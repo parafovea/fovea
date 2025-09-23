@@ -1,0 +1,48 @@
+/* Video.js custom styles for annotation workspace */
+.annotation-video-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.annotation-video-container .video-js {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: transparent !important;
+}
+
+.annotation-video-container .video-js .vjs-tech {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Hide default video.js controls since we have custom ones */
+.annotation-video-container .vjs-control-bar {
+  display: none !important;
+}
+
+.annotation-video-container .vjs-big-play-button {
+  display: none !important;
+}
+
+.annotation-video-container .vjs-loading-spinner {
+  display: block !important;
+}
+
+/* Ensure the poster is hidden */
+.annotation-video-container .vjs-poster {
+  display: none !important;
+}
+
+/* Make sure the video element itself is visible */
+.annotation-video-container video {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}

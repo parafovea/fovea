@@ -1,0 +1,353 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://multivent.com/schemas/ontology.schema.json",
+  "title": "Video Annotation Ontology Schema",
+  "type": "object",
+  "definitions": {
+    "glossItem": {
+      "type": "object",
+      "required": ["type", "content"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["text", "typeRef"]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refType": {
+          "type": "string",
+          "enum": ["entity", "role", "event", "relation"]
+        },
+        "refPersonaId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "typeRef" } }
+      },
+      "then": {
+        "required": ["refType"]
+      }
+    },
+    "typeConstraint": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["allowedTypes", "requiredProperties", "valueRange"]
+        },
+        "value": {}
+      }
+    },
+    "persona": {
+      "type": "object",
+      "required": ["id", "name", "role", "informationNeed", "details", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "informationNeed": { "type": "string", "minLength": 1 },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "entityType": {
+      "type": "object",
+      "required": ["id", "name", "gloss", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "gloss": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/glossItem" },
+          "minItems": 1
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/typeConstraint" }
+        },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "roleType": {
+      "type": "object",
+      "required": ["id", "name", "gloss", "allowedFillerTypes", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "gloss": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/glossItem" },
+          "minItems": 1
+        },
+        "allowedFillerTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["entity", "event"]
+          },
+          "minItems": 1
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/typeConstraint" }
+        },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "eventRole": {
+      "type": "object",
+      "required": ["roleTypeId", "optional"],
+      "properties": {
+        "roleTypeId": { "type": "string", "format": "uuid" },
+        "optional": { "type": "boolean" },
+        "excludes": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "minOccurrences": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxOccurrences": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "relationType": {
+      "type": "object",
+      "required": ["id", "name", "gloss", "sourceTypes", "targetTypes", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "gloss": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/glossItem" },
+          "minItems": 1
+        },
+        "sourceTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["entity", "role", "event"]
+          },
+          "minItems": 1
+        },
+        "targetTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["entity", "role", "event"]
+          },
+          "minItems": 1
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/typeConstraint" }
+        },
+        "symmetric": { "type": "boolean" },
+        "transitive": { "type": "boolean" },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ontologyRelation": {
+      "type": "object",
+      "required": ["id", "relationTypeId", "sourceType", "sourceId", "targetType", "targetId", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "relationTypeId": { "type": "string", "format": "uuid" },
+        "sourceType": {
+          "type": "string",
+          "enum": ["entity", "role", "event"]
+        },
+        "sourceId": { "type": "string", "format": "uuid" },
+        "targetType": {
+          "type": "string",
+          "enum": ["entity", "role", "event"]
+        },
+        "targetId": { "type": "string", "format": "uuid" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "eventType": {
+      "type": "object",
+      "required": ["id", "name", "gloss", "roles", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "gloss": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/glossItem" },
+          "minItems": 1
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/eventRole" }
+        },
+        "parentEventId": { "type": "string", "format": "uuid" },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "boundingBox": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 },
+        "frameNumber": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "timeSpan": {
+      "type": "object",
+      "required": ["startTime", "endTime"],
+      "properties": {
+        "startTime": { "type": "number", "minimum": 0 },
+        "endTime": { "type": "number", "minimum": 0 },
+        "startFrame": { "type": "integer", "minimum": 0 },
+        "endFrame": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "required": ["id", "videoId", "boundingBox", "timeSpan", "typeCategory", "typeId", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "videoId": { "type": "string" },
+        "boundingBox": { "$ref": "#/definitions/boundingBox" },
+        "timeSpan": { "$ref": "#/definitions/timeSpan" },
+        "typeCategory": {
+          "type": "string",
+          "enum": ["entity", "role", "event"]
+        },
+        "typeId": { "type": "string", "format": "uuid" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "notes": { "type": "string" },
+        "metadata": { "type": "object" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "videoMetadata": {
+      "type": "object",
+      "required": ["id", "title", "description", "duration", "width", "height", "filePath"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "duration": { "type": "number", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "number", "minimum": 0 },
+        "format": { "type": "string" },
+        "uploader": { "type": "string" },
+        "uploadDate": { "type": "string", "format": "date-time" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "thumbnail": { "type": "string" },
+        "filePath": { "type": "string" }
+      }
+    },
+    "personaOntology": {
+      "type": "object",
+      "required": ["id", "personaId", "entities", "roles", "events", "relationTypes", "relations", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "personaId": { "type": "string", "format": "uuid" },
+        "entities": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/entityType" }
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/roleType" }
+        },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/eventType" }
+        },
+        "relationTypes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/relationType" }
+        },
+        "relations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ontologyRelation" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ontology": {
+      "type": "object",
+      "required": ["id", "version", "personas", "personaOntologies", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "personas": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/persona" },
+          "minItems": 1
+        },
+        "personaOntologies": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/personaOntology" },
+          "minItems": 1
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" }
+      }
+    }
+  },
+  "required": ["ontology", "annotations", "videos", "exportDate", "exportVersion"],
+  "properties": {
+    "ontology": { "$ref": "#/definitions/ontology" },
+    "annotations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/annotation" }
+    },
+    "videos": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/videoMetadata" }
+    },
+    "exportDate": { "type": "string", "format": "date-time" },
+    "exportVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+  }
+}
