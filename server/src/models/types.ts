@@ -1,5 +1,6 @@
 export interface Persona {
   id: string
+  name: string
   role: string
   informationNeed: string
   details: string
@@ -10,7 +11,8 @@ export interface Persona {
 export interface GlossItem {
   type: 'text' | 'typeRef'
   content: string
-  refType?: 'entity' | 'role' | 'event'
+  refType?: 'entity' | 'role' | 'event' | 'relation'
+  refPersonaId?: string
 }
 
 export interface TypeConstraint {
@@ -73,9 +75,36 @@ export interface TimeSpan {
   endFrame?: number
 }
 
+export interface RelationType {
+  id: string
+  name: string
+  gloss: GlossItem[]
+  sourceTypes: ('entity' | 'role' | 'event')[]
+  targetTypes: ('entity' | 'role' | 'event')[]
+  constraints?: TypeConstraint[]
+  symmetric?: boolean
+  transitive?: boolean
+  examples?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OntologyRelation {
+  id: string
+  relationTypeId: string
+  sourceType: 'entity' | 'role' | 'event'
+  sourceId: string
+  targetType: 'entity' | 'role' | 'event'
+  targetId: string
+  metadata?: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Annotation {
   id: string
   videoId: string
+  personaId: string
   boundingBox: BoundingBox
   timeSpan: TimeSpan
   typeCategory: 'entity' | 'role' | 'event'
@@ -104,13 +133,23 @@ export interface VideoMetadata {
   filePath: string
 }
 
-export interface Ontology {
+export interface PersonaOntology {
   id: string
-  version: string
-  persona: Persona
+  personaId: string
   entities: EntityType[]
   roles: RoleType[]
   events: EventType[]
+  relationTypes: RelationType[]
+  relations: OntologyRelation[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Ontology {
+  id: string
+  version: string
+  personas: Persona[]
+  personaOntologies: PersonaOntology[]
   createdAt: string
   updatedAt: string
   description?: string
