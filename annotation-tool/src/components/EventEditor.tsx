@@ -20,6 +20,7 @@ import {
   Checkbox,
   Chip,
 } from '@mui/material'
+import { generateId } from '../utils/uuid'
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -66,7 +67,7 @@ export default function EventEditor({ open, onClose, event, personaId }: EventEd
     
     const now = new Date().toISOString()
     const eventData: EventType = {
-      id: event?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: event?.id || `generateId()`,
       name,
       gloss,
       roles,

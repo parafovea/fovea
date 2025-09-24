@@ -22,6 +22,7 @@ import {
   Chip,
   Grid,
 } from '@mui/material'
+import { generateId } from '../utils/uuid'
 import {
   Delete as DeleteIcon,
   Add as AddIcon,
@@ -83,7 +84,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     if (!personaId || !relationTypeId || !sourceId || !targetId) return
 
     const newRelation: OntologyRelation = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `generateId()`,
       relationTypeId,
       sourceType,
       sourceId,

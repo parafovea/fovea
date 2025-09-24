@@ -16,6 +16,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material'
+import { generateId } from '../utils/uuid'
 import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
@@ -63,7 +64,7 @@ export default function Layout() {
     try {
       // Create ontology in new format
       const ontology: Ontology = {
-        id: currentOntology?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: currentOntology?.id || `generateId()`,
         version: currentOntology?.version || '1.0.0',
         personas,
         personaOntologies,

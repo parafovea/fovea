@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Box } from '@mui/material'
 import { useDispatch } from 'react-redux'
+import { generateId } from './utils/uuid'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
 import AnnotationWorkspace from './components/AnnotationWorkspace'
@@ -39,7 +40,7 @@ function App() {
             name: ontology.persona.role,
           }
           const personaOntology = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             personaId: persona.id,
             entities: ontology.entities || [],
             roles: ontology.roles || [],
@@ -55,7 +56,7 @@ function App() {
         } else {
           // Create default persona
           const defaultPersona = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             name: 'Default Persona',
             role: 'Analyst',
             informationNeed: 'General information extraction',
@@ -64,7 +65,7 @@ function App() {
             updatedAt: new Date().toISOString(),
           }
           const defaultOntology = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             personaId: defaultPersona.id,
             entities: [],
             roles: [],

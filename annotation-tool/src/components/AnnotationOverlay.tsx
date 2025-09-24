@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Box } from '@mui/material'
 import { RootState, AppDispatch } from '../store/store'
+import { generateId } from '../utils/uuid'
 import { 
   setTemporaryBox, 
   addAnnotation, 
@@ -79,7 +80,7 @@ export default function AnnotationOverlay({
     
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
       const annotation = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `generateId()`,
         videoId,
         personaId: selectedPersonaId,
         boundingBox: temporaryBox,

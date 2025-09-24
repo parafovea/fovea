@@ -10,6 +10,7 @@ import {
   Box,
 } from '@mui/material'
 import { AppDispatch } from '../store/store'
+import { generateId } from '../utils/uuid'
 import { addEntityToPersona, updateEntityInPersona } from '../store/personaSlice'
 import { EntityType, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
@@ -44,7 +45,7 @@ export default function EntityEditor({ open, onClose, entity, personaId }: Entit
     
     const now = new Date().toISOString()
     const entityData: EntityType = {
-      id: entity?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: entity?.id || `generateId()`,
       name,
       gloss,
       examples,

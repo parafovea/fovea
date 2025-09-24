@@ -10,6 +10,7 @@ import {
   Box,
 } from '@mui/material'
 import { AppDispatch } from '../store/store'
+import { generateId } from '../utils/uuid'
 import { setPersona, setOntology } from '../store/ontologySlice'
 import { Persona } from '../models/types'
 
@@ -46,7 +47,7 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
   const handleSave = () => {
     const now = new Date().toISOString()
     const updatedPersona: Persona = {
-      id: persona?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: persona?.id || `generateId()`,
       ...formData,
       createdAt: persona?.createdAt || now,
       updatedAt: now,
@@ -56,7 +57,7 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
       dispatch(setPersona(updatedPersona))
     } else {
       dispatch(setOntology({
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `generateId()`,
         version: '0.1.0',
         persona: updatedPersona,
         entities: [],

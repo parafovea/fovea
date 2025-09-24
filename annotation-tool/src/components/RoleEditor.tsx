@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material'
 import { AppDispatch } from '../store/store'
+import { generateId } from '../utils/uuid'
 import { addRoleToPersona, updateRoleInPersona } from '../store/personaSlice'
 import { RoleType, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
@@ -51,7 +52,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     
     const now = new Date().toISOString()
     const roleData: RoleType = {
-      id: role?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: role?.id || `generateId()`,
       name,
       gloss,
       allowedFillerTypes,

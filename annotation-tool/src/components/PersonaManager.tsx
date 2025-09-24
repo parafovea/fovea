@@ -21,6 +21,7 @@ import {
   ListItemSecondaryAction,
   Divider,
 } from '@mui/material'
+import { generateId } from '../utils/uuid'
 import {
   PersonAdd as AddPersonaIcon,
   ContentCopy as CopyIcon,
@@ -89,7 +90,7 @@ export default function PersonaManager() {
     const sourcePersona = personas.find(p => p.id === sourcePersonaId)
     if (sourcePersona) {
       const newPersona: Persona = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `generateId()`,
         name: `${sourcePersona.name} (Copy)`,
         role: sourcePersona.role,
         informationNeed: sourcePersona.informationNeed,
@@ -105,7 +106,7 @@ export default function PersonaManager() {
 
   const handleSaveNew = () => {
     const newPersona: Persona = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `generateId()`,
       name: formData.name,
       role: formData.role,
       informationNeed: formData.informationNeed,
@@ -115,7 +116,7 @@ export default function PersonaManager() {
     }
 
     const newOntology: PersonaOntology = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `generateId()`,
       personaId: newPersona.id,
       entities: [],
       roles: [],

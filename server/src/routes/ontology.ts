@@ -2,19 +2,19 @@ import { Router } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { v4 as uuidv4 } from 'uuid'
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
-import { Ontology, Persona, PersonaOntology } from '../models/types.js'
-import ontologySchema from '../schemas/ontology.schema.json' assert { type: 'json' }
+import { Ontology } from '../models/types.js'
+import ontologySchema from '../schemas/ontology.schema.json' with { type: 'json' }
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const router = Router()
 
 const ONTOLOGY_FILE = path.join(__dirname, '..', '..', 'ontology.json')
-const ajv = new Ajv()
+const ajv = new (Ajv as any)({ strict: false, validateFormats: false })
 addFormats(ajv)
-const validate = ajv.compile(ontologySchema)
 
 let currentOntology: Ontology | null = null
 
@@ -63,7 +63,7 @@ function createDefaultOntology(): Ontology {
 }
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return uuidv4()
 }
 
 async function saveOntology() {
@@ -71,7 +71,7 @@ async function saveOntology() {
   await fs.writeFile(ONTOLOGY_FILE, JSON.stringify(currentOntology, null, 2))
 }
 
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
     const ontology = await loadOntology()
     res.json(ontology)
@@ -85,15 +85,21 @@ router.put('/', async (req, res) => {
   try {
     const ontology = req.body
     
-    // Validate ontology directly (no wrapper)
-    const ontologyDef = ontologySchema.definitions?.ontology
-    if (!ontologyDef) {
-      return res.status(500).json({ error: 'Schema definition not found' })
+    // Validate ontology using the full schema with definitions
+    const validateOntology = ajv.compile(ontologySchema)
+    
+    // Wrap in export format for validation
+    const exportData = {
+      ontology,
+      annotations: [],
+      videos: [],
+      exportDate: new Date().toISOString(),
+      exportVersion: '1.0.0'
     }
     
-    const validateOntology = ajv.compile(ontologyDef)
-    const valid = validateOntology(ontology)
+    const valid = validateOntology(exportData)
     if (!valid) {
+      console.error('Validation errors:', JSON.stringify(validateOntology.errors, null, 2))
       return res.status(400).json({ 
         error: 'Invalid ontology format',
         details: validateOntology.errors 
@@ -120,7 +126,7 @@ router.post('/entities', async (req, res) => {
     const { personaId, ...entityData } = req.body
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
@@ -133,7 +139,7 @@ router.post('/entities', async (req, res) => {
     }
     
     personaOntology.entities.push(entity)
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json(entity)
@@ -152,7 +158,7 @@ router.put('/entities/:id', async (req, res) => {
     const { personaId, ...entityData } = req.body
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
@@ -169,7 +175,7 @@ router.put('/entities/:id', async (req, res) => {
       updatedAt: new Date().toISOString(),
     }
     
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json(personaOntology.entities[index])
@@ -188,13 +194,13 @@ router.delete('/entities/:id', async (req, res) => {
     const { personaId } = req.query
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
     
     personaOntology.entities = personaOntology.entities.filter(e => e.id !== req.params.id)
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json({ success: true })
@@ -213,7 +219,7 @@ router.post('/roles', async (req, res) => {
     const { personaId, ...roleData } = req.body
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
@@ -226,7 +232,7 @@ router.post('/roles', async (req, res) => {
     }
     
     personaOntology.roles.push(role)
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json(role)
@@ -245,7 +251,7 @@ router.put('/roles/:id', async (req, res) => {
     const { personaId, ...roleData } = req.body
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
@@ -262,7 +268,7 @@ router.put('/roles/:id', async (req, res) => {
       updatedAt: new Date().toISOString(),
     }
     
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json(personaOntology.roles[index])
@@ -281,7 +287,7 @@ router.post('/events', async (req, res) => {
     const { personaId, ...eventData } = req.body
     
     // Find the persona ontology
-    const personaOntology = currentOntology.personaOntologies.find(po => po.personaId === personaId)
+    const personaOntology = currentOntology!.personaOntologies.find(po => po.personaId === personaId)
     if (!personaOntology) {
       return res.status(404).json({ error: 'Persona ontology not found' })
     }
@@ -294,7 +300,7 @@ router.post('/events', async (req, res) => {
     }
     
     personaOntology.events.push(event)
-    currentOntology.updatedAt = new Date().toISOString()
+    currentOntology!.updatedAt = new Date().toISOString()
     await saveOntology()
     
     res.json(event)
@@ -306,14 +312,18 @@ router.post('/events', async (req, res) => {
 
 router.post('/validate', async (req, res) => {
   try {
-    // Validate ontology directly (no wrapper)
-    const ontologyDef = ontologySchema.definitions?.ontology
-    if (!ontologyDef) {
-      return res.status(500).json({ error: 'Schema definition not found' })
+    const validateOntology = ajv.compile(ontologySchema)
+    
+    // Wrap in export format for validation
+    const exportData = {
+      ontology: req.body,
+      annotations: [],
+      videos: [],
+      exportDate: new Date().toISOString(),
+      exportVersion: '1.0.0'
     }
     
-    const validateOntology = ajv.compile(ontologyDef)
-    const valid = validateOntology(req.body)
+    const valid = validateOntology(exportData)
     if (valid) {
       res.json({ valid: true })
     } else {

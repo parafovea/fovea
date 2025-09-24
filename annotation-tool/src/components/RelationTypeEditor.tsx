@@ -15,6 +15,7 @@ import {
   Stack,
 } from '@mui/material'
 import { RootState, AppDispatch } from '../store/store'
+import { generateId } from '../utils/uuid'
 import { addRelationType, updateRelationType } from '../store/personaSlice'
 import { RelationType, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
@@ -68,7 +69,7 @@ export default function RelationTypeEditor({
     if (!personaId) return
 
     const relationTypeData: RelationType = {
-      id: relationType?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: relationType?.id || `generateId()`,
       name,
       gloss,
       sourceTypes,

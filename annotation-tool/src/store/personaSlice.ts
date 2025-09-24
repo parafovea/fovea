@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { Persona, PersonaOntology, EntityType, RoleType, EventType, RelationType, OntologyRelation, ImportRequest } from '../models/types'
+import { generateId } from '../utils/uuid'
 
 interface PersonaState {
   personas: Persona[]
@@ -59,7 +60,7 @@ const personaSlice = createSlice({
       if (sourceOntology) {
         const newOntology: PersonaOntology = {
           ...sourceOntology,
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `generateId()`,
           personaId: action.payload.newPersona.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -82,7 +83,7 @@ const personaSlice = createSlice({
           const entitiesToImport = sourceOntology.entities.filter(e => entityIds.includes(e.id))
           const newEntities = entitiesToImport.map(e => ({
             ...e,
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             createdAt: now,
             updatedAt: now,
           }))
@@ -93,7 +94,7 @@ const personaSlice = createSlice({
           const rolesToImport = sourceOntology.roles.filter(r => roleIds.includes(r.id))
           const newRoles = rolesToImport.map(r => ({
             ...r,
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             createdAt: now,
             updatedAt: now,
           }))
@@ -104,7 +105,7 @@ const personaSlice = createSlice({
           const eventsToImport = sourceOntology.events.filter(e => eventIds.includes(e.id))
           const newEvents = eventsToImport.map(e => ({
             ...e,
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             createdAt: now,
             updatedAt: now,
           }))
@@ -115,7 +116,7 @@ const personaSlice = createSlice({
           const relationTypesToImport = sourceOntology.relationTypes.filter(r => relationTypeIds.includes(r.id))
           const newRelationTypes = relationTypesToImport.map(r => ({
             ...r,
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `generateId()`,
             createdAt: now,
             updatedAt: now,
           }))
