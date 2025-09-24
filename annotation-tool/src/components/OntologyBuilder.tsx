@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import React from 'react'
 import {
   Box,
@@ -18,6 +19,7 @@ import {
   Fab,
   Alert,
   Chip,
+  Tooltip,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -27,6 +29,7 @@ import {
   AccountTree as RelationIcon,
   ImportExport as ImportIcon,
   Link as LinkIcon,
+  VideoLibrary as VideoIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../store/store'
 import EntityEditor from './EntityEditor'
@@ -73,7 +76,9 @@ function TabPanel(props: TabPanelProps) {
 
 export default function OntologyBuilder() {
   const dispatch = useDispatch<AppDispatch>()
+  const navigate = useNavigate()
   const { activePersonaId, personaOntologies, personas } = useSelector((state: RootState) => state.persona)
+  const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
   const activeOntology = personaOntologies.find(o => o.personaId === activePersonaId)
   const activePersona = personas.find(p => p.id === activePersonaId)
   
@@ -476,6 +481,25 @@ export default function OntologyBuilder() {
           onClose={() => setRelationManagerOpen(false)}
           personaId={activePersonaId}
         />
+      )}
+      
+      {/* Floating Action Button to return to last annotation */}
+      {lastAnnotation.videoId && (
+        <Tooltip title="Return to Annotation (Cmd/Ctrl + O)" placement="left">
+          <Fab
+            color="secondary"
+            aria-label="return to annotation"
+            onClick={() => navigate(`/annotate/${lastAnnotation.videoId}`)}
+            sx={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1000,
+            }}
+          >
+            <VideoIcon />
+          </Fab>
+        </Tooltip>
       )}
     </Box>
   )

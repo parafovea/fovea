@@ -10,6 +10,10 @@ interface VideoState {
     searchTerm: string
     tags: string[]
   }
+  lastAnnotation: {
+    videoId: string | null
+    timestamp: number
+  }
 }
 
 const initialState: VideoState = {
@@ -20,6 +24,10 @@ const initialState: VideoState = {
   filter: {
     searchTerm: '',
     tags: [],
+  },
+  lastAnnotation: {
+    videoId: null,
+    timestamp: 0,
   },
 }
 
@@ -45,6 +53,9 @@ const videoSlice = createSlice({
     setFilterTags: (state, action: PayloadAction<string[]>) => {
       state.filter.tags = action.payload
     },
+    setLastAnnotation: (state, action: PayloadAction<{ videoId: string; timestamp: number }>) => {
+      state.lastAnnotation = action.payload
+    },
   },
 })
 
@@ -55,6 +66,7 @@ export const {
   setError,
   setSearchTerm,
   setFilterTags,
+  setLastAnnotation,
 } = videoSlice.actions
 
 export default videoSlice.reducer

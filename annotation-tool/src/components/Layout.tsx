@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
   AppBar, 
   Toolbar, 
@@ -23,7 +23,7 @@ import {
   Download as ExportIcon,
   Menu as MenuIcon,
 } from '@mui/icons-material'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store/store'
 import { markSaved } from '../store/ontologySlice'
@@ -35,6 +35,7 @@ const DRAWER_WIDTH = 240
 
 export default function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -50,6 +51,7 @@ export default function Layout() {
   )
   const currentOntology = useSelector((state: RootState) => state.ontology.currentOntology)
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/' },
@@ -114,6 +116,29 @@ export default function Layout() {
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false })
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Check for Cmd (Mac) or Ctrl (Windows/Linux)
+      const isModifierKey = e.metaKey || e.ctrlKey
+      
+      if (isModifierKey && e.key.toLowerCase() === 'o' && !e.shiftKey) {
+        e.preventDefault()
+        // If we're in the ontology builder and there's a last annotation, go back to it
+        if (location.pathname === '/ontology' && lastAnnotation.videoId) {
+          navigate(`/annotate/${lastAnnotation.videoId}`)
+        }
+        // Otherwise, go to the ontology builder
+        else if (location.pathname !== '/ontology') {
+          navigate('/ontology')
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [navigate, location.pathname, lastAnnotation.videoId])
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>

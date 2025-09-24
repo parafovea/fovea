@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
@@ -25,6 +25,8 @@ import {
   Select,
   MenuItem,
   Alert,
+  Fab,
+  Tooltip,
 } from '@mui/material'
 import {
   PlayArrow as PlayIcon,
@@ -41,12 +43,13 @@ import {
   Share as ShareIcon,
   Comment as CommentIcon,
   OpenInNew as ExternalLinkIcon,
+  Build as BuildIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
 import './AnnotationWorkspace.css'
 import { RootState, AppDispatch } from '../store/store'
-import { setCurrentVideo } from '../store/videoSlice'
+import { setCurrentVideo, setLastAnnotation } from '../store/videoSlice'
 import { setDrawingMode, selectAnnotation, deleteAnnotation, setSelectedPersona } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -57,6 +60,7 @@ const DRAWER_WIDTH = 300
 
 export default function AnnotationWorkspace() {
   const { videoId } = useParams()
+  const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
@@ -83,6 +87,13 @@ export default function AnnotationWorkspace() {
   })
   const drawingMode = useSelector((state: RootState) => state.annotations.drawingMode)
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
+
+  // Track this as the last annotation when we load the component
+  useEffect(() => {
+    if (videoId) {
+      dispatch(setLastAnnotation({ videoId, timestamp: Date.now() }))
+    }
+  }, [videoId, dispatch])
 
   useEffect(() => {
     if (!videoRef.current || !videoId) return
@@ -211,6 +222,14 @@ export default function AnnotationWorkspace() {
     const secs = Math.floor(seconds % 60)
     const ms = Math.floor((seconds % 1) * 100)
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+  }
+
+  const handleGoToOntology = () => {
+    // Save current annotation state before navigating
+    if (videoId) {
+      dispatch(setLastAnnotation({ videoId, timestamp: currentTime }))
+    }
+    navigate('/ontology')
   }
 
   // Show all annotations sorted by start time
@@ -528,6 +547,23 @@ export default function AnnotationWorkspace() {
         annotation={editingAnnotation}
         videoFps={currentVideo?.fps}
       />
+      
+      {/* Floating Action Button to go to Ontology */}
+      <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
+        <Fab
+          color="primary"
+          aria-label="go to ontology"
+          onClick={handleGoToOntology}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+          }}
+        >
+          <BuildIcon />
+        </Fab>
+      </Tooltip>
     </Box>
   )
 }
