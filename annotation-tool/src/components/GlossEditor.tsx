@@ -235,7 +235,7 @@ export default function GlossEditor({ gloss, onChange, availableTypes, personaId
       </Typography>
       
       <TextField
-        ref={inputRef}
+        inputRef={inputRef}
         fullWidth
         multiline
         minRows={3}

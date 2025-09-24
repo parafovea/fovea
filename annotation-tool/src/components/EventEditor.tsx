@@ -125,6 +125,7 @@ export default function EventEditor({ open, onClose, event, personaId }: EventEd
           <GlossEditor
             gloss={gloss}
             onChange={setGloss}
+            personaId={personaId}
           />
 
           <Box>

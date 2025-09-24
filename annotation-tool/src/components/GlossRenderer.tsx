@@ -42,9 +42,9 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
   }
 
   if (inline) {
-    // For inline rendering, return a string with type names
+    // For inline rendering, return a span container to avoid nesting issues
     return (
-      <>
+      <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap' }}>
         {gloss.map((item, index) => {
           const display = getTypeDisplay(item)
           if (item.type === 'text') {
@@ -57,12 +57,13 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
                 size="small"
                 color={display.found ? 'primary' : 'default'}
                 variant={display.found ? 'filled' : 'outlined'}
+                component="span"
                 sx={{ mx: 0.5, verticalAlign: 'baseline', height: 20 }}
               />
             )
           }
         })}
-      </>
+      </span>
     )
   }
 
