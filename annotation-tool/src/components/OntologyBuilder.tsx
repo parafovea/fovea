@@ -39,6 +39,7 @@ import PersonaManager from './PersonaManager'
 import RelationTypeEditor from './RelationTypeEditor'
 import ImportDialog from './ImportDialog'
 import RelationManager from './RelationManager'
+import { GlossRenderer } from './GlossRenderer'
 import {
   addEntityToPersona,
   updateEntityInPersona,
@@ -255,7 +256,7 @@ export default function OntologyBuilder() {
                           )}
                         </Box>
                       }
-                      secondary={entity.gloss.map(g => g.content).join(' ')}
+                      secondary={<GlossRenderer gloss={entity.gloss} personaId={activePersonaId} inline />}
                     />
                     <ListItemSecondaryAction>
                       <IconButton edge="end" aria-label="edit" onClick={() => handleEditEntity(entity)}>

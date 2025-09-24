@@ -1,18 +1,18 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { useSelector } from 'react-redux'
 import {
   Box,
   TextField,
-  IconButton,
-  Chip,
-  Autocomplete,
   Typography,
   Paper,
+  Popper,
+  List,
+  ListItem,
+  ListItemText,
+  ListSubheader,
+  ClickAwayListener,
+  Chip,
 } from '@mui/material'
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material'
 import { RootState } from '../store/store'
 import { GlossItem } from '../models/types'
 
@@ -23,76 +23,209 @@ interface GlossEditorProps {
   personaId?: string | null
 }
 
-export default function GlossEditor({ gloss, onChange, availableTypes, personaId }: GlossEditorProps) {
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  const activeOntology = personaOntologies.find(o => o.personaId === personaId)
-  const [currentText, setCurrentText] = useState('')
+interface TypeOption {
+  id: string
+  name: string
+  type: 'entity' | 'role' | 'event'
+  personaId?: string | null
+}
 
-  const allTypes = [
+export default function GlossEditor({ gloss, onChange, availableTypes, personaId }: GlossEditorProps) {
+  const { personaOntologies } = useSelector((state: RootState) => state.persona)
+  const activeOntology = personaOntologies.find(o => o.personaId === personaId)
+  
+  const [inputValue, setInputValue] = useState('')
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [cursorPosition, setCursorPosition] = useState(0)
+
+  // Get all available types (excluding relations as per requirement)
+  const allTypes: TypeOption[] = [
     ...((!availableTypes || availableTypes.includes('entity')) ? 
-      (activeOntology?.entities.map(e => ({ id: e.id, name: e.name, type: 'entity', personaId })) || []) : []),
+      (activeOntology?.entities.map(e => ({ id: e.id, name: e.name, type: 'entity' as const, personaId })) || []) : []),
     ...((!availableTypes || availableTypes.includes('role')) ? 
-      (activeOntology?.roles.map(r => ({ id: r.id, name: r.name, type: 'role', personaId })) || []) : []),
+      (activeOntology?.roles.map(r => ({ id: r.id, name: r.name, type: 'role' as const, personaId })) || []) : []),
     ...((!availableTypes || availableTypes.includes('event')) ? 
-      (activeOntology?.events.map(e => ({ id: e.id, name: e.name, type: 'event', personaId })) || []) : []),
-    ...((!availableTypes || availableTypes.includes('relation')) ? 
-      (activeOntology?.relationTypes.map(r => ({ id: r.id, name: r.name, type: 'relation', personaId })) || []) : []),
+      (activeOntology?.events.map(e => ({ id: e.id, name: e.name, type: 'event' as const, personaId })) || []) : []),
   ]
 
-  const handleAddText = () => {
-    if (currentText.trim()) {
-      onChange([...gloss, { type: 'text', content: currentText.trim() }])
-      setCurrentText('')
-    }
+  // Filter types based on search query
+  const filteredTypes = searchQuery 
+    ? allTypes.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allTypes
+
+  // Group filtered types by type
+  const groupedTypes = {
+    entity: filteredTypes.filter(t => t.type === 'entity'),
+    role: filteredTypes.filter(t => t.type === 'role'),
+    event: filteredTypes.filter(t => t.type === 'event'),
   }
 
-  const handleAddTypeRef = (typeRef: any) => {
-    if (typeRef) {
-      onChange([...gloss, { 
-        type: 'typeRef', 
-        content: typeRef.id,
-        refType: typeRef.type as 'entity' | 'role' | 'event' | 'relation',
-        refPersonaId: typeRef.personaId
-      }])
-    }
+  // Convert gloss items to display string
+  const glossToString = (glossItems: GlossItem[]): string => {
+    return glossItems.map(item => {
+      if (item.type === 'text') {
+        return item.content
+      } else {
+        const typeObj = allTypes.find(t => t.id === item.content)
+        return typeObj ? `@${typeObj.name}` : `@[${item.content}]`
+      }
+    }).join('')
   }
 
-  const handleRemoveItem = (index: number) => {
-    onChange(gloss.filter((_, i) => i !== index))
-  }
-
-  const getTypeDisplay = (item: GlossItem) => {
-    if (item.type === 'text') return item.content
+  // Parse string to gloss items
+  const stringToGloss = (text: string): GlossItem[] => {
+    const items: GlossItem[] = []
+    let currentText = ''
+    let i = 0
     
-    // Check current persona first
-    let typeObj = allTypes.find(t => t.id === item.content)
-    
-    // If not found and has refPersonaId, check other personas
-    if (!typeObj && item.refPersonaId && item.refPersonaId !== personaId) {
-      const otherOntology = personaOntologies.find(o => o.personaId === item.refPersonaId)
-      const otherPersona = personas.find(p => p.id === item.refPersonaId)
-      if (otherOntology) {
-        switch (item.refType) {
-          case 'entity':
-            typeObj = otherOntology.entities.find(e => e.id === item.content)
-            break
-          case 'role':
-            typeObj = otherOntology.roles.find(r => r.id === item.content)
-            break
-          case 'event':
-            typeObj = otherOntology.events.find(e => e.id === item.content)
-            break
-          case 'relation':
-            typeObj = otherOntology.relationTypes.find(r => r.id === item.content)
-            break
+    while (i < text.length) {
+      if (text[i] === '@') {
+        // Save any accumulated text
+        if (currentText) {
+          items.push({ type: 'text', content: currentText })
+          currentText = ''
         }
-        if (typeObj && otherPersona) {
-          return `[${item.refType} from ${otherPersona.name}: ${typeObj.name}]`
+        
+        // Find the end of the type reference
+        let j = i + 1
+        while (j < text.length && text[j] !== ' ' && text[j] !== '@') {
+          j++
         }
+        
+        const typeName = text.slice(i + 1, j)
+        const typeObj = allTypes.find(t => t.name === typeName)
+        
+        if (typeObj) {
+          items.push({
+            type: 'typeRef',
+            content: typeObj.id,
+            refType: typeObj.type,
+            refPersonaId: typeObj.personaId
+          })
+        } else {
+          // If type not found, treat as text
+          currentText += text.slice(i, j)
+        }
+        
+        i = j
+      } else {
+        currentText += text[i]
+        i++
       }
     }
     
-    return typeObj ? `[${item.refType}: ${typeObj.name}]` : `[${item.refType}: ${item.content}]`
+    // Add any remaining text
+    if (currentText) {
+      items.push({ type: 'text', content: currentText })
+    }
+    
+    return items
+  }
+
+  // Initialize input value from gloss
+  useEffect(() => {
+    setInputValue(glossToString(gloss))
+  }, [gloss, allTypes]) // Re-run when gloss or available types change
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart || 0
+    setInputValue(value)
+    setCursorPosition(cursorPos)
+    
+    // Check if @ was typed
+    const lastChar = value[cursorPos - 1]
+    if (lastChar === '@') {
+      setShowAutocomplete(true)
+      setAutocompleteAnchor(e.target)
+      setSearchQuery('')
+      setSelectedIndex(0)
+    } else if (showAutocomplete) {
+      // Update search query if autocomplete is open
+      const atIndex = value.lastIndexOf('@', cursorPos - 1)
+      if (atIndex !== -1) {
+        const query = value.slice(atIndex + 1, cursorPos)
+        setSearchQuery(query)
+        setSelectedIndex(0)
+      } else {
+        setShowAutocomplete(false)
+      }
+    }
+    
+    // Update gloss items
+    const newGloss = stringToGloss(value)
+    onChange(newGloss)
+  }
+
+  const insertTypeReference = (typeObj: TypeOption) => {
+    const beforeAt = inputValue.lastIndexOf('@', cursorPosition - 1)
+    const beforeText = inputValue.slice(0, beforeAt)
+    const afterText = inputValue.slice(cursorPosition)
+    
+    const newValue = `${beforeText}@${typeObj.name} ${afterText}`
+    setInputValue(newValue)
+    
+    const newGloss = stringToGloss(newValue)
+    onChange(newGloss)
+    
+    setShowAutocomplete(false)
+    setSearchQuery('')
+    
+    // Focus back to input
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+        const newPos = beforeText.length + typeObj.name.length + 2
+        inputRef.current.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!showAutocomplete) return
+    
+    const allFilteredTypes = [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event]
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev + 1) % allFilteredTypes.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev - 1 + allFilteredTypes.length) % allFilteredTypes.length)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (allFilteredTypes[selectedIndex]) {
+        insertTypeReference(allFilteredTypes[selectedIndex])
+      }
+    } else if (e.key === 'Escape') {
+      setShowAutocomplete(false)
+      setSearchQuery('')
+    }
+  }
+
+  // Render gloss preview
+  const renderGlossPreview = () => {
+    return gloss.map((item, index) => {
+      if (item.type === 'text') {
+        return <span key={index}>{item.content}</span>
+      } else {
+        const typeObj = allTypes.find(t => t.id === item.content)
+        const displayName = typeObj ? typeObj.name : item.content
+        return (
+          <Chip
+            key={index}
+            label={`${item.refType}: ${displayName}`}
+            size="small"
+            color="primary"
+            sx={{ mx: 0.5, verticalAlign: 'middle' }}
+          />
+        )
+      }
+    })
   }
 
   return (
@@ -101,68 +234,131 @@ export default function GlossEditor({ gloss, onChange, availableTypes, personaId
         Gloss Definition
       </Typography>
       
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, minHeight: 40 }}>
-          {gloss.length === 0 && (
+      <TextField
+        ref={inputRef}
+        fullWidth
+        multiline
+        minRows={3}
+        maxRows={6}
+        value={inputValue}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Type your gloss definition. Use @ to reference entities, roles, or events."
+        variant="outlined"
+        sx={{ mb: 2 }}
+      />
+
+      <ClickAwayListener onClickAway={() => setShowAutocomplete(false)}>
+        <Popper 
+          open={showAutocomplete} 
+          anchorEl={autocompleteAnchor}
+          placement="bottom-start"
+          style={{ zIndex: 1300 }}
+        >
+          <Paper elevation={8} sx={{ maxHeight: 300, overflow: 'auto', minWidth: 250 }}>
+            <List dense>
+              {groupedTypes.entity.length > 0 && (
+                <>
+                  <ListSubheader>Entities</ListSubheader>
+                  {groupedTypes.entity.map((type, idx) => {
+                    const globalIdx = idx
+                    return (
+                      <ListItem
+                        key={type.id}
+                        onClick={() => insertTypeReference(type)}
+                        sx={{
+                          backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          }
+                        }}
+                      >
+                        <ListItemText primary={type.name} />
+                      </ListItem>
+                    )
+                  })}
+                </>
+              )}
+              
+              {groupedTypes.role.length > 0 && (
+                <>
+                  <ListSubheader>Roles</ListSubheader>
+                  {groupedTypes.role.map((type, idx) => {
+                    const globalIdx = groupedTypes.entity.length + idx
+                    return (
+                      <ListItem
+                        key={type.id}
+                        onClick={() => insertTypeReference(type)}
+                        sx={{
+                          backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          }
+                        }}
+                      >
+                        <ListItemText primary={type.name} />
+                      </ListItem>
+                    )
+                  })}
+                </>
+              )}
+              
+              {groupedTypes.event.length > 0 && (
+                <>
+                  <ListSubheader>Events</ListSubheader>
+                  {groupedTypes.event.map((type, idx) => {
+                    const globalIdx = groupedTypes.entity.length + groupedTypes.role.length + idx
+                    return (
+                      <ListItem
+                        key={type.id}
+                        onClick={() => insertTypeReference(type)}
+                        sx={{
+                          backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          }
+                        }}
+                      >
+                        <ListItemText primary={type.name} />
+                      </ListItem>
+                    )
+                  })}
+                </>
+              )}
+              
+              {filteredTypes.length === 0 && (
+                <ListItem>
+                  <ListItemText 
+                    primary="No types found" 
+                    secondary="Type to search or ESC to close"
+                  />
+                </ListItem>
+              )}
+            </List>
+          </Paper>
+        </Popper>
+      </ClickAwayListener>
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+          Preview:
+        </Typography>
+        <Box sx={{ minHeight: 24 }}>
+          {gloss.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              No gloss items yet. Add text or type references below.
+              No gloss definition yet.
             </Typography>
+          ) : (
+            renderGlossPreview()
           )}
-          {gloss.map((item, index) => (
-            <Chip
-              key={index}
-              label={getTypeDisplay(item)}
-              color={item.type === 'typeRef' ? 'primary' : 'default'}
-              variant={item.type === 'typeRef' ? 'filled' : 'outlined'}
-              onDelete={() => handleRemoveItem(index)}
-              deleteIcon={<DeleteIcon />}
-            />
-          ))}
         </Box>
       </Paper>
 
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-        <TextField
-          label="Add text"
-          value={currentText}
-          onChange={(e) => setCurrentText(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              handleAddText()
-            }
-          }}
-          size="small"
-          sx={{ flex: 1 }}
-        />
-        <IconButton onClick={handleAddText} color="primary">
-          <AddIcon />
-        </IconButton>
-      </Box>
-
-      <Box sx={{ mt: 2 }}>
-        <Autocomplete
-          options={allTypes}
-          getOptionLabel={(option) => `${option.type}: ${option.name}`}
-          groupBy={(option) => option.type}
-          onChange={(e, value) => {
-            if (value) {
-              handleAddTypeRef(value)
-            }
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Add type reference"
-              size="small"
-            />
-          )}
-          value={null}
-        />
-      </Box>
-
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        Build your gloss by combining text and references to other types. Text appears as regular chips, while type references appear as colored chips.
+        Tip: Type @ to insert references to entities, roles, or events. Use arrow keys to navigate suggestions.
       </Typography>
     </Box>
   )
