@@ -21,18 +21,22 @@ import {
   Select,
   MenuItem,
   Alert,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material'
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Inventory2 as ObjectIcon,
+  Language as WikidataIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import { addEntity, updateEntity, addEntityTypeAssignment, removeEntityTypeAssignment } from '../../store/worldSlice'
 import { Entity, EntityTypeAssignment, GlossItem, EntityType } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import WikidataSearch from '../WikidataSearch'
 
 interface EntityEditorProps {
   open: boolean
@@ -48,6 +52,9 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [alternateNames, setAlternateNames] = useState<string[]>([])
   const [typeAssignments, setTypeAssignments] = useState<EntityTypeAssignment[]>([])
+  const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
+  const [wikidataId, setWikidataId] = useState<string>('')
+  const [wikidataUrl, setWikidataUrl] = useState<string>('')
   
   // For adding new type assignment
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
@@ -145,6 +152,42 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
             This is different from entity types which are categories (e.g., "Person", "Building").
           </Alert>
 
+          {!entity && (
+            <ToggleButtonGroup
+              value={importMode}
+              exclusive
+              onChange={(_, newMode) => newMode && setImportMode(newMode)}
+              fullWidth
+              size="small"
+            >
+              <ToggleButton value="manual">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <EditIcon fontSize="small" />
+                  <Typography variant="body2">Manual Entry</Typography>
+                </Box>
+              </ToggleButton>
+              <ToggleButton value="wikidata">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WikidataIcon fontSize="small" />
+                  <Typography variant="body2">Import from Wikidata</Typography>
+                </Box>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+
+          {importMode === 'wikidata' && !entity && (
+            <WikidataSearch
+              entityType="object"
+              onImport={(data) => {
+                setName(data.name)
+                setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])
+                setAlternateNames(data.aliases || [])
+                setWikidataId(data.wikidataId)
+                setWikidataUrl(data.wikidataUrl)
+              }}
+            />
+          )}
+
           <TextField
             label="Name"
             value={name}
@@ -172,6 +215,24 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
             fullWidth
             helperText="Other names for this entity (comma-separated)"
           />
+
+          {wikidataId && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip 
+                label={`Wikidata: ${wikidataId}`}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                component="a"
+                href={wikidataUrl}
+                target="_blank"
+                clickable
+              />
+              <Typography variant="caption" color="text.secondary">
+                Imported from Wikidata
+              </Typography>
+            </Box>
+          )}
 
           <Divider />
 

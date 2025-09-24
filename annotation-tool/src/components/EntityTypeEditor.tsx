@@ -24,6 +24,7 @@ import { generateId } from '../utils/uuid'
 import { addEntityToPersona, updateEntityInPersona } from '../store/personaSlice'
 import { EntityType, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
+import WikidataSearch from './WikidataSearch'
 
 interface EntityTypeEditorProps {
   open: boolean
@@ -38,10 +39,12 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [examples, setExamples] = useState<string[]>([])
-  const [mode, setMode] = useState<'new' | 'copy'>('new')
+  const [mode, setMode] = useState<'new' | 'copy' | 'wikidata'>('new')
   const [sourcePersonaId, setSourcePersonaId] = useState('')
   const [sourceEntityId, setSourceEntityId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
+  const [wikidataId, setWikidataId] = useState<string>('')
+  const [wikidataUrl, setWikidataUrl] = useState<string>('')
 
   useEffect(() => {
     if (entity) {
@@ -137,11 +140,12 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
                 <InputLabel>Mode</InputLabel>
                 <Select
                   value={mode}
-                  onChange={(e) => setMode(e.target.value as 'new' | 'copy')}
+                  onChange={(e) => setMode(e.target.value as 'new' | 'copy' | 'wikidata')}
                   label="Mode"
                 >
                   <MenuItem value="new">Create New Type</MenuItem>
                   <MenuItem value="copy">Copy from Existing Type</MenuItem>
+                  <MenuItem value="wikidata">Import from Wikidata</MenuItem>
                 </Select>
               </FormControl>
               
@@ -181,6 +185,21 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
                   )}
                 </>
               )}
+              
+              {mode === 'wikidata' && (
+                <WikidataSearch
+                  entityType="type"
+                  onImport={(data) => {
+                    setName(data.name)
+                    setGloss([{ type: 'text', content: data.description || `A type of ${data.name} from Wikidata.` }])
+                    setWikidataId(data.wikidataId)
+                    setWikidataUrl(data.wikidataUrl)
+                    if (data.aliases) {
+                      setExamples(data.aliases)
+                    }
+                  }}
+                />
+              )}
             </>
           )}
           
@@ -190,13 +209,13 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             onChange={(e) => setName(e.target.value)}
             fullWidth
             required
-            disabled={mode === 'copy' && !sourceEntityId}
+            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
           />
           <GlossEditor
             gloss={gloss}
             onChange={setGloss}
             personaId={personaId}
-            disabled={mode === 'copy' && !sourceEntityId}
+            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
           />
           <TextField
             label="Examples (comma-separated)"
@@ -206,8 +225,26 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             multiline
             rows={2}
             helperText="Optional: Provide example instances of this entity type"
-            disabled={mode === 'copy' && !sourceEntityId}
+            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
           />
+          
+          {wikidataId && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip 
+                label={`Wikidata: ${wikidataId}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                component="a"
+                href={wikidataUrl}
+                target="_blank"
+                clickable
+              />
+              <Typography variant="caption" color="text.secondary">
+                Imported from Wikidata
+              </Typography>
+            </Box>
+          )}
           
           <Divider />
           
