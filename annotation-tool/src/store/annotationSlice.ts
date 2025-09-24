@@ -1,10 +1,18 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { Annotation } from '../models/types'
+import { Annotation, Time } from '../models/types'
+
+type AnnotationMode = 
+  | 'type-assignment'  // Assign types directly (requires persona)
+  | 'entity-link'      // Link to world entity
+  | 'event-link'       // Link to world event
+  | 'location-link'    // Link to location entity
+  | 'collection-link'  // Link to collection
 
 interface AnnotationState {
   annotations: Record<string, Annotation[]>
   selectedAnnotation: Annotation | null
   selectedPersonaId: string | null
+  annotationMode: AnnotationMode
   isDrawing: boolean
   drawingMode: 'entity' | 'role' | 'event' | null
   temporaryBox: {
@@ -13,15 +21,22 @@ interface AnnotationState {
     width: number
     height: number
   } | null
+  temporaryTime: Time | null
+  linkTargetId: string | null  // ID of entity/event/collection to link
+  linkTargetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null
 }
 
 const initialState: AnnotationState = {
   annotations: {},
   selectedAnnotation: null,
   selectedPersonaId: null,
+  annotationMode: 'type-assignment',
   isDrawing: false,
   drawingMode: null,
   temporaryBox: null,
+  temporaryTime: null,
+  linkTargetId: null,
+  linkTargetType: null,
 }
 
 const annotationSlice = createSlice({
@@ -71,6 +86,27 @@ const annotationSlice = createSlice({
     setSelectedPersona: (state, action: PayloadAction<string | null>) => {
       state.selectedPersonaId = action.payload
     },
+    setAnnotationMode: (state, action: PayloadAction<AnnotationMode>) => {
+      state.annotationMode = action.payload
+      // Clear persona if switching to a mode that doesn't need it
+      if (action.payload !== 'type-assignment') {
+        state.selectedPersonaId = null
+      }
+    },
+    setTemporaryTime: (state, action: PayloadAction<Time | null>) => {
+      state.temporaryTime = action.payload
+    },
+    setLinkTarget: (state, action: PayloadAction<{
+      id: string | null
+      type: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null
+    }>) => {
+      state.linkTargetId = action.payload.id
+      state.linkTargetType = action.payload.type
+    },
+    clearLinkTarget: (state) => {
+      state.linkTargetId = null
+      state.linkTargetType = null
+    },
   },
 })
 
@@ -84,6 +120,10 @@ export const {
   setTemporaryBox,
   clearDrawingState,
   setSelectedPersona,
+  setAnnotationMode,
+  setTemporaryTime,
+  setLinkTarget,
+  clearLinkTarget,
 } = annotationSlice.actions
 
 export default annotationSlice.reducer

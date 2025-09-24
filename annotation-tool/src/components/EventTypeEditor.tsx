@@ -17,6 +17,10 @@ import {
   Select,
   MenuItem,
   FormControlLabel,
+  FormControl,
+  InputLabel,
+  FormGroup,
+  Divider,
   Checkbox,
   Chip,
 } from '@mui/material'
@@ -30,23 +34,26 @@ import { addEventToPersona, updateEventInPersona } from '../store/personaSlice'
 import { EventType, EventRole, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
 
-interface EventEditorProps {
+interface EventTypeEditorProps {
   open: boolean
   onClose: () => void
   event: EventType | null
   personaId: string | null
 }
 
-export default function EventEditor({ open, onClose, event, personaId }: EventEditorProps) {
+export default function EventTypeEditor({ open, onClose, event, personaId }: EventTypeEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
-  const ontology = useSelector((state: RootState) => 
-    state.persona.personaOntologies.find(o => o.personaId === personaId)
-  )
+  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  const ontology = personaOntologies.find(o => o.personaId === personaId)
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [roles, setRoles] = useState<EventRole[]>([])
   const [examples, setExamples] = useState<string[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState('')
+  const [mode, setMode] = useState<'new' | 'copy'>('new')
+  const [sourcePersonaId, setSourcePersonaId] = useState('')
+  const [sourceEventId, setSourceEventId] = useState('')
+  const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
 
   useEffect(() => {
     if (event) {
@@ -112,7 +119,7 @@ export default function EventEditor({ open, onClose, event, personaId }: EventEd
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{event ? 'Edit Event' : 'Add Event'}</DialogTitle>
+      <DialogTitle>{event ? 'Edit Event Type' : 'Add Event Type'}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
           <TextField

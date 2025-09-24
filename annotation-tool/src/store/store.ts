@@ -3,6 +3,7 @@ import ontologyReducer from './ontologySlice'
 import annotationReducer from './annotationSlice'
 import videoReducer from './videoSlice'
 import personaReducer from './personaSlice'
+import worldReducer from './worldSlice'
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     annotations: annotationReducer,
     videos: videoReducer,
     persona: personaReducer,
+    world: worldReducer,
   },
 })
 
