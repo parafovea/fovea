@@ -428,7 +428,7 @@ export default function AnnotationWorkspace() {
           <Stack spacing={2}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {/* Persona Selector (left side) */}
-              <FormControl size="small" sx={{ width: 250 }}>
+              <FormControl size="small" sx={{ width: 250 }} disabled={annotationMode === 'object'}>
                 <InputLabel id="persona-select-label">Select Persona</InputLabel>
                 <Select
                   labelId="persona-select-label"
@@ -436,6 +436,7 @@ export default function AnnotationWorkspace() {
                   value={selectedPersonaId || ''}
                   label="Select Persona"
                   onChange={(e) => dispatch(setSelectedPersona(e.target.value || null))}
+                  disabled={annotationMode === 'object'}
                 >
                   <MenuItem value="">
                     <em>None</em>
@@ -486,16 +487,6 @@ export default function AnnotationWorkspace() {
                 >
                   Edit Summary
                 </Button>
-              )}
-              
-              {/* Ontology Info */}
-              {selectedPersona && (
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
-                  {personaOntology ? 
-                    `${personaOntology.entities.length} entities, ${personaOntology.roles.length} roles, ${personaOntology.events.length} events` :
-                    'Loading ontology...'
-                  }
-                </Typography>
               )}
             </Box>
             

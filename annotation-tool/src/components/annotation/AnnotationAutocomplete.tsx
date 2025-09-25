@@ -190,6 +190,17 @@ export default function AnnotationAutocomplete({
     }
   }
 
+  // Generate label with counts for type mode
+  const getTypeLabel = () => {
+    if (mode === 'type' && personaOntology && !value) {
+      const entityCount = personaOntology.entities.length
+      const roleCount = personaOntology.roles.length
+      const eventCount = personaOntology.events.length
+      return `Select Type (${entityCount} entities, ${roleCount} roles, ${eventCount} events)`
+    }
+    return mode === 'type' ? 'Select Type' : 'Select Object'
+  }
+
   return (
     <Autocomplete
       value={value}
@@ -205,7 +216,7 @@ export default function AnnotationAutocomplete({
         <TextField
           {...params}
           size="small"
-          label={mode === 'type' ? 'Select Type' : 'Select Object'}
+          label={getTypeLabel()}
           placeholder={
             mode === 'type' && !personaId 
               ? 'Please select a persona first' 
