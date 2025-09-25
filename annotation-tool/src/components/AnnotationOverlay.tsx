@@ -1,14 +1,16 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Box } from '@mui/material'
+import { Box, Tooltip, Chip } from '@mui/material'
 import { RootState, AppDispatch } from '../store/store'
 import { generateId } from '../utils/uuid'
 import { 
   setTemporaryBox, 
   addAnnotation, 
-  clearDrawingState 
+  clearDrawingState,
+  selectAnnotation 
 } from '../store/annotationSlice'
 import { useParams } from 'react-router-dom'
+import InteractiveBoundingBox from './annotation/InteractiveBoundingBox'
 
 interface AnnotationOverlayProps {
   videoElement: HTMLVideoElement | null
@@ -32,14 +34,26 @@ export default function AnnotationOverlay({
   const drawingMode = useSelector((state: RootState) => state.annotations.drawingMode)
   const temporaryBox = useSelector((state: RootState) => state.annotations.temporaryBox)
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
+  const selectedTypeId = useSelector((state: RootState) => state.annotations.selectedTypeId)
+  const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
+  const linkTargetId = useSelector((state: RootState) => state.annotations.linkTargetId)
+  const linkTargetType = useSelector((state: RootState) => state.annotations.linkTargetType)
+  const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
   const annotations = useSelector((state: RootState) => {
     const videoAnnotations = state.annotations.annotations[videoId || '']
-    // Filter annotations by selected persona if one is selected
-    if (selectedPersonaId && videoAnnotations) {
+    // Filter annotations by selected persona if one is selected and in type mode
+    if (selectedPersonaId && videoAnnotations && annotationMode === 'type') {
       return videoAnnotations.filter(a => a.personaId === selectedPersonaId)
     }
     return videoAnnotations || []
   })
+  
+  // Get world objects for linked annotations
+  const entities = useSelector((state: RootState) => state.world.entities)
+  const events = useSelector((state: RootState) => state.world.events)
+  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
+  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
+  const personas = useSelector((state: RootState) => state.persona.personas)
 
 
   const getRelativeCoordinates = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -53,7 +67,13 @@ export default function AnnotationOverlay({
   }
 
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!drawingMode) return
+    // Check if we're clicking on an existing annotation (not the SVG background)
+    if (e.target !== e.currentTarget) return
+    
+    // In type mode, need both drawing mode and persona
+    if (annotationMode === 'type' && (!drawingMode || !selectedPersonaId)) return
+    // In object mode, need a link target
+    if (annotationMode === 'object' && !linkTargetId) return
     
     const coords = getRelativeCoordinates(e)
     setIsDrawing(true)
@@ -76,34 +96,89 @@ export default function AnnotationOverlay({
   }
 
   const handleMouseUp = () => {
-    if (!isDrawing || !drawingMode || !temporaryBox || !videoId || !selectedPersonaId) return
+    if (!isDrawing || !temporaryBox || !videoId) return
+    
+    // Check requirements based on mode
+    if (annotationMode === 'type' && (!drawingMode || !selectedPersonaId)) return
+    if (annotationMode === 'object' && !linkTargetId) return
     
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
-      const annotation = {
-        id: `generateId()`,
+      const annotation: any = {
+        id: generateId(),
         videoId,
-        personaId: selectedPersonaId,
         boundingBox: temporaryBox,
         timeSpan: {
           startTime: currentTime,
           endTime: currentTime + 1,
         },
-        typeCategory: drawingMode,
-        typeId: 'temp-type',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
       
-      dispatch(addAnnotation(annotation as any))
+      if (annotationMode === 'type') {
+        annotation.personaId = selectedPersonaId
+        annotation.typeCategory = drawingMode
+        annotation.typeId = selectedTypeId || 'temp-type'
+      } else {
+        // Object linking mode
+        if (linkTargetType === 'entity') {
+          annotation.linkedEntityId = linkTargetId
+        } else if (linkTargetType === 'event') {
+          annotation.linkedEventId = linkTargetId
+        } else if (linkTargetType === 'location') {
+          annotation.linkedLocationId = linkTargetId
+        } else if (linkTargetType?.includes('collection')) {
+          annotation.linkedCollectionId = linkTargetId
+          annotation.linkedCollectionType = linkTargetType.replace('-collection', '')
+        }
+      }
+      
+      dispatch(addAnnotation(annotation))
     }
     
     setIsDrawing(false)
     dispatch(clearDrawingState())
   }
 
-  const currentAnnotations = annotations.filter(ann => 
-    ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
-  )
+  // Get display info for annotations
+  const annotationsWithInfo = useMemo(() => {
+    return annotations.filter(ann => 
+      ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
+    ).map(ann => {
+      let displayInfo: any = { ...ann }
+      
+      // Get linked object info
+      if (ann.linkedEntityId) {
+        const entity = entities.find(e => e.id === ann.linkedEntityId)
+        if (entity) {
+          displayInfo.linkedObject = entity
+          displayInfo.linkedType = 'entity'
+        }
+      } else if (ann.linkedEventId) {
+        const event = events.find(e => e.id === ann.linkedEventId)
+        if (event) {
+          displayInfo.linkedObject = event
+          displayInfo.linkedType = 'event'
+        }
+      } else if (ann.linkedLocationId) {
+        const location = entities.find(e => e.id === ann.linkedLocationId && 'locationType' in e)
+        if (location) {
+          displayInfo.linkedObject = location
+          displayInfo.linkedType = 'location'
+        }
+      } else if (ann.linkedCollectionId) {
+        const collection = ann.linkedCollectionType === 'entity' 
+          ? entityCollections.find(c => c.id === ann.linkedCollectionId)
+          : eventCollections.find(c => c.id === ann.linkedCollectionId)
+        if (collection) {
+          displayInfo.linkedObject = collection
+          displayInfo.linkedType = `${ann.linkedCollectionType}-collection`
+        }
+      }
+      
+      return displayInfo
+    })
+  }, [annotations, currentTime, entities, events, entityCollections, eventCollections])
 
   return (
     <Box
@@ -113,7 +188,7 @@ export default function AnnotationOverlay({
         left: 0,
         width: '100%',
         height: '100%',
-        pointerEvents: drawingMode ? 'auto' : 'none',
+        pointerEvents: 'auto', // Always allow pointer events so existing annotations can be interacted with
       }}
     >
       <svg
@@ -121,7 +196,9 @@ export default function AnnotationOverlay({
         width="100%"
         height="100%"
         style={{
-          cursor: drawingMode ? 'crosshair' : 'default',
+          cursor: ((annotationMode === 'type' && drawingMode) || 
+                   (annotationMode === 'object' && linkTargetId))
+                   ? 'crosshair' : 'default',
         }}
         viewBox={`0 0 ${videoWidth} ${videoHeight}`}
         preserveAspectRatio="none"
@@ -130,22 +207,16 @@ export default function AnnotationOverlay({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {currentAnnotations.map((annotation) => (
-          <rect
-            key={annotation.id}
-            x={annotation.boundingBox.x}
-            y={annotation.boundingBox.y}
-            width={annotation.boundingBox.width}
-            height={annotation.boundingBox.height}
-            fill="none"
-            stroke={
-              annotation.typeCategory === 'entity' ? '#4caf50' :
-              annotation.typeCategory === 'role' ? '#2196f3' :
-              '#ff9800'
-            }
-            strokeWidth="2"
-            opacity="0.8"
-          />
+        {annotationsWithInfo.map((ann) => (
+          <g key={ann.id} style={{ pointerEvents: 'auto' }}>
+            <InteractiveBoundingBox
+              annotation={ann}
+              videoWidth={videoWidth}
+              videoHeight={videoHeight}
+              isActive={selectedAnnotation?.id === ann.id}
+              onSelect={() => dispatch(selectAnnotation(ann))}
+            />
+          </g>
         ))}
         
         {temporaryBox && (

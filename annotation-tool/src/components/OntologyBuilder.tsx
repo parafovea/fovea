@@ -590,7 +590,7 @@ export default function OntologyBuilder() {
                           }
                           secondary={
                             entity.metadata?.alternateNames?.length > 0
-                              ? `Also known as: ${entity.metadata.alternateNames.join(', ')}`
+                              ? `Also known as: ${entity.metadata.alternateNames?.join(', ') || ''}`
                               : undefined
                           }
                         />

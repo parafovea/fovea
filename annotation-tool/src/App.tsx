@@ -56,7 +56,7 @@ function App() {
         } else {
           // Create default persona
           const defaultPersona = {
-            id: `generateId()`,
+            id: generateId(),
             name: 'Default Persona',
             role: 'Analyst',
             informationNeed: 'General information extraction',
@@ -65,7 +65,7 @@ function App() {
             updatedAt: new Date().toISOString(),
           }
           const defaultOntology = {
-            id: `generateId()`,
+            id: generateId(),
             personaId: defaultPersona.id,
             entities: [],
             roles: [],

@@ -14,10 +14,21 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Chip,
+  Stack,
+  Alert,
+  Divider,
 } from '@mui/material'
+import {
+  Person as EntityIcon,
+  Event as EventIcon,
+  LocationOn as LocationIcon,
+  Folder as CollectionIcon,
+} from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
-import { updateAnnotation } from '../store/annotationSlice'
+import { updateAnnotation, setLinkTarget } from '../store/annotationSlice'
 import { Annotation } from '../models/types'
+import ObjectPicker from './annotation/ObjectPicker'
 
 interface AnnotationEditorProps {
   open: boolean
@@ -33,6 +44,8 @@ export default function AnnotationEditor({
   videoFps = 30 
 }: AnnotationEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
+  const [objectPickerOpen, setObjectPickerOpen] = useState(false)
+  const [objectPickerType, setObjectPickerType] = useState<'entity' | 'event' | 'location' | 'collection'>('entity')
   
   // Get the persona and its ontology for this annotation
   const persona = useSelector((state: RootState) => {
@@ -41,12 +54,23 @@ export default function AnnotationEditor({
   })
   const personaOntology = useSelector((state: RootState) => {
     if (!annotation?.personaId) return null
-    return state.persona.personaOntologies[annotation.personaId]
+    return state.persona.personaOntologies.find(o => o.personaId === annotation.personaId)
   })
+  
+  // Get world objects for linked annotations
+  const entities = useSelector((state: RootState) => state.world.entities)
+  const events = useSelector((state: RootState) => state.world.events)
+  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
+  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
   
   const [formData, setFormData] = useState({
     typeCategory: 'entity' as 'entity' | 'role' | 'event',
     typeId: '',
+    linkedEntityId: '',
+    linkedEventId: '',
+    linkedLocationId: '',
+    linkedCollectionId: '',
+    linkedCollectionType: '' as '' | 'entity' | 'event',
     startTime: 0,
     endTime: 0,
     x: 0,
@@ -59,8 +83,13 @@ export default function AnnotationEditor({
   useEffect(() => {
     if (annotation) {
       setFormData({
-        typeCategory: annotation.typeCategory,
-        typeId: annotation.typeId,
+        typeCategory: annotation.typeCategory || 'entity',
+        typeId: annotation.typeId || '',
+        linkedEntityId: annotation.linkedEntityId || '',
+        linkedEventId: annotation.linkedEventId || '',
+        linkedLocationId: annotation.linkedLocationId || '',
+        linkedCollectionId: annotation.linkedCollectionId || '',
+        linkedCollectionType: annotation.linkedCollectionType || '',
         startTime: annotation.timeSpan.startTime,
         endTime: annotation.timeSpan.endTime,
         x: annotation.boundingBox.x,
@@ -75,10 +104,8 @@ export default function AnnotationEditor({
   const handleSave = () => {
     if (!annotation) return
 
-    const updatedAnnotation: Annotation = {
+    const updatedAnnotation: any = {
       ...annotation,
-      typeCategory: formData.typeCategory,
-      typeId: formData.typeId,
       timeSpan: {
         startTime: formData.startTime,
         endTime: formData.endTime,
@@ -94,6 +121,30 @@ export default function AnnotationEditor({
       },
       notes: formData.notes,
       updatedAt: new Date().toISOString(),
+    }
+    
+    // Clear all type/link fields first
+    delete updatedAnnotation.typeCategory
+    delete updatedAnnotation.typeId
+    delete updatedAnnotation.linkedEntityId
+    delete updatedAnnotation.linkedEventId
+    delete updatedAnnotation.linkedLocationId
+    delete updatedAnnotation.linkedCollectionId
+    delete updatedAnnotation.linkedCollectionType
+    
+    // Add appropriate fields based on what's set
+    if (formData.typeCategory && formData.typeId) {
+      updatedAnnotation.typeCategory = formData.typeCategory
+      updatedAnnotation.typeId = formData.typeId
+    } else if (formData.linkedEntityId) {
+      updatedAnnotation.linkedEntityId = formData.linkedEntityId
+    } else if (formData.linkedEventId) {
+      updatedAnnotation.linkedEventId = formData.linkedEventId
+    } else if (formData.linkedLocationId) {
+      updatedAnnotation.linkedLocationId = formData.linkedLocationId
+    } else if (formData.linkedCollectionId) {
+      updatedAnnotation.linkedCollectionId = formData.linkedCollectionId
+      updatedAnnotation.linkedCollectionType = formData.linkedCollectionType
     }
 
     dispatch(updateAnnotation(updatedAnnotation))
@@ -129,42 +180,143 @@ export default function AnnotationEditor({
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Type Category</InputLabel>
-                <Select
-                  value={formData.typeCategory}
-                  label="Type Category"
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    typeCategory: e.target.value as 'entity' | 'role' | 'event',
-                    typeId: '' // Reset type when category changes
-                  })}
-                >
-                  <MenuItem value="entity">Entity</MenuItem>
-                  <MenuItem value="role">Role</MenuItem>
-                  <MenuItem value="event">Event</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Type</InputLabel>
-                <Select
-                  value={formData.typeId}
-                  label="Type"
-                  onChange={(e) => setFormData({ ...formData, typeId: e.target.value })}
-                >
-                  {getAvailableTypes().map(type => (
-                    <MenuItem key={type.id} value={type.id}>
-                      {type.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
+          {/* Type Assignment or Object Linking */}
+          <Typography variant="subtitle1">Annotation Target</Typography>
+          
+          {/* Show linked object if present */}
+          {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedCollectionId) && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Stack spacing={1}>
+                <Typography variant="body2">Linked Object:</Typography>
+                {formData.linkedEntityId && (
+                  <Chip
+                    icon={<EntityIcon />}
+                    label={entities.find(e => e.id === formData.linkedEntityId)?.name || 'Unknown Entity'}
+                    onDelete={() => setFormData({ ...formData, linkedEntityId: '' })}
+                  />
+                )}
+                {formData.linkedEventId && (
+                  <Chip
+                    icon={<EventIcon />}
+                    label={events.find(e => e.id === formData.linkedEventId)?.name || 'Unknown Event'}
+                    onDelete={() => setFormData({ ...formData, linkedEventId: '' })}
+                  />
+                )}
+                {formData.linkedLocationId && (
+                  <Chip
+                    icon={<LocationIcon />}
+                    label={entities.find(e => e.id === formData.linkedLocationId)?.name || 'Unknown Location'}
+                    onDelete={() => setFormData({ ...formData, linkedLocationId: '' })}
+                  />
+                )}
+                {formData.linkedCollectionId && (
+                  <Chip
+                    icon={<CollectionIcon />}
+                    label={
+                      formData.linkedCollectionType === 'entity'
+                        ? entityCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
+                        : eventCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
+                    }
+                    onDelete={() => setFormData({ ...formData, linkedCollectionId: '', linkedCollectionType: '' })}
+                  />
+                )}
+              </Stack>
+            </Alert>
+          )}
+          
+          {/* Object picker buttons */}
+          {!formData.linkedEntityId && !formData.linkedEventId && !formData.linkedLocationId && !formData.linkedCollectionId && (
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EntityIcon />}
+                onClick={() => {
+                  setObjectPickerType('entity')
+                  setObjectPickerOpen(true)
+                }}
+              >
+                Link Entity
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EventIcon />}
+                onClick={() => {
+                  setObjectPickerType('event')
+                  setObjectPickerOpen(true)
+                }}
+              >
+                Link Event
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<LocationIcon />}
+                onClick={() => {
+                  setObjectPickerType('location')
+                  setObjectPickerOpen(true)
+                }}
+              >
+                Link Location
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<CollectionIcon />}
+                onClick={() => {
+                  setObjectPickerType('collection')
+                  setObjectPickerOpen(true)
+                }}
+              >
+                Link Collection
+              </Button>
+            </Stack>
+          )}
+          
+          <Divider>OR</Divider>
+          
+          {/* Type Assignment (only if persona present) */}
+          {persona && (
+            <>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Type Category</InputLabel>
+                    <Select
+                      value={formData.typeCategory}
+                      label="Type Category"
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        typeCategory: e.target.value as 'entity' | 'role' | 'event',
+                        typeId: '' // Reset type when category changes
+                      })}
+                    >
+                      <MenuItem value="entity">Entity</MenuItem>
+                      <MenuItem value="role">Role</MenuItem>
+                      <MenuItem value="event">Event</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Type</InputLabel>
+                    <Select
+                      value={formData.typeId}
+                      label="Type"
+                      onChange={(e) => setFormData({ ...formData, typeId: e.target.value })}
+                    >
+                      {getAvailableTypes().map(type => (
+                        <MenuItem key={type.id} value={type.id}>
+                          {type.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </>
+          )}
 
           <Typography variant="subtitle1" sx={{ mt: 2 }}>
             Time Span
@@ -274,11 +426,49 @@ export default function AnnotationEditor({
         <Button 
           onClick={handleSave} 
           variant="contained"
-          disabled={!formData.typeId}
+          disabled={
+            !formData.typeId && 
+            !formData.linkedEntityId && 
+            !formData.linkedEventId && 
+            !formData.linkedLocationId && 
+            !formData.linkedCollectionId
+          }
         >
           Save Changes
         </Button>
       </DialogActions>
+      
+      <ObjectPicker
+        open={objectPickerOpen}
+        onClose={() => setObjectPickerOpen(false)}
+        onSelect={(object) => {
+          // Clear all link fields first
+          const clearedFormData = {
+            ...formData,
+            linkedEntityId: '',
+            linkedEventId: '',
+            linkedLocationId: '',
+            linkedCollectionId: '',
+            linkedCollectionType: '' as '' | 'entity' | 'event',
+          }
+          
+          // Set the appropriate field based on object type
+          if (object.type === 'entity') {
+            setFormData({ ...clearedFormData, linkedEntityId: object.id })
+          } else if (object.type === 'event') {
+            setFormData({ ...clearedFormData, linkedEventId: object.id })
+          } else if (object.type === 'location') {
+            setFormData({ ...clearedFormData, linkedLocationId: object.id })
+          } else if (object.type === 'entity-collection') {
+            setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'entity' })
+          } else if (object.type === 'event-collection') {
+            setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'event' })
+          }
+          
+          setObjectPickerOpen(false)
+        }}
+        allowedTypes={[objectPickerType]}
+      />
     </Dialog>
   )
 }

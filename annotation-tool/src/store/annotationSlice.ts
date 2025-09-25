@@ -2,11 +2,8 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { Annotation, Time } from '../models/types'
 
 type AnnotationMode = 
-  | 'type-assignment'  // Assign types directly (requires persona)
-  | 'entity-link'      // Link to world entity
-  | 'event-link'       // Link to world event
-  | 'location-link'    // Link to location entity
-  | 'collection-link'  // Link to collection
+  | 'type'    // Assign types from persona ontology (requires persona)
+  | 'object'  // Link to world objects (entities, events, locations, collections)
 
 interface AnnotationState {
   annotations: Record<string, Annotation[]>
@@ -15,6 +12,7 @@ interface AnnotationState {
   annotationMode: AnnotationMode
   isDrawing: boolean
   drawingMode: 'entity' | 'role' | 'event' | null
+  selectedTypeId: string | null  // ID of the selected type for type mode
   temporaryBox: {
     x: number
     y: number
@@ -30,9 +28,10 @@ const initialState: AnnotationState = {
   annotations: {},
   selectedAnnotation: null,
   selectedPersonaId: null,
-  annotationMode: 'type-assignment',
+  annotationMode: 'type',
   isDrawing: false,
   drawingMode: null,
+  selectedTypeId: null,
   temporaryBox: null,
   temporaryTime: null,
   linkTargetId: null,
@@ -75,12 +74,18 @@ const annotationSlice = createSlice({
       state.drawingMode = action.payload
       state.isDrawing = action.payload !== null
     },
+    setSelectedType: (state, action: PayloadAction<{ typeId: string | null; category: 'entity' | 'role' | 'event' | null }>) => {
+      state.selectedTypeId = action.payload.typeId
+      state.drawingMode = action.payload.category
+      state.isDrawing = action.payload.category !== null
+    },
     setTemporaryBox: (state, action: PayloadAction<{ x: number; y: number; width: number; height: number } | null>) => {
       state.temporaryBox = action.payload
     },
     clearDrawingState: (state) => {
       state.isDrawing = false
       state.drawingMode = null
+      state.selectedTypeId = null
       state.temporaryBox = null
     },
     setSelectedPersona: (state, action: PayloadAction<string | null>) => {
@@ -88,8 +93,8 @@ const annotationSlice = createSlice({
     },
     setAnnotationMode: (state, action: PayloadAction<AnnotationMode>) => {
       state.annotationMode = action.payload
-      // Clear persona if switching to a mode that doesn't need it
-      if (action.payload !== 'type-assignment') {
+      // Clear persona if switching to object mode
+      if (action.payload === 'object') {
         state.selectedPersonaId = null
       }
     },
@@ -117,6 +122,7 @@ export const {
   deleteAnnotation,
   selectAnnotation,
   setDrawingMode,
+  setSelectedType,
   setTemporaryBox,
   clearDrawingState,
   setSelectedPersona,

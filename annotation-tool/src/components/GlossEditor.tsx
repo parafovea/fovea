@@ -22,6 +22,8 @@ interface GlossEditorProps {
   availableTypes?: ('entity' | 'role' | 'event' | 'relation')[]
   personaId?: string | null
   disabled?: boolean
+  videoId?: string | null  // For annotation references
+  includeAnnotations?: boolean  // Whether to allow ^ references
 }
 
 interface TypeOption {
@@ -37,9 +39,26 @@ interface ObjectOption {
   type: 'entity-object' | 'event-object' | 'time-object' | 'location-object'
 }
 
-export default function GlossEditor({ gloss, onChange, availableTypes, personaId, disabled = false }: GlossEditorProps) {
+interface AnnotationOption {
+  id: string
+  name: string
+  type: 'annotation'
+}
+
+export default function GlossEditor({ 
+  gloss, 
+  onChange, 
+  availableTypes, 
+  personaId, 
+  disabled = false, 
+  videoId = null,
+  includeAnnotations = false
+}: GlossEditorProps) {
   const { personaOntologies } = useSelector((state: RootState) => state.persona)
   const { entities, events, times } = useSelector((state: RootState) => state.world)
+  const annotations = useSelector((state: RootState) => 
+    videoId ? state.annotations.annotations[videoId] || [] : []
+  )
   const activeOntology = personaOntologies.find(o => o.personaId === personaId)
   
   const [inputValue, setInputValue] = useState('')

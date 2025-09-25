@@ -9,9 +9,9 @@ export interface Persona {
 }
 
 export interface GlossItem {
-  type: 'text' | 'typeRef'
+  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef'
   content: string
-  refType?: 'entity' | 'role' | 'event' | 'relation'
+  refType?: 'entity' | 'role' | 'event' | 'relation' | 'entity-object' | 'event-object' | 'time-object' | 'location-object' | 'annotation'
   refPersonaId?: string
 }
 
@@ -458,10 +458,22 @@ export interface Ontology {
   description?: string
 }
 
+// Video Summary
+export interface VideoSummary {
+  id: string
+  videoId: string
+  personaId: string
+  summary: GlossItem[]
+  createdAt: string
+  updatedAt: string
+  createdBy?: string
+}
+
 export interface OntologyExport {
   ontology: Ontology
   annotations: Annotation[]
   videos: VideoMetadata[]
+  videoSummaries?: VideoSummary[]
   exportDate: string
   exportVersion: string
 }
