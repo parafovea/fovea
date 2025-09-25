@@ -5,12 +5,13 @@
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 1;
 }
 
 .annotation-video-container .video-js {
   width: 100% !important;
   height: 100% !important;
-  background-color: transparent !important;
+  background-color: black !important;
 }
 
 .annotation-video-container .video-js .vjs-tech {
@@ -45,4 +46,11 @@
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  z-index: 0 !important;
 }

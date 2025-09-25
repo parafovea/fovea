@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { VideoMetadata } from '../models/types.js'
+import { VideoMetadata, VideoSummary } from '../models/types.js'
+import { videoSummaryModel } from '../models/VideoSummary.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -155,6 +156,89 @@ router.get('/:id/stream', async (req, res) => {
   } catch (error) {
     console.error('Error streaming video:', error)
     res.status(500).json({ error: 'Failed to stream video' })
+  }
+})
+
+// Video Summary endpoints
+router.get('/:videoId/summaries', async (req, res) => {
+  try {
+    const summaries = videoSummaryModel.getAllForVideo(req.params.videoId)
+    res.json(summaries)
+  } catch (error) {
+    console.error('Error loading video summaries:', error)
+    res.status(500).json({ error: 'Failed to load video summaries' })
+  }
+})
+
+router.get('/:videoId/summaries/:personaId', async (req, res) => {
+  try {
+    const summary = videoSummaryModel.getForPersona(
+      req.params.videoId, 
+      req.params.personaId
+    )
+    
+    if (!summary) {
+      return res.status(404).json({ error: 'Summary not found' })
+    }
+    
+    res.json(summary)
+  } catch (error) {
+    console.error('Error loading video summary:', error)
+    res.status(500).json({ error: 'Failed to load video summary' })
+  }
+})
+
+router.post('/:videoId/summaries', async (req, res) => {
+  try {
+    const summary: VideoSummary = req.body
+    
+    // Validate required fields
+    if (!summary.videoId || !summary.personaId) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+    
+    // Ensure videoId matches URL param
+    summary.videoId = req.params.videoId
+    
+    const savedSummary = videoSummaryModel.save(summary)
+    res.json(savedSummary)
+  } catch (error) {
+    console.error('Error creating video summary:', error)
+    res.status(500).json({ error: 'Failed to create video summary' })
+  }
+})
+
+router.put('/:videoId/summaries/:summaryId', async (req, res) => {
+  try {
+    const summary: VideoSummary = req.body
+    
+    // Ensure IDs match
+    summary.videoId = req.params.videoId
+    summary.id = req.params.summaryId
+    
+    const savedSummary = videoSummaryModel.save(summary)
+    res.json(savedSummary)
+  } catch (error) {
+    console.error('Error updating video summary:', error)
+    res.status(500).json({ error: 'Failed to update video summary' })
+  }
+})
+
+router.delete('/:videoId/summaries/:summaryId', async (req, res) => {
+  try {
+    const deleted = videoSummaryModel.delete(
+      req.params.videoId,
+      req.params.summaryId
+    )
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Summary not found' })
+    }
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting video summary:', error)
+    res.status(500).json({ error: 'Failed to delete video summary' })
   }
 })
 

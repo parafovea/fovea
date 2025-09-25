@@ -63,6 +63,8 @@ import {
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './annotation/AnnotationAutocomplete'
+import VideoSummaryDialog from './VideoSummaryDialog'
+import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 
@@ -79,6 +81,7 @@ export default function AnnotationWorkspace() {
   const [duration, setDuration] = useState(0)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState<any>(null)
+  const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
@@ -94,7 +97,14 @@ export default function AnnotationWorkspace() {
     const videoAnnotations = state.annotations.annotations[videoId || '']
     // Filter annotations by selected persona if one is selected
     if (selectedPersonaId && videoAnnotations) {
-      return videoAnnotations.filter(a => a.personaId === selectedPersonaId)
+      return videoAnnotations.filter(a => {
+        // Only TypeAnnotations have personaId
+        if (a.annotationType === 'type') {
+          return (a as any).personaId === selectedPersonaId
+        }
+        // Object annotations are not filtered by persona
+        return true
+      })
     }
     return videoAnnotations || []
   })
@@ -364,16 +374,45 @@ export default function AnnotationWorkspace() {
         </Box>
 
         <Paper sx={{ p: 2, mt: 2 }}>
+          {/* Playback Controls Row */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <IconButton onClick={handlePlayPause}>
-              {isPlaying ? <PauseIcon /> : <PlayIcon />}
-            </IconButton>
-            <IconButton onClick={handlePrevFrame}>
-              <PrevFrameIcon />
-            </IconButton>
-            <IconButton onClick={handleNextFrame}>
-              <NextFrameIcon />
-            </IconButton>
+            {/* Mode Toggle (now to the left of play button) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2">Mode:</Typography>
+              <ToggleButtonGroup
+                value={annotationMode}
+                exclusive
+                onChange={(_, newMode) => {
+                  if (newMode) {
+                    dispatch(setAnnotationMode(newMode))
+                    if (newMode === 'object') {
+                      dispatch(setSelectedPersona(null))
+                    }
+                  }
+                }}
+                size="small"
+              >
+                <ToggleButton value="type">
+                  Type
+                </ToggleButton>
+                <ToggleButton value="object">
+                  Object
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton onClick={handlePlayPause}>
+                {isPlaying ? <PauseIcon /> : <PlayIcon />}
+              </IconButton>
+              <IconButton onClick={handlePrevFrame}>
+                <PrevFrameIcon />
+              </IconButton>
+              <IconButton onClick={handleNextFrame}>
+                <NextFrameIcon />
+              </IconButton>
+            </Box>
+
             <Typography variant="body2" sx={{ minWidth: 100 }}>
               {formatTime(currentTime)} / {formatTime(duration)}
             </Typography>
@@ -385,10 +424,11 @@ export default function AnnotationWorkspace() {
             />
           </Box>
 
+          {/* Second Row: Persona Selector and Type/Object Selection */}
           <Stack spacing={2}>
-            {/* Persona Selector */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+              {/* Persona Selector (left side) */}
+              <FormControl size="small" sx={{ width: 250 }}>
                 <InputLabel id="persona-select-label">Select Persona</InputLabel>
                 <Select
                   labelId="persona-select-label"
@@ -407,8 +447,50 @@ export default function AnnotationWorkspace() {
                   ))}
                 </Select>
               </FormControl>
+              
+              {/* Type/Object Selection (right of persona selector) */}
+              {(annotationMode === 'type' || annotationMode === 'object') && (
+                <Box sx={{ flex: 1, maxWidth: 400 }}>
+                  <AnnotationAutocomplete
+                    mode={annotationMode}
+                    personaId={selectedPersonaId}
+                    onSelect={(option) => {
+                      if (option) {
+                        // Set drawing mode based on selection
+                        if (annotationMode === 'type') {
+                          const drawMode = option.type as 'entity' | 'role' | 'event'
+                          dispatch(setSelectedType({ 
+                            typeId: option.id, 
+                            category: drawMode 
+                          }))
+                        } else {
+                          // For object mode, we'll use entity drawing mode
+                          dispatch(setDrawingMode('entity'))
+                        }
+                      } else {
+                        dispatch(setSelectedType({ typeId: null, category: null }))
+                      }
+                    }}
+                    disabled={annotationMode === 'type' && !selectedPersonaId}
+                  />
+                </Box>
+              )}
+              
+              {/* Video Summary Button */}
+              {currentVideo && videoId && (
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => setSummaryDialogOpen(true)}
+                  size="small"
+                >
+                  Edit Summary
+                </Button>
+              )}
+              
+              {/* Ontology Info */}
               {selectedPersona && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
                   {personaOntology ? 
                     `${personaOntology.entities.length} entities, ${personaOntology.roles.length} roles, ${personaOntology.events.length} events` :
                     'Loading ontology...'
@@ -416,59 +498,6 @@ export default function AnnotationWorkspace() {
                 </Typography>
               )}
             </Box>
-
-            {/* Simplified Annotation Mode Selector */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="body2">Mode:</Typography>
-              <ToggleButtonGroup
-                value={annotationMode}
-                exclusive
-                onChange={(_, newMode) => {
-                  if (newMode) {
-                    dispatch(setAnnotationMode(newMode))
-                    if (newMode === 'object') {
-                      dispatch(setSelectedPersona(null))
-                    }
-                  }
-                }}
-                size="small"
-              >
-                <ToggleButton value="type">
-                  Type Mode
-                </ToggleButton>
-                <ToggleButton value="object">
-                  Object Mode
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            {/* Autocomplete for Type or Object selection */}
-            {(annotationMode === 'type' || annotationMode === 'object') && (
-              <Box sx={{ mt: 2 }}>
-                <AnnotationAutocomplete
-                  mode={annotationMode}
-                  personaId={selectedPersonaId}
-                  onSelect={(option) => {
-                    if (option) {
-                      // Set drawing mode based on selection
-                      if (annotationMode === 'type') {
-                        const drawMode = option.type as 'entity' | 'role' | 'event'
-                        dispatch(setSelectedType({ 
-                          typeId: option.id, 
-                          category: drawMode 
-                        }))
-                      } else {
-                        // For object mode, we'll use entity drawing mode
-                        dispatch(setDrawingMode('entity'))
-                      }
-                    } else {
-                      dispatch(setSelectedType({ typeId: null, category: null }))
-                    }
-                  }}
-                  disabled={annotationMode === 'type' && !selectedPersonaId}
-                />
-              </Box>
-            )}
             
           </Stack>
         </Paper>
@@ -585,6 +614,15 @@ export default function AnnotationWorkspace() {
         videoFps={currentVideo?.fps}
       />
       
+      {/* Video Summary Dialog */}
+      {videoId && (
+        <VideoSummaryDialog
+          open={summaryDialogOpen}
+          onClose={() => setSummaryDialogOpen(false)}
+          videoId={videoId}
+          initialPersonaId={selectedPersonaId}
+        />
+      )}
       
       {/* Floating Action Button to go to Ontology */}
       <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">

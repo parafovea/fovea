@@ -189,6 +189,7 @@ export default function AnnotationOverlay({
         width: '100%',
         height: '100%',
         pointerEvents: 'auto', // Always allow pointer events so existing annotations can be interacted with
+        zIndex: 2, // Ensure overlay is above video but allows video to show through
       }}
     >
       <svg
@@ -199,6 +200,7 @@ export default function AnnotationOverlay({
           cursor: ((annotationMode === 'type' && drawingMode) || 
                    (annotationMode === 'object' && linkTargetId))
                    ? 'crosshair' : 'default',
+          backgroundColor: 'transparent',
         }}
         viewBox={`0 0 ${videoWidth} ${videoHeight}`}
         preserveAspectRatio="none"

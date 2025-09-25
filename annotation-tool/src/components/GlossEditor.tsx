@@ -24,6 +24,7 @@ interface GlossEditorProps {
   disabled?: boolean
   videoId?: string | null  // For annotation references
   includeAnnotations?: boolean  // Whether to allow ^ references
+  label?: string  // Optional label for the editor (defaults to 'Gloss Definition')
 }
 
 interface TypeOption {
@@ -52,7 +53,8 @@ export default function GlossEditor({
   personaId, 
   disabled = false, 
   videoId = null,
-  includeAnnotations = false
+  includeAnnotations = false,
+  label = 'Gloss Definition'
 }: GlossEditorProps) {
   const { personaOntologies } = useSelector((state: RootState) => state.persona)
   const { entities, events, times } = useSelector((state: RootState) => state.world)
@@ -66,7 +68,7 @@ export default function GlossEditor({
   const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
-  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects'>('types')
+  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations'>('types')
   const inputRef = useRef<HTMLInputElement>(null)
   const [cursorPosition, setCursorPosition] = useState(0)
 
@@ -104,6 +106,35 @@ export default function GlossEditor({
     })),
   ]
 
+  // Get all available annotations (if enabled)
+  const allAnnotations: AnnotationOption[] = includeAnnotations ? annotations.map(ann => {
+    let name = 'Annotation'
+    
+    // Get name from linked object or type
+    if ('linkedEntityId' in ann && ann.linkedEntityId) {
+      const entity = entities.find(e => e.id === ann.linkedEntityId)
+      if (entity) name = entity.name
+    } else if ('linkedEventId' in ann && ann.linkedEventId) {
+      const event = events.find(e => e.id === ann.linkedEventId)
+      if (event) name = event.name
+    } else if ('linkedLocationId' in ann && ann.linkedLocationId) {
+      const location = entities.find(e => e.id === ann.linkedLocationId)
+      if (location) name = location.name
+    } else if ('typeId' in ann && ann.typeId) {
+      const type = allTypes.find(t => t.id === ann.typeId)
+      if (type) name = type.name
+    }
+    
+    // Add time info to distinguish annotations
+    const timeStr = ann.timeSpan ? `@${ann.timeSpan.startTime.toFixed(1)}s` : ''
+    
+    return {
+      id: ann.id,
+      name: `${name}${timeStr}`,
+      type: 'annotation' as const
+    }
+  }) : []
+
   // Filter types based on search query
   const filteredTypes = searchQuery 
     ? allTypes.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -113,6 +144,11 @@ export default function GlossEditor({
   const filteredObjects = searchQuery
     ? allObjects.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : allObjects
+
+  // Filter annotations based on search query
+  const filteredAnnotations = searchQuery
+    ? allAnnotations.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allAnnotations
 
   // Group filtered types by type
   const groupedTypes = {
@@ -140,6 +176,9 @@ export default function GlossEditor({
       } else if (item.type === 'objectRef') {
         const obj = allObjects.find(o => o.id === item.content)
         return obj ? `@\`${obj.name}\`` : `@[${item.content}]`
+      } else if (item.type === 'annotationRef') {
+        const ann = allAnnotations.find(a => a.id === item.content)
+        return ann ? `^\`${ann.name}\`` : `^[${item.content}]`
       }
       return ''
     }).join('')
@@ -221,6 +260,42 @@ export default function GlossEditor({
             currentText += '#'
             i++
           }
+        }
+      } else if (text[i] === '^' && includeAnnotations) {
+        // Handle annotation reference
+        if (currentText) {
+          items.push({ type: 'text', content: currentText })
+          currentText = ''
+        }
+        
+        // Check if it's a backtick-delimited reference
+        if (text[i + 1] === '`') {
+          const endBacktick = text.indexOf('`', i + 2)
+          if (endBacktick !== -1) {
+            const annName = text.slice(i + 2, endBacktick)
+            const ann = allAnnotations.find(a => a.name === annName)
+            
+            if (ann) {
+              items.push({
+                type: 'annotationRef',
+                content: ann.id,
+                refType: 'annotation'
+              })
+              i = endBacktick + 1
+            } else {
+              // No match, treat as text
+              currentText += text.slice(i, endBacktick + 1)
+              i = endBacktick + 1
+            }
+          } else {
+            // No closing backtick, treat as text
+            currentText += '^`'
+            i += 2
+          }
+        } else {
+          // No backtick, treat as text
+          currentText += '^'
+          i++
         }
       } else if (text[i] === '@') {
         // Handle object reference
@@ -315,7 +390,7 @@ export default function GlossEditor({
     setInputValue(value)
     setCursorPosition(cursorPos)
     
-    // Check if # or @ was typed
+    // Check if #, @, or ^ was typed
     const lastChar = value[cursorPos - 1]
     if (lastChar === '#') {
       setShowAutocomplete(true)
@@ -329,9 +404,15 @@ export default function GlossEditor({
       setAutocompleteAnchor(e.target)
       setSearchQuery('')
       setSelectedIndex(0)
+    } else if (lastChar === '^' && includeAnnotations) {
+      setShowAutocomplete(true)
+      setAutocompleteMode('annotations')
+      setAutocompleteAnchor(e.target)
+      setSearchQuery('')
+      setSelectedIndex(0)
     } else if (showAutocomplete) {
       // Update search query if autocomplete is open
-      const char = autocompleteMode === 'types' ? '#' : '@'
+      const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
       const charIndex = value.lastIndexOf(char, cursorPos - 1)
       if (charIndex !== -1) {
         const query = value.slice(charIndex + 1, cursorPos)
@@ -347,8 +428,8 @@ export default function GlossEditor({
     onChange(newGloss)
   }
 
-  const insertReference = (item: TypeOption | ObjectOption) => {
-    const char = autocompleteMode === 'types' ? '#' : '@'
+  const insertReference = (item: TypeOption | ObjectOption | AnnotationOption) => {
+    const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
     const beforeChar = inputValue.lastIndexOf(char, cursorPosition - 1)
     const beforeText = inputValue.slice(0, beforeChar)
     const afterText = inputValue.slice(cursorPosition)
@@ -377,7 +458,9 @@ export default function GlossEditor({
     
     const allFilteredItems = autocompleteMode === 'types' 
       ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event]
-      : [...groupedObjects.entities, ...groupedObjects.locations, ...groupedObjects.events, ...groupedObjects.times]
+      : autocompleteMode === 'objects'
+      ? [...groupedObjects.entities, ...groupedObjects.locations, ...groupedObjects.events, ...groupedObjects.times]
+      : filteredAnnotations
     
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -438,7 +521,7 @@ export default function GlossEditor({
   return (
     <Box>
       <Typography variant="subtitle1" gutterBottom>
-        Gloss Definition
+        {label}
       </Typography>
       
       <TextField
@@ -451,7 +534,9 @@ export default function GlossEditor({
         value={inputValue}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
-        placeholder="Type your gloss definition. Use #`name` for types and @`name` for objects."
+        placeholder={includeAnnotations 
+          ? "Type your gloss definition. Use #`name` for types, @`name` for objects, and ^`name` for annotations."
+          : "Type your gloss definition. Use #`name` for types and @`name` for objects."}
         variant="outlined"
         sx={{ mb: 2 }}
       />
@@ -548,7 +633,7 @@ export default function GlossEditor({
                     </ListItem>
                   )}
                 </>
-              ) : (
+              ) : autocompleteMode === 'objects' ? (
                 <>
                   {groupedObjects.entities.length > 0 && (
                     <>
@@ -655,7 +740,38 @@ export default function GlossEditor({
                     </ListItem>
                   )}
                 </>
-              )}
+              ) : autocompleteMode === 'annotations' ? (
+                // Annotations mode
+                <>
+                  {filteredAnnotations.length > 0 ? (
+                    <>
+                      <ListSubheader>Annotations</ListSubheader>
+                      {filteredAnnotations.map((ann, idx) => (
+                        <ListItem
+                          key={ann.id}
+                          onClick={() => insertReference(ann)}
+                          sx={{
+                            backgroundColor: selectedIndex === idx ? 'action.selected' : undefined,
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: 'action.hover',
+                            }
+                          }}
+                        >
+                          <ListItemText primary={ann.name} />
+                        </ListItem>
+                      ))}
+                    </>
+                  ) : (
+                    <ListItem>
+                      <ListItemText 
+                        primary="No annotations found" 
+                        secondary="Type to search or ESC to close"
+                      />
+                    </ListItem>
+                  )}
+                </>
+              ) : null}
             </List>
           </Paper>
         </Popper>

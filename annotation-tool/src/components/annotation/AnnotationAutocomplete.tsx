@@ -204,9 +204,15 @@ export default function AnnotationAutocomplete({
       renderInput={(params) => (
         <TextField
           {...params}
+          size="small"
           label={mode === 'type' ? 'Select Type' : 'Select Object'}
-          placeholder={mode === 'type' ? 'Search for entity, role, or event type...' : 'Search for world object...'}
-          helperText={mode === 'type' && !personaId ? 'Please select a persona first' : ''}
+          placeholder={
+            mode === 'type' && !personaId 
+              ? 'Please select a persona first' 
+              : mode === 'type' 
+                ? 'Search for entity, role, or event type...' 
+                : 'Search for world object...'
+          }
           InputProps={{
             ...params.InputProps,
             startAdornment: value && (

@@ -33,18 +33,19 @@ function App() {
           if (ontology.personas.length > 0) {
             dispatch(setActivePersona(ontology.personas[0].id))
           }
-        } else if (ontology.persona) {
+        } else if ((ontology as any).persona) {
           // Old format - convert to new
+          const oldOntology = ontology as any
           const persona = {
-            ...ontology.persona,
-            name: ontology.persona.role,
+            ...oldOntology.persona,
+            name: oldOntology.persona.role,
           }
           const personaOntology = {
-            id: `generateId()`,
+            id: generateId(),
             personaId: persona.id,
-            entities: ontology.entities || [],
-            roles: ontology.roles || [],
-            events: ontology.events || [],
+            entities: oldOntology.entities || [],
+            roles: oldOntology.roles || [],
+            events: oldOntology.events || [],
             relationTypes: [],
             relations: [],
             createdAt: ontology.createdAt,
