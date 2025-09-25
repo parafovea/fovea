@@ -477,13 +477,14 @@ export default function AnnotationWorkspace() {
                 </Box>
               )}
               
-              {/* Video Summary Button */}
+              {/* Video Summary Button - moved to far right */}
               {currentVideo && videoId && (
                 <Button
                   variant="outlined"
                   startIcon={<EditIcon />}
                   onClick={() => setSummaryDialogOpen(true)}
                   size="small"
+                  sx={{ ml: 'auto' }}
                 >
                   Edit Summary
                 </Button>
