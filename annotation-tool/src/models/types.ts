@@ -142,33 +142,92 @@ export interface TimeInterval extends Time {
   endTime?: string
 }
 
+// Recurrence types based on iCalendar RFC 5545
+export type RecurrenceFrequency = 'YEARLY' | 'MONTHLY' | 'WEEKLY' | 'DAILY' | 'HOURLY' | 'MINUTELY' | 'SECONDLY'
+export type DayOfWeek = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'
+export type HabitualFrequency = 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never'
+
+export interface RecurrenceByDay {
+  day: DayOfWeek
+  nth?: number  // e.g., 2 for "2nd Monday", -1 for "last Friday"
+}
+
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency
+  interval?: number  // e.g., every 2 weeks
+  
+  // End conditions
+  endCondition?: {
+    type: 'count' | 'until' | 'never'
+    count?: number  // Number of occurrences
+    until?: string  // ISO 8601 date
+  }
+  
+  // BY rules for fine control
+  byRules?: {
+    byDay?: RecurrenceByDay[]
+    byMonthDay?: number[]  // 1-31, -1 for last day
+    byMonth?: number[]  // 1-12
+    byHour?: number[]  // 0-23
+    byMinute?: number[]  // 0-59
+    bySetPos?: number[]  // Position in set (1st, 2nd, -1 for last)
+  }
+  
+  weekStart?: DayOfWeek
+  
+  // Exceptions and modifications
+  exceptions?: string[]  // ISO 8601 dates to exclude
+  modifications?: Array<{
+    date: string  // ISO 8601
+    newTime?: string  // Rescheduled time
+    cancelled?: boolean
+  }>
+}
+
+export interface HabitualPattern {
+  frequency: HabitualFrequency
+  typicality: number  // 0-1 scale
+  
+  // Natural language pattern description
+  naturalLanguage?: {
+    expression: string  // "every morning", "on weekends", "during lunch"
+    culturalContext?: string
+    vagueness?: 'precise' | 'approximate' | 'fuzzy'
+  }
+  
+  // Contextual anchors
+  anchors?: Array<{
+    type: 'event' | 'time_of_day' | 'season' | 'cultural'
+    reference: string
+    offset?: string  // ISO 8601 duration
+  }>
+}
+
+export interface CyclicalPattern {
+  phases: Array<{
+    name: string
+    duration?: string  // ISO 8601 duration
+    description?: string
+  }>
+  currentPhase?: number
+  startTime?: string
+}
+
 export interface TimeCollection {
   id: string
   name: string
   description: string
-  times: Time[]
-  collectionType: 'periodic' | 'cyclical' | 'calendar' | 'irregular' | 'anchored'
+  times: Time[]  // Concrete instances (can be empty for pure patterns)
+  collectionType: 'periodic' | 'calendar' | 'irregular' | 'anchored' | 'habitual'
   
-  pattern?: {
-    period?: {
-      unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years'
-      value: number
-      variance?: number
-    }
-    cycle?: {
-      phases: string[]
-      durations?: number[]
-      unit?: string
-    }
-    calendarRule?: string
-    anchorEvents?: string[]
-  }
+  // Enhanced recurrence pattern based on iCalendar RRULE
+  recurrence?: RecurrenceRule
   
-  habituality?: {
-    frequency?: 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never'
-    exceptions?: Time[]
-    typicality?: number
-  }
+  // Linguistic/habitual patterns (for annotation research)
+  habituality?: HabitualPattern
+  
+  // For cyclical/phase-based patterns
+  cycle?: CyclicalPattern
   
   metadata?: Record<string, any>
 }

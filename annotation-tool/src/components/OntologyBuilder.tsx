@@ -33,6 +33,7 @@ import {
   FlashOn as EventIcon,
   Place as LocationIcon,
   AccessTime as TimeIcon,
+  Pattern as PatternIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../store/store'
 import EntityTypeEditor from './EntityTypeEditor'
@@ -47,6 +48,8 @@ import EntityEditor from './world/EntityEditor'
 import EventEditor from './world/EventEditor'
 import TimeEditor from './world/TimeEditor'
 import LocationEditor from './world/LocationEditor'
+import TimeBuilder from './world/TimeBuilder'
+import TimeCollectionBuilder from './world/TimeCollectionBuilder'
 import {
   deleteEntityFromPersona,
   deleteRoleFromPersona,
@@ -72,7 +75,9 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`ontology-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && (
+        <Box sx={{ p: 3 }}>{children}</Box>
+      )}
     </div>
   )
 }
@@ -104,6 +109,8 @@ export default function OntologyBuilder() {
   const [eventEditorOpen, setEventEditorOpen] = useState(false)
   const [timeEditorOpen, setTimeEditorOpen] = useState(false)
   const [locationEditorOpen, setLocationEditorOpen] = useState(false)
+  const [timeBuilderOpen, setTimeBuilderOpen] = useState(false)
+  const [timeCollectionBuilderOpen, setTimeCollectionBuilderOpen] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState(null)
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
@@ -283,7 +290,12 @@ export default function OntologyBuilder() {
             <ToggleButtonGroup
               value={mainView}
               exclusive
-              onChange={(_, value) => value && setMainView(value)}
+              onChange={(_, value) => {
+                if (value) {
+                  setMainView(value)
+                  setTabValue(0) // Reset tab to first when switching views
+                }
+              }}
               size="large"
             >
               <Tooltip title="Types are categories in your ontology (e.g., 'Person', 'Building', 'Meeting'). Types are defined per-persona and represent conceptual classifications.">
@@ -319,23 +331,31 @@ export default function OntologyBuilder() {
 
         <Paper sx={{ width: '1300px', mx: 'auto' }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', width: '100%' }}>
-            <Tabs value={tabValue} onChange={handleTabChange} aria-label="ontology tabs" variant="fullWidth">
-              {mainView === 'types' ? (
-                <>
-                  <Tab label={`Entity Types (${activeOntology.entities.length})`} />
-                  <Tab label={`Role Types (${activeOntology.roles.length})`} />
-                  <Tab label={`Event Types (${activeOntology.events.length})`} />
-                  <Tab label={`Relation Types (${activeOntology.relationTypes.length})`} />
-                </>
-              ) : (
-                <>
-                  <Tab label={`Entities (${nonLocationEntities.length})`} />
-                  <Tab label={`Events (${events.length})`} />
-                  <Tab label={`Locations (${locationEntities.length})`} />
-                  <Tab label={`Times (${times.length})`} />
-                </>
-              )}
-            </Tabs>
+            {mainView === 'types' ? (
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange}
+                aria-label="ontology types tabs" 
+                variant="fullWidth"
+              >
+                <Tab label={`Entity Types (${activeOntology.entities.length})`} />
+                <Tab label={`Role Types (${activeOntology.roles.length})`} />
+                <Tab label={`Event Types (${activeOntology.events.length})`} />
+                <Tab label={`Relation Types (${activeOntology.relationTypes.length})`} />
+              </Tabs>
+            ) : (
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange}
+                aria-label="ontology objects tabs" 
+                variant="fullWidth"
+              >
+                <Tab label={`Entities (${nonLocationEntities.length})`} />
+                <Tab label={`Events (${events.length})`} />
+                <Tab label={`Locations (${locationEntities.length})`} />
+                <Tab label={`Times (${times.length})`} />
+              </Tabs>
+            )}
           </Box>
 
         {/* TYPES VIEW */}
@@ -723,6 +743,24 @@ export default function OntologyBuilder() {
             
             <TabPanel value={tabValue} index={3}>
               {/* Times */}
+              <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setTimeBuilderOpen(true)}
+                  startIcon={<TimeIcon />}
+                >
+                  Advanced Time Builder
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setTimeCollectionBuilderOpen(true)}
+                  startIcon={<PatternIcon />}
+                >
+                  Pattern Designer
+                </Button>
+              </Box>
               <List>
                 {times.map((time) => {
                   const hasVagueness = time.vagueness !== undefined
@@ -849,6 +887,20 @@ export default function OntologyBuilder() {
           open={locationEditorOpen}
           onClose={() => setLocationEditorOpen(false)}
           location={selectedLocation}
+        />
+      )}
+      
+      {timeBuilderOpen && (
+        <TimeBuilder
+          open={timeBuilderOpen}
+          onClose={() => setTimeBuilderOpen(false)}
+        />
+      )}
+      
+      {timeCollectionBuilderOpen && (
+        <TimeCollectionBuilder
+          open={timeCollectionBuilderOpen}
+          onClose={() => setTimeCollectionBuilderOpen(false)}
         />
       )}
 

@@ -25,8 +25,11 @@ interface WikidataSearchProps {
     wikidataId: string
     wikidataUrl: string
     aliases?: string[]
+    coordinates?: any
+    boundingBox?: any
+    temporalData?: any
   }) => void
-  entityType: 'type' | 'object'
+  entityType: 'type' | 'object' | 'time'
 }
 
 export default function WikidataSearch({ onImport, entityType }: WikidataSearchProps) {
@@ -87,14 +90,17 @@ export default function WikidataSearch({ onImport, entityType }: WikidataSearchP
       wikidataId: entityDetails.id,
       wikidataUrl: entityDetails.wikidataUrl,
       aliases: entityDetails.aliases,
+      coordinates: entityDetails.coordinates,
+      boundingBox: entityDetails.boundingBox,
+      temporalData: entityDetails.temporalData,
     })
   }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Alert severity="info" icon={<WikidataIcon />}>
-        Search Wikidata to import {entityType === 'type' ? 'entity types' : 'entity instances'} into your ontology.
-        This will create a new {entityType} based on Wikidata information.
+        Search Wikidata to import {entityType === 'type' ? 'entity types' : entityType === 'time' ? 'temporal data' : 'entity instances'} into your ontology.
+        This will create a new {entityType === 'time' ? 'time object' : entityType} based on Wikidata information.
       </Alert>
 
       <Autocomplete
@@ -108,7 +114,7 @@ export default function WikidataSearch({ onImport, entityType }: WikidataSearchP
           <TextField
             {...params}
             label="Search Wikidata"
-            placeholder={`Search for ${entityType === 'type' ? 'concepts (e.g., "Person", "Building")' : 'entities (e.g., "Albert Einstein", "Eiffel Tower")'}`}
+            placeholder={`Search for ${entityType === 'type' ? 'concepts (e.g., "Person", "Building")' : entityType === 'time' ? 'events or periods (e.g., "Battle of Waterloo", "Renaissance")' : 'entities (e.g., "Albert Einstein", "Eiffel Tower")'}`}
             InputProps={{
               ...params.InputProps,
               startAdornment: <WikidataIcon sx={{ mr: 1, color: 'action.active' }} />,
@@ -205,13 +211,54 @@ export default function WikidataSearch({ onImport, entityType }: WikidataSearchP
               </Box>
             )}
 
+            {/* Display temporal data if available */}
+            {entityDetails.temporalData && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Temporal Information:
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                  {entityDetails.temporalData.pointInTime && (
+                    <Chip 
+                      label={`Point in time: ${new Date(entityDetails.temporalData.pointInTime.timestamp).toLocaleDateString()} (${entityDetails.temporalData.pointInTime.granularity})`}
+                      size="small" 
+                      color="info" 
+                      variant="outlined" 
+                    />
+                  )}
+                  {entityDetails.temporalData.startTime && (
+                    <Chip 
+                      label={`Start: ${new Date(entityDetails.temporalData.startTime.timestamp).toLocaleDateString()}`}
+                      size="small" 
+                      color="info" 
+                      variant="outlined" 
+                    />
+                  )}
+                  {entityDetails.temporalData.endTime && (
+                    <Chip 
+                      label={`End: ${new Date(entityDetails.temporalData.endTime.timestamp).toLocaleDateString()}`}
+                      size="small" 
+                      color="info" 
+                      variant="outlined" 
+                    />
+                  )}
+                  {entityDetails.temporalData.circa && (
+                    <Chip label="Circa (approximate)" size="small" variant="outlined" />
+                  )}
+                  {entityDetails.temporalData.disputed && (
+                    <Chip label="Disputed date" size="small" variant="outlined" color="warning" />
+                  )}
+                </Box>
+              </Box>
+            )}
+
             <Button
               variant="contained"
               onClick={handleImport}
               startIcon={<WikidataIcon />}
               fullWidth
             >
-              Import as {entityType === 'type' ? 'Entity Type' : 'Entity'}
+              Import as {entityType === 'type' ? 'Entity Type' : entityType === 'time' ? 'Time Object' : 'Entity'}
             </Button>
           </Box>
         </Paper>

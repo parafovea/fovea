@@ -102,6 +102,41 @@ export function extractWikidataInfo(entity: WikidataEntity) {
     claim.mainsnak?.datavalue?.value
   ).filter(Boolean) || []
 
+  // Extract coordinates (P625 - coordinate location)
+  let coordinates = null
+  const coordinateClaim = entity.claims?.P625?.[0]
+  if (coordinateClaim?.mainsnak?.datavalue?.value) {
+    const coordValue = coordinateClaim.mainsnak.datavalue.value
+    coordinates = {
+      latitude: coordValue.latitude,
+      longitude: coordValue.longitude,
+      altitude: coordValue.altitude,
+      precision: coordValue.precision,
+      globe: coordValue.globe
+    }
+  }
+
+  // Extract bounding box coordinates if available
+  // P1332: northernmost point, P1333: southernmost point
+  // P1334: westernmost point, P1335: easternmost point
+  let boundingBox = null
+  const northClaim = entity.claims?.P1332?.[0]?.mainsnak?.datavalue?.value
+  const southClaim = entity.claims?.P1333?.[0]?.mainsnak?.datavalue?.value
+  const westClaim = entity.claims?.P1334?.[0]?.mainsnak?.datavalue?.value
+  const eastClaim = entity.claims?.P1335?.[0]?.mainsnak?.datavalue?.value
+  
+  if (northClaim || southClaim || westClaim || eastClaim) {
+    boundingBox = {
+      minLatitude: southClaim?.latitude,
+      maxLatitude: northClaim?.latitude,
+      minLongitude: westClaim?.longitude,
+      maxLongitude: eastClaim?.longitude
+    }
+  }
+
+  // Extract temporal data
+  const temporalData = extractTemporalData(entity)
+
   return {
     id: entity.id,
     label,
@@ -109,6 +144,155 @@ export function extractWikidataInfo(entity: WikidataEntity) {
     instanceOf,
     subclassOf,
     aliases,
+    coordinates,
+    boundingBox,
+    temporalData,
     wikidataUrl: `https://www.wikidata.org/wiki/${entity.id}`
   }
+}
+
+// Helper function to parse Wikidata time format
+function parseWikidataTime(timeValue: any) {
+  if (!timeValue) return null
+  
+  // Wikidata time format: +YYYY-MM-DDT00:00:00Z
+  // Precision: 9=year, 10=month, 11=day, 12=hour, 13=minute, 14=second
+  const time = timeValue.time || timeValue
+  const precision = timeValue.precision || 11
+  const calendarmodel = timeValue.calendarmodel
+  const timezone = timeValue.timezone || 0
+  
+  // Parse the time string
+  const match = time.match(/^([+-]?\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z?$/)
+  if (!match) return null
+  
+  const [, year, month, day, hour, minute] = match
+  
+  // Determine granularity based on precision
+  let granularity = 'day'
+  let isoString = time
+  
+  switch (precision) {
+    case 9: // Year
+      granularity = 'year'
+      isoString = `${year}-01-01T00:00:00Z`
+      break
+    case 10: // Month
+      granularity = 'month'
+      isoString = `${year}-${month}-01T00:00:00Z`
+      break
+    case 11: // Day
+      granularity = 'day'
+      isoString = `${year}-${month}-${day}T00:00:00Z`
+      break
+    case 12: // Hour
+      granularity = 'hour'
+      isoString = `${year}-${month}-${day}T${hour}:00:00Z`
+      break
+    case 13: // Minute
+      granularity = 'minute'
+      isoString = `${year}-${month}-${day}T${hour}:${minute}:00Z`
+      break
+    case 14: // Second
+      granularity = 'second'
+      isoString = time
+      break
+  }
+  
+  return {
+    timestamp: isoString,
+    precision,
+    granularity,
+    timezone,
+    calendarModel: calendarmodel,
+    originalValue: time
+  }
+}
+
+// Extract all temporal properties from a Wikidata entity
+export function extractTemporalData(entity: WikidataEntity) {
+  const temporalData: any = {}
+  
+  // P585 - Point in time
+  if (entity.claims?.P585) {
+    const pointInTime = entity.claims.P585[0]?.mainsnak?.datavalue?.value
+    if (pointInTime) {
+      temporalData.pointInTime = parseWikidataTime(pointInTime)
+      
+      // Check for qualifiers like "circa" (P1480)
+      const sourcingCircumstances = entity.claims.P585[0]?.qualifiers?.P1480
+      if (sourcingCircumstances) {
+        const qualifier = sourcingCircumstances[0]?.datavalue?.value?.id
+        if (qualifier === 'Q5727902') temporalData.circa = true
+        if (qualifier === 'Q18122778') temporalData.disputed = true
+        if (qualifier === 'Q56644435') temporalData.presumably = true
+      }
+    }
+  }
+  
+  // P580 - Start time
+  if (entity.claims?.P580) {
+    const startTime = entity.claims.P580[0]?.mainsnak?.datavalue?.value
+    if (startTime) {
+      temporalData.startTime = parseWikidataTime(startTime)
+    }
+  }
+  
+  // P582 - End time
+  if (entity.claims?.P582) {
+    const endTime = entity.claims.P582[0]?.mainsnak?.datavalue?.value
+    if (endTime) {
+      temporalData.endTime = parseWikidataTime(endTime)
+    }
+  }
+  
+  // P571 - Inception (date of establishment/creation)
+  if (entity.claims?.P571) {
+    const inception = entity.claims.P571[0]?.mainsnak?.datavalue?.value
+    if (inception) {
+      temporalData.inception = parseWikidataTime(inception)
+    }
+  }
+  
+  // P576 - Dissolved, abolished or demolished date
+  if (entity.claims?.P576) {
+    const dissolved = entity.claims.P576[0]?.mainsnak?.datavalue?.value
+    if (dissolved) {
+      temporalData.dissolved = parseWikidataTime(dissolved)
+    }
+  }
+  
+  // P577 - Publication date
+  if (entity.claims?.P577) {
+    const publicationDate = entity.claims.P577[0]?.mainsnak?.datavalue?.value
+    if (publicationDate) {
+      temporalData.publicationDate = parseWikidataTime(publicationDate)
+    }
+  }
+  
+  // P1319 - Earliest date
+  if (entity.claims?.P1319) {
+    const earliestDate = entity.claims.P1319[0]?.mainsnak?.datavalue?.value
+    if (earliestDate) {
+      temporalData.earliestDate = parseWikidataTime(earliestDate)
+    }
+  }
+  
+  // P1326 - Latest date
+  if (entity.claims?.P1326) {
+    const latestDate = entity.claims.P1326[0]?.mainsnak?.datavalue?.value
+    if (latestDate) {
+      temporalData.latestDate = parseWikidataTime(latestDate)
+    }
+  }
+  
+  // Multiple P585 values could indicate recurring events
+  if (entity.claims?.P585 && entity.claims.P585.length > 1) {
+    temporalData.multipleOccurrences = entity.claims.P585.map((claim: any) => {
+      const timeValue = claim.mainsnak?.datavalue?.value
+      return timeValue ? parseWikidataTime(timeValue) : null
+    }).filter(Boolean)
+  }
+  
+  return Object.keys(temporalData).length > 0 ? temporalData : null
 }

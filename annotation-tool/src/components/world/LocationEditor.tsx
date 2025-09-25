@@ -24,6 +24,7 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  Link,
 } from '@mui/material'
 import {
   Place as LocationIcon,
@@ -33,12 +34,18 @@ import {
   Add as AddIcon,
   GpsFixed as GPSIcon,
   Grid3x3 as CartesianIcon,
+  Map as MapIcon,
+  Language as WikidataIcon,
+  Edit as EditIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
 import { AppDispatch, RootState } from '../../store/store'
 import { addEntity, updateEntity } from '../../store/worldSlice'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import WikidataSearch from '../WikidataSearch'
+import MapLocationPicker from './MapLocationPicker'
 
 interface LocationEditorProps {
   open: boolean
@@ -59,10 +66,13 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies, activePersonaId } = useSelector((state: RootState) => state.persona)
   
+  const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [alternateNames, setAlternateNames] = useState<string[]>([])
   const [typeAssignments, setTypeAssignments] = useState<EntityTypeAssignment[]>([])
+  const [wikidataId, setWikidataId] = useState<string>('')
+  const [wikidataUrl, setWikidataUrl] = useState<string>('')
   
   // Location-specific fields
   const [locationType, setLocationType] = useState<'point' | 'extent'>('point')
@@ -86,6 +96,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   // For type assignment form
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState<string>('')
+  
+  // Map interface state
+  const [mapOpen, setMapOpen] = useState(false)
 
   useEffect(() => {
     if (location) {
@@ -119,6 +132,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setBoundaryPoints([])
       setUseBoundingBox(false)
       setBoundingBox({})
+      setWikidataId('')
+      setWikidataUrl('')
     }
   }, [location])
 
@@ -155,6 +170,35 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     setTypeAssignments(typeAssignments.filter(a => a.personaId !== personaId))
   }
 
+  const handleOpenMap = () => {
+    setMapOpen(true)
+  }
+
+  const handleMapSelect = (coordinates: Coordinate | Coordinate[], type: 'point' | 'extent') => {
+    if (type === 'point' && !Array.isArray(coordinates)) {
+      setLocationType('point')
+      setPointCoordinates(coordinates)
+    } else if (type === 'extent' && Array.isArray(coordinates)) {
+      setLocationType('extent')
+      setBoundaryPoints(coordinates)
+      // Calculate bounding box if GPS coordinates
+      if (coordinateSystem === 'GPS' && coordinates.length > 0) {
+        const lats = coordinates.map(c => c.latitude).filter((v): v is number => v !== undefined)
+        const lngs = coordinates.map(c => c.longitude).filter((v): v is number => v !== undefined)
+        if (lats.length > 0 && lngs.length > 0) {
+          setBoundingBox({
+            minLatitude: Math.min(...lats),
+            maxLatitude: Math.max(...lats),
+            minLongitude: Math.min(...lngs),
+            maxLongitude: Math.max(...lngs),
+          })
+          setUseBoundingBox(true)
+        }
+      }
+    }
+    setMapOpen(false)
+  }
+
   const handleSave = () => {
     const baseEntity = {
       name,
@@ -162,8 +206,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       typeAssignments,
       metadata: {
         alternateNames: alternateNames.filter(Boolean),
-        externalIds: {},
-        properties: {},
+        externalIds: wikidataId ? { wikidata: wikidataId } : {},
+        properties: wikidataUrl ? { wikidataUrl } : {},
       },
     }
     
@@ -287,6 +331,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   }
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -301,6 +346,77 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
             A location is a specific place in the world (e.g., "Times Square", "Mount Everest").
             Locations are special types of entities with coordinate information.
           </Alert>
+
+          {/* Import mode selector */}
+          {!location && (
+            <ToggleButtonGroup
+              value={importMode}
+              exclusive
+              onChange={(_, value) => value && setImportMode(value)}
+              size="small"
+              fullWidth
+            >
+              <ToggleButton value="manual">
+                <EditIcon sx={{ mr: 1 }} />
+                Manual Entry
+              </ToggleButton>
+              <ToggleButton value="wikidata">
+                <WikidataIcon sx={{ mr: 1 }} />
+                Import from Wikidata
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+
+          {/* Wikidata import */}
+          {importMode === 'wikidata' && !location && (
+            <WikidataSearch
+              entityType="object"
+              onImport={(data: any) => {
+                setName(data.name)
+                setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])
+                setAlternateNames(data.aliases || [])
+                setWikidataId(data.wikidataId)
+                setWikidataUrl(data.wikidataUrl)
+                
+                // Auto-populate coordinates if available
+                if (data.coordinates) {
+                  setLocationType('point')
+                  setCoordinateSystem('GPS')
+                  setPointCoordinates({
+                    latitude: data.coordinates.latitude,
+                    longitude: data.coordinates.longitude,
+                    altitude: data.coordinates.altitude,
+                  })
+                }
+                
+                // Handle bounding box if available
+                if (data.boundingBox && data.boundingBox.minLatitude) {
+                  setLocationType('extent')
+                  setUseBoundingBox(true)
+                  setBoundingBox(data.boundingBox)
+                }
+              }}
+            />
+          )}
+
+          {/* Show Wikidata link if imported */}
+          {wikidataUrl && (
+            <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WikidataIcon color="action" />
+                <Typography variant="body2">Imported from Wikidata:</Typography>
+                <Link
+                  href={wikidataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                >
+                  {wikidataId}
+                  <OpenInNewIcon fontSize="small" />
+                </Link>
+              </Box>
+            </Paper>
+          )}
 
           {/* Basic Entity Fields */}
           <TextField
@@ -377,6 +493,22 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                   <MenuItem value="relative">Relative</MenuItem>
                 </Select>
               </FormControl>
+            </Box>
+
+            {/* Map button */}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<MapIcon />}
+                onClick={handleOpenMap}
+                fullWidth
+              >
+                {(locationType === 'point' && (pointCoordinates.latitude || pointCoordinates.x)) ||
+                 (locationType === 'extent' && boundaryPoints.length > 0)
+                  ? 'View/Edit on Map'
+                  : 'Select on Map'
+                }
+              </Button>
             </Box>
 
             {/* Point Coordinates */}
@@ -599,5 +731,20 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         </Button>
       </DialogActions>
     </Dialog>
+    
+    {/* Map Location Picker */}
+    {mapOpen && (
+      <MapLocationPicker
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        onSelect={handleMapSelect}
+        initialCoordinates={
+          locationType === 'point' ? pointCoordinates : boundaryPoints
+        }
+        locationType={locationType}
+        coordinateSystem={coordinateSystem}
+      />
+    )}
+  </>
   )
 }
