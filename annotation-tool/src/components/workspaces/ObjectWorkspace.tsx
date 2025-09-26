@@ -16,6 +16,8 @@ import {
   Paper,
   Divider,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -26,6 +28,7 @@ import {
   Event as EventIcon,
   Place as LocationIcon,
   Schedule as TimeIcon,
+  Language as WikidataIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import { deleteEntity, deleteEvent, deleteTime } from '../../store/worldSlice'
@@ -65,6 +68,7 @@ export default function ObjectWorkspace() {
   
   const [tabValue, setTabValue] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
+  const [wikidataFilter, setWikidataFilter] = useState<'all' | 'wikidata' | 'manual'>('all')
   
   // Editor states
   const [entityEditorOpen, setEntityEditorOpen] = useState(false)
@@ -127,17 +131,33 @@ export default function ObjectWorkspace() {
     }
   }
 
+  const filterByWikidata = (item: any) => {
+    if (wikidataFilter === 'all') return true
+    if (wikidataFilter === 'wikidata') return !!item.wikidataId
+    if (wikidataFilter === 'manual') return !item.wikidataId
+    return true
+  }
+  
+  const searchMatches = (item: any, term: string) => {
+    const lowerTerm = term.toLowerCase()
+    return (
+      item.name?.toLowerCase().includes(lowerTerm) ||
+      item.id?.toLowerCase().includes(lowerTerm) ||
+      item.wikidataId?.toLowerCase().includes(lowerTerm)
+    )
+  }
+  
   const filteredEntities = entities.filter(e => 
-    e.name.toLowerCase().includes(searchTerm.toLowerCase())
+    searchMatches(e, searchTerm) && filterByWikidata(e)
   )
   const filteredEvents = events.filter(e => 
-    e.name.toLowerCase().includes(searchTerm.toLowerCase())
+    searchMatches(e, searchTerm) && filterByWikidata(e)
   )
   const filteredLocations = locations.filter((l: any) => 
-    l.name.toLowerCase().includes(searchTerm.toLowerCase())
+    searchMatches(l, searchTerm) && filterByWikidata(l)
   )
   const filteredTimes = times.filter(t => 
-    (t.id || '').toLowerCase().includes(searchTerm.toLowerCase())
+    searchMatches(t, searchTerm) && filterByWikidata(t)
   )
 
   const getEntityTypeNames = (entity: typeof entities[0]) => {
@@ -229,7 +249,7 @@ export default function ObjectWorkspace() {
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="Search objects..."
+          placeholder="Search objects (name, ID, or Wikidata ID)..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           inputRef={searchInputRef}
@@ -240,7 +260,29 @@ export default function ObjectWorkspace() {
               </InputAdornment>
             ),
           }}
+          sx={{ mb: 2 }}
         />
+        
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <ToggleButtonGroup
+            value={wikidataFilter}
+            exclusive
+            onChange={(_, value) => value && setWikidataFilter(value)}
+            aria-label="wikidata filter"
+            size="small"
+          >
+            <ToggleButton value="all" aria-label="all objects">
+              All
+            </ToggleButton>
+            <ToggleButton value="wikidata" aria-label="wikidata imports">
+              <WikidataIcon sx={{ mr: 0.5 }} fontSize="small" />
+              Wikidata Only
+            </ToggleButton>
+            <ToggleButton value="manual" aria-label="manual entries">
+              Manual Only
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
       </Box>
 
       <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>

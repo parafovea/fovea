@@ -43,6 +43,7 @@ import PersonaManager from './PersonaManager'
 import RelationTypeEditor from './RelationTypeEditor'
 import { GlossRenderer } from './GlossRenderer'
 import { TypeObjectBadge } from './shared/TypeObjectToggle'
+import { WikidataChip } from './shared/WikidataChip'
 // Import world object editors
 import EntityEditor from './world/EntityEditor'
 import EventEditor from './world/EventEditor'
@@ -376,6 +377,13 @@ export default function OntologyBuilder() {
                           primary={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Typography sx={{ fontStyle: 'italic' }}>{entityType.name}</Typography>
+                              <WikidataChip 
+                                wikidataId={entityType.wikidataId}
+                                wikidataUrl={entityType.wikidataUrl}
+                                importedAt={entityType.importedAt}
+                                size="small"
+                                showTimestamp={false}
+                              />
                               {entityRelations.length > 0 && (
                                 <Chip 
                                   label={`${entityRelations.length} relations`} 
@@ -426,6 +434,13 @@ export default function OntologyBuilder() {
                           primary={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               {role.name}
+                              <WikidataChip 
+                                wikidataId={role.wikidataId}
+                                wikidataUrl={role.wikidataUrl}
+                                importedAt={role.importedAt}
+                                size="small"
+                                showTimestamp={false}
+                              />
                               {roleRelations.length > 0 && (
                                 <Chip 
                                   label={`${roleRelations.length} relations`} 
@@ -476,6 +491,13 @@ export default function OntologyBuilder() {
                           primary={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Typography sx={{ fontStyle: 'italic' }}>{eventType.name}</Typography>
+                              <WikidataChip 
+                                wikidataId={eventType.wikidataId}
+                                wikidataUrl={eventType.wikidataUrl}
+                                importedAt={eventType.importedAt}
+                                size="small"
+                                showTimestamp={false}
+                              />
                               {eventRelations.length > 0 && (
                                 <Chip 
                                   label={`${eventRelations.length} relations`} 
@@ -523,6 +545,13 @@ export default function OntologyBuilder() {
                           primary={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               {relationType.name}
+                              <WikidataChip 
+                                wikidataId={relationType.wikidataId}
+                                wikidataUrl={relationType.wikidataUrl}
+                                importedAt={relationType.importedAt}
+                                size="small"
+                                showTimestamp={false}
+                              />
                               {relationsOfType.length > 0 && (
                                 <Chip 
                                   label={`${relationsOfType.length} instances`} 

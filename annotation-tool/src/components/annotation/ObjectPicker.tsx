@@ -31,8 +31,8 @@ import {
   Add as AddIcon,
   Clear as ClearIcon,
   AccessTime as RecentIcon,
-  Public as WikidataIcon,
 } from '@mui/icons-material'
+import { WikidataChip } from '../shared/WikidataChip'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../../store/store'
 import { 
@@ -204,9 +204,13 @@ export default function ObjectPicker({
             primary={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body1">{item.name}</Typography>
-                {item.metadata?.externalIds?.wikidata && (
-                  <WikidataIcon fontSize="small" color="action" />
-                )}
+                <WikidataChip 
+                  wikidataId={item.wikidataId}
+                  wikidataUrl={item.wikidataUrl}
+                  importedAt={item.importedAt}
+                  size="small"
+                  showTimestamp={false}
+                />
               </Box>
             }
             secondary={
