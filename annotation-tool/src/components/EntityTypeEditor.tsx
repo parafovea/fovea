@@ -17,14 +17,17 @@ import {
   FormGroup,
   Typography,
   Divider,
-  Chip,
 } from '@mui/material'
+import { Category as EntityTypeIcon } from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
 import { generateId } from '../utils/uuid'
 import { addEntityToPersona, updateEntityInPersona } from '../store/personaSlice'
 import { EntityType, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
 import WikidataSearch from './WikidataSearch'
+import ModeSelector from './shared/ModeSelector'
+import { WikidataChip } from './shared/WikidataChip'
+import { TypeObjectBadge } from './shared/TypeObjectToggle'
 
 interface EntityTypeEditorProps {
   open: boolean
@@ -39,28 +42,35 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [examples, setExamples] = useState<string[]>([])
-  const [mode, setMode] = useState<'new' | 'copy' | 'wikidata'>('new')
+  const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
   const [sourcePersonaId, setSourcePersonaId] = useState('')
   const [sourceEntityId, setSourceEntityId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
+  const [importedAt, setImportedAt] = useState<string>('')
 
   useEffect(() => {
     if (entity) {
       setName(entity.name)
       setGloss(entity.gloss)
       setExamples(entity.examples || [])
-      setMode('new')
+      setMode('manual')
       setTargetPersonaIds([personaId || ''])
+      setWikidataId(entity.wikidataId || '')
+      setWikidataUrl(entity.wikidataUrl || '')
+      setImportedAt(entity.importedAt || '')
     } else {
       setName('')
       setGloss([{ type: 'text', content: '' }])
       setExamples([])
-      setMode('new')
+      setMode('manual')
       setSourcePersonaId('')
       setSourceEntityId('')
       setTargetPersonaIds([personaId || ''])
+      setWikidataId('')
+      setWikidataUrl('')
+      setImportedAt('')
     }
   }, [entity, personaId])
 
@@ -87,6 +97,10 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
         name,
         gloss,
         examples,
+        wikidataId: wikidataId || undefined,
+        wikidataUrl: wikidataUrl || undefined,
+        importedFrom: wikidataId ? 'wikidata' : undefined,
+        importedAt: importedAt || undefined,
         updatedAt: now,
       }
       
@@ -103,6 +117,10 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             name,
             gloss,
             examples,
+            wikidataId: wikidataId || undefined,
+            wikidataUrl: wikidataUrl || undefined,
+            importedFrom: wikidataId ? 'wikidata' : undefined,
+            importedAt: importedAt || undefined,
             createdAt: now,
             updatedAt: now,
           }
@@ -118,6 +136,10 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             name,
             gloss,
             examples,
+            wikidataId: wikidataId || undefined,
+            wikidataUrl: wikidataUrl || undefined,
+            importedFrom: wikidataId ? 'wikidata' : undefined,
+            importedAt: importedAt || undefined,
             createdAt: now,
             updatedAt: now,
           }
@@ -131,23 +153,31 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{entity ? 'Edit Entity Type' : 'Add Entity Type'}</DialogTitle>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EntityTypeIcon color="primary" />
+          {entity ? 'Edit Entity Type' : 'Add Entity Type'}
+          <TypeObjectBadge isType={true} />
+        </Box>
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+          {wikidataId && (
+            <WikidataChip 
+              wikidataId={wikidataId}
+              wikidataUrl={wikidataUrl}
+              importedAt={importedAt}
+              showTimestamp={true}
+            />
+          )}
+          
           {!entity && (
             <>
-              <FormControl fullWidth>
-                <InputLabel>Mode</InputLabel>
-                <Select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as 'new' | 'copy' | 'wikidata')}
-                  label="Mode"
-                >
-                  <MenuItem value="new">Create New Type</MenuItem>
-                  <MenuItem value="copy">Copy from Existing Type</MenuItem>
-                  <MenuItem value="wikidata">Import from Wikidata</MenuItem>
-                </Select>
-              </FormControl>
+              <ModeSelector 
+                mode={mode} 
+                onChange={(newMode) => setMode(newMode)}
+                showCopy={true}
+              />
               
               {mode === 'copy' && (
                 <>
@@ -194,6 +224,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
                     setGloss([{ type: 'text', content: data.description || `A type of ${data.name} from Wikidata.` }])
                     setWikidataId(data.wikidataId)
                     setWikidataUrl(data.wikidataUrl)
+                    setImportedAt(new Date().toISOString())
                     if (data.aliases) {
                       setExamples(data.aliases)
                     }
@@ -227,25 +258,6 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             helperText="Optional: Provide example instances of this entity type"
             disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
           />
-          
-          {wikidataId && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip 
-                label={`Wikidata: ${wikidataId}`}
-                size="small"
-                color="primary"
-                variant="outlined"
-                component="a"
-                href={wikidataUrl}
-                target="_blank"
-                clickable
-              />
-              <Typography variant="caption" color="text.secondary">
-                Imported from Wikidata
-              </Typography>
-            </Box>
-          )}
-          
           <Divider />
           
           <Box>
@@ -273,7 +285,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       {persona.name}
                       {entity && persona.id === personaId && (
-                        <Chip label="current" size="small" color="primary" />
+                        <Typography variant="caption" color="primary">(current)</Typography>
                       )}
                     </Box>
                   }

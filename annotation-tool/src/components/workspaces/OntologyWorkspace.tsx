@@ -15,7 +15,6 @@ import {
   ListItemSecondaryAction,
   IconButton,
   Fab,
-  Chip,
   Divider,
   AppBar,
   Toolbar,
@@ -33,7 +32,6 @@ import {
   Event as EventTypeIcon,
   Share as RelationIcon,
   ArrowBack as BackIcon,
-  Language as WikidataIcon,
   Search as SearchIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
@@ -44,6 +42,7 @@ import RoleEditor from '../RoleEditor'
 import EventTypeEditor from '../EventTypeEditor'
 import RelationTypeEditor from '../RelationTypeEditor'
 import { GlossRenderer, glossToText } from '../GlossRenderer'
+import { WikidataChip } from '../shared/WikidataChip'
 import {
   deleteEntityFromPersona,
   deleteRoleFromPersona,
@@ -278,19 +277,13 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{entity.name}</Typography>
-                      {entity.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={entity.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={entity.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={entity.wikidataId}
+                        wikidataUrl={entity.wikidataUrl}
+                        importedAt={entity.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={<GlossRenderer gloss={entity.gloss} personaId={selectedPersonaId} />}
@@ -322,19 +315,13 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{role.name}</Typography>
-                      {role.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={role.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={role.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={role.wikidataId}
+                        wikidataUrl={role.wikidataUrl}
+                        importedAt={role.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={
@@ -373,19 +360,13 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{event.name}</Typography>
-                      {event.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={event.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={event.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={event.wikidataId}
+                        wikidataUrl={event.wikidataUrl}
+                        importedAt={event.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={
@@ -426,19 +407,13 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{relation.name}</Typography>
-                      {relation.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={relation.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={relation.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={relation.wikidataId}
+                        wikidataUrl={relation.wikidataUrl}
+                        importedAt={relation.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={

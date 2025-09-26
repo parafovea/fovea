@@ -11,7 +11,6 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-  Chip,
   TextField,
   InputAdornment,
   Paper,
@@ -26,7 +25,6 @@ import {
   Event as EventIcon,
   Place as LocationIcon,
   Schedule as TimeIcon,
-  Language as WikidataIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import { deleteEntity, deleteEvent, deleteTime } from '../../store/worldSlice'
@@ -34,6 +32,7 @@ import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
+import { WikidataChip } from '../shared/WikidataChip'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -188,19 +187,13 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">{entity.name}</Typography>
-                      {entity.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={entity.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={entity.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={entity.wikidataId}
+                        wikidataUrl={entity.wikidataUrl}
+                        importedAt={entity.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={
@@ -237,19 +230,13 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">{event.name}</Typography>
-                      {event.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={event.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={event.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={event.wikidataId}
+                        wikidataUrl={event.wikidataUrl}
+                        importedAt={event.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={
@@ -279,19 +266,13 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">{location.name}</Typography>
-                      {location.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={location.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={location.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={location.wikidataId}
+                        wikidataUrl={location.wikidataUrl}
+                        importedAt={location.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={
@@ -323,19 +304,13 @@ export default function ObjectWorkspace() {
                       <Typography variant="body1">
                         {time.type === 'instant' ? 'Instant' : 'Interval'}: {time.id}
                       </Typography>
-                      {time.wikidataId && (
-                        <Chip
-                          icon={<WikidataIcon />}
-                          label={time.wikidataId}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          component="a"
-                          href={time.wikidataUrl}
-                          target="_blank"
-                          clickable
-                        />
-                      )}
+                      <WikidataChip 
+                        wikidataId={time.wikidataId}
+                        wikidataUrl={time.wikidataUrl}
+                        importedAt={time.importedAt}
+                        size="small"
+                        showTimestamp={false}
+                      />
                     </Box>
                   }
                   secondary={

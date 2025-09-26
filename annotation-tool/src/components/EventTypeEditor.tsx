@@ -22,17 +22,21 @@ import {
   FormGroup,
   Divider,
   Checkbox,
-  Chip,
 } from '@mui/material'
 import { generateId } from '../utils/uuid'
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
+  Event as EventTypeIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../store/store'
 import { addEventToPersona, updateEventInPersona } from '../store/personaSlice'
 import { EventType, EventRole, GlossItem } from '../models/types'
 import GlossEditor from './GlossEditor'
+import ModeSelector from './shared/ModeSelector'
+import { WikidataChip } from './shared/WikidataChip'
+import { TypeObjectBadge } from './shared/TypeObjectToggle'
+import WikidataSearch from './WikidataSearch'
 
 interface EventTypeEditorProps {
   open: boolean
@@ -50,10 +54,13 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   const [roles, setRoles] = useState<EventRole[]>([])
   const [examples, setExamples] = useState<string[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState('')
-  const [mode, setMode] = useState<'new' | 'copy'>('new')
+  const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
   const [sourcePersonaId, setSourcePersonaId] = useState('')
   const [sourceEventId, setSourceEventId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
+  const [wikidataId, setWikidataId] = useState<string>('')
+  const [wikidataUrl, setWikidataUrl] = useState<string>('')
+  const [importedAt, setImportedAt] = useState<string>('')
 
   useEffect(() => {
     if (event) {
@@ -61,11 +68,20 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       setGloss(event.gloss)
       setRoles(event.roles)
       setExamples(event.examples || [])
+      setWikidataId(event.wikidataId || '')
+      setWikidataUrl(event.wikidataUrl || '')
+      setImportedAt(event.importedAt || '')
     } else {
       setName('')
       setGloss([{ type: 'text', content: '' }])
       setRoles([])
       setExamples([])
+      setMode('manual')
+      setSourcePersonaId('')
+      setSourceEventId('')
+      setWikidataId('')
+      setWikidataUrl('')
+      setImportedAt('')
     }
   }, [event])
 
@@ -74,11 +90,15 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     
     const now = new Date().toISOString()
     const eventData: EventType = {
-      id: event?.id || `generateId()`,
+      id: event?.id || generateId(),
       name,
       gloss,
       roles,
       examples,
+      wikidataId: wikidataId || undefined,
+      wikidataUrl: wikidataUrl || undefined,
+      importedFrom: wikidataId ? 'wikidata' : undefined,
+      importedAt: importedAt || undefined,
       createdAt: event?.createdAt || now,
       updatedAt: now,
     }
@@ -119,21 +139,112 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{event ? 'Edit Event Type' : 'Add Event Type'}</DialogTitle>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EventTypeIcon color="primary" />
+          {event ? 'Edit Event Type' : 'Add Event Type'}
+          <TypeObjectBadge isType={true} />
+        </Box>
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+          {wikidataId && (
+            <WikidataChip 
+              wikidataId={wikidataId}
+              wikidataUrl={wikidataUrl}
+              importedAt={importedAt}
+              showTimestamp={true}
+            />
+          )}
+          
+          {!event && (
+            <>
+              <ModeSelector 
+                mode={mode} 
+                onChange={(newMode) => setMode(newMode)}
+                showCopy={true}
+              />
+              
+              {mode === 'copy' && (
+                <>
+                  <FormControl fullWidth>
+                    <InputLabel>Source Persona</InputLabel>
+                    <Select
+                      value={sourcePersonaId}
+                      onChange={(e) => {
+                        setSourcePersonaId(e.target.value)
+                        setSourceEventId('')
+                      }}
+                      label="Source Persona"
+                    >
+                      {personas.map(p => (
+                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  {sourcePersonaId && (
+                    <FormControl fullWidth>
+                      <InputLabel>Event Type to Copy</InputLabel>
+                      <Select
+                        value={sourceEventId}
+                        onChange={(e) => {
+                          const selectedId = e.target.value
+                          setSourceEventId(selectedId)
+                          const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
+                          const sourceEvent = sourceOntology?.events.find(ev => ev.id === selectedId)
+                          if (sourceEvent) {
+                            setName(sourceEvent.name)
+                            setGloss(sourceEvent.gloss)
+                            setRoles(sourceEvent.roles || [])
+                            setExamples(sourceEvent.examples || [])
+                          }
+                        }}
+                        label="Event Type to Copy"
+                      >
+                        {personaOntologies
+                          .find(o => o.personaId === sourcePersonaId)
+                          ?.events.map(e => (
+                            <MenuItem key={e.id} value={e.id}>{e.name}</MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </>
+              )}
+              
+              {mode === 'wikidata' && (
+                <WikidataSearch
+                  entityType="type"
+                  onImport={(data) => {
+                    setName(data.name)
+                    setGloss([{ type: 'text', content: data.description || `An event type from Wikidata.` }])
+                    setWikidataId(data.wikidataId)
+                    setWikidataUrl(data.wikidataUrl)
+                    setImportedAt(new Date().toISOString())
+                    if (data.aliases) {
+                      setExamples(data.aliases)
+                    }
+                  }}
+                />
+              )}
+            </>
+          )}
+          
           <TextField
             label="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             fullWidth
             required
+            disabled={!event && ((mode === 'copy' && !sourceEventId) || (mode === 'wikidata' && !name))}
           />
           
           <GlossEditor
             gloss={gloss}
             onChange={setGloss}
             personaId={personaId}
+            disabled={!event && ((mode === 'copy' && !sourceEventId) || (mode === 'wikidata' && !name))}
           />
 
           <Box>
