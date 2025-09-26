@@ -17,6 +17,7 @@ import {
   Fab,
   Divider,
   AppBar,
+  Tooltip,
   Toolbar,
   Button,
   TextField,
@@ -537,18 +538,20 @@ export default function OntologyWorkspace() {
         </TabPanel>
       </Box>
 
-      <Fab
-        color="primary"
-        aria-label="add type"
-        sx={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-        }}
-        onClick={handleAddType}
-      >
-        <AddIcon />
-      </Fab>
+      <Tooltip title="Add New Type (Cmd/Ctrl+N)" placement="left">
+        <Fab
+          color="primary"
+          aria-label="add type"
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            right: 16,
+          }}
+          onClick={handleAddType}
+        >
+          <AddIcon />
+        </Fab>
+      </Tooltip>
 
       {/* Type Editors */}
       <EntityTypeEditor

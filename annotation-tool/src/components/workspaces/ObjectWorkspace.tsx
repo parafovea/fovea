@@ -15,6 +15,7 @@ import {
   InputAdornment,
   Paper,
   Divider,
+  Tooltip,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -432,18 +433,20 @@ export default function ObjectWorkspace() {
         </TabPanel>
       </Box>
 
-      <Fab
-        color="primary"
-        aria-label="add"
-        sx={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-        }}
-        onClick={handleAddNew}
-      >
-        <AddIcon />
-      </Fab>
+      <Tooltip title="Add New Object (Cmd/Ctrl+N)" placement="left">
+        <Fab
+          color="primary"
+          aria-label="add"
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            right: 16,
+          }}
+          onClick={handleAddNew}
+        >
+          <AddIcon />
+        </Fab>
+      </Tooltip>
 
       {/* Editors */}
       <EntityEditor

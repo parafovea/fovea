@@ -15,6 +15,7 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import {
   VideoLibrary as VideoIcon,
@@ -23,6 +24,7 @@ import {
   Save as SaveIcon,
   Download as ExportIcon,
   Menu as MenuIcon,
+  Keyboard as KeyboardIcon,
 } from '@mui/icons-material'
 import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
@@ -33,6 +35,7 @@ import { api } from '../services/api'
 import { Ontology } from '../models/types'
 import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
+import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
 
 const DRAWER_WIDTH = 240
 
@@ -58,9 +61,9 @@ export default function Layout() {
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
   const menuItems = [
-    { text: 'Video Browser', icon: <VideoIcon />, path: '/' },
-    { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology' },
-    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects' },
+    { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
+    { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
+    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -181,22 +184,35 @@ export default function Layout() {
               Unsaved changes
             </Typography>
           )}
-          <Button 
-            color="inherit" 
-            startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-            onClick={handleSave}
-            disabled={saving || !currentOntology}
-          >
-            Save
-          </Button>
-          <Button 
-            color="inherit" 
-            startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
-            onClick={handleExport}
-            disabled={exporting}
-          >
-            Export
-          </Button>
+          <Tooltip title="Save (Cmd/Ctrl+S)">
+            <Button 
+              color="inherit" 
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+              onClick={handleSave}
+              disabled={saving || !currentOntology}
+            >
+              Save
+            </Button>
+          </Tooltip>
+          <Tooltip title="Export (Cmd/Ctrl+E)">
+            <Button 
+              color="inherit" 
+              startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              Export
+            </Button>
+          </Tooltip>
+          <Tooltip title="Keyboard Shortcuts (?)">
+            <IconButton
+              color="inherit"
+              onClick={() => setShortcutsDialogOpen(true)}
+              sx={{ ml: 1 }}
+            >
+              <KeyboardIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
 
@@ -228,7 +244,14 @@ export default function Layout() {
               }}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemText 
+                primary={item.text} 
+                secondary={item.shortcut}
+                secondaryTypographyProps={{ 
+                  variant: 'caption',
+                  sx: { opacity: 0.7 }
+                }}
+              />
             </ListItem>
           ))}
         </List>
@@ -268,6 +291,8 @@ export default function Layout() {
         onClose={() => setShortcutsDialogOpen(false)}
         currentContext={getCurrentContext()}
       />
+      
+      <KeyboardShortcutHint />
     </Box>
   )
 }
