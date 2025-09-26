@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
   Box,
   Typography,
   List,
@@ -19,9 +13,9 @@ import {
   FormControlLabel,
   FormControl,
   InputLabel,
-  FormGroup,
-  Divider,
   Checkbox,
+  TextField,
+  Chip,
 } from '@mui/material'
 import { generateId } from '../utils/uuid'
 import {
@@ -30,13 +24,9 @@ import {
   Event as EventTypeIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../store/store'
-import { addEventToPersona, updateEventInPersona } from '../store/personaSlice'
+import { addEventToPersona, updateEventInPersona, deleteEventFromPersona } from '../store/personaSlice'
 import { EventType, EventRole, GlossItem } from '../models/types'
-import GlossEditor from './GlossEditor'
-import ModeSelector from './shared/ModeSelector'
-import { WikidataChip } from './shared/WikidataChip'
-import { TypeObjectBadge } from './shared/TypeObjectToggle'
-import WikidataSearch from './WikidataSearch'
+import BaseTypeEditor from './shared/BaseTypeEditor'
 
 interface EventTypeEditorProps {
   open: boolean
@@ -49,6 +39,8 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
   const ontology = personaOntologies.find(o => o.personaId === personaId)
+  
+  // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [roles, setRoles] = useState<EventRole[]>([])
@@ -61,6 +53,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
   const [importedAt, setImportedAt] = useState<string>('')
+  const [exampleInput, setExampleInput] = useState('')
 
   useEffect(() => {
     if (event) {
@@ -85,6 +78,23 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     }
   }, [event])
 
+  useEffect(() => {
+    // When copying from another persona, populate the fields
+    if (mode === 'copy' && sourcePersonaId && sourceEventId) {
+      const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
+      const sourceEvent = sourceOntology?.events.find(e => e.id === sourceEventId)
+      if (sourceEvent) {
+        setName(sourceEvent.name)
+        setGloss(sourceEvent.gloss)
+        setRoles(sourceEvent.roles)
+        setExamples(sourceEvent.examples || [])
+        setWikidataId(sourceEvent.wikidataId || '')
+        setWikidataUrl(sourceEvent.wikidataUrl || '')
+        setImportedAt(sourceEvent.importedAt || '')
+      }
+    }
+  }, [mode, sourcePersonaId, sourceEventId, personaOntologies])
+
   const handleSave = () => {
     if (!personaId) return
     
@@ -97,23 +107,33 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       examples,
       wikidataId: wikidataId || undefined,
       wikidataUrl: wikidataUrl || undefined,
-      importedFrom: wikidataId ? 'wikidata' : undefined,
-      importedAt: importedAt || undefined,
+      importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+      importedAt: wikidataId ? (importedAt || now) : undefined,
       createdAt: event?.createdAt || now,
       updatedAt: now,
     }
-
+    
     if (event) {
       dispatch(updateEventInPersona({ personaId, event: eventData }))
     } else {
-      dispatch(addEventToPersona({ personaId, event: eventData }))
+      targetPersonaIds.forEach(targetId => {
+        const newEventData = { ...eventData, id: generateId() }
+        dispatch(addEventToPersona({ personaId: targetId, event: newEventData }))
+      })
     }
-
+    
     onClose()
   }
 
+  const handleDelete = () => {
+    if (event && personaId) {
+      dispatch(deleteEventFromPersona({ personaId, eventId: event.id }))
+      onClose()
+    }
+  }
+
   const handleAddRole = () => {
-    if (selectedRoleId && !roles.some(r => r.roleTypeId === selectedRoleId)) {
+    if (selectedRoleId && !roles.find(r => r.roleTypeId === selectedRoleId)) {
       setRoles([...roles, {
         roleTypeId: selectedRoleId,
         optional: false,
@@ -122,213 +142,203 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     }
   }
 
-  const handleRemoveRole = (index: number) => {
-    setRoles(roles.filter((_, i) => i !== index))
+  const handleRemoveRole = (roleTypeId: string) => {
+    setRoles(roles.filter(r => r.roleTypeId !== roleTypeId))
   }
 
-  const handleRoleOptionalChange = (index: number, optional: boolean) => {
-    const updated = [...roles]
-    updated[index] = { ...updated[index], optional }
-    setRoles(updated)
+  const handleToggleOptional = (roleTypeId: string) => {
+    setRoles(roles.map(r =>
+      r.roleTypeId === roleTypeId
+        ? { ...r, optional: !r.optional }
+        : r
+    ))
   }
 
-  const getRoleName = (roleTypeId: string) => {
-    const role = ontology?.roles.find(r => r.id === roleTypeId)
-    return role?.name || roleTypeId
+  const handleWikidataSelect = (data: any) => {
+    setName(data.name)
+    setGloss([{ type: 'text', content: data.description }])
+    setWikidataId(data.wikidataId)
+    setWikidataUrl(data.wikidataUrl)
+    setImportedAt(new Date().toISOString())
   }
+
+  const handleAddExample = () => {
+    if (exampleInput.trim()) {
+      setExamples([...examples, exampleInput.trim()])
+      setExampleInput('')
+    }
+  }
+
+  const handleRemoveExample = (index: number) => {
+    setExamples(examples.filter((_, i) => i !== index))
+  }
+
+  // Additional fields for event types (roles management)
+  const additionalFields = (
+    <Box>
+      {/* Roles Management */}
+      <Typography variant="subtitle2" gutterBottom>Roles</Typography>
+      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+        <FormControl fullWidth size="small">
+          <InputLabel>Add Role</InputLabel>
+          <Select
+            value={selectedRoleId}
+            onChange={(e) => setSelectedRoleId(e.target.value)}
+            label="Add Role"
+          >
+            {ontology?.roles
+              .filter(r => !roles.find(er => er.roleTypeId === r.id))
+              .map(role => (
+                <MenuItem key={role.id} value={role.id}>
+                  {role.name}
+                </MenuItem>
+              ))}
+          </Select>
+        </FormControl>
+        <IconButton onClick={handleAddRole} disabled={!selectedRoleId}>
+          <AddIcon />
+        </IconButton>
+      </Box>
+      
+      <List dense>
+        {roles.map((eventRole) => {
+          const role = ontology?.roles.find(r => r.id === eventRole.roleTypeId)
+          if (!role) return null
+          
+          return (
+            <ListItem key={eventRole.roleTypeId}>
+              <ListItemText
+                primary={role.name}
+                secondary={
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={eventRole.optional}
+                        onChange={() => handleToggleOptional(eventRole.roleTypeId)}
+                      />
+                    }
+                    label="Optional"
+                  />
+                }
+              />
+              <ListItemSecondaryAction>
+                <IconButton
+                  edge="end"
+                  size="small"
+                  onClick={() => handleRemoveRole(eventRole.roleTypeId)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </ListItemSecondaryAction>
+            </ListItem>
+          )
+        })}
+      </List>
+
+      {/* Examples */}
+      <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
+      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+        <TextField
+          size="small"
+          placeholder="Add example..."
+          value={exampleInput}
+          onChange={(e) => setExampleInput(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleAddExample()
+            }
+          }}
+          fullWidth
+        />
+        <IconButton onClick={handleAddExample} size="small">
+          <AddIcon />
+        </IconButton>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        {examples.map((example, index) => (
+          <Chip
+            key={index}
+            label={example}
+            onDelete={() => handleRemoveExample(index)}
+            size="small"
+          />
+        ))}
+      </Box>
+    </Box>
+  )
+
+  // Source selector for copy mode
+  const sourceSelector = mode === 'copy' && (
+    <>
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Source Persona</InputLabel>
+        <Select
+          value={sourcePersonaId}
+          onChange={(e) => {
+            setSourcePersonaId(e.target.value)
+            setSourceEventId('')
+          }}
+          label="Source Persona"
+        >
+          {personas.filter(p => p.id !== personaId).map(persona => (
+            <MenuItem key={persona.id} value={persona.id}>
+              {persona.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      
+      {sourcePersonaId && (
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Source Event Type</InputLabel>
+          <Select
+            value={sourceEventId}
+            onChange={(e) => setSourceEventId(e.target.value)}
+            label="Source Event Type"
+          >
+            {personaOntologies
+              .find(o => o.personaId === sourcePersonaId)
+              ?.events.map(event => (
+                <MenuItem key={event.id} value={event.id}>
+                  {event.name}
+                </MenuItem>
+              ))}
+          </Select>
+        </FormControl>
+      )}
+    </>
+  )
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EventTypeIcon color="primary" />
-          {event ? 'Edit Event Type' : 'Add Event Type'}
-          <TypeObjectBadge isType={true} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          {wikidataId && (
-            <WikidataChip 
-              wikidataId={wikidataId}
-              wikidataUrl={wikidataUrl}
-              importedAt={importedAt}
-              showTimestamp={true}
-            />
-          )}
-          
-          {!event && (
-            <>
-              <ModeSelector 
-                mode={mode} 
-                onChange={(newMode) => setMode(newMode)}
-                showCopy={true}
-              />
-              
-              {mode === 'copy' && (
-                <>
-                  <FormControl fullWidth>
-                    <InputLabel>Source Persona</InputLabel>
-                    <Select
-                      value={sourcePersonaId}
-                      onChange={(e) => {
-                        setSourcePersonaId(e.target.value)
-                        setSourceEventId('')
-                      }}
-                      label="Source Persona"
-                    >
-                      {personas.map(p => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  
-                  {sourcePersonaId && (
-                    <FormControl fullWidth>
-                      <InputLabel>Event Type to Copy</InputLabel>
-                      <Select
-                        value={sourceEventId}
-                        onChange={(e) => {
-                          const selectedId = e.target.value
-                          setSourceEventId(selectedId)
-                          const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-                          const sourceEvent = sourceOntology?.events.find(ev => ev.id === selectedId)
-                          if (sourceEvent) {
-                            setName(sourceEvent.name)
-                            setGloss(sourceEvent.gloss)
-                            setRoles(sourceEvent.roles || [])
-                            setExamples(sourceEvent.examples || [])
-                          }
-                        }}
-                        label="Event Type to Copy"
-                      >
-                        {personaOntologies
-                          .find(o => o.personaId === sourcePersonaId)
-                          ?.events.map(e => (
-                            <MenuItem key={e.id} value={e.id}>{e.name}</MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </>
-              )}
-              
-              {mode === 'wikidata' && (
-                <WikidataSearch
-                  entityType="type"
-                  onImport={(data) => {
-                    setName(data.name)
-                    setGloss([{ type: 'text', content: data.description || `An event type from Wikidata.` }])
-                    setWikidataId(data.wikidataId)
-                    setWikidataUrl(data.wikidataUrl)
-                    setImportedAt(new Date().toISOString())
-                    if (data.aliases) {
-                      setExamples(data.aliases)
-                    }
-                  }}
-                />
-              )}
-            </>
-          )}
-          
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            disabled={!event && ((mode === 'copy' && !sourceEventId) || (mode === 'wikidata' && !name))}
-          />
-          
-          <GlossEditor
-            gloss={gloss}
-            onChange={setGloss}
-            personaId={personaId}
-            disabled={!event && ((mode === 'copy' && !sourceEventId) || (mode === 'wikidata' && !name))}
-          />
-
-          <Box>
-            <Typography variant="subtitle1" gutterBottom>
-              Event Roles
-            </Typography>
-            <List dense>
-              {roles.map((role, index) => (
-                <ListItem key={index}>
-                  <ListItemText
-                    primary={getRoleName(role.roleTypeId)}
-                    secondary={
-                      <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                        {role.optional && <Chip label="Optional" size="small" />}
-                        {role.minOccurrences && <Chip label={`Min: ${role.minOccurrences}`} size="small" />}
-                        {role.maxOccurrences && <Chip label={`Max: ${role.maxOccurrences}`} size="small" />}
-                      </Box>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={role.optional}
-                          onChange={(e) => handleRoleOptionalChange(index, e.target.checked)}
-                        />
-                      }
-                      label="Optional"
-                    />
-                    <IconButton edge="end" onClick={() => handleRemoveRole(index)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Select
-                value={selectedRoleId}
-                onChange={(e) => setSelectedRoleId(e.target.value)}
-                displayEmpty
-                size="small"
-                sx={{ flex: 1 }}
-              >
-                <MenuItem value="" disabled>
-                  Select a role to add
-                </MenuItem>
-                {ontology?.roles
-                  .filter(r => !roles.some(er => er.roleTypeId === r.id))
-                  .map(role => (
-                    <MenuItem key={role.id} value={role.id}>
-                      {role.name}
-                    </MenuItem>
-                  ))
-                }
-              </Select>
-              <IconButton onClick={handleAddRole} color="primary" disabled={!selectedRoleId}>
-                <AddIcon />
-              </IconButton>
-            </Box>
-          </Box>
-
-          <TextField
-            label="Examples (comma-separated)"
-            value={examples.join(', ')}
-            onChange={(e) => setExamples(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            fullWidth
-            multiline
-            rows={2}
-            helperText="Optional: Provide example instances of this event type"
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
-          disabled={!name || gloss.length === 0}
-        >
-          {event ? 'Update' : 'Add'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <BaseTypeEditor
+      open={open}
+      onClose={onClose}
+      typeCategory="event"
+      personaId={personaId}
+      name={name}
+      setName={setName}
+      gloss={gloss}
+      setGloss={setGloss}
+      mode={mode}
+      setMode={setMode}
+      sourcePersonaId={sourcePersonaId}
+      setSourcePersonaId={setSourcePersonaId}
+      targetPersonaIds={targetPersonaIds}
+      setTargetPersonaIds={setTargetPersonaIds}
+      wikidataId={wikidataId}
+      wikidataUrl={wikidataUrl}
+      importedAt={importedAt}
+      onWikidataSelect={handleWikidataSelect}
+      onSave={handleSave}
+      onDelete={event ? handleDelete : undefined}
+      title={event ? 'Edit Event Type' : 'Create Event Type'}
+      icon={<EventTypeIcon />}
+      additionalFields={additionalFields}
+      sourceSelector={sourceSelector}
+      isEditing={!!event}
+      availablePersonas={personas}
+    />
   )
 }

@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { usePreferences } from '../../hooks/usePreferences'
 import {
   Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   Tabs,
   Tab,
   Paper,
@@ -15,7 +13,6 @@ import {
   ListItemSecondaryAction,
   IconButton,
   Fab,
-  Divider,
   AppBar,
   Tooltip,
   Toolbar,
@@ -27,7 +24,6 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Category as EntityTypeIcon,
   GroupWork as RoleIcon,
   Event as EventTypeIcon,
@@ -78,11 +74,40 @@ export default function OntologyWorkspace() {
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
   const { entities, events, times } = useSelector((state: RootState) => state.world)
   
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null)
+  // Use preferences for smart defaults
+  const { 
+    lastPersonaId, 
+    setLastPersonaId,
+    getFilterState,
+    setFilterState,
+  } = usePreferences()
+  
+  // Initialize with last used persona or first available
+  const [selectedPersonaId, setSelectedPersonaIdState] = useState<string | null>(
+    lastPersonaId && personas.some(p => p.id === lastPersonaId) 
+      ? lastPersonaId 
+      : personas[0]?.id || null
+  )
+  
+  // Wrapper to also save to preferences
+  const setSelectedPersonaId = (id: string | null) => {
+    setSelectedPersonaIdState(id)
+    if (id) setLastPersonaId(id)
+  }
+  
   const [personaEditorOpen, setPersonaEditorOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<typeof personas[0] | null>(null)
   const [tabValue, setTabValue] = useState(0)
-  const [searchTerm, setSearchTerm] = useState('')
+  
+  // Initialize search from saved filter state
+  const initialFilterState = getFilterState('ontology')
+  const [searchTerm, setSearchTermState] = useState(initialFilterState.searchQuery || '')
+  
+  // Wrapper to also save search term
+  const setSearchTerm = (term: string) => {
+    setSearchTermState(term)
+    setFilterState('ontology', { ...getFilterState('ontology'), searchQuery: term })
+  }
   
   // Type editor states
   const [entityTypeEditorOpen, setEntityTypeEditorOpen] = useState(false)
@@ -590,7 +615,7 @@ export default function OntologyWorkspace() {
           setRelationTypeEditorOpen(false)
           setSelectedRelationType(null)
         }}
-        relation={selectedRelationType}
+        relationType={selectedRelationType}
         personaId={selectedPersonaId}
       />
       

@@ -164,6 +164,9 @@ export default function TimeBuilder({
     if (existingTime) {
       // Load existing time data
       setTimeType(existingTime.type)
+      setWikidataId(existingTime.wikidataId || '')
+      setWikidataUrl(existingTime.wikidataUrl || '')
+      setImportedName(existingTime.wikidataId ? 'Imported' : '')
       
       if (existingTime.type === 'instant') {
         const instant = existingTime as TimeInstant
@@ -283,16 +286,16 @@ export default function TimeBuilder({
       }
       
       // Add common fields
+      const now = new Date().toISOString()
       const commonFields: Partial<Time> = {
         videoReferences: videoReferences.length > 0
           ? videoReferences.map(({ id, ...ref }) => ref)
           : undefined,
         certainty: certainty < 1 ? certainty : undefined,
-        metadata: {
-          ...(wikidataId ? { wikidataId } : {}),
-          ...(wikidataUrl ? { wikidataUrl } : {}),
-          ...(importedName ? { importedFrom: importedName } : {}),
-        },
+        wikidataId: wikidataId || undefined,
+        wikidataUrl: wikidataUrl || undefined,
+        importedFrom: wikidataId ? (existingTime?.importedFrom || 'wikidata') : undefined,
+        importedAt: wikidataId ? (existingTime?.importedAt || now) : undefined,
       }
       
       if (hasVagueness) {

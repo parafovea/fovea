@@ -84,6 +84,119 @@ export async function getWikidataEntity(id: string): Promise<WikidataEntity | nu
   }
 }
 
+// Extract location data from a Wikidata entity
+export function extractLocationData(entity: WikidataEntity) {
+  const locations: any[] = []
+  
+  // P276 - location (general location of an event or object)
+  if (entity.claims?.P276) {
+    entity.claims.P276.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        locations.push({
+          property: 'location',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+          // We'll need to fetch the actual entity details later
+        })
+      }
+    })
+  }
+  
+  // P17 - country
+  if (entity.claims?.P17) {
+    entity.claims.P17.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        locations.push({
+          property: 'country',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  // P131 - located in the administrative territorial entity
+  if (entity.claims?.P131) {
+    entity.claims.P131.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        locations.push({
+          property: 'administrative_location',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  // P706 - located on terrain feature
+  if (entity.claims?.P706) {
+    entity.claims.P706.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        locations.push({
+          property: 'terrain_feature',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  return locations
+}
+
+// Extract participant data from a Wikidata entity
+export function extractParticipantData(entity: WikidataEntity) {
+  const participants: any[] = []
+  
+  // P710 - participant (entities that participated in an event)
+  if (entity.claims?.P710) {
+    entity.claims.P710.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        participants.push({
+          property: 'participant',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+          // Check for qualifiers like P3831 (object has role)
+          role: claim.qualifiers?.P3831?.[0]?.datavalue?.value?.id || null
+        })
+      }
+    })
+  }
+  
+  // P1923 - participating teams
+  if (entity.claims?.P1923) {
+    entity.claims.P1923.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        participants.push({
+          property: 'participating_team',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  // P664 - organizer
+  if (entity.claims?.P664) {
+    entity.claims.P664.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        participants.push({
+          property: 'organizer',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  // P112 - founder
+  if (entity.claims?.P112) {
+    entity.claims.P112.forEach((claim: any) => {
+      if (claim.mainsnak?.datavalue?.value?.id) {
+        participants.push({
+          property: 'founder',
+          wikidataId: claim.mainsnak.datavalue.value.id,
+        })
+      }
+    })
+  }
+  
+  return participants
+}
+
 export function extractWikidataInfo(entity: WikidataEntity) {
   const label = entity.labels?.en?.value || entity.id
   const description = entity.descriptions?.en?.value || ''
@@ -136,6 +249,12 @@ export function extractWikidataInfo(entity: WikidataEntity) {
 
   // Extract temporal data
   const temporalData = extractTemporalData(entity)
+  
+  // Extract location data
+  const locationData = extractLocationData(entity)
+  
+  // Extract participant data
+  const participantData = extractParticipantData(entity)
 
   return {
     id: entity.id,
@@ -147,6 +266,8 @@ export function extractWikidataInfo(entity: WikidataEntity) {
     coordinates,
     boundingBox,
     temporalData,
+    locationData,
+    participantData,
     wikidataUrl: `https://www.wikidata.org/wiki/${entity.id}`
   }
 }
@@ -166,11 +287,14 @@ function parseWikidataTime(timeValue: any) {
   const match = time.match(/^([+-]?\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z?$/)
   if (!match) return null
   
-  const [, year, month, day, hour, minute] = match
+  const [, yearWithSign, month, day, hour, minute] = match
+  
+  // Remove + prefix from year for valid ISO string
+  const year = yearWithSign.replace(/^\+/, '')
   
   // Determine granularity based on precision
   let granularity = 'day'
-  let isoString = time
+  let isoString = time.replace(/^\+/, '') // Remove + prefix for valid ISO format
   
   switch (precision) {
     case 9: // Year
@@ -195,7 +319,7 @@ function parseWikidataTime(timeValue: any) {
       break
     case 14: // Second
       granularity = 'second'
-      isoString = time
+      isoString = time.replace(/^\+/, '') // Remove + prefix for valid ISO format
       break
   }
   

@@ -24,6 +24,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  ToggleButton,
+  ToggleButtonGroup,
+  FormControlLabel,
+  Checkbox,
+  Paper,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -33,12 +38,17 @@ import {
   Person as PersonIcon,
   AccessTime as TimeIcon,
   Place as LocationIcon,
+  Language as WikidataIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { addEvent, updateEvent, addEventInterpretation, removeEventInterpretation } from '../../store/worldSlice'
-import { Event, EventInterpretation, GlossItem, Time, Location } from '../../models/types'
+import { addEvent, updateEvent, addEventInterpretation, removeEventInterpretation, addTime, addEntity } from '../../store/worldSlice'
+import { Event, EventInterpretation, GlossItem, Time, Location, TimeInstant, TimeInterval, LocationPoint, Entity } from '../../models/types'
+import { generateId } from '../../utils/uuid'
+import { getWikidataEntity, extractWikidataInfo } from '../../services/wikidataApi'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import WikidataSearch from '../WikidataSearch'
 
 interface EventEditorProps {
   open: boolean
@@ -62,6 +72,22 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [certainty, setCertainty] = useState<number>(1.0)
   
+  // Wikidata import
+  const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
+  const [wikidataId, setWikidataId] = useState<string>('')
+  const [wikidataUrl, setWikidataUrl] = useState<string>('')
+  const [wikidataTemporalData, setWikidataTemporalData] = useState<any>(null)
+  const [wikidataLocationData, setWikidataLocationData] = useState<any[]>([])
+  const [wikidataParticipantData, setWikidataParticipantData] = useState<any[]>([])
+  const [shouldImportTime, setShouldImportTime] = useState(false)
+  const [shouldImportLocation, setShouldImportLocation] = useState(false)
+  const [shouldImportParticipants, setShouldImportParticipants] = useState(false)
+  const [hasImportedTime, setHasImportedTime] = useState(false)
+  const [hasImportedLocation, setHasImportedLocation] = useState(false)
+  const [hasImportedParticipants, setHasImportedParticipants] = useState(false)
+  const [locationDetails, setLocationDetails] = useState<Record<string, any>>({})
+  const [participantDetails, setParticipantDetails] = useState<Record<string, any>>({})
+  
   // For persona interpretations
   const [interpretations, setInterpretations] = useState<EventInterpretation[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
@@ -78,6 +104,21 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
       setSelectedLocationId(event.location?.id || '')
       setCertainty(event.metadata?.certainty || 1.0)
       setInterpretations(event.personaInterpretations || [])
+      setWikidataId(event.wikidataId || '')
+      setWikidataUrl(event.wikidataUrl || '')
+      
+      // Check if time/location were imported from Wikidata
+      if (event.time?.importedFrom === 'wikidata' && event.wikidataId) {
+        setHasImportedTime(true)
+      }
+      if (event.location?.importedFrom === 'wikidata' && event.wikidataId) {
+        setHasImportedLocation(true)
+      }
+      // Check if any entities were imported as participants
+      // We'll check if there are entities with wikidataId that match the event's wikidataId import timestamp
+      if (event.wikidataId && entities.some(e => e.wikidataId && e.importedAt === event.importedAt)) {
+        setHasImportedParticipants(true)
+      }
     } else {
       setName('')
       setDescription([{ type: 'text', content: '' }])
@@ -85,8 +126,13 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
       setSelectedLocationId('')
       setCertainty(1.0)
       setInterpretations([])
+      setWikidataId('')
+      setWikidataUrl('')
+      setHasImportedTime(false)
+      setHasImportedLocation(false)
+      setHasImportedParticipants(false)
     }
-  }, [event])
+  }, [event, entities])
 
   const handleAddParticipant = () => {
     setParticipants([...participants, { entityId: '', roleTypeId: '' }])
@@ -131,13 +177,149 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     setInterpretations(interpretations.filter(i => i.personaId !== personaId))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const now = new Date().toISOString()
+    
+    // Create time if importing from Wikidata
+    let timeToUse = times.find(t => t.id === selectedTimeId)
+    if (shouldImportTime && wikidataTemporalData && !hasImportedTime) {
+      const td = wikidataTemporalData
+      let newTime: Omit<Time, 'id'>
+      
+      if (td.startTime && td.endTime) {
+        // Create interval
+        newTime = {
+          type: 'interval',
+          startTime: td.startTime.timestamp,
+          endTime: td.endTime.timestamp,
+          importedFrom: 'wikidata',
+          importedAt: now,
+        } as Omit<TimeInterval, 'id'>
+      } else {
+        // Create instant from various time properties
+        const timeData = td.pointInTime || td.inception || td.publicationDate || td.dissolved
+        if (timeData) {
+          newTime = {
+            type: 'instant',
+            timestamp: timeData.timestamp,
+            importedFrom: 'wikidata',
+            importedAt: now,
+            vagueness: timeData.granularity !== 'day' ? {
+              type: 'approximate',
+              granularity: timeData.granularity,
+            } : undefined,
+          } as Omit<TimeInstant, 'id'>
+        } else {
+          // No valid time data
+          newTime = null
+        }
+      }
+      
+      if (newTime) {
+        const timeWithId = { ...newTime, id: generateId() } as Time
+        dispatch(addTime(timeWithId))
+        timeToUse = timeWithId
+        // Mark as imported so we don't import again
+        setHasImportedTime(true)
+        setShouldImportTime(false)
+      }
+    }
+    
+    // Create location if importing from Wikidata
+    let locationToUse = entities.find(e => e.id === selectedLocationId && 'locationType' in e) as Location | undefined
+    if (shouldImportLocation && wikidataLocationData.length > 0 && !hasImportedLocation) {
+      // For now, fetch and create the first location
+      // In a more complete implementation, we'd let the user choose which location(s) to import
+      const firstLocation = wikidataLocationData[0]
+      
+      try {
+        const locationEntity = await getWikidataEntity(firstLocation.wikidataId)
+        if (locationEntity) {
+          const locationInfo = extractWikidataInfo(locationEntity)
+          
+          // Create a location entity
+          const newLocation: Omit<LocationPoint, 'id' | 'createdAt' | 'updatedAt'> = {
+            name: locationInfo.label,
+            description: [{ type: 'text', content: locationInfo.description || `${locationInfo.label} from Wikidata.` }],
+            wikidataId: locationInfo.id,
+            wikidataUrl: locationInfo.wikidataUrl,
+            importedFrom: 'wikidata',
+            importedAt: now,
+            typeAssignments: [],
+            metadata: {
+              alternateNames: locationInfo.aliases || [],
+              externalIds: {},
+              properties: {},
+            },
+            locationType: 'point',
+            coordinateSystem: 'GPS',
+            coordinates: locationInfo.coordinates || {},
+          }
+          
+          const locationWithId = { ...newLocation, id: generateId(), createdAt: now, updatedAt: now } as Location
+          dispatch(addEntity(locationWithId))
+          locationToUse = locationWithId
+          // Mark as imported so we don't import again
+          setHasImportedLocation(true)
+          setShouldImportLocation(false)
+        }
+      } catch (error) {
+        console.error('Failed to fetch location from Wikidata:', error)
+      }
+    }
+    
+    // Create participants if importing from Wikidata
+    const createdParticipantIds: string[] = []
+    if (shouldImportParticipants && wikidataParticipantData.length > 0 && !hasImportedParticipants) {
+      for (const participant of wikidataParticipantData) {
+        try {
+          const participantEntity = await getWikidataEntity(participant.wikidataId)
+          if (participantEntity) {
+            const participantInfo = extractWikidataInfo(participantEntity)
+            
+            // Create an entity for the participant
+            const newParticipant: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
+              name: participantInfo.label,
+              description: [{ type: 'text', content: participantInfo.description || `${participantInfo.label} from Wikidata.` }],
+              wikidataId: participantInfo.id,
+              wikidataUrl: participantInfo.wikidataUrl,
+              importedFrom: 'wikidata',
+              importedAt: now,
+              typeAssignments: [],
+              metadata: {
+                alternateNames: participantInfo.aliases || [],
+                externalIds: {},
+                properties: {
+                  role: participant.property, // Store the role type from Wikidata
+                },
+              },
+            }
+            
+            const participantWithId = { ...newParticipant, id: generateId(), createdAt: now, updatedAt: now }
+            dispatch(addEntity(participantWithId))
+            createdParticipantIds.push(participantWithId.id)
+          }
+        } catch (error) {
+          console.error('Failed to fetch participant from Wikidata:', error)
+        }
+      }
+      // Mark as imported so we don't import again
+      if (createdParticipantIds.length > 0) {
+        setHasImportedParticipants(true)
+        setShouldImportParticipants(false)
+      }
+    }
+    
     const eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
       description,
       personaInterpretations: interpretations,
-      time: times.find(t => t.id === selectedTimeId),
-      location: entities.find(e => e.id === selectedLocationId && 'locationType' in e) as Location | undefined,
+      time: timeToUse,
+      location: locationToUse,
+      wikidataId: wikidataId || undefined,
+      wikidataUrl: wikidataUrl || undefined,
+      importedFrom: wikidataId ? (event?.importedFrom || 'wikidata') : undefined,
+      importedAt: wikidataId ? (event?.importedAt || now) : undefined,
       metadata: {
         certainty,
         properties: {},
@@ -174,6 +356,39 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     const persona = personas.find(p => p.id === personaId)
     return persona?.name || 'Unknown Persona'
   }
+  
+  const formatTimePreview = (temporalData: any): string => {
+    if (!temporalData) return 'No time data'
+    
+    const formatDate = (timestamp: string, granularity?: string) => {
+      const date = new Date(timestamp)
+      if (isNaN(date.getTime())) return timestamp
+      
+      if (granularity === 'year') {
+        return date.getFullYear().toString()
+      } else if (granularity === 'month') {
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })
+      }
+    }
+    
+    if (temporalData.startTime && temporalData.endTime) {
+      return `${formatDate(temporalData.startTime.timestamp, temporalData.startTime.granularity)} to ${formatDate(temporalData.endTime.timestamp, temporalData.endTime.granularity)}`
+    } else if (temporalData.pointInTime) {
+      return formatDate(temporalData.pointInTime.timestamp, temporalData.pointInTime.granularity)
+    } else if (temporalData.inception) {
+      return `Inception: ${formatDate(temporalData.inception.timestamp, temporalData.inception.granularity)}`
+    } else if (temporalData.dissolved) {
+      return `Dissolved: ${formatDate(temporalData.dissolved.timestamp, temporalData.dissolved.granularity)}`
+    }
+    
+    return 'Time data available'
+  }
 
   const availableEventTypes = selectedPersonaId
     ? personaOntologies.find(o => o.personaId === selectedPersonaId)?.events || []
@@ -200,6 +415,241 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
             An event is something that actually happened (e.g., "The 2024 Olympics", "John's birthday party").
             This is different from event types which are categories (e.g., "Olympics", "Birthday Party").
           </Alert>
+
+          {/* Import mode selector */}
+          {!event && (
+            <ToggleButtonGroup
+              value={importMode}
+              exclusive
+              onChange={(_, newMode) => newMode && setImportMode(newMode)}
+              fullWidth
+              size="small"
+            >
+              <ToggleButton value="manual">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <EditIcon fontSize="small" />
+                  <Typography variant="body2">Manual Entry</Typography>
+                </Box>
+              </ToggleButton>
+              <ToggleButton value="wikidata">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WikidataIcon fontSize="small" />
+                  <Typography variant="body2">Import from Wikidata</Typography>
+                </Box>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+
+          {/* Wikidata import */}
+          {importMode === 'wikidata' && !event && (
+            <WikidataSearch
+              entityType="object"
+              objectSubtype="event"
+              onImport={async (data) => {
+                setName(data.name)
+                setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])
+                setWikidataId(data.wikidataId)
+                setWikidataUrl(data.wikidataUrl)
+                
+                // Store temporal and location data
+                if (data.temporalData) {
+                  setWikidataTemporalData(data.temporalData)
+                  setShouldImportTime(true)
+                }
+                
+                // Fetch location details
+                if (data.locationData && data.locationData.length > 0) {
+                  setWikidataLocationData(data.locationData)
+                  setShouldImportLocation(true)
+                  
+                  // Fetch names for each location
+                  const details: Record<string, any> = {}
+                  for (const loc of data.locationData) {
+                    try {
+                      const entity = await getWikidataEntity(loc.wikidataId)
+                      if (entity) {
+                        const info = extractWikidataInfo(entity)
+                        details[loc.wikidataId] = {
+                          name: info.label,
+                          description: info.description
+                        }
+                      }
+                    } catch (error) {
+                      console.error(`Failed to fetch location ${loc.wikidataId}:`, error)
+                    }
+                  }
+                  setLocationDetails(details)
+                }
+                
+                // Fetch participant details
+                if (data.participantData && data.participantData.length > 0) {
+                  setWikidataParticipantData(data.participantData)
+                  setShouldImportParticipants(true)
+                  
+                  // Fetch names for each participant
+                  const details: Record<string, any> = {}
+                  for (const participant of data.participantData) {
+                    try {
+                      const entity = await getWikidataEntity(participant.wikidataId)
+                      if (entity) {
+                        const info = extractWikidataInfo(entity)
+                        details[participant.wikidataId] = {
+                          name: info.label,
+                          description: info.description
+                        }
+                      }
+                    } catch (error) {
+                      console.error(`Failed to fetch participant ${participant.wikidataId}:`, error)
+                    }
+                  }
+                  setParticipantDetails(details)
+                }
+              }}
+            />
+          )}
+
+          {/* Show Wikidata chip if imported */}
+          {wikidataId && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip 
+                label={`Wikidata: ${wikidataId}`}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                component="a"
+                href={wikidataUrl}
+                target="_blank"
+                clickable
+              />
+              <Typography variant="caption" color="text.secondary">
+                Imported from Wikidata
+              </Typography>
+            </Box>
+          )}
+
+          {/* Show available time data from Wikidata */}
+          {wikidataTemporalData && (
+            <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={shouldImportTime}
+                    onChange={(e) => setShouldImportTime(e.target.checked)}
+                    disabled={hasImportedTime}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Import Time from Wikidata
+                      {hasImportedTime && (
+                        <Chip 
+                          label="Already imported" 
+                          size="small" 
+                          color="success" 
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatTimePreview(wikidataTemporalData)}
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Paper>
+          )}
+
+          {/* Show available location data from Wikidata */}
+          {wikidataLocationData && wikidataLocationData.length > 0 && (
+            <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={shouldImportLocation}
+                    onChange={(e) => setShouldImportLocation(e.target.checked)}
+                    disabled={hasImportedLocation}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Import Locations from Wikidata
+                      {hasImportedLocation && (
+                        <Chip 
+                          label="Already imported" 
+                          size="small" 
+                          color="success" 
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                      {wikidataLocationData.map((loc) => {
+                        const detail = locationDetails[loc.wikidataId]
+                        return (
+                          <Chip
+                            key={loc.wikidataId}
+                            label={detail?.name || loc.wikidataId}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            title={`${loc.property}: ${detail?.description || ''}`}
+                          />
+                        )
+                      })}
+                    </Box>
+                  </Box>
+                }
+              />
+            </Paper>
+          )}
+
+          {/* Show available participant data from Wikidata */}
+          {wikidataParticipantData && wikidataParticipantData.length > 0 && (
+            <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={shouldImportParticipants}
+                    onChange={(e) => setShouldImportParticipants(e.target.checked)}
+                    disabled={hasImportedParticipants}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Import Participants from Wikidata
+                      {hasImportedParticipants && (
+                        <Chip 
+                          label="Already imported" 
+                          size="small" 
+                          color="success" 
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                      {wikidataParticipantData.map((participant) => {
+                        const detail = participantDetails[participant.wikidataId]
+                        const roleLabel = participant.property.replace(/_/g, ' ')
+                        return (
+                          <Chip
+                            key={participant.wikidataId}
+                            label={`${detail?.name || participant.wikidataId} (${roleLabel})`}
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            title={detail?.description || ''}
+                          />
+                        )
+                      })}
+                    </Box>
+                  </Box>
+                }
+              />
+            </Paper>
+          )}
 
           <TextField
             label="Name"

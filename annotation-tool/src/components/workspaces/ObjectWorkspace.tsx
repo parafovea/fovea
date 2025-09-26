@@ -18,6 +18,8 @@ import {
   Tooltip,
   ToggleButton,
   ToggleButtonGroup,
+  Chip,
+  Alert,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -147,12 +149,14 @@ export default function ObjectWorkspace() {
     )
   }
   
+  // Note: filteredEntities now includes ALL entities (including locations)
   const filteredEntities = entities.filter(e => 
     searchMatches(e, searchTerm) && filterByWikidata(e)
   )
   const filteredEvents = events.filter(e => 
     searchMatches(e, searchTerm) && filterByWikidata(e)
   )
+  // Locations shown separately for location-specific view
   const filteredLocations = locations.filter((l: any) => 
     searchMatches(l, searchTerm) && filterByWikidata(l)
   )
@@ -174,6 +178,90 @@ export default function ObjectWorkspace() {
       const eventType = ontology?.events.find(e => e.id === interp.eventTypeId)
       return eventType?.name || 'Unknown'
     }).join(', ')
+  }
+  
+  const formatTimeDisplay = (time: typeof times[0]): string => {
+    if (time.type === 'instant') {
+      const instant = time as any
+      if (instant.timestamp) {
+        const date = new Date(instant.timestamp)
+        // Check if it's a valid date
+        if (!isNaN(date.getTime())) {
+          // Format based on vagueness/granularity
+          if (instant.vagueness?.granularity === 'year') {
+            return date.getFullYear().toString()
+          } else if (instant.vagueness?.granularity === 'month') {
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+          } else {
+            return date.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric',
+              hour: date.getHours() !== 0 || date.getMinutes() !== 0 ? 'numeric' : undefined,
+              minute: date.getMinutes() !== 0 ? 'numeric' : undefined
+            })
+          }
+        }
+      }
+      return 'Instant'
+    } else {
+      const interval = time as any
+      if (interval.startTime && interval.endTime) {
+        const start = new Date(interval.startTime)
+        const end = new Date(interval.endTime)
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          const formatDate = (d: Date) => d.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          })
+          return `${formatDate(start)} – ${formatDate(end)}`
+        }
+      } else if (interval.startTime) {
+        const start = new Date(interval.startTime)
+        if (!isNaN(start.getTime())) {
+          return `From ${start.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          })}`
+        }
+      } else if (interval.endTime) {
+        const end = new Date(interval.endTime)
+        if (!isNaN(end.getTime())) {
+          return `Until ${end.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          })}`
+        }
+      }
+      return 'Interval'
+    }
+  }
+  
+  const getTimeDescription = (time: typeof times[0]): string => {
+    const parts: string[] = []
+    
+    if (time.type === 'instant') {
+      const instant = time as any
+      if (instant.vagueness) {
+        if (instant.vagueness.type === 'approximate') parts.push('Approximate')
+        if (instant.vagueness.type === 'bounded') parts.push('Bounded')
+        if (instant.vagueness.type === 'fuzzy') parts.push('Fuzzy')
+        if (instant.vagueness.description) parts.push(instant.vagueness.description)
+      }
+    }
+    
+    if (time.certainty && time.certainty < 1) {
+      parts.push(`${Math.round(time.certainty * 100)}% certain`)
+    }
+    
+    if (time.videoReferences?.length) {
+      parts.push(`${time.videoReferences.length} video ref${time.videoReferences.length > 1 ? 's' : ''}`)
+    }
+    
+    return parts.join(' • ')
   }
   
   // Get the currently visible list items based on tab
@@ -259,30 +347,32 @@ export default function ObjectWorkspace() {
                 <SearchIcon />
               </InputAdornment>
             ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <ToggleButtonGroup
+                  value={wikidataFilter}
+                  exclusive
+                  onChange={(_, value) => value && setWikidataFilter(value)}
+                  aria-label="wikidata filter"
+                  size="small"
+                  sx={{ height: 32 }}
+                >
+                  <ToggleButton value="all" aria-label="all objects" sx={{ px: 1.5, fontSize: '0.875rem' }}>
+                    All
+                  </ToggleButton>
+                  <ToggleButton value="wikidata" aria-label="wikidata imports" sx={{ px: 1.5, fontSize: '0.875rem' }}>
+                    <WikidataIcon sx={{ mr: 0.5 }} fontSize="small" />
+                    Wikidata
+                  </ToggleButton>
+                  <ToggleButton value="manual" aria-label="manual entries" sx={{ px: 1.5, fontSize: '0.875rem' }}>
+                    Manual
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </InputAdornment>
+            ),
           }}
           sx={{ mb: 2 }}
         />
-        
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <ToggleButtonGroup
-            value={wikidataFilter}
-            exclusive
-            onChange={(_, value) => value && setWikidataFilter(value)}
-            aria-label="wikidata filter"
-            size="small"
-          >
-            <ToggleButton value="all" aria-label="all objects">
-              All
-            </ToggleButton>
-            <ToggleButton value="wikidata" aria-label="wikidata imports">
-              <WikidataIcon sx={{ mr: 0.5 }} fontSize="small" />
-              Wikidata Only
-            </ToggleButton>
-            <ToggleButton value="manual" aria-label="manual entries">
-              Manual Only
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
       </Box>
 
       <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -297,50 +387,69 @@ export default function ObjectWorkspace() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
           <List>
-            {filteredEntities.map((entity, index) => (
-              <ListItem 
-                key={entity.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1">{entity.name}</Typography>
-                      <WikidataChip 
-                        wikidataId={entity.wikidataId}
-                        wikidataUrl={entity.wikidataUrl}
-                        importedAt={entity.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <Typography variant="caption" component="div">
-                        Types: {getEntityTypeNames(entity) || 'None assigned'}
-                      </Typography>
-                      {entity.metadata?.alternateNames && entity.metadata.alternateNames.length > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                          Also known as: {entity.metadata.alternateNames.join(', ')}
+            {filteredEntities.map((entity, index) => {
+              const isLocation = !!(entity as any).locationType
+              return (
+                <ListItem 
+                  key={entity.id} 
+                  divider
+                  selected={selectedItemIndex === index}
+                  onClick={() => handleItemClick(index)}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body1">{entity.name}</Typography>
+                        {isLocation && (
+                          <Chip
+                            icon={<LocationIcon />}
+                            label="Location"
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        )}
+                        <WikidataChip 
+                          wikidataId={entity.wikidataId}
+                          wikidataUrl={entity.wikidataUrl}
+                          importedAt={entity.importedAt}
+                          size="small"
+                          showTimestamp={false}
+                        />
+                      </Box>
+                    }
+                    secondary={
+                      <Box>
+                        <Typography variant="caption" component="div">
+                          {isLocation ? (
+                            <>Type: {(entity as any).locationType === 'point' ? 'Point' : 'Extent'} Location</>
+                          ) : (
+                            <>Types: {getEntityTypeNames(entity) || 'None assigned'}</>
+                          )}
                         </Typography>
-                      )}
-                    </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEntity(entity)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))}>
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
+                        {entity.metadata?.alternateNames && entity.metadata.alternateNames.length > 0 && (
+                          <Typography variant="caption" color="text.secondary">
+                            Also known as: {entity.metadata.alternateNames.join(', ')}
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <IconButton 
+                      edge="end" 
+                      onClick={() => isLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              )
+            })}
           </List>
         </TabPanel>
 
@@ -442,7 +551,7 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">
-                        {time.type === 'instant' ? 'Instant' : 'Interval'}: {time.id}
+                        {formatTimeDisplay(time)}
                       </Typography>
                       <WikidataChip 
                         wikidataId={time.wikidataId}
@@ -455,9 +564,7 @@ export default function ObjectWorkspace() {
                   }
                   secondary={
                     <Typography variant="caption">
-                      {time.type === 'instant' 
-                        ? (time as any).timestamp 
-                        : `${(time as any).startTime || 'Unknown'} - ${(time as any).endTime || 'Unknown'}`}
+                      {getTimeDescription(time)}
                     </Typography>
                   }
                 />

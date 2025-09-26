@@ -28,11 +28,14 @@ interface WikidataSearchProps {
     coordinates?: any
     boundingBox?: any
     temporalData?: any
+    locationData?: any[]
+    participantData?: any[]
   }) => void
   entityType: 'type' | 'object' | 'time'
+  objectSubtype?: 'entity' | 'event' | 'location'
 }
 
-export default function WikidataSearch({ onImport, entityType }: WikidataSearchProps) {
+export default function WikidataSearch({ onImport, entityType, objectSubtype = 'entity' }: WikidataSearchProps) {
   const [query, setQuery] = useState('')
   const [options, setOptions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -93,6 +96,8 @@ export default function WikidataSearch({ onImport, entityType }: WikidataSearchP
       coordinates: entityDetails.coordinates,
       boundingBox: entityDetails.boundingBox,
       temporalData: entityDetails.temporalData,
+      locationData: entityDetails.locationData,
+      participantData: entityDetails.participantData,
     })
   }
 
@@ -258,7 +263,7 @@ export default function WikidataSearch({ onImport, entityType }: WikidataSearchP
               startIcon={<WikidataIcon />}
               fullWidth
             >
-              Import as {entityType === 'type' ? 'Entity Type' : entityType === 'time' ? 'Time Object' : 'Entity'}
+              Import as {entityType === 'type' ? 'Entity Type' : entityType === 'time' ? 'Time Object' : objectSubtype === 'event' ? 'Event' : objectSubtype === 'location' ? 'Location' : 'Entity'}
             </Button>
           </Box>
         </Paper>

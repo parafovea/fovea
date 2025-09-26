@@ -68,11 +68,15 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
       setDescription(entity.description)
       setAlternateNames(entity.metadata?.alternateNames || [])
       setTypeAssignments(entity.typeAssignments || [])
+      setWikidataId(entity.wikidataId || '')
+      setWikidataUrl(entity.wikidataUrl || '')
     } else {
       setName('')
       setDescription([{ type: 'text', content: '' }])
       setAlternateNames([])
       setTypeAssignments([])
+      setWikidataId('')
+      setWikidataUrl('')
     }
   }, [entity])
 
@@ -101,10 +105,15 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   }
 
   const handleSave = () => {
+    const now = new Date().toISOString()
     const entityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
       description,
       typeAssignments,
+      wikidataId: wikidataId || undefined,
+      wikidataUrl: wikidataUrl || undefined,
+      importedFrom: wikidataId ? (entity?.importedFrom || 'wikidata') : undefined,
+      importedAt: wikidataId ? (entity?.importedAt || now) : undefined,
       metadata: {
         alternateNames: alternateNames.filter(Boolean),
         externalIds: {},
@@ -178,6 +187,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
           {importMode === 'wikidata' && !entity && (
             <WikidataSearch
               entityType="object"
+              objectSubtype="entity"
               onImport={(data) => {
                 setName(data.name)
                 setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])

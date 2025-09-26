@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
   Box,
   FormControlLabel,
   Checkbox,
@@ -16,18 +10,19 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider,
+  TextField,
+  Chip,
+  IconButton,
 } from '@mui/material'
-import { GroupWork as RoleIcon } from '@mui/icons-material'
+import { 
+  GroupWork as RoleIcon,
+  Add as AddIcon,
+} from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { addRoleToPersona, updateRoleInPersona } from '../store/personaSlice'
+import { addRoleToPersona, updateRoleInPersona, deleteRoleFromPersona } from '../store/personaSlice'
 import { RoleType, GlossItem } from '../models/types'
-import GlossEditor from './GlossEditor'
-import ModeSelector from './shared/ModeSelector'
-import { WikidataChip } from './shared/WikidataChip'
-import { TypeObjectBadge } from './shared/TypeObjectToggle'
-import WikidataSearch from './WikidataSearch'
+import BaseTypeEditor from './shared/BaseTypeEditor'
 
 interface RoleEditorProps {
   open: boolean
@@ -39,6 +34,8 @@ interface RoleEditorProps {
 export default function RoleEditor({ open, onClose, role, personaId }: RoleEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  
+  // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [allowedFillerTypes, setAllowedFillerTypes] = useState<('entity' | 'event')[]>(['entity'])
@@ -46,9 +43,11 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
   const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
   const [sourcePersonaId, setSourcePersonaId] = useState('')
   const [sourceRoleId, setSourceRoleId] = useState('')
+  const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
   const [importedAt, setImportedAt] = useState<string>('')
+  const [exampleInput, setExampleInput] = useState('')
 
   useEffect(() => {
     if (role) {
@@ -73,6 +72,23 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     }
   }, [role])
 
+  useEffect(() => {
+    // When copying from another persona, populate the fields
+    if (mode === 'copy' && sourcePersonaId && sourceRoleId) {
+      const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
+      const sourceRole = sourceOntology?.roles.find(r => r.id === sourceRoleId)
+      if (sourceRole) {
+        setName(sourceRole.name)
+        setGloss(sourceRole.gloss)
+        setAllowedFillerTypes(sourceRole.allowedFillerTypes)
+        setExamples(sourceRole.examples || [])
+        setWikidataId(sourceRole.wikidataId || '')
+        setWikidataUrl(sourceRole.wikidataUrl || '')
+        setImportedAt(sourceRole.importedAt || '')
+      }
+    }
+  }, [mode, sourcePersonaId, sourceRoleId, personaOntologies])
+
   const handleSave = () => {
     if (!personaId) return
     
@@ -85,187 +101,185 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
       examples,
       wikidataId: wikidataId || undefined,
       wikidataUrl: wikidataUrl || undefined,
-      importedFrom: wikidataId ? 'wikidata' : undefined,
-      importedAt: importedAt || undefined,
+      importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+      importedAt: wikidataId ? (importedAt || now) : undefined,
       createdAt: role?.createdAt || now,
       updatedAt: now,
     }
-
+    
     if (role) {
       dispatch(updateRoleInPersona({ personaId, role: roleData }))
     } else {
-      dispatch(addRoleToPersona({ personaId, role: roleData }))
+      targetPersonaIds.forEach(targetId => {
+        const newRoleData = { ...roleData, id: generateId() }
+        dispatch(addRoleToPersona({ personaId: targetId, role: newRoleData }))
+      })
     }
-
+    
     onClose()
   }
 
-  const handleFillerTypeChange = (type: 'entity' | 'event', checked: boolean) => {
-    if (checked) {
-      setAllowedFillerTypes([...allowedFillerTypes, type])
-    } else {
-      setAllowedFillerTypes(allowedFillerTypes.filter(t => t !== type))
+  const handleDelete = () => {
+    if (role && personaId) {
+      dispatch(deleteRoleFromPersona({ personaId, roleId: role.id }))
+      onClose()
     }
   }
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <RoleIcon color="primary" />
-          {role ? 'Edit Role Type' : 'Add Role Type'}
-          <TypeObjectBadge isType={true} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          {wikidataId && (
-            <WikidataChip 
-              wikidataId={wikidataId}
-              wikidataUrl={wikidataUrl}
-              importedAt={importedAt}
-              showTimestamp={true}
+  const handleToggleFillerType = (type: 'entity' | 'event') => {
+    if (allowedFillerTypes.includes(type)) {
+      setAllowedFillerTypes(allowedFillerTypes.filter(t => t !== type))
+    } else {
+      setAllowedFillerTypes([...allowedFillerTypes, type])
+    }
+  }
+
+  const handleWikidataSelect = (data: any) => {
+    setName(data.name)
+    setGloss([{ type: 'text', content: data.description }])
+    setWikidataId(data.wikidataId)
+    setWikidataUrl(data.wikidataUrl)
+    setImportedAt(new Date().toISOString())
+  }
+
+  const handleAddExample = () => {
+    if (exampleInput.trim()) {
+      setExamples([...examples, exampleInput.trim()])
+      setExampleInput('')
+    }
+  }
+
+  const handleRemoveExample = (index: number) => {
+    setExamples(examples.filter((_, i) => i !== index))
+  }
+
+  // Additional fields for role types
+  const additionalFields = (
+    <Box>
+      <Typography variant="subtitle2" gutterBottom>Allowed Filler Types</Typography>
+      <FormGroup row>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={allowedFillerTypes.includes('entity')}
+              onChange={() => handleToggleFillerType('entity')}
             />
-          )}
-          
-          {!role && (
-            <>
-              <ModeSelector 
-                mode={mode} 
-                onChange={(newMode) => setMode(newMode)}
-                showCopy={true}
-              />
-              
-              {mode === 'copy' && (
-                <>
-                  <FormControl fullWidth>
-                    <InputLabel>Source Persona</InputLabel>
-                    <Select
-                      value={sourcePersonaId}
-                      onChange={(e) => {
-                        setSourcePersonaId(e.target.value)
-                        setSourceRoleId('')
-                      }}
-                      label="Source Persona"
-                    >
-                      {personas.map(p => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  
-                  {sourcePersonaId && (
-                    <FormControl fullWidth>
-                      <InputLabel>Role Type to Copy</InputLabel>
-                      <Select
-                        value={sourceRoleId}
-                        onChange={(e) => {
-                          const selectedId = e.target.value
-                          setSourceRoleId(selectedId)
-                          const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-                          const sourceRole = sourceOntology?.roles.find(r => r.id === selectedId)
-                          if (sourceRole) {
-                            setName(sourceRole.name)
-                            setGloss(sourceRole.gloss)
-                            setAllowedFillerTypes(sourceRole.allowedFillerTypes)
-                            setExamples(sourceRole.examples || [])
-                          }
-                        }}
-                        label="Role Type to Copy"
-                      >
-                        {personaOntologies
-                          .find(o => o.personaId === sourcePersonaId)
-                          ?.roles.map(r => (
-                            <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </>
-              )}
-              
-              {mode === 'wikidata' && (
-                <WikidataSearch
-                  entityType="type"
-                  onImport={(data) => {
-                    setName(data.name)
-                    setGloss([{ type: 'text', content: data.description || `A role type from Wikidata.` }])
-                    setWikidataId(data.wikidataId)
-                    setWikidataUrl(data.wikidataUrl)
-                    setImportedAt(new Date().toISOString())
-                    if (data.aliases) {
-                      setExamples(data.aliases)
-                    }
-                  }}
-                />
-              )}
-            </>
-          )}
-          
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            disabled={!role && ((mode === 'copy' && !sourceRoleId) || (mode === 'wikidata' && !name))}
-          />
-          
-          <GlossEditor
-            gloss={gloss}
-            onChange={setGloss}
-            personaId={personaId}
-            disabled={!role && ((mode === 'copy' && !sourceRoleId) || (mode === 'wikidata' && !name))}
-          />
+          }
+          label="Entities"
+        />
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={allowedFillerTypes.includes('event')}
+              onChange={() => handleToggleFillerType('event')}
+            />
+          }
+          label="Events"
+        />
+      </FormGroup>
 
-          <Box>
-            <Typography variant="subtitle1" gutterBottom>
-              Allowed Filler Types
-            </Typography>
-            <FormGroup row>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={allowedFillerTypes.includes('entity')}
-                    onChange={(e) => handleFillerTypeChange('entity', e.target.checked)}
-                  />
-                }
-                label="Entity"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={allowedFillerTypes.includes('event')}
-                    onChange={(e) => handleFillerTypeChange('event', e.target.checked)}
-                  />
-                }
-                label="Event"
-              />
-            </FormGroup>
-          </Box>
-
-          <TextField
-            label="Examples (comma-separated)"
-            value={examples.join(', ')}
-            onChange={(e) => setExamples(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            fullWidth
-            multiline
-            rows={2}
-            helperText="Optional: Provide example uses of this role type"
-            disabled={!role && ((mode === 'copy' && !sourceRoleId) || (mode === 'wikidata' && !name))}
+      <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
+      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+        <TextField
+          size="small"
+          placeholder="Add example..."
+          value={exampleInput}
+          onChange={(e) => setExampleInput(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleAddExample()
+            }
+          }}
+          fullWidth
+        />
+        <IconButton onClick={handleAddExample} size="small">
+          <AddIcon />
+        </IconButton>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        {examples.map((example, index) => (
+          <Chip
+            key={index}
+            label={example}
+            onDelete={() => handleRemoveExample(index)}
+            size="small"
           />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
-          disabled={!name || gloss.length === 0 || allowedFillerTypes.length === 0}
+        ))}
+      </Box>
+    </Box>
+  )
+
+  // Source selector for copy mode
+  const sourceSelector = mode === 'copy' && (
+    <>
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Source Persona</InputLabel>
+        <Select
+          value={sourcePersonaId}
+          onChange={(e) => {
+            setSourcePersonaId(e.target.value)
+            setSourceRoleId('')
+          }}
+          label="Source Persona"
         >
-          {role ? 'Update' : 'Add'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+          {personas.filter(p => p.id !== personaId).map(persona => (
+            <MenuItem key={persona.id} value={persona.id}>
+              {persona.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      
+      {sourcePersonaId && (
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Source Role Type</InputLabel>
+          <Select
+            value={sourceRoleId}
+            onChange={(e) => setSourceRoleId(e.target.value)}
+            label="Source Role Type"
+          >
+            {personaOntologies
+              .find(o => o.personaId === sourcePersonaId)
+              ?.roles.map(role => (
+                <MenuItem key={role.id} value={role.id}>
+                  {role.name}
+                </MenuItem>
+              ))}
+          </Select>
+        </FormControl>
+      )}
+    </>
+  )
+
+  return (
+    <BaseTypeEditor
+      open={open}
+      onClose={onClose}
+      typeCategory="role"
+      personaId={personaId}
+      name={name}
+      setName={setName}
+      gloss={gloss}
+      setGloss={setGloss}
+      mode={mode}
+      setMode={setMode}
+      sourcePersonaId={sourcePersonaId}
+      setSourcePersonaId={setSourcePersonaId}
+      targetPersonaIds={targetPersonaIds}
+      setTargetPersonaIds={setTargetPersonaIds}
+      wikidataId={wikidataId}
+      wikidataUrl={wikidataUrl}
+      importedAt={importedAt}
+      onWikidataSelect={handleWikidataSelect}
+      onSave={handleSave}
+      onDelete={role ? handleDelete : undefined}
+      title={role ? 'Edit Role Type' : 'Create Role Type'}
+      icon={<RoleIcon />}
+      additionalFields={additionalFields}
+      sourceSelector={sourceSelector}
+      isEditing={!!role}
+      availablePersonas={personas}
+    />
   )
 }

@@ -35,11 +35,15 @@ import {
   VideoLibrary as VideoIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  Edit as EditIcon,
+  Language as WikidataIcon,
 } from '@mui/icons-material'
 import { AppDispatch, RootState } from '../../store/store'
 import { addTime, updateTime } from '../../store/worldSlice'
 import { Time, TimeInstant, TimeInterval } from '../../models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import WikidataSearch from '../WikidataSearch'
+import { generateId } from '../../utils/uuid'
 
 interface TimeEditorProps {
   open: boolean
@@ -59,7 +63,10 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
   const { videos } = useSelector((state: RootState) => state.videos)
   
+  const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
+  const [wikidataId, setWikidataId] = useState('')
+  const [wikidataUrl, setWikidataUrl] = useState('')
   
   // Instant fields
   const [timestamp, setTimestamp] = useState('')
@@ -90,7 +97,10 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
 
   useEffect(() => {
     if (time) {
+      setImportMode('manual')
       setTimeType(time.type)
+      setWikidataId(time.wikidataId || '')
+      setWikidataUrl(time.wikidataUrl || '')
       
       if (time.type === 'instant') {
         const instant = time as TimeInstant
@@ -121,10 +131,13 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       setCertainty(time.certainty || 1.0)
     } else {
       // Reset to defaults for new time
+      setImportMode('manual')
       setTimeType('instant')
       setTimestamp('')
       setStartTime('')
       setEndTime('')
+      setWikidataId('')
+      setWikidataUrl('')
       setHasVagueness(false)
       setHasDeictic(false)
       setVideoReferences([])
@@ -153,6 +166,8 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       type: timeType,
       videoReferences: videoReferences.filter(ref => ref.videoId),
       certainty,
+      wikidataId: wikidataId || undefined,
+      wikidataUrl: wikidataUrl || undefined,
       metadata: {},
     }
     
@@ -197,7 +212,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     if (time) {
       dispatch(updateTime({ ...time, ...timeData }))
     } else {
-      dispatch(addTime(timeData))
+      dispatch(addTime({ ...timeData, id: generateId() }))
     }
     
     onClose()
@@ -223,6 +238,95 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
             A time represents when something happens - either a specific instant or an interval.
             Times can be precise or vague, and can reference specific video frames.
           </Alert>
+
+          {/* Import mode selector */}
+          {!time && (
+            <Box>
+              <ToggleButtonGroup
+                value={importMode}
+                exclusive
+                onChange={(_, value) => value && setImportMode(value)}
+                size="small"
+                fullWidth
+              >
+                <ToggleButton value="manual">
+                  <EditIcon sx={{ mr: 1 }} />
+                  Manual Entry
+                </ToggleButton>
+                <ToggleButton value="wikidata">
+                  <WikidataIcon sx={{ mr: 1 }} />
+                  Import from Wikidata
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          )}
+
+          {/* Wikidata import */}
+          {importMode === 'wikidata' && !time && (
+            <WikidataSearch
+              entityType="time"
+              onImport={(data) => {
+                setWikidataId(data.wikidataId)
+                setWikidataUrl(data.wikidataUrl)
+                
+                if (data.temporalData) {
+                  const td = data.temporalData
+                  
+                  // Handle interval (start and end times)
+                  if (td.startTime && td.endTime) {
+                    setTimeType('interval')
+                    setStartTime(td.startTime.timestamp)
+                    setEndTime(td.endTime.timestamp)
+                    
+                    // Set vagueness if needed
+                    if (td.startTime.granularity !== 'day' || td.endTime.granularity !== 'day') {
+                      setHasVagueness(true)
+                      setGranularity(td.startTime.granularity)
+                    }
+                  }
+                  // Handle single point in time
+                  else if (td.pointInTime || td.inception || td.publicationDate) {
+                    setTimeType('instant')
+                    const timeData = td.pointInTime || td.inception || td.publicationDate
+                    setTimestamp(timeData.timestamp)
+                    
+                    // Set vagueness based on granularity
+                    if (timeData.granularity !== 'day') {
+                      setHasVagueness(true)
+                      setGranularity(timeData.granularity)
+                      
+                      if (td.circa) {
+                        setVaguenessType('approximate')
+                        setVaguenessDescription('circa')
+                      } else if (td.disputed) {
+                        setVaguenessType('fuzzy')
+                        setVaguenessDescription('disputed')
+                      }
+                    }
+                  }
+                }
+              }}
+            />
+          )}
+
+          {/* Show Wikidata chip if imported */}
+          {wikidataId && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip 
+                label={`Wikidata: ${wikidataId}`}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                component="a"
+                href={wikidataUrl}
+                target="_blank"
+                clickable
+              />
+              <Typography variant="caption" color="text.secondary">
+                Imported from Wikidata
+              </Typography>
+            </Box>
+          )}
 
           {/* Time Type Selection */}
           <Box>

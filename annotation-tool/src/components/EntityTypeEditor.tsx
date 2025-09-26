@@ -1,33 +1,25 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
   Box,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Checkbox,
-  FormControlLabel,
-  FormGroup,
+  TextField,
+  Chip,
+  IconButton,
   Typography,
-  Divider,
 } from '@mui/material'
-import { Category as EntityTypeIcon } from '@mui/icons-material'
+import { 
+  Category as EntityTypeIcon,
+  Add as AddIcon,
+} from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { addEntityToPersona, updateEntityInPersona } from '../store/personaSlice'
+import { addEntityToPersona, updateEntityInPersona, deleteEntityFromPersona } from '../store/personaSlice'
 import { EntityType, GlossItem } from '../models/types'
-import GlossEditor from './GlossEditor'
-import WikidataSearch from './WikidataSearch'
-import ModeSelector from './shared/ModeSelector'
-import { WikidataChip } from './shared/WikidataChip'
-import { TypeObjectBadge } from './shared/TypeObjectToggle'
+import BaseTypeEditor from './shared/BaseTypeEditor'
 
 interface EntityTypeEditorProps {
   open: boolean
@@ -39,6 +31,8 @@ interface EntityTypeEditorProps {
 export default function EntityTypeEditor({ open, onClose, entity, personaId }: EntityTypeEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  
+  // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [examples, setExamples] = useState<string[]>([])
@@ -49,6 +43,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
   const [importedAt, setImportedAt] = useState<string>('')
+  const [exampleInput, setExampleInput] = useState('')
 
   useEffect(() => {
     if (entity) {
@@ -83,6 +78,9 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
         setName(sourceEntity.name)
         setGloss(sourceEntity.gloss)
         setExamples(sourceEntity.examples || [])
+        setWikidataId(sourceEntity.wikidataId || '')
+        setWikidataUrl(sourceEntity.wikidataUrl || '')
+        setImportedAt(sourceEntity.importedAt || '')
       }
     }
   }, [mode, sourcePersonaId, sourceEntityId, personaOntologies])
@@ -90,7 +88,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   const handleSave = () => {
     const now = new Date().toISOString()
     
-    // If editing existing, update it and optionally copy to other personas
+    // If editing existing, update it
     if (entity) {
       const entityData: EntityType = {
         ...entity,
@@ -99,208 +97,167 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
         examples,
         wikidataId: wikidataId || undefined,
         wikidataUrl: wikidataUrl || undefined,
-        importedFrom: wikidataId ? 'wikidata' : undefined,
-        importedAt: importedAt || undefined,
+        importedAt: wikidataId ? (importedAt || now) : undefined,
         updatedAt: now,
       }
       
-      // Update in original persona
       if (personaId) {
         dispatch(updateEntityInPersona({ personaId, entity: entityData }))
       }
-      
-      // Copy to additional personas if selected
-      targetPersonaIds.forEach(targetId => {
-        if (targetId && targetId !== personaId) {
-          const newEntity: EntityType = {
-            id: generateId(),
-            name,
-            gloss,
-            examples,
-            wikidataId: wikidataId || undefined,
-            wikidataUrl: wikidataUrl || undefined,
-            importedFrom: wikidataId ? 'wikidata' : undefined,
-            importedAt: importedAt || undefined,
-            createdAt: now,
-            updatedAt: now,
-          }
-          dispatch(addEntityToPersona({ personaId: targetId, entity: newEntity }))
-        }
-      })
     } else {
-      // Adding new - add to all selected personas
+      // Creating new entity types for selected personas
       targetPersonaIds.forEach(targetId => {
-        if (targetId) {
-          const entityData: EntityType = {
-            id: generateId(),
-            name,
-            gloss,
-            examples,
-            wikidataId: wikidataId || undefined,
-            wikidataUrl: wikidataUrl || undefined,
-            importedFrom: wikidataId ? 'wikidata' : undefined,
-            importedAt: importedAt || undefined,
-            createdAt: now,
-            updatedAt: now,
-          }
-          dispatch(addEntityToPersona({ personaId: targetId, entity: entityData }))
+        const entityData: EntityType = {
+          id: generateId(),
+          name,
+          gloss,
+          examples,
+          wikidataId: wikidataId || undefined,
+          wikidataUrl: wikidataUrl || undefined,
+          importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+          importedAt: wikidataId ? now : undefined,
+          createdAt: now,
+          updatedAt: now,
         }
+        
+        dispatch(addEntityToPersona({ personaId: targetId, entity: entityData }))
       })
     }
-
+    
     onClose()
   }
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EntityTypeIcon color="primary" />
-          {entity ? 'Edit Entity Type' : 'Add Entity Type'}
-          <TypeObjectBadge isType={true} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          {wikidataId && (
-            <WikidataChip 
-              wikidataId={wikidataId}
-              wikidataUrl={wikidataUrl}
-              importedAt={importedAt}
-              showTimestamp={true}
-            />
-          )}
-          
-          {!entity && (
-            <>
-              <ModeSelector 
-                mode={mode} 
-                onChange={(newMode) => setMode(newMode)}
-                showCopy={true}
-              />
-              
-              {mode === 'copy' && (
-                <>
-                  <FormControl fullWidth>
-                    <InputLabel>Source Persona</InputLabel>
-                    <Select
-                      value={sourcePersonaId}
-                      onChange={(e) => {
-                        setSourcePersonaId(e.target.value)
-                        setSourceEntityId('')
-                      }}
-                      label="Source Persona"
-                    >
-                      {personas.map(p => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  
-                  {sourcePersonaId && (
-                    <FormControl fullWidth>
-                      <InputLabel>Entity Type to Copy</InputLabel>
-                      <Select
-                        value={sourceEntityId}
-                        onChange={(e) => setSourceEntityId(e.target.value)}
-                        label="Entity Type to Copy"
-                      >
-                        {personaOntologies
-                          .find(o => o.personaId === sourcePersonaId)
-                          ?.entities.map(e => (
-                            <MenuItem key={e.id} value={e.id}>{e.name}</MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </>
-              )}
-              
-              {mode === 'wikidata' && (
-                <WikidataSearch
-                  entityType="type"
-                  onImport={(data) => {
-                    setName(data.name)
-                    setGloss([{ type: 'text', content: data.description || `A type of ${data.name} from Wikidata.` }])
-                    setWikidataId(data.wikidataId)
-                    setWikidataUrl(data.wikidataUrl)
-                    setImportedAt(new Date().toISOString())
-                    if (data.aliases) {
-                      setExamples(data.aliases)
-                    }
-                  }}
-                />
-              )}
-            </>
-          )}
-          
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
+  const handleDelete = () => {
+    if (entity && personaId) {
+      dispatch(deleteEntityFromPersona({ personaId, entityId: entity.id }))
+      onClose()
+    }
+  }
+
+  const handleWikidataSelect = (data: any) => {
+    setName(data.name)
+    setGloss([{ type: 'text', content: data.description }])
+    setWikidataId(data.wikidataId)
+    setWikidataUrl(data.wikidataUrl)
+    setImportedAt(new Date().toISOString())
+  }
+
+  const handleAddExample = () => {
+    if (exampleInput.trim()) {
+      setExamples([...examples, exampleInput.trim()])
+      setExampleInput('')
+    }
+  }
+
+  const handleRemoveExample = (index: number) => {
+    setExamples(examples.filter((_, i) => i !== index))
+  }
+
+  // Additional fields for entity types
+  const additionalFields = (
+    <Box>
+      <Typography variant="subtitle2" gutterBottom>Examples</Typography>
+      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+        <TextField
+          size="small"
+          placeholder="Add example..."
+          value={exampleInput}
+          onChange={(e) => setExampleInput(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleAddExample()
+            }
+          }}
+          fullWidth
+        />
+        <IconButton onClick={handleAddExample} size="small">
+          <AddIcon />
+        </IconButton>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        {examples.map((example, index) => (
+          <Chip
+            key={index}
+            label={example}
+            onDelete={() => handleRemoveExample(index)}
+            size="small"
           />
-          <GlossEditor
-            gloss={gloss}
-            onChange={setGloss}
-            personaId={personaId}
-            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
-          />
-          <TextField
-            label="Examples (comma-separated)"
-            value={examples.join(', ')}
-            onChange={(e) => setExamples(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            fullWidth
-            multiline
-            rows={2}
-            helperText="Optional: Provide example instances of this entity type"
-            disabled={(mode === 'copy' && !sourceEntityId) || (mode === 'wikidata' && !name)}
-          />
-          <Divider />
-          
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              {entity ? 'Copy to Other Personas' : 'Add to Personas'}
-            </Typography>
-            <FormGroup row>
-              {personas.map(persona => (
-                <FormControlLabel
-                  key={persona.id}
-                  control={
-                    <Checkbox
-                      checked={targetPersonaIds.includes(persona.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setTargetPersonaIds([...targetPersonaIds, persona.id])
-                        } else {
-                          setTargetPersonaIds(targetPersonaIds.filter(id => id !== persona.id))
-                        }
-                      }}
-                      disabled={entity && persona.id === personaId}
-                    />
-                  }
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {persona.name}
-                      {entity && persona.id === personaId && (
-                        <Typography variant="caption" color="primary">(current)</Typography>
-                      )}
-                    </Box>
-                  }
-                />
+        ))}
+      </Box>
+    </Box>
+  )
+
+  // Source selector for copy mode
+  const sourceSelector = mode === 'copy' && (
+    <>
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Source Persona</InputLabel>
+        <Select
+          value={sourcePersonaId}
+          onChange={(e) => {
+            setSourcePersonaId(e.target.value)
+            setSourceEntityId('')
+          }}
+          label="Source Persona"
+        >
+          {personas.filter(p => p.id !== personaId).map(persona => (
+            <MenuItem key={persona.id} value={persona.id}>
+              {persona.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      
+      {sourcePersonaId && (
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Source Entity Type</InputLabel>
+          <Select
+            value={sourceEntityId}
+            onChange={(e) => setSourceEntityId(e.target.value)}
+            label="Source Entity Type"
+          >
+            {personaOntologies
+              .find(o => o.personaId === sourcePersonaId)
+              ?.entities.map(entity => (
+                <MenuItem key={entity.id} value={entity.id}>
+                  {entity.name}
+                </MenuItem>
               ))}
-            </FormGroup>
-          </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" disabled={!name || gloss.length === 0}>
-          {entity ? 'Update' : 'Add'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+          </Select>
+        </FormControl>
+      )}
+    </>
+  )
+
+  return (
+    <BaseTypeEditor
+      open={open}
+      onClose={onClose}
+      typeCategory="entity"
+      personaId={personaId}
+      name={name}
+      setName={setName}
+      gloss={gloss}
+      setGloss={setGloss}
+      mode={mode}
+      setMode={setMode}
+      sourcePersonaId={sourcePersonaId}
+      setSourcePersonaId={setSourcePersonaId}
+      targetPersonaIds={targetPersonaIds}
+      setTargetPersonaIds={setTargetPersonaIds}
+      wikidataId={wikidataId}
+      wikidataUrl={wikidataUrl}
+      importedAt={importedAt}
+      onWikidataSelect={handleWikidataSelect}
+      onSave={handleSave}
+      onDelete={entity ? handleDelete : undefined}
+      title={entity ? 'Edit Entity Type' : 'Create Entity Type'}
+      icon={<EntityTypeIcon />}
+      additionalFields={additionalFields}
+      sourceSelector={sourceSelector}
+      isEditing={!!entity}
+      availablePersonas={personas}
+    />
   )
 }

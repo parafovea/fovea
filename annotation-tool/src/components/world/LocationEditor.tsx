@@ -106,6 +106,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setDescription(location.description)
       setAlternateNames(location.metadata?.alternateNames || [])
       setTypeAssignments(location.typeAssignments || [])
+      setWikidataId(location.wikidataId || '')
+      setWikidataUrl(location.wikidataUrl || '')
       setLocationType(location.locationType)
       setCoordinateSystem(location.coordinateSystem || 'GPS')
       
@@ -200,14 +202,19 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   }
 
   const handleSave = () => {
+    const now = new Date().toISOString()
     const baseEntity = {
       name,
       description,
       typeAssignments,
+      wikidataId: wikidataId || undefined,
+      wikidataUrl: wikidataUrl || undefined,
+      importedFrom: wikidataId ? (location?.importedFrom || 'wikidata') : undefined,
+      importedAt: wikidataId ? (location?.importedAt || now) : undefined,
       metadata: {
         alternateNames: alternateNames.filter(Boolean),
-        externalIds: wikidataId ? { wikidata: wikidataId } : {},
-        properties: wikidataUrl ? { wikidataUrl } : {},
+        externalIds: {},
+        properties: {},
       },
     }
     
@@ -371,6 +378,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
           {importMode === 'wikidata' && !location && (
             <WikidataSearch
               entityType="object"
+              objectSubtype="location"
               onImport={(data: any) => {
                 setName(data.name)
                 setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])

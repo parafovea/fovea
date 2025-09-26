@@ -36,6 +36,7 @@ import { Ontology } from '../models/types'
 import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
 import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
+import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 
 const DRAWER_WIDTH = 240
 
@@ -185,24 +186,28 @@ export default function Layout() {
             </Typography>
           )}
           <Tooltip title="Save (Cmd/Ctrl+S)">
-            <Button 
-              color="inherit" 
-              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-              onClick={handleSave}
-              disabled={saving || !currentOntology}
-            >
-              Save
-            </Button>
+            <span>
+              <Button 
+                color="inherit" 
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                onClick={handleSave}
+                disabled={saving || !currentOntology}
+              >
+                Save
+              </Button>
+            </span>
           </Tooltip>
           <Tooltip title="Export (Cmd/Ctrl+E)">
-            <Button 
-              color="inherit" 
-              startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
-              onClick={handleExport}
-              disabled={exporting}
-            >
-              Export
-            </Button>
+            <span>
+              <Button 
+                color="inherit" 
+                startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                Export
+              </Button>
+            </span>
           </Tooltip>
           <Tooltip title="Keyboard Shortcuts (?)">
             <IconButton
@@ -262,13 +267,16 @@ export default function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           mt: '64px',
           height: 'calc(100vh - 64px)',
-          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Outlet />
+        <BreadcrumbNavigation />
+        <Box sx={{ flexGrow: 1, p: 3, overflow: 'auto' }}>
+          <Outlet />
+        </Box>
       </Box>
       
       <Snackbar
