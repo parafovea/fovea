@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
@@ -33,12 +33,15 @@ import { RootState, AppDispatch } from '../store/store'
 import { setVideos, setSearchTerm, setLoading } from '../store/videoSlice'
 import { formatTimestamp, formatDuration } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
+import { useWorkspaceKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
   const { videos, isLoading, filter } = useSelector((state: RootState) => state.videos)
   const [localSearchTerm, setLocalSearchTerm] = useState(filter.searchTerm)
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadVideos()
@@ -74,6 +77,17 @@ export default function VideoBrowser() {
     )
   })
 
+  // Calculate grid columns based on screen size
+  const getGridColumns = () => {
+    // This assumes the grid breakpoints: xs=12, sm=6, md=4, lg=3
+    // Which means 1, 2, 3, or 4 columns respectively
+    const width = window.innerWidth
+    if (width >= 1200) return 4 // lg
+    if (width >= 900) return 3 // md
+    if (width >= 600) return 2 // sm
+    return 1 // xs
+  }
+  
   const getVideoUrl = (video: VideoMetadata) => {
     // First try webpage_url as it's the original source
     if (video.webpage_url) {
@@ -93,6 +107,46 @@ export default function VideoBrowser() {
     }
     return ''
   }
+  
+  // Setup keyboard shortcuts
+  useWorkspaceKeyboardShortcuts('videoBrowser', {
+    'search.focus': () => {
+      searchInputRef.current?.focus()
+    },
+    'video.open': () => {
+      if (filteredVideos[selectedVideoIndex]) {
+        navigate(`/annotate/${filteredVideos[selectedVideoIndex].id}`)
+      }
+    },
+    'video.preview': () => {
+      // TODO: Implement video preview
+      console.log('Video preview not yet implemented')
+    },
+    'navigate.left': () => {
+      const cols = getGridColumns()
+      setSelectedVideoIndex(prev => Math.max(0, prev - 1))
+    },
+    'navigate.right': () => {
+      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + 1))
+    },
+    'navigate.up': () => {
+      const cols = getGridColumns()
+      setSelectedVideoIndex(prev => Math.max(0, prev - cols))
+    },
+    'navigate.down': () => {
+      const cols = getGridColumns()
+      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + cols))
+    },
+  })
+  
+  // Reset selection when search changes
+  useEffect(() => {
+    setSelectedVideoIndex(0)
+  }, [filter.searchTerm])
+  
+  const handleCardClick = (index: number) => {
+    setSelectedVideoIndex(index)
+  }
 
   if (isLoading) {
     return (
@@ -111,6 +165,7 @@ export default function VideoBrowser() {
           placeholder="Search videos by title, description, uploader, or tags..."
           value={localSearchTerm}
           onChange={(e) => handleSearch(e.target.value)}
+          inputRef={searchInputRef}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -122,7 +177,7 @@ export default function VideoBrowser() {
       </Box>
 
       <Grid container spacing={3}>
-        {filteredVideos.map((video: VideoMetadata) => {
+        {filteredVideos.map((video: VideoMetadata, index) => {
           const videoUrl = getVideoUrl(video)
           const thumbnailUrl = video.thumbnail || 
             (video.thumbnails && video.thumbnails.length > 0 
@@ -131,7 +186,17 @@ export default function VideoBrowser() {
           
           return (
             <Grid item xs={12} sm={6} md={4} lg={3} key={video.id}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Card 
+                sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  outline: selectedVideoIndex === index ? 2 : 0,
+                  outlineColor: 'primary.main',
+                  cursor: 'pointer',
+                }}
+                onClick={() => handleCardClick(index)}
+              >
                 <CardMedia
                   component="div"
                   sx={{

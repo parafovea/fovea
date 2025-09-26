@@ -16,7 +16,6 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material'
-import { generateId } from '../utils/uuid'
 import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
@@ -25,13 +24,15 @@ import {
   Download as ExportIcon,
   Menu as MenuIcon,
 } from '@mui/icons-material'
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store/store'
 import { markSaved } from '../store/ontologySlice'
 import { markSaved as markPersonaSaved } from '../store/personaSlice'
 import { api } from '../services/api'
 import { Ontology } from '../models/types'
+import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
 
 const DRAWER_WIDTH = 240
 
@@ -42,6 +43,7 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
@@ -61,12 +63,12 @@ export default function Layout() {
     { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects' },
   ]
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true)
     try {
       // Create ontology in new format
       const ontology: Ontology = {
-        id: currentOntology?.id || `generateId()`,
+        id: currentOntology?.id || `ont_${Date.now()}`,
         version: currentOntology?.version || '1.0.0',
         personas,
         personaOntologies,
@@ -93,9 +95,9 @@ export default function Layout() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [currentOntology, personas, personaOntologies, dispatch])
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     setExporting(true)
     try {
       await api.downloadExport()
@@ -114,55 +116,50 @@ export default function Layout() {
     } finally {
       setExporting(false)
     }
-  }
+  }, [])
 
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false })
   }
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Check for Cmd (Mac) or Ctrl (Windows/Linux)
-      const isModifierKey = e.metaKey || e.ctrlKey
-      
-      if (isModifierKey && !e.shiftKey) {
-        switch(e.key) {
-          case '1':
-            e.preventDefault()
-            navigate('/')
-            break
-          case '2':
-            e.preventDefault()
-            navigate('/ontology')
-            break
-          case '3':
-            e.preventDefault()
-            navigate('/objects')
-            break
-          case 'o':
-          case 'O':
-            e.preventDefault()
-            // If we're in the ontology builder and there's a last annotation, go back to it
-            if (location.pathname === '/ontology' && lastAnnotation.videoId) {
-              navigate(`/annotate/${lastAnnotation.videoId}`)
-            }
-            // If we're in the object builder and there's a last annotation, go back to it
-            else if (location.pathname === '/objects' && lastAnnotation.videoId) {
-              navigate(`/annotate/${lastAnnotation.videoId}`)
-            }
-            // Otherwise, go to the ontology builder
-            else if (location.pathname !== '/ontology') {
-              navigate('/ontology')
-            }
-            break
-        }
+  // Setup global keyboard shortcuts
+  const getCurrentContext = () => {
+    if (location.pathname === '/') return 'videoBrowser'
+    if (location.pathname === '/ontology') return 'ontologyWorkspace'
+    if (location.pathname === '/objects') return 'objectWorkspace'
+    return undefined
+  }
+  
+  useGlobalKeyboardShortcuts({
+    'navigate.videoBrowser': () => navigate('/'),
+    'navigate.ontologyBuilder': () => navigate('/ontology'),
+    'navigate.objectBuilder': () => navigate('/objects'),
+    'navigate.toggle': () => {
+      // If we're in the ontology builder and there's a last annotation, go back to it
+      if (location.pathname === '/ontology' && lastAnnotation.videoId) {
+        navigate(`/annotate/${lastAnnotation.videoId}`)
       }
-    }
-
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [navigate, location.pathname, lastAnnotation.videoId])
+      // If we're in the object builder and there's a last annotation, go back to it
+      else if (location.pathname === '/objects' && lastAnnotation.videoId) {
+        navigate(`/annotate/${lastAnnotation.videoId}`)
+      }
+      // Otherwise, go to the ontology builder
+      else if (location.pathname !== '/ontology') {
+        navigate('/ontology')
+      }
+    },
+    'file.save': () => {
+      if (!saving && currentOntology) {
+        handleSave()
+      }
+    },
+    'file.export': () => {
+      if (!exporting) {
+        handleExport()
+      }
+    },
+    'help.show': () => setShortcutsDialogOpen(true),
+  })
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -265,6 +262,12 @@ export default function Layout() {
           {notification.message}
         </Alert>
       </Snackbar>
+      
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onClose={() => setShortcutsDialogOpen(false)}
+        currentContext={getCurrentContext()}
+      />
     </Box>
   )
 }

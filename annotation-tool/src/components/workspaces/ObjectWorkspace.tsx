@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
@@ -33,6 +33,7 @@ import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
 import { WikidataChip } from '../shared/WikidataChip'
+import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -74,6 +75,10 @@ export default function ObjectWorkspace() {
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<typeof locations[0] | null>(null)
   const [selectedTime, setSelectedTime] = useState<typeof times[0] | null>(null)
+  
+  // Refs for managing focus
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
@@ -149,6 +154,73 @@ export default function ObjectWorkspace() {
       return eventType?.name || 'Unknown'
     }).join(', ')
   }
+  
+  // Get the currently visible list items based on tab
+  const getCurrentItems = () => {
+    switch(tabValue) {
+      case 0: return filteredEntities
+      case 1: return filteredEvents
+      case 2: return filteredLocations
+      case 3: return filteredTimes
+      default: return []
+    }
+  }
+  
+  // Setup keyboard shortcuts
+  useWorkspaceKeyboardShortcuts('objectWorkspace', {
+    'object.new': () => handleAddNew(),
+    'tab.next': () => setTabValue((prev) => (prev + 1) % 4),
+    'tab.previous': () => setTabValue((prev) => (prev - 1 + 4) % 4),
+    'item.edit': () => {
+      const items = getCurrentItems()
+      if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
+        const item = items[selectedItemIndex] as any
+        switch(tabValue) {
+          case 0: handleEditEntity(item); break
+          case 1: handleEditEvent(item); break
+          case 2: handleEditLocation(item); break
+          case 3: handleEditTime(item); break
+        }
+      }
+    },
+    'item.delete': () => {
+      const items = getCurrentItems()
+      if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
+        const item = items[selectedItemIndex] as any
+        switch(tabValue) {
+          case 0: dispatch(deleteEntity(item.id)); break
+          case 1: dispatch(deleteEvent(item.id)); break
+          case 2: dispatch(deleteEntity(item.id)); break // Locations are entities
+          case 3: dispatch(deleteTime(item.id)); break
+        }
+      }
+    },
+    'object.duplicate': () => {
+      // TODO: Implement duplication logic
+      console.log('Duplicate object not yet implemented')
+    },
+    'search.focus': () => {
+      searchInputRef.current?.focus()
+    },
+    'collection.open': () => {
+      // TODO: Implement collection builder opening
+      console.log('Collection builder not yet implemented')
+    },
+    'time.open': () => {
+      setSelectedTime(null)
+      setTimeEditorOpen(true)
+    },
+  })
+  
+  // Handle item selection with mouse
+  const handleItemClick = (index: number) => {
+    setSelectedItemIndex(index)
+  }
+  
+  // Reset selection when tab or search changes
+  useEffect(() => {
+    setSelectedItemIndex(-1)
+  }, [tabValue, searchTerm])
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -159,6 +231,7 @@ export default function ObjectWorkspace() {
           placeholder="Search objects..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          inputRef={searchInputRef}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -181,8 +254,14 @@ export default function ObjectWorkspace() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
           <List>
-            {filteredEntities.map((entity) => (
-              <ListItem key={entity.id} divider>
+            {filteredEntities.map((entity, index) => (
+              <ListItem 
+                key={entity.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -224,8 +303,14 @@ export default function ObjectWorkspace() {
 
         <TabPanel value={tabValue} index={1}>
           <List>
-            {filteredEvents.map((event) => (
-              <ListItem key={event.id} divider>
+            {filteredEvents.map((event, index) => (
+              <ListItem 
+                key={event.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -260,8 +345,14 @@ export default function ObjectWorkspace() {
 
         <TabPanel value={tabValue} index={2}>
           <List>
-            {filteredLocations.map((location) => (
-              <ListItem key={location.id} divider>
+            {filteredLocations.map((location, index) => (
+              <ListItem 
+                key={location.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -296,8 +387,14 @@ export default function ObjectWorkspace() {
 
         <TabPanel value={tabValue} index={3}>
           <List>
-            {filteredTimes.map((time) => (
-              <ListItem key={time.id} divider>
+            {filteredTimes.map((time, index) => (
+              <ListItem 
+                key={time.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

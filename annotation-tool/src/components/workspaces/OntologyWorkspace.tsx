@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
@@ -49,6 +49,7 @@ import {
   deleteEventFromPersona,
   deleteRelationType,
 } from '../../store/personaSlice'
+import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -92,6 +93,10 @@ export default function OntologyWorkspace() {
   const [selectedRole, setSelectedRole] = useState<any>(null)
   const [selectedEventType, setSelectedEventType] = useState<any>(null)
   const [selectedRelationType, setSelectedRelationType] = useState<any>(null)
+  
+  // Refs for managing focus
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
 
   const selectedPersona = personas.find(p => p.id === selectedPersonaId)
   const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
@@ -184,6 +189,68 @@ export default function OntologyWorkspace() {
     setSelectedRelationType(relation)
     setRelationTypeEditorOpen(true)
   }
+  
+  // Get the currently visible list items based on tab
+  const getCurrentItems = () => {
+    switch(tabValue) {
+      case 0: return filteredEntities
+      case 1: return filteredRoles
+      case 2: return filteredEvents
+      case 3: return filteredRelations
+      default: return []
+    }
+  }
+  
+  // Setup keyboard shortcuts
+  useWorkspaceKeyboardShortcuts('ontologyWorkspace', {
+    'type.new': () => handleAddType(),
+    'tab.next': () => setTabValue((prev) => (prev + 1) % 4),
+    'tab.previous': () => setTabValue((prev) => (prev - 1 + 4) % 4),
+    'item.edit': () => {
+      const items = getCurrentItems()
+      if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
+        const item = items[selectedItemIndex]
+        switch(tabValue) {
+          case 0: handleEditEntityType(item); break
+          case 1: handleEditRole(item); break
+          case 2: handleEditEventType(item); break
+          case 3: handleEditRelationType(item); break
+        }
+      }
+    },
+    'item.delete': () => {
+      const items = getCurrentItems()
+      if (selectedItemIndex >= 0 && selectedItemIndex < items.length && selectedPersonaId) {
+        const item = items[selectedItemIndex]
+        switch(tabValue) {
+          case 0: dispatch(deleteEntityFromPersona({ personaId: selectedPersonaId, entityId: item.id })); break
+          case 1: dispatch(deleteRoleFromPersona({ personaId: selectedPersonaId, roleId: item.id })); break
+          case 2: dispatch(deleteEventFromPersona({ personaId: selectedPersonaId, eventId: item.id })); break
+          case 3: dispatch(deleteRelationType({ personaId: selectedPersonaId, relationTypeId: item.id })); break
+        }
+      }
+    },
+    'type.duplicate': () => {
+      // TODO: Implement duplication logic
+      console.log('Duplicate type not yet implemented')
+    },
+    'search.focus': () => {
+      searchInputRef.current?.focus()
+    },
+    'navigate.personaBrowser': () => {
+      handleBackToBrowser()
+    },
+  }, selectedPersonaId !== null)
+  
+  // Handle item selection with mouse
+  const handleItemClick = (index: number) => {
+    setSelectedItemIndex(index)
+  }
+  
+  // Reset selection when tab or search changes
+  useEffect(() => {
+    setSelectedItemIndex(-1)
+  }, [tabValue, searchTerm])
 
   if (!selectedPersonaId) {
     return (
@@ -215,6 +282,7 @@ export default function OntologyWorkspace() {
           placeholder="Search types by name or description..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          inputRef={searchInputRef}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -271,8 +339,14 @@ export default function OntologyWorkspace() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
           <List>
-            {filteredEntities.map((entity) => (
-              <ListItem key={entity.id} divider>
+            {filteredEntities.map((entity, index) => (
+              <ListItem 
+                key={entity.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -309,8 +383,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={1}>
           <List>
-            {filteredRoles.map((role) => (
-              <ListItem key={role.id} divider>
+            {filteredRoles.map((role, index) => (
+              <ListItem 
+                key={role.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -354,8 +434,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={2}>
           <List>
-            {filteredEvents.map((event) => (
-              <ListItem key={event.id} divider>
+            {filteredEvents.map((event, index) => (
+              <ListItem 
+                key={event.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -401,8 +487,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={3}>
           <List>
-            {filteredRelations.map((relation) => (
-              <ListItem key={relation.id} divider>
+            {filteredRelations.map((relation, index) => (
+              <ListItem 
+                key={relation.id} 
+                divider
+                selected={selectedItemIndex === index}
+                onClick={() => handleItemClick(index)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
