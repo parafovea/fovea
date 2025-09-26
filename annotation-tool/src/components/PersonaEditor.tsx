@@ -10,9 +10,9 @@ import {
   Box,
 } from '@mui/material'
 import { AppDispatch } from '../store/store'
-import { generateId } from '../utils/uuid'
-import { setPersona, setOntology } from '../store/ontologySlice'
+import { addPersona, updatePersona } from '../store/personaSlice'
 import { Persona } from '../models/types'
+import { generateId } from '../utils/uuid'
 
 interface PersonaEditorProps {
   open: boolean
@@ -22,90 +22,94 @@ interface PersonaEditorProps {
 
 export default function PersonaEditor({ open, onClose, persona }: PersonaEditorProps) {
   const dispatch = useDispatch<AppDispatch>()
-  const [formData, setFormData] = useState({
-    role: '',
-    informationNeed: '',
-    details: '',
-  })
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('')
+  const [informationNeed, setInformationNeed] = useState('')
+  const [details, setDetails] = useState('')
 
   useEffect(() => {
     if (persona) {
-      setFormData({
-        role: persona.role,
-        informationNeed: persona.informationNeed,
-        details: persona.details,
-      })
+      setName(persona.name)
+      setRole(persona.role)
+      setInformationNeed(persona.informationNeed)
+      setDetails(persona.details || '')
     } else {
-      setFormData({
-        role: 'Tactically-Oriented Analyst',
-        informationNeed: 'Imports and exports of goods via ship, truck, or rail',
-        details: 'The information need includes the arrival or departure of ships, trucks, trains; container counts, types, and company logos.',
-      })
+      setName('')
+      setRole('')
+      setInformationNeed('')
+      setDetails('')
     }
   }, [persona])
 
   const handleSave = () => {
     const now = new Date().toISOString()
-    const updatedPersona: Persona = {
-      id: persona?.id || `generateId()`,
-      ...formData,
+    const personaData: Persona = {
+      id: persona?.id || generateId(),
+      name,
+      role,
+      informationNeed,
+      details,
       createdAt: persona?.createdAt || now,
       updatedAt: now,
     }
 
     if (persona) {
-      dispatch(setPersona(updatedPersona))
+      dispatch(updatePersona(personaData))
     } else {
-      dispatch(setOntology({
-        id: `generateId()`,
-        version: '0.1.0',
-        persona: updatedPersona,
-        entities: [],
-        roles: [],
-        events: [],
-        createdAt: now,
-        updatedAt: now,
-        description: 'New ontology',
-      }))
+      dispatch(addPersona(personaData))
     }
-
     onClose()
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{persona ? 'Edit Persona' : 'Create New Ontology'}</DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{persona ? 'Edit Persona' : 'Create New Persona'}</DialogTitle>
       <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
           <TextField
-            label="Role"
-            value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+            label="Persona Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             fullWidth
             required
+            helperText="A descriptive name for this persona"
+          />
+          <TextField
+            label="Role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            fullWidth
+            required
+            helperText="The persona's professional role or title"
           />
           <TextField
             label="Information Need"
-            value={formData.informationNeed}
-            onChange={(e) => setFormData({ ...formData, informationNeed: e.target.value })}
+            value={informationNeed}
+            onChange={(e) => setInformationNeed(e.target.value)}
             fullWidth
             required
             multiline
-            rows={2}
+            rows={3}
+            helperText="What information is this persona looking for?"
           />
           <TextField
-            label="Details"
-            value={formData.details}
-            onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+            label="Additional Details"
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
             fullWidth
             multiline
-            rows={4}
+            rows={2}
+            helperText="Optional: Any additional context or details"
           />
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained">
+        <Button 
+          onClick={handleSave} 
+          variant="contained"
+          disabled={!name || !role || !informationNeed}
+        >
           {persona ? 'Update' : 'Create'}
         </Button>
       </DialogActions>

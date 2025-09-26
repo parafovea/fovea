@@ -6,7 +6,8 @@ import { generateId } from './utils/uuid'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
 import AnnotationWorkspace from './components/AnnotationWorkspace'
-import OntologyBuilder from './components/OntologyBuilder'
+import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
+import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
 import { AppDispatch } from './store/store'
 import { setOntology, setLoading, setError } from './store/ontologySlice'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
@@ -93,15 +94,14 @@ function App() {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<VideoBrowser />} />
-          <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
-          <Route path="ontology" element={<OntologyBuilder />} />
-        </Route>
-      </Routes>
-    </Box>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<VideoBrowser />} />
+        <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
+        <Route path="ontology" element={<OntologyWorkspace />} />
+        <Route path="objects" element={<ObjectWorkspace />} />
+      </Route>
+    </Routes>
   )
 }
 

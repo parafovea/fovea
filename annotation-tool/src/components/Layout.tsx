@@ -20,6 +20,7 @@ import { generateId } from '../utils/uuid'
 import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
+  Inventory2 as ObjectIcon,
   Save as SaveIcon,
   Download as ExportIcon,
   Menu as MenuIcon,
@@ -57,6 +58,7 @@ export default function Layout() {
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology' },
+    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects' },
   ]
 
   const handleSave = async () => {
@@ -124,15 +126,36 @@ export default function Layout() {
       // Check for Cmd (Mac) or Ctrl (Windows/Linux)
       const isModifierKey = e.metaKey || e.ctrlKey
       
-      if (isModifierKey && e.key.toLowerCase() === 'o' && !e.shiftKey) {
-        e.preventDefault()
-        // If we're in the ontology builder and there's a last annotation, go back to it
-        if (location.pathname === '/ontology' && lastAnnotation.videoId) {
-          navigate(`/annotate/${lastAnnotation.videoId}`)
-        }
-        // Otherwise, go to the ontology builder
-        else if (location.pathname !== '/ontology') {
-          navigate('/ontology')
+      if (isModifierKey && !e.shiftKey) {
+        switch(e.key) {
+          case '1':
+            e.preventDefault()
+            navigate('/')
+            break
+          case '2':
+            e.preventDefault()
+            navigate('/ontology')
+            break
+          case '3':
+            e.preventDefault()
+            navigate('/objects')
+            break
+          case 'o':
+          case 'O':
+            e.preventDefault()
+            // If we're in the ontology builder and there's a last annotation, go back to it
+            if (location.pathname === '/ontology' && lastAnnotation.videoId) {
+              navigate(`/annotate/${lastAnnotation.videoId}`)
+            }
+            // If we're in the object builder and there's a last annotation, go back to it
+            else if (location.pathname === '/objects' && lastAnnotation.videoId) {
+              navigate(`/annotate/${lastAnnotation.videoId}`)
+            }
+            // Otherwise, go to the ontology builder
+            else if (location.pathname !== '/ontology') {
+              navigate('/ontology')
+            }
+            break
         }
       }
     }

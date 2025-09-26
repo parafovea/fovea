@@ -24,6 +24,10 @@ export interface EntityType {
   id: string
   name: string
   gloss: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   constraints?: TypeConstraint[]
   examples?: string[]
   createdAt: string
@@ -34,6 +38,10 @@ export interface RoleType {
   id: string
   name: string
   gloss: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   allowedFillerTypes: ('entity' | 'event')[]
   constraints?: TypeConstraint[]
   examples?: string[]
@@ -53,6 +61,10 @@ export interface EventType {
   id: string
   name: string
   gloss: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   roles: EventRole[]
   parentEventId?: string
   examples?: string[]
@@ -64,6 +76,10 @@ export interface RelationType {
   id: string
   name: string
   gloss: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   sourceTypes: ('entity' | 'role' | 'event' | 'time')[]
   targetTypes: ('entity' | 'role' | 'event' | 'time')[]
   constraints?: TypeConstraint[]
@@ -98,6 +114,10 @@ export interface BoundingBox {
 export interface Time {
   id: string
   type: 'instant' | 'interval'
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   
   // Multiple videos can represent the same time
   videoReferences?: Array<{
@@ -245,6 +265,10 @@ export interface Entity {
   id: string
   name: string
   description: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   typeAssignments: EntityTypeAssignment[]
   metadata: {
     alternateNames?: string[]
@@ -266,6 +290,10 @@ export interface Event {
   id: string
   name: string
   description: GlossItem[]
+  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataUrl?: string // Full URL to Wikidata entry
+  importedFrom?: 'wikidata' | 'persona' // Track import source
+  importedAt?: string  // ISO timestamp of import
   personaInterpretations: EventInterpretation[]
   time?: Time
   location?: Location
