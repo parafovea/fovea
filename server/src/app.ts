@@ -5,6 +5,7 @@ import fastifyCors from '@fastify/cors'
 import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
+import { PrismaClient } from '@prisma/client'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -82,6 +83,22 @@ export async function buildApp() {
       docExpansion: 'list',
       deepLinking: false
     }
+  })
+
+  // Database connection
+  const prisma = new PrismaClient({
+    log: process.env.NODE_ENV === 'development'
+      ? ['query', 'error', 'warn']
+      : ['error']
+  })
+
+  // Decorate Fastify instance with Prisma client
+  app.decorate('prisma', prisma)
+
+  // Graceful shutdown - disconnect Prisma on close
+  app.addHook('onClose', async (instance) => {
+    await instance.prisma.$disconnect()
+    instance.log.info('Prisma client disconnected')
   })
 
   /**

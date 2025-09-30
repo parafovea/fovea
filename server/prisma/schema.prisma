@@ -1,0 +1,119 @@
+// Prisma Schema for Fovea Video Annotation Tool
+// This schema defines the database structure for personas, videos, ontologies, annotations, and summaries
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+/// Persona represents an analyst or user with their own ontology and interpretations
+model Persona {
+  id              String   @id @default(uuid())
+  name            String
+  role            String
+  informationNeed String
+  details         String?
+  isSystemGenerated Boolean @default(false)
+  hidden          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ontology        Ontology?
+  videoSummaries  VideoSummary[]
+  annotations     Annotation[]
+
+  @@map("personas")
+}
+
+/// Ontology defines the types (entities, events, roles, relations) for a specific persona
+model Ontology {
+  id             String   @id @default(uuid())
+  personaId      String   @unique
+  persona        Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  /// JSON structure: EntityType[]
+  entityTypes    Json     @default("[]")
+  /// JSON structure: EventType[]
+  eventTypes     Json     @default("[]")
+  /// JSON structure: RoleType[]
+  roleTypes      Json     @default("[]")
+  /// JSON structure: RelationType[]
+  relationTypes  Json     @default("[]")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("ontologies")
+}
+
+/// Video represents a video file with its metadata
+model Video {
+  id          String   @id @default(uuid())
+  filename    String   @unique
+  path        String
+  duration    Float?
+  frameRate   Float?
+  resolution  String?
+  /// Additional metadata stored as JSON
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  summaries   VideoSummary[]
+  annotations Annotation[]
+
+  @@map("videos")
+}
+
+/// VideoSummary stores AI-generated or manual summaries of videos for specific personas
+model VideoSummary {
+  id              String   @id @default(uuid())
+  videoId         String
+  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  personaId       String
+  persona         Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  summary         String
+  visualAnalysis  String?
+  audioTranscript String?
+  /// JSON structure for key frame data
+  keyFrames       Json?
+  confidence      Float?
+
+  /// Vector embedding for semantic search (1536 dimensions for OpenAI embeddings)
+  embedding       Unsupported("vector(1536)")?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([videoId, personaId])
+  @@map("video_summaries")
+}
+
+/// Annotation represents a temporal-spatial annotation on a video
+model Annotation {
+  id          String   @id @default(uuid())
+  videoId     String
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  personaId   String
+  persona     Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  type        String
+  label       String
+  /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
+  frames      Json
+  confidence  Float?
+  /// Source of annotation: manual, ai-assisted, automatic
+  source      String   @default("manual")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("annotations")
+}
