@@ -66,6 +66,58 @@ export interface ApiError {
 }
 
 /**
+ * Bounding box coordinates for object detection (normalized 0-1).
+ */
+export interface BoundingBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * Single object detection result.
+ */
+export interface Detection {
+  label: string
+  bounding_box: BoundingBox
+  confidence: number
+  track_id?: string | null
+}
+
+/**
+ * Detections for a single video frame.
+ */
+export interface FrameDetections {
+  frame_number: number
+  timestamp: number
+  detections: Detection[]
+}
+
+/**
+ * Request payload for object detection.
+ */
+export interface DetectionRequest {
+  videoId: string
+  query: string
+  frameNumbers?: number[]
+  confidenceThreshold?: number
+  enableTracking?: boolean
+}
+
+/**
+ * Response from object detection endpoint.
+ */
+export interface DetectionResponse {
+  id: string
+  video_id: string
+  query: string
+  frames: FrameDetections[]
+  total_detections: number
+  processing_time: number
+}
+
+/**
  * Category of ontology type to augment.
  */
 export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
@@ -270,6 +322,31 @@ export class ApiClient {
           existing_types: request.existingTypes,
           target_category: request.targetCategory,
           max_suggestions: request.maxSuggestions,
+        }
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Detect objects in video frames using open-vocabulary detection models.
+   *
+   * @param request - Detection parameters
+   * @returns Detection results with bounding boxes and confidence scores
+   * @throws ApiError if request fails
+   */
+  async detectObjects(request: DetectionRequest): Promise<DetectionResponse> {
+    try {
+      const response = await this.client.post<DetectionResponse>(
+        '/api/detection/detect',
+        {
+          video_id: request.videoId,
+          query: request.query,
+          frame_numbers: request.frameNumbers,
+          confidence_threshold: request.confidenceThreshold,
+          enable_tracking: request.enableTracking,
         }
       )
       return response.data
