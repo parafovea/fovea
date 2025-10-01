@@ -188,6 +188,72 @@ class DetectionResponse(BaseModel):
     processing_time: float = Field(..., description="Processing time in seconds")
 
 
+class TrackingMaskData(BaseModel):
+    """RLE-encoded segmentation mask for tracked object.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    object_id: int = Field(..., description="Unique identifier for tracked object")
+    mask_rle: dict[str, Any] = Field(
+        ..., description="RLE-encoded mask with 'size' and 'counts' keys"
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Mask prediction confidence"
+    )
+    is_occluded: bool = Field(
+        default=False, description="Whether object is occluded in this frame"
+    )
+
+
+class TrackingFrameResult(BaseModel):
+    """Tracking results for a single video frame.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    frame_number: int = Field(..., description="Frame number in the video")
+    timestamp: float = Field(..., description="Time in seconds from video start")
+    masks: list[TrackingMaskData] = Field(..., description="Tracked object masks")
+    processing_time: float = Field(
+        ..., description="Processing time for this frame in seconds"
+    )
+
+
+class TrackingRequest(BaseModel):
+    """Request model for object tracking endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    video_id: str = Field(..., description="Unique identifier for the video")
+    initial_masks: list[str] = Field(
+        ..., description="Base64-encoded initial masks for frame 0 (numpy arrays)"
+    )
+    object_ids: list[int] = Field(..., description="Object IDs to track")
+    frame_numbers: list[int] = Field(
+        default_factory=list, description="Specific frames to process (empty = all)"
+    )
+
+
+class TrackingResponse(BaseModel):
+    """Response model for object tracking endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    id: str = Field(..., description="Unique identifier for this tracking job")
+    video_id: str = Field(..., description="Video identifier")
+    frames: list[TrackingFrameResult] = Field(
+        ..., description="Frames with tracked masks"
+    )
+    video_width: int = Field(..., description="Video frame width in pixels")
+    video_height: int = Field(..., description="Video frame height in pixels")
+    total_frames: int = Field(..., description="Total frames processed")
+    processing_time: float = Field(..., description="Total processing time in seconds")
+    fps: float = Field(..., description="Processing speed in frames per second")
+
+
 class ErrorResponse(BaseModel):
     """Error response model for API errors.
 

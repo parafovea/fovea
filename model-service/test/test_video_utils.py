@@ -4,8 +4,8 @@ Tests for video processing utilities.
 Tests cover frame extraction, audio extraction, and video metadata reading.
 """
 
-import os
 import subprocess
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cv2
@@ -278,7 +278,7 @@ class TestExtractAudio:
 
             # Should create temp file
             assert result.endswith("_audio.wav")
-            assert os.path.isabs(result)
+            assert Path(result).is_absolute()
 
     @pytest.mark.asyncio
     async def test_extract_audio_custom_sample_rate(self, test_video_path, tmp_path):
@@ -325,11 +325,11 @@ class TestExtractAudio:
         """Test error handling when FFmpeg is not installed."""
         output_path = tmp_path / "audio.wav"
 
-        with patch(
-            "asyncio.create_subprocess_exec", side_effect=FileNotFoundError()
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError()),
+            pytest.raises(VideoProcessingError, match="FFmpeg not found"),
         ):
-            with pytest.raises(VideoProcessingError, match="FFmpeg not found"):
-                await extract_audio(test_video_path, str(output_path))
+            await extract_audio(test_video_path, str(output_path))
 
     @pytest.mark.asyncio
     async def test_extract_audio_output_not_created(self, test_video_path, tmp_path):
@@ -343,12 +343,14 @@ class TestExtractAudio:
             mock_exec.return_value = mock_process
 
             # Mock exists to return True for video path, False for output path
-            def mock_exists(path):
+            def mock_exists(path: str) -> bool:
                 return path == test_video_path
 
-            with patch("os.path.exists", side_effect=mock_exists):
-                with pytest.raises(VideoProcessingError, match="Output audio file not created"):
-                    await extract_audio(test_video_path, str(output_path))
+            with (
+                patch("os.path.exists", side_effect=mock_exists),
+                pytest.raises(VideoProcessingError, match="Output audio file not created"),
+            ):
+                await extract_audio(test_video_path, str(output_path))
 
 
 class TestCheckFFmpegAvailable:

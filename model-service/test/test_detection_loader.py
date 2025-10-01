@@ -236,7 +236,7 @@ class TestOWLv2Loader:
     @patch("transformers.Owlv2Processor")
     @patch("transformers.Owlv2ForObjectDetection")
     def test_load_owlv2_success(
-        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig
+        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig  # noqa: ARG002
     ) -> None:
         """Test successful OWLv2 model loading."""
         mock_model = MagicMock()
@@ -305,7 +305,7 @@ class TestFlorence2Loader:
     @patch("transformers.AutoProcessor")
     @patch("transformers.AutoModelForCausalLM")
     def test_load_florence2_success(
-        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig
+        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig  # noqa: ARG002
     ) -> None:
         """Test successful Florence-2 model loading."""
         mock_model = MagicMock()

@@ -34,7 +34,7 @@ def mock_tokenizer() -> Mock:
     """Create a mock tokenizer."""
     tokenizer = Mock()
     tokenizer.pad_token = None
-    tokenizer.eos_token = "<eos>"
+    tokenizer.eos_token = "<eos>"  # noqa: S105
     tokenizer.eos_token_id = 2
     tokenizer.pad_token_id = 0
     tokenizer.return_value = {
@@ -119,7 +119,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        cache_dir = Path("/tmp/models")
+        cache_dir = Path("/tmp/models")  # noqa: S108
 
         loader = LLMLoader(config, cache_dir)
 
@@ -596,9 +596,9 @@ class TestFallbackLoading:
                 side_effect=RuntimeError("Model failed"),
             ),
             patch("builtins.print"),
+            pytest.raises(RuntimeError, match="All model loading attempts failed"),
         ):
-            with pytest.raises(RuntimeError, match="All model loading attempts failed"):
-                await create_llm_loader_with_fallback(primary, [fallback])
+            await create_llm_loader_with_fallback(primary, [fallback])
 
 
 class TestDiverseExamples:

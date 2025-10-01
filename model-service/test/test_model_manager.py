@@ -401,7 +401,7 @@ class TestModelManager:
         ), patch(
             "torch.cuda.empty_cache"
         ):
-            model = await model_manager.load_model("video_summarization")
+            _model = await model_manager.load_model("video_summarization")
 
         assert "video_summarization" in model_manager.loaded_models
         assert "other_task" not in model_manager.loaded_models
@@ -409,11 +409,12 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_load_model_insufficient_memory(self, model_manager):
         """Test loading model with insufficient memory."""
-        with patch.object(
-            model_manager, "check_memory_available", return_value=False
-        ), patch.object(model_manager, "evict_lru_model", return_value=None):
-            with pytest.raises(RuntimeError, match="Insufficient memory"):
-                await model_manager.load_model("video_summarization")
+        with (
+            patch.object(model_manager, "check_memory_available", return_value=False),
+            patch.object(model_manager, "evict_lru_model", return_value=None),
+            pytest.raises(RuntimeError, match="Insufficient memory"),
+        ):
+            await model_manager.load_model("video_summarization")
 
     @pytest.mark.asyncio
     async def test_get_model(self, model_manager):

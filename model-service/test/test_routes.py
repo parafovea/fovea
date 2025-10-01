@@ -49,10 +49,20 @@ def mock_model_manager() -> Mock:
     mock_augment_config.framework = "sglang"
     mock_augment_task.get_selected_config.return_value = mock_augment_config
 
+    # Video tracking task config
+    mock_tracking_task = Mock()
+    mock_tracking_task.selected = "samurai"
+    mock_tracking_config = Mock()
+    mock_tracking_config.model_id = "yangchris11/samurai"
+    mock_tracking_config.quantization = None
+    mock_tracking_config.framework = "pytorch"
+    mock_tracking_task.get_selected_config.return_value = mock_tracking_config
+
     mock_manager.tasks = {
         "video_summarization": mock_task_config,
         "object_detection": mock_detection_task,
         "ontology_augmentation": mock_augment_task,
+        "video_tracking": mock_tracking_task,
     }
 
     with patch("src.routes._model_manager", mock_manager):
@@ -528,6 +538,498 @@ class TestDetectionEndpoint:
             assert isinstance(frame["detections"], list)
 
 
+class TestTrackingEndpoint:
+    """Tests for /api/tracking/track endpoint."""
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_success(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test successful object tracking request with SAMURAI model."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/test-tracking-123.mp4")
+
+        # Mock video capture
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            30.0
+            if prop == 5
+            else 100
+            if prop == 7
+            else 640
+            if prop == 3
+            else 480
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        # Mock tracking loader
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        mock_loader = Mock()
+        mock_mask = TrackingMask(
+            mask=np.ones((480, 640), dtype=np.uint8),
+            confidence=0.95,
+            object_id=1,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask],
+            occlusions={1: False},
+            processing_time=0.1,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=640,
+            video_height=480,
+            total_processing_time=0.1,
+            fps=10.0,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        # Create initial mask
+        initial_mask = np.ones((480, 640), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "test-tracking-123",
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+                "frame_numbers": [0, 10, 20],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "id" in data
+        assert data["video_id"] == "test-tracking-123"
+        assert "frames" in data
+        assert isinstance(data["frames"], list)
+        assert data["video_width"] == 640
+        assert data["video_height"] == 480
+        assert "total_frames" in data
+        assert "processing_time" in data
+        assert "fps" in data
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_all_models(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test tracking with all supported models (SAMURAI, SAM2Long, SAM2, YOLO11n-seg)."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/wildlife-video.mp4")
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            30.0
+            if prop == 5
+            else 50
+            if prop == 7
+            else 1920
+            if prop == 3
+            else 1080
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (
+            True,
+            np.zeros((1080, 1920, 3), dtype=np.uint8),
+        )
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        mock_loader = Mock()
+        mock_mask = TrackingMask(
+            mask=np.ones((1080, 1920), dtype=np.uint8),
+            confidence=0.92,
+            object_id=1,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask],
+            occlusions={1: False},
+            processing_time=0.08,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=1920,
+            video_height=1080,
+            total_processing_time=0.08,
+            fps=12.5,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        initial_mask = np.ones((1080, 1920), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        # Test with each model by verifying the endpoint works
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "wildlife-video",
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 200
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_multiple_objects(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test tracking multiple objects simultaneously."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/sports-video.mp4")
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            60.0
+            if prop == 5
+            else 180
+            if prop == 7
+            else 1280
+            if prop == 3
+            else 720
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (True, np.zeros((720, 1280, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        mock_loader = Mock()
+        mock_mask1 = TrackingMask(
+            mask=np.ones((720, 1280), dtype=np.uint8),
+            confidence=0.88,
+            object_id=1,
+        )
+        mock_mask2 = TrackingMask(
+            mask=np.ones((720, 1280), dtype=np.uint8),
+            confidence=0.91,
+            object_id=2,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask1, mock_mask2],
+            occlusions={1: False, 2: False},
+            processing_time=0.15,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=1280,
+            video_height=720,
+            total_processing_time=0.15,
+            fps=6.7,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        initial_mask1 = np.ones((720, 1280), dtype=np.uint8)
+        initial_mask2 = np.ones((720, 1280), dtype=np.uint8) * 2
+        mask1_b64 = base64.b64encode(initial_mask1.tobytes()).decode("utf-8")
+        mask2_b64 = base64.b64encode(initial_mask2.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "sports-video",
+                "initial_masks": [mask1_b64, mask2_b64],
+                "object_ids": [1, 2],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["frames"]) > 0
+        if len(data["frames"][0]["masks"]) > 0:
+            mask = data["frames"][0]["masks"][0]
+            assert "object_id" in mask
+            assert "mask_rle" in mask
+            assert "confidence" in mask
+            assert "is_occluded" in mask
+
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_missing_masks(self, mock_get_video: Mock) -> None:
+        """Test tracking with mismatched masks and object_ids."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/test-video.mp4")
+
+        initial_mask = np.ones((480, 640), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "test-video",
+                "initial_masks": [mask_b64],
+                "object_ids": [1, 2],  # More IDs than masks
+            },
+        )
+
+        assert response.status_code == 400
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_invalid_mask_encoding(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test tracking with invalid base64 mask encoding."""
+        mock_get_video.return_value = Path("/videos/test-video.mp4")
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            30.0
+            if prop == 5
+            else 100
+            if prop == 7
+            else 640
+            if prop == 3
+            else 480
+            if prop == 4
+            else 0
+        )
+        mock_video_capture.return_value = mock_cap
+
+        mock_loader = Mock()
+        mock_create_loader.return_value = mock_loader
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "test-video",
+                "initial_masks": ["invalid-base64!!!"],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 400
+
+    def test_track_objects_missing_video_id(self) -> None:
+        """Test tracking with missing video_id field."""
+        import base64
+
+        import numpy as np
+
+        initial_mask = np.ones((480, 640), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 422
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_with_occlusion(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test tracking with object occlusion handling."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/vehicle-tracking.mp4")
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            25.0
+            if prop == 5
+            else 250
+            if prop == 7
+            else 1920
+            if prop == 3
+            else 1080
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (
+            True,
+            np.zeros((1080, 1920, 3), dtype=np.uint8),
+        )
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        mock_loader = Mock()
+        # Object is occluded with low confidence
+        mock_mask = TrackingMask(
+            mask=np.ones((1080, 1920), dtype=np.uint8),
+            confidence=0.35,
+            object_id=1,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask],
+            occlusions={1: True},  # Object is occluded
+            processing_time=0.12,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=1920,
+            video_height=1080,
+            total_processing_time=0.12,
+            fps=8.3,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        initial_mask = np.ones((1080, 1920), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "vehicle-tracking",
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        if len(data["frames"]) > 0 and len(data["frames"][0]["masks"]) > 0:
+            mask = data["frames"][0]["masks"][0]
+            assert "is_occluded" in mask
+
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_track_objects_response_structure(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
+        """Test that tracking response contains all expected fields."""
+        import base64
+
+        import numpy as np
+
+        mock_get_video.return_value = Path("/videos/test-structure.mp4")
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            30.0
+            if prop == 5
+            else 100
+            if prop == 7
+            else 640
+            if prop == 3
+            else 480
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        mock_loader = Mock()
+        mock_mask = TrackingMask(
+            mask=np.ones((480, 640), dtype=np.uint8),
+            confidence=0.9,
+            object_id=1,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask],
+            occlusions={1: False},
+            processing_time=0.1,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=640,
+            video_height=480,
+            total_processing_time=0.1,
+            fps=10.0,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        initial_mask = np.ones((480, 640), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = client.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "test-structure",
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify required top-level fields
+        required_fields = [
+            "id",
+            "video_id",
+            "frames",
+            "video_width",
+            "video_height",
+            "total_frames",
+            "processing_time",
+            "fps",
+        ]
+        for field in required_fields:
+            assert field in data
+
+        # Verify frame structure
+        if len(data["frames"]) > 0:
+            frame = data["frames"][0]
+            assert "frame_number" in frame
+            assert "timestamp" in frame
+            assert "masks" in frame
+            assert "processing_time" in frame
+            assert isinstance(frame["masks"], list)
+
+            # Verify mask structure
+            if len(frame["masks"]) > 0:
+                mask = frame["masks"][0]
+                assert "object_id" in mask
+                assert "mask_rle" in mask
+                assert "confidence" in mask
+                assert "is_occluded" in mask
+
+
 class TestOpenAPIDocumentation:
     """Tests for OpenAPI documentation."""
 
@@ -549,6 +1051,7 @@ class TestOpenAPIDocumentation:
         assert "/api/summarize" in paths
         assert "/api/ontology/augment" in paths
         assert "/api/detection/detect" in paths
+        assert "/api/tracking/track" in paths
 
     def test_docs_ui_available(self) -> None:
         """Test that Swagger UI is available."""
