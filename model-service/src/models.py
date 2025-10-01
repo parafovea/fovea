@@ -1,5 +1,4 @@
-"""
-Pydantic models for API requests and responses.
+"""Pydantic models for API requests and responses.
 
 This module defines the request and response schemas for the model service API
 endpoints, including video summarization, ontology augmentation, and object detection.
@@ -11,14 +10,9 @@ from pydantic import BaseModel, Field
 
 
 class SummarizeRequest(BaseModel):
-    """
-    Request model for video summarization.
+    """Request model for video summarization endpoint.
 
-    Attributes:
-        video_id: Unique identifier for the video to summarize
-        persona_id: Unique identifier for the persona perspective
-        frame_sample_rate: Number of frames to sample per second (default: 1)
-        max_frames: Maximum number of frames to process (default: 30)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     video_id: str = Field(..., description="Unique identifier for the video")
@@ -32,14 +26,9 @@ class SummarizeRequest(BaseModel):
 
 
 class KeyFrame(BaseModel):
-    """
-    Key frame information from video analysis.
+    """Key frame information from video analysis.
 
-    Attributes:
-        frame_number: Frame number in the video
-        timestamp: Time in seconds from video start
-        description: Description of what is visible in this frame
-        confidence: Model confidence score (0-1)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     frame_number: int = Field(..., description="Frame number in the video")
@@ -51,18 +40,9 @@ class KeyFrame(BaseModel):
 
 
 class SummarizeResponse(BaseModel):
-    """
-    Response model for video summarization.
+    """Response model for video summarization endpoint.
 
-    Attributes:
-        id: Unique identifier for this summary
-        video_id: Video that was summarized
-        persona_id: Persona perspective used
-        summary: Text summary of the video content
-        visual_analysis: Detailed visual content analysis
-        audio_transcript: Transcribed audio content (if available)
-        key_frames: List of key frames with descriptions
-        confidence: Overall confidence score (0-1)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     id: str = Field(..., description="Unique identifier for this summary")
@@ -84,15 +64,9 @@ class SummarizeResponse(BaseModel):
 
 
 class OntologyType(BaseModel):
-    """
-    Suggested ontology type.
+    """Suggested ontology type from augmentation.
 
-    Attributes:
-        name: Type name
-        description: Type description
-        parent: Parent type name (if hierarchical)
-        confidence: Model confidence in this suggestion (0-1)
-        examples: Example instances of this type
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     name: str = Field(..., description="Type name")
@@ -107,15 +81,9 @@ class OntologyType(BaseModel):
 
 
 class AugmentRequest(BaseModel):
-    """
-    Request model for ontology augmentation.
+    """Request model for ontology augmentation endpoint.
 
-    Attributes:
-        persona_id: Unique identifier for the persona
-        domain: Domain description for context
-        existing_types: List of existing type names for context
-        target_category: Category to augment (entity, event, role, relation)
-        max_suggestions: Maximum number of suggestions to return (default: 10)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     persona_id: str = Field(..., description="Unique identifier for the persona")
@@ -132,15 +100,9 @@ class AugmentRequest(BaseModel):
 
 
 class AugmentResponse(BaseModel):
-    """
-    Response model for ontology augmentation.
+    """Response model for ontology augmentation endpoint.
 
-    Attributes:
-        id: Unique identifier for this augmentation
-        persona_id: Persona identifier
-        target_category: Category that was augmented
-        suggestions: List of suggested types
-        reasoning: Explanation of why these types were suggested
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     id: str = Field(..., description="Unique identifier for this augmentation")
@@ -153,14 +115,9 @@ class AugmentResponse(BaseModel):
 
 
 class BoundingBox(BaseModel):
-    """
-    Bounding box coordinates.
+    """Bounding box coordinates for object detection.
 
-    Attributes:
-        x: X coordinate (normalized 0-1)
-        y: Y coordinate (normalized 0-1)
-        width: Box width (normalized 0-1)
-        height: Box height (normalized 0-1)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     x: float = Field(..., ge=0.0, le=1.0, description="X coordinate (normalized)")
@@ -170,14 +127,9 @@ class BoundingBox(BaseModel):
 
 
 class Detection(BaseModel):
-    """
-    Single object detection result.
+    """Single object detection result.
 
-    Attributes:
-        label: Detected object label
-        bounding_box: Bounding box coordinates
-        confidence: Detection confidence score (0-1)
-        track_id: Tracking ID across frames (if tracking enabled)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     label: str = Field(..., description="Detected object label")
@@ -191,15 +143,9 @@ class Detection(BaseModel):
 
 
 class DetectionRequest(BaseModel):
-    """
-    Request model for object detection.
+    """Request model for object detection endpoint.
 
-    Attributes:
-        video_id: Unique identifier for the video
-        query: Text query describing objects to detect
-        frame_numbers: Specific frames to process (if empty, process all)
-        confidence_threshold: Minimum confidence for detections (default: 0.3)
-        enable_tracking: Whether to enable object tracking (default: True)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     video_id: str = Field(..., description="Unique identifier for the video")
@@ -216,13 +162,9 @@ class DetectionRequest(BaseModel):
 
 
 class FrameDetections(BaseModel):
-    """
-    Detections for a single frame.
+    """Detections for a single video frame.
 
-    Attributes:
-        frame_number: Frame number in the video
-        timestamp: Time in seconds from video start
-        detections: List of detections in this frame
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     frame_number: int = Field(..., description="Frame number in the video")
@@ -231,16 +173,9 @@ class FrameDetections(BaseModel):
 
 
 class DetectionResponse(BaseModel):
-    """
-    Response model for object detection.
+    """Response model for object detection endpoint.
 
-    Attributes:
-        id: Unique identifier for this detection job
-        video_id: Video that was processed
-        query: Query that was used
-        frames: List of frames with detections
-        total_detections: Total number of detections across all frames
-        processing_time: Time taken to process (seconds)
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     id: str = Field(..., description="Unique identifier for this detection job")
@@ -254,13 +189,9 @@ class DetectionResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """
-    Error response model.
+    """Error response model for API errors.
 
-    Attributes:
-        error: Error type
-        message: Human-readable error message
-        details: Additional error details
+    Fields are validated using Pydantic. See Field descriptions for details.
     """
 
     error: str = Field(..., description="Error type")

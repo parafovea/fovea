@@ -253,7 +253,7 @@ class TestExtractAudio:
             mock_exec.return_value = mock_process
 
             # Mock file existence check
-            with patch("os.path.exists", return_value=True):
+            with patch("pathlib.Path.exists", return_value=True):
                 result = await extract_audio(test_video_path, str(output_path))
 
             assert result == str(output_path)
@@ -275,7 +275,7 @@ class TestExtractAudio:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            with patch("os.path.exists", return_value=True):
+            with patch("pathlib.Path.exists", return_value=True):
                 result = await extract_audio(test_video_path)
 
             # Should create temp file
@@ -293,7 +293,7 @@ class TestExtractAudio:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            with patch("os.path.exists", return_value=True):
+            with patch("pathlib.Path.exists", return_value=True):
                 await extract_audio(
                     test_video_path, str(output_path), sample_rate=48000, channels=2
                 )

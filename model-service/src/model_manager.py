@@ -1,5 +1,4 @@
-"""
-Model management with dynamic loading, memory budget validation, and LRU eviction.
+"""Model management with dynamic loading, memory budget validation, and LRU eviction.
 
 This module provides a ModelManager class that handles loading and unloading
 of AI models based on available GPU memory. Models are loaded on demand and
@@ -10,7 +9,7 @@ import logging
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 import yaml
@@ -21,61 +20,119 @@ tracer = trace.get_tracer(__name__)
 
 
 class ModelConfig:
-    """Configuration for a single model variant."""
+    """Configuration for a single model variant.
 
-    def __init__(self, config_dict: Dict[str, Any]):
-        """
-        Initialize model configuration from dictionary.
+    Attributes
+    ----------
+    model_id : str
+        Hugging Face model identifier.
+    framework : str
+        Inference framework (sglang, vllm, pytorch).
+    vram_gb : float
+        VRAM requirement in GB.
+    quantization : str | None
+        Quantization method (4bit, 8bit, awq, etc).
+    speed : str
+        Speed category (fast, medium, slow).
+    description : str
+        Human-readable description.
+    fps : int | None
+        Processing speed in frames per second (for vision models).
+    """
 
-        Args:
-            config_dict: Dictionary containing model configuration parameters
+    def __init__(self, config_dict: dict[str, Any]) -> None:
+        """Initialize model configuration from dictionary.
+
+        Parameters
+        ----------
+        config_dict : dict[str, Any]
+            Dictionary containing model configuration parameters.
         """
         self.model_id: str = config_dict["model_id"]
         self.framework: str = config_dict["framework"]
         self.vram_gb: float = config_dict.get("vram_gb", 0)
-        self.quantization: Optional[str] = config_dict.get("quantization")
+        self.quantization: str | None = config_dict.get("quantization")
         self.speed: str = config_dict.get("speed", "medium")
         self.description: str = config_dict.get("description", "")
-        self.fps: Optional[int] = config_dict.get("fps")
+        self.fps: int | None = config_dict.get("fps")
 
     @property
     def vram_bytes(self) -> int:
-        """Convert VRAM requirement from GB to bytes."""
+        """Convert VRAM requirement from GB to bytes.
+
+        Returns
+        -------
+        int
+            VRAM requirement in bytes.
+        """
         return int(self.vram_gb * 1024 * 1024 * 1024)
 
 
 class TaskConfig:
-    """Configuration for a task type with multiple model options."""
+    """Configuration for a task type with multiple model options.
 
-    def __init__(self, task_name: str, config_dict: Dict[str, Any]):
-        """
-        Initialize task configuration from dictionary.
+    Attributes
+    ----------
+    task_name : str
+        Name of the task.
+    selected : str
+        Currently selected model name.
+    options : dict[str, ModelConfig]
+        Available model options for this task.
+    """
 
-        Args:
-            task_name: Name of the task (e.g., "video_summarization")
-            config_dict: Dictionary containing task configuration
+    def __init__(self, task_name: str, config_dict: dict[str, Any]) -> None:
+        """Initialize task configuration from dictionary.
+
+        Parameters
+        ----------
+        task_name : str
+            Name of the task (e.g., "video_summarization").
+        config_dict : dict[str, Any]
+            Dictionary containing task configuration.
         """
         self.task_name = task_name
         self.selected = config_dict["selected"]
-        self.options: Dict[str, ModelConfig] = {
+        self.options: dict[str, ModelConfig] = {
             name: ModelConfig(opt_dict)
             for name, opt_dict in config_dict["options"].items()
         }
 
     def get_selected_config(self) -> ModelConfig:
-        """Get the currently selected model configuration."""
+        """Get the currently selected model configuration.
+
+        Returns
+        -------
+        ModelConfig
+            Configuration for the selected model.
+        """
         return self.options[self.selected]
 
 
 class InferenceConfig:
-    """Global inference configuration settings."""
+    """Global inference configuration settings.
 
-    def __init__(self, config_dict: Dict[str, Any]):
-        """
-        Initialize inference configuration from dictionary.
+    Attributes
+    ----------
+    max_memory_per_model : str
+        Maximum memory per model ('auto' or specific value).
+    offload_threshold : float
+        Memory usage threshold for offloading (0.0 to 1.0).
+    warmup_on_startup : bool
+        Whether to load all models on startup.
+    default_batch_size : int
+        Default batch size for inference.
+    max_batch_size : int
+        Maximum batch size for inference.
+    """
 
-        Args:
-            config_dict: Dictionary containing inference configuration
+    def __init__(self, config_dict: dict[str, Any]) -> None:
+        """Initialize inference configuration from dictionary.
+
+        Parameters
+        ----------
+        config_dict : dict[str, Any]
+            Dictionary containing inference configuration.
         """
         self.max_memory_per_model = config_dict.get("max_memory_per_model", "auto")
         self.offload_threshold: float = config_dict.get("offload_threshold", 0.85)
@@ -85,47 +142,68 @@ class InferenceConfig:
 
 
 class ModelManager:
-    """
-    Manages loading, unloading, and memory management of AI models.
+    """Manages loading, unloading, and memory management of AI models.
 
     This class handles dynamic model loading based on memory availability,
     implements LRU eviction when memory pressure occurs, and provides
     utilities for VRAM monitoring.
+
+    Attributes
+    ----------
+    config_path : Path
+        Path to models.yaml configuration file.
+    config : dict[str, Any]
+        Parsed configuration dictionary.
+    loaded_models : OrderedDict[str, Any]
+        Currently loaded models (LRU ordered).
+    model_load_times : dict[str, float]
+        Timestamp when each model was loaded.
+    model_memory_usage : dict[str, int]
+        Actual memory usage per model in bytes.
+    tasks : dict[str, TaskConfig]
+        Task configurations.
+    inference_config : InferenceConfig
+        Global inference settings.
     """
 
-    def __init__(self, config_path: str):
-        """
-        Initialize ModelManager with configuration file.
+    def __init__(self, config_path: str) -> None:
+        """Initialize ModelManager with configuration file.
 
-        Args:
-            config_path: Path to models.yaml configuration file
+        Parameters
+        ----------
+        config_path : str
+            Path to models.yaml configuration file.
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.loaded_models: OrderedDict[str, Any] = OrderedDict()
-        self.model_load_times: Dict[str, float] = {}
-        self.model_memory_usage: Dict[str, int] = {}
+        self.model_load_times: dict[str, float] = {}
+        self.model_memory_usage: dict[str, int] = {}
 
         logger.info(f"ModelManager initialized with config from {config_path}")
 
-    def _load_config(self) -> Dict[str, Any]:
-        """
-        Load configuration from YAML file.
+    def _load_config(self) -> dict[str, Any]:
+        """Load configuration from YAML file.
 
-        Returns:
-            Dictionary containing parsed configuration
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary containing parsed configuration.
 
-        Raises:
-            FileNotFoundError: If configuration file does not exist
-            yaml.YAMLError: If configuration file is invalid
+        Raises
+        ------
+        FileNotFoundError
+            If configuration file does not exist.
+        yaml.YAMLError
+            If configuration file is invalid.
         """
         if not self.config_path.exists():
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
-        with open(self.config_path, "r") as f:
-            config = yaml.safe_load(f)
+        with self.config_path.open() as f:
+            config: dict[str, Any] = yaml.safe_load(f)
 
-        self.tasks: Dict[str, TaskConfig] = {
+        self.tasks: dict[str, TaskConfig] = {
             task_name: TaskConfig(task_name, task_config)
             for task_name, task_config in config["models"].items()
         }
@@ -189,7 +267,7 @@ class ModelManager:
         available = self.get_available_vram()
         return available >= required_bytes
 
-    def get_lru_model(self) -> Optional[str]:
+    def get_lru_model(self) -> str | None:
         """
         Get least recently used model identifier.
 
@@ -201,7 +279,7 @@ class ModelManager:
         return next(iter(self.loaded_models))
 
     @tracer.start_as_current_span("evict_lru_model")
-    async def evict_lru_model(self) -> Optional[str]:
+    async def evict_lru_model(self) -> str | None:
         """
         Evict the least recently used model from memory.
 
@@ -344,7 +422,7 @@ class ModelManager:
 
         return await self.load_model(task_type)
 
-    def get_loaded_models(self) -> Dict[str, Dict[str, Any]]:
+    def get_loaded_models(self) -> dict[str, dict[str, Any]]:
         """
         Get information about currently loaded models.
 
@@ -360,7 +438,7 @@ class ModelManager:
             }
         return result
 
-    def get_model_config(self, task_type: str) -> Optional[TaskConfig]:
+    def get_model_config(self, task_type: str) -> TaskConfig | None:
         """
         Get configuration for a task type.
 
@@ -408,7 +486,7 @@ class ModelManager:
             await self.unload_model(task_type)
             await self.load_model(task_type)
 
-    def validate_memory_budget(self) -> Dict[str, Any]:
+    def validate_memory_budget(self) -> dict[str, Any]:
         """
         Validate that all selected models can fit in available memory.
 

@@ -1,5 +1,4 @@
-"""
-FastAPI application for AI model inference services.
+"""FastAPI application for AI model inference services.
 
 This module provides the main FastAPI application with endpoints for video
 summarization, ontology augmentation, and object detection using open-weight
@@ -7,10 +6,10 @@ AI models.
 """
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,17 +25,20 @@ model_manager: ModelManager | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """
-    Manage application lifecycle.
+    """Manage application lifecycle for FastAPI application.
 
-    Handles startup and shutdown operations for the FastAPI application,
-    including model loading and resource cleanup.
+    Handles startup and shutdown operations including model loading
+    and resource cleanup.
 
-    Args:
-        app: The FastAPI application instance
+    Parameters
+    ----------
+    app : FastAPI
+        The FastAPI application instance.
 
-    Yields:
-        None during application runtime
+    Yields
+    ------
+    None
+        Control during application runtime.
     """
     global model_manager
 
@@ -93,18 +95,17 @@ app.include_router(router)
 
 @app.get("/health")
 async def health_check() -> JSONResponse:
-    """
-    Health check endpoint.
+    """Health check endpoint returning service status.
 
-    Returns the service health status and current timestamp.
-
-    Returns:
-        JSONResponse with status and timestamp
+    Returns
+    -------
+    JSONResponse
+        JSON response with status, timestamp, and service name.
     """
     return JSONResponse(
         content={
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "service": "model-service",
         }
     )
@@ -112,13 +113,12 @@ async def health_check() -> JSONResponse:
 
 @app.get("/")
 async def root() -> JSONResponse:
-    """
-    Root endpoint.
+    """Root endpoint returning basic service information.
 
-    Returns basic service information.
-
-    Returns:
-        JSONResponse with service name and version
+    Returns
+    -------
+    JSONResponse
+        JSON response with service name, version, and documentation URL.
     """
     return JSONResponse(
         content={

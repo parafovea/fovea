@@ -1,5 +1,4 @@
-"""
-API routes for model service endpoints.
+"""API routes for model service endpoints.
 
 This module contains the API endpoint implementations for video summarization,
 ontology augmentation, object detection, and model configuration management.
@@ -7,8 +6,7 @@ ontology augmentation, object detection, and model configuration management.
 
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, cast
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -26,40 +24,48 @@ from .models import (
     SummarizeResponse,
 )
 
+if TYPE_CHECKING:
+    from .model_manager import ModelManager
+
 router = APIRouter(prefix="/api")
 tracer = trace.get_tracer(__name__)
 
 # Global model manager instance (will be injected via dependency)
-_model_manager: Optional[object] = None
+_model_manager: object | None = None
 
 
 def set_model_manager(manager: object) -> None:
-    """
-    Set the global model manager instance.
+    """Set the global model manager instance.
 
-    Args:
-        manager: ModelManager instance to use for model operations
+    Parameters
+    ----------
+    manager : object
+        ModelManager instance to use for model operations.
     """
     global _model_manager
     _model_manager = manager
 
 
-def get_model_manager() -> object:
-    """
-    Get the global model manager instance.
+def get_model_manager() -> "ModelManager":
+    """Get the global model manager instance.
 
-    Returns:
-        ModelManager instance
+    Returns
+    -------
+    ModelManager
+        ModelManager instance.
 
-    Raises:
-        HTTPException: If model manager is not initialized
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized.
     """
     if _model_manager is None:
         raise HTTPException(
             status_code=500,
             detail="Model manager not initialized",
         )
-    return _model_manager
+    from .model_manager import ModelManager
+    return cast(ModelManager, _model_manager)
 
 
 @router.post(
@@ -74,21 +80,22 @@ def get_model_manager() -> object:
     "Analyzes video frames and optionally audio to produce a description tailored to the persona's perspective.",
 )
 async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
-    """
-    Summarize video content using vision language models.
+    """Summarize video content using vision language models.
 
-    This endpoint processes video frames using a vision language model (Qwen2-VL)
-    to generate a text summary. The summary is tailored to the specified persona's
-    information needs and domain expertise.
+    Parameters
+    ----------
+    request : SummarizeRequest
+        Video summarization request with video_id, persona_id, and sampling parameters.
 
-    Args:
-        request: Video summarization request with video_id, persona_id, and sampling parameters
+    Returns
+    -------
+    SummarizeResponse
+        Generated summary with key frame analysis.
 
-    Returns:
-        SummarizeResponse with generated summary and key frame analysis
-
-    Raises:
-        HTTPException: If video_id or persona_id is invalid, or if processing fails
+    Raises
+    ------
+    HTTPException
+        If video_id or persona_id is invalid, or if processing fails.
     """
     with tracer.start_as_current_span("summarize_video") as span:
         span.set_attribute("video_id", request.video_id)
@@ -145,21 +152,22 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
     "Uses language models to generate semantically relevant entity types, event types, roles, or relations.",
 )
 async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
-    """
-    Suggest new ontology types using language models.
+    """Suggest new ontology types using language models.
 
-    This endpoint uses a language model (Llama 3.1) to analyze the domain description
-    and existing types, then suggests additional relevant types for the specified category.
-    Suggestions include descriptions, hierarchical relationships, and example instances.
+    Parameters
+    ----------
+    request : AugmentRequest
+        Ontology augmentation request with persona_id, domain, and target category.
 
-    Args:
-        request: Ontology augmentation request with persona_id, domain, and target category
+    Returns
+    -------
+    AugmentResponse
+        Suggested types with descriptions and reasoning.
 
-    Returns:
-        AugmentResponse with suggested types and reasoning
-
-    Raises:
-        HTTPException: If persona_id is invalid, or if generation fails
+    Raises
+    ------
+    HTTPException
+        If persona_id is invalid, or if generation fails.
     """
     with tracer.start_as_current_span("augment_ontology") as span:
         span.set_attribute("persona_id", request.persona_id)
@@ -221,21 +229,22 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
     "Optionally tracks detected objects across frames using SAM2 for temporal consistency.",
 )
 async def process_detection(request: DetectionRequest) -> DetectionResponse:
-    """
-    Detect and track objects in video using vision models.
+    """Detect and track objects in video using vision models.
 
-    This endpoint uses Grounding DINO for text-based object detection and SAM2 for
-    tracking objects across video frames. Results include bounding boxes, confidence
-    scores, and tracking IDs for temporal consistency.
+    Parameters
+    ----------
+    request : DetectionRequest
+        Detection request with video_id, query, and processing parameters.
 
-    Args:
-        request: Detection request with video_id, query, and processing parameters
+    Returns
+    -------
+    DetectionResponse
+        Detected objects with bounding boxes and tracking information.
 
-    Returns:
-        DetectionResponse with detected objects and tracking information
-
-    Raises:
-        HTTPException: If video_id is invalid, or if processing fails
+    Raises
+    ------
+    HTTPException
+        If video_id is invalid, or if processing fails.
     """
     with tracer.start_as_current_span("process_detection") as span:
         span.set_attribute("video_id", request.video_id)
@@ -275,15 +284,18 @@ async def process_detection(request: DetectionRequest) -> DetectionResponse:
     description="Returns the current model configuration including all task types, "
     "available model options, and currently selected models.",
 )
-async def get_model_config():
-    """
-    Get current model configuration for all task types.
+async def get_model_config() -> dict[str, object]:
+    """Get current model configuration for all task types.
 
-    Returns:
-        Dictionary containing configuration for all tasks
+    Returns
+    -------
+    dict[str, object]
+        Dictionary containing configuration for all tasks.
 
-    Raises:
-        HTTPException: If model manager is not initialized
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized.
     """
     manager = get_model_manager()
 
@@ -321,15 +333,18 @@ async def get_model_config():
     summary="Get model status",
     description="Returns information about currently loaded models, memory usage, and system statistics.",
 )
-async def get_model_status():
-    """
-    Get status of loaded models and memory usage.
+async def get_model_status() -> dict[str, object]:
+    """Get status of loaded models and memory usage.
 
-    Returns:
-        Dictionary with loaded models, memory statistics, and system info
+    Returns
+    -------
+    dict[str, object]
+        Dictionary with loaded models, memory statistics, and system info.
 
-    Raises:
-        HTTPException: If model manager is not initialized
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized.
     """
     manager = get_model_manager()
 
@@ -355,26 +370,32 @@ async def get_model_status():
     description="Changes the selected model for a specific task type. "
     "If the task's model is currently loaded, it will be unloaded and reloaded with the new selection.",
 )
-async def select_model(task_type: str, model_name: str):
-    """
-    Change selected model for a task type.
+async def select_model(task_type: str, model_name: str) -> dict[str, str]:
+    """Change selected model for a task type.
 
-    Args:
-        task_type: Task type to update (e.g., "video_summarization")
-        model_name: Name of model option to select (e.g., "llama-4-maverick")
+    Parameters
+    ----------
+    task_type : str
+        Task type to update (e.g., "video_summarization").
+    model_name : str
+        Name of model option to select (e.g., "llama-4-maverick").
 
-    Returns:
-        Success message with new configuration
+    Returns
+    -------
+    dict[str, str]
+        Success message with new configuration.
 
-    Raises:
-        HTTPException: If task type or model name is invalid
+    Raises
+    ------
+    HTTPException
+        If task type or model name is invalid.
     """
     manager = get_model_manager()
 
     try:
         await manager.set_selected_model(task_type, model_name)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return {
         "status": "success",
@@ -389,21 +410,21 @@ async def select_model(task_type: str, model_name: str):
     description="Validates that all currently selected models can fit in available GPU memory. "
     "Returns detailed breakdown of memory requirements and availability.",
 )
-async def validate_memory_budget():
-    """
-    Validate memory budget for currently selected models.
+async def validate_memory_budget() -> dict[str, object]:
+    """Validate memory budget for currently selected models.
 
-    Returns:
-        Validation results with memory breakdown
+    Returns
+    -------
+    dict[str, object]
+        Validation results with memory breakdown.
 
-    Raises:
-        HTTPException: If model manager is not initialized
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized.
     """
     manager = get_model_manager()
-
-    validation = manager.validate_memory_budget()
-
-    return validation
+    return manager.validate_memory_budget()
 
 
 @router.post(
@@ -411,18 +432,23 @@ async def validate_memory_budget():
     summary="Unload model",
     description="Manually unload a model from memory to free GPU resources.",
 )
-async def unload_model(task_type: str):
-    """
-    Unload a model from memory.
+async def unload_model(task_type: str) -> dict[str, str]:
+    """Unload a model from memory.
 
-    Args:
-        task_type: Task type of model to unload
+    Parameters
+    ----------
+    task_type : str
+        Task type of model to unload.
 
-    Returns:
-        Success message
+    Returns
+    -------
+    dict[str, str]
+        Success message.
 
-    Raises:
-        HTTPException: If model manager is not initialized or model not loaded
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized or model not loaded.
     """
     manager = get_model_manager()
 
@@ -440,25 +466,30 @@ async def unload_model(task_type: str):
     summary="Load model",
     description="Manually load a model into memory. Models are normally loaded on demand when needed.",
 )
-async def load_model(task_type: str):
-    """
-    Load a model into memory.
+async def load_model(task_type: str) -> dict[str, str]:
+    """Load a model into memory.
 
-    Args:
-        task_type: Task type of model to load
+    Parameters
+    ----------
+    task_type : str
+        Task type of model to load.
 
-    Returns:
-        Success message with model info
+    Returns
+    -------
+    dict[str, str]
+        Success message with model info.
 
-    Raises:
-        HTTPException: If model manager is not initialized or loading fails
+    Raises
+    ------
+    HTTPException
+        If model manager is not initialized or loading fails.
     """
     manager = get_model_manager()
 
     try:
         await manager.load_model(task_type)
     except (ValueError, RuntimeError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return {
         "status": "success",

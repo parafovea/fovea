@@ -1,5 +1,4 @@
-"""
-Video processing utilities for frame extraction and audio processing.
+"""Video processing utilities for frame extraction and audio processing.
 
 This module provides functions for extracting frames from videos using OpenCV
 and extracting audio using FFmpeg. It supports various sampling strategies and
@@ -7,14 +6,14 @@ output formats.
 """
 
 import asyncio
-import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
+from numpy.typing import NDArray
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
@@ -23,20 +22,24 @@ tracer = trace.get_tracer(__name__)
 class VideoProcessingError(Exception):
     """Raised when video processing operations fail."""
 
-    pass
-
 
 class VideoInfo:
-    """
-    Container for video metadata.
+    """Container for video metadata.
 
-    Attributes:
-        path: Path to the video file
-        frame_count: Total number of frames in the video
-        fps: Frames per second
-        duration: Duration in seconds
-        width: Frame width in pixels
-        height: Frame height in pixels
+    Attributes
+    ----------
+    path : str
+        Path to the video file.
+    frame_count : int
+        Total number of frames in the video.
+    fps : float
+        Frames per second.
+    duration : float
+        Duration in seconds.
+    width : int
+        Frame width in pixels.
+    height : int
+        Frame height in pixels.
     """
 
     def __init__(
@@ -47,7 +50,7 @@ class VideoInfo:
         duration: float,
         width: int,
         height: int,
-    ):
+    ) -> None:
         self.path = path
         self.frame_count = frame_count
         self.fps = fps
@@ -57,22 +60,27 @@ class VideoInfo:
 
 
 def get_video_info(video_path: str) -> VideoInfo:
-    """
-    Extract metadata from a video file.
+    """Extract metadata from a video file.
 
-    Args:
-        video_path: Path to the video file
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
 
-    Returns:
-        VideoInfo object containing video metadata
+    Returns
+    -------
+    VideoInfo
+        Video metadata object.
 
-    Raises:
-        VideoProcessingError: If the video cannot be opened or read
+    Raises
+    ------
+    VideoProcessingError
+        If the video cannot be opened or read.
     """
     with tracer.start_as_current_span("get_video_info") as span:
         span.set_attribute("video.path", video_path)
 
-        if not os.path.exists(video_path):
+        if not Path(video_path).exists():
             raise VideoProcessingError(f"Video file not found: {video_path}")
 
         cap = cv2.VideoCapture(video_path)
@@ -104,19 +112,25 @@ def get_video_info(video_path: str) -> VideoInfo:
             cap.release()
 
 
-def extract_frame(video_path: str, frame_number: int) -> np.ndarray:
-    """
-    Extract a single frame from a video.
+def extract_frame(video_path: str, frame_number: int) -> NDArray[Any]:
+    """Extract a single frame from a video.
 
-    Args:
-        video_path: Path to the video file
-        frame_number: Frame index to extract (0-based)
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    frame_number : int
+        Frame index to extract (zero-indexed).
 
-    Returns:
-        Frame as a numpy array in RGB format
+    Returns
+    -------
+    np.ndarray
+        Frame as numpy array in RGB format.
 
-    Raises:
-        VideoProcessingError: If frame extraction fails
+    Raises
+    ------
+    VideoProcessingError
+        If frame extraction fails.
     """
     with tracer.start_as_current_span("extract_frame") as span:
         span.set_attribute("video.path", video_path)
@@ -136,8 +150,7 @@ def extract_frame(video_path: str, frame_number: int) -> np.ndarray:
                 )
 
             # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            return frame_rgb
+            return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         finally:
             cap.release()
 
@@ -145,21 +158,29 @@ def extract_frame(video_path: str, frame_number: int) -> np.ndarray:
 def extract_frames_uniform(
     video_path: str,
     num_frames: int = 10,
-    max_dimension: Optional[int] = None,
-) -> List[Tuple[int, np.ndarray]]:
-    """
-    Extract frames uniformly sampled from a video.
+    max_dimension: int | None = None,
+) -> list[tuple[int, NDArray[Any]]]:
+    """Extract frames uniformly sampled from a video.
 
-    Args:
-        video_path: Path to the video file
-        num_frames: Number of frames to extract
-        max_dimension: Maximum width or height for resizing (maintains aspect ratio)
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    num_frames : int, default=10
+        Number of frames to extract.
+    max_dimension : int | None, default=None
+        Maximum width or height for resizing (maintains aspect ratio).
+        If None, frames are not resized.
 
-    Returns:
-        List of tuples containing (frame_number, frame_array)
+    Returns
+    -------
+    list[tuple[int, np.ndarray]]
+        List of tuples containing (frame_number, frame_array).
 
-    Raises:
-        VideoProcessingError: If frame extraction fails
+    Raises
+    ------
+    VideoProcessingError
+        If frame extraction fails.
     """
     with tracer.start_as_current_span("extract_frames_uniform") as span:
         span.set_attribute("video.path", video_path)
@@ -204,21 +225,29 @@ def extract_frames_uniform(
 def extract_frames_by_rate(
     video_path: str,
     sample_rate: int = 30,
-    max_dimension: Optional[int] = None,
-) -> List[Tuple[int, np.ndarray]]:
-    """
-    Extract frames at a specified sampling rate.
+    max_dimension: int | None = None,
+) -> list[tuple[int, NDArray[Any]]]:
+    """Extract frames at a specified sampling rate.
 
-    Args:
-        video_path: Path to the video file
-        sample_rate: Extract one frame every N frames
-        max_dimension: Maximum width or height for resizing (maintains aspect ratio)
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    sample_rate : int, default=30
+        Extract one frame every N frames.
+    max_dimension : int | None, default=None
+        Maximum width or height for resizing (maintains aspect ratio).
+        If None, frames are not resized.
 
-    Returns:
-        List of tuples containing (frame_number, frame_array)
+    Returns
+    -------
+    list[tuple[int, np.ndarray]]
+        List of tuples containing (frame_number, frame_array).
 
-    Raises:
-        VideoProcessingError: If frame extraction fails
+    Raises
+    ------
+    VideoProcessingError
+        If frame extraction fails.
     """
     with tracer.start_as_current_span("extract_frames_by_rate") as span:
         span.set_attribute("video.path", video_path)
@@ -253,16 +282,20 @@ def extract_frames_by_rate(
             cap.release()
 
 
-def resize_frame(frame: np.ndarray, max_dimension: int) -> np.ndarray:
-    """
-    Resize a frame maintaining aspect ratio.
+def resize_frame(frame: NDArray[Any], max_dimension: int) -> NDArray[Any]:
+    """Resize a frame maintaining aspect ratio.
 
-    Args:
-        frame: Input frame as numpy array
-        max_dimension: Maximum width or height
+    Parameters
+    ----------
+    frame : np.ndarray
+        Input frame as numpy array.
+    max_dimension : int
+        Maximum width or height in pixels.
 
-    Returns:
-        Resized frame
+    Returns
+    -------
+    np.ndarray
+        Resized frame.
     """
     height, width = frame.shape[:2]
 
@@ -273,51 +306,58 @@ def resize_frame(frame: np.ndarray, max_dimension: int) -> np.ndarray:
             new_width = int(width * ratio)
         else:
             return frame
+    elif width > max_dimension:
+        ratio = max_dimension / width
+        new_width = max_dimension
+        new_height = int(height * ratio)
     else:
-        if width > max_dimension:
-            ratio = max_dimension / width
-            new_width = max_dimension
-            new_height = int(height * ratio)
-        else:
-            return frame
+        return frame
 
     return cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
 
 async def extract_audio(
     video_path: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     sample_rate: int = 16000,
     channels: int = 1,
 ) -> str:
-    """
-    Extract audio from a video file using FFmpeg.
+    """Extract audio from a video file using FFmpeg.
 
-    Args:
-        video_path: Path to the video file
-        output_path: Path for output audio file (defaults to temp file)
-        sample_rate: Audio sample rate in Hz
-        channels: Number of audio channels (1=mono, 2=stereo)
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    output_path : str | None, default=None
+        Path for output audio file. If None, creates temp file.
+    sample_rate : int, default=16000
+        Audio sample rate in Hz.
+    channels : int, default=1
+        Number of audio channels (1=mono, 2=stereo).
 
-    Returns:
-        Path to the extracted audio file
+    Returns
+    -------
+    str
+        Path to the extracted audio file.
 
-    Raises:
-        VideoProcessingError: If audio extraction fails
+    Raises
+    ------
+    VideoProcessingError
+        If audio extraction fails.
     """
     with tracer.start_as_current_span("extract_audio") as span:
         span.set_attribute("video.path", video_path)
         span.set_attribute("audio.sample_rate", sample_rate)
         span.set_attribute("audio.channels", channels)
 
-        if not os.path.exists(video_path):
+        if not Path(video_path).exists():
             raise VideoProcessingError(f"Video file not found: {video_path}")
 
         # Create output path if not provided
         if output_path is None:
-            temp_dir = tempfile.gettempdir()
+            temp_dir = Path(tempfile.gettempdir())
             output_filename = f"{Path(video_path).stem}_audio.wav"
-            output_path = os.path.join(temp_dir, output_filename)
+            output_path = str(temp_dir / output_filename)
 
         span.set_attribute("audio.output_path", output_path)
 
@@ -352,33 +392,33 @@ async def extract_audio(
                     f"FFmpeg failed with return code {process.returncode}: {error_msg}"
                 )
 
-            if not os.path.exists(output_path):
+            if not Path(output_path).exists():
                 raise VideoProcessingError(f"Output audio file not created: {output_path}")
 
             span.set_attribute("audio.success", True)
             return output_path
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise VideoProcessingError(
                 "FFmpeg not found. Please install FFmpeg and ensure it's in your PATH."
-            )
+            ) from e
         except Exception as e:
-            raise VideoProcessingError(f"Audio extraction failed: {str(e)}")
+            raise VideoProcessingError(f"Audio extraction failed: {e!s}") from e
 
 
 def check_ffmpeg_available() -> bool:
-    """
-    Check if FFmpeg is available in the system PATH.
+    """Check if FFmpeg is available in the system PATH.
 
-    Returns:
-        True if FFmpeg is available, False otherwise
+    Returns
+    -------
+    bool
+        True if FFmpeg is available, False otherwise.
     """
     try:
         result = subprocess.run(
             ["ffmpeg", "-version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=5,
+            capture_output=True,
+            timeout=5, check=False,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
