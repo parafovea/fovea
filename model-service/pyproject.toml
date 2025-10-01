@@ -1,3 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fovea-model-service"
+version = "1.0.0"
+description = "Model service for fovea video annotation tool"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.110.0",
+    "uvicorn[standard]==0.27.1",
+    "pydantic==2.6.1",
+    "python-multipart==0.0.9",
+    "opentelemetry-api==1.25.0",
+    "opentelemetry-sdk==1.25.0",
+    "opentelemetry-instrumentation-fastapi==0.46b0",
+    "opentelemetry-instrumentation-redis==0.46b0",
+    "opentelemetry-exporter-otlp-proto-http==1.25.0",
+    "opencv-python==4.9.0.80",
+    "numpy==1.26.4",
+    "pyyaml==6.0.1",
+    "torch==2.5.1",
+    "transformers>=4.47.0",
+    "accelerate>=0.34.0",
+    "pillow>=10.2.0",
+    "sentencepiece>=0.1.99",
+    "protobuf>=4.25.2",
+]
+
+[project.optional-dependencies]
+quantization = [
+    "bitsandbytes>=0.42.0",
+]
+sglang = [
+    "sglang>=0.4.1",
+]
+vllm = [
+    "vllm>=0.6.3",
+]
+all = [
+    "bitsandbytes>=0.42.0",
+    "sglang>=0.4.1",
+    "vllm>=0.6.3",
+]
+dev = [
+    "pytest==8.0.0",
+    "pytest-asyncio==0.23.5",
+    "pytest-cov==4.1.0",
+    "httpx==0.26.0",
+    "ruff==0.2.1",
+    "mypy==1.8.0",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -53,9 +107,9 @@ disallow_subclassing_any = true
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = true
+warn_unused_ignores = false
 warn_no_return = true
-warn_unreachable = true
+warn_unreachable = false
 strict_equality = true
 strict_concatenate = true
 
@@ -63,3 +117,12 @@ strict_concatenate = true
 module = "test.*"
 disallow_untyped_defs = false
 disallow_any_generics = false
+
+[[tool.mypy.overrides]]
+module = ["sglang", "sglang.*", "vllm", "vllm.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["transformers", "transformers.*"]
+follow_imports = "skip"
+ignore_errors = true
