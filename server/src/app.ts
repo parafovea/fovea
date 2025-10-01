@@ -6,6 +6,10 @@ import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import { PrismaClient } from '@prisma/client'
+import { createBullBoard } from '@bull-board/api'
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
+import { FastifyAdapter } from '@bull-board/fastify'
+import { videoSummarizationQueue, closeQueues } from './queues/setup.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -17,6 +21,7 @@ import { PrismaClient } from '@prisma/client'
  * - CORS configuration
  * - Rate limiting protection
  * - OpenAPI documentation with Swagger UI
+ * - Bull Board queue monitoring dashboard
  * - Health check endpoint
  *
  * @returns Configured Fastify instance ready to be started
@@ -85,6 +90,15 @@ export async function buildApp() {
     }
   })
 
+  // Bull Board queue monitoring
+  const serverAdapter = new FastifyAdapter()
+  createBullBoard({
+    queues: [new BullMQAdapter(videoSummarizationQueue)],
+    serverAdapter,
+  })
+  serverAdapter.setBasePath('/admin/queues')
+  await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+
   // Database connection
   const prisma = new PrismaClient({
     log: process.env.NODE_ENV === 'development'
@@ -95,8 +109,10 @@ export async function buildApp() {
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)
 
-  // Graceful shutdown - disconnect Prisma on close
+  // Graceful shutdown - disconnect Prisma and close queues
   app.addHook('onClose', async (instance) => {
+    await closeQueues()
+    instance.log.info('Queue connections closed')
     await instance.prisma.$disconnect()
     instance.log.info('Prisma client disconnected')
   })
