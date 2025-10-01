@@ -27,6 +27,136 @@ export const handlers = [
     return HttpResponse.json([
       { id: '1', filename: 'test.mp4', path: '/data/videos/test.mp4' }
     ])
+  }),
+
+  // Video summaries endpoints
+  http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+    return HttpResponse.json([
+      {
+        id: 'summary-1',
+        videoId: 'video-1',
+        personaId: 'persona-1',
+        summary: 'Baseball scout analyzing pitcher mechanics during spring training game',
+        visualAnalysis: 'Pitcher demonstrates consistent three-quarter arm slot with late breaking curveball',
+        audioTranscript: null,
+        keyFrames: [0, 150, 300],
+        confidence: 0.92,
+        createdAt: '2025-10-01T10:00:00Z',
+        updatedAt: '2025-10-01T10:00:00Z',
+      },
+    ])
+  }),
+
+  http.get('http://localhost:3001/api/videos/:videoId/summaries/:personaId', ({ params }) => {
+    const { personaId } = params
+    if (personaId === 'persona-missing') {
+      return new HttpResponse(null, { status: 404 })
+    }
+    return HttpResponse.json({
+      id: 'summary-1',
+      videoId: 'video-1',
+      personaId: personaId as string,
+      summary: 'Wildlife researcher documenting whale pod behavior',
+      visualAnalysis: 'Three adult humpback whales surface in coordinated breathing pattern',
+      audioTranscript: null,
+      keyFrames: [0, 180, 360],
+      confidence: 0.88,
+      createdAt: '2025-10-01T10:00:00Z',
+      updatedAt: '2025-10-01T10:00:00Z',
+    })
+  }),
+
+  http.post('http://localhost:3001/api/videos/summaries/generate', async ({ request }) => {
+    const body = await request.json() as { videoId: string; personaId: string }
+    return HttpResponse.json(
+      {
+        jobId: 'job-123',
+        videoId: body.videoId,
+        personaId: body.personaId,
+      },
+      { status: 202 }
+    )
+  }),
+
+  http.get('http://localhost:3001/api/jobs/:jobId', ({ params }) => {
+    const { jobId } = params
+    if (jobId === 'job-active') {
+      return HttpResponse.json({
+        id: 'job-active',
+        state: 'active',
+        progress: 50,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+      })
+    }
+    if (jobId === 'job-completed') {
+      return HttpResponse.json({
+        id: 'job-completed',
+        state: 'completed',
+        progress: 100,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+        returnvalue: {
+          id: 'summary-1',
+          videoId: 'video-1',
+          personaId: 'persona-1',
+          summary: 'Retail analyst studying customer flow patterns',
+          visualAnalysis: 'Peak traffic occurs near product displays with promotional signage',
+          audioTranscript: null,
+          keyFrames: [0, 200, 400],
+          confidence: 0.85,
+          createdAt: '2025-10-01T10:00:00Z',
+          updatedAt: '2025-10-01T10:00:00Z',
+        },
+        finishedOn: Date.now(),
+      })
+    }
+    if (jobId === 'job-failed') {
+      return HttpResponse.json({
+        id: 'job-failed',
+        state: 'failed',
+        progress: 70,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+        failedReason: 'Video file not found',
+      })
+    }
+    return HttpResponse.json({
+      id: jobId as string,
+      state: 'waiting',
+      progress: 0,
+      data: {
+        videoId: 'video-1',
+        personaId: 'persona-1',
+      },
+    })
+  }),
+
+  http.post('http://localhost:3001/api/summaries', async ({ request }) => {
+    const body = await request.json() as {
+      videoId: string
+      personaId: string
+      summary: string
+    }
+    return HttpResponse.json(
+      {
+        id: 'summary-new',
+        ...body,
+        createdAt: '2025-10-01T10:00:00Z',
+        updatedAt: '2025-10-01T10:00:00Z',
+      },
+      { status: 201 }
+    )
+  }),
+
+  http.delete('http://localhost:3001/api/videos/:videoId/summaries/:personaId', () => {
+    return new HttpResponse(null, { status: 204 })
   })
 ]
 

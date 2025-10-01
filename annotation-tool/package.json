@@ -21,6 +21,8 @@
     "@mui/material": "^5.15.10",
     "@mui/x-date-pickers": "^8.11.3",
     "@reduxjs/toolkit": "^2.2.1",
+    "@tanstack/react-query": "^5.90.2",
+    "@tanstack/react-query-devtools": "^5.90.2",
     "@types/leaflet": "^1.9.20",
     "@types/lodash": "^4.17.20",
     "@types/uuid": "^10.0.0",
