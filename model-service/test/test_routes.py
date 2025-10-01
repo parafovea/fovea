@@ -5,19 +5,54 @@ This module contains tests for the video summarization, ontology augmentation,
 and object detection endpoints.
 """
 
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.models import SummarizeResponse
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def mock_model_manager() -> Mock:
+    """Mock the global model manager for all tests."""
+    mock_manager = Mock()
+    mock_task_config = Mock()
+    mock_task_config.selected = "llama-4-maverick"
+    mock_model_config = Mock()
+    mock_model_config.model_id = "meta-llama/Llama-4-Maverick"
+    mock_model_config.quantization = "4bit"
+    mock_model_config.framework = "sglang"
+    mock_task_config.get_selected_config.return_value = mock_model_config
+    mock_manager.tasks = {"video_summarization": mock_task_config}
+
+    with patch("src.routes._model_manager", mock_manager):
+        yield mock_manager
 
 
 class TestSummarizeEndpoint:
     """Tests for /api/summarize endpoint."""
 
-    def test_summarize_video_success(self) -> None:
+    @patch("src.summarization.summarize_video_with_vlm")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_summarize_video_success(
+        self, mock_get_video: Mock, mock_summarize: AsyncMock
+    ) -> None:
         """Test successful video summarization request."""
+        mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+        mock_summarize.return_value = SummarizeResponse(
+            id="summary-123",
+            video_id="test-video-123",
+            persona_id="test-persona-456",
+            summary="Test video summary content",
+            key_frames=[],
+            confidence=0.95,
+        )
+
         response = client.post(
             "/api/summarize",
             json={
@@ -28,6 +63,8 @@ class TestSummarizeEndpoint:
             },
         )
 
+        if response.status_code != 200:
+            print(f"Response: {response.json()}")
         assert response.status_code == 200
         data = response.json()
 
@@ -38,8 +75,22 @@ class TestSummarizeEndpoint:
         assert isinstance(data["key_frames"], list)
         assert "confidence" in data
 
-    def test_summarize_video_default_params(self) -> None:
+    @patch("src.summarization.summarize_video_with_vlm")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_summarize_video_default_params(
+        self, mock_get_video: Mock, mock_summarize: AsyncMock
+    ) -> None:
         """Test summarization with default parameters."""
+        mock_get_video.return_value = Path("/videos/test-video-789.mp4")
+        mock_summarize.return_value = SummarizeResponse(
+            id="summary-789",
+            video_id="test-video-789",
+            persona_id="test-persona-012",
+            summary="Default params test summary",
+            key_frames=[],
+            confidence=0.90,
+        )
+
         response = client.post(
             "/api/summarize",
             json={
@@ -76,8 +127,22 @@ class TestSummarizeEndpoint:
 
         assert response.status_code == 422
 
-    def test_summarize_response_structure(self) -> None:
+    @patch("src.summarization.summarize_video_with_vlm")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_summarize_response_structure(
+        self, mock_get_video: Mock, mock_summarize: AsyncMock
+    ) -> None:
         """Test that response contains all expected fields."""
+        mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+        mock_summarize.return_value = SummarizeResponse(
+            id="summary-456",
+            video_id="test-video-123",
+            persona_id="test-persona-456",
+            summary="Response structure test",
+            key_frames=[],
+            confidence=0.88,
+        )
+
         response = client.post(
             "/api/summarize",
             json={

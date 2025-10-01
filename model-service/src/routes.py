@@ -4,6 +4,7 @@ This module contains the API endpoint implementations for video summarization,
 ontology augmentation, object detection, and model configuration management.
 """
 
+import logging
 import time
 import uuid
 from typing import TYPE_CHECKING, cast
@@ -18,7 +19,6 @@ from .models import (
     DetectionResponse,
     ErrorResponse,
     FrameDetections,
-    KeyFrame,
     OntologyType,
     SummarizeRequest,
     SummarizeResponse,
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/api")
 tracer = trace.get_tracer(__name__)
+logger = logging.getLogger(__name__)
 
 # Global model manager instance (will be injected via dependency)
 _model_manager: object | None = None
@@ -165,6 +166,8 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
             span.set_attribute("summary_generated", True)
             return response
 
+        except HTTPException:
+            raise
         except SummarizationError as e:
             logger.error(f"Summarization error: {e}")
             raise HTTPException(
