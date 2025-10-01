@@ -118,6 +118,80 @@ export interface DetectionResponse {
 }
 
 /**
+ * Model metadata for a single model option.
+ */
+export interface ModelOption {
+  model_id: string
+  framework: string
+  vram_gb: number
+  speed: string
+  description: string
+  fps: number | null
+}
+
+/**
+ * Configuration for a single task type.
+ */
+export interface TaskConfig {
+  selected: string
+  options: Record<string, ModelOption>
+}
+
+/**
+ * Inference configuration settings.
+ */
+export interface InferenceConfig {
+  max_memory_per_model: number
+  offload_threshold: number
+  warmup_on_startup: boolean
+}
+
+/**
+ * Complete model configuration response.
+ */
+export interface ModelConfig {
+  models: Record<string, TaskConfig>
+  inference: InferenceConfig
+}
+
+/**
+ * Memory requirement for a single task.
+ */
+export interface ModelRequirement {
+  model_id: string
+  vram_gb: number
+}
+
+/**
+ * Memory validation result.
+ */
+export interface MemoryValidation {
+  valid: boolean
+  total_vram_gb: number
+  total_required_gb: number
+  threshold: number
+  max_allowed_gb: number
+  model_requirements: Record<string, ModelRequirement>
+}
+
+/**
+ * Request payload for selecting a model.
+ */
+export interface SelectModelRequest {
+  task_type: string
+  model_name: string
+}
+
+/**
+ * Response from model selection.
+ */
+export interface SelectModelResponse {
+  status: string
+  task_type: string
+  selected_model: string
+}
+
+/**
  * Category of ontology type to augment.
  */
 export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
@@ -348,6 +422,63 @@ export class ApiClient {
           confidence_threshold: request.confidenceThreshold,
           enable_tracking: request.enableTracking,
         }
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Get current model configuration for all task types.
+   *
+   * @returns Model configuration with all task types and options
+   * @throws ApiError if request fails
+   */
+  async getModelConfig(): Promise<ModelConfig> {
+    try {
+      const response = await this.client.get<ModelConfig>('/api/models/config')
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Select a model for a specific task type.
+   *
+   * @param request - Task type and model name to select
+   * @returns Selection confirmation
+   * @throws ApiError if request fails
+   */
+  async selectModel(request: SelectModelRequest): Promise<SelectModelResponse> {
+    try {
+      const response = await this.client.post<SelectModelResponse>(
+        '/api/models/select',
+        null,
+        {
+          params: {
+            task_type: request.task_type,
+            model_name: request.model_name,
+          },
+        }
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Validate memory budget for currently selected models.
+   *
+   * @returns Memory validation results
+   * @throws ApiError if request fails
+   */
+  async validateMemoryBudget(): Promise<MemoryValidation> {
+    try {
+      const response = await this.client.post<MemoryValidation>(
+        '/api/models/validate'
       )
       return response.data
     } catch (error) {
