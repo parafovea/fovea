@@ -2,12 +2,22 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { Persona, PersonaOntology, EntityType, RoleType, EventType, RelationType, OntologyRelation, ImportRequest } from '../models/types'
 import { generateId } from '../utils/uuid'
 
+/**
+ * State shape for persona management.
+ * Manages personas and their associated ontologies in the application.
+ */
 interface PersonaState {
+  /** Array of all personas */
   personas: Persona[]
+  /** Array of ontologies, one per persona */
   personaOntologies: PersonaOntology[]
+  /** ID of the currently active persona, or null if none selected */
   activePersonaId: string | null
+  /** Loading state for async operations */
   isLoading: boolean
+  /** Error message from failed operations */
   error: string | null
+  /** Flag indicating whether there are unsaved changes */
   unsavedChanges: boolean
 }
 
@@ -20,26 +30,65 @@ const initialState: PersonaState = {
   unsavedChanges: false,
 }
 
+/**
+ * Redux slice for persona and ontology management.
+ *
+ * Manages the state of personas (analysts with different ontological perspectives)
+ * and their associated ontologies (entity types, event types, roles, and relations).
+ * Each persona has their own ontology that defines how they interpret and annotate videos.
+ *
+ * Key features:
+ * - CRUD operations for personas
+ * - CRUD operations for ontology types (entities, roles, events, relation types)
+ * - CRUD operations for ontology relations (instances of relation types)
+ * - Import functionality to copy types between personas
+ * - Active persona tracking for UI context
+ * - Unsaved changes tracking for data persistence warnings
+ */
 const personaSlice = createSlice({
   name: 'persona',
   initialState,
   reducers: {
+    /**
+     * Replaces all personas with a new array.
+     * Used when loading data from API or file import.
+     */
     setPersonas: (state, action: PayloadAction<Persona[]>) => {
       state.personas = action.payload
       state.unsavedChanges = false
     },
+
+    /**
+     * Replaces all persona ontologies with a new array.
+     * Used when loading data from API or file import.
+     */
     setPersonaOntologies: (state, action: PayloadAction<PersonaOntology[]>) => {
       state.personaOntologies = action.payload
       state.unsavedChanges = false
     },
+
+    /**
+     * Sets the active persona for the UI context.
+     * The active persona determines which ontology is used for annotations.
+     */
     setActivePersona: (state, action: PayloadAction<string>) => {
       state.activePersonaId = action.payload
     },
+
+    /**
+     * Adds a new persona and its associated ontology.
+     * The ontology is created empty and can be populated separately.
+     */
     addPersona: (state, action: PayloadAction<{ persona: Persona; ontology: PersonaOntology }>) => {
       state.personas.push(action.payload.persona)
       state.personaOntologies.push(action.payload.ontology)
       state.unsavedChanges = true
     },
+
+    /**
+     * Updates an existing persona's basic information.
+     * Does not modify the associated ontology.
+     */
     updatePersona: (state, action: PayloadAction<Persona>) => {
       const index = state.personas.findIndex(p => p.id === action.payload.id)
       if (index !== -1) {
@@ -47,6 +96,11 @@ const personaSlice = createSlice({
         state.unsavedChanges = true
       }
     },
+
+    /**
+     * Deletes a persona and its associated ontology.
+     * If the deleted persona was active, switches to the first remaining persona.
+     */
     deletePersona: (state, action: PayloadAction<string>) => {
       state.personas = state.personas.filter(p => p.id !== action.payload)
       state.personaOntologies = state.personaOntologies.filter(o => o.personaId !== action.payload)
@@ -55,6 +109,10 @@ const personaSlice = createSlice({
       }
       state.unsavedChanges = true
     },
+    /**
+     * Copies a persona and its entire ontology.
+     * Creates a new persona with a deep copy of the source persona's ontology.
+     */
     copyPersona: (state, action: PayloadAction<{ sourcePersonaId: string; newPersona: Persona }>) => {
       const sourceOntology = state.personaOntologies.find(o => o.personaId === action.payload.sourcePersonaId)
       if (sourceOntology) {
@@ -70,6 +128,12 @@ const personaSlice = createSlice({
         state.unsavedChanges = true
       }
     },
+
+    /**
+     * Imports selected types from one persona's ontology to another.
+     * Allows selective copying of entity types, roles, events, and relation types
+     * between personas for ontology reuse.
+     */
     importFromPersona: (state, action: PayloadAction<ImportRequest>) => {
       const { fromPersonaId, toPersonaId, entityIds, roleIds, eventIds, relationTypeIds, includeRelations } = action.payload
       
@@ -127,6 +191,9 @@ const personaSlice = createSlice({
         state.unsavedChanges = true
       }
     },
+    /**
+     * Adds an entity type to a persona's ontology.
+     */
     addEntityToPersona: (state, action: PayloadAction<{ personaId: string; entity: EntityType }>) => {
       const ontology = state.personaOntologies.find(o => o.personaId === action.payload.personaId)
       if (ontology) {
@@ -135,6 +202,10 @@ const personaSlice = createSlice({
         state.unsavedChanges = true
       }
     },
+
+    /**
+     * Updates an existing entity type in a persona's ontology.
+     */
     updateEntityInPersona: (state, action: PayloadAction<{ personaId: string; entity: EntityType }>) => {
       const ontology = state.personaOntologies.find(o => o.personaId === action.payload.personaId)
       if (ontology) {
@@ -146,6 +217,10 @@ const personaSlice = createSlice({
         }
       }
     },
+
+    /**
+     * Deletes an entity type from a persona's ontology.
+     */
     deleteEntityFromPersona: (state, action: PayloadAction<{ personaId: string; entityId: string }>) => {
       const ontology = state.personaOntologies.find(o => o.personaId === action.payload.personaId)
       if (ontology) {

@@ -126,5 +126,9 @@ export async function buildApp() {
     return { status: 'healthy', timestamp: new Date().toISOString() }
   })
 
+  // Register routes
+  const personasRoute = await import('./routes/personas.js')
+  await app.register(personasRoute.default)
+
   return app
 }
