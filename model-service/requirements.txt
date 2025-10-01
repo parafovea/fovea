@@ -7,3 +7,7 @@ opentelemetry-sdk==1.25.0
 opentelemetry-instrumentation-fastapi==0.46b0
 opentelemetry-instrumentation-redis==0.46b0
 opentelemetry-exporter-otlp-proto-http==1.25.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+pyyaml==6.0.1
+torch==2.5.1

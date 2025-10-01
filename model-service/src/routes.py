@@ -2,12 +2,13 @@
 API routes for model service endpoints.
 
 This module contains the API endpoint implementations for video summarization,
-ontology augmentation, and object detection.
+ontology augmentation, object detection, and model configuration management.
 """
 
 import time
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -27,6 +28,38 @@ from .models import (
 
 router = APIRouter(prefix="/api")
 tracer = trace.get_tracer(__name__)
+
+# Global model manager instance (will be injected via dependency)
+_model_manager: Optional[object] = None
+
+
+def set_model_manager(manager: object) -> None:
+    """
+    Set the global model manager instance.
+
+    Args:
+        manager: ModelManager instance to use for model operations
+    """
+    global _model_manager
+    _model_manager = manager
+
+
+def get_model_manager() -> object:
+    """
+    Get the global model manager instance.
+
+    Returns:
+        ModelManager instance
+
+    Raises:
+        HTTPException: If model manager is not initialized
+    """
+    if _model_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Model manager not initialized",
+        )
+    return _model_manager
 
 
 @router.post(
@@ -234,3 +267,201 @@ async def process_detection(request: DetectionRequest) -> DetectionResponse:
             total_detections=0,
             processing_time=processing_time,
         )
+
+
+@router.get(
+    "/models/config",
+    summary="Get model configuration",
+    description="Returns the current model configuration including all task types, "
+    "available model options, and currently selected models.",
+)
+async def get_model_config():
+    """
+    Get current model configuration for all task types.
+
+    Returns:
+        Dictionary containing configuration for all tasks
+
+    Raises:
+        HTTPException: If model manager is not initialized
+    """
+    manager = get_model_manager()
+
+    config = {}
+    for task_type, task_config in manager.tasks.items():
+        config[task_type] = {
+            "selected": task_config.selected,
+            "options": {
+                name: {
+                    "model_id": opt.model_id,
+                    "framework": opt.framework,
+                    "vram_gb": opt.vram_gb,
+                    "speed": opt.speed,
+                    "description": opt.description,
+                    "fps": opt.fps,
+                }
+                for name, opt in task_config.options.items()
+            },
+        }
+
+    return {
+        "models": config,
+        "inference": {
+            "max_memory_per_model": manager.inference_config.max_memory_per_model,
+            "offload_threshold": manager.inference_config.offload_threshold,
+            "warmup_on_startup": manager.inference_config.warmup_on_startup,
+            "default_batch_size": manager.inference_config.default_batch_size,
+            "max_batch_size": manager.inference_config.max_batch_size,
+        },
+    }
+
+
+@router.get(
+    "/models/status",
+    summary="Get model status",
+    description="Returns information about currently loaded models, memory usage, and system statistics.",
+)
+async def get_model_status():
+    """
+    Get status of loaded models and memory usage.
+
+    Returns:
+        Dictionary with loaded models, memory statistics, and system info
+
+    Raises:
+        HTTPException: If model manager is not initialized
+    """
+    manager = get_model_manager()
+
+    loaded_models = manager.get_loaded_models()
+    memory_usage = manager.get_memory_usage_percentage()
+    available_vram = manager.get_available_vram()
+    total_vram = manager.get_total_vram()
+
+    return {
+        "loaded_models": loaded_models,
+        "memory": {
+            "total_vram_gb": total_vram / 1024**3,
+            "available_vram_gb": available_vram / 1024**3,
+            "usage_percentage": memory_usage,
+        },
+        "cuda_available": manager.loaded_models is not None,
+    }
+
+
+@router.post(
+    "/models/select",
+    summary="Select model for task",
+    description="Changes the selected model for a specific task type. "
+    "If the task's model is currently loaded, it will be unloaded and reloaded with the new selection.",
+)
+async def select_model(task_type: str, model_name: str):
+    """
+    Change selected model for a task type.
+
+    Args:
+        task_type: Task type to update (e.g., "video_summarization")
+        model_name: Name of model option to select (e.g., "llama-4-maverick")
+
+    Returns:
+        Success message with new configuration
+
+    Raises:
+        HTTPException: If task type or model name is invalid
+    """
+    manager = get_model_manager()
+
+    try:
+        await manager.set_selected_model(task_type, model_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "status": "success",
+        "task_type": task_type,
+        "selected_model": model_name,
+    }
+
+
+@router.post(
+    "/models/validate",
+    summary="Validate memory budget",
+    description="Validates that all currently selected models can fit in available GPU memory. "
+    "Returns detailed breakdown of memory requirements and availability.",
+)
+async def validate_memory_budget():
+    """
+    Validate memory budget for currently selected models.
+
+    Returns:
+        Validation results with memory breakdown
+
+    Raises:
+        HTTPException: If model manager is not initialized
+    """
+    manager = get_model_manager()
+
+    validation = manager.validate_memory_budget()
+
+    return validation
+
+
+@router.post(
+    "/models/unload/{task_type}",
+    summary="Unload model",
+    description="Manually unload a model from memory to free GPU resources.",
+)
+async def unload_model(task_type: str):
+    """
+    Unload a model from memory.
+
+    Args:
+        task_type: Task type of model to unload
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If model manager is not initialized or model not loaded
+    """
+    manager = get_model_manager()
+
+    await manager.unload_model(task_type)
+
+    return {
+        "status": "success",
+        "task_type": task_type,
+        "message": "Model unloaded successfully",
+    }
+
+
+@router.post(
+    "/models/load/{task_type}",
+    summary="Load model",
+    description="Manually load a model into memory. Models are normally loaded on demand when needed.",
+)
+async def load_model(task_type: str):
+    """
+    Load a model into memory.
+
+    Args:
+        task_type: Task type of model to load
+
+    Returns:
+        Success message with model info
+
+    Raises:
+        HTTPException: If model manager is not initialized or loading fails
+    """
+    manager = get_model_manager()
+
+    try:
+        await manager.load_model(task_type)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "status": "success",
+        "task_type": task_type,
+        "message": "Model loaded successfully",
+    }

@@ -1,0 +1,141 @@
+# Model Configuration
+# Defines which models to use for each task type and their loading parameters
+
+models:
+  video_summarization:
+    selected: "llama-4-maverick"
+    options:
+      llama-4-maverick:
+        model_id: "meta-llama/Llama-4-Maverick"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 62
+        speed: "fast"
+        description: "MoE model with 17B active parameters, multimodal, 10M context"
+      gemma-3-27b:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Document analysis, OCR, multilingual support"
+      internvl3-78b:
+        model_id: "OpenGVLab/InternVL3-78B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 40
+        speed: "medium"
+        description: "SOTA benchmarks, scientific reasoning"
+      pixtral-large:
+        model_id: "mistralai/Pixtral-Large-Instruct-2411"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 62
+        speed: "medium"
+        description: "Long context (128k), batch processing"
+      qwen2-5-vl-72b:
+        model_id: "Qwen/Qwen2.5-VL-72B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 36
+        speed: "fast"
+        description: "Proven stable, good baseline"
+
+  ontology_augmentation:
+    selected: "llama-4-scout"
+    options:
+      llama-4-scout:
+        model_id: "meta-llama/Llama-4-Scout"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 55
+        speed: "very_fast"
+        description: "MoE model with 17B active, 10M context, multimodal"
+      llama-3-3-70b:
+        model_id: "meta-llama/Llama-3.3-70B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 35
+        speed: "fast"
+        description: "Matches 405B quality, proven performance"
+      deepseek-v3:
+        model_id: "deepseek-ai/DeepSeek-V3"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 85
+        speed: "fast"
+        description: "MoE with 37B active, best reasoning, scientific tasks"
+      gemma-3-27b-text:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Lightweight, fast iteration"
+
+  object_detection:
+    selected: "yolo-world-v2"
+    options:
+      yolo-world-v2:
+        model_id: "ultralytics/yolo-world-v2-l"
+        framework: "pytorch"
+        vram_gb: 2
+        speed: "real_time"
+        fps: 52
+        description: "Speed and accuracy balance, image prompts"
+      grounding-dino-1-5:
+        model_id: "IDEA-Research/grounding-dino-1.5-pro"
+        framework: "pytorch"
+        vram_gb: 4
+        speed: "medium"
+        fps: 20
+        description: "Open-world, zero-shot, 52.5 AP"
+      owlv2:
+        model_id: "google/owlv2-large-patch14-ensemble"
+        framework: "pytorch"
+        vram_gb: 6
+        speed: "medium"
+        fps: 15
+        description: "Scaled training, rare classes"
+      florence-2:
+        model_id: "microsoft/Florence-2-large"
+        framework: "pytorch"
+        vram_gb: 2
+        speed: "fast"
+        fps: 30
+        description: "Unified vision, captioning"
+
+  video_tracking:
+    selected: "samurai"
+    options:
+      samurai:
+        model_id: "yangchris11/samurai"
+        framework: "pytorch"
+        vram_gb: 3
+        speed: "real_time"
+        description: "Motion-aware, occlusion handling, 7.1% better"
+      sam2long:
+        model_id: "Mark12Ding/SAM2Long"
+        framework: "pytorch"
+        vram_gb: 3
+        speed: "real_time"
+        description: "Long videos, error accumulation fix, 5.3% better"
+      sam2-1:
+        model_id: "facebook/sam2.1-hiera-large"
+        framework: "pytorch"
+        vram_gb: 3
+        speed: "real_time"
+        description: "Baseline, proven stable"
+      yolo11n-seg:
+        model_id: "ultralytics/yolo11n-seg"
+        framework: "pytorch"
+        vram_gb: 1
+        speed: "very_fast"
+        description: "Lightweight, speed-critical tasks"
+
+inference:
+  max_memory_per_model: "auto"
+  offload_threshold: 0.85
+  warmup_on_startup: false
+  default_batch_size: 1
+  max_batch_size: 8
