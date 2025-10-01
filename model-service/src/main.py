@@ -14,6 +14,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .observability import configure_observability, instrument_app
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # Startup
     print("Model service starting up...")
+    configure_observability()
 
     yield
 
@@ -44,6 +47,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Configure OpenTelemetry instrumentation
+instrument_app(app)
 
 # Configure CORS
 app.add_middleware(
