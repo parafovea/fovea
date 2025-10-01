@@ -16,6 +16,7 @@ import {
   SelectModelRequest,
   SelectModelResponse,
   MemoryValidation,
+  ModelStatusResponse,
   ApiError,
 } from '../api/client'
 
@@ -27,6 +28,7 @@ export const modelConfigKeys = {
   all: ['modelConfig'] as const,
   config: () => [...modelConfigKeys.all, 'config'] as const,
   validation: () => [...modelConfigKeys.all, 'validation'] as const,
+  status: () => [...modelConfigKeys.all, 'status'] as const,
 }
 
 /**
@@ -116,6 +118,42 @@ export function useMemoryValidation(
     queryKey: modelConfigKeys.validation(),
     queryFn: () => apiClient.validateMemoryBudget(),
     staleTime: 30 * 1000, // 30 seconds (more frequent since memory is dynamic)
+    ...options,
+  })
+}
+
+/**
+ * Fetch status information for all loaded models.
+ * Includes health status, VRAM usage, and performance metrics.
+ * Automatically refetches at a configurable interval for real-time monitoring.
+ *
+ * @param options - TanStack Query options with optional refetchInterval
+ * @returns Query result with model status data
+ *
+ * @example
+ * ```tsx
+ * // Auto-refresh every 5 seconds
+ * const { data: status } = useModelStatus({
+ *   refetchInterval: 5000
+ * })
+ *
+ * // Disable auto-refresh
+ * const { data: status } = useModelStatus({
+ *   refetchInterval: false
+ * })
+ * ```
+ */
+export function useModelStatus(
+  options?: Omit<
+    UseQueryOptions<ModelStatusResponse, ApiError>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  return useQuery<ModelStatusResponse, ApiError>({
+    queryKey: modelConfigKeys.status(),
+    queryFn: () => apiClient.getModelStatus(),
+    staleTime: 10 * 1000, // 10 seconds
+    refetchInterval: 15 * 1000, // Auto-refresh every 15 seconds by default
     ...options,
   })
 }

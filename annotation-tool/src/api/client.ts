@@ -192,6 +192,50 @@ export interface SelectModelResponse {
 }
 
 /**
+ * Model health status indicator.
+ */
+export type ModelHealth = 'loaded' | 'loading' | 'failed' | 'unloaded'
+
+/**
+ * Performance metrics for a loaded model.
+ */
+export interface ModelPerformanceMetrics {
+  total_requests: number
+  average_latency_ms: number
+  requests_per_second: number
+  average_fps: number | null
+}
+
+/**
+ * Status information for a single loaded model.
+ */
+export interface LoadedModelStatus {
+  model_id: string
+  task_type: string
+  model_name: string
+  framework: string
+  quantization: string | null
+  health: ModelHealth
+  vram_allocated_gb: number
+  vram_used_gb: number | null
+  warm_up_complete: boolean
+  last_used: string | null
+  load_time_ms: number | null
+  performance_metrics: ModelPerformanceMetrics | null
+  error_message: string | null
+}
+
+/**
+ * Overall model service status.
+ */
+export interface ModelStatusResponse {
+  loaded_models: LoadedModelStatus[]
+  total_vram_allocated_gb: number
+  total_vram_available_gb: number
+  timestamp: string
+}
+
+/**
  * Category of ontology type to augment.
  */
 export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
@@ -479,6 +523,24 @@ export class ApiClient {
     try {
       const response = await this.client.post<MemoryValidation>(
         '/api/models/validate'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Get status information for all loaded models.
+   * Includes health status, VRAM usage, and performance metrics.
+   *
+   * @returns Model status with loaded model information
+   * @throws ApiError if request fails
+   */
+  async getModelStatus(): Promise<ModelStatusResponse> {
+    try {
+      const response = await this.client.get<ModelStatusResponse>(
+        '/api/models/status'
       )
       return response.data
     } catch (error) {
