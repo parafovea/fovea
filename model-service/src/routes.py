@@ -19,7 +19,6 @@ from .models import (
     DetectionResponse,
     ErrorResponse,
     FrameDetections,
-    OntologyType,
     SummarizeRequest,
     SummarizeResponse,
 )
@@ -216,47 +215,82 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
         span.set_attribute("target_category", request.target_category)
         span.set_attribute("max_suggestions", request.max_suggestions)
 
-        # TODO: Implement actual LLM-based augmentation
-        # For now, return a mock response
-        augmentation_id = str(uuid.uuid4())
-
-        # Mock suggestions based on category
-        mock_suggestions = []
-        if request.target_category == "entity":
-            mock_suggestions = [
-                OntologyType(
-                    name="Equipment",
-                    description="Physical tools or devices used in operations",
-                    parent=None,
-                    confidence=0.85,
-                    examples=["Camera", "Laptop", "Sensor"],
-                ),
-                OntologyType(
-                    name="Location",
-                    description="Geographic or spatial positions",
-                    parent=None,
-                    confidence=0.90,
-                    examples=["Building", "Intersection", "Park"],
-                ),
-            ]
-        elif request.target_category == "event":
-            mock_suggestions = [
-                OntologyType(
-                    name="Movement",
-                    description="Change in position or location",
-                    parent=None,
-                    confidence=0.88,
-                    examples=["Walking", "Driving", "Flying"],
-                ),
-            ]
-
-        return AugmentResponse(
-            id=augmentation_id,
-            persona_id=request.persona_id,
-            target_category=request.target_category,
-            suggestions=mock_suggestions[: request.max_suggestions],
-            reasoning=f"Suggestions generated based on domain: {request.domain}. Model integration pending.",
+        from .llm_loader import LLMConfig, LLMFramework
+        from .ontology_augmentation import (
+            AugmentationContext,
+            augment_ontology_with_llm,
+            generate_augmentation_reasoning,
         )
+
+        try:
+            manager = get_model_manager()
+            task_config = manager.tasks.get("ontology_augmentation")
+            if task_config is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Ontology augmentation task not configured",
+                )
+
+            selected_model_config = task_config.get_selected_config()
+
+            llm_config = LLMConfig(
+                model_id=selected_model_config.model_id,
+                quantization=selected_model_config.quantization or "4bit",
+                framework=LLMFramework(selected_model_config.framework),
+                max_tokens=2048,
+                temperature=0.7,
+                top_p=0.9,
+            )
+
+            context = AugmentationContext(
+                domain=request.domain,
+                existing_types=request.existing_types,
+                target_category=request.target_category,
+                persona_role=None,
+                information_need=None,
+            )
+
+            suggestions = await augment_ontology_with_llm(
+                context=context,
+                llm_config=llm_config,
+                max_suggestions=request.max_suggestions,
+                cache_dir=None,
+            )
+
+            reasoning = generate_augmentation_reasoning(suggestions, context)
+
+            augmentation_id = str(uuid.uuid4())
+
+            span.set_attribute("suggestions_generated", len(suggestions))
+            span.set_attribute(
+                "avg_confidence",
+                sum(s.confidence for s in suggestions) / len(suggestions)
+                if suggestions
+                else 0.0,
+            )
+
+            return AugmentResponse(
+                id=augmentation_id,
+                persona_id=request.persona_id,
+                target_category=request.target_category,
+                suggestions=suggestions,
+                reasoning=reasoning,
+            )
+
+        except HTTPException:
+            raise
+        except ValueError as e:
+            logger.error(f"Validation error in augmentation: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error in augmentation: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal server error: {e!s}",
+            ) from e
 
 
 @router.post(
