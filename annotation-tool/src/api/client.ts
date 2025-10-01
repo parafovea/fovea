@@ -66,6 +66,44 @@ export interface ApiError {
 }
 
 /**
+ * Category of ontology type to augment.
+ */
+export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
+
+/**
+ * Suggested ontology type from the AI.
+ */
+export interface OntologySuggestion {
+  name: string
+  description: string
+  parent: string | null
+  confidence: number
+  examples: string[]
+}
+
+/**
+ * Request payload for ontology augmentation.
+ */
+export interface AugmentOntologyRequest {
+  personaId: string
+  domain: string
+  existingTypes: string[]
+  targetCategory: OntologyCategory
+  maxSuggestions?: number
+}
+
+/**
+ * Response from ontology augmentation API.
+ */
+export interface AugmentationResponse {
+  id: string
+  persona_id: string
+  target_category: OntologyCategory
+  suggestions: OntologySuggestion[]
+  reasoning: string
+}
+
+/**
  * API client configuration options.
  */
 export interface ApiClientConfig {
@@ -208,6 +246,33 @@ export class ApiClient {
       await this.client.delete(
         `/api/videos/${videoId}/summaries/${personaId}`
       )
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Request AI-generated ontology type suggestions.
+   *
+   * @param request - Augmentation parameters
+   * @returns Suggestions with confidence scores and reasoning
+   * @throws ApiError if request fails
+   */
+  async augmentOntology(
+    request: AugmentOntologyRequest
+  ): Promise<AugmentationResponse> {
+    try {
+      const response = await this.client.post<AugmentationResponse>(
+        '/api/ontology/augment',
+        {
+          persona_id: request.personaId,
+          domain: request.domain,
+          existing_types: request.existingTypes,
+          target_category: request.targetCategory,
+          max_suggestions: request.maxSuggestions,
+        }
+      )
+      return response.data
     } catch (error) {
       throw this.handleError(error)
     }
