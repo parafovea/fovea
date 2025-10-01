@@ -2,7 +2,7 @@
 Tests for OpenTelemetry observability integration.
 """
 
-from opentelemetry import trace, metrics
+from opentelemetry import metrics, trace
 
 
 def test_create_tracer():

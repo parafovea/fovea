@@ -5,7 +5,7 @@ Tests cover health check endpoint, root endpoint, CORS configuration,
 and application lifecycle management.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -56,7 +56,7 @@ def test_health_check_timestamp_is_recent(client):
     data = response.json()
 
     timestamp = datetime.fromisoformat(data["timestamp"])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Timestamp should be within 5 seconds of now
     time_diff = abs((now - timestamp).total_seconds())

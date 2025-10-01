@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.models import SummarizeResponse
+from src.models import OntologyType, SummarizeResponse
 
 client = TestClient(app)
 
@@ -21,6 +21,8 @@ client = TestClient(app)
 def mock_model_manager() -> Mock:
     """Mock the global model manager for all tests."""
     mock_manager = Mock()
+
+    # Video summarization task config
     mock_task_config = Mock()
     mock_task_config.selected = "llama-4-maverick"
     mock_model_config = Mock()
@@ -28,7 +30,30 @@ def mock_model_manager() -> Mock:
     mock_model_config.quantization = "4bit"
     mock_model_config.framework = "sglang"
     mock_task_config.get_selected_config.return_value = mock_model_config
-    mock_manager.tasks = {"video_summarization": mock_task_config}
+
+    # Object detection task config
+    mock_detection_task = Mock()
+    mock_detection_task.selected = "yolo-world-v2"
+    mock_detection_config = Mock()
+    mock_detection_config.model_id = "ultralytics/yolov8x-worldv2"
+    mock_detection_config.quantization = None
+    mock_detection_config.framework = "ultralytics"
+    mock_detection_task.get_selected_config.return_value = mock_detection_config
+
+    # Ontology augmentation task config
+    mock_augment_task = Mock()
+    mock_augment_task.selected = "llama-4-scout"
+    mock_augment_config = Mock()
+    mock_augment_config.model_id = "meta-llama/Llama-4-Scout"
+    mock_augment_config.quantization = "4bit"
+    mock_augment_config.framework = "sglang"
+    mock_augment_task.get_selected_config.return_value = mock_augment_config
+
+    mock_manager.tasks = {
+        "video_summarization": mock_task_config,
+        "object_detection": mock_detection_task,
+        "ontology_augmentation": mock_augment_task,
+    }
 
     with patch("src.routes._model_manager", mock_manager):
         yield mock_manager
@@ -176,8 +201,24 @@ class TestSummarizeEndpoint:
 class TestAugmentEndpoint:
     """Tests for /api/ontology/augment endpoint."""
 
-    def test_augment_ontology_success(self) -> None:
+    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    def test_augment_ontology_success(self, mock_augment: AsyncMock) -> None:
         """Test successful ontology augmentation request."""
+        mock_augment.return_value = [
+            OntologyType(
+                name="Reptile",
+                description="Cold-blooded vertebrate animal",
+                confidence=0.92,
+                examples=["Snake", "Lizard"],
+            ),
+            OntologyType(
+                name="Amphibian",
+                description="Animal that lives both on land and in water",
+                confidence=0.88,
+                examples=["Frog", "Salamander"],
+            ),
+        ]
+
         response = client.post(
             "/api/ontology/augment",
             json={
@@ -200,8 +241,18 @@ class TestAugmentEndpoint:
         assert len(data["suggestions"]) <= 5
         assert "reasoning" in data
 
-    def test_augment_ontology_event_category(self) -> None:
+    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    def test_augment_ontology_event_category(self, mock_augment: AsyncMock) -> None:
         """Test augmentation for event category."""
+        mock_augment.return_value = [
+            OntologyType(
+                name="Goal",
+                description="Scoring event in a game",
+                confidence=0.95,
+                examples=["Soccer goal", "Hockey goal"],
+            ),
+        ]
+
         response = client.post(
             "/api/ontology/augment",
             json={
@@ -228,8 +279,21 @@ class TestAugmentEndpoint:
 
         assert response.status_code == 422
 
-    def test_augment_ontology_default_max_suggestions(self) -> None:
+    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    def test_augment_ontology_default_max_suggestions(
+        self, mock_augment: AsyncMock
+    ) -> None:
         """Test augmentation with default max_suggestions."""
+        mock_augment.return_value = [
+            OntologyType(
+                name=f"Type{i}",
+                description="Test description",
+                confidence=0.8,
+                examples=["ex1", "ex2"],
+            )
+            for i in range(8)
+        ]
+
         response = client.post(
             "/api/ontology/augment",
             json={
@@ -243,8 +307,20 @@ class TestAugmentEndpoint:
         data = response.json()
         assert len(data["suggestions"]) <= 10
 
-    def test_augment_response_suggestion_structure(self) -> None:
+    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    def test_augment_response_suggestion_structure(
+        self, mock_augment: AsyncMock
+    ) -> None:
         """Test that suggestions have correct structure."""
+        mock_augment.return_value = [
+            OntologyType(
+                name="Infrastructure",
+                description="Built environment",
+                confidence=0.9,
+                examples=["Bridge", "Road"],
+            ),
+        ]
+
         response = client.post(
             "/api/ontology/augment",
             json={
@@ -266,12 +342,33 @@ class TestAugmentEndpoint:
 
 
 class TestDetectionEndpoint:
-    """Tests for /api/detection/process endpoint."""
+    """Tests for /api/detection/detect endpoint."""
 
-    def test_process_detection_success(self) -> None:
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_process_detection_success(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
         """Test successful object detection request."""
+        mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+
+        # Mock video capture
+        import numpy as np
+
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0  # FPS and frame count
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        # Mock detection loader
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_create_loader.return_value = mock_loader
+
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-123",
                 "query": "person wearing red shirt",
@@ -291,10 +388,28 @@ class TestDetectionEndpoint:
         assert "total_detections" in data
         assert "processing_time" in data
 
-    def test_process_detection_specific_frames(self) -> None:
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_process_detection_specific_frames(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
         """Test detection on specific frames."""
+        mock_get_video.return_value = Path("/videos/test-video-456.mp4")
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        import numpy as np
+
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_create_loader.return_value = mock_loader
+
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-456",
                 "query": "vehicle",
@@ -306,10 +421,28 @@ class TestDetectionEndpoint:
         data = response.json()
         assert data["video_id"] == "test-video-456"
 
-    def test_process_detection_no_tracking(self) -> None:
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_process_detection_no_tracking(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
         """Test detection without tracking enabled."""
+        mock_get_video.return_value = Path("/videos/test-video-789.mp4")
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        import numpy as np
+
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_create_loader.return_value = mock_loader
+
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-789",
                 "query": "animal",
@@ -324,7 +457,7 @@ class TestDetectionEndpoint:
     def test_process_detection_missing_query(self) -> None:
         """Test detection with missing query field."""
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-012",
             },
@@ -335,7 +468,7 @@ class TestDetectionEndpoint:
     def test_process_detection_invalid_confidence(self) -> None:
         """Test detection with invalid confidence threshold."""
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-345",
                 "query": "test",
@@ -345,10 +478,28 @@ class TestDetectionEndpoint:
 
         assert response.status_code == 422
 
-    def test_process_detection_response_structure(self) -> None:
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_process_detection_response_structure(
+        self, mock_get_video: Mock, mock_create_loader: Mock, mock_video_capture: Mock
+    ) -> None:
         """Test that response contains all expected fields."""
+        mock_get_video.return_value = Path("/videos/test-video-678.mp4")
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        import numpy as np
+
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_create_loader.return_value = mock_loader
+
         response = client.post(
-            "/api/detection/process",
+            "/api/detection/detect",
             json={
                 "video_id": "test-video-678",
                 "query": "test object",
@@ -397,7 +548,7 @@ class TestOpenAPIDocumentation:
 
         assert "/api/summarize" in paths
         assert "/api/ontology/augment" in paths
-        assert "/api/detection/process" in paths
+        assert "/api/detection/detect" in paths
 
     def test_docs_ui_available(self) -> None:
         """Test that Swagger UI is available."""

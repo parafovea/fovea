@@ -5,12 +5,11 @@ and end-to-end ontology augmentation across diverse domains.
 """
 
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.llm_loader import GenerationConfig, GenerationResult, LLMConfig, LLMFramework
+from src.llm_loader import GenerationResult, LLMConfig, LLMFramework
 from src.models import OntologyType
 from src.ontology_augmentation import (
     AugmentationContext,

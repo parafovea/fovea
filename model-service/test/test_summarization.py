@@ -3,14 +3,13 @@
 import tempfile
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import cv2
 import numpy as np
 import pytest
-from PIL import Image
 
-from src.models import KeyFrame, SummarizeRequest, SummarizeResponse
+from src.models import SummarizeRequest
 from src.summarization import (
     SummarizationError,
     get_default_prompt_template,

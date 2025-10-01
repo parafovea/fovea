@@ -6,8 +6,6 @@ Tests cover frame extraction, audio extraction, and video metadata reading.
 
 import os
 import subprocess
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cv2

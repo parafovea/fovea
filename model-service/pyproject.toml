@@ -21,11 +21,14 @@ dependencies = [
     "numpy==1.26.4",
     "pyyaml==6.0.1",
     "torch==2.5.1",
+    "torchvision>=0.20.1",
     "transformers>=4.47.0",
     "accelerate>=0.34.0",
     "pillow>=10.2.0",
     "sentencepiece>=0.1.99",
     "protobuf>=4.25.2",
+    "ultralytics>=8.3.0",
+    "supervision>=0.22.0",
 ]
 
 [project.optional-dependencies]
@@ -126,3 +129,7 @@ ignore_missing_imports = true
 module = ["transformers", "transformers.*"]
 follow_imports = "skip"
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*"]
+ignore_missing_imports = true

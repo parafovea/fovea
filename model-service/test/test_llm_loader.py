@@ -1,7 +1,7 @@
 """Tests for LLM loader with multi-model support and quantization."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 import torch

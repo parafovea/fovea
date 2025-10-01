@@ -9,6 +9,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, cast
 
+import torch
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
@@ -294,18 +295,19 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
 
 
 @router.post(
-    "/detection/process",
+    "/detection/detect",
     response_model=DetectionResponse,
     responses={
         400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
         500: {"model": ErrorResponse},
     },
-    summary="Detect and track objects in video",
-    description="Detects objects in video frames based on text query using Grounding DINO. "
-    "Optionally tracks detected objects across frames using SAM2 for temporal consistency.",
+    summary="Detect objects in video frames",
+    description="Detects objects in video frames based on text prompts using open-vocabulary detection models. "
+    "Supports YOLO-World v2.1, Grounding DINO 1.5, OWLv2, and Florence-2.",
 )
-async def process_detection(request: DetectionRequest) -> DetectionResponse:
-    """Detect and track objects in video using vision models.
+async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noqa: PLR0915
+    """Detect objects in video frames using open-vocabulary detection models.
 
     Parameters
     ----------
@@ -315,43 +317,156 @@ async def process_detection(request: DetectionRequest) -> DetectionResponse:
     Returns
     -------
     DetectionResponse
-        Detected objects with bounding boxes and tracking information.
+        Detected objects with bounding boxes and confidence scores.
 
     Raises
     ------
     HTTPException
         If video_id is invalid, or if processing fails.
     """
-    with tracer.start_as_current_span("process_detection") as span:
+    with tracer.start_as_current_span("detect_objects") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("query", request.query)
-        span.set_attribute("enable_tracking", request.enable_tracking)
+        span.set_attribute("confidence_threshold", request.confidence_threshold)
 
-        start_time = time.time()
+        from pathlib import Path as PathlibPath
 
-        # TODO: Implement actual detection and tracking
-        # For now, return a mock response
-        detection_id = str(uuid.uuid4())
+        import cv2
+        from PIL import Image
 
-        # Mock frame detections
-        frames = [
-            FrameDetections(
-                frame_number=0,
-                timestamp=0.0,
-                detections=[],
+        from .detection_loader import DetectionConfig, create_detection_loader
+        from .summarization import get_video_path_for_id
+
+        try:
+            video_path = get_video_path_for_id(request.video_id)
+            if video_path is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Video not found: {request.video_id}",
+                )
+
+            manager = get_model_manager()
+            task_config = manager.tasks.get("object_detection")
+            if task_config is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Object detection task not configured",
+                )
+
+            selected_model_config = task_config.get_selected_config()
+
+            from .detection_loader import DetectionFramework
+
+            framework_map = {
+                "pytorch": DetectionFramework.PYTORCH,
+                "ultralytics": DetectionFramework.ULTRALYTICS,
+                "transformers": DetectionFramework.TRANSFORMERS,
+            }
+            framework = framework_map.get(
+                selected_model_config.framework,
+                DetectionFramework.PYTORCH,
             )
-        ]
 
-        processing_time = time.time() - start_time
+            detection_config = DetectionConfig(
+                model_id=selected_model_config.model_id,
+                framework=framework,
+                confidence_threshold=request.confidence_threshold,
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                cache_dir=PathlibPath.home() / ".cache" / "huggingface",
+            )
 
-        return DetectionResponse(
-            id=detection_id,
-            video_id=request.video_id,
-            query=request.query,
-            frames=frames,
-            total_detections=0,
-            processing_time=processing_time,
-        )
+            loader = create_detection_loader(
+                task_config.selected, detection_config
+            )
+            loader.load()
+
+            cap = cv2.VideoCapture(str(video_path))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            frame_numbers = request.frame_numbers
+            if not frame_numbers:
+                frame_numbers = [0, total_frames // 2, total_frames - 1]
+
+            frame_results = []
+            total_detections = 0
+            start_time = time.time()
+
+            for frame_num in frame_numbers:
+                if frame_num >= total_frames:
+                    continue
+
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+                ret, frame = cap.read()
+
+                if not ret:
+                    continue
+
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(frame_rgb)
+
+                result = loader.detect(pil_image, request.query)
+
+                detections_list = []
+                for det in result.detections:
+                    from .models import BoundingBox as APIBoundingBox
+                    from .models import Detection as APIDetection
+
+                    api_bbox = APIBoundingBox(
+                        x=det.bbox.x1,
+                        y=det.bbox.y1,
+                        width=det.bbox.x2 - det.bbox.x1,
+                        height=det.bbox.y2 - det.bbox.y1,
+                    )
+
+                    api_detection = APIDetection(
+                        label=det.label,
+                        bounding_box=api_bbox,
+                        confidence=det.confidence,
+                        track_id=None,
+                    )
+
+                    detections_list.append(api_detection)
+
+                timestamp = frame_num / fps if fps > 0 else 0.0
+
+                frame_detections = FrameDetections(
+                    frame_number=frame_num,
+                    timestamp=timestamp,
+                    detections=detections_list,
+                )
+
+                frame_results.append(frame_detections)
+                total_detections += len(detections_list)
+
+            cap.release()
+            loader.unload()
+
+            processing_time = time.time() - start_time
+
+            detection_id = str(uuid.uuid4())
+
+            span.set_attribute("total_detections", total_detections)
+            span.set_attribute("frames_processed", len(frame_results))
+            span.set_attribute("processing_time", processing_time)
+
+            return DetectionResponse(
+                id=detection_id,
+                video_id=request.video_id,
+                query=request.query,
+                frames=frame_results,
+                total_detections=total_detections,
+                processing_time=processing_time,
+            )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in detection: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal server error: {e!s}",
+            ) from e
 
 
 @router.get(

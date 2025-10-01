@@ -15,7 +15,7 @@ from PIL import Image
 
 from .models import KeyFrame, SummarizeRequest, SummarizeResponse
 from .video_utils import extract_frames_uniform, get_video_info
-from .vlm_loader import InferenceFramework, QuantizationType, VLMConfig, create_vlm_loader
+from .vlm_loader import VLMConfig, create_vlm_loader
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
