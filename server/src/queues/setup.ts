@@ -1,5 +1,6 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Redis connection configuration for BullMQ.
@@ -43,11 +44,18 @@ queueEvents.on('failed', ({ jobId, failedReason }) => {
 });
 
 /**
+ * Prisma client instance for database operations within workers.
+ */
+const prisma = new PrismaClient();
+
+/**
  * Job data structure for video summarization tasks.
  */
 export interface VideoSummarizationJobData {
   videoId: string;
   personaId: string;
+  frameSampleRate?: number;
+  maxFrames?: number;
 }
 
 /**
@@ -69,32 +77,77 @@ export interface VideoSummarizationResult {
 
 /**
  * Worker for processing video summarization jobs.
- * Calls the model service API to generate video summaries using vision language models.
+ * Calls the model service API to generate video summaries using vision language models,
+ * then saves the results to Prisma database.
  */
 export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizationResult>(
   'video-summarization',
   async (job): Promise<VideoSummarizationResult> => {
-    const { videoId, personaId } = job.data;
+    const { videoId, personaId, frameSampleRate = 1, maxFrames = 30 } = job.data;
 
     await job.updateProgress(10);
 
-    const response = await fetch(`${process.env.MODEL_SERVICE_URL}/api/summarize`, {
+    const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
+    const response = await fetch(`${modelServiceUrl}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoId, personaId }),
+      body: JSON.stringify({
+        video_id: videoId,
+        persona_id: personaId,
+        frame_sample_rate: frameSampleRate,
+        max_frames: maxFrames,
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Model service error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Model service error (${response.status}): ${errorText}`);
     }
 
-    await job.updateProgress(90);
+    await job.updateProgress(50);
 
-    const summary = await response.json() as VideoSummarizationResult;
+    const modelResponse = await response.json();
+
+    await job.updateProgress(70);
+
+    const savedSummary = await prisma.videoSummary.upsert({
+      where: {
+        videoId_personaId: {
+          videoId,
+          personaId,
+        },
+      },
+      update: {
+        summary: modelResponse.summary,
+        visualAnalysis: modelResponse.visual_analysis,
+        audioTranscript: modelResponse.audio_transcript,
+        keyFrames: modelResponse.key_frames,
+        confidence: modelResponse.confidence,
+        updatedAt: new Date(),
+      },
+      create: {
+        videoId,
+        personaId,
+        summary: modelResponse.summary,
+        visualAnalysis: modelResponse.visual_analysis,
+        audioTranscript: modelResponse.audio_transcript,
+        keyFrames: modelResponse.key_frames,
+        confidence: modelResponse.confidence,
+      },
+    });
 
     await job.updateProgress(100);
 
-    return summary;
+    return {
+      summaryId: savedSummary.id,
+      videoId: savedSummary.videoId,
+      personaId: savedSummary.personaId,
+      summary: savedSummary.summary,
+      visualAnalysis: savedSummary.visualAnalysis || undefined,
+      audioTranscript: savedSummary.audioTranscript || undefined,
+      keyFrames: savedSummary.keyFrames as any,
+      confidence: savedSummary.confidence || undefined,
+    };
   },
   {
     connection,
@@ -108,11 +161,12 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
 
 /**
  * Graceful shutdown handler for queue connections.
- * Closes workers and queue events cleanly.
+ * Closes workers, queue events, and Prisma client cleanly.
  */
 export async function closeQueues(): Promise<void> {
   await videoWorker.close();
   await queueEvents.close();
   await videoSummarizationQueue.close();
   await connection.quit();
+  await prisma.$disconnect();
 }
