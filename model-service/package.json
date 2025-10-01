@@ -1,0 +1,22 @@
+{
+  "name": "fovea-model-service",
+  "version": "1.0.0",
+  "description": "AI model inference service for video annotation",
+  "scripts": {
+    "dev": "source venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
+    "start": "source venv/bin/activate && uvicorn src.main:app --host 0.0.0.0 --port 8000",
+    "test": "source venv/bin/activate && pytest",
+    "test:watch": "source venv/bin/activate && pytest --watch",
+    "test:cov": "source venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term",
+    "lint": "source venv/bin/activate && ruff check .",
+    "lint:fix": "source venv/bin/activate && ruff check . --fix",
+    "type-check": "source venv/bin/activate && mypy src/"
+  },
+  "keywords": [
+    "fastapi",
+    "ai",
+    "video-annotation"
+  ],
+  "author": "",
+  "license": "ISC"
+}
