@@ -47,16 +47,15 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 
 1. **Use minimal/recommended modes locally** (works on all platforms):
    ```bash
-   export MODEL_DEVICE=cpu MODEL_BUILD_MODE=recommended
-   docker compose build model-service
+   MODEL_BUILD_MODE=recommended docker compose build model-service
+   docker compose up -d
    ```
 
 2. **Test on cloud GPU instances** (AWS p3.2xlarge, Azure NC6, GCP T4):
    ```bash
    # On GPU instance
-   export MODEL_DEVICE=gpu MODEL_BUILD_MODE=full
-   docker compose build model-service
-   docker compose up -d model-service
+   docker compose --profile gpu build
+   docker compose --profile gpu up -d
    ```
 
 3. **Verify Dockerfile syntax only** (limited validation):
@@ -69,6 +68,10 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 
 ## Quick Start
 
+### Local Development (CPU)
+
+For development on machines without GPUs (default):
+
 1. **Clone the repository** (if not already done):
    ```bash
    cd /path/to/fovea
@@ -80,10 +83,25 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
    # Edit .env with your preferred settings
    ```
 
-3. **Start all services**:
+3. **Start all services with CPU mode** (default):
    ```bash
    docker compose up -d
    ```
+
+The CPU model service runs by default with no additional flags needed.
+
+### Production Deployment (GPU)
+
+For production on servers with NVIDIA GPUs:
+
+1. **Ensure GPU prerequisites are met** (see [GPU Setup](#gpu-setup-required-for-model-service))
+
+2. **Start services with GPU profile**:
+   ```bash
+   docker compose --profile gpu up -d
+   ```
+
+This activates the `model-service-gpu` variant with NVIDIA GPU support.
 
 4. **Check service health**:
    ```bash
@@ -126,6 +144,42 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 
 - `fovea-network`: Internal bridge network for service communication
 
+## Docker Compose Profiles
+
+The project uses **Docker Compose profiles** to support both CPU and GPU deployments from a single configuration file.
+
+### Profile Structure
+
+| Profile | Service Name | Purpose | Activation |
+|---------|-------------|---------|------------|
+| *(default)* | `model-service` | CPU-only inference | Runs by default |
+| `cpu` | `model-service` | CPU-only inference (explicit) | `--profile cpu` |
+| `gpu` | `model-service-gpu` | GPU-accelerated inference | `--profile gpu` |
+
+### How It Works
+
+**CPU Development (default)**:
+```bash
+docker compose up -d  # Starts model-service (CPU)
+```
+
+**CPU Development (explicit)**:
+```bash
+docker compose --profile cpu up -d  # Same as default
+```
+
+**GPU Production**:
+```bash
+docker compose --profile gpu up -d  # Starts model-service-gpu instead
+```
+
+### Profile Benefits
+
+- ✅ **Single configuration file**: No need for multiple compose files
+- ✅ **Explicit intent**: `--profile gpu` clearly indicates GPU mode
+- ✅ **No conflicts**: CPU and GPU services can't run simultaneously
+- ✅ **Modern standard**: Uses Docker Compose profiles feature (v1.28+)
+
 ## Configuration
 
 ### Environment Variables
@@ -162,13 +216,15 @@ The model service supports three build modes to balance features and build time:
 
 **Using Docker Compose** (recommended):
 ```bash
-# Set environment variables
-export MODEL_DEVICE=cpu
-export MODEL_BUILD_MODE=minimal
-
-# Build and start
-docker compose build model-service
+# CPU mode (default)
 docker compose up -d
+
+# CPU mode with recommended build
+MODEL_BUILD_MODE=recommended docker compose build model-service
+docker compose up -d
+
+# GPU mode with full build (default for GPU profile)
+docker compose --profile gpu up -d
 ```
 
 **Using Docker directly**:
@@ -226,8 +282,11 @@ models:
 
 ### Start Services
 ```bash
-# Start all services
+# Start all services (CPU mode, default)
 docker compose up -d
+
+# Start with GPU profile
+docker compose --profile gpu up -d
 
 # Start specific services
 docker compose up -d frontend backend postgres redis
@@ -238,11 +297,28 @@ docker compose up
 
 ### Stop Services
 ```bash
-# Stop all services
+# Stop all services (works for any profile)
 docker compose down
+
+# Stop GPU services specifically
+docker compose --profile gpu down
 
 # Stop and remove volumes (WARNING: deletes data)
 docker compose down -v
+```
+
+### Switch Between CPU and GPU
+```bash
+# Switch from CPU to GPU
+docker compose down
+docker compose --profile gpu up -d
+
+# Switch from GPU to CPU
+docker compose --profile gpu down
+docker compose up -d
+
+# View which services are running
+docker compose ps
 ```
 
 ### View Logs
@@ -343,16 +419,27 @@ Traces are collected via otel-collector on ports 4317 (gRPC) and 4318 (HTTP).
 
 ### GPU Not Detected
 
+First, ensure you're using the GPU profile:
+
 ```bash
+# Are you using the GPU profile?
+docker compose --profile gpu ps
+
 # Verify nvidia-smi works in container
-docker compose exec model-service nvidia-smi
+docker compose exec model-service-gpu nvidia-smi
 
 # Check CUDA_VISIBLE_DEVICES
-docker compose exec model-service env | grep CUDA
+docker compose exec model-service-gpu env | grep CUDA
 
-# Check GPU allocation
-docker compose exec model-service python -c "import torch; print(torch.cuda.is_available())"
+# Check GPU allocation in PyTorch
+docker compose exec model-service-gpu python -c "import torch; print(torch.cuda.is_available())"
 ```
+
+If GPUs still aren't detected:
+1. Verify NVIDIA Container Toolkit is installed: `nvidia-ctk --version`
+2. Check Docker can access GPUs: `docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi`
+3. Restart Docker daemon: `sudo systemctl restart docker`
+4. Ensure you started with `--profile gpu` flag
 
 ### Out of Memory (OOM)
 

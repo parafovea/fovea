@@ -26,22 +26,27 @@ A web-based tool for developing annotation ontologies for video data with AI-sup
 
 ### Quick Start with Docker Compose (Recommended)
 
-1. Start all services:
+1. **CPU Mode (Default)** - For local development:
 ```bash
 docker compose up
 ```
 
-2. Open your browser and navigate to: http://localhost:3000
+2. **GPU Mode** - For production with NVIDIA GPUs:
+```bash
+docker compose --profile gpu up
+```
+
+3. Open your browser and navigate to: http://localhost:3000
 
 The Docker Compose setup includes:
 - Frontend (port 3000)
 - Backend API (port 3001)
-- Model Service with AI capabilities (port 8000)
+- Model Service with AI capabilities (port 8000) - CPU or GPU variant
 - PostgreSQL database (port 5432)
 - Redis queue (port 6379)
 - OpenTelemetry Collector, Prometheus, and Grafana for observability
 
-**Note**: The model service supports different build modes (`minimal`, `recommended`, `full`) for balancing features and build time. The default `minimal` mode works on CPU. See [DEPLOYMENT.md](DEPLOYMENT.md) for details on GPU support and build modes.
+**Note**: The project uses Docker Compose profiles for CPU/GPU deployment. CPU mode (default) runs the model service with minimal dependencies. GPU mode (`--profile gpu`) enables NVIDIA GPU support with full inference engines. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed configuration options.
 
 ### Manual Development Setup
 

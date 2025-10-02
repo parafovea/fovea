@@ -3,11 +3,14 @@
 ## Setup
 
 ```bash
-# Copy environment template
+# Copy environment template (optional)
 cp .env.example .env
 
-# Start all services
+# Start all services (CPU mode, default)
 docker compose up -d
+
+# Start with GPU support
+docker compose --profile gpu up -d
 
 # Start with logs
 docker compose up
@@ -41,22 +44,38 @@ docker compose build backend
 docker compose up -d --build backend
 ```
 
-## Model Service Build Modes
+## CPU vs GPU Profiles
 
-The model service supports different build configurations via environment variables:
+The project uses Docker Compose profiles to manage CPU and GPU deployments:
 
 ```bash
-# Minimal (default) - Fast build, basic features
-export MODEL_DEVICE=cpu MODEL_BUILD_MODE=minimal
-docker compose build model-service
+# CPU mode (default) - For local development
+docker compose up -d                    # Starts model-service (CPU)
 
-# Recommended - Includes quantization support
-export MODEL_DEVICE=cpu MODEL_BUILD_MODE=recommended
-docker compose build model-service
+# GPU mode - For production with NVIDIA GPUs
+docker compose --profile gpu up -d      # Starts model-service-gpu
 
-# Full - All inference engines (GPU only)
-export MODEL_DEVICE=gpu MODEL_BUILD_MODE=full
-docker compose build model-service
+# View which services will start
+docker compose config --services        # Shows default services
+docker compose --profile gpu config --services  # Shows GPU services
+```
+
+### Model Service Variants
+
+| Profile | Service Name | Build Mode | Device | Best For |
+|---------|-------------|------------|--------|----------|
+| *(default)* | `model-service` | minimal | CPU | Local development |
+| `cpu` | `model-service` | minimal | CPU | Explicit CPU mode |
+| `gpu` | `model-service-gpu` | full | GPU | Production with GPUs |
+
+### Customizing Build Mode
+
+```bash
+# Build CPU service with recommended mode
+MODEL_BUILD_MODE=recommended docker compose build model-service
+
+# Build GPU service with custom mode
+MODEL_BUILD_MODE=recommended docker compose --profile gpu build model-service-gpu
 ```
 
 ### Build Mode Comparison
@@ -67,16 +86,23 @@ docker compose build model-service
 | **recommended** | ~1-2 min | ~3-4GB | minimal + bitsandbytes (quantization) |
 | **full** | ~10-15 min | ~8-10GB | recommended + vLLM, SGLang, SAM-2 (GPU only) |
 
-**Note**: The `full` build mode requires `DEVICE=gpu` and will fail on CPU/ARM64 systems.
+**Note**: The `full` build mode requires GPU and will fail on CPU/ARM64 systems.
 
 ## Development Mode
 
-```bash
-# Use development compose override
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+The default mode is optimized for local CPU development. For custom overrides:
 
-# Or set environment variable
-export COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+```bash
+# Create a local override file (gitignored)
+cat > docker-compose.override.yml <<EOF
+services:
+  backend:
+    command: npm run dev  # Hot reload
+    volumes:
+      - ./server/src:/app/src
+EOF
+
+# Docker Compose automatically loads docker-compose.override.yml
 docker compose up
 ```
 
@@ -103,16 +129,19 @@ cat backup.sql | docker compose exec -T postgres psql -U fovea fovea
 docker compose exec backend sh
 docker compose exec model-service bash
 
+# For GPU service
+docker compose exec model-service-gpu bash
+
 # Check environment
 docker compose exec backend env
-docker compose exec model-service env | grep CUDA
+docker compose exec model-service-gpu env | grep CUDA
 
-# Test GPU access
-docker compose exec model-service nvidia-smi
+# Test GPU access (requires --profile gpu)
+docker compose exec model-service-gpu nvidia-smi
 
 # Check health
-curl http://localhost:3001/health
-curl http://localhost:8000/health
+curl http://localhost:3001/health  # Backend
+curl http://localhost:8000/health  # Model service (CPU or GPU)
 ```
 
 ## Monitoring
@@ -163,12 +192,12 @@ docker compose up -d --scale frontend=3
 
 Key variables to configure in `.env`:
 
-- `MODEL_DEVICE`: Hardware target - `cpu` (default) or `gpu`
 - `MODEL_BUILD_MODE`: Feature set - `minimal` (default), `recommended`, or `full`
-- `CUDA_VISIBLE_DEVICES`: GPU indices (e.g., "0,1,2,3")
+  - **Note**: CPU/GPU is controlled by profiles (`--profile gpu`), not env vars
+- `CUDA_VISIBLE_DEVICES`: GPU indices when using `--profile gpu` (e.g., "0,1,2,3")
 - `POSTGRES_PASSWORD`: Database password (change for production!)
 - `GF_SECURITY_ADMIN_PASSWORD`: Grafana password (change for production!)
-- `MODEL_CONFIG_PATH`: Path to models.yaml
+- `MODEL_CONFIG_PATH`: Path to models.yaml configuration
 
 ## Service Ports
 
@@ -187,7 +216,7 @@ Key variables to configure in `.env`:
 ## File Locations
 
 - **Compose file**: `docker-compose.yml`
-- **Development override**: `docker-compose.dev.yml`
+- **Local overrides**: `docker-compose.override.yml` (gitignored, create if needed)
 - **Environment**: `.env`
 - **Dockerfiles**: `*/Dockerfile`
 - **Config**: `otel-collector-config.yaml`, `prometheus.yml`, `model-service/config/models.yaml`

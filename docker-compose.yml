@@ -45,34 +45,27 @@ services:
       - fovea-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  model-service:
+  # Model service base configuration (used by both CPU and GPU variants)
+  # Use YAML anchor for shared config
+  model-service: &model-service-base
     build:
       context: ./model-service
       dockerfile: Dockerfile
       args:
-        BUILD_MODE: ${MODEL_BUILD_MODE:-minimal}  # minimal, recommended, or full
-        DEVICE: ${MODEL_DEVICE:-cpu}  # cpu (local dev) or gpu (production)
+        BUILD_MODE: ${MODEL_BUILD_MODE:-minimal}
+        DEVICE: cpu
     ports:
       - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all  # Use all available GPUs for single-server deployment
-              capabilities: [gpu]
     environment:
       - TRANSFORMERS_CACHE=/models
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - MODEL_CONFIG_PATH=/config/models.yaml
-      - CUDA_VISIBLE_DEVICES=0,1,2,3  # Adjust based on available GPUs
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512  # Optimize memory allocation
     volumes:
       - model-cache:/models
       - video-data:/videos
@@ -86,6 +79,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    profiles: ["cpu", ""]  # Active by default (empty profile) and with --profile cpu
+
+  # GPU variant of model service (activated with --profile gpu)
+  model-service-gpu:
+    <<: *model-service-base
+    build:
+      context: ./model-service
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: ${MODEL_BUILD_MODE:-full}
+        DEVICE: gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - TRANSFORMERS_CACHE=/models
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - MODEL_CONFIG_PATH=/config/models.yaml
+      - CUDA_VISIBLE_DEVICES=0,1,2,3
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    profiles: ["gpu"]
 
   postgres:
     image: pgvector/pgvector:pg16
