@@ -71,5 +71,5 @@ vitest.config.ts
 # Data (mounted as volume)
 /data
 
-# Prisma migrations (keep schema, exclude migrations for Docker build)
-prisma/migrations
+# Prisma migrations are now included for database initialization
+# prisma/migrations

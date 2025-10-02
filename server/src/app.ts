@@ -143,6 +143,9 @@ export async function buildApp() {
   })
 
   // Register routes
+  const ontologyRoute = await import('./routes/ontology.js')
+  await app.register(ontologyRoute.default)
+
   const personasRoute = await import('./routes/personas.js')
   await app.register(personasRoute.default)
 

@@ -56,6 +56,9 @@ COPY --link --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 COPY --link --from=builder /app/dist ./dist
 COPY --link --from=builder /app/package.json ./package.json
 
+# Copy Prisma schema and migrations for database setup
+COPY --link --from=builder /app/prisma ./prisma
+
 # Create data directory
 RUN mkdir -p /data
 
