@@ -45,8 +45,14 @@ vllm = [
 sam2 = [
     "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
 ]
-all = [
+recommended = [
     "bitsandbytes>=0.42.0",
+]
+inference-engines = [
+    "bitsandbytes>=0.42.0",
+    "sglang>=0.4.1",
+    "vllm>=0.6.3",
+    "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
 ]
 dev = [
     "pytest==8.0.0",

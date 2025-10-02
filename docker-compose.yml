@@ -55,6 +55,9 @@ services:
     build:
       context: ./model-service
       dockerfile: Dockerfile
+      args:
+        BUILD_MODE: ${MODEL_BUILD_MODE:-minimal}  # minimal, recommended, or full
+        DEVICE: ${MODEL_DEVICE:-cpu}  # cpu (local dev) or gpu (production)
     ports:
       - "8000:8000"
     deploy:

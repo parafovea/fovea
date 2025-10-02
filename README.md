@@ -41,6 +41,8 @@ The Docker Compose setup includes:
 - Redis queue (port 6379)
 - OpenTelemetry Collector, Prometheus, and Grafana for observability
 
+**Note**: The model service supports different build modes (`minimal`, `recommended`, `full`) for balancing features and build time. The default `minimal` mode works on CPU. See [DEPLOYMENT.md](DEPLOYMENT.md) for details on GPU support and build modes.
+
 ### Manual Development Setup
 
 For active development, you can run services individually:

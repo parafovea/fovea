@@ -37,6 +37,36 @@ Verify GPU access:
 docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 ```
 
+### Testing GPU Builds on macOS/CPU Systems
+
+⚠️ **Important**: The `full` build mode with `DEVICE=gpu` cannot be fully built or tested on macOS or CPU-only systems because:
+- macOS does not support NVIDIA CUDA (even with eGPUs)
+- vLLM and SGLang require NVIDIA GPUs and will fail to compile on CPU/ARM64
+
+**Options for testing GPU builds**:
+
+1. **Use minimal/recommended modes locally** (works on all platforms):
+   ```bash
+   export MODEL_DEVICE=cpu MODEL_BUILD_MODE=recommended
+   docker compose build model-service
+   ```
+
+2. **Test on cloud GPU instances** (AWS p3.2xlarge, Azure NC6, GCP T4):
+   ```bash
+   # On GPU instance
+   export MODEL_DEVICE=gpu MODEL_BUILD_MODE=full
+   docker compose build model-service
+   docker compose up -d model-service
+   ```
+
+3. **Verify Dockerfile syntax only** (limited validation):
+   ```bash
+   docker buildx build --platform linux/amd64 \
+     --build-arg DEVICE=gpu --build-arg BUILD_MODE=full \
+     model-service/
+   # May fail during vLLM compilation without actual GPU
+   ```
+
 ## Quick Start
 
 1. **Clone the repository** (if not already done):
@@ -115,6 +145,66 @@ PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 # Security
 GF_SECURITY_ADMIN_PASSWORD=admin  # Change in production!
 ```
+
+### Model Service Build Configuration
+
+The model service supports three build modes to balance features and build time:
+
+#### Build Modes
+
+| Mode | Device | Build Time | Image Size | Features | Use Case |
+|------|--------|-----------|-----------|----------|----------|
+| **minimal** | CPU/GPU | ~1-2 min | ~3-4GB | PyTorch, Transformers, Ultralytics, FastAPI | Local development, CI/CD |
+| **recommended** | CPU/GPU | ~1-2 min | ~3-4GB | minimal + bitsandbytes quantization | Development with model optimization |
+| **full** | GPU only | ~10-15 min | ~8-10GB | recommended + vLLM, SGLang, SAM-2 | Production GPU deployment |
+
+#### Setting Build Mode
+
+**Using Docker Compose** (recommended):
+```bash
+# Set environment variables
+export MODEL_DEVICE=cpu
+export MODEL_BUILD_MODE=minimal
+
+# Build and start
+docker compose build model-service
+docker compose up -d
+```
+
+**Using Docker directly**:
+```bash
+# Minimal (default)
+docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=minimal model-service/
+
+# Recommended
+docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=recommended model-service/
+
+# Full (GPU required)
+docker build --build-arg DEVICE=gpu --build-arg BUILD_MODE=full model-service/
+```
+
+#### Build Mode Details
+
+**minimal**: Fast iteration for development
+- ✅ Video summarization (Transformers)
+- ✅ Object detection (Ultralytics/YOLO)
+- ✅ Basic inference
+- ❌ Advanced quantization
+- ❌ High-performance inference engines
+
+**recommended**: Development with optimization
+- ✅ All minimal features
+- ✅ bitsandbytes for 4-bit/8-bit quantization
+- ✅ Reduced VRAM usage
+- ❌ vLLM/SGLang inference engines
+
+**full**: Production deployment
+- ✅ All recommended features
+- ✅ vLLM for high-throughput LLM serving
+- ✅ SGLang for structured generation
+- ✅ SAM-2 for video segmentation
+- ⚠️ Requires NVIDIA GPU with CUDA
+- ⚠️ Will not build on CPU/ARM64 (macOS)
 
 ### Model Configuration
 

@@ -41,6 +41,34 @@ docker compose build backend
 docker compose up -d --build backend
 ```
 
+## Model Service Build Modes
+
+The model service supports different build configurations via environment variables:
+
+```bash
+# Minimal (default) - Fast build, basic features
+export MODEL_DEVICE=cpu MODEL_BUILD_MODE=minimal
+docker compose build model-service
+
+# Recommended - Includes quantization support
+export MODEL_DEVICE=cpu MODEL_BUILD_MODE=recommended
+docker compose build model-service
+
+# Full - All inference engines (GPU only)
+export MODEL_DEVICE=gpu MODEL_BUILD_MODE=full
+docker compose build model-service
+```
+
+### Build Mode Comparison
+
+| Mode | Build Time | Size | Includes |
+|------|-----------|------|----------|
+| **minimal** | ~1-2 min | ~3-4GB | PyTorch, Transformers, Ultralytics, FastAPI |
+| **recommended** | ~1-2 min | ~3-4GB | minimal + bitsandbytes (quantization) |
+| **full** | ~10-15 min | ~8-10GB | recommended + vLLM, SGLang, SAM-2 (GPU only) |
+
+**Note**: The `full` build mode requires `DEVICE=gpu` and will fail on CPU/ARM64 systems.
+
 ## Development Mode
 
 ```bash
@@ -135,6 +163,8 @@ docker compose up -d --scale frontend=3
 
 Key variables to configure in `.env`:
 
+- `MODEL_DEVICE`: Hardware target - `cpu` (default) or `gpu`
+- `MODEL_BUILD_MODE`: Feature set - `minimal` (default), `recommended`, or `full`
 - `CUDA_VISIBLE_DEVICES`: GPU indices (e.g., "0,1,2,3")
 - `POSTGRES_PASSWORD`: Database password (change for production!)
 - `GF_SECURITY_ADMIN_PASSWORD`: Grafana password (change for production!)
