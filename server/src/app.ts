@@ -10,6 +10,7 @@ import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, closeQueues } from './queues/setup.js'
+import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -108,6 +109,32 @@ export async function buildApp() {
 
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)
+
+  // Metrics collection hooks
+  app.addHook('onRequest', async (request, _reply) => {
+    // Store start time for duration calculation
+    request.requestStartTime = Date.now()
+  })
+
+  app.addHook('onResponse', async (request, reply) => {
+    // Record API request metrics
+    const duration = Date.now() - (request.requestStartTime || Date.now())
+    const route = request.routeOptions.url || request.url
+    const method = request.method
+    const statusCode = reply.statusCode
+
+    apiRequestCounter.add(1, {
+      method,
+      route,
+      status: statusCode
+    })
+
+    apiRequestDuration.record(duration, {
+      method,
+      route,
+      status: statusCode
+    })
+  })
 
   // Graceful shutdown - disconnect Prisma and close queues
   app.addHook('onClose', async (instance) => {

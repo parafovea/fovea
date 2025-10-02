@@ -146,11 +146,15 @@ curl http://localhost:8000/health  # Model service (CPU or GPU)
 
 ## Monitoring
 
-- **Grafana**: http://localhost:3002 (admin/admin)
-- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3002 (admin/admin) - Visualization dashboards
+- **Prometheus**: http://localhost:9090 - Metrics storage and queries
+- **Bull Board**: http://localhost:3001/admin/queues - Job queue monitoring
+- **OTEL Metrics**: http://localhost:8889/metrics - Raw metrics endpoint
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001
 - **Model Service**: http://localhost:8000/docs (Swagger UI)
+
+**For detailed metrics, dashboards, and troubleshooting**, see [OBSERVABILITY.md](OBSERVABILITY.md).
 
 ## Troubleshooting
 
@@ -205,13 +209,15 @@ Key variables to configure in `.env`:
 |---------|------|-----|
 | Frontend | 3000 | http://localhost:3000 |
 | Backend | 3001 | http://localhost:3001 |
+| Backend (Bull Board) | 3001 | http://localhost:3001/admin/queues |
 | Model Service | 8000 | http://localhost:8000 |
 | Postgres | 5432 | postgresql://localhost:5432 |
 | Redis | 6379 | redis://localhost:6379 |
+| OTEL Collector (gRPC) | 4317 | - |
+| OTEL Collector (HTTP) | 4318 | - |
+| OTEL Metrics | 8889 | http://localhost:8889/metrics |
 | Prometheus | 9090 | http://localhost:9090 |
 | Grafana | 3002 | http://localhost:3002 |
-| OTLP gRPC | 4317 | - |
-| OTLP HTTP | 4318 | - |
 
 ## File Locations
 
@@ -221,4 +227,4 @@ Key variables to configure in `.env`:
 - **Dockerfiles**: `*/Dockerfile`
 - **Config**: `otel-collector-config.yaml`, `prometheus.yml`, `model-service/config/models.yaml`
 - **Dashboards**: `grafana-dashboards/`
-- **Full guide**: `DEPLOYMENT.md`
+- **Documentation**: `DEPLOYMENT.md`, `OBSERVABILITY.md`, `DOCKER_DEPLOYMENT.md`

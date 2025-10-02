@@ -70,6 +70,3 @@ vitest.config.ts
 
 # Data (mounted as volume)
 /data
-
-# Prisma migrations are now included for database initialization
-# prisma/migrations

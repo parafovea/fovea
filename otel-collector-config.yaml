@@ -23,17 +23,12 @@ exporters:
   debug:
     verbosity: detailed
 
-  otlp/jaeger:
-    endpoint: jaeger:4317
-    tls:
-      insecure: true
-
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, otlp/jaeger]
+      exporters: [debug]
 
     metrics:
       receivers: [otlp]

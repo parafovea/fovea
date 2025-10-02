@@ -389,6 +389,8 @@ Health check intervals:
 
 ## Monitoring
 
+The application includes a comprehensive observability stack with OpenTelemetry, Prometheus, and Grafana.
+
 ### Grafana Dashboards
 
 1. Access Grafana at http://localhost:3002
@@ -399,14 +401,39 @@ Health check intervals:
 
 Access Prometheus at http://localhost:9090
 
-Key metrics:
-- Service health: `up{job="fovea"}`
-- Request latency: `http_request_duration_seconds`
-- Model inference time: `model_inference_duration_seconds`
+Available custom metrics (with `fovea_` prefix):
+- `fovea_api_requests_total` - API request counter by method/route/status
+- `fovea_api_request_duration_milliseconds` - Request latency histogram
+- `fovea_queue_job_submitted` - Queue job counter
+- `fovea_model_service_requests` - Model service request counter
+
+Auto-instrumented metrics:
+- `fovea_http_server_duration_milliseconds` - HTTP server request duration
+- `fovea_http_client_duration_milliseconds` - HTTP client request duration
 
 ### OpenTelemetry Traces
 
-Traces are collected via otel-collector on ports 4317 (gRPC) and 4318 (HTTP).
+Traces are collected via otel-collector on ports 4317 (gRPC) and 4318 (HTTP). All requests include trace context in logs for correlation.
+
+### Bull Board (Queue Monitoring)
+
+Access job queue monitoring at http://localhost:3001/admin/queues to view:
+- Video summarization job status
+- Job progress and completion rates
+- Failed jobs and error details
+- Queue metrics and statistics
+
+### Detailed Observability Guide
+
+For comprehensive information on:
+- Adding custom metrics
+- Creating Grafana dashboards
+- Distributed tracing
+- PromQL query examples
+- Production configuration
+- Troubleshooting metrics
+
+See **[OBSERVABILITY.md](OBSERVABILITY.md)**.
 
 ## Troubleshooting
 

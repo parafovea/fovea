@@ -1,3 +1,7 @@
+// Initialize OpenTelemetry tracing FIRST, before any other imports
+// This allows auto-instrumentation to hook into libraries as they load
+import './tracing.js'
+
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import fs from 'fs/promises'

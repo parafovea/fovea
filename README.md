@@ -181,7 +181,11 @@ mypy src/            # Type checking
 
 ### Observability
 
+The application includes a complete observability stack with distributed tracing, metrics collection, and monitoring dashboards.
+
 Access monitoring dashboards when running with Docker Compose:
 - **Grafana**: http://localhost:3002 (admin/admin)
 - **Prometheus**: http://localhost:9090
 - **Bull Board** (Queue monitoring): http://localhost:3001/admin/queues
+
+**For detailed information** on metrics, tracing, custom instrumentation, and dashboard creation, see [OBSERVABILITY.md](OBSERVABILITY.md).

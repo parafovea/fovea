@@ -4,7 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { FastifyInstance } from 'fastify'
+import { FastifyInstance, FastifyRequest } from 'fastify'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -18,5 +18,13 @@ declare module 'fastify' {
      * ```
      */
     prisma: PrismaClient
+  }
+
+  interface FastifyRequest {
+    /**
+     * Request start timestamp for metrics collection.
+     * Set by onRequest hook, used by onResponse hook to calculate duration.
+     */
+    requestStartTime?: number
   }
 }

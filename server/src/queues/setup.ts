@@ -1,6 +1,7 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { PrismaClient } from '@prisma/client';
+import { queueJobCounter, queueJobDuration, modelServiceCounter, modelServiceDuration } from '../metrics.js';
 
 /**
  * Response type from model service /api/summarize endpoint.
@@ -46,12 +47,28 @@ export const videoSummarizationQueue = new Queue('video-summarization', {
  */
 const queueEvents = new QueueEvents('video-summarization', { connection });
 
-queueEvents.on('completed', ({ jobId, returnvalue }) => {
+queueEvents.on('completed', async ({ jobId, returnvalue }) => {
   console.log(`Job ${jobId} completed with result:`, returnvalue);
+
+  // Get job details to calculate duration
+  const job = await videoSummarizationQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn ? job.finishedOn - (job.processedOn || job.timestamp) : 0;
+    queueJobCounter.add(1, { queue: 'video-summarization', status: 'completed' });
+    queueJobDuration.record(duration, { queue: 'video-summarization', status: 'completed' });
+  }
 });
 
-queueEvents.on('failed', ({ jobId, failedReason }) => {
+queueEvents.on('failed', async ({ jobId, failedReason }) => {
   console.error(`Job ${jobId} failed:`, failedReason);
+
+  // Get job details to calculate duration
+  const job = await videoSummarizationQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn ? job.finishedOn - (job.processedOn || job.timestamp) : 0;
+    queueJobCounter.add(1, { queue: 'video-summarization', status: 'failed' });
+    queueJobDuration.record(duration, { queue: 'video-summarization', status: 'failed' });
+  }
 });
 
 /**
@@ -98,7 +115,10 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
 
     await job.updateProgress(10);
 
+    // Call model service with metrics tracking
     const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
+    const modelStartTime = Date.now();
+
     const response = await fetch(`${modelServiceUrl}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,10 +130,18 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
       }),
     });
 
+    const modelDuration = Date.now() - modelStartTime;
+
     if (!response.ok) {
+      modelServiceCounter.add(1, { endpoint: '/api/summarize', status: response.status });
+      modelServiceDuration.record(modelDuration, { endpoint: '/api/summarize', status: response.status });
+
       const errorText = await response.text();
       throw new Error(`Model service error (${response.status}): ${errorText}`);
     }
+
+    modelServiceCounter.add(1, { endpoint: '/api/summarize', status: response.status });
+    modelServiceDuration.record(modelDuration, { endpoint: '/api/summarize', status: response.status });
 
     await job.updateProgress(50);
 

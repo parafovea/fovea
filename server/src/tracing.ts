@@ -29,14 +29,19 @@ function initializeOpenTelemetry(): NodeSDK {
     })
   );
 
+  // Build full OTLP endpoint URLs
+  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
+  const traceUrl = `${otlpEndpoint}/v1/traces`;
+  const metricUrl = `${otlpEndpoint}/v1/metrics`;
+
   const sdk = new NodeSDK({
     resource,
     traceExporter: new OTLPTraceExporter({
-      url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces'
+      url: traceUrl
     }),
     metricReader: new PeriodicExportingMetricReader({
       exporter: new OTLPMetricExporter({
-        url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/metrics'
+        url: metricUrl
       }),
       exportIntervalMillis: 60000
     }),
