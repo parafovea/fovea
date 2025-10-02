@@ -45,8 +45,6 @@ vllm = [
 ]
 all = [
     "bitsandbytes>=0.42.0",
-    "sglang>=0.4.1",
-    "vllm>=0.6.3",
 ]
 dev = [
     "pytest==8.0.0",
