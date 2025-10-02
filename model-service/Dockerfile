@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Multi-stage Dockerfile for fovea model service
 #
 # Build Arguments:
@@ -90,15 +91,17 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml ./
 
-# Install PyTorch based on device type (CPU or CUDA)
-RUN if [ "$DEVICE" = "cpu" ]; then \
+# Install PyTorch based on device type (CPU or CUDA) with pip cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "$DEVICE" = "cpu" ]; then \
         pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     else \
         pip install --no-cache-dir torch torchvision; \
     fi
 
-# Install dependencies based on BUILD_MODE
-RUN if [ "$BUILD_MODE" = "full" ]; then \
+# Install dependencies based on BUILD_MODE with pip cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "$BUILD_MODE" = "full" ]; then \
         pip install --no-cache-dir -e ".[inference-engines]"; \
     elif [ "$BUILD_MODE" = "recommended" ]; then \
         pip install --no-cache-dir -e ".[recommended]"; \
@@ -111,13 +114,13 @@ FROM base AS production
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder-base /usr/local/lib/python3.12 /usr/local/lib/python3.12
-COPY --from=builder-base /usr/local/bin /usr/local/bin
+# Copy installed packages from builder with link for better caching
+COPY --link --from=builder-base /usr/local/lib/python3.12 /usr/local/lib/python3.12
+COPY --link --from=builder-base /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY src ./src
-COPY config ./config
+# Copy application code with link
+COPY --link src ./src
+COPY --link config ./config
 
 # Create cache directories
 RUN mkdir -p /models /videos

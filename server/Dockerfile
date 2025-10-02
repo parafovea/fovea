@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Multi-stage Dockerfile for fovea server backend
 
 # Build stage
@@ -8,33 +9,52 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with cache mount for npm
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
-# Copy source code and config
-COPY . .
+# Copy Prisma schema first (if exists) for better layer caching
+COPY prisma ./prisma
 
-# Generate Prisma client (if schema exists)
+# Generate Prisma client
 RUN if [ -d "prisma" ]; then npx prisma generate; fi
+
+# Copy source code
+COPY . .
 
 # Build TypeScript
 RUN npm run build
+
+# Production dependencies stage
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies with cache mount
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev
+
+# Copy Prisma schema and generate client
+COPY --link prisma ./prisma
+RUN npx prisma generate
 
 # Production stage
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-RUN npm ci --omit=dev
+# Copy production dependencies from deps stage
+COPY --link --from=deps /app/node_modules ./node_modules
 
-# Copy Prisma schema and generate client
-COPY --from=builder /app/prisma ./prisma
-RUN npx prisma generate
+# Copy Prisma client from deps stage
+COPY --link --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy built application
-COPY --from=builder /app/dist ./dist
+COPY --link --from=builder /app/dist ./dist
+COPY --link --from=builder /app/package.json ./package.json
 
 # Create data directory
 RUN mkdir -p /data
@@ -46,5 +66,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
 
-# Start server
-CMD ["npm", "run", "start"]
+# Start server with node directly for better performance
+CMD ["node", "dist/index.js"]

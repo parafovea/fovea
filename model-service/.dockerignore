@@ -10,6 +10,7 @@ venv
 env
 ENV
 .venv
+.conda
 
 # Testing
 .pytest_cache
@@ -18,6 +19,7 @@ htmlcov
 *.cover
 .hypothesis
 .tox
+pytest.ini
 
 # Distribution / packaging
 build
@@ -34,47 +36,76 @@ dist
 *~
 
 # Environment
-.env
-.env.local
+.env*
+!.env.example
 
 # Jupyter
 .ipynb_checkpoints
 *.ipynb
+notebooks
 
 # Models and data (mounted as volumes)
 models
+weights
+checkpoints
 *.pth
 *.pt
 *.bin
 *.safetensors
 *.onnx
+*.h5
+*.pb
+*.ckpt
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Git
 .git
 .gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+.circleci
 
 # Documentation
 *.md
 !README.md
+docs
 
 # Tests
 test
 tests
+__tests__
 *_test.py
 test_*.py
 
 # Logs
 logs
 *.log
+wandb
 
-# MyPy
+# Type checking
 .mypy_cache
 .dmypy.json
 dmypy.json
+.pytype
 
-# Ruff
+# Linters
 .ruff_cache
+.pylint.d
+
+# IDEs
+*.iml
+.idea
+.vscode
