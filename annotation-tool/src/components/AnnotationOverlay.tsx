@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Box, Tooltip, Chip } from '@mui/material'
+import { Box } from '@mui/material'
 import { RootState, AppDispatch } from '../store/store'
 import { generateId } from '../utils/uuid'
 import { 
@@ -20,7 +20,6 @@ interface AnnotationOverlayProps {
 }
 
 export default function AnnotationOverlay({
-  videoElement,
   currentTime,
   videoWidth,
   videoHeight,
@@ -43,7 +42,7 @@ export default function AnnotationOverlay({
     const videoAnnotations = state.annotations.annotations[videoId || '']
     // Filter annotations by selected persona if one is selected and in type mode
     if (selectedPersonaId && videoAnnotations && annotationMode === 'type') {
-      return videoAnnotations.filter(a => a.personaId === selectedPersonaId)
+      return videoAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
     }
     return videoAnnotations || []
   })
@@ -53,7 +52,6 @@ export default function AnnotationOverlay({
   const events = useSelector((state: RootState) => state.world.events)
   const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
   const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
-  const personas = useSelector((state: RootState) => state.persona.personas)
 
 
   const getRelativeCoordinates = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -142,40 +140,42 @@ export default function AnnotationOverlay({
 
   // Get display info for annotations
   const annotationsWithInfo = useMemo(() => {
-    return annotations.filter(ann => 
-      ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
+    return annotations.filter(ann =>
+      ann.timeSpan && ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
     ).map(ann => {
       let displayInfo: any = { ...ann }
-      
-      // Get linked object info
-      if (ann.linkedEntityId) {
-        const entity = entities.find(e => e.id === ann.linkedEntityId)
-        if (entity) {
-          displayInfo.linkedObject = entity
-          displayInfo.linkedType = 'entity'
-        }
-      } else if (ann.linkedEventId) {
-        const event = events.find(e => e.id === ann.linkedEventId)
-        if (event) {
-          displayInfo.linkedObject = event
-          displayInfo.linkedType = 'event'
-        }
-      } else if (ann.linkedLocationId) {
-        const location = entities.find(e => e.id === ann.linkedLocationId && 'locationType' in e)
-        if (location) {
-          displayInfo.linkedObject = location
-          displayInfo.linkedType = 'location'
-        }
-      } else if (ann.linkedCollectionId) {
-        const collection = ann.linkedCollectionType === 'entity' 
-          ? entityCollections.find(c => c.id === ann.linkedCollectionId)
-          : eventCollections.find(c => c.id === ann.linkedCollectionId)
-        if (collection) {
-          displayInfo.linkedObject = collection
-          displayInfo.linkedType = `${ann.linkedCollectionType}-collection`
+
+      // Get linked object info (only for object annotations)
+      if (ann.annotationType === 'object') {
+        if (ann.linkedEntityId) {
+          const entity = entities.find(e => e.id === ann.linkedEntityId)
+          if (entity) {
+            displayInfo.linkedObject = entity
+            displayInfo.linkedType = 'entity'
+          }
+        } else if (ann.linkedEventId) {
+          const event = events.find(e => e.id === ann.linkedEventId)
+          if (event) {
+            displayInfo.linkedObject = event
+            displayInfo.linkedType = 'event'
+          }
+        } else if (ann.linkedLocationId) {
+          const location = entities.find(e => e.id === ann.linkedLocationId && 'locationType' in e)
+          if (location) {
+            displayInfo.linkedObject = location
+            displayInfo.linkedType = 'location'
+          }
+        } else if (ann.linkedCollectionId) {
+          const collection = ann.linkedCollectionType === 'entity'
+            ? entityCollections.find(c => c.id === ann.linkedCollectionId)
+            : eventCollections.find(c => c.id === ann.linkedCollectionId)
+          if (collection) {
+            displayInfo.linkedObject = collection
+            displayInfo.linkedType = `${ann.linkedCollectionType}-collection`
+          }
         }
       }
-      
+
       return displayInfo
     })
   }, [annotations, currentTime, entities, events, entityCollections, eventCollections])

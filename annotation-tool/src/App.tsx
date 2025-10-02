@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { Box } from '@mui/material'
 import { useDispatch } from 'react-redux'
 import { generateId } from './utils/uuid'
 import Layout from './components/Layout'
@@ -9,7 +8,6 @@ import AnnotationWorkspace from './components/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
 import { AppDispatch } from './store/store'
-import { setOntology, setLoading, setError } from './store/ontologySlice'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { api } from './services/api'
 
@@ -21,10 +19,9 @@ function App() {
   }, [])
 
   const loadOntology = async () => {
-    dispatch(setLoading(true))
     try {
       const ontology = await api.getOntology()
-      
+
       // Convert old format to new multi-persona format if needed
       if (ontology) {
         if (ontology.personas && ontology.personaOntologies) {
@@ -81,15 +78,9 @@ function App() {
           dispatch(setPersonaOntologies([defaultOntology]))
           dispatch(setActivePersona(defaultPersona.id))
         }
-        
-        // Keep old format for backward compatibility
-        dispatch(setOntology(ontology))
       }
     } catch (error) {
       console.error('Failed to load ontology:', error)
-      dispatch(setError('Failed to load ontology'))
-    } finally {
-      dispatch(setLoading(false))
     }
   }
 

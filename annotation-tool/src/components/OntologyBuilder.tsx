@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import React from 'react'
 import {
   Box,
   Tabs,
@@ -26,7 +25,6 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Person as PersonaIcon,
   VideoLibrary as VideoIcon,
   Category as TypeIcon,
   Inventory2 as ObjectIcon,
@@ -42,7 +40,6 @@ import EventTypeEditor from './EventTypeEditor'
 import PersonaManager from './PersonaManager'
 import RelationTypeEditor from './RelationTypeEditor'
 import { GlossRenderer } from './GlossRenderer'
-import { TypeObjectBadge } from './shared/TypeObjectToggle'
 import { WikidataChip } from './shared/WikidataChip'
 // Import world object editors
 import EntityEditor from './world/EntityEditor'
@@ -86,11 +83,10 @@ function TabPanel(props: TabPanelProps) {
 export default function OntologyBuilder() {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
-  const { activePersonaId, personaOntologies, personas } = useSelector((state: RootState) => state.persona)
+  const { personas, activePersonaId, personaOntologies } = useSelector((state: RootState) => state.persona)
   const { entities, events, times } = useSelector((state: RootState) => state.world)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
   const activeOntology = personaOntologies.find(o => o.personaId === activePersonaId)
-  const activePersona = personas.find(p => p.id === activePersonaId)
   
   const [mainView, setMainView] = useState<'types' | 'objects'>('types')
   const [tabValue, setTabValue] = useState(0)
@@ -117,7 +113,7 @@ export default function OntologyBuilder() {
   const [selectedTime, setSelectedTime] = useState(null)
   const [selectedLocation, setSelectedLocation] = useState(null)
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
   }
 
@@ -618,7 +614,7 @@ export default function OntologyBuilder() {
                             </Box>
                           }
                           secondary={
-                            entity.metadata?.alternateNames?.length > 0
+                            (entity.metadata?.alternateNames?.length ?? 0) > 0
                               ? `Also known as: ${entity.metadata.alternateNames?.join(', ') || ''}`
                               : undefined
                           }

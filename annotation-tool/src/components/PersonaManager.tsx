@@ -4,7 +4,6 @@ import {
   Box,
   Paper,
   Typography,
-  IconButton,
   Button,
   Menu,
   MenuItem,
@@ -15,17 +14,15 @@ import {
   TextField,
   Chip,
   Tooltip,
-  List,
-  ListItem,
   ListItemText,
   ListItemSecondaryAction,
   Divider,
+  IconButton,
 } from '@mui/material'
 import { generateId } from '../utils/uuid'
 import {
   PersonAdd as AddPersonaIcon,
   ContentCopy as CopyIcon,
-  ImportExport as ImportIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   ExpandMore as ExpandMoreIcon,
@@ -90,7 +87,7 @@ export default function PersonaManager() {
     const sourcePersona = personas.find(p => p.id === sourcePersonaId)
     if (sourcePersona) {
       const newPersona: Persona = {
-        id: `generateId()`,
+        id: generateId(),
         name: `${sourcePersona.name} (Copy)`,
         role: sourcePersona.role,
         informationNeed: sourcePersona.informationNeed,
@@ -106,7 +103,7 @@ export default function PersonaManager() {
 
   const handleSaveNew = () => {
     const newPersona: Persona = {
-      id: `generateId()`,
+      id: generateId(),
       name: formData.name,
       role: formData.role,
       informationNeed: formData.informationNeed,
@@ -116,7 +113,7 @@ export default function PersonaManager() {
     }
 
     const newOntology: PersonaOntology = {
-      id: `generateId()`,
+      id: generateId(),
       personaId: newPersona.id,
       entities: [],
       roles: [],
@@ -240,7 +237,7 @@ export default function PersonaManager() {
                 <Tooltip title="Copy persona">
                   <IconButton
                     size="small"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation()
                       handleCopyPersona(persona.id)
                     }}
@@ -251,7 +248,7 @@ export default function PersonaManager() {
                 <Tooltip title="Delete persona">
                   <IconButton
                     size="small"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation()
                       handleDeletePersona(persona.id)
                     }}

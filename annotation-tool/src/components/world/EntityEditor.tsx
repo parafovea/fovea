@@ -32,8 +32,8 @@ import {
   Language as WikidataIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { addEntity, updateEntity, addEntityTypeAssignment, removeEntityTypeAssignment } from '../../store/worldSlice'
-import { Entity, EntityTypeAssignment, GlossItem, EntityType } from '../../models/types'
+import { addEntity, updateEntity } from '../../store/worldSlice'
+import { Entity, EntityTypeAssignment, GlossItem } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '../WikidataSearch'

@@ -11,7 +11,7 @@ import {
 } from '@mui/material'
 import { AppDispatch } from '../store/store'
 import { addPersona, updatePersona } from '../store/personaSlice'
-import { Persona } from '../models/types'
+import { Persona, PersonaOntology } from '../models/types'
 import { generateId } from '../utils/uuid'
 
 interface PersonaEditorProps {
@@ -56,7 +56,18 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
     if (persona) {
       dispatch(updatePersona(personaData))
     } else {
-      dispatch(addPersona(personaData))
+      const newOntology: PersonaOntology = {
+        id: generateId(),
+        personaId: personaData.id,
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+        createdAt: now,
+        updatedAt: now,
+      }
+      dispatch(addPersona({ persona: personaData, ontology: newOntology }))
     }
     onClose()
   }

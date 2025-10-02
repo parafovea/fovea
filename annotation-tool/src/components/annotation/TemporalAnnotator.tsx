@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Paper,
@@ -14,7 +14,6 @@ import {
   Chip,
   Alert,
   IconButton,
-  Tooltip,
   FormControlLabel,
   Switch,
   Divider,
@@ -23,13 +22,12 @@ import {
   AccessTime as TimeIcon,
   Sync as SyncIcon,
   Movie as VideoIcon,
-  Warning as WarningIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material'
-import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../../store/store'
-import { Time, TimeInstant, TimeInterval } from '../../models/types'
+import { useDispatch } from 'react-redux'
+import { AppDispatch } from '../../store/store'
+import { Time } from '../../models/types'
 import { generateId } from '../../utils/uuid'
 import { addTime } from '../../store/worldSlice'
 

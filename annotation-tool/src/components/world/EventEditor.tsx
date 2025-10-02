@@ -13,8 +13,6 @@ import {
   Divider,
   List,
   ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   FormControl,
   InputLabel,
@@ -42,7 +40,7 @@ import {
   Edit as EditIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { addEvent, updateEvent, addEventInterpretation, removeEventInterpretation, addTime, addEntity } from '../../store/worldSlice'
+import { addEvent, updateEvent, addTime, addEntity } from '../../store/worldSlice'
 import { Event, EventInterpretation, GlossItem, Time, Location, TimeInstant, TimeInterval, LocationPoint, Entity } from '../../models/types'
 import { generateId } from '../../utils/uuid'
 import { getWikidataEntity, extractWikidataInfo } from '../../services/wikidataApi'
@@ -184,7 +182,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     let timeToUse = times.find(t => t.id === selectedTimeId)
     if (shouldImportTime && wikidataTemporalData && !hasImportedTime) {
       const td = wikidataTemporalData
-      let newTime: Omit<Time, 'id'>
+      let newTime: Omit<Time, 'id'> | null = null
       
       if (td.startTime && td.endTime) {
         // Create interval

@@ -20,10 +20,6 @@ import {
   Select,
   MenuItem,
   Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Divider,
 } from '@mui/material'
@@ -31,8 +27,6 @@ import {
   AccessTime as TimeIcon,
   Schedule as InstantIcon,
   DateRange as IntervalIcon,
-  QuestionMark as VagueIcon,
-  VideoLibrary as VideoIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
   Edit as EditIcon,
@@ -212,15 +206,10 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     if (time) {
       dispatch(updateTime({ ...time, ...timeData }))
     } else {
-      dispatch(addTime({ ...timeData, id: generateId() }))
+      dispatch(addTime({ ...timeData, id: generateId() } as Time))
     }
     
     onClose()
-  }
-
-  const getVideoName = (videoId: string): string => {
-    const video = Object.values(videos).find(v => v.id === videoId)
-    return video?.title || 'Unknown Video'
   }
 
   return (

@@ -24,7 +24,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Alert,
   Fab,
   Tooltip,
 } from '@mui/material'
@@ -33,11 +32,7 @@ import {
   Pause as PauseIcon,
   SkipNext as NextFrameIcon,
   SkipPrevious as PrevFrameIcon,
-  Category as EntityIcon,
-  AccountTree as RoleIcon,
-  Event as EventIcon,
   Delete as DeleteIcon,
-  Person as PersonIcon,
   Schedule as TimeIcon,
   ThumbUp as LikeIcon,
   Share as ShareIcon,
@@ -50,15 +45,13 @@ import 'video.js/dist/video-js.css'
 import './AnnotationWorkspace.css'
 import { RootState, AppDispatch } from '../store/store'
 import { setCurrentVideo, setLastAnnotation } from '../store/videoSlice'
-import { 
+import {
   setDrawingMode,
-  setSelectedType, 
-  selectAnnotation, 
-  deleteAnnotation, 
+  setSelectedType,
+  selectAnnotation,
+  deleteAnnotation,
   setSelectedPersona,
   setAnnotationMode,
-  setLinkTarget,
-  clearLinkTarget
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -86,13 +79,7 @@ export default function AnnotationWorkspace() {
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
-  const selectedPersona = personas.find(p => p.id === selectedPersonaId)
-  const personaOntology = useSelector((state: RootState) => 
-    state.persona.personaOntologies.find(o => o.personaId === selectedPersonaId) || null
-  )
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
-  const linkTargetId = useSelector((state: RootState) => state.annotations.linkTargetId)
-  const linkTargetType = useSelector((state: RootState) => state.annotations.linkTargetType)
   const annotations = useSelector((state: RootState) => {
     const videoAnnotations = state.annotations.annotations[videoId || '']
     // Filter annotations by selected persona if one is selected
@@ -108,7 +95,6 @@ export default function AnnotationWorkspace() {
     }
     return videoAnnotations || []
   })
-  const drawingMode = useSelector((state: RootState) => state.annotations.drawingMode)
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
 
   // Track this as the last annotation when we load the component
@@ -157,18 +143,18 @@ export default function AnnotationWorkspace() {
       })
 
       player.on('loadedmetadata', () => {
-        setDuration(player.duration())
+        setDuration(player.duration() ?? 0)
         console.log('Video loaded, duration:', player.duration())
       })
 
       player.on('timeupdate', () => {
-        setCurrentTime(player.currentTime())
+        setCurrentTime(player.currentTime() ?? 0)
       })
 
       player.on('play', () => setIsPlaying(true))
       player.on('pause', () => setIsPlaying(false))
       
-      player.on('error', (e: any) => {
+      player.on('error', () => {
         console.error('Video player error:', player.error())
       })
     }, 100)
@@ -223,13 +209,6 @@ export default function AnnotationWorkspace() {
     playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
   }
 
-  const handleDrawingModeChange = (
-    _event: React.MouseEvent<HTMLElement>,
-    newMode: 'entity' | 'role' | 'event' | null
-  ) => {
-    dispatch(setDrawingMode(newMode))
-  }
-
   const handleAnnotationClick = (annotation: any) => {
     // Select the annotation
     dispatch(selectAnnotation(annotation))
@@ -256,8 +235,11 @@ export default function AnnotationWorkspace() {
   }
 
   // Show all annotations sorted by start time
-  const sortedAnnotations = useMemo(() => 
-    [...annotations].sort((a, b) => a.timeSpan.startTime - b.timeSpan.startTime),
+  const sortedAnnotations = useMemo(() =>
+    [...annotations].sort((a, b) => {
+      if (!a.timeSpan || !b.timeSpan) return 0
+      return a.timeSpan.startTime - b.timeSpan.startTime
+    }),
     [annotations]
   )
   
@@ -547,26 +529,37 @@ export default function AnnotationWorkspace() {
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip
-                            label={annotation.typeCategory}
-                            size="small"
-                            color={
-                              annotation.typeCategory === 'entity' ? 'success' :
-                              annotation.typeCategory === 'role' ? 'primary' :
-                              'warning'
-                            }
-                            sx={{ height: 20, fontSize: '0.75rem' }}
-                          />
-                          <Typography variant="body2" noWrap>
-                            {annotation.typeId}
-                          </Typography>
+                          {annotation.annotationType === 'type' && (
+                            <>
+                              <Chip
+                                label={annotation.typeCategory}
+                                size="small"
+                                color={
+                                  annotation.typeCategory === 'entity' ? 'success' :
+                                  annotation.typeCategory === 'role' ? 'primary' :
+                                  'warning'
+                                }
+                                sx={{ height: 20, fontSize: '0.75rem' }}
+                              />
+                              <Typography variant="body2" noWrap>
+                                {annotation.typeId}
+                              </Typography>
+                            </>
+                          )}
+                          {annotation.annotationType === 'object' && (
+                            <Typography variant="body2" noWrap>
+                              Object Annotation
+                            </Typography>
+                          )}
                         </Box>
                       }
                       secondary={
                         <Box>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatTime(annotation.timeSpan.startTime)} → {formatTime(annotation.timeSpan.endTime)}
-                          </Typography>
+                          {annotation.timeSpan && (
+                            <Typography variant="caption" color="text.secondary">
+                              {formatTime(annotation.timeSpan.startTime)} → {formatTime(annotation.timeSpan.endTime)}
+                            </Typography>
+                          )}
                           {annotation.notes && (
                             <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic' }}>
                               {annotation.notes}

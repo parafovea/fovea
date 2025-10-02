@@ -118,7 +118,7 @@ const personaSlice = createSlice({
       if (sourceOntology) {
         const newOntology: PersonaOntology = {
           ...sourceOntology,
-          id: `generateId()`,
+          id: generateId(),
           personaId: action.payload.newPersona.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -135,58 +135,58 @@ const personaSlice = createSlice({
      * between personas for ontology reuse.
      */
     importFromPersona: (state, action: PayloadAction<ImportRequest>) => {
-      const { fromPersonaId, toPersonaId, entityIds, roleIds, eventIds, relationTypeIds, includeRelations } = action.payload
-      
+      const { fromPersonaId, toPersonaId, entityIds, roleIds, eventIds, relationTypeIds } = action.payload
+
       const sourceOntology = state.personaOntologies.find(o => o.personaId === fromPersonaId)
       const targetOntology = state.personaOntologies.find(o => o.personaId === toPersonaId)
-      
+
       if (sourceOntology && targetOntology) {
         const now = new Date().toISOString()
-        
+
         if (entityIds && entityIds.length > 0) {
           const entitiesToImport = sourceOntology.entities.filter(e => entityIds.includes(e.id))
           const newEntities = entitiesToImport.map(e => ({
             ...e,
-            id: `generateId()`,
+            id: generateId(),
             createdAt: now,
             updatedAt: now,
           }))
           targetOntology.entities.push(...newEntities)
         }
-        
+
         if (roleIds && roleIds.length > 0) {
           const rolesToImport = sourceOntology.roles.filter(r => roleIds.includes(r.id))
           const newRoles = rolesToImport.map(r => ({
             ...r,
-            id: `generateId()`,
+            id: generateId(),
             createdAt: now,
             updatedAt: now,
           }))
           targetOntology.roles.push(...newRoles)
         }
-        
+
         if (eventIds && eventIds.length > 0) {
           const eventsToImport = sourceOntology.events.filter(e => eventIds.includes(e.id))
           const newEvents = eventsToImport.map(e => ({
             ...e,
-            id: `generateId()`,
+            id: generateId(),
             createdAt: now,
             updatedAt: now,
           }))
           targetOntology.events.push(...newEvents)
         }
-        
+
         if (relationTypeIds && relationTypeIds.length > 0) {
           const relationTypesToImport = sourceOntology.relationTypes.filter(r => relationTypeIds.includes(r.id))
           const newRelationTypes = relationTypesToImport.map(r => ({
             ...r,
-            id: `generateId()`,
+            id: generateId(),
             createdAt: now,
             updatedAt: now,
           }))
           targetOntology.relationTypes.push(...newRelationTypes)
         }
-        
+
         targetOntology.updatedAt = now
         state.unsavedChanges = true
       }

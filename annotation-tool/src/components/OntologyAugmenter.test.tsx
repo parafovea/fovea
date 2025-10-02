@@ -10,20 +10,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { OntologyAugmenter, AugmentationResponse } from './OntologyAugmenter'
-import ontologyReducer from '../store/ontologySlice'
+import personaReducer from '../store/personaSlice'
 import * as apiClient from '../api/client'
 
-const createMockStore = (initialState = {}) => {
-  return configureStore({
+const createMockStore = () => {
+  const store = configureStore({
     reducer: {
-      ontology: ontologyReducer,
+      persona: personaReducer as any,
     },
     preloadedState: {
-      ontology: {
-        currentOntology: {
-          id: 'ont-1',
-          personaId: 'persona-1',
-          persona: {
+      persona: {
+        personas: [
+          {
             id: 'persona-1',
             name: 'Test Persona',
             role: 'Test Role',
@@ -32,45 +30,54 @@ const createMockStore = (initialState = {}) => {
             createdAt: '2025-10-01T00:00:00Z',
             updatedAt: '2025-10-01T00:00:00Z',
           },
-          entities: [
-            {
-              id: 'entity-1',
-              name: 'Player',
-              gloss: [{ type: 'text', content: 'A person playing the game' }],
-              createdAt: '2025-10-01T00:00:00Z',
-              updatedAt: '2025-10-01T00:00:00Z',
-            },
-          ],
-          events: [
-            {
-              id: 'event-1',
-              name: 'Goal',
-              gloss: [{ type: 'text', content: 'A scoring event' }],
-              roles: [],
-              createdAt: '2025-10-01T00:00:00Z',
-              updatedAt: '2025-10-01T00:00:00Z',
-            },
-          ],
-          roles: [
-            {
-              id: 'role-1',
-              name: 'Scorer',
-              gloss: [{ type: 'text', content: 'The player who scores' }],
-              allowedFillerTypes: ['entity' as const],
-              createdAt: '2025-10-01T00:00:00Z',
-              updatedAt: '2025-10-01T00:00:00Z',
-            },
-          ],
-          createdAt: '2025-10-01T00:00:00Z',
-          updatedAt: '2025-10-01T00:00:00Z',
-        } as unknown,
+        ],
+        personaOntologies: [
+          {
+            id: 'ont-1',
+            personaId: 'persona-1',
+            entities: [
+              {
+                id: 'entity-1',
+                name: 'Player',
+                gloss: [{ type: 'text', content: 'A person playing the game' }],
+                createdAt: '2025-10-01T00:00:00Z',
+                updatedAt: '2025-10-01T00:00:00Z',
+              },
+            ],
+            events: [
+              {
+                id: 'event-1',
+                name: 'Goal',
+                gloss: [{ type: 'text', content: 'A scoring event' }],
+                roles: [],
+                createdAt: '2025-10-01T00:00:00Z',
+                updatedAt: '2025-10-01T00:00:00Z',
+              },
+            ],
+            roles: [
+              {
+                id: 'role-1',
+                name: 'Scorer',
+                gloss: [{ type: 'text', content: 'The player who scores' }],
+                allowedFillerTypes: ['entity' as const],
+                createdAt: '2025-10-01T00:00:00Z',
+                updatedAt: '2025-10-01T00:00:00Z',
+              },
+            ],
+            relationTypes: [],
+            relations: [],
+            createdAt: '2025-10-01T00:00:00Z',
+            updatedAt: '2025-10-01T00:00:00Z',
+          },
+        ],
+        activePersonaId: 'persona-1',
         isLoading: false,
         error: null,
         unsavedChanges: false,
       },
-      ...initialState,
     },
   })
+  return store
 }
 
 const renderWithProviders = (

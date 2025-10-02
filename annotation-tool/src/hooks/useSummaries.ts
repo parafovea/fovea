@@ -96,7 +96,7 @@ export function useGenerateSummary(
 
   return useMutation<GenerateSummaryResponse, ApiError, GenerateSummaryRequest>({
     mutationFn: (request) => apiClient.generateSummary(request),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate the specific summary query so it refetches when job completes
       queryClient.invalidateQueries({
         queryKey: summaryKeys.summary(variables.videoId, variables.personaId),

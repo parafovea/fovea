@@ -29,7 +29,6 @@ import {
 import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store/store'
-import { markSaved } from '../store/ontologySlice'
 import { markSaved as markPersonaSaved } from '../store/personaSlice'
 import { api } from '../services/api'
 import { Ontology } from '../models/types'
@@ -54,10 +53,9 @@ export default function Layout() {
     severity: 'success' | 'error' | 'info' | 'warning'
   }>({ open: false, message: '', severity: 'success' })
   
-  const unsavedChanges = useSelector((state: RootState) => 
-    state.ontology.unsavedChanges || state.persona.unsavedChanges
+  const unsavedChanges = useSelector((state: RootState) =>
+    state.persona.unsavedChanges
   )
-  const currentOntology = useSelector((state: RootState) => state.ontology.currentOntology)
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
@@ -72,17 +70,15 @@ export default function Layout() {
     try {
       // Create ontology in new format
       const ontology: Ontology = {
-        id: currentOntology?.id || `ont_${Date.now()}`,
-        version: currentOntology?.version || '1.0.0',
+        id: `ont_${Date.now()}`,
+        version: '1.0.0',
         personas,
         personaOntologies,
-        createdAt: currentOntology?.createdAt || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        description: currentOntology?.description,
       }
-      
+
       await api.saveOntology(ontology)
-      dispatch(markSaved())
       dispatch(markPersonaSaved())
       setNotification({
         open: true,
@@ -99,7 +95,7 @@ export default function Layout() {
     } finally {
       setSaving(false)
     }
-  }, [currentOntology, personas, personaOntologies, dispatch])
+  }, [personas, personaOntologies, dispatch])
 
   const handleExport = useCallback(async () => {
     setExporting(true)
@@ -153,7 +149,7 @@ export default function Layout() {
       }
     },
     'file.save': () => {
-      if (!saving && currentOntology) {
+      if (!saving) {
         handleSave()
       }
     },
@@ -187,11 +183,11 @@ export default function Layout() {
           )}
           <Tooltip title="Save (Cmd/Ctrl+S)">
             <span>
-              <Button 
-                color="inherit" 
+              <Button
+                color="inherit"
                 startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                 onClick={handleSave}
-                disabled={saving || !currentOntology}
+                disabled={saving}
               >
                 Save
               </Button>

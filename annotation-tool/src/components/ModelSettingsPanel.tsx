@@ -3,7 +3,7 @@
  * Provides dropdowns for model selection, VRAM visualization, and validation.
  */
 
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Box,
   Card,
@@ -33,7 +33,7 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import { useModelConfig, useSelectModel, useMemoryValidation } from '../hooks/useModelConfig'
-import { ModelOption, TaskConfig } from '../api/client'
+import { ModelOption } from '../api/client'
 
 /**
  * Props for ModelSettingsPanel component.
@@ -137,7 +137,6 @@ export function ModelSettingsPanel({
     }))
 
     // Check if there are any changes from the current config
-    const current = config?.models[taskType]?.selected
     const allSelectionsMatchCurrent = Object.entries({
       ...pendingSelections,
       [taskType]: modelName,

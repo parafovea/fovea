@@ -41,10 +41,10 @@ import { useMutation } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
 import {
-  addEntity,
-  addEvent,
-  addRole,
-} from '../store/ontologySlice'
+  addEntityToPersona,
+  addEventToPersona,
+  addRoleToPersona,
+} from '../store/personaSlice'
 import { apiClient } from '../api/client'
 import { RootState } from '../store/store'
 import { EntityType, EventType, RoleType } from '../models/types'
@@ -88,17 +88,6 @@ export interface OntologyAugmenterProps {
 }
 
 /**
- * Extended ontology interface that includes entities, events, and roles arrays.
- * This matches the Redux state structure used by ontologySlice.
- */
-interface ExtendedOntology {
-  entities: EntityType[]
-  events: EventType[]
-  roles: RoleType[]
-  [key: string]: unknown
-}
-
-/**
  * Component for requesting AI-generated ontology type suggestions.
  * Displays suggestions with confidence scores and allows selection for addition to ontology.
  *
@@ -113,7 +102,9 @@ export function OntologyAugmenter({
   initialDomain = '',
 }: OntologyAugmenterProps) {
   const dispatch = useDispatch()
-  const ontology = useSelector((state: RootState) => state.ontology.currentOntology) as ExtendedOntology | null
+  const ontology = useSelector((state: RootState) =>
+    state.persona.personaOntologies.find(o => o.personaId === personaId) ?? null
+  )
 
   const [category, setCategory] = useState<OntologyCategory>(initialCategory)
   const [domain, setDomain] = useState(initialDomain)
@@ -183,7 +174,7 @@ export function OntologyAugmenter({
   }
 
   const handleAcceptSelected = () => {
-    if (!mutation.data || selectedSuggestions.size === 0) return
+    if (!mutation.data || selectedSuggestions.size === 0 || !personaId) return
 
     const now = new Date().toISOString()
 
@@ -200,7 +191,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addEntity(entityType))
+            dispatch(addEntityToPersona({ personaId, entity: entityType }))
             break
           }
           case 'event': {
@@ -213,7 +204,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addEvent(eventType))
+            dispatch(addEventToPersona({ personaId, event: eventType }))
             break
           }
           case 'role': {
@@ -226,7 +217,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addRole(roleType))
+            dispatch(addRoleToPersona({ personaId, role: roleType }))
             break
           }
         }

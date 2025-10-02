@@ -3,6 +3,17 @@ import { Redis } from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 
 /**
+ * Response type from model service /api/summarize endpoint.
+ */
+interface ModelSummarizeResponse {
+  summary: string;
+  visual_analysis: string;
+  audio_transcript: string;
+  key_frames: number[];
+  confidence: number;
+}
+
+/**
  * Redis connection configuration for BullMQ.
  * Uses environment variables with localhost defaults for development.
  */
@@ -106,7 +117,7 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
 
     await job.updateProgress(50);
 
-    const modelResponse = await response.json();
+    const modelResponse = await response.json() as ModelSummarizeResponse;
 
     await job.updateProgress(70);
 

@@ -74,7 +74,7 @@ export default function BaseObjectEditor({
   mode,
   setMode,
   metadata,
-  setMetadata,
+  setMetadata: _setMetadata,
   wikidataId,
   wikidataUrl,
   importedFrom,

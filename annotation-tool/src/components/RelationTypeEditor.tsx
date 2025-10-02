@@ -59,8 +59,8 @@ export default function RelationTypeEditor({
   const [tabValue, setTabValue] = useState(0)
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([])
-  const [sourceTypes, setSourceTypes] = useState<('entity' | 'role' | 'event')[]>([])
-  const [targetTypes, setTargetTypes] = useState<('entity' | 'role' | 'event')[]>([])
+  const [sourceTypes, setSourceTypes] = useState<('entity' | 'role' | 'event' | 'time')[]>([])
+  const [targetTypes, setTargetTypes] = useState<('entity' | 'role' | 'event' | 'time')[]>([])
   const [symmetric, setSymmetric] = useState(false)
   const [transitive, setTransitive] = useState(false)
   const [examples, setExamples] = useState<string[]>([])
@@ -176,7 +176,7 @@ export default function RelationTypeEditor({
     dispatch(deleteRelation({ personaId, relationId }))
   }
   
-  const getItemName = (type: 'entity' | 'role' | 'event', id: string) => {
+  const getItemName = (type: 'entity' | 'role' | 'event' | 'time', id: string) => {
     if (!ontology) return 'Unknown'
     switch (type) {
       case 'entity':
@@ -185,6 +185,9 @@ export default function RelationTypeEditor({
         return ontology.roles.find(r => r.id === id)?.name || 'Unknown'
       case 'event':
         return ontology.events.find(e => e.id === id)?.name || 'Unknown'
+      case 'time':
+        // Time relations not yet implemented in UI
+        return 'Time (ID: ' + id + ')'
       default:
         return 'Unknown'
     }

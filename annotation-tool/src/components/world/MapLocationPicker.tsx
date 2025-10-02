@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +18,6 @@ import {
   PinDrop as PointIcon,
   CropFree as ExtentIcon,
   MyLocation as LocationIcon,
-  Search as SearchIcon,
 } from '@mui/icons-material'
 import { MapContainer, TileLayer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'

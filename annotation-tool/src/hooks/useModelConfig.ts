@@ -85,7 +85,7 @@ export function useSelectModel(
 
   return useMutation<SelectModelResponse, ApiError, SelectModelRequest>({
     mutationFn: (request) => apiClient.selectModel(request),
-    onSuccess: (data, variables, context) => {
+    onSuccess: (data, variables, context, mutation) => {
       // Invalidate config to refetch with new selection
       queryClient.invalidateQueries({
         queryKey: modelConfigKeys.config(),
@@ -95,7 +95,7 @@ export function useSelectModel(
         queryKey: modelConfigKeys.validation(),
       })
       // Call user-provided onSuccess if exists
-      options?.onSuccess?.(data, variables, context)
+      options?.onSuccess?.(data, variables, context, mutation)
     },
     ...options,
   })

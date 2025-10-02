@@ -6,7 +6,6 @@ import {
   CardContent,
   CardActions,
   Typography,
-  IconButton,
   Box,
   TextField,
   InputAdornment,
@@ -17,7 +16,6 @@ import {
 } from '@mui/material'
 import {
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Person as PersonIcon,
   Search as SearchIcon,
   Add as AddIcon,
@@ -27,7 +25,7 @@ import {
   Share as RelationIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { deletePersona, setActivePersona } from '../../store/personaSlice'
+import { setActivePersona } from '../../store/personaSlice'
 import { Persona } from '../../models/types'
 
 interface PersonaBrowserProps {
@@ -66,13 +64,6 @@ export default function PersonaBrowser({
   const handlePersonaClick = (persona: Persona) => {
     dispatch(setActivePersona(persona.id))
     onSelectPersona(persona.id)
-  }
-
-  const handleDeletePersona = (personaId: string, event: React.MouseEvent) => {
-    event.stopPropagation()
-    if (window.confirm('Are you sure you want to delete this persona and all its ontologies?')) {
-      dispatch(deletePersona(personaId))
-    }
   }
 
   const handleEditPersona = (persona: Persona, event: React.MouseEvent) => {

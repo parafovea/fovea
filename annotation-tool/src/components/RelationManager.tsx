@@ -45,9 +45,9 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
   )
   
   const [relationTypeId, setRelationTypeId] = useState<string>('')
-  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event'>('entity')
+  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event' | 'time'>('entity')
   const [sourceId, setSourceId] = useState<string>('')
-  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event'>('entity')
+  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event' | 'time'>('entity')
   const [targetId, setTargetId] = useState<string>('')
 
   if (!ontology) return null
@@ -84,7 +84,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     if (!personaId || !relationTypeId || !sourceId || !targetId) return
 
     const newRelation: OntologyRelation = {
-      id: `generateId()`,
+      id: generateId(),
       relationTypeId,
       sourceType,
       sourceId,
@@ -95,7 +95,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     }
 
     dispatch(addRelation({ personaId, relation: newRelation }))
-    
+
     // Reset form
     setSourceId('')
     setTargetId('')
@@ -108,7 +108,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     }
   }
 
-  const getItemName = (type: 'entity' | 'role' | 'event', itemId: string) => {
+  const getItemName = (type: 'entity' | 'role' | 'event' | 'time', itemId: string) => {
     switch (type) {
       case 'entity':
         return ontology.entities.find(e => e.id === itemId)?.name || 'Unknown'
@@ -116,6 +116,11 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
         return ontology.roles.find(r => r.id === itemId)?.name || 'Unknown'
       case 'event':
         return ontology.events.find(e => e.id === itemId)?.name || 'Unknown'
+      case 'time':
+        // Time relations not yet implemented in UI
+        return 'Time (ID: ' + itemId + ')'
+      default:
+        return 'Unknown'
     }
   }
 

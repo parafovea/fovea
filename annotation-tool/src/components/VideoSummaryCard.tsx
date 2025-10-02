@@ -3,7 +3,7 @@
  * Shows summary text, metadata, and actions for a video summary.
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   Card,
   CardContent,
@@ -15,7 +15,6 @@ import {
   IconButton,
   Collapse,
   Alert,
-  LinearProgress,
   Skeleton,
 } from '@mui/material'
 import {

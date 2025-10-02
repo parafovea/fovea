@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useDispatch } from 'react-redux'
-import { Box, Chip } from '@mui/material'
+import { Chip } from '@mui/material'
 import { AppDispatch } from '../../store/store'
 import { updateAnnotation } from '../../store/annotationSlice'
 

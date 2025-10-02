@@ -28,21 +28,13 @@ import {
   Event as EventIcon,
   LocationOn as LocationIcon,
   Folder as CollectionIcon,
-  Add as AddIcon,
   Clear as ClearIcon,
   AccessTime as RecentIcon,
 } from '@mui/icons-material'
 import { WikidataChip } from '../shared/WikidataChip'
-import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../../store/store'
-import { 
-  Entity, 
-  Event, 
-  Location, 
-  EntityCollection, 
-  EventCollection,
-  TimeCollection 
-} from '../../models/types'
+import { useSelector } from 'react-redux'
+import { RootState } from '../../store/store'
+import { Location } from '../../models/types'
 
 interface ObjectPickerProps {
   open: boolean
@@ -85,7 +77,6 @@ export default function ObjectPicker({
   allowedTypes = ['entity', 'event', 'location', 'collection'],
   recentIds = [],
 }: ObjectPickerProps) {
-  const dispatch = useDispatch<AppDispatch>()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTab, setSelectedTab] = useState(0)
   const [selectedObject, setSelectedObject] = useState<any>(null)
@@ -156,7 +147,7 @@ export default function ObjectPicker({
     return objects
   }, [recentIds, entities, events, entityCollections, eventCollections])
   
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue)
     setSelectedObject(null)
   }

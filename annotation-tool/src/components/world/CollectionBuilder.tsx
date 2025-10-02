@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
@@ -36,7 +36,6 @@ import {
   FlashOn as EventIcon,
   Inventory2 as EntityIcon,
   AccessTime as TimeIcon,
-  AccountTree as StructureIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import {
@@ -54,9 +53,6 @@ import {
   EntityCollection,
   EventCollection,
   TimeCollection,
-  Entity,
-  Event,
-  Time,
   GlossItem,
 } from '../../models/types'
 import GlossEditor from '../GlossEditor'
@@ -96,7 +92,6 @@ function EntityCollectionEditor({
 }) {
   const dispatch = useDispatch<AppDispatch>()
   const { entities } = useSelector((state: RootState) => state.world)
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
   
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
@@ -508,7 +503,7 @@ function TimeCollectionEditor({
               <InputLabel>Frequency</InputLabel>
               <Select
                 value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
+                onChange={(e) => setFrequency(e.target.value as 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never')}
                 label="Frequency"
               >
                 <MenuItem value="always">Always</MenuItem>
@@ -627,7 +622,7 @@ export default function CollectionBuilder() {
 
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} aria-label="collection tabs">
+          <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} aria-label="collection tabs">
             <Tab 
               label={`Entity Collections (${entityCollections.length})`} 
               icon={<EntityIcon />} 

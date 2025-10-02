@@ -14,12 +14,10 @@ import {
   TextField,
   InputAdornment,
   Paper,
-  Divider,
   Tooltip,
   ToggleButton,
   ToggleButtonGroup,
   Chip,
-  Alert,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -34,6 +32,7 @@ import {
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import { deleteEntity, deleteEvent, deleteTime } from '../../store/worldSlice'
+import { Entity, LocationPoint, LocationExtent } from '../../models/types'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
@@ -62,11 +61,16 @@ function TabPanel(props: TabPanelProps) {
   )
 }
 
+// Type guard to check if an Entity is a Location
+function isLocation(entity: Entity): entity is LocationPoint | LocationExtent {
+  return 'locationType' in entity
+}
+
 export default function ObjectWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
   const { entities, events, times } = useSelector((state: RootState) => state.world)
   const { personaOntologies } = useSelector((state: RootState) => state.persona)
-  const locations = entities.filter(e => (e as any).locationType) // Locations are specialized entities
+  const locations = entities.filter(isLocation) // Locations are specialized entities
   
   const [tabValue, setTabValue] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
@@ -80,14 +84,14 @@ export default function ObjectWorkspace() {
   
   const [selectedEntity, setSelectedEntity] = useState<typeof entities[0] | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
-  const [selectedLocation, setSelectedLocation] = useState<typeof locations[0] | null>(null)
+  const [selectedLocation, setSelectedLocation] = useState<LocationPoint | LocationExtent | null>(null)
   const [selectedTime, setSelectedTime] = useState<typeof times[0] | null>(null)
   
   // Refs for managing focus
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
     setSearchTerm('')
   }
@@ -102,7 +106,7 @@ export default function ObjectWorkspace() {
     setEventEditorOpen(true)
   }
 
-  const handleEditLocation = (location: any) => {
+  const handleEditLocation = (location: LocationPoint | LocationExtent) => {
     setSelectedLocation(location)
     setLocationEditorOpen(true)
   }
@@ -388,10 +392,10 @@ export default function ObjectWorkspace() {
         <TabPanel value={tabValue} index={0}>
           <List>
             {filteredEntities.map((entity, index) => {
-              const isLocation = !!(entity as any).locationType
+              const entityIsLocation = isLocation(entity)
               return (
-                <ListItem 
-                  key={entity.id} 
+                <ListItem
+                  key={entity.id}
                   divider
                   selected={selectedItemIndex === index}
                   onClick={() => handleItemClick(index)}
@@ -401,7 +405,7 @@ export default function ObjectWorkspace() {
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body1">{entity.name}</Typography>
-                        {isLocation && (
+                        {entityIsLocation && (
                           <Chip
                             icon={<LocationIcon />}
                             label="Location"
@@ -410,7 +414,7 @@ export default function ObjectWorkspace() {
                             variant="outlined"
                           />
                         )}
-                        <WikidataChip 
+                        <WikidataChip
                           wikidataId={entity.wikidataId}
                           wikidataUrl={entity.wikidataUrl}
                           importedAt={entity.importedAt}
@@ -422,8 +426,8 @@ export default function ObjectWorkspace() {
                     secondary={
                       <Box>
                         <Typography variant="caption" component="div">
-                          {isLocation ? (
-                            <>Type: {(entity as any).locationType === 'point' ? 'Point' : 'Extent'} Location</>
+                          {entityIsLocation ? (
+                            <>Type: {entity.locationType === 'point' ? 'Point' : 'Extent'} Location</>
                           ) : (
                             <>Types: {getEntityTypeNames(entity) || 'None assigned'}</>
                           )}
@@ -437,9 +441,9 @@ export default function ObjectWorkspace() {
                     }
                   />
                   <ListItemSecondaryAction>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => isLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
+                    <IconButton
+                      edge="end"
+                      onClick={() => entityIsLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
                     >
                       <EditIcon />
                     </IconButton>

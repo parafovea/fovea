@@ -26,7 +26,7 @@ import {
   Folder as CollectionIcon,
 } from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
-import { updateAnnotation, setLinkTarget } from '../store/annotationSlice'
+import { updateAnnotation } from '../store/annotationSlice'
 import { Annotation } from '../models/types'
 import ObjectPicker from './annotation/ObjectPicker'
 
@@ -49,11 +49,11 @@ export default function AnnotationEditor({
   
   // Get the persona and its ontology for this annotation
   const persona = useSelector((state: RootState) => {
-    if (!annotation?.personaId) return null
+    if (!annotation || annotation.annotationType !== 'type') return null
     return state.persona.personas.find(p => p.id === annotation.personaId)
   })
   const personaOntology = useSelector((state: RootState) => {
-    if (!annotation?.personaId) return null
+    if (!annotation || annotation.annotationType !== 'type') return null
     return state.persona.personaOntologies.find(o => o.personaId === annotation.personaId)
   })
   
@@ -70,7 +70,7 @@ export default function AnnotationEditor({
     linkedEventId: '',
     linkedLocationId: '',
     linkedCollectionId: '',
-    linkedCollectionType: '' as '' | 'entity' | 'event',
+    linkedCollectionType: '' as '' | 'entity' | 'event' | 'time',
     startTime: 0,
     endTime: 0,
     x: 0,
@@ -83,19 +83,19 @@ export default function AnnotationEditor({
   useEffect(() => {
     if (annotation) {
       setFormData({
-        typeCategory: annotation.typeCategory || 'entity',
-        typeId: annotation.typeId || '',
-        linkedEntityId: annotation.linkedEntityId || '',
-        linkedEventId: annotation.linkedEventId || '',
-        linkedLocationId: annotation.linkedLocationId || '',
-        linkedCollectionId: annotation.linkedCollectionId || '',
-        linkedCollectionType: annotation.linkedCollectionType || '',
-        startTime: annotation.timeSpan.startTime,
-        endTime: annotation.timeSpan.endTime,
-        x: annotation.boundingBox.x,
-        y: annotation.boundingBox.y,
-        width: annotation.boundingBox.width,
-        height: annotation.boundingBox.height,
+        typeCategory: annotation.annotationType === 'type' ? annotation.typeCategory : 'entity',
+        typeId: annotation.annotationType === 'type' ? annotation.typeId : '',
+        linkedEntityId: annotation.annotationType === 'object' ? (annotation.linkedEntityId || '') : '',
+        linkedEventId: annotation.annotationType === 'object' ? (annotation.linkedEventId || '') : '',
+        linkedLocationId: annotation.annotationType === 'object' ? (annotation.linkedLocationId || '') : '',
+        linkedCollectionId: annotation.annotationType === 'object' ? (annotation.linkedCollectionId || '') : '',
+        linkedCollectionType: annotation.annotationType === 'object' ? (annotation.linkedCollectionType || '') : '',
+        startTime: annotation.timeSpan?.startTime || 0,
+        endTime: annotation.timeSpan?.endTime || 0,
+        x: annotation.boundingBox?.x || 0,
+        y: annotation.boundingBox?.y || 0,
+        width: annotation.boundingBox?.width || 0,
+        height: annotation.boundingBox?.height || 0,
         notes: annotation.notes || '',
       })
     }

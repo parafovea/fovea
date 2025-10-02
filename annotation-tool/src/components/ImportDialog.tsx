@@ -64,7 +64,6 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
   const [selectedRelationTypes, setSelectedRelationTypes] = useState<string[]>([])
   const [includeRelations, setIncludeRelations] = useState(false)
 
-  const sourcePersona = personas.find(p => p.id === sourcePersonaId)
   const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
   const targetPersona = personas.find(p => p.id === targetPersonaId)
 

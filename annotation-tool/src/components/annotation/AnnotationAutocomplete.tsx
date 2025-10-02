@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   TextField,
   Autocomplete,
   Box,
   Typography,
-  Chip,
   ListSubheader,
   Paper,
   InputAdornment,
@@ -17,7 +16,6 @@ import {
   Person as EntityObjectIcon,
   LocationOn as LocationIcon,
   Folder as CollectionIcon,
-  Schedule as TimeIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import { setLinkTarget } from '../../store/annotationSlice'

@@ -29,16 +29,16 @@ export function isTimeInstant(obj: any): obj is TimeInstant {
   return (
     isTime(obj) &&
     obj.type === 'instant' &&
-    typeof obj.timestamp === 'string'
+    typeof (obj as TimeInstant).timestamp === 'string'
   )
 }
 
 export function isTimeInterval(obj: any): obj is TimeInterval {
+  if (!isTime(obj) || obj.type !== 'interval') return false
+  const interval = obj as TimeInterval
   return (
-    isTime(obj) &&
-    obj.type === 'interval' &&
-    (obj.startTime === undefined || typeof obj.startTime === 'string') &&
-    (obj.endTime === undefined || typeof obj.endTime === 'string')
+    (interval.startTime === undefined || typeof interval.startTime === 'string') &&
+    (interval.endTime === undefined || typeof interval.endTime === 'string')
   )
 }
 

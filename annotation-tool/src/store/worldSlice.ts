@@ -337,7 +337,7 @@ const worldSlice = createSlice({
       state.error = action.payload
     },
     
-    clearWorld: (state) => {
+    clearWorld: () => {
       return initialState
     },
   },

@@ -16,13 +16,10 @@ import {
   CircularProgress,
   Stack,
   Link,
-  IconButton,
 } from '@mui/material'
-import { 
-  Search as SearchIcon, 
-  PlayArrow as PlayIcon,
+import {
+  Search as SearchIcon,
   Edit as AnnotateIcon,
-  Person as PersonIcon,
   Schedule as TimeIcon,
   ThumbUp as LikeIcon,
   Share as ShareIcon,
@@ -123,7 +120,6 @@ export default function VideoBrowser() {
       console.log('Video preview not yet implemented')
     },
     'navigate.left': () => {
-      const cols = getGridColumns()
       setSelectedVideoIndex(prev => Math.max(0, prev - 1))
     },
     'navigate.right': () => {

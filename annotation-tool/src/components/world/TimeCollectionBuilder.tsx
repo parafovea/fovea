@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { v4 as uuidv4 } from 'uuid'
 import {
   Dialog,
   DialogTitle,
@@ -38,19 +37,16 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import {
   CalendarMonth as CalendarIcon,
-  Schedule as ScheduleIcon,
   Loop as RecurringIcon,
   Event as EventIcon,
   AccessTime as TimeIcon,
   Today as TodayIcon,
-  DateRange as DateRangeIcon,
-  Add as AddIcon,
   Delete as DeleteIcon,
   Refresh as CyclicalIcon,
   Language as LinguisticIcon,
   Pattern as PatternIcon,
 } from '@mui/icons-material'
-import { format, addDays, addWeeks, addMonths, addYears, startOfWeek } from 'date-fns'
+import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns'
 import { AppDispatch, RootState } from '../../store/store'
 import { addTimeCollection, updateTimeCollection } from '../../store/worldSlice'
 import {
@@ -62,7 +58,6 @@ import {
   HabitualPattern,
   CyclicalPattern,
   HabitualFrequency,
-  Time,
 } from '../../models/types'
 
 interface TimeCollectionBuilderProps {
