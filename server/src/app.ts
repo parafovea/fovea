@@ -146,5 +146,11 @@ export async function buildApp() {
   const personasRoute = await import('./routes/personas.js')
   await app.register(personasRoute.default)
 
+  const summariesRoute = await import('./routes/summaries.js')
+  await app.register(summariesRoute.default)
+
+  const videosRoute = await import('./routes/videos.js')
+  await app.register(videosRoute.default)
+
   return app
 }
