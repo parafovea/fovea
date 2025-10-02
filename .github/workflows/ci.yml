@@ -1,0 +1,388 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  lint-frontend:
+    name: Lint Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: annotation-tool/package-lock.json
+
+      - name: Install dependencies
+        working-directory: annotation-tool
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: annotation-tool
+        run: npm run lint
+
+      - name: Type check
+        working-directory: annotation-tool
+        run: npx tsc --noEmit
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: annotation-tool/package-lock.json
+
+      - name: Install dependencies
+        working-directory: annotation-tool
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: annotation-tool
+        run: npm run test:coverage
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: annotation-tool/coverage/
+          retention-days: 30
+
+  lint-backend:
+    name: Lint Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: server
+        run: npm run lint
+
+      - name: Type check
+        working-directory: server
+        run: npx tsc --noEmit
+
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: fovea_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run tests
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/fovea_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: npm run test:coverage
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: server/coverage/
+          retention-days: 30
+
+  lint-model-service:
+    name: Lint Model Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: model-service/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: model-service
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff check
+        working-directory: model-service
+        run: ruff check .
+
+      - name: Run ruff format check
+        working-directory: model-service
+        run: ruff format --check .
+
+      - name: Run mypy
+        working-directory: model-service
+        run: mypy src/
+
+  test-model-service:
+    name: Test Model Service
+    runs-on: ubuntu-latest
+    needs: lint-model-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: model-service/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: model-service
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        working-directory: model-service
+        run: pytest --cov=src --cov-report=json --cov-report=term --cov-report=html -v
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-service-coverage
+          path: |
+            model-service/coverage.json
+            model-service/htmlcov/
+          retention-days: 30
+
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [test-frontend, test-backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: annotation-tool/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: annotation-tool
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: annotation-tool
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: annotation-tool
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: annotation-tool/playwright-report/
+          retention-days: 30
+
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: annotation-tool/test-results/
+          retention-days: 30
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: annotation-tool/package-lock.json
+
+      - name: Install dependencies
+        working-directory: annotation-tool
+        run: npm ci
+
+      - name: Build production bundle
+        working-directory: annotation-tool
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: annotation-tool/dist/
+          retention-days: 30
+
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    needs: [test-backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: server
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: server/dist/
+          retention-days: 30
+
+  build-docker-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-frontend, test-backend, test-model-service]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./annotation-tool
+          push: false
+          tags: fovea-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/frontend-image.tar
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: false
+          tags: fovea-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/backend-image.tar
+
+      - name: Build model service image (CPU)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./model-service
+          push: false
+          tags: fovea-model-service:${{ github.sha }}
+          build-args: |
+            DEVICE=cpu
+            BUILD_MODE=minimal
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/model-service-image.tar
+
+      - name: Upload Docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp/*-image.tar
+          retention-days: 7
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint-frontend, test-frontend, build-frontend, lint-backend, test-backend, build-backend, lint-model-service, test-model-service, build-docker-images, test-e2e]
+    if: always()
+    steps:
+      - name: Check job status
+        run: |
+          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend Lint**: ${{ needs.lint-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend Tests**: ${{ needs.test-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend Build**: ${{ needs.build-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend Lint**: ${{ needs.lint-backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend Tests**: ${{ needs.test-backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend Build**: ${{ needs.build-backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Model Service Lint**: ${{ needs.lint-model-service.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Model Service Tests**: ${{ needs.test-model-service.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **E2E Tests**: ${{ needs.test-e2e.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Images**: ${{ needs.build-docker-images.result }}" >> $GITHUB_STEP_SUMMARY
