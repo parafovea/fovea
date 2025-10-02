@@ -1,0 +1,80 @@
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv
+env
+ENV
+.venv
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+*.cover
+.hypothesis
+.tox
+
+# Distribution / packaging
+build
+dist
+*.egg-info
+.eggs
+*.egg
+
+# Development
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Models and data (mounted as volumes)
+models
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+test
+tests
+*_test.py
+test_*.py
+
+# Logs
+logs
+*.log
+
+# MyPy
+.mypy_cache
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache

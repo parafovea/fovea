@@ -1,0 +1,174 @@
+# Docker Compose configuration for fovea (Compose Spec - no version field)
+name: fovea
+
+services:
+  frontend:
+    build:
+      context: ./annotation-tool
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://backend:3001
+      - VITE_MODEL_SERVICE_URL=http://model-service:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - fovea-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://fovea:fovea_password@postgres:5432/fovea
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODEL_SERVICE_URL=http://model-service:8000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    networks:
+      - fovea-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  model-service:
+    build:
+      context: ./model-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all  # Use all available GPUs for single-server deployment
+              capabilities: [gpu]
+    environment:
+      - TRANSFORMERS_CACHE=/models
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - MODEL_CONFIG_PATH=/config/models.yaml
+      - CUDA_VISIBLE_DEVICES=0,1,2,3  # Adjust based on available GPUs
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512  # Optimize memory allocation
+    volumes:
+      - model-cache:/models
+      - video-data:/videos
+      - ./model-service/config:/config
+    networks:
+      - fovea-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=fovea
+      - POSTGRES_PASSWORD=fovea_password
+      - POSTGRES_DB=fovea
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - fovea-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fovea"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - fovea-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - fovea-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - fovea-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - "3002:3000"
+    networks:
+      - fovea-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+networks:
+  fovea-network:
+    driver: bridge
+
+volumes:
+  model-cache:
+  postgres-data:
+  redis-data:
+  video-data:
+  prometheus-data:
+  grafana-data:
