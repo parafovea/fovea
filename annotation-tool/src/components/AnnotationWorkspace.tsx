@@ -72,6 +72,7 @@ import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
+import { useModelConfig } from '../hooks/useModelConfig'
 
 const DRAWER_WIDTH = 300
 
@@ -79,6 +80,8 @@ export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
+  const { data: modelConfig } = useModelConfig()
+  const isCpuOnly = !modelConfig?.cuda_available
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -496,14 +499,19 @@ export default function AnnotationWorkspace() {
               <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
                 {/* Detect Objects Button */}
                 {currentVideo && videoId && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<DetectIcon />}
-                    onClick={() => setDetectionDialogOpen(true)}
-                    size="small"
-                  >
-                    Detect Objects
-                  </Button>
+                  <Tooltip title={isCpuOnly ? 'GPU required for object detection (CPU-only mode detected)' : ''}>
+                    <span>
+                      <Button
+                        variant="outlined"
+                        startIcon={<DetectIcon />}
+                        onClick={() => setDetectionDialogOpen(true)}
+                        size="small"
+                        disabled={isCpuOnly}
+                      >
+                        Detect Objects
+                      </Button>
+                    </span>
+                  </Tooltip>
                 )}
 
                 {/* Video Summary Button */}

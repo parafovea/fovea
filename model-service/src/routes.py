@@ -7,6 +7,7 @@ ontology augmentation, object detection, and model configuration management.
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, cast
 
 import torch
@@ -746,6 +747,7 @@ async def get_model_config() -> dict[str, object]:
             "default_batch_size": manager.inference_config.default_batch_size,
             "max_batch_size": manager.inference_config.max_batch_size,
         },
+        "cuda_available": torch.cuda.is_available(),
     }
 
 
@@ -769,19 +771,36 @@ async def get_model_status() -> dict[str, object]:
     """
     manager = get_model_manager()
 
-    loaded_models = manager.get_loaded_models()
+    loaded_models_dict = manager.get_loaded_models()
     memory_usage = manager.get_memory_usage_percentage()
     available_vram = manager.get_available_vram()
     total_vram = manager.get_total_vram()
 
+    # Convert loaded_models dict to array format expected by frontend
+    loaded_models = []
+    for task_type, model_info in loaded_models_dict.items():
+        loaded_models.append({
+            "task_type": task_type,
+            "model_id": model_info["model_id"],
+            "model_name": manager.tasks[task_type].selected,
+            "framework": manager.tasks[task_type].get_selected_config().framework,
+            "quantization": manager.tasks[task_type].get_selected_config().quantization,
+            "health": "loaded",
+            "vram_allocated_gb": model_info["memory_usage_gb"],
+            "vram_used_gb": model_info["memory_usage_gb"],
+            "warm_up_complete": True,
+            "last_used": None,
+            "load_time_ms": model_info["load_time"] * 1000 if model_info["load_time"] else None,
+            "performance_metrics": None,
+            "error_message": None,
+        })
+
     return {
         "loaded_models": loaded_models,
-        "memory": {
-            "total_vram_gb": total_vram / 1024**3,
-            "available_vram_gb": available_vram / 1024**3,
-            "usage_percentage": memory_usage,
-        },
-        "cuda_available": manager.loaded_models is not None,
+        "total_vram_allocated_gb": sum(m["vram_allocated_gb"] for m in loaded_models),
+        "total_vram_available_gb": total_vram / 1024**3,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "cuda_available": torch.cuda.is_available(),
     }
 
 

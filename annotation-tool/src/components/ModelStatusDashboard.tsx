@@ -193,6 +193,7 @@ export function ModelStatusDashboard({
 
   const isVramWarning = vramUtilizationPercent >= 80 && vramUtilizationPercent < 100
   const isVramError = vramUtilizationPercent >= 100
+  const isCpuOnly = !status.cuda_available
 
   return (
     <Card>
@@ -228,6 +229,19 @@ export function ModelStatusDashboard({
             Monitor loaded models, VRAM usage, and performance metrics in real-time.
           </Typography>
         </Box>
+
+        {/* CPU-Only Mode Warning */}
+        {isCpuOnly && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              CPU-Only Mode Detected
+            </Typography>
+            <Typography variant="body2">
+              The model service is running in CPU-only mode (no GPU/CUDA available).
+              Deep learning models cannot be loaded or used without GPU acceleration.
+            </Typography>
+          </Alert>
+        )}
 
         {/* Overall VRAM Status */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
@@ -267,8 +281,10 @@ export function ModelStatusDashboard({
 
         {/* Loaded Models */}
         {status.loaded_models.length === 0 ? (
-          <Alert severity="info">
-            No models currently loaded. Models will load automatically when needed.
+          <Alert severity={isCpuOnly ? "warning" : "info"}>
+            {isCpuOnly
+              ? "No models loaded. GPU required to load deep learning models."
+              : "No models currently loaded. Models will load automatically when needed."}
           </Alert>
         ) : (
           <Grid container spacing={2}>

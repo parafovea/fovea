@@ -66,7 +66,7 @@ export async function buildApp() {
   })
 
   await app.register(fastifyCors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173']
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000']
   })
 
   // OpenAPI documentation
@@ -181,6 +181,9 @@ export async function buildApp() {
 
   const videosRoute = await import('./routes/videos.js')
   await app.register(videosRoute.default)
+
+  const modelsRoute = await import('./routes/models.js')
+  await app.register(modelsRoute.default)
 
   return app
 }

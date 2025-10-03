@@ -219,6 +219,8 @@ export function ModelSettingsPanel({
     )
   }
 
+  // Check for CPU-only mode
+  const isCpuOnly = !config.cuda_available
   const isVramWarning = vramCalculation.utilizationPercent >= 80 && vramCalculation.valid
   const isVramError = !vramCalculation.valid
 
@@ -234,9 +236,34 @@ export function ModelSettingsPanel({
           </Typography>
         </Box>
 
-        {/* VRAM Budget Visualization */}
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        {/* CPU-Only Mode Warning */}
+        {isCpuOnly && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+              ⚠️ GPU Required - CPU-Only Mode Detected
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              The model service is running in <strong>CPU-only mode</strong> (no GPU/CUDA available).
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              <strong>All AI-powered features are disabled:</strong>
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              <li>Video summarization</li>
+              <li>Object detection</li>
+              <li>Object tracking</li>
+              <li>Ontology augmentation</li>
+            </Box>
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: 'bold' }}>
+              These deep learning models require GPU acceleration and will not work on CPU.
+            </Typography>
+          </Alert>
+        )}
+
+        {/* VRAM Budget Visualization - Only show if GPU available */}
+        {!isCpuOnly && (
+          <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <MemoryIcon sx={{ mr: 1 }} />
             <Typography variant="subtitle1">
               VRAM Budget
@@ -282,23 +309,26 @@ export function ModelSettingsPanel({
               Approaching VRAM limit. Consider smaller models if performance issues occur.
             </Alert>
           )}
-        </Paper>
+          </Paper>
+        )}
 
-        {/* Model Selection per Task */}
-        <Stack spacing={3}>
+        {/* Model Selection per Task - hide in CPU mode */}
+        {!isCpuOnly && (
+          <Stack spacing={3}>
           {Object.entries(config.models).map(([taskType, taskConfig]) => (
             <Box key={taskType}>
               <Typography variant="h6" gutterBottom>
                 {TASK_DISPLAY_NAMES[taskType] || taskType}
               </Typography>
 
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={isCpuOnly}>
                 <InputLabel id={`${taskType}-label`}>Model</InputLabel>
                 <Select
                   labelId={`${taskType}-label`}
                   value={pendingSelections[taskType] || taskConfig.selected}
                   label="Model"
                   onChange={(e) => handleModelChange(taskType, e.target.value)}
+                  disabled={isCpuOnly}
                 >
                   {Object.entries(taskConfig.options).map(([name, option]) => (
                     <MenuItem key={name} value={name}>
@@ -339,23 +369,24 @@ export function ModelSettingsPanel({
               />
             </Box>
           ))}
-        </Stack>
+          </Stack>
+        )}
 
-        <Divider sx={{ my: 3 }} />
+        {!isCpuOnly && <Divider sx={{ my: 3 }} />}
 
         {/* Action Buttons */}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={!hasChanges || isVramError || selectModelMutation.isPending}
+            disabled={isCpuOnly || !hasChanges || isVramError || selectModelMutation.isPending}
           >
             {selectModelMutation.isPending ? 'Saving...' : 'Save Configuration'}
           </Button>
           <Button
             variant="outlined"
             onClick={handleReset}
-            disabled={!hasChanges || selectModelMutation.isPending}
+            disabled={isCpuOnly || !hasChanges || selectModelMutation.isPending}
           >
             Reset
           </Button>

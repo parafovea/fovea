@@ -25,6 +25,7 @@ import {
   MenuItem,
   Toolbar,
   Paper,
+  Tooltip,
 } from '@mui/material'
 import {
   Search as SearchIcon,
@@ -52,6 +53,7 @@ import { useWorkspaceKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useGenerateSummary, useVideoSummary } from '../hooks/useSummaries'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from './JobStatusIndicator'
+import { useModelConfig } from '../hooks/useModelConfig'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
@@ -68,6 +70,8 @@ export default function VideoBrowser() {
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const { mutate: generateSummary } = useGenerateSummary()
+  const { data: modelConfig } = useModelConfig()
+  const isCpuOnly = !modelConfig?.cuda_available
 
   useEffect(() => {
     loadVideos()
@@ -298,51 +302,55 @@ export default function VideoBrowser() {
                 <SearchIcon />
               </InputAdornment>
             ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <Typography variant="body2" color="text.secondary">
+                  {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
+                </Typography>
+              </InputAdornment>
+            ),
           }}
         />
       </Box>
 
-      <Paper elevation={0} sx={{ mb: 3, p: 2, bgcolor: 'background.default' }}>
-        <Toolbar disableGutters sx={{ gap: 2, flexWrap: 'wrap' }}>
-          <FormControl sx={{ minWidth: 200 }} size="small">
-            <InputLabel id="persona-select-label">Persona</InputLabel>
-            <Select
-              labelId="persona-select-label"
-              id="persona-select"
-              value={activePersonaId || ''}
-              label="Persona"
-              onChange={(e) => handlePersonaChange(e.target.value)}
+      {/* Only show toolbar in GPU mode */}
+      {!isCpuOnly && (
+        <Paper elevation={0} sx={{ mb: 3, p: 2, bgcolor: 'background.default' }}>
+          <Toolbar disableGutters sx={{ gap: 2, flexWrap: 'wrap' }}>
+            <FormControl sx={{ minWidth: 200 }} size="small">
+              <InputLabel id="persona-select-label">Persona</InputLabel>
+              <Select
+                labelId="persona-select-label"
+                id="persona-select"
+                value={activePersonaId || ''}
+                label="Persona"
+                onChange={(e) => handlePersonaChange(e.target.value)}
+              >
+                {personas.length === 0 && (
+                  <MenuItem value="" disabled>
+                    No personas available
+                  </MenuItem>
+                )}
+                {personas.map((persona) => (
+                  <MenuItem key={persona.id} value={persona.id}>
+                    {persona.name}
+                    {persona.role && ` (${persona.role})`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Button
+              variant="contained"
+              startIcon={isBatchSummarizing ? <CircularProgress size={16} /> : <SummarizeIcon />}
+              onClick={handleSummarizeAll}
+              disabled={!activePersonaId || isBatchSummarizing || filteredVideos.length === 0}
             >
-              {personas.length === 0 && (
-                <MenuItem value="" disabled>
-                  No personas available
-                </MenuItem>
-              )}
-              {personas.map((persona) => (
-                <MenuItem key={persona.id} value={persona.id}>
-                  {persona.name}
-                  {persona.role && ` (${persona.role})`}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <Button
-            variant="contained"
-            startIcon={isBatchSummarizing ? <CircularProgress size={16} /> : <SummarizeIcon />}
-            onClick={handleSummarizeAll}
-            disabled={!activePersonaId || isBatchSummarizing || filteredVideos.length === 0}
-          >
-            {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
-          </Button>
-
-          <Box sx={{ ml: 'auto' }}>
-            <Typography variant="body2" color="text.secondary">
-              {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
-            </Typography>
-          </Box>
-        </Toolbar>
-      </Paper>
+              {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
+            </Button>
+          </Toolbar>
+        </Paper>
+      )}
 
       <Grid container spacing={3}>
         {filteredVideos.map((video: VideoMetadata, index) => {
@@ -371,6 +379,7 @@ export default function VideoBrowser() {
               toggleSummaryExpand={toggleSummaryExpand}
               handleSummaryJobComplete={handleSummaryJobComplete}
               handleSummaryJobFail={handleSummaryJobFail}
+              isCpuOnly={isCpuOnly}
             />
           )
         })}
@@ -415,6 +424,7 @@ interface VideoCardProps {
   toggleSummaryExpand: (videoId: string) => void
   handleSummaryJobComplete: (videoId: string, personaId: string) => void
   handleSummaryJobFail: (videoId: string, personaId: string) => void
+  isCpuOnly: boolean
 }
 
 function VideoCard({
@@ -434,6 +444,7 @@ function VideoCard({
   toggleSummaryExpand,
   handleSummaryJobComplete,
   handleSummaryJobFail,
+  isCpuOnly,
 }: VideoCardProps) {
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
@@ -620,21 +631,25 @@ function VideoCard({
                 Source
               </Button>
             )}
-            <Button
-              size="small"
-              startIcon={<SummarizeIcon />}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (hasSummary) {
-                  toggleSummaryExpand(video.id)
-                } else {
-                  handleGenerateSummary(video.id)
-                }
-              }}
-              disabled={!!activeJobId || !activePersonaId}
-            >
-              {hasSummary ? 'View' : 'Summarize'}
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for video summarization (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  size="small"
+                  startIcon={<SummarizeIcon />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (hasSummary) {
+                      toggleSummaryExpand(video.id)
+                    } else {
+                      handleGenerateSummary(video.id)
+                    }
+                  }}
+                  disabled={!!activeJobId || !activePersonaId || isCpuOnly}
+                >
+                  {hasSummary ? 'View' : 'Summarize'}
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
 
           {activeJobId && (
@@ -660,7 +675,7 @@ function VideoCard({
             </Collapse>
           )}
 
-          {!activePersonaId && (
+          {!activePersonaId && !isCpuOnly && (
             <Alert severity="info" sx={{ mt: 1 }}>
               Select a persona to generate summaries
             </Alert>

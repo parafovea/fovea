@@ -49,6 +49,7 @@ import {
 } from '../../store/personaSlice'
 import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
+import { useModelConfig } from '../../hooks/useModelConfig'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -75,10 +76,12 @@ export default function OntologyWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
   const { entities, events, times } = useSelector((state: RootState) => state.world)
-  
+  const { data: modelConfig } = useModelConfig()
+  const isCpuOnly = !modelConfig?.cuda_available
+
   // Use preferences for smart defaults
-  const { 
-    lastPersonaId, 
+  const {
+    lastPersonaId,
     setLastPersonaId,
     getFilterState,
     setFilterState,
@@ -386,14 +389,19 @@ export default function OntologyWorkspace() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => handleOpenAugmenter('entity')}
-              size="small"
-            >
-              Suggest Types
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => handleOpenAugmenter('entity')}
+                  size="small"
+                  disabled={isCpuOnly}
+                >
+                  Suggest Types
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
           <List>
             {filteredEntities.map((entity, index) => (
@@ -440,14 +448,19 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={1}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => handleOpenAugmenter('role')}
-              size="small"
-            >
-              Suggest Types
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => handleOpenAugmenter('role')}
+                  size="small"
+                  disabled={isCpuOnly}
+                >
+                  Suggest Types
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
           <List>
             {filteredRoles.map((role, index) => (
@@ -501,14 +514,19 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={2}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => handleOpenAugmenter('event')}
-              size="small"
-            >
-              Suggest Types
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => handleOpenAugmenter('event')}
+                  size="small"
+                  disabled={isCpuOnly}
+                >
+                  Suggest Types
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
           <List>
             {filteredEvents.map((event, index) => (
@@ -564,14 +582,19 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={3}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => handleOpenAugmenter('relation')}
-              size="small"
-            >
-              Suggest Types
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => handleOpenAugmenter('relation')}
+                  size="small"
+                  disabled={isCpuOnly}
+                >
+                  Suggest Types
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
           <List>
             {filteredRelations.map((relation, index) => (
