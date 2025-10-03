@@ -39,7 +39,7 @@ describe('Personas API', () => {
     })
 
     it('returns all personas sorted by creation date (newest first)', async () => {
-      const first = await prisma.persona.create({
+      await prisma.persona.create({
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -49,7 +49,7 @@ describe('Personas API', () => {
 
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      const second = await prisma.persona.create({
+      await prisma.persona.create({
         data: {
           name: 'Wildlife Researcher',
           role: 'Marine Biologist',

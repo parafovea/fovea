@@ -17,7 +17,7 @@ export interface GlossItem {
 
 export interface TypeConstraint {
   type: 'allowedTypes' | 'requiredProperties' | 'valueRange'
-  value: any
+  value: string[] | Record<string, unknown> | { min?: number; max?: number }
 }
 
 export interface EntityType {
@@ -102,7 +102,7 @@ export interface Time {
   }
   
   certainty?: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface TimeInstant extends Time {
@@ -203,7 +203,7 @@ export interface TimeCollection {
   // For cyclical/phase-based patterns
   cycle?: CyclicalPattern
   
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 // Legacy TimeSpan for backward compatibility
@@ -235,7 +235,7 @@ export interface OntologyRelation {
   sourceId: string
   targetType: 'entity' | 'role' | 'event' | 'time'
   targetId: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -249,7 +249,7 @@ export interface Entity {
   metadata: {
     alternateNames?: string[]
     externalIds?: Record<string, string>
-    properties?: Record<string, any>
+    properties?: Record<string, unknown>
   }
   createdAt: string
   updatedAt: string
@@ -271,7 +271,7 @@ export interface Event {
   location?: Location
   metadata: {
     certainty?: number
-    properties?: Record<string, any>
+    properties?: Record<string, unknown>
   }
   createdAt: string
   updatedAt: string
@@ -339,7 +339,7 @@ export interface EntityCollection {
     ordered?: boolean
     mereological?: 'mass' | 'count' | 'mixed'
   }
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -358,7 +358,7 @@ export interface EventCollection {
   }>
   timeCollectionId?: string
   structure?: EventStructureNode
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -387,7 +387,7 @@ interface BaseAnnotation {
   // Common metadata
   confidence?: number
   notes?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdBy?: string
   createdAt: string
   updatedAt: string

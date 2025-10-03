@@ -1,9 +1,10 @@
 import { FastifyPluginAsync } from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type, Static } from '@sinclair/typebox'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createReadStream } from 'fs'
 import crypto from 'crypto'
+import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
 
 const VideoSchema = Type.Object({
   id: Type.String(),
@@ -235,6 +236,209 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'Failed to stream video' })
     }
   })
+
+  /**
+   * Detection query options schema.
+   */
+  const DetectionQueryOptionsSchema = Type.Object({
+    // Ontology type options
+    includeEntityTypes: Type.Optional(Type.Boolean({ default: true })),
+    includeEntityGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeEventTypes: Type.Optional(Type.Boolean({ default: false })),
+    includeEventGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeRoleTypes: Type.Optional(Type.Boolean({ default: false })),
+    includeRoleGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeRelationTypes: Type.Optional(Type.Boolean({ default: false })),
+    includeRelationGlosses: Type.Optional(Type.Boolean({ default: false })),
+    // World state instance options
+    includeEntityInstances: Type.Optional(Type.Boolean({ default: false })),
+    includeEntityInstanceGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeEventInstances: Type.Optional(Type.Boolean({ default: false })),
+    includeEventInstanceGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeLocationInstances: Type.Optional(Type.Boolean({ default: false })),
+    includeLocationInstanceGlosses: Type.Optional(Type.Boolean({ default: false })),
+    includeTimeInstances: Type.Optional(Type.Boolean({ default: false })),
+    includeTimeInstanceGlosses: Type.Optional(Type.Boolean({ default: false })),
+  })
+
+  /**
+   * Detection request schema.
+   */
+  const DetectionRequestSchema = Type.Object({
+    personaId: Type.Optional(Type.String({ format: 'uuid' })),
+    manualQuery: Type.Optional(Type.String()),
+    queryOptions: Type.Optional(DetectionQueryOptionsSchema),
+    confidenceThreshold: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 0.3 })),
+    frameNumbers: Type.Optional(Type.Array(Type.Number())),
+    enableTracking: Type.Optional(Type.Boolean({ default: false })),
+  })
+
+  /**
+   * Detection bounding box schema.
+   */
+  const BoundingBoxSchema = Type.Object({
+    x: Type.Number(),
+    y: Type.Number(),
+    width: Type.Number(),
+    height: Type.Number(),
+    confidence: Type.Number(),
+    label: Type.String(),
+  })
+
+  /**
+   * Detection response schema.
+   */
+  const DetectionResponseSchema = Type.Object({
+    videoId: Type.String(),
+    query: Type.String(),
+    frameResults: Type.Array(Type.Object({
+      frameNumber: Type.Number(),
+      detections: Type.Array(BoundingBoxSchema),
+    })),
+  })
+
+  /**
+   * Detect objects in video using persona-based or manual query.
+   *
+   * @route POST /api/videos/:videoId/detect
+   * @param videoId - MD5 hash of filename
+   * @param personaId - Optional UUID of persona to use for query building
+   * @param manualQuery - Optional manual query string to override persona-based query
+   * @param queryOptions - Options for what to include in persona-based query
+   * @param confidenceThreshold - Minimum confidence for detections (default 0.3)
+   * @param frameNumbers - Optional array of specific frame numbers to process
+   * @param enableTracking - Optional flag to enable object tracking across frames
+   * @returns Detection results with bounding boxes
+   */
+  fastify.post<{
+    Params: { videoId: string }
+    Body: Static<typeof DetectionRequestSchema>
+  }>(
+    '/api/videos/:videoId/detect',
+    {
+      schema: {
+        description: 'Detect objects in video frames',
+        tags: ['videos'],
+        params: Type.Object({
+          videoId: Type.String(),
+        }),
+        body: DetectionRequestSchema,
+        response: {
+          200: DetectionResponseSchema,
+          400: Type.Object({ error: Type.String() }),
+          404: Type.Object({ error: Type.String() }),
+          500: Type.Object({ error: Type.String() }),
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { videoId } = request.params
+        const {
+          personaId,
+          manualQuery,
+          queryOptions,
+          confidenceThreshold = 0.3,
+          frameNumbers,
+          enableTracking = false,
+        } = request.body
+
+        // Validate that either personaId or manualQuery is provided
+        if (!personaId && !manualQuery) {
+          return reply.code(400).send({
+            error: 'Either personaId or manualQuery must be provided',
+          })
+        }
+
+        // Build query based on persona or use manual query
+        let query: string
+        if (manualQuery) {
+          query = manualQuery
+        } else if (personaId) {
+          try {
+            query = await buildDetectionQueryFromPersona(
+              personaId,
+              fastify.prisma,
+              queryOptions as DetectionQueryOptions
+            )
+          } catch (error) {
+            return reply.code(400).send({
+              error: error instanceof Error ? error.message : 'Failed to build query from persona',
+            })
+          }
+        } else {
+          return reply.code(400).send({
+            error: 'Either personaId or manualQuery must be provided',
+          })
+        }
+
+        // Check if query is empty
+        if (!query || query.trim() === '') {
+          return reply.code(400).send({
+            error: 'Generated query is empty. Persona may have no entity types defined.',
+          })
+        }
+
+        // Call model service
+        const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+        const response = await fetch(`${modelServiceUrl}/api/detection/detect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            video_id: videoId,
+            query,
+            confidence_threshold: confidenceThreshold,
+            frame_numbers: frameNumbers,
+            enable_tracking: enableTracking,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          fastify.log.error({ status: response.status, error: errorText }, 'Model service error')
+          return reply.code(response.status).send({
+            error: `Model service error: ${errorText}`,
+          })
+        }
+
+        const detectionResult = await response.json() as {
+          frame_results?: Array<{
+            frame_number: number
+            detections: Array<{
+              x: number
+              y: number
+              width: number
+              height: number
+              confidence: number
+              label: string
+            }>
+          }>
+          frameResults?: Array<{
+            frameNumber: number
+            detections: Array<{
+              x: number
+              y: number
+              width: number
+              height: number
+              confidence: number
+              label: string
+            }>
+          }>
+        }
+
+        return reply.send({
+          videoId,
+          query,
+          frameResults: detectionResult.frame_results || detectionResult.frameResults || [],
+        })
+      } catch (error) {
+        fastify.log.error(error)
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to detect objects',
+        })
+      }
+    }
+  )
 }
 
 export default videosRoute

@@ -203,8 +203,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         data: validatedData
       })
       return reply.send(persona)
-    } catch (error: any) {
-      if (error.code === 'P2025') {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
         return reply.code(404).send({ error: 'Persona not found' })
       }
       throw error
@@ -243,8 +243,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         where: { id }
       })
       return reply.send({ message: 'Persona deleted successfully' })
-    } catch (error: any) {
-      if (error.code === 'P2025') {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
         return reply.code(404).send({ error: 'Persona not found' })
       }
       throw error

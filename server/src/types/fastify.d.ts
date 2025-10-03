@@ -4,7 +4,6 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { FastifyInstance, FastifyRequest } from 'fastify'
 
 declare module 'fastify' {
   interface FastifyInstance {

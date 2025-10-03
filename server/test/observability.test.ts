@@ -2,7 +2,7 @@
  * Tests for OpenTelemetry observability integration.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { trace, metrics } from '@opentelemetry/api'
 
 describe('Observability Integration', () => {

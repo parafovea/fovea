@@ -2,6 +2,7 @@ import { Queue, Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import { queueJobCounter, queueJobDuration, modelServiceCounter, modelServiceDuration } from '../metrics.js';
+import { buildPersonaPrompts } from '../utils/queryBuilder.js';
 
 /**
  * Response type from model service /api/summarize endpoint.
@@ -115,6 +116,25 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
 
     await job.updateProgress(10);
 
+    // Fetch persona prompts for context-specific summarization
+    const persona = await prisma.persona.findUnique({
+      where: { id: personaId },
+    });
+
+    if (!persona) {
+      throw new Error(`Persona not found: ${personaId}`);
+    }
+
+    // Build persona prompts (null for Automated persona)
+    let personaRole: string | null = null;
+    let informationNeed: string | null = null;
+
+    if (persona.name !== 'Automated') {
+      const prompts = await buildPersonaPrompts(personaId, prisma);
+      personaRole = prompts.persona_role;
+      informationNeed = prompts.information_need;
+    }
+
     // Call model service with metrics tracking
     const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
     const modelStartTime = Date.now();
@@ -127,6 +147,8 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         persona_id: personaId,
         frame_sample_rate: frameSampleRate,
         max_frames: maxFrames,
+        persona_role: personaRole,
+        information_need: informationNeed,
       }),
     });
 
@@ -184,7 +206,7 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
       summary: savedSummary.summary,
       visualAnalysis: savedSummary.visualAnalysis || undefined,
       audioTranscript: savedSummary.audioTranscript || undefined,
-      keyFrames: savedSummary.keyFrames as any,
+      keyFrames: savedSummary.keyFrames as Array<{ timestamp: number; description: string }> | undefined,
       confidence: savedSummary.confidence || undefined,
     };
   },
