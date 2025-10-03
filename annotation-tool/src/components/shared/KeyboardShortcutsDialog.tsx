@@ -36,7 +36,7 @@ import { useDialogKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 interface KeyboardShortcutsDialogProps {
   open: boolean
   onClose: () => void
-  currentContext?: 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace'
+  currentContext?: 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'settings'
 }
 
 interface TabPanelProps {

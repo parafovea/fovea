@@ -7,6 +7,7 @@ import VideoBrowser from './components/VideoBrowser'
 import AnnotationWorkspace from './components/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
+import Settings from './pages/Settings'
 import { AppDispatch } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { api } from './services/api'
@@ -91,6 +92,7 @@ function App() {
         <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
         <Route path="ontology" element={<OntologyWorkspace />} />
         <Route path="objects" element={<ObjectWorkspace />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   )

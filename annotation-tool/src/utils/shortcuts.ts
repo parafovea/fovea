@@ -1,7 +1,7 @@
 // Keyboard shortcut definitions and utilities
 
 export type ModifierKey = 'cmd' | 'ctrl' | 'alt' | 'shift'
-export type ShortcutContext = 'global' | 'workspace' | 'dialog' | 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace'
+export type ShortcutContext = 'global' | 'workspace' | 'dialog' | 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'settings'
 
 export interface ShortcutDefinition {
   key: string
@@ -87,6 +87,13 @@ export const globalShortcuts: ShortcutDefinition[] = [
     modifiers: [getOSModifier()],
     action: 'navigate.objectBuilder',
     description: 'Go to Object Builder',
+    context: 'global',
+  },
+  {
+    key: ',',
+    modifiers: [getOSModifier()],
+    action: 'navigate.settings',
+    description: 'Go to Settings',
     context: 'global',
   },
   {

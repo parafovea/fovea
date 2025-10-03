@@ -25,6 +25,7 @@ import {
   Download as ExportIcon,
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
@@ -63,6 +64,7 @@ export default function Layout() {
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
     { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+    { text: 'Settings', icon: <SettingsIcon />, path: '/settings', shortcut: 'Cmd/Ctrl+,' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -127,6 +129,7 @@ export default function Layout() {
     if (location.pathname === '/') return 'videoBrowser'
     if (location.pathname === '/ontology') return 'ontologyWorkspace'
     if (location.pathname === '/objects') return 'objectWorkspace'
+    if (location.pathname === '/settings') return 'settings'
     return undefined
   }
   
@@ -134,6 +137,7 @@ export default function Layout() {
     'navigate.videoBrowser': () => navigate('/'),
     'navigate.ontologyBuilder': () => navigate('/ontology'),
     'navigate.objectBuilder': () => navigate('/objects'),
+    'navigate.settings': () => navigate('/settings'),
     'navigate.toggle': () => {
       // If we're in the ontology builder and there's a last annotation, go back to it
       if (location.pathname === '/ontology' && lastAnnotation.videoId) {
