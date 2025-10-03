@@ -1,7 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { Annotation, Time } from '../models/types'
+import { DetectionResponse } from '../api/client'
 
-type AnnotationMode = 
+type AnnotationMode =
   | 'type'    // Assign types from persona ontology (requires persona)
   | 'object'  // Link to world objects (entities, events, locations, collections)
 
@@ -22,6 +23,10 @@ interface AnnotationState {
   temporaryTime: Time | null
   linkTargetId: string | null  // ID of entity/event/collection to link
   linkTargetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null
+  detectionResults: DetectionResponse | null
+  detectionQuery: string
+  detectionConfidenceThreshold: number
+  showDetectionCandidates: boolean
 }
 
 const initialState: AnnotationState = {
@@ -36,6 +41,10 @@ const initialState: AnnotationState = {
   temporaryTime: null,
   linkTargetId: null,
   linkTargetType: null,
+  detectionResults: null,
+  detectionQuery: '',
+  detectionConfidenceThreshold: 0.5,
+  showDetectionCandidates: false,
 }
 
 const annotationSlice = createSlice({
@@ -112,6 +121,23 @@ const annotationSlice = createSlice({
       state.linkTargetId = null
       state.linkTargetType = null
     },
+    setDetectionResults: (state, action: PayloadAction<DetectionResponse | null>) => {
+      state.detectionResults = action.payload
+    },
+    setDetectionQuery: (state, action: PayloadAction<string>) => {
+      state.detectionQuery = action.payload
+    },
+    setDetectionConfidenceThreshold: (state, action: PayloadAction<number>) => {
+      state.detectionConfidenceThreshold = action.payload
+    },
+    setShowDetectionCandidates: (state, action: PayloadAction<boolean>) => {
+      state.showDetectionCandidates = action.payload
+    },
+    clearDetectionState: (state) => {
+      state.detectionResults = null
+      state.detectionQuery = ''
+      state.showDetectionCandidates = false
+    },
   },
 })
 
@@ -130,6 +156,11 @@ export const {
   setTemporaryTime,
   setLinkTarget,
   clearLinkTarget,
+  setDetectionResults,
+  setDetectionQuery,
+  setDetectionConfidenceThreshold,
+  setShowDetectionCandidates,
+  clearDetectionState,
 } = annotationSlice.actions
 
 export default annotationSlice.reducer

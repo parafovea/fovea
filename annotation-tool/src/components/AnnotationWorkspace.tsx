@@ -26,6 +26,13 @@ import {
   MenuItem,
   Fab,
   Tooltip,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
+  Alert,
 } from '@mui/material'
 import {
   PlayArrow as PlayIcon,
@@ -39,6 +46,7 @@ import {
   Comment as CommentIcon,
   OpenInNew as ExternalLinkIcon,
   Build as BuildIcon,
+  Search as DetectIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
@@ -52,14 +60,21 @@ import {
   deleteAnnotation,
   setSelectedPersona,
   setAnnotationMode,
+  setDetectionResults,
+  setDetectionQuery,
+  setDetectionConfidenceThreshold,
+  setShowDetectionCandidates,
+  clearDetectionState,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './annotation/AnnotationAutocomplete'
 import VideoSummaryDialog from './VideoSummaryDialog'
+import { AnnotationCandidatesList } from './AnnotationCandidatesList'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
+import { useDetectObjects } from '../hooks/useDetection'
 
 const DRAWER_WIDTH = 300
 
@@ -75,6 +90,10 @@ export default function AnnotationWorkspace() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState<any>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
+  const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
+  const [detectionFrameMode, setDetectionFrameMode] = useState<'current' | 'range' | 'all'>('current')
+  const [detectionFrameStart, setDetectionFrameStart] = useState(0)
+  const [detectionFrameEnd, setDetectionFrameEnd] = useState(0)
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
@@ -96,6 +115,22 @@ export default function AnnotationWorkspace() {
     return videoAnnotations || []
   })
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
+  const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
+  const detectionQuery = useSelector((state: RootState) => state.annotations.detectionQuery)
+  const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
+  const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
+
+  // Detection mutation
+  const detectMutation = useDetectObjects({
+    onSuccess: (data) => {
+      dispatch(setDetectionResults(data))
+      dispatch(setShowDetectionCandidates(true))
+      setDetectionDialogOpen(false)
+    },
+    onError: (error) => {
+      console.error('Detection failed:', error)
+    },
+  })
 
   // Track this as the last annotation when we load the component
   useEffect(() => {
@@ -234,6 +269,39 @@ export default function AnnotationWorkspace() {
     navigate('/ontology')
   }
 
+  const handleRunDetection = () => {
+    if (!videoId || !detectionQuery.trim()) return
+
+    const fps = currentVideo?.fps || 30
+    let frameNumbers: number[] | undefined
+
+    if (detectionFrameMode === 'current') {
+      const currentFrame = Math.floor(currentTime * fps)
+      frameNumbers = [currentFrame]
+    } else if (detectionFrameMode === 'range') {
+      frameNumbers = []
+      for (let i = detectionFrameStart; i <= detectionFrameEnd; i++) {
+        frameNumbers.push(i)
+      }
+    }
+
+    detectMutation.mutate({
+      videoId,
+      query: detectionQuery,
+      frameNumbers,
+      confidenceThreshold: detectionConfidenceThreshold,
+      enableTracking: detectionFrameMode !== 'current',
+    })
+  }
+
+  const handleOpenDetectionDialog = () => {
+    const fps = currentVideo?.fps || 30
+    const currentFrame = Math.floor(currentTime * fps)
+    setDetectionFrameStart(currentFrame)
+    setDetectionFrameEnd(Math.min(currentFrame + fps * 5, Math.floor(duration * fps)))
+    setDetectionDialogOpen(true)
+  }
+
   // Show all annotations sorted by start time
   const sortedAnnotations = useMemo(() =>
     [...annotations].sort((a, b) => {
@@ -351,6 +419,7 @@ export default function AnnotationWorkspace() {
               currentTime={currentTime}
               videoWidth={currentVideo.width}
               videoHeight={currentVideo.height}
+              detectionResults={detectionResults}
             />
           )}
         </Box>
@@ -459,18 +528,32 @@ export default function AnnotationWorkspace() {
                 </Box>
               )}
               
-              {/* Video Summary Button - moved to far right */}
-              {currentVideo && videoId && (
-                <Button
-                  variant="outlined"
-                  startIcon={<EditIcon />}
-                  onClick={() => setSummaryDialogOpen(true)}
-                  size="small"
-                  sx={{ ml: 'auto' }}
-                >
-                  Edit Summary
-                </Button>
-              )}
+              {/* Action Buttons - right aligned */}
+              <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                {/* Detect Objects Button */}
+                {currentVideo && videoId && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<DetectIcon />}
+                    onClick={handleOpenDetectionDialog}
+                    size="small"
+                  >
+                    Detect Objects
+                  </Button>
+                )}
+
+                {/* Video Summary Button */}
+                {currentVideo && videoId && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<EditIcon />}
+                    onClick={() => setSummaryDialogOpen(true)}
+                    size="small"
+                  >
+                    Edit Summary
+                  </Button>
+                )}
+              </Box>
             </Box>
             
           </Stack>
@@ -608,7 +691,138 @@ export default function AnnotationWorkspace() {
           initialPersonaId={selectedPersonaId}
         />
       )}
-      
+
+      {/* Detection Dialog */}
+      <Dialog
+        open={detectionDialogOpen}
+        onClose={() => setDetectionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Detect Objects</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {/* Detection Query */}
+            <TextField
+              label="Detection Query"
+              placeholder="e.g., person, vehicle, baseball"
+              value={detectionQuery}
+              onChange={(e) => dispatch(setDetectionQuery(e.target.value))}
+              fullWidth
+              helperText="Describe what you want to detect in the video"
+            />
+
+            {/* Frame Selection Mode */}
+            <FormControl fullWidth>
+              <InputLabel>Frame Selection</InputLabel>
+              <Select
+                value={detectionFrameMode}
+                onChange={(e) => setDetectionFrameMode(e.target.value as 'current' | 'range' | 'all')}
+                label="Frame Selection"
+              >
+                <MenuItem value="current">Current Frame Only</MenuItem>
+                <MenuItem value="range">Frame Range</MenuItem>
+                <MenuItem value="all">All Frames</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Frame Range Inputs */}
+            {detectionFrameMode === 'range' && (
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Start Frame"
+                  type="number"
+                  value={detectionFrameStart}
+                  onChange={(e) => setDetectionFrameStart(parseInt(e.target.value) || 0)}
+                  size="small"
+                  fullWidth
+                />
+                <TextField
+                  label="End Frame"
+                  type="number"
+                  value={detectionFrameEnd}
+                  onChange={(e) => setDetectionFrameEnd(parseInt(e.target.value) || 0)}
+                  size="small"
+                  fullWidth
+                />
+              </Box>
+            )}
+
+            {/* Confidence Threshold */}
+            <Box>
+              <Typography variant="body2" gutterBottom>
+                Confidence Threshold: {detectionConfidenceThreshold.toFixed(2)}
+              </Typography>
+              <Slider
+                value={detectionConfidenceThreshold}
+                onChange={(_, value) => dispatch(setDetectionConfidenceThreshold(value as number))}
+                min={0.1}
+                max={1.0}
+                step={0.05}
+                marks={[
+                  { value: 0.1, label: '0.1' },
+                  { value: 0.5, label: '0.5' },
+                  { value: 1.0, label: '1.0' },
+                ]}
+              />
+            </Box>
+
+            {/* Error Display */}
+            {detectMutation.isError && (
+              <Alert severity="error">
+                Detection failed: {detectMutation.error.message}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetectionDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleRunDetection}
+            variant="contained"
+            disabled={detectMutation.isPending || !detectionQuery.trim()}
+            startIcon={detectMutation.isPending ? <CircularProgress size={20} /> : <DetectIcon />}
+          >
+            {detectMutation.isPending ? 'Detecting...' : 'Run Detection'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Detection Candidates Dialog */}
+      {detectionResults && showDetectionCandidates && videoId && (
+        <Dialog
+          open={showDetectionCandidates}
+          onClose={() => dispatch(setShowDetectionCandidates(false))}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            Detection Results
+            <Typography variant="body2" color="text.secondary">
+              Found {detectionResults.total_detections} objects for query: "{detectionResults.query}"
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <AnnotationCandidatesList
+              videoId={videoId}
+              frames={detectionResults.frames}
+              personaId={annotationMode === 'type' ? selectedPersonaId || undefined : undefined}
+              typeId={annotationMode === 'type' ? undefined : undefined}
+              typeCategory={annotationMode === 'type' ? 'entity' : undefined}
+              initialConfidenceThreshold={detectionConfidenceThreshold}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => {
+              dispatch(setShowDetectionCandidates(false))
+              dispatch(clearDetectionState())
+            }}>
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
       {/* Floating Action Button to go to Ontology */}
       <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
         <Fab

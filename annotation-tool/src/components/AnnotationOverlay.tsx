@@ -3,26 +3,29 @@ import { useSelector, useDispatch } from 'react-redux'
 import { Box } from '@mui/material'
 import { RootState, AppDispatch } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { 
-  setTemporaryBox, 
-  addAnnotation, 
+import {
+  setTemporaryBox,
+  addAnnotation,
   clearDrawingState,
-  selectAnnotation 
+  selectAnnotation
 } from '../store/annotationSlice'
 import { useParams } from 'react-router-dom'
 import InteractiveBoundingBox from './annotation/InteractiveBoundingBox'
+import type { DetectionResponse } from '../api/client'
 
 interface AnnotationOverlayProps {
   videoElement: HTMLVideoElement | null
   currentTime: number
   videoWidth: number
   videoHeight: number
+  detectionResults?: DetectionResponse | null
 }
 
 export default function AnnotationOverlay({
   currentTime,
   videoWidth,
   videoHeight,
+  detectionResults,
 }: AnnotationOverlayProps) {
   const { videoId } = useParams()
   const dispatch = useDispatch<AppDispatch>()
@@ -143,7 +146,7 @@ export default function AnnotationOverlay({
     return annotations.filter(ann =>
       ann.timeSpan && ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
     ).map(ann => {
-      let displayInfo: any = { ...ann }
+      const displayInfo: any = { ...ann }
 
       // Get linked object info (only for object annotations)
       if (ann.annotationType === 'object') {
@@ -179,6 +182,27 @@ export default function AnnotationOverlay({
       return displayInfo
     })
   }, [annotations, currentTime, entities, events, entityCollections, eventCollections])
+
+  // Get detection boxes for current time
+  const detectionBoxes = useMemo(() => {
+    if (!detectionResults) return []
+
+    return detectionResults.frames
+      .filter(frame => Math.abs(frame.timestamp - currentTime) < 0.1)
+      .flatMap(frame =>
+        frame.detections.map((detection, index) => ({
+          id: `detection-${frame.frame_number}-${index}`,
+          boundingBox: {
+            x: detection.bounding_box.x * videoWidth,
+            y: detection.bounding_box.y * videoHeight,
+            width: detection.bounding_box.width * videoWidth,
+            height: detection.bounding_box.height * videoHeight,
+          },
+          label: detection.label,
+          confidence: detection.confidence,
+        }))
+      )
+  }, [detectionResults, currentTime, videoWidth, videoHeight])
 
   return (
     <Box
@@ -220,7 +244,34 @@ export default function AnnotationOverlay({
             />
           </g>
         ))}
-        
+
+        {/* Detection boxes (read-only, shown in yellow) */}
+        {detectionBoxes.map((detection) => (
+          <g key={detection.id}>
+            <rect
+              x={detection.boundingBox.x}
+              y={detection.boundingBox.y}
+              width={detection.boundingBox.width}
+              height={detection.boundingBox.height}
+              fill="none"
+              stroke="#ffeb3b"
+              strokeWidth="3"
+              opacity="0.8"
+            />
+            <text
+              x={detection.boundingBox.x}
+              y={detection.boundingBox.y - 5}
+              fill="#ffeb3b"
+              fontSize="14"
+              fontWeight="bold"
+              stroke="black"
+              strokeWidth="0.5"
+            >
+              {detection.label} ({Math.round(detection.confidence * 100)}%)
+            </text>
+          </g>
+        ))}
+
         {temporaryBox && (
           <rect
             x={temporaryBox.x}

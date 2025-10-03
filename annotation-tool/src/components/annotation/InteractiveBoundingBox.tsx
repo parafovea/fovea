@@ -114,7 +114,7 @@ export default function InteractiveBoundingBox({
     const deltaX = currentX - dragStart.x
     const deltaY = currentY - dragStart.y
 
-    let newBox = { ...originalBox }
+    const newBox = { ...originalBox }
 
     if (interactionMode === 'dragging') {
       // Move the entire box
