@@ -27,6 +27,10 @@ interface VideoState {
     /** Timestamp of the last annotation in seconds. */
     timestamp: number
   }
+  /** Active summary generation jobs by video ID and persona ID. */
+  activeSummaryJobs: Record<string, string>
+  /** Summary IDs that have been generated for videos. */
+  videoSummaries: Record<string, string[]>
 }
 
 const initialState: VideoState = {
@@ -42,6 +46,8 @@ const initialState: VideoState = {
     videoId: null,
     timestamp: 0,
   },
+  activeSummaryJobs: {},
+  videoSummaries: {},
 }
 
 /**
@@ -108,6 +114,49 @@ const videoSlice = createSlice({
     setLastAnnotation: (state, action: PayloadAction<{ videoId: string; timestamp: number }>) => {
       state.lastAnnotation = action.payload
     },
+    /**
+     * Set active summary generation job for a video and persona.
+     * @param state - Current video state.
+     * @param action - Action containing video ID, persona ID, and job ID.
+     */
+    setActiveSummaryJob: (state, action: PayloadAction<{ videoId: string; personaId: string; jobId: string }>) => {
+      const key = `${action.payload.videoId}:${action.payload.personaId}`
+      state.activeSummaryJobs[key] = action.payload.jobId
+    },
+    /**
+     * Clear active summary job for a video and persona.
+     * @param state - Current video state.
+     * @param action - Action containing video ID and persona ID.
+     */
+    clearSummaryJob: (state, action: PayloadAction<{ videoId: string; personaId: string }>) => {
+      const key = `${action.payload.videoId}:${action.payload.personaId}`
+      delete state.activeSummaryJobs[key]
+    },
+    /**
+     * Add summary ID to video summaries tracking.
+     * @param state - Current video state.
+     * @param action - Action containing video ID, persona ID, and summary ID.
+     */
+    addVideoSummary: (state, action: PayloadAction<{ videoId: string; personaId: string }>) => {
+      if (!state.videoSummaries[action.payload.videoId]) {
+        state.videoSummaries[action.payload.videoId] = []
+      }
+      if (!state.videoSummaries[action.payload.videoId].includes(action.payload.personaId)) {
+        state.videoSummaries[action.payload.videoId].push(action.payload.personaId)
+      }
+    },
+    /**
+     * Remove summary ID from video summaries tracking.
+     * @param state - Current video state.
+     * @param action - Action containing video ID and persona ID.
+     */
+    removeVideoSummary: (state, action: PayloadAction<{ videoId: string; personaId: string }>) => {
+      if (state.videoSummaries[action.payload.videoId]) {
+        state.videoSummaries[action.payload.videoId] = state.videoSummaries[action.payload.videoId].filter(
+          (personaId) => personaId !== action.payload.personaId
+        )
+      }
+    },
   },
 })
 
@@ -119,6 +168,10 @@ export const {
   setSearchTerm,
   setFilterTags,
   setLastAnnotation,
+  setActiveSummaryJob,
+  clearSummaryJob,
+  addVideoSummary,
+  removeVideoSummary,
 } = videoSlice.actions
 
 export default videoSlice.reducer

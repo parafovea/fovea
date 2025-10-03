@@ -16,6 +16,9 @@ import {
   CircularProgress,
   Stack,
   Link,
+  Badge,
+  Collapse,
+  Alert,
 } from '@mui/material'
 import {
   Search as SearchIcon,
@@ -25,20 +28,38 @@ import {
   Share as ShareIcon,
   Comment as CommentIcon,
   OpenInNew as ExternalLinkIcon,
+  AutoAwesome as SummarizeIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../store/store'
-import { setVideos, setSearchTerm, setLoading } from '../store/videoSlice'
+import {
+  setVideos,
+  setSearchTerm,
+  setLoading,
+  setActiveSummaryJob,
+  clearSummaryJob,
+  addVideoSummary,
+} from '../store/videoSlice'
 import { formatTimestamp, formatDuration } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 import { useWorkspaceKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useGenerateSummary, useVideoSummary } from '../hooks/useSummaries'
+import { VideoSummaryCard } from './VideoSummaryCard'
+import { JobStatusIndicator } from './JobStatusIndicator'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
-  const { videos, isLoading, filter } = useSelector((state: RootState) => state.videos)
+  const { videos, isLoading, filter, activeSummaryJobs, videoSummaries } = useSelector(
+    (state: RootState) => state.videos
+  )
+  const activePersonaId = useSelector((state: RootState) => state.persona.activePersonaId)
+  const personas = useSelector((state: RootState) => state.persona.personas)
   const [localSearchTerm, setLocalSearchTerm] = useState(filter.searchTerm)
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
+  const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
   const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const { mutate: generateSummary } = useGenerateSummary()
 
   useEffect(() => {
     loadVideos()
@@ -60,6 +81,53 @@ export default function VideoBrowser() {
   const handleSearch = (value: string) => {
     setLocalSearchTerm(value)
     dispatch(setSearchTerm(value))
+  }
+
+  const handleGenerateSummary = (videoId: string) => {
+    if (!activePersonaId) {
+      alert('Please select a persona first')
+      return
+    }
+
+    generateSummary(
+      {
+        videoId,
+        personaId: activePersonaId,
+        frameSampleRate: 1,
+        maxFrames: 30,
+      },
+      {
+        onSuccess: (result) => {
+          dispatch(
+            setActiveSummaryJob({
+              videoId,
+              personaId: activePersonaId,
+              jobId: result.jobId,
+            })
+          )
+          setExpandedSummaries((prev) => ({ ...prev, [videoId]: true }))
+        },
+        onError: (error) => {
+          console.error('Failed to generate summary:', error)
+        },
+      }
+    )
+  }
+
+  const handleSummaryJobComplete = (videoId: string, personaId: string) => {
+    dispatch(clearSummaryJob({ videoId, personaId }))
+    dispatch(addVideoSummary({ videoId, personaId }))
+  }
+
+  const handleSummaryJobFail = (videoId: string, personaId: string) => {
+    dispatch(clearSummaryJob({ videoId, personaId }))
+  }
+
+  const toggleSummaryExpand = (videoId: string) => {
+    setExpandedSummaries((prev) => ({
+      ...prev,
+      [videoId]: !prev[videoId],
+    }))
   }
 
   const filteredVideos = videos.filter((video: VideoMetadata) => {
@@ -175,181 +243,31 @@ export default function VideoBrowser() {
       <Grid container spacing={3}>
         {filteredVideos.map((video: VideoMetadata, index) => {
           const videoUrl = getVideoUrl(video)
-          const thumbnailUrl = video.thumbnail || 
-            (video.thumbnails && video.thumbnails.length > 0 
-              ? video.thumbnails[video.thumbnails.length - 1].url 
+          const thumbnailUrl = video.thumbnail ||
+            (video.thumbnails && video.thumbnails.length > 0
+              ? video.thumbnails[video.thumbnails.length - 1].url
               : '')
-          
+
           return (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={video.id}>
-              <Card 
-                sx={{ 
-                  height: '100%', 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  outline: selectedVideoIndex === index ? 2 : 0,
-                  outlineColor: 'primary.main',
-                  cursor: 'pointer',
-                }}
-                onClick={() => handleCardClick(index)}
-              >
-                <CardMedia
-                  component="div"
-                  sx={{
-                    pt: '56.25%',
-                    bgcolor: 'grey.300',
-                    backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : 'none',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    position: 'relative',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      position: 'absolute',
-                      bottom: 8,
-                      right: 8,
-                      bgcolor: 'rgba(0, 0, 0, 0.8)',
-                      color: 'white',
-                      px: 1,
-                      borderRadius: 1,
-                    }}
-                  >
-                    {formatDuration(video.duration)}
-                  </Typography>
-                  {video.width && video.height && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        position: 'absolute',
-                        bottom: 8,
-                        left: 8,
-                        bgcolor: 'rgba(0, 0, 0, 0.8)',
-                        color: 'white',
-                        px: 1,
-                        borderRadius: 1,
-                      }}
-                    >
-                      {video.width}×{video.height}
-                    </Typography>
-                  )}
-                </CardMedia>
-                <CardContent sx={{ flexGrow: 1 }}>
-                  {/* Uploader as main title with clickable link */}
-                  <Typography gutterBottom variant="h6" component="h2">
-                    {video.uploader || video.uploader_id || 'Unknown User'}
-                    {video.uploader_id && video.uploader_url && (
-                      <>
-                        {' '}(
-                        <Link 
-                          href={video.uploader_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          underline="hover"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          @{video.uploader_id}
-                        </Link>
-                        )
-                      </>
-                    )}
-                  </Typography>
-                  
-                  {/* Description (no need for title since it duplicates uploader + description) */}
-                  <Typography 
-                    variant="body2" 
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      mb: 1,
-                    }}
-                  >
-                    {video.description}
-                  </Typography>
-
-                  {/* Timestamp */}
-                  {video.timestamp && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                      <TimeIcon fontSize="small" color="action" />
-                      <Typography variant="caption" color="text.secondary">
-                        {formatTimestamp(video.timestamp)}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Engagement Metrics */}
-                  {(video.like_count || video.repost_count || video.comment_count) && (
-                    <Stack direction="row" spacing={1.5} sx={{ mb: 1 }}>
-                      {video.like_count !== undefined && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <LikeIcon fontSize="small" color="action" />
-                          <Typography variant="caption">{video.like_count.toLocaleString()}</Typography>
-                        </Box>
-                      )}
-                      {video.repost_count !== undefined && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <ShareIcon fontSize="small" color="action" />
-                          <Typography variant="caption">{video.repost_count.toLocaleString()}</Typography>
-                        </Box>
-                      )}
-                      {video.comment_count !== undefined && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <CommentIcon fontSize="small" color="action" />
-                          <Typography variant="caption">{video.comment_count.toLocaleString()}</Typography>
-                        </Box>
-                      )}
-                    </Stack>
-                  )}
-
-                  {/* Tags */}
-                  {video.tags && video.tags.length > 0 && (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {video.tags.slice(0, 3).map((tag, index) => (
-                        <Chip
-                          key={index}
-                          label={tag}
-                          size="small"
-                          variant="outlined"
-                        />
-                      ))}
-                      {video.tags.length > 3 && (
-                        <Chip
-                          label={`+${video.tags.length - 3}`}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                        />
-                      )}
-                    </Box>
-                  )}
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    startIcon={<AnnotateIcon />}
-                    onClick={() => navigate(`/annotate/${video.id}`)}
-                  >
-                    Annotate
-                  </Button>
-                  {videoUrl && (
-                    <Button
-                      size="small"
-                      startIcon={<ExternalLinkIcon />}
-                      href={videoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Source
-                    </Button>
-                  )}
-                </CardActions>
-              </Card>
-            </Grid>
+            <VideoCard
+              key={video.id}
+              video={video}
+              index={index}
+              videoUrl={videoUrl}
+              thumbnailUrl={thumbnailUrl}
+              selectedVideoIndex={selectedVideoIndex}
+              handleCardClick={handleCardClick}
+              navigate={navigate}
+              activePersonaId={activePersonaId}
+              personas={personas}
+              activeSummaryJobs={activeSummaryJobs}
+              videoSummaries={videoSummaries}
+              expandedSummaries={expandedSummaries}
+              handleGenerateSummary={handleGenerateSummary}
+              toggleSummaryExpand={toggleSummaryExpand}
+              handleSummaryJobComplete={handleSummaryJobComplete}
+              handleSummaryJobFail={handleSummaryJobFail}
+            />
           )
         })}
       </Grid>
@@ -373,5 +291,278 @@ export default function VideoBrowser() {
         </Box>
       )}
     </Box>
+  )
+}
+
+interface VideoCardProps {
+  video: VideoMetadata
+  index: number
+  videoUrl: string
+  thumbnailUrl: string
+  selectedVideoIndex: number
+  handleCardClick: (index: number) => void
+  navigate: ReturnType<typeof useNavigate>
+  activePersonaId: string | null
+  personas: any[]
+  activeSummaryJobs: Record<string, string>
+  videoSummaries: Record<string, string[]>
+  expandedSummaries: Record<string, boolean>
+  handleGenerateSummary: (videoId: string) => void
+  toggleSummaryExpand: (videoId: string) => void
+  handleSummaryJobComplete: (videoId: string, personaId: string) => void
+  handleSummaryJobFail: (videoId: string, personaId: string) => void
+}
+
+function VideoCard({
+  video,
+  index,
+  videoUrl,
+  thumbnailUrl,
+  selectedVideoIndex,
+  handleCardClick,
+  navigate,
+  activePersonaId,
+  personas,
+  activeSummaryJobs,
+  videoSummaries,
+  expandedSummaries,
+  handleGenerateSummary,
+  toggleSummaryExpand,
+  handleSummaryJobComplete,
+  handleSummaryJobFail,
+}: VideoCardProps) {
+  const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
+  const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
+  const hasSummary = Boolean(activePersonaId && videoSummaries[video.id]?.includes(activePersonaId))
+  const activePersona = personas.find((p) => p.id === activePersonaId)
+
+  const { data: summary, isLoading: summaryLoading } = useVideoSummary(
+    video.id,
+    activePersonaId || '',
+    {
+      enabled: !!activePersonaId && hasSummary,
+    }
+  )
+
+  return (
+    <Grid item xs={12} sm={6} md={4} lg={3}>
+      <Card
+        sx={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          outline: selectedVideoIndex === index ? 2 : 0,
+          outlineColor: 'primary.main',
+          cursor: 'pointer',
+        }}
+        onClick={() => handleCardClick(index)}
+      >
+        <CardMedia
+          component="div"
+          sx={{
+            pt: '56.25%',
+            bgcolor: 'grey.300',
+            backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            position: 'relative',
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              bgcolor: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              px: 1,
+              borderRadius: 1,
+            }}
+          >
+            {formatDuration(video.duration)}
+          </Typography>
+          {video.width && video.height && (
+            <Typography
+              variant="caption"
+              sx={{
+                position: 'absolute',
+                bottom: 8,
+                left: 8,
+                bgcolor: 'rgba(0, 0, 0, 0.8)',
+                color: 'white',
+                px: 1,
+                borderRadius: 1,
+              }}
+            >
+              {video.width}×{video.height}
+            </Typography>
+          )}
+          {hasSummary && (
+            <Badge
+              badgeContent="✓"
+              color="success"
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+              }}
+            />
+          )}
+        </CardMedia>
+        <CardContent sx={{ flexGrow: 1 }}>
+          <Typography gutterBottom variant="h6" component="h2">
+            {video.uploader || video.uploader_id || 'Unknown User'}
+            {video.uploader_id && video.uploader_url && (
+              <>
+                {' '}(
+                <Link
+                  href={video.uploader_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  @{video.uploader_id}
+                </Link>
+                )
+              </>
+            )}
+          </Typography>
+
+          <Typography
+            variant="body2"
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              mb: 1,
+            }}
+          >
+            {video.description}
+          </Typography>
+
+          {video.timestamp && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+              <TimeIcon fontSize="small" color="action" />
+              <Typography variant="caption" color="text.secondary">
+                {formatTimestamp(video.timestamp)}
+              </Typography>
+            </Box>
+          )}
+
+          {(video.like_count || video.repost_count || video.comment_count) && (
+            <Stack direction="row" spacing={1.5} sx={{ mb: 1 }}>
+              {video.like_count !== undefined && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <LikeIcon fontSize="small" color="action" />
+                  <Typography variant="caption">{video.like_count.toLocaleString()}</Typography>
+                </Box>
+              )}
+              {video.repost_count !== undefined && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ShareIcon fontSize="small" color="action" />
+                  <Typography variant="caption">{video.repost_count.toLocaleString()}</Typography>
+                </Box>
+              )}
+              {video.comment_count !== undefined && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <CommentIcon fontSize="small" color="action" />
+                  <Typography variant="caption">{video.comment_count.toLocaleString()}</Typography>
+                </Box>
+              )}
+            </Stack>
+          )}
+
+          {video.tags && video.tags.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {video.tags.slice(0, 3).map((tag, idx) => (
+                <Chip key={idx} label={tag} size="small" variant="outlined" />
+              ))}
+              {video.tags.length > 3 && (
+                <Chip
+                  label={`+${video.tags.length - 3}`}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                />
+              )}
+            </Box>
+          )}
+        </CardContent>
+        <CardActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              size="small"
+              startIcon={<AnnotateIcon />}
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(`/annotate/${video.id}`)
+              }}
+            >
+              Annotate
+            </Button>
+            {videoUrl && (
+              <Button
+                size="small"
+                startIcon={<ExternalLinkIcon />}
+                href={videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Source
+              </Button>
+            )}
+            <Button
+              size="small"
+              startIcon={<SummarizeIcon />}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (hasSummary) {
+                  toggleSummaryExpand(video.id)
+                } else {
+                  handleGenerateSummary(video.id)
+                }
+              }}
+              disabled={!!activeJobId || !activePersonaId}
+            >
+              {hasSummary ? 'View' : 'Summarize'}
+            </Button>
+          </Box>
+
+          {activeJobId && (
+            <Box onClick={(e) => e.stopPropagation()}>
+              <JobStatusIndicator
+                jobId={activeJobId}
+                title="Generating summary"
+                onComplete={() => activePersonaId && handleSummaryJobComplete(video.id, activePersonaId)}
+                onFail={() => activePersonaId && handleSummaryJobFail(video.id, activePersonaId)}
+              />
+            </Box>
+          )}
+
+          {hasSummary && expandedSummaries[video.id] && (
+            <Collapse in={expandedSummaries[video.id]} onClick={(e) => e.stopPropagation()}>
+              <VideoSummaryCard
+                summary={summary ?? null}
+                personaName={activePersona?.name}
+                personaRole={activePersona?.role}
+                loading={summaryLoading}
+                showActions={false}
+              />
+            </Collapse>
+          )}
+
+          {!activePersonaId && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Select a persona to generate summaries
+            </Alert>
+          )}
+        </CardActions>
+      </Card>
+    </Grid>
   )
 }
