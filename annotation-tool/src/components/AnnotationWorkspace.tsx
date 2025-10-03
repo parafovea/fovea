@@ -26,13 +26,10 @@ import {
   MenuItem,
   Fab,
   Tooltip,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
-  Alert,
 } from '@mui/material'
 import {
   PlayArrow as PlayIcon,
@@ -61,8 +58,6 @@ import {
   setSelectedPersona,
   setAnnotationMode,
   setDetectionResults,
-  setDetectionQuery,
-  setDetectionConfidenceThreshold,
   setShowDetectionCandidates,
   clearDetectionState,
 } from '../store/annotationSlice'
@@ -71,6 +66,8 @@ import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './annotation/AnnotationAutocomplete'
 import VideoSummaryDialog from './VideoSummaryDialog'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
+import { DetectionDialog } from './dialogs/DetectionDialog'
+import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
@@ -91,9 +88,6 @@ export default function AnnotationWorkspace() {
   const [editingAnnotation, setEditingAnnotation] = useState<any>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
-  const [detectionFrameMode, setDetectionFrameMode] = useState<'current' | 'range' | 'all'>('current')
-  const [detectionFrameStart, setDetectionFrameStart] = useState(0)
-  const [detectionFrameEnd, setDetectionFrameEnd] = useState(0)
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
@@ -116,7 +110,6 @@ export default function AnnotationWorkspace() {
   })
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
   const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
-  const detectionQuery = useSelector((state: RootState) => state.annotations.detectionQuery)
   const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
   const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
 
@@ -269,37 +262,8 @@ export default function AnnotationWorkspace() {
     navigate('/ontology')
   }
 
-  const handleRunDetection = () => {
-    if (!videoId || !detectionQuery.trim()) return
-
-    const fps = currentVideo?.fps || 30
-    let frameNumbers: number[] | undefined
-
-    if (detectionFrameMode === 'current') {
-      const currentFrame = Math.floor(currentTime * fps)
-      frameNumbers = [currentFrame]
-    } else if (detectionFrameMode === 'range') {
-      frameNumbers = []
-      for (let i = detectionFrameStart; i <= detectionFrameEnd; i++) {
-        frameNumbers.push(i)
-      }
-    }
-
-    detectMutation.mutate({
-      videoId,
-      query: detectionQuery,
-      frameNumbers,
-      confidenceThreshold: detectionConfidenceThreshold,
-      enableTracking: detectionFrameMode !== 'current',
-    })
-  }
-
-  const handleOpenDetectionDialog = () => {
-    const fps = currentVideo?.fps || 30
-    const currentFrame = Math.floor(currentTime * fps)
-    setDetectionFrameStart(currentFrame)
-    setDetectionFrameEnd(Math.min(currentFrame + fps * 5, Math.floor(duration * fps)))
-    setDetectionDialogOpen(true)
+  const handleRunDetection = (request: DetectionRequest) => {
+    detectMutation.mutate(request)
   }
 
   // Show all annotations sorted by start time
@@ -535,7 +499,7 @@ export default function AnnotationWorkspace() {
                   <Button
                     variant="outlined"
                     startIcon={<DetectIcon />}
-                    onClick={handleOpenDetectionDialog}
+                    onClick={() => setDetectionDialogOpen(true)}
                     size="small"
                   >
                     Detect Objects
@@ -693,100 +657,19 @@ export default function AnnotationWorkspace() {
       )}
 
       {/* Detection Dialog */}
-      <Dialog
-        open={detectionDialogOpen}
-        onClose={() => setDetectionDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Detect Objects</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            {/* Detection Query */}
-            <TextField
-              label="Detection Query"
-              placeholder="e.g., person, vehicle, baseball"
-              value={detectionQuery}
-              onChange={(e) => dispatch(setDetectionQuery(e.target.value))}
-              fullWidth
-              helperText="Describe what you want to detect in the video"
-            />
-
-            {/* Frame Selection Mode */}
-            <FormControl fullWidth>
-              <InputLabel>Frame Selection</InputLabel>
-              <Select
-                value={detectionFrameMode}
-                onChange={(e) => setDetectionFrameMode(e.target.value as 'current' | 'range' | 'all')}
-                label="Frame Selection"
-              >
-                <MenuItem value="current">Current Frame Only</MenuItem>
-                <MenuItem value="range">Frame Range</MenuItem>
-                <MenuItem value="all">All Frames</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Frame Range Inputs */}
-            {detectionFrameMode === 'range' && (
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Start Frame"
-                  type="number"
-                  value={detectionFrameStart}
-                  onChange={(e) => setDetectionFrameStart(parseInt(e.target.value) || 0)}
-                  size="small"
-                  fullWidth
-                />
-                <TextField
-                  label="End Frame"
-                  type="number"
-                  value={detectionFrameEnd}
-                  onChange={(e) => setDetectionFrameEnd(parseInt(e.target.value) || 0)}
-                  size="small"
-                  fullWidth
-                />
-              </Box>
-            )}
-
-            {/* Confidence Threshold */}
-            <Box>
-              <Typography variant="body2" gutterBottom>
-                Confidence Threshold: {detectionConfidenceThreshold.toFixed(2)}
-              </Typography>
-              <Slider
-                value={detectionConfidenceThreshold}
-                onChange={(_, value) => dispatch(setDetectionConfidenceThreshold(value as number))}
-                min={0.1}
-                max={1.0}
-                step={0.05}
-                marks={[
-                  { value: 0.1, label: '0.1' },
-                  { value: 0.5, label: '0.5' },
-                  { value: 1.0, label: '1.0' },
-                ]}
-              />
-            </Box>
-
-            {/* Error Display */}
-            {detectMutation.isError && (
-              <Alert severity="error">
-                Detection failed: {detectMutation.error.message}
-              </Alert>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetectionDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleRunDetection}
-            variant="contained"
-            disabled={detectMutation.isPending || !detectionQuery.trim()}
-            startIcon={detectMutation.isPending ? <CircularProgress size={20} /> : <DetectIcon />}
-          >
-            {detectMutation.isPending ? 'Detecting...' : 'Run Detection'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {videoId && currentVideo && (
+        <DetectionDialog
+          open={detectionDialogOpen}
+          onClose={() => setDetectionDialogOpen(false)}
+          onDetect={handleRunDetection}
+          videoId={videoId}
+          currentTime={currentTime}
+          duration={duration}
+          fps={currentVideo.fps || 30}
+          isLoading={detectMutation.isPending}
+          error={detectMutation.isError ? detectMutation.error.message : null}
+        />
+      )}
 
       {/* Detection Candidates Dialog */}
       {detectionResults && showDetectionCandidates && videoId && (

@@ -95,11 +95,35 @@ export interface FrameDetections {
 }
 
 /**
+ * Detection query options for persona-based detection.
+ */
+export interface DetectionQueryOptions {
+  includeEntityTypes?: boolean
+  includeEntityGlosses?: boolean
+  includeEventTypes?: boolean
+  includeEventGlosses?: boolean
+  includeRoleTypes?: boolean
+  includeRoleGlosses?: boolean
+  includeRelationTypes?: boolean
+  includeRelationGlosses?: boolean
+  includeEntityInstances?: boolean
+  includeEntityInstanceGlosses?: boolean
+  includeEventInstances?: boolean
+  includeEventInstanceGlosses?: boolean
+  includeLocationInstances?: boolean
+  includeLocationInstanceGlosses?: boolean
+  includeTimeInstances?: boolean
+  includeTimeInstanceGlosses?: boolean
+}
+
+/**
  * Request payload for object detection.
  */
 export interface DetectionRequest {
   videoId: string
-  query: string
+  personaId?: string
+  manualQuery?: string
+  queryOptions?: DetectionQueryOptions
   frameNumbers?: number[]
   confidenceThreshold?: number
   enableTracking?: boolean
@@ -450,6 +474,7 @@ export class ApiClient {
 
   /**
    * Detect objects in video frames using open-vocabulary detection models.
+   * Supports both persona-based queries (using ontology and world state) and manual text queries.
    *
    * @param request - Detection parameters
    * @returns Detection results with bounding boxes and confidence scores
@@ -458,10 +483,11 @@ export class ApiClient {
   async detectObjects(request: DetectionRequest): Promise<DetectionResponse> {
     try {
       const response = await this.client.post<DetectionResponse>(
-        '/api/detection/detect',
+        `/api/videos/${request.videoId}/detect`,
         {
-          video_id: request.videoId,
-          query: request.query,
+          persona_id: request.personaId,
+          manual_query: request.manualQuery,
+          query_options: request.queryOptions,
           frame_numbers: request.frameNumbers,
           confidence_threshold: request.confidenceThreshold,
           enable_tracking: request.enableTracking,

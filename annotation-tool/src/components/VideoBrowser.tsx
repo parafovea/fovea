@@ -19,6 +19,12 @@ import {
   Badge,
   Collapse,
   Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Toolbar,
+  Paper,
 } from '@mui/material'
 import {
   Search as SearchIcon,
@@ -39,6 +45,7 @@ import {
   clearSummaryJob,
   addVideoSummary,
 } from '../store/videoSlice'
+import { setActivePersona } from '../store/personaSlice'
 import { formatTimestamp, formatDuration } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 import { useWorkspaceKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -57,6 +64,7 @@ export default function VideoBrowser() {
   const [localSearchTerm, setLocalSearchTerm] = useState(filter.searchTerm)
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
   const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
+  const [isBatchSummarizing, setIsBatchSummarizing] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const { mutate: generateSummary } = useGenerateSummary()
@@ -128,6 +136,60 @@ export default function VideoBrowser() {
       ...prev,
       [videoId]: !prev[videoId],
     }))
+  }
+
+  const handlePersonaChange = (personaId: string) => {
+    dispatch(setActivePersona(personaId))
+  }
+
+  const handleSummarizeAll = async () => {
+    if (!activePersonaId) {
+      alert('Please select a persona first')
+      return
+    }
+
+    setIsBatchSummarizing(true)
+
+    // Generate summaries for all filtered videos that don't already have one
+    for (const video of filteredVideos) {
+      const jobKey = `${video.id}:${activePersonaId}`
+      const hasSummary = videoSummaries[video.id]?.includes(activePersonaId)
+      const hasActiveJob = !!activeSummaryJobs[jobKey]
+
+      // Skip if already has summary or job in progress
+      if (hasSummary || hasActiveJob) {
+        continue
+      }
+
+      // Generate summary for this video
+      generateSummary(
+        {
+          videoId: video.id,
+          personaId: activePersonaId,
+          frameSampleRate: 1,
+          maxFrames: 30,
+        },
+        {
+          onSuccess: (result) => {
+            dispatch(
+              setActiveSummaryJob({
+                videoId: video.id,
+                personaId: activePersonaId,
+                jobId: result.jobId,
+              })
+            )
+          },
+          onError: (error) => {
+            console.error(`Failed to generate summary for video ${video.id}:`, error)
+          },
+        }
+      )
+
+      // Add a small delay to avoid overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    setIsBatchSummarizing(false)
   }
 
   const filteredVideos = videos.filter((video: VideoMetadata) => {
@@ -239,6 +301,48 @@ export default function VideoBrowser() {
           }}
         />
       </Box>
+
+      <Paper elevation={0} sx={{ mb: 3, p: 2, bgcolor: 'background.default' }}>
+        <Toolbar disableGutters sx={{ gap: 2, flexWrap: 'wrap' }}>
+          <FormControl sx={{ minWidth: 200 }} size="small">
+            <InputLabel id="persona-select-label">Persona</InputLabel>
+            <Select
+              labelId="persona-select-label"
+              id="persona-select"
+              value={activePersonaId || ''}
+              label="Persona"
+              onChange={(e) => handlePersonaChange(e.target.value)}
+            >
+              {personas.length === 0 && (
+                <MenuItem value="" disabled>
+                  No personas available
+                </MenuItem>
+              )}
+              {personas.map((persona) => (
+                <MenuItem key={persona.id} value={persona.id}>
+                  {persona.name}
+                  {persona.role && ` (${persona.role})`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Button
+            variant="contained"
+            startIcon={isBatchSummarizing ? <CircularProgress size={16} /> : <SummarizeIcon />}
+            onClick={handleSummarizeAll}
+            disabled={!activePersonaId || isBatchSummarizing || filteredVideos.length === 0}
+          >
+            {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
+          </Button>
+
+          <Box sx={{ ml: 'auto' }}>
+            <Typography variant="body2" color="text.secondary">
+              {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
+            </Typography>
+          </Box>
+        </Toolbar>
+      </Paper>
 
       <Grid container spacing={3}>
         {filteredVideos.map((video: VideoMetadata, index) => {
