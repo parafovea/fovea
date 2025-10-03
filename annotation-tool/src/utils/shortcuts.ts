@@ -15,7 +15,7 @@ export interface ShortcutDefinition {
 
 // Get the appropriate modifier key for the current OS
 export const getOSModifier = (): 'cmd' | 'ctrl' => {
-  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+  const isMac = navigator.userAgent.toUpperCase().indexOf('MAC') >= 0
   return isMac ? 'cmd' : 'ctrl'
 }
 
@@ -26,7 +26,7 @@ export const formatShortcut = (shortcut: ShortcutDefinition): string => {
     if (mod === 'cmd' || mod === 'ctrl') {
       return osModifier === 'cmd' ? '⌘' : 'Ctrl'
     }
-    if (mod === 'alt') return navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌥' : 'Alt'
+    if (mod === 'alt') return navigator.userAgent.toUpperCase().indexOf('MAC') >= 0 ? '⌥' : 'Alt'
     if (mod === 'shift') return '⇧'
     return mod
   })
@@ -243,6 +243,13 @@ export const ontologyWorkspaceShortcuts: ShortcutDefinition[] = [
     sequence: ['g', 'p'],
     action: 'navigate.personaBrowser',
     description: 'Go to persona browser',
+    context: 'ontologyWorkspace',
+  },
+  {
+    key: 's',
+    modifiers: [getOSModifier(), 'shift'],
+    action: 'ontology.suggestTypes',
+    description: 'Suggest types with AI',
     context: 'ontologyWorkspace',
   },
 ]

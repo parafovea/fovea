@@ -30,6 +30,7 @@ import {
   Share as RelationIcon,
   ArrowBack as BackIcon,
   Search as SearchIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
 import PersonaBrowser from '../browsers/PersonaBrowser'
@@ -47,6 +48,7 @@ import {
   deleteRelationType,
 } from '../../store/personaSlice'
 import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -119,7 +121,11 @@ export default function OntologyWorkspace() {
   const [selectedRole, setSelectedRole] = useState<any>(null)
   const [selectedEventType, setSelectedEventType] = useState<any>(null)
   const [selectedRelationType, setSelectedRelationType] = useState<any>(null)
-  
+
+  // Ontology Augmenter state
+  const [augmenterOpen, setAugmenterOpen] = useState(false)
+  const [augmenterCategory, setAugmenterCategory] = useState<OntologyCategory>('entity')
+
   // Refs for managing focus
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
@@ -215,7 +221,12 @@ export default function OntologyWorkspace() {
     setSelectedRelationType(relation)
     setRelationTypeEditorOpen(true)
   }
-  
+
+  const handleOpenAugmenter = (category: OntologyCategory) => {
+    setAugmenterCategory(category)
+    setAugmenterOpen(true)
+  }
+
   // Get the currently visible list items based on tab
   const getCurrentItems = () => {
     switch(tabValue) {
@@ -232,6 +243,16 @@ export default function OntologyWorkspace() {
     'type.new': () => handleAddType(),
     'tab.next': () => setTabValue((prev) => (prev + 1) % 4),
     'tab.previous': () => setTabValue((prev) => (prev - 1 + 4) % 4),
+    'ontology.suggestTypes': () => {
+      const categoryMap: Record<number, OntologyCategory> = {
+        0: 'entity',
+        1: 'role',
+        2: 'event',
+        3: 'relation',
+      }
+      const category = categoryMap[tabValue] || 'entity'
+      handleOpenAugmenter(category)
+    },
     'item.edit': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
@@ -364,6 +385,16 @@ export default function OntologyWorkspace() {
 
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => handleOpenAugmenter('entity')}
+              size="small"
+            >
+              Suggest Types
+            </Button>
+          </Box>
           <List>
             {filteredEntities.map((entity, index) => (
               <ListItem 
@@ -408,6 +439,16 @@ export default function OntologyWorkspace() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => handleOpenAugmenter('role')}
+              size="small"
+            >
+              Suggest Types
+            </Button>
+          </Box>
           <List>
             {filteredRoles.map((role, index) => (
               <ListItem 
@@ -459,6 +500,16 @@ export default function OntologyWorkspace() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => handleOpenAugmenter('event')}
+              size="small"
+            >
+              Suggest Types
+            </Button>
+          </Box>
           <List>
             {filteredEvents.map((event, index) => (
               <ListItem 
@@ -512,6 +563,16 @@ export default function OntologyWorkspace() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => handleOpenAugmenter('relation')}
+              size="small"
+            >
+              Suggest Types
+            </Button>
+          </Box>
           <List>
             {filteredRelations.map((relation, index) => (
               <ListItem 
@@ -627,6 +688,30 @@ export default function OntologyWorkspace() {
         }}
         persona={editingPersona}
       />
+
+      {/* Ontology Augmenter Dialog */}
+      {augmenterOpen && selectedPersonaId && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1300,
+            maxWidth: '800px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+          }}
+        >
+          <OntologyAugmenter
+            personaId={selectedPersonaId}
+            personaName={selectedPersona?.name}
+            initialCategory={augmenterCategory}
+            onClose={() => setAugmenterOpen(false)}
+          />
+        </Box>
+      )}
     </Box>
   )
 }
