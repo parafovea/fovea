@@ -102,13 +102,156 @@ export interface OntologyRelation {
   updatedAt: string
 }
 
+/**
+ * @interface BoundingBox
+ * @description Represents a spatial bounding box at a specific video frame.
+ * All bounding boxes must have a frame number for sequence support.
+ */
 export interface BoundingBox {
   x: number
   y: number
   width: number
   height: number
-  frameNumber?: number
+  frameNumber: number  // Required for all bounding boxes (sequences with 1+ keyframes)
+  confidence?: number  // For model-generated boxes
+  isKeyframe?: boolean // User-set keyframe vs. interpolated frame
+  metadata?: Record<string, any>
 }
+
+/**
+ * @type InterpolationType
+ * @description Supported interpolation modes for bounding box sequences.
+ */
+export type InterpolationType =
+  | 'linear'
+  | 'bezier'
+  | 'ease-in'
+  | 'ease-out'
+  | 'ease-in-out'
+  | 'hold'
+  | 'parametric'
+
+/**
+ * @interface BezierControlPoint
+ * @description Control point for cubic Bezier curve interpolation.
+ */
+export interface BezierControlPoint {
+  x: number  // Temporal (0-1, position between keyframes)
+  y: number  // Spatial (0-1, value interpolation)
+}
+
+/**
+ * @interface ParametricFunction
+ * @description Configuration for parametric motion functions.
+ */
+export interface ParametricFunction {
+  type: 'linear' | 'quadratic' | 'sinusoidal' | 'custom'
+  parameters: Record<string, number>
+  expression?: string  // For custom functions
+}
+
+/**
+ * @interface InterpolationSegment
+ * @description Defines interpolation behavior between two keyframes.
+ */
+export interface InterpolationSegment {
+  startFrame: number
+  endFrame: number
+  type: InterpolationType
+
+  // For bezier interpolation
+  controlPoints?: {
+    x?: BezierControlPoint[]
+    y?: BezierControlPoint[]
+    width?: BezierControlPoint[]
+    height?: BezierControlPoint[]
+  }
+
+  // For parametric functions
+  parametric?: {
+    x?: ParametricFunction
+    y?: ParametricFunction
+    width?: ParametricFunction
+    height?: ParametricFunction
+  }
+}
+
+/**
+ * @interface BoundingBoxSequence
+ * @description Complete sequence of bounding boxes with interpolation configuration.
+ * ALL annotations use sequences. Single-frame annotations are sequences with 1 keyframe.
+ */
+export interface BoundingBoxSequence {
+  boxes: BoundingBox[]  // Keyframes only (interpolated frames generated on demand)
+  interpolationSegments: InterpolationSegment[]
+
+  // Discontiguous support
+  visibilityRanges: Array<{
+    startFrame: number
+    endFrame: number
+    visible: boolean
+  }>
+
+  // Tracking integration
+  trackId?: string | number  // Links to automated tracking result
+  trackingSource?: 'manual' | 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
+  trackingConfidence?: number  // Overall confidence for tracked sequence
+
+  // Metadata
+  totalFrames: number
+  keyframeCount: number
+  interpolatedFrameCount: number
+}
+
+/**
+ * @constant INTERPOLATION_PRESETS
+ * @description Preset configurations for common interpolation modes.
+ */
+export const INTERPOLATION_PRESETS = {
+  linear: {
+    name: 'Linear',
+    description: 'Constant velocity',
+    icon: '—',
+    default: true
+  },
+  easeInOut: {
+    name: 'Ease In-Out',
+    description: 'Smooth start and end',
+    icon: '~',
+    controlPoints: {
+      default: { x: [{ x: 0.42, y: 0 }, { x: 0.58, y: 1 }] }
+    }
+  },
+  easeIn: {
+    name: 'Ease In',
+    description: 'Gradual acceleration',
+    icon: '/',
+    controlPoints: {
+      default: { x: [{ x: 0.42, y: 0 }, { x: 1, y: 1 }] }
+    }
+  },
+  easeOut: {
+    name: 'Ease Out',
+    description: 'Gradual deceleration',
+    icon: '\\',
+    controlPoints: {
+      default: { x: [{ x: 0, y: 0 }, { x: 0.58, y: 1 }] }
+    }
+  },
+  hold: {
+    name: 'Hold',
+    description: 'No interpolation',
+    icon: '⊏',
+  },
+  parametricGravity: {
+    name: 'Gravity',
+    description: 'Falling object physics',
+    icon: '↓',
+    parametric: {
+      y: { type: 'quadratic', parameters: { a: 9.8 } }
+    }
+  }
+} as const
 
 // Temporal Model
 export interface Time {
@@ -399,19 +542,22 @@ export interface EventStructureNode {
   optional?: boolean
 }
 
-// Base Annotation interface with common fields
+/**
+ * @interface BaseAnnotation
+ * @description Base interface for all annotation types with common fields.
+ * ALL annotations now use bounding box sequences (no legacy single-frame mode).
+ */
 interface BaseAnnotation {
   id: string
   videoId: string
-  
-  // Spatial
-  boundingBox?: BoundingBox
-  boundingBoxSequence?: BoundingBox[]
-  
+
+  // Spatial (ALL annotations use sequences)
+  boundingBoxSequence: BoundingBoxSequence  // Required for all annotations
+
   // Temporal
   time?: Time
   timeSpan?: TimeSpan  // Deprecated, for backward compatibility
-  
+
   // Common metadata
   confidence?: number
   notes?: string
@@ -419,6 +565,13 @@ interface BaseAnnotation {
   createdBy?: string
   createdAt: string
   updatedAt: string
+
+  // UI state (ephemeral, not persisted)
+  _ui?: {
+    selectedKeyframes?: number[]  // Frame numbers
+    showMotionPath?: boolean
+    timelineExpanded?: boolean
+  }
 }
 
 // Annotation linking to world objects (entities, events, times)
