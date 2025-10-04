@@ -178,7 +178,7 @@ export default function Layout() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            FOVEA: Frame-Oriented Video Event Annotator
+            FOVEA: Flexible Ontology Visual Event Analyzer
           </Typography>
           {unsavedChanges && (
             <Typography variant="body2" sx={{ mr: 2, color: 'yellow' }}>

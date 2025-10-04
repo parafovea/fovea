@@ -13,7 +13,6 @@ import {
   Typography,
   Divider,
   Alert,
-  Link,
 } from '@mui/material'
 import {
   Settings as SettingsIcon,
@@ -168,61 +167,77 @@ export default function Settings() {
                 About FOVEA
               </Typography>
               <Typography variant="body1" paragraph>
-                FOVEA (Frame-Oriented Video Event Annotator) is a video annotation tool for developing annotation ontologies.
-              </Typography>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Typography variant="h6" gutterBottom>
-                Model Service Features
+                FOVEA (Flexible Ontology Visual Event Analyzer) is a web-based video annotation tool designed for tactically-oriented analysts developing annotation ontologies.
               </Typography>
               <Typography variant="body2" paragraph>
-                This application integrates with an AI model service for automated video analysis:
+                FOVEA uses a persona-based approach where different analysts can assign different semantic types to the same real-world objects, enabling collaborative ontology development with multiple perspectives. The tool maintains a clean separation between type definitions (EntityType, EventType, RoleType) and actual world instances (Entity, Event, Location), supporting rich temporal modeling, spatial relationships, and semantic collections.
+              </Typography>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="h6" gutterBottom>
+                Key Features
               </Typography>
               <Box component="ul" sx={{ pl: 3, mt: 1 }}>
                 <Typography component="li" variant="body2">
-                  Video Summarization: Generate narrative summaries using vision language models
+                  <strong>Persona-Based Ontologies:</strong> Multiple analysts maintain their own type systems and interpretations
                 </Typography>
                 <Typography component="li" variant="body2">
-                  Object Detection: Detect and localize objects in video frames
+                  <strong>World Model:</strong> Shared instances of entities, events, locations, and temporal objects
                 </Typography>
                 <Typography component="li" variant="body2">
-                  Video Tracking: Track objects across multiple frames
+                  <strong>Rich Temporal Model:</strong> Support for vague times, deictic references, and temporal patterns
+                </Typography>
+                <Typography component="li" variant="body2">
+                  <strong>Wikidata Integration:</strong> Auto-populate entities and locations from Wikidata
+                </Typography>
+                <Typography component="li" variant="body2">
+                  <strong>Interactive Mapping:</strong> Leaflet-based location visualization and selection
                 </Typography>
               </Box>
 
               <Divider sx={{ my: 3 }} />
 
               <Typography variant="h6" gutterBottom>
-                Documentation
+                AI-Powered Analysis
+              </Typography>
+              <Typography variant="body2" paragraph>
+                FOVEA integrates with a GPU-accelerated model service for automated video analysis:
               </Typography>
               <Box component="ul" sx={{ pl: 3, mt: 1 }}>
                 <Typography component="li" variant="body2">
-                  <Link href="https://github.com/anthropics/claude-code" target="_blank" rel="noopener">
-                    Claude Code Documentation
-                  </Link>
+                  <strong>Video Summarization:</strong> Generate persona-specific narrative summaries using vision-language models
                 </Typography>
                 <Typography component="li" variant="body2">
-                  Use the Models tab to configure which models are loaded for each task
+                  <strong>Object Detection:</strong> Detect and localize objects with customizable queries
                 </Typography>
                 <Typography component="li" variant="body2">
-                  Use the Status tab to monitor VRAM usage and model performance
+                  <strong>Video Tracking:</strong> Track objects across multiple frames with motion-aware segmentation
+                </Typography>
+                <Typography component="li" variant="body2">
+                  <strong>Ontology Augmentation:</strong> AI-assisted expansion of type definitions
                 </Typography>
               </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Configure models in the Models tab and monitor performance in the Status tab.
+              </Typography>
 
               <Divider sx={{ my: 3 }} />
 
               <Typography variant="h6" gutterBottom>
-                System Information
+                Technology Stack
               </Typography>
               <Typography variant="body2">
-                Frontend: React + TypeScript + Vite
+                Frontend: React 18 + TypeScript + Vite + Material-UI v5 + Redux Toolkit
               </Typography>
               <Typography variant="body2">
-                Backend: Node.js + Fastify
+                Backend: Node.js + Fastify + TypeScript
               </Typography>
               <Typography variant="body2">
-                Model Service: Python + FastAPI
+                Model Service: Python + FastAPI + PyTorch + Transformers
+              </Typography>
+              <Typography variant="body2">
+                Video Player: video.js v8 with custom annotation overlay
               </Typography>
             </Box>
           </TabPanel>
