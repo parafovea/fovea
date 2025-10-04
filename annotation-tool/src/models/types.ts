@@ -499,11 +499,22 @@ export interface PersonaOntology {
   updatedAt: string
 }
 
+export interface WorldStateData {
+  entities: Entity[]
+  events: Event[]
+  times: Time[]
+  entityCollections: EntityCollection[]
+  eventCollections: EventCollection[]
+  timeCollections: TimeCollection[]
+  relations: OntologyRelation[]
+}
+
 export interface Ontology {
   id: string
   version: string
   personas: Persona[]
   personaOntologies: PersonaOntology[]
+  world?: WorldStateData
   createdAt: string
   updatedAt: string
   description?: string

@@ -61,7 +61,7 @@ export async function buildApp() {
   })
 
   await app.register(fastifyRateLimit, {
-    max: 100,
+    max: 1000,
     timeWindow: '1 minute'
   })
 
@@ -184,6 +184,9 @@ export async function buildApp() {
 
   const modelsRoute = await import('./routes/models.js')
   await app.register(modelsRoute.default)
+
+  const annotationsRoute = await import('./routes/annotations.js')
+  await app.register(annotationsRoute.default)
 
   return app
 }

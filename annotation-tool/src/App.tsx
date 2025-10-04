@@ -10,6 +10,7 @@ import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
 import Settings from './pages/Settings'
 import { AppDispatch } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
+import { setWorldData } from './store/worldSlice'
 import { api } from './services/api'
 
 function App() {
@@ -25,6 +26,12 @@ function App() {
           // New format
           dispatch(setPersonas(ontology.personas))
           dispatch(setPersonaOntologies(ontology.personaOntologies))
+
+          // Load world state if it exists
+          if (ontology.world) {
+            dispatch(setWorldData(ontology.world))
+          }
+
           if (ontology.personas.length > 0) {
             dispatch(setActivePersona(ontology.personas[0].id))
           }

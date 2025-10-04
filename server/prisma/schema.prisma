@@ -52,6 +52,32 @@ model Ontology {
   @@map("ontologies")
 }
 
+/// WorldState stores the actual instances of entities, events, locations, times, and collections
+/// This is shared across all personas (personas assign types to these instances)
+model WorldState {
+  id                String   @id @default(uuid())
+
+  /// JSON structure: Entity[]
+  entities          Json     @default("[]")
+  /// JSON structure: Event[]
+  events            Json     @default("[]")
+  /// JSON structure: Time[]
+  times             Json     @default("[]")
+  /// JSON structure: EntityCollection[]
+  entityCollections Json     @default("[]")
+  /// JSON structure: EventCollection[]
+  eventCollections  Json     @default("[]")
+  /// JSON structure: TimeCollection[]
+  timeCollections   Json     @default("[]")
+  /// JSON structure: OntologyRelation[]
+  relations         Json     @default("[]")
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("world_state")
+}
+
 /// Video represents a video file with its metadata
 model Video {
   id          String   @id @default(uuid())

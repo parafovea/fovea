@@ -77,31 +77,83 @@ export const api = {
   // Export as JSON Lines
   async downloadExport(): Promise<void> {
     const exportData = await this.exportOntology()
-    
-    // Convert to JSON Lines format
-    const jsonLines = [
-      JSON.stringify({ type: 'ontology', data: exportData.ontology }),
-      ...exportData.annotations.map(ann => 
-        JSON.stringify({ type: 'annotation', data: ann })
-      ),
-      ...exportData.videos.map(video => 
-        JSON.stringify({ type: 'video', data: video })
-      ),
-      JSON.stringify({ 
-        type: 'metadata', 
-        data: { 
-          exportDate: exportData.exportDate, 
-          exportVersion: exportData.exportVersion 
-        } 
-      }),
-    ].join('\n')
+
+    const jsonLines: string[] = []
+
+    // Export ontology types (personas and their ontologies)
+    jsonLines.push(JSON.stringify({
+      type: 'ontology',
+      data: {
+        personas: exportData.ontology.personas,
+        personaOntologies: exportData.ontology.personaOntologies
+      }
+    }))
+
+    // Export world state if it exists
+    if (exportData.ontology.world) {
+      const world = exportData.ontology.world
+
+      // Export each entity
+      world.entities.forEach(entity => {
+        jsonLines.push(JSON.stringify({ type: 'entity', data: entity }))
+      })
+
+      // Export each event
+      world.events.forEach(event => {
+        jsonLines.push(JSON.stringify({ type: 'event', data: event }))
+      })
+
+      // Export each time
+      world.times.forEach(time => {
+        jsonLines.push(JSON.stringify({ type: 'time', data: time }))
+      })
+
+      // Export each entity collection
+      world.entityCollections.forEach(collection => {
+        jsonLines.push(JSON.stringify({ type: 'entityCollection', data: collection }))
+      })
+
+      // Export each event collection
+      world.eventCollections.forEach(collection => {
+        jsonLines.push(JSON.stringify({ type: 'eventCollection', data: collection }))
+      })
+
+      // Export each time collection
+      world.timeCollections.forEach(collection => {
+        jsonLines.push(JSON.stringify({ type: 'timeCollection', data: collection }))
+      })
+
+      // Export each relation
+      world.relations.forEach(relation => {
+        jsonLines.push(JSON.stringify({ type: 'relation', data: relation }))
+      })
+    }
+
+    // Export annotations
+    exportData.annotations.forEach(ann => {
+      jsonLines.push(JSON.stringify({ type: 'annotation', data: ann }))
+    })
+
+    // Export videos
+    exportData.videos.forEach(video => {
+      jsonLines.push(JSON.stringify({ type: 'video', data: video }))
+    })
+
+    // Export metadata
+    jsonLines.push(JSON.stringify({
+      type: 'metadata',
+      data: {
+        exportDate: exportData.exportDate,
+        exportVersion: exportData.exportVersion
+      }
+    }))
 
     // Create download
-    const blob = new Blob([jsonLines], { type: 'application/x-ndjson' })
+    const blob = new Blob([jsonLines.join('\n')], { type: 'application/x-ndjson' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ontology-export-${Date.now()}.jsonl`
+    a.download = `fovea-export-${Date.now()}.jsonl`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

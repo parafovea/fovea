@@ -58,6 +58,7 @@ export default function Layout() {
     state.persona.unsavedChanges
   )
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  const world = useSelector((state: RootState) => state.world)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
   const menuItems = [
@@ -70,12 +71,20 @@ export default function Layout() {
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      // Create ontology in new format
       const ontology: Ontology = {
         id: `ont_${Date.now()}`,
         version: '1.0.0',
         personas,
         personaOntologies,
+        world: {
+          entities: world.entities,
+          events: world.events,
+          times: world.times,
+          entityCollections: world.entityCollections,
+          eventCollections: world.eventCollections,
+          timeCollections: world.timeCollections,
+          relations: world.relations,
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
@@ -84,20 +93,20 @@ export default function Layout() {
       dispatch(markPersonaSaved())
       setNotification({
         open: true,
-        message: 'Ontology saved successfully',
+        message: 'Data saved successfully',
         severity: 'success',
       })
     } catch (error) {
-      console.error('Failed to save ontology:', error)
+      console.error('Failed to save data:', error)
       setNotification({
         open: true,
-        message: 'Failed to save ontology',
+        message: 'Failed to save data',
         severity: 'error',
       })
     } finally {
       setSaving(false)
     }
-  }, [personas, personaOntologies, dispatch])
+  }, [personas, personaOntologies, world, dispatch])
 
   const handleExport = useCallback(async () => {
     setExporting(true)
@@ -105,7 +114,7 @@ export default function Layout() {
       await api.downloadExport()
       setNotification({
         open: true,
-        message: 'Export downloaded successfully',
+        message: 'Export completed successfully',
         severity: 'success',
       })
     } catch (error) {
