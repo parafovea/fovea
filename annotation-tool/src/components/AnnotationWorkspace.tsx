@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react'
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import {
@@ -76,6 +76,17 @@ import { useModelConfig } from '../hooks/useModelConfig'
 
 const DRAWER_WIDTH = 300
 
+/**
+ * Video annotation workspace providing video playback, annotation drawing, and AI-assisted analysis.
+ * Supports persona-based type annotation and object linking with integrated detection and summarization.
+ *
+ * @returns React component rendering video player, annotation controls, and annotation list
+ *
+ * @example
+ * ```tsx
+ * <Route path="/annotate/:videoId" element={<AnnotationWorkspace />} />
+ * ```
+ */
 export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
@@ -199,11 +210,21 @@ export default function AnnotationWorkspace() {
     }
   }, [videoId])
 
-  useEffect(() => {
-    loadVideo()
-  }, [videoId])
-
-  const loadVideo = async () => {
+  /**
+   * Loads video metadata from the API and stores it in Redux state.
+   * Fetches video information including dimensions, FPS, uploader data, and timestamps.
+   *
+   * @returns Promise that resolves when video metadata is loaded
+   *
+   * @example
+   * ```tsx
+   * // Called automatically on mount when videoId changes
+   * useEffect(() => {
+   *   loadVideo()
+   * }, [loadVideo])
+   * ```
+   */
+  const loadVideo = useCallback(async () => {
     try {
       const response = await fetch(`/api/videos/${videoId}`)
       const data = await response.json()
@@ -211,8 +232,23 @@ export default function AnnotationWorkspace() {
     } catch (error) {
       console.error('Failed to load video:', error)
     }
-  }
+  }, [videoId, dispatch])
 
+  useEffect(() => {
+    loadVideo()
+  }, [loadVideo])
+
+  /**
+   * Toggles video playback between play and pause states.
+   * Updates the isPlaying state through video.js event listeners.
+   *
+   * @example
+   * ```tsx
+   * <IconButton onClick={handlePlayPause}>
+   *   {isPlaying ? <PauseIcon /> : <PlayIcon />}
+   * </IconButton>
+   * ```
+   */
   const handlePlayPause = () => {
     if (!playerRef.current) return
     if (isPlaying) {
@@ -222,34 +258,94 @@ export default function AnnotationWorkspace() {
     }
   }
 
+  /**
+   * Seeks video to a specific time position.
+   * Called by the timeline slider component when user drags the playhead.
+   *
+   * @param _event - Material-UI slider event (unused)
+   * @param value - Target time in seconds (array or number from slider)
+   *
+   * @example
+   * ```tsx
+   * <Slider value={currentTime} max={duration} onChange={handleSeek} />
+   * ```
+   */
   const handleSeek = (_event: Event, value: number | number[]) => {
     if (!playerRef.current) return
     const time = Array.isArray(value) ? value[0] : value
     playerRef.current.currentTime(time)
   }
 
+  /**
+   * Advances video by one frame based on video FPS.
+   * Uses video FPS metadata or defaults to 30 FPS if unavailable.
+   *
+   * @example
+   * ```tsx
+   * <IconButton onClick={handleNextFrame}>
+   *   <NextFrameIcon />
+   * </IconButton>
+   * ```
+   */
   const handleNextFrame = () => {
     if (!playerRef.current) return
     const fps = currentVideo?.fps || 30
     playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
   }
 
+  /**
+   * Rewinds video by one frame based on video FPS.
+   * Clamps minimum time to 0 to prevent negative values.
+   *
+   * @example
+   * ```tsx
+   * <IconButton onClick={handlePrevFrame}>
+   *   <PrevFrameIcon />
+   * </IconButton>
+   * ```
+   */
   const handlePrevFrame = () => {
     if (!playerRef.current) return
     const fps = currentVideo?.fps || 30
     playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
   }
 
+  /**
+   * Selects an annotation and seeks video to its start time.
+   * Highlights the annotation in the sidebar and moves playhead to annotation start.
+   *
+   * @param annotation - Annotation object containing timeSpan with startTime
+   *
+   * @example
+   * ```tsx
+   * <ListItem onClick={() => handleAnnotationClick(annotation)}>
+   *   {annotation.typeId}
+   * </ListItem>
+   * ```
+   */
   const handleAnnotationClick = (annotation: any) => {
     // Select the annotation
     dispatch(selectAnnotation(annotation))
-    
+
     // Seek video to start of annotation
     if (playerRef.current) {
       playerRef.current.currentTime(annotation.timeSpan.startTime)
     }
   }
 
+  /**
+   * Formats video time in seconds to MM:SS.CS display format.
+   * Converts decimal seconds to minutes, seconds, and centiseconds.
+   *
+   * @param seconds - Time value in seconds (may include fractional component)
+   * @returns Formatted time string in MM:SS.CS format
+   *
+   * @example
+   * ```tsx
+   * formatTime(65.75)  // returns "1:05.75"
+   * formatTime(0.5)    // returns "0:00.50"
+   * ```
+   */
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
@@ -257,6 +353,17 @@ export default function AnnotationWorkspace() {
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
   }
 
+  /**
+   * Navigates to the ontology builder and saves current annotation context.
+   * Stores the current video ID and timestamp for resuming annotation later.
+   *
+   * @example
+   * ```tsx
+   * <Fab onClick={handleGoToOntology}>
+   *   <BuildIcon />
+   * </Fab>
+   * ```
+   */
   const handleGoToOntology = () => {
     // Save current annotation state before navigating
     if (videoId) {
@@ -265,11 +372,27 @@ export default function AnnotationWorkspace() {
     navigate('/ontology')
   }
 
+  /**
+   * Initiates object detection request using AI model.
+   * Triggers detection mutation and opens results dialog on success.
+   *
+   * @param request - Detection parameters including video ID, query, frames, and options
+   *
+   * @example
+   * ```tsx
+   * <DetectionDialog onDetect={handleRunDetection} />
+   * ```
+   */
   const handleRunDetection = (request: DetectionRequest) => {
     detectMutation.mutate(request)
   }
 
-  // Show all annotations sorted by start time
+  /**
+   * Sorts annotations by start time for chronological display.
+   * Memoized to avoid re-sorting on every render.
+   *
+   * @returns Array of annotations sorted by timeSpan.startTime in ascending order
+   */
   const sortedAnnotations = useMemo(() =>
     [...annotations].sort((a, b) => {
       if (!a.timeSpan || !b.timeSpan) return 0
@@ -277,9 +400,20 @@ export default function AnnotationWorkspace() {
     }),
     [annotations]
   )
-  
-  // Highlight annotations at current time
-  const isAnnotationActive = (annotation: any) => 
+
+  /**
+   * Checks if an annotation is active at the current video time.
+   * Used to highlight annotations in the sidebar during playback.
+   *
+   * @param annotation - Annotation with timeSpan containing start and end times
+   * @returns True if current time falls within annotation's time span
+   *
+   * @example
+   * ```tsx
+   * <ListItem sx={{ borderLeft: isAnnotationActive(annotation) ? '3px solid' : 'none' }}>
+   * ```
+   */
+  const isAnnotationActive = (annotation: any) =>
     annotation.timeSpan.startTime <= currentTime && annotation.timeSpan.endTime >= currentTime
 
   return (

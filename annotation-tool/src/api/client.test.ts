@@ -200,4 +200,319 @@ describe('ApiClient', () => {
       })
     })
   })
+
+  describe('augmentOntology', () => {
+    it('returns ontology suggestions', async () => {
+      const response = await client.augmentOntology({
+        personaId: 'persona-1',
+        domain: 'baseball analytics',
+        existingTypes: ['Player', 'Team', 'Game'],
+        targetCategory: 'event',
+        maxSuggestions: 5,
+      })
+
+      expect(response).toMatchObject({
+        id: 'augment-1',
+        persona_id: 'persona-1',
+        target_category: 'event',
+      })
+      expect(response.suggestions).toHaveLength(2)
+      expect(response.suggestions[0]).toMatchObject({
+        name: 'Home Run',
+        description: expect.stringContaining('batter'),
+        confidence: 0.95,
+        examples: expect.arrayContaining(['Grand slam']),
+      })
+    })
+
+    it('handles optional parameters', async () => {
+      const response = await client.augmentOntology({
+        personaId: 'persona-1',
+        domain: 'sports analytics',
+        existingTypes: ['Player'],
+        targetCategory: 'entity',
+      })
+
+      expect(response.persona_id).toBe('persona-1')
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.post('http://localhost:3001/api/ontology/augment', () => {
+          return HttpResponse.json(
+            { message: 'Invalid category' },
+            { status: 400 }
+          )
+        })
+      )
+
+      await expect(
+        client.augmentOntology({
+          personaId: 'persona-1',
+          domain: 'test',
+          existingTypes: [],
+          targetCategory: 'entity',
+        })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+      })
+    })
+  })
+
+  describe('detectObjects', () => {
+    it('detects objects with manual query', async () => {
+      const response = await client.detectObjects({
+        videoId: 'video-1',
+        manualQuery: 'baseball, bat, glove',
+      })
+
+      expect(response).toMatchObject({
+        id: 'detection-1',
+        video_id: 'video-1',
+        query: 'baseball, bat, glove',
+        total_detections: 3,
+      })
+      expect(response.frames).toHaveLength(2)
+      expect(response.frames[0].detections[0]).toMatchObject({
+        label: 'baseball',
+        confidence: 0.94,
+        track_id: 'track-1',
+      })
+    })
+
+    it('detects objects with persona and query options', async () => {
+      const response = await client.detectObjects({
+        videoId: 'video-1',
+        personaId: 'persona-1',
+        queryOptions: {
+          includeEntityTypes: true,
+          includeEntityGlosses: true,
+        },
+        frameNumbers: [0, 30, 60],
+        confidenceThreshold: 0.7,
+        enableTracking: true,
+      })
+
+      expect(response.video_id).toBe('video-1')
+      expect(response.frames.length).toBeGreaterThan(0)
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.post('http://localhost:3001/api/videos/:videoId/detect', () => {
+          return HttpResponse.json(
+            { message: 'Video not found' },
+            { status: 404 }
+          )
+        })
+      )
+
+      await expect(
+        client.detectObjects({
+          videoId: 'invalid',
+          manualQuery: 'test',
+        })
+      ).rejects.toMatchObject({
+        statusCode: 404,
+      })
+    })
+  })
+
+  describe('getModelConfig', () => {
+    it('fetches model configuration', async () => {
+      const config = await client.getModelConfig()
+
+      expect(config).toMatchObject({
+        cuda_available: true,
+      })
+      expect(config.models.vlm).toMatchObject({
+        selected: 'llava',
+      })
+      expect(config.models.vlm.options.llava).toMatchObject({
+        model_id: 'llava-hf/llava-1.5-7b-hf',
+        vram_gb: 14.0,
+      })
+      expect(config.inference).toMatchObject({
+        max_memory_per_model: 24.0,
+        offload_threshold: 0.8,
+      })
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/models/config', () => {
+          return HttpResponse.json(
+            { message: 'Service unavailable' },
+            { status: 503 }
+          )
+        })
+      )
+
+      await expect(client.getModelConfig()).rejects.toMatchObject({
+        statusCode: 503,
+      })
+    })
+  })
+
+  describe('selectModel', () => {
+    it('selects a model for a task type', async () => {
+      const response = await client.selectModel({
+        task_type: 'vlm',
+        model_name: 'llava',
+      })
+
+      expect(response).toMatchObject({
+        status: 'success',
+        task_type: 'vlm',
+        selected_model: 'llava',
+      })
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.post('http://localhost:3001/api/models/select', () => {
+          return HttpResponse.json(
+            { message: 'Invalid model name' },
+            { status: 400 }
+          )
+        })
+      )
+
+      await expect(
+        client.selectModel({
+          task_type: 'vlm',
+          model_name: 'invalid',
+        })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+      })
+    })
+  })
+
+  describe('validateMemoryBudget', () => {
+    it('validates memory budget', async () => {
+      const validation = await client.validateMemoryBudget()
+
+      expect(validation).toMatchObject({
+        valid: true,
+        total_vram_gb: 24.0,
+        total_required_gb: 18.0,
+        threshold: 0.8,
+      })
+      expect(validation.model_requirements.vlm).toMatchObject({
+        model_id: 'llava-hf/llava-1.5-7b-hf',
+        vram_gb: 14.0,
+      })
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.post('http://localhost:3001/api/models/validate', () => {
+          return HttpResponse.json(
+            { message: 'Validation error' },
+            { status: 500 }
+          )
+        })
+      )
+
+      await expect(client.validateMemoryBudget()).rejects.toMatchObject({
+        statusCode: 500,
+      })
+    })
+  })
+
+  describe('getModelStatus', () => {
+    it('fetches model status', async () => {
+      const status = await client.getModelStatus()
+
+      expect(status).toMatchObject({
+        total_vram_allocated_gb: 14.0,
+        total_vram_available_gb: 24.0,
+        cuda_available: true,
+      })
+      expect(status.loaded_models).toHaveLength(1)
+      expect(status.loaded_models[0]).toMatchObject({
+        model_id: 'llava-hf/llava-1.5-7b-hf',
+        task_type: 'vlm',
+        health: 'loaded',
+        warm_up_complete: true,
+      })
+      expect(status.loaded_models[0].performance_metrics).toMatchObject({
+        total_requests: 150,
+        average_latency_ms: 234.5,
+      })
+    })
+
+    it('throws ApiError on failure', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/models/status', () => {
+          return HttpResponse.json(
+            { message: 'Service error' },
+            { status: 500 }
+          )
+        })
+      )
+
+      await expect(client.getModelStatus()).rejects.toMatchObject({
+        statusCode: 500,
+      })
+    })
+  })
+
+  describe('error handling', () => {
+    it('handles timeout errors', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+          return HttpResponse.json(null, { status: 408 })
+        })
+      )
+
+      await expect(client.getVideoSummaries('video-1')).rejects.toMatchObject({
+        statusCode: 408,
+      })
+    })
+
+    it('handles network errors', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+          return HttpResponse.error()
+        })
+      )
+
+      await expect(client.getVideoSummaries('video-1')).rejects.toMatchObject({
+        message: expect.stringContaining('Network Error'),
+        statusCode: 500,
+      })
+    })
+
+    it('converts axios errors to ApiError', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+          return HttpResponse.json(
+            { message: 'Custom error message' },
+            { status: 418 }
+          )
+        })
+      )
+
+      await expect(client.getVideoSummaries('video-1')).rejects.toMatchObject({
+        message: 'Custom error message',
+        statusCode: 418,
+      })
+    })
+
+    it('handles errors without response data', async () => {
+      server.use(
+        http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+          return new HttpResponse(null, { status: 503 })
+        })
+      )
+
+      const error = await client.getVideoSummaries('video-1').catch((e) => e)
+      expect(error).toMatchObject({
+        statusCode: 503,
+        message: expect.any(String),
+      })
+    })
+  })
 })

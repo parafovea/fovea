@@ -73,9 +73,10 @@ export function useKeyboardShortcuts(
   useEffect(() => {
     if (enabled) {
       window.addEventListener('keydown', handleKeyDown)
+      const tracker = sequenceTracker.current
       return () => {
         window.removeEventListener('keydown', handleKeyDown)
-        sequenceTracker.current.reset()
+        tracker.reset()
       }
     }
   }, [handleKeyDown, enabled])

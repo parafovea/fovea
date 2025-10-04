@@ -125,21 +125,3 @@ export function TypeObjectBadge({ isType, size = 'small' }: TypeObjectBadgeProps
     />
   )
 }
-
-// Helper function to get consistent styling for types vs objects
-export function getTypeObjectStyles(isType: boolean) {
-  return {
-    borderStyle: isType ? 'dashed' as const : 'solid' as const,
-    borderColor: isType ? 'primary.main' : 'secondary.main',
-    bgcolor: isType ? 'primary.50' : 'secondary.50',
-    fontStyle: isType ? 'italic' : 'normal',
-    icon: {
-      color: isType ? 'primary.main' : 'secondary.main',
-      component: isType ? CategoryIcon : ObjectIcon,
-    },
-    text: {
-      primary: isType ? 'italic' : 'normal',
-      secondary: isType ? 'Type Definition' : 'Object Instance',
-    },
-  }
-}

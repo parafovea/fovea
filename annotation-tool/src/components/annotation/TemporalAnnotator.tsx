@@ -102,7 +102,7 @@ export default function TemporalAnnotator({
   useEffect(() => {
     const newRefs = [...videoReferences]
     const primaryRef = newRefs.find(ref => ref.videoId === videoId)
-    
+
     if (primaryRef) {
       if (timeType === 'instant') {
         primaryRef.frameNumber = Math.floor(currentTime * fps)
@@ -123,7 +123,7 @@ export default function TemporalAnnotator({
       }
       setVideoReferences(newRefs)
     }
-  }, [currentTime, startTime, endTime, timeType, fps, videoId])
+  }, [currentTime, startTime, endTime, timeType, fps, videoId, videoReferences])
   
   // Initialize from existing time
   useEffect(() => {

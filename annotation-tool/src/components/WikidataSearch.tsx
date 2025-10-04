@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Box,
   TextField,
@@ -43,8 +43,8 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   const [importing, setImporting] = useState(false)
   const [entityDetails, setEntityDetails] = useState<any>(null)
 
-  const debouncedSearch = useCallback(
-    debounce(async (searchQuery: string) => {
+  const debouncedSearch = useMemo(
+    () => debounce(async (searchQuery: string) => {
       if (!searchQuery || searchQuery.length < 2) {
         setOptions([])
         return

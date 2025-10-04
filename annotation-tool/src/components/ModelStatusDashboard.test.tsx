@@ -76,6 +76,7 @@ function createMockStatusResponse(
     total_vram_allocated_gb: totalAllocated,
     total_vram_available_gb: 24.0,
     timestamp: new Date().toISOString(),
+    cuda_available: true,
     ...overrides,
   }
 }
@@ -144,6 +145,26 @@ describe('ModelStatusDashboard', () => {
 
       expect(screen.getByText(/No models currently loaded/i)).toBeInTheDocument()
       expect(screen.getByText(/0 models loaded/i)).toBeInTheDocument()
+    })
+
+    it('displays CPU-only mode warning when CUDA not available', () => {
+      const cpuOnlyStatus = createMockStatusResponse([], { cuda_available: false })
+      vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
+        data: cpuOnlyStatus,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <TestWrapper>
+          <ModelStatusDashboard />
+        </TestWrapper>
+      )
+
+      expect(screen.getByText(/CPU-Only Mode Detected/i)).toBeInTheDocument()
+      expect(screen.getByText(/no GPU\/CUDA available/i)).toBeInTheDocument()
+      expect(screen.getByText(/No models loaded\. GPU required/i)).toBeInTheDocument()
     })
   })
 
@@ -563,6 +584,52 @@ describe('ModelStatusDashboard', () => {
       )
 
       expect(screen.queryByText(/Auto-refresh/i)).not.toBeInTheDocument()
+    })
+
+    it('respects custom refresh interval when provided', () => {
+      const status = createMockStatusResponse([])
+      const mockUseModelStatus = vi.spyOn(useModelConfigHooks, 'useModelStatus')
+      mockUseModelStatus.mockReturnValue({
+        data: status,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <TestWrapper>
+          <ModelStatusDashboard refreshInterval={5000} />
+        </TestWrapper>
+      )
+
+      expect(mockUseModelStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refetchInterval: 5000,
+        })
+      )
+    })
+
+    it('disables auto-refresh when refreshInterval is false', () => {
+      const status = createMockStatusResponse([])
+      const mockUseModelStatus = vi.spyOn(useModelConfigHooks, 'useModelStatus')
+      mockUseModelStatus.mockReturnValue({
+        data: status,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <TestWrapper>
+          <ModelStatusDashboard refreshInterval={false} />
+        </TestWrapper>
+      )
+
+      expect(mockUseModelStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refetchInterval: false,
+        })
+      )
     })
   })
 

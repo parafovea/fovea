@@ -93,7 +93,12 @@ export function ModelSettingsPanel({
     }
   }, [config])
 
-  // Calculate VRAM usage based on pending selections
+  /**
+   * Calculates total VRAM usage and validates against available budget.
+   * Compares pending model selections against configured threshold.
+   *
+   * @returns Object containing VRAM requirements, utilization percent, and validation status, or null if config/validation unavailable
+   */
   const vramCalculation = useMemo(() => {
     if (!config || !validation) {
       return null
@@ -129,7 +134,12 @@ export function ModelSettingsPanel({
     }
   }, [config, validation, pendingSelections])
 
-  // Handle model selection change
+  /**
+   * Updates pending model selection for a task type and marks configuration as changed.
+   *
+   * @param taskType - Task type identifier (e.g., 'video_summarization')
+   * @param modelName - Name of the selected model option
+   */
   const handleModelChange = (taskType: string, modelName: string) => {
     setPendingSelections((prev) => ({
       ...prev,
@@ -145,7 +155,11 @@ export function ModelSettingsPanel({
     setHasChanges(!allSelectionsMatchCurrent)
   }
 
-  // Handle save
+  /**
+   * Saves all pending model selections to the backend.
+   * Only sends API calls for selections that differ from current configuration.
+   * Triggers success/error callbacks on completion.
+   */
   const handleSave = async () => {
     if (!config) return
 
@@ -172,7 +186,10 @@ export function ModelSettingsPanel({
     }
   }
 
-  // Handle reset to defaults
+  /**
+   * Resets pending selections to current saved configuration.
+   * Discards all unsaved changes and clears the changed state flag.
+   */
   const handleReset = () => {
     if (config) {
       const current: Record<string, string> = {}

@@ -76,7 +76,7 @@ export default function InteractiveBoundingBox({
         svgRef.current = gElement.closest('svg')
       }
     }
-  }, [])
+  }, [annotation.id])
 
   // Get relative coordinates within the SVG
   const getRelativeCoordinates = (e: React.MouseEvent): { x: number; y: number } => {

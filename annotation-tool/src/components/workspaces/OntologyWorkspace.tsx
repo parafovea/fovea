@@ -39,7 +39,8 @@ import EntityTypeEditor from '../EntityTypeEditor'
 import RoleEditor from '../RoleEditor'
 import EventTypeEditor from '../EventTypeEditor'
 import RelationTypeEditor from '../RelationTypeEditor'
-import { GlossRenderer, glossToText } from '../GlossRenderer'
+import { GlossRenderer } from '../GlossRenderer'
+import { glossToText } from '../../utils/glossUtils'
 import { WikidataChip } from '../shared/WikidataChip'
 import {
   deleteEntityFromPersona,
@@ -51,12 +52,33 @@ import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
 import { useModelConfig } from '../../hooks/useModelConfig'
 
+/**
+ * Props for the TabPanel component.
+ *
+ * @property children - Content to render within the tab panel
+ * @property index - Zero-based index of this panel
+ * @property value - Currently active tab index
+ */
 interface TabPanelProps {
   children?: React.ReactNode
   index: number
   value: number
 }
 
+/**
+ * Tab panel component that conditionally renders content based on active tab.
+ * Provides accessible tabpanel structure with ARIA attributes.
+ *
+ * @param props - Component props
+ * @returns Hidden div when inactive, visible content when tab is selected
+ *
+ * @example
+ * ```tsx
+ * <TabPanel value={activeTab} index={0}>
+ *   <EntityTypeList />
+ * </TabPanel>
+ * ```
+ */
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props
   return (
@@ -72,6 +94,18 @@ function TabPanel(props: TabPanelProps) {
   )
 }
 
+/**
+ * Ontology workspace for managing persona-specific type definitions.
+ * Provides tabbed interface for entity, role, event, and relation types with search,
+ * CRUD operations, and AI-powered type suggestions.
+ *
+ * @returns React component rendering persona browser or ontology editor with tabs
+ *
+ * @example
+ * ```tsx
+ * <Route path="/ontology" element={<OntologyWorkspace />} />
+ * ```
+ */
 export default function OntologyWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
   const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
@@ -136,7 +170,13 @@ export default function OntologyWorkspace() {
   const selectedPersona = personas.find(p => p.id === selectedPersonaId)
   const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
 
-  // Filter functions for each type
+  /**
+   * Filters ontology type items by search term.
+   * Searches across name, gloss text, and Wikidata ID fields.
+   *
+   * @param item - Ontology type item (entity, role, event, or relation type)
+   * @returns True if item matches search term, false otherwise
+   */
   const filterBySearchTerm = (item: any) => {
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
@@ -179,11 +219,18 @@ export default function OntologyWorkspace() {
     setPersonaEditorOpen(true)
   }
 
+  /**
+   * Returns to persona browser view, clearing selected persona.
+   */
   const handleBackToBrowser = () => {
     setSelectedPersonaId(null)
     setTabValue(0)
   }
 
+  /**
+   * Opens the appropriate type editor dialog based on active tab.
+   * Creates a new entity, role, event, or relation type.
+   */
   const handleAddType = () => {
     switch (tabValue) {
       case 0:
@@ -225,12 +272,21 @@ export default function OntologyWorkspace() {
     setRelationTypeEditorOpen(true)
   }
 
+  /**
+   * Opens the ontology augmenter dialog for AI-powered type suggestions.
+   *
+   * @param category - Ontology category to generate suggestions for
+   */
   const handleOpenAugmenter = (category: OntologyCategory) => {
     setAugmenterCategory(category)
     setAugmenterOpen(true)
   }
 
-  // Get the currently visible list items based on tab
+  /**
+   * Gets the currently visible list items based on active tab.
+   *
+   * @returns Filtered list of items for the current tab (entities, roles, events, or relations)
+   */
   const getCurrentItems = () => {
     switch(tabValue) {
       case 0: return filteredEntities

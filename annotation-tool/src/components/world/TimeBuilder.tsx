@@ -289,7 +289,7 @@ export default function TimeBuilder({
       const now = new Date().toISOString()
       const commonFields: Partial<Time> = {
         videoReferences: videoReferences.length > 0
-          ? videoReferences.map(({ id, ...ref }) => ref)
+          ? videoReferences.map(({ id: _id, ...ref }) => ref)
           : undefined,
         certainty: certainty < 1 ? certainty : undefined,
         wikidataId: wikidataId || undefined,

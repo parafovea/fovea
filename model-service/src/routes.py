@@ -772,8 +772,6 @@ async def get_model_status() -> dict[str, object]:
     manager = get_model_manager()
 
     loaded_models_dict = manager.get_loaded_models()
-    memory_usage = manager.get_memory_usage_percentage()
-    available_vram = manager.get_available_vram()
     total_vram = manager.get_total_vram()
 
     # Convert loaded_models dict to array format expected by frontend
@@ -799,7 +797,7 @@ async def get_model_status() -> dict[str, object]:
         "loaded_models": loaded_models,
         "total_vram_allocated_gb": sum(m["vram_allocated_gb"] for m in loaded_models),
         "total_vram_available_gb": total_vram / 1024**3,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         "cuda_available": torch.cuda.is_available(),
     }
 

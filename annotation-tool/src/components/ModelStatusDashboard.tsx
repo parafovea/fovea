@@ -63,7 +63,16 @@ export interface ModelStatusDashboardProps {
 }
 
 /**
- * Get color for health status badge.
+ * Maps model health status to Material-UI color variant for badge display.
+ *
+ * @param health - Current health status of the model
+ * @returns Material-UI color variant for the health badge
+ *
+ * @example
+ * ```tsx
+ * const color = getHealthColor('loaded') // returns 'success'
+ * const color = getHealthColor('failed') // returns 'error'
+ * ```
  */
 function getHealthColor(
   health: ModelHealth
@@ -81,7 +90,16 @@ function getHealthColor(
 }
 
 /**
- * Get icon for health status.
+ * Maps model health status to corresponding Material-UI icon component.
+ *
+ * @param health - Current health status of the model
+ * @returns Icon component representing the health status
+ *
+ * @example
+ * ```tsx
+ * const icon = getHealthIcon('loaded') // returns CheckCircleIcon
+ * const icon = getHealthIcon('loading') // returns HourglassEmpty (LoadingIcon)
+ * ```
  */
 function getHealthIcon(health: ModelHealth) {
   switch (health) {
@@ -97,7 +115,14 @@ function getHealthIcon(health: ModelHealth) {
 }
 
 /**
- * Display name mapping for task types.
+ * Maps task type identifiers to human-readable display names.
+ * Used to show friendly labels in the UI instead of technical keys.
+ *
+ * @example
+ * ```tsx
+ * const displayName = TASK_DISPLAY_NAMES['video_summarization'] // 'Video Summarization'
+ * const displayName = TASK_DISPLAY_NAMES['object_detection'] // 'Object Detection'
+ * ```
  */
 const TASK_DISPLAY_NAMES: Record<string, string> = {
   video_summarization: 'Video Summarization',
@@ -312,6 +337,9 @@ export function ModelStatusDashboard({
 
 /**
  * Props for ModelStatusCard component.
+ *
+ * @property model - Loaded model status information including health, VRAM, and metrics
+ * @property onUnload - Optional callback triggered when unload button is clicked
  */
 interface ModelStatusCardProps {
   model: LoadedModelStatus
@@ -319,11 +347,20 @@ interface ModelStatusCardProps {
 }
 
 /**
- * Card component for displaying a single model's status.
- * Shows health, VRAM usage, performance metrics, and unload button.
+ * Card component for displaying a single model's status information.
+ * Shows health indicator, VRAM usage with progress bar, performance metrics,
+ * warm-up status, and optional unload button.
  *
  * @param props - Component properties
  * @returns ModelStatusCard component
+ *
+ * @example
+ * ```tsx
+ * <ModelStatusCard
+ *   model={loadedModelData}
+ *   onUnload={(modelId, taskType) => console.log('Unload:', modelId)}
+ * />
+ * ```
  */
 function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
   const handleUnload = () => {

@@ -1057,3 +1057,116 @@ class TestOpenAPIDocumentation:
         """Test that Swagger UI is available."""
         response = client.get("/docs")
         assert response.status_code == 200
+
+
+class TestModelConfigEndpoints:
+    """Tests for model configuration endpoints."""
+
+    def test_get_model_config(self, mock_model_manager: Mock) -> None:
+        """Test getting model configuration."""
+        # Setup mock
+        mock_option = Mock()
+        mock_option.model_id = "meta-llama/Llama-4-Maverick"
+        mock_option.framework = "sglang"
+        mock_option.vram_gb = 16.0
+        mock_option.speed = "fast"
+        mock_option.description = "Test model"
+        mock_option.fps = 2.5
+
+        mock_task = Mock()
+        mock_task.selected = "llama-4-maverick"
+        mock_task.options = {"llama-4-maverick": mock_option}
+
+        mock_inference = Mock()
+        mock_inference.max_memory_per_model = 24.0
+        mock_inference.offload_threshold = 0.8
+        mock_inference.warmup_on_startup = True
+        mock_inference.default_batch_size = 1
+        mock_inference.max_batch_size = 8
+
+        mock_model_manager.tasks = {"video_summarization": mock_task}
+        mock_model_manager.inference_config = mock_inference
+
+        response = client.get("/api/models/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "models" in data
+        assert "inference" in data
+        assert "cuda_available" in data
+        assert "video_summarization" in data["models"]
+
+    def test_get_model_status(self, mock_model_manager: Mock) -> None:
+        """Test getting model status."""
+        # Setup mock
+        mock_model_manager.get_loaded_models.return_value = {
+            "video_summarization": {
+                "model_id": "meta-llama/Llama-4-Maverick",
+                "memory_usage_gb": 14.0,
+                "load_time": 3.5,
+            }
+        }
+        mock_model_manager.get_total_vram.return_value = 24 * 1024**3  # 24 GB in bytes
+
+        response = client.get("/api/models/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "loaded_models" in data
+        assert "total_vram_allocated_gb" in data
+        assert "total_vram_available_gb" in data
+        assert "cuda_available" in data
+        assert len(data["loaded_models"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_select_model(self, mock_model_manager: Mock) -> None:
+        """Test selecting a model for a task."""
+        mock_model_manager.set_selected_model = AsyncMock()
+
+        response = client.post(
+            "/api/models/select",
+            params={"task_type": "video_summarization", "model_name": "llama-4-scout"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["task_type"] == "video_summarization"
+        assert data["selected_model"] == "llama-4-scout"
+
+    @pytest.mark.asyncio
+    async def test_select_model_invalid_task(self, mock_model_manager: Mock) -> None:
+        """Test selecting model with invalid task type."""
+        mock_model_manager.set_selected_model = AsyncMock(
+            side_effect=ValueError("Invalid task type")
+        )
+
+        response = client.post(
+            "/api/models/select",
+            params={"task_type": "invalid_task", "model_name": "test-model"},
+        )
+
+        assert response.status_code == 400
+
+    def test_validate_memory_budget(self, mock_model_manager: Mock) -> None:
+        """Test memory budget validation."""
+        mock_model_manager.validate_memory_budget.return_value = {
+            "valid": True,
+            "total_vram_gb": 24.0,
+            "total_required_gb": 18.0,
+            "threshold": 0.8,
+            "max_allowed_gb": 19.2,
+            "model_requirements": {
+                "video_summarization": {
+                    "model_id": "meta-llama/Llama-4-Maverick",
+                    "vram_gb": 14.0,
+                }
+            },
+        }
+
+        response = client.post("/api/models/validate")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is True
+        assert data["total_vram_gb"] == 24.0

@@ -111,6 +111,7 @@ const mockConfig: ModelConfig = {
     offload_threshold: 0.9,
     warmup_on_startup: true,
   },
+  cuda_available: true,
 }
 
 /**

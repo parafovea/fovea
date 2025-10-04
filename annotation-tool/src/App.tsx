@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { generateId } from './utils/uuid'
@@ -15,11 +15,7 @@ import { api } from './services/api'
 function App() {
   const dispatch = useDispatch<AppDispatch>()
 
-  useEffect(() => {
-    loadOntology()
-  }, [])
-
-  const loadOntology = async () => {
+  const loadOntology = useCallback(async () => {
     try {
       const ontology = await api.getOntology()
 
@@ -83,7 +79,11 @@ function App() {
     } catch (error) {
       console.error('Failed to load ontology:', error)
     }
-  }
+  }, [dispatch])
+
+  useEffect(() => {
+    loadOntology()
+  }, [loadOntology])
 
   return (
     <Routes>

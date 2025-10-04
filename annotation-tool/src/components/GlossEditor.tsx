@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, KeyboardEvent } from 'react'
+import { useState, useRef, useEffect, KeyboardEvent, useCallback, useMemo } from 'react'
 import { useSelector } from 'react-redux'
 import {
   Box,
@@ -73,43 +73,43 @@ export default function GlossEditor({
   const [cursorPosition, setCursorPosition] = useState(0)
 
   // Get all available types (excluding relations as per requirement)
-  const allTypes: TypeOption[] = [
-    ...((!availableTypes || availableTypes.includes('entity')) ? 
+  const allTypes: TypeOption[] = useMemo(() => [
+    ...((!availableTypes || availableTypes.includes('entity')) ?
       (activeOntology?.entities.map(e => ({ id: e.id, name: e.name, type: 'entity' as const, personaId })) || []) : []),
-    ...((!availableTypes || availableTypes.includes('role')) ? 
+    ...((!availableTypes || availableTypes.includes('role')) ?
       (activeOntology?.roles.map(r => ({ id: r.id, name: r.name, type: 'role' as const, personaId })) || []) : []),
-    ...((!availableTypes || availableTypes.includes('event')) ? 
+    ...((!availableTypes || availableTypes.includes('event')) ?
       (activeOntology?.events.map(e => ({ id: e.id, name: e.name, type: 'event' as const, personaId })) || []) : []),
-  ]
+  ], [availableTypes, activeOntology, personaId])
 
   // Get all available objects
-  const allObjects: ObjectOption[] = [
-    ...entities.filter(e => !('locationType' in e)).map(e => ({ 
-      id: e.id, 
-      name: e.name, 
-      type: 'entity-object' as const 
+  const allObjects: ObjectOption[] = useMemo(() => [
+    ...entities.filter(e => !('locationType' in e)).map(e => ({
+      id: e.id,
+      name: e.name,
+      type: 'entity-object' as const
     })),
-    ...entities.filter(e => 'locationType' in e).map(l => ({ 
-      id: l.id, 
-      name: l.name, 
-      type: 'location-object' as const 
+    ...entities.filter(e => 'locationType' in e).map(l => ({
+      id: l.id,
+      name: l.name,
+      type: 'location-object' as const
     })),
-    ...events.map(e => ({ 
-      id: e.id, 
-      name: e.name, 
-      type: 'event-object' as const 
+    ...events.map(e => ({
+      id: e.id,
+      name: e.name,
+      type: 'event-object' as const
     })),
-    ...times.map(t => ({ 
-      id: t.id, 
-      name: `Time: ${t.type === 'instant' ? (t as any).timestamp || 'instant' : 'interval'}`, 
-      type: 'time-object' as const 
+    ...times.map(t => ({
+      id: t.id,
+      name: `Time: ${t.type === 'instant' ? (t as any).timestamp || 'instant' : 'interval'}`,
+      type: 'time-object' as const
     })),
-  ]
+  ], [entities, events, times])
 
   // Get all available annotations (if enabled)
-  const allAnnotations: AnnotationOption[] = includeAnnotations ? annotations.map(ann => {
+  const allAnnotations: AnnotationOption[] = useMemo(() => includeAnnotations ? annotations.map(ann => {
     let name = 'Annotation'
-    
+
     // Get name from linked object or type
     if ('linkedEntityId' in ann && ann.linkedEntityId) {
       const entity = entities.find(e => e.id === ann.linkedEntityId)
@@ -124,16 +124,16 @@ export default function GlossEditor({
       const type = allTypes.find(t => t.id === ann.typeId)
       if (type) name = type.name
     }
-    
+
     // Add time info to distinguish annotations
     const timeStr = ann.timeSpan ? `@${ann.timeSpan.startTime.toFixed(1)}s` : ''
-    
+
     return {
       id: ann.id,
       name: `${name}${timeStr}`,
       type: 'annotation' as const
     }
-  }) : []
+  }) : [], [includeAnnotations, annotations, entities, events, allTypes])
 
   // Filter types based on search query
   const filteredTypes = searchQuery 
@@ -166,7 +166,7 @@ export default function GlossEditor({
   }
 
   // Convert gloss items to display string
-  const glossToString = (glossItems: GlossItem[]): string => {
+  const glossToString = useCallback((glossItems: GlossItem[]): string => {
     return glossItems.map(item => {
       if (item.type === 'text') {
         return item.content
@@ -182,7 +182,7 @@ export default function GlossEditor({
       }
       return ''
     }).join('')
-  }
+  }, [allTypes, allObjects, allAnnotations])
 
   // Parse string to gloss items
   const stringToGloss = (text: string): GlossItem[] => {
@@ -382,7 +382,7 @@ export default function GlossEditor({
   // Initialize input value from gloss
   useEffect(() => {
     setInputValue(glossToString(gloss))
-  }, [gloss, allTypes, allObjects]) // Re-run when gloss, types, or objects change
+  }, [gloss, glossToString]) // Re-run when gloss or glossToString changes
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value

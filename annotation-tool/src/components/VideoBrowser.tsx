@@ -1,4 +1,16 @@
-import { useEffect, useState, useRef } from 'react'
+/**
+ * Video browser component for discovering and managing video content.
+ * Displays a searchable grid of video cards with metadata, summaries, and annotation controls.
+ * Supports batch summarization and persona-based analysis in GPU mode.
+ *
+ * @example
+ * ```tsx
+ * // Used in main application routing
+ * <Route path="/videos" element={<VideoBrowser />} />
+ * ```
+ */
+
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
@@ -73,11 +85,11 @@ export default function VideoBrowser() {
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cuda_available
 
-  useEffect(() => {
-    loadVideos()
-  }, [])
-
-  const loadVideos = async () => {
+  /**
+   * Fetches video list from backend API.
+   * Updates Redux store with video metadata and manages loading state.
+   */
+  const loadVideos = useCallback(async () => {
     dispatch(setLoading(true))
     try {
       const response = await fetch('/api/videos')
@@ -88,13 +100,29 @@ export default function VideoBrowser() {
     } finally {
       dispatch(setLoading(false))
     }
-  }
+  }, [dispatch])
 
+  useEffect(() => {
+    loadVideos()
+  }, [loadVideos])
+
+  /**
+   * Updates search filter for video list.
+   * Filters videos by title, description, uploader, and tags.
+   *
+   * @param value - Search term to filter videos
+   */
   const handleSearch = (value: string) => {
     setLocalSearchTerm(value)
     dispatch(setSearchTerm(value))
   }
 
+  /**
+   * Queues a video summary generation job.
+   * Requires an active persona to be selected. Expands summary section on success.
+   *
+   * @param videoId - Video identifier to summarize
+   */
   const handleGenerateSummary = (videoId: string) => {
     if (!activePersonaId) {
       alert('Please select a persona first')
@@ -126,15 +154,34 @@ export default function VideoBrowser() {
     )
   }
 
+  /**
+   * Handles successful completion of a summary job.
+   * Clears job status and adds summary reference to Redux store.
+   *
+   * @param videoId - Video identifier
+   * @param personaId - Persona identifier
+   */
   const handleSummaryJobComplete = (videoId: string, personaId: string) => {
     dispatch(clearSummaryJob({ videoId, personaId }))
     dispatch(addVideoSummary({ videoId, personaId }))
   }
 
+  /**
+   * Handles failed summary job.
+   * Removes job status from Redux store to allow retry.
+   *
+   * @param videoId - Video identifier
+   * @param personaId - Persona identifier
+   */
   const handleSummaryJobFail = (videoId: string, personaId: string) => {
     dispatch(clearSummaryJob({ videoId, personaId }))
   }
 
+  /**
+   * Toggles summary visibility for a video card.
+   *
+   * @param videoId - Video identifier
+   */
   const toggleSummaryExpand = (videoId: string) => {
     setExpandedSummaries((prev) => ({
       ...prev,
@@ -142,10 +189,21 @@ export default function VideoBrowser() {
     }))
   }
 
+  /**
+   * Sets the active persona for video analysis.
+   * Updates Redux store with selected persona ID.
+   *
+   * @param personaId - Persona identifier to activate
+   */
   const handlePersonaChange = (personaId: string) => {
     dispatch(setActivePersona(personaId))
   }
 
+  /**
+   * Batch summarizes all filtered videos without existing summaries.
+   * Queues jobs sequentially with delay to avoid server overload.
+   * Requires an active persona to be selected.
+   */
   const handleSummarizeAll = async () => {
     if (!activePersonaId) {
       alert('Please select a persona first')
@@ -208,7 +266,12 @@ export default function VideoBrowser() {
     )
   })
 
-  // Calculate grid columns based on screen size
+  /**
+   * Calculates grid layout columns based on viewport width.
+   * Returns 1, 2, 3, or 4 columns for xs, sm, md, lg breakpoints.
+   *
+   * @returns Number of grid columns
+   */
   const getGridColumns = () => {
     // This assumes the grid breakpoints: xs=12, sm=6, md=4, lg=3
     // Which means 1, 2, 3, or 4 columns respectively
@@ -218,7 +281,14 @@ export default function VideoBrowser() {
     if (width >= 600) return 2 // sm
     return 1 // xs
   }
-  
+
+  /**
+   * Extracts video URL from metadata.
+   * Prefers original webpage URL, then highest quality format URL.
+   *
+   * @param video - Video metadata object
+   * @returns Video URL or empty string
+   */
   const getVideoUrl = (video: VideoMetadata) => {
     // First try webpage_url as it's the original source
     if (video.webpage_url) {
@@ -227,7 +297,7 @@ export default function VideoBrowser() {
     // Then try to get the highest quality video URL from formats
     if (video.formats && video.formats.length > 0) {
       // Find the format with both video and audio, preferring higher resolutions
-      const httpFormats = video.formats.filter(f => 
+      const httpFormats = video.formats.filter(f =>
         f.url && f.url.startsWith('http') && f.width && f.height
       )
       if (httpFormats.length > 0) {
@@ -273,7 +343,12 @@ export default function VideoBrowser() {
   useEffect(() => {
     setSelectedVideoIndex(0)
   }, [filter.searchTerm])
-  
+
+  /**
+   * Selects a video card for keyboard navigation.
+   *
+   * @param index - Index of video in filtered list
+   */
   const handleCardClick = (index: number) => {
     setSelectedVideoIndex(index)
   }
@@ -407,26 +482,50 @@ export default function VideoBrowser() {
   )
 }
 
+/**
+ * Props for VideoCard component.
+ */
 interface VideoCardProps {
+  /** Video metadata object */
   video: VideoMetadata
+  /** Index in filtered video list */
   index: number
+  /** External video URL */
   videoUrl: string
+  /** Thumbnail image URL */
   thumbnailUrl: string
+  /** Currently selected video index for keyboard navigation */
   selectedVideoIndex: number
+  /** Handler for card click events */
   handleCardClick: (index: number) => void
+  /** React Router navigation function */
   navigate: ReturnType<typeof useNavigate>
+  /** Active persona identifier */
   activePersonaId: string | null
+  /** List of all personas */
   personas: any[]
+  /** Active summary jobs keyed by video:persona */
   activeSummaryJobs: Record<string, string>
+  /** Video summaries keyed by video ID */
   videoSummaries: Record<string, string[]>
+  /** Expanded summary states keyed by video ID */
   expandedSummaries: Record<string, boolean>
+  /** Handler for summary generation */
   handleGenerateSummary: (videoId: string) => void
+  /** Handler for toggling summary visibility */
   toggleSummaryExpand: (videoId: string) => void
+  /** Handler for summary job completion */
   handleSummaryJobComplete: (videoId: string, personaId: string) => void
+  /** Handler for summary job failure */
   handleSummaryJobFail: (videoId: string, personaId: string) => void
+  /** Whether system is running in CPU-only mode */
   isCpuOnly: boolean
 }
 
+/**
+ * Video card component displaying metadata, thumbnail, and summary controls.
+ * Supports keyboard navigation and persona-based summarization in GPU mode.
+ */
 function VideoCard({
   video,
   index,
