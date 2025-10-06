@@ -116,8 +116,9 @@ export class TimelineRenderer {
    * Main render loop using requestAnimationFrame.
    *
    * @param options - Render options
+   * @param selectedKeyframes - Array of selected keyframe frame numbers
    */
-  render(options: RenderOptions): void {
+  render(options: RenderOptions, selectedKeyframes: number[] = []): void {
     if (!this.needsRedraw) {
       return
     }
@@ -138,7 +139,7 @@ export class TimelineRenderer {
 
     // Render timeline elements
     this.renderFrameRuler(targetCtx, options)
-    this.renderKeyframes(targetCtx, options)
+    this.renderKeyframes(targetCtx, options, selectedKeyframes)
     this.renderPlayhead(targetCtx, options)
 
     // Copy offscreen canvas to visible canvas if using double buffering
@@ -239,10 +240,12 @@ export class TimelineRenderer {
    *
    * @param ctx - Canvas rendering context
    * @param options - Render options
+   * @param selectedKeyframes - Array of selected keyframe frame numbers
    */
   private renderKeyframes(
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    options: RenderOptions
+    options: RenderOptions,
+    selectedKeyframes: number[] = []
   ): void {
     const y = this.PADDING + this.FRAME_RULER_HEIGHT + this.PADDING
     const height = this.KEYFRAME_TRACK_HEIGHT
@@ -286,25 +289,56 @@ export class TimelineRenderer {
     }
 
     // Draw keyframe dots
-    ctx.fillStyle = options.theme.primaryMain
-
     for (const keyframe of options.keyframes) {
       if (keyframe.frameNumber < this.viewportStartFrame || keyframe.frameNumber > this.viewportEndFrame) {
         continue
       }
 
       const x = this.frameToX(keyframe.frameNumber)
+      const isSelected = selectedKeyframes.includes(keyframe.frameNumber)
 
       // Draw circle
       ctx.beginPath()
       ctx.arc(x, centerY, 6, 0, Math.PI * 2)
+      ctx.fillStyle = options.theme.primaryMain
       ctx.fill()
 
-      // Draw white border
-      ctx.strokeStyle = '#ffffff'
-      ctx.lineWidth = 2
+      // Draw border (blue if selected, white otherwise)
+      ctx.strokeStyle = isSelected ? options.theme.primaryMain : '#ffffff'
+      ctx.lineWidth = isSelected ? 3 : 2
       ctx.stroke()
+
+      // Draw selection highlight
+      if (isSelected) {
+        ctx.beginPath()
+        ctx.arc(x, centerY, 9, 0, Math.PI * 2)
+        ctx.strokeStyle = options.theme.primaryMain
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
     }
+  }
+
+  /**
+   * Get keyframe at specific canvas X coordinate (within 10px radius).
+   *
+   * @param x - Canvas X coordinate
+   * @param keyframes - Array of keyframe bounding boxes
+   * @returns Frame number if keyframe found, null otherwise
+   */
+  getKeyframeAtX(x: number, keyframes: any[]): number | null {
+    const clickRadius = 10
+
+    for (const keyframe of keyframes) {
+      const keyframeX = this.frameToX(keyframe.frameNumber)
+      const distance = Math.abs(x - keyframeX)
+
+      if (distance <= clickRadius) {
+        return keyframe.frameNumber
+      }
+    }
+
+    return null
   }
 
   /**

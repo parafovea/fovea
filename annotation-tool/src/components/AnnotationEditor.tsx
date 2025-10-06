@@ -82,6 +82,9 @@ export default function AnnotationEditor({
 
   useEffect(() => {
     if (annotation) {
+      // Get first keyframe from boundingBoxSequence
+      const firstBox = annotation.boundingBoxSequence.boxes[0]
+
       setFormData({
         typeCategory: annotation.annotationType === 'type' ? annotation.typeCategory : 'entity',
         typeId: annotation.annotationType === 'type' ? annotation.typeId : '',
@@ -92,10 +95,10 @@ export default function AnnotationEditor({
         linkedCollectionType: annotation.annotationType === 'object' ? (annotation.linkedCollectionType || '') : '',
         startTime: annotation.timeSpan?.startTime || 0,
         endTime: annotation.timeSpan?.endTime || 0,
-        x: annotation.boundingBox?.x || 0,
-        y: annotation.boundingBox?.y || 0,
-        width: annotation.boundingBox?.width || 0,
-        height: annotation.boundingBox?.height || 0,
+        x: firstBox?.x || 0,
+        y: firstBox?.y || 0,
+        width: firstBox?.width || 0,
+        height: firstBox?.height || 0,
         notes: annotation.notes || '',
       })
     }
@@ -103,6 +106,8 @@ export default function AnnotationEditor({
 
   const handleSave = () => {
     if (!annotation) return
+
+    const frameNumber = Math.floor(formData.startTime * videoFps)
 
     const updatedAnnotation: any = {
       ...annotation,
@@ -112,12 +117,24 @@ export default function AnnotationEditor({
         startFrame: Math.floor(formData.startTime * videoFps),
         endFrame: Math.floor(formData.endTime * videoFps),
       },
-      boundingBox: {
-        x: formData.x,
-        y: formData.y,
-        width: formData.width,
-        height: formData.height,
-        frameNumber: Math.floor(formData.startTime * videoFps),
+      boundingBoxSequence: {
+        boxes: [{
+          x: formData.x,
+          y: formData.y,
+          width: formData.width,
+          height: formData.height,
+          frameNumber,
+          isKeyframe: true,
+        }],
+        interpolationSegments: [],
+        visibilityRanges: [{
+          startFrame: frameNumber,
+          endFrame: frameNumber,
+          visible: true,
+        }],
+        totalFrames: 1,
+        keyframeCount: 1,
+        interpolatedFrameCount: 0,
       },
       notes: formData.notes,
       updatedAt: new Date().toISOString(),

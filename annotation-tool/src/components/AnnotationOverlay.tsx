@@ -1,3 +1,11 @@
+/**
+ * @module AnnotationOverlay
+ * @description SVG overlay for drawing and displaying bounding box annotations on video.
+ * Supports both type-based annotations (persona-specific ontology types) and object-based
+ * annotations (links to world entities, events, locations, and collections).
+ * Provides interactive drawing, editing, and visualization of annotations and AI detections.
+ */
+
 import { useRef, useState, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Box } from '@mui/material'
@@ -13,14 +21,44 @@ import { useParams } from 'react-router-dom'
 import InteractiveBoundingBox from './annotation/InteractiveBoundingBox'
 import type { DetectionResponse } from '../api/client'
 
+/**
+ * @interface AnnotationOverlayProps
+ * @description Props for AnnotationOverlay component.
+ */
 interface AnnotationOverlayProps {
+  /** Reference to video element (currently unused but reserved for future features) */
   videoElement: HTMLVideoElement | null
+  /** Current video playback time in seconds */
   currentTime: number
+  /** Video frame width in pixels */
   videoWidth: number
+  /** Video frame height in pixels */
   videoHeight: number
+  /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
 }
 
+/**
+ * @component AnnotationOverlay
+ * @description SVG overlay component for video annotation.
+ * Handles drawing new bounding boxes, displaying existing annotations with keyframe support,
+ * and showing AI detection results. Supports two annotation modes: type assignment (persona-specific)
+ * and object linking (world entities/events/collections).
+ *
+ * @param props - Component props
+ * @returns SVG overlay with interactive bounding boxes
+ *
+ * @example
+ * ```tsx
+ * <AnnotationOverlay
+ *   videoElement={videoRef.current}
+ *   currentTime={5.2}
+ *   videoWidth={1920}
+ *   videoHeight={1080}
+ *   detectionResults={detectionData}
+ * />
+ * ```
+ */
 export default function AnnotationOverlay({
   currentTime,
   videoWidth,
@@ -57,9 +95,17 @@ export default function AnnotationOverlay({
   const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
 
 
+  /**
+   * Convert mouse event coordinates to video coordinate space.
+   * Transforms screen pixel coordinates to video frame coordinates accounting for
+   * SVG viewBox scaling and viewport positioning.
+   *
+   * @param e - Mouse event from SVG element
+   * @returns Coordinates in video frame space (0 to videoWidth/videoHeight)
+   */
   const getRelativeCoordinates = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!svgRef.current) return { x: 0, y: 0 }
-    
+
     const rect = svgRef.current.getBoundingClientRect()
     return {
       x: ((e.clientX - rect.left) / rect.width) * videoWidth,
@@ -67,42 +113,63 @@ export default function AnnotationOverlay({
     }
   }
 
+  /**
+   * Handle mouse down event to start drawing new bounding box.
+   * Only initiates drawing if clicking on SVG background (not existing annotations)
+   * and all required mode prerequisites are met (persona + type for type mode, or
+   * link target for object mode).
+   *
+   * @param e - Mouse event from SVG element
+   */
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     // Check if we're clicking on an existing annotation (not the SVG background)
     if (e.target !== e.currentTarget) return
-    
+
     // In type mode, need both drawing mode and persona
     if (annotationMode === 'type' && (!drawingMode || !selectedPersonaId)) return
     // In object mode, need a link target
     if (annotationMode === 'object' && !linkTargetId) return
-    
+
     const coords = getRelativeCoordinates(e)
     setIsDrawing(true)
     setStartPoint(coords)
   }
 
+  /**
+   * Handle mouse move event during drawing to update temporary bounding box.
+   * Calculates normalized rectangle from start point to current cursor position
+   * and dispatches to Redux for visual preview.
+   *
+   * @param e - Mouse event from SVG element
+   */
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!isDrawing) return
-    
+
     const coords = getRelativeCoordinates(e)
-    
+
     const box = {
       x: Math.min(startPoint.x, coords.x),
       y: Math.min(startPoint.y, coords.y),
       width: Math.abs(coords.x - startPoint.x),
       height: Math.abs(coords.y - startPoint.y),
     }
-    
+
     dispatch(setTemporaryBox(box))
   }
 
+  /**
+   * Handle mouse up event to finalize bounding box and create annotation.
+   * Validates box size (minimum 5x5 pixels) and mode requirements before creating
+   * annotation. For type mode, creates TypeAnnotation with persona and type IDs.
+   * For object mode, creates ObjectAnnotation linked to entity/event/location/collection.
+   */
   const handleMouseUp = () => {
     if (!isDrawing || !temporaryBox || !videoId) return
-    
+
     // Check requirements based on mode
     if (annotationMode === 'type' && (!drawingMode || !selectedPersonaId)) return
     if (annotationMode === 'object' && !linkTargetId) return
-    
+
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
       const annotation: any = {
         id: generateId(),
@@ -141,7 +208,14 @@ export default function AnnotationOverlay({
     dispatch(clearDrawingState())
   }
 
-  // Get display info for annotations
+  /**
+   * Compute annotations with linked object information for display.
+   * Filters annotations to current video time window and enriches object annotations
+   * with linked entity/event/location/collection data from world state.
+   * Type annotations are displayed as-is without additional lookups.
+   *
+   * @returns Array of annotations enriched with linkedObject and linkedType fields
+   */
   const annotationsWithInfo = useMemo(() => {
     return annotations.filter(ann =>
       ann.timeSpan && ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
@@ -183,7 +257,13 @@ export default function AnnotationOverlay({
     })
   }, [annotations, currentTime, entities, events, entityCollections, eventCollections])
 
-  // Get detection boxes for current time
+  /**
+   * Extract detection bounding boxes for current video time.
+   * Filters AI detection results to frames within 0.1 seconds of current playback time
+   * and transforms normalized coordinates to video pixel space.
+   *
+   * @returns Array of detection boxes with pixel coordinates, labels, and confidence scores
+   */
   const detectionBoxes = useMemo(() => {
     if (!detectionResults) return []
 
@@ -233,17 +313,31 @@ export default function AnnotationOverlay({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {annotationsWithInfo.map((ann) => (
-          <g key={ann.id} style={{ pointerEvents: 'auto' }}>
-            <InteractiveBoundingBox
-              annotation={ann}
-              videoWidth={videoWidth}
-              videoHeight={videoHeight}
-              isActive={selectedAnnotation?.id === ann.id}
-              onSelect={() => dispatch(selectAnnotation(ann))}
-            />
-          </g>
-        ))}
+        {annotationsWithInfo.map((ann) => {
+          // Calculate current frame (assuming 30fps for now, will need proper videoFps later)
+          const fps = 30
+          const currentFrame = Math.floor(currentTime * fps)
+
+          // Determine mode based on whether current frame is a keyframe
+          const isKeyframe = ann.boundingBoxSequence.boxes.some(
+            (b: any) => (b.isKeyframe || b.isKeyframe === undefined) && b.frameNumber === currentFrame
+          )
+          const mode: 'keyframe' | 'interpolated' | 'ghost' = isKeyframe ? 'keyframe' : 'interpolated'
+
+          return (
+            <g key={ann.id} style={{ pointerEvents: 'auto' }}>
+              <InteractiveBoundingBox
+                annotation={ann}
+                currentFrame={currentFrame}
+                videoWidth={videoWidth}
+                videoHeight={videoHeight}
+                isActive={selectedAnnotation?.id === ann.id}
+                onSelect={() => dispatch(selectAnnotation(ann))}
+                mode={mode}
+              />
+            </g>
+          )
+        })}
 
         {/* Detection boxes (read-only, shown in yellow) */}
         {detectionBoxes.map((detection) => (

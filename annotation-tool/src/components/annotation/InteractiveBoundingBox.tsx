@@ -1,15 +1,19 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useDispatch } from 'react-redux'
-import { Chip } from '@mui/material'
+import { Chip, Tooltip } from '@mui/material'
 import { AppDispatch } from '../../store/store'
-import { updateAnnotation } from '../../store/annotationSlice'
+import { updateAnnotation, addKeyframe, updateKeyframe } from '../../store/annotationSlice'
+import { BoundingBox } from '../../models/types.js'
 
 interface InteractiveBoundingBoxProps {
   annotation: any
+  currentFrame: number
   videoWidth: number
   videoHeight: number
   isActive: boolean
   onSelect: () => void
+  mode: 'keyframe' | 'interpolated' | 'ghost'
+  onUpdate?: (box: Partial<BoundingBox>) => void
 }
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
@@ -17,10 +21,13 @@ type InteractionMode = 'none' | 'dragging' | 'resizing'
 
 export default function InteractiveBoundingBox({
   annotation,
+  currentFrame,
   videoWidth,
   videoHeight,
   isActive,
   onSelect,
+  mode,
+  onUpdate,
 }: InteractiveBoundingBoxProps) {
   const dispatch = useDispatch<AppDispatch>()
   const [hovering, setHovering] = useState(false)
@@ -31,6 +38,10 @@ export default function InteractiveBoundingBox({
   const svgRef = useRef<SVGSVGElement | null>(null)
 
   const handleSize = 8 // Size of resize handles in pixels
+
+  // Determine if box is editable based on mode
+  const isEditable = mode !== 'ghost'
+  const showAllHandles = mode === 'keyframe'
 
   // Get stroke color based on type
   const getStrokeColor = () => {
@@ -44,11 +55,39 @@ export default function InteractiveBoundingBox({
 
   const strokeColor = getStrokeColor()
 
+  // Get visual style based on mode
+  const getVisualStyle = () => {
+    switch (mode) {
+      case 'keyframe':
+        return {
+          opacity: isActive || hovering ? 1.0 : 0.8,
+          strokeWidth: 3,
+          strokeDasharray: undefined,
+        }
+      case 'interpolated':
+        return {
+          opacity: 0.6,
+          strokeWidth: 2,
+          strokeDasharray: undefined,
+        }
+      case 'ghost':
+        return {
+          opacity: 0.3,
+          strokeWidth: 2,
+          strokeDasharray: '5,5',
+        }
+    }
+  }
+
+  const visualStyle = getVisualStyle()
+
   // Handle mouse down on main box (for dragging)
   const handleBoxMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!isEditable) return
+
     onSelect()
-    
+
     const coords = getRelativeCoordinates(e)
     setInteractionMode('dragging')
     setDragStart(coords)
@@ -58,8 +97,21 @@ export default function InteractiveBoundingBox({
   // Handle mouse down on resize handle
   const handleResizeMouseDown = (e: React.MouseEvent, handle: ResizeHandle) => {
     e.stopPropagation()
+    if (!isEditable) return
+
     onSelect()
-    
+
+    // If interpolated mode, convert to keyframe on handle click
+    if (mode === 'interpolated') {
+      dispatch(addKeyframe({
+        videoId: annotation.videoId,
+        annotationId: annotation.id,
+        frameNumber: currentFrame,
+        box: annotation.boundingBox,
+      }))
+      return
+    }
+
     const coords = getRelativeCoordinates(e)
     setInteractionMode('resizing')
     setActiveHandle(handle)
@@ -161,11 +213,24 @@ export default function InteractiveBoundingBox({
     }
 
     // Update the annotation with the new bounding box
-    dispatch(updateAnnotation({
-      ...annotation,
-      boundingBox: newBox,
-      updatedAt: new Date().toISOString(),
-    }))
+    if (onUpdate) {
+      onUpdate(newBox)
+    } else if (mode === 'keyframe') {
+      // Update keyframe directly
+      dispatch(updateKeyframe({
+        videoId: annotation.videoId,
+        annotationId: annotation.id,
+        frameNumber: currentFrame,
+        box: newBox,
+      }))
+    } else {
+      // Fallback to updating annotation (legacy support)
+      dispatch(updateAnnotation({
+        ...annotation,
+        boundingBox: newBox,
+        updatedAt: new Date().toISOString(),
+      }))
+    }
   }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, dispatch])
 
   // Handle mouse up
@@ -191,9 +256,9 @@ export default function InteractiveBoundingBox({
   return (
     <g
       data-annotation-id={annotation.id}
-      onMouseEnter={() => setHovering(true)}
+      onMouseEnter={() => isEditable && setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: mode === 'ghost' ? 'none' : 'auto' }}
     >
       {/* Main bounding box */}
       <rect
@@ -203,111 +268,124 @@ export default function InteractiveBoundingBox({
         height={box.height}
         fill="none"
         stroke={strokeColor}
-        strokeWidth={isActive || hovering ? 3 : 2}
-        opacity={isActive || hovering ? 1 : 0.8}
-        style={{ cursor: 'move', pointerEvents: 'auto' }}
+        strokeWidth={visualStyle.strokeWidth}
+        strokeDasharray={visualStyle.strokeDasharray}
+        opacity={visualStyle.opacity}
+        style={{ cursor: isEditable ? 'move' : 'default', pointerEvents: mode === 'ghost' ? 'none' : 'auto' }}
         onMouseDown={handleBoxMouseDown}
       />
-      
-      {/* Show resize handles when active or hovering */}
-      {(isActive || hovering) && (
+
+      {/* Show resize handles when active or hovering and not in ghost mode */}
+      {isEditable && (isActive || hovering) && (
         <>
-          {/* Corner handles */}
-          <rect
-            x={box.x - handleSize / 2}
-            y={box.y - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'nw-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
-          />
-          <rect
-            x={box.x + box.width - handleSize / 2}
-            y={box.y - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'ne-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
-          />
-          <rect
-            x={box.x + box.width - handleSize / 2}
-            y={box.y + box.height - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'se-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
-          />
-          <rect
-            x={box.x - handleSize / 2}
-            y={box.y + box.height - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'sw-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
-          />
-          
-          {/* Edge handles */}
-          <rect
-            x={box.x + box.width / 2 - handleSize / 2}
-            y={box.y - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'n-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
-          />
-          <rect
-            x={box.x + box.width - handleSize / 2}
-            y={box.y + box.height / 2 - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'e-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
-          />
-          <rect
-            x={box.x + box.width / 2 - handleSize / 2}
-            y={box.y + box.height - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 's-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 's')}
-          />
-          <rect
-            x={box.x - handleSize / 2}
-            y={box.y + box.height / 2 - handleSize / 2}
-            width={handleSize}
-            height={handleSize}
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            style={{ cursor: 'w-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
-          />
+          {/* Corner handles (always shown for keyframe and interpolated) */}
+          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="top">
+            <rect
+              x={box.x - handleSize / 2}
+              y={box.y - handleSize / 2}
+              width={handleSize}
+              height={handleSize}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="1"
+              style={{ cursor: 'nw-resize', pointerEvents: 'auto' }}
+              onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
+            />
+          </Tooltip>
+          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="top">
+            <rect
+              x={box.x + box.width - handleSize / 2}
+              y={box.y - handleSize / 2}
+              width={handleSize}
+              height={handleSize}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="1"
+              style={{ cursor: 'ne-resize', pointerEvents: 'auto' }}
+              onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
+            />
+          </Tooltip>
+          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="bottom">
+            <rect
+              x={box.x + box.width - handleSize / 2}
+              y={box.y + box.height - handleSize / 2}
+              width={handleSize}
+              height={handleSize}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="1"
+              style={{ cursor: 'se-resize', pointerEvents: 'auto' }}
+              onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
+            />
+          </Tooltip>
+          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="bottom">
+            <rect
+              x={box.x - handleSize / 2}
+              y={box.y + box.height - handleSize / 2}
+              width={handleSize}
+              height={handleSize}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="1"
+              style={{ cursor: 'sw-resize', pointerEvents: 'auto' }}
+              onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
+            />
+          </Tooltip>
+
+          {/* Edge handles (only for keyframe mode) */}
+          {showAllHandles && (
+            <>
+              <rect
+                x={box.x + box.width / 2 - handleSize / 2}
+                y={box.y - handleSize / 2}
+                width={handleSize}
+                height={handleSize}
+                fill="white"
+                stroke={strokeColor}
+                strokeWidth="1"
+                style={{ cursor: 'n-resize', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
+              />
+              <rect
+                x={box.x + box.width - handleSize / 2}
+                y={box.y + box.height / 2 - handleSize / 2}
+                width={handleSize}
+                height={handleSize}
+                fill="white"
+                stroke={strokeColor}
+                strokeWidth="1"
+                style={{ cursor: 'e-resize', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
+              />
+              <rect
+                x={box.x + box.width / 2 - handleSize / 2}
+                y={box.y + box.height - handleSize / 2}
+                width={handleSize}
+                height={handleSize}
+                fill="white"
+                stroke={strokeColor}
+                strokeWidth="1"
+                style={{ cursor: 's-resize', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeMouseDown(e, 's')}
+              />
+              <rect
+                x={box.x - handleSize / 2}
+                y={box.y + box.height / 2 - handleSize / 2}
+                width={handleSize}
+                height={handleSize}
+                fill="white"
+                stroke={strokeColor}
+                strokeWidth="1"
+                style={{ cursor: 'w-resize', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
+              />
+            </>
+          )}
         </>
       )}
-      
+
       {/* Label for linked objects */}
-      {annotation.linkedObject && (
+      {annotation.linkedObject && mode !== 'ghost' && (
         <foreignObject
           x={box.x}
           y={box.y - 25}

@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { useDispatch } from 'react-redux'
 import { Box, Slider, IconButton, Typography, useTheme } from '@mui/material'
 import {
   SkipPrevious,
@@ -15,6 +16,8 @@ import {
 import { Annotation } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
 import { useTimelineKeyboardShortcuts } from '../../hooks/useTimelineKeyboardShortcuts.js'
+import { AppDispatch } from '../../store/store.js'
+import { moveKeyframe } from '../../store/annotationSlice.js'
 
 /**
  * @interface TimelineComponentProps
@@ -48,12 +51,16 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   videoRef,
 }) => {
   const theme = useTheme()
+  const dispatch = useDispatch<AppDispatch>()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<TimelineRenderer | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [hoveredFrame, setHoveredFrame] = useState<number | null>(null)
+  const [selectedKeyframes, setLocalSelectedKeyframes] = useState<number[]>([])
+  const [draggingKeyframe, setDraggingKeyframe] = useState<number | null>(null)
+  const [dragStartFrame, setDragStartFrame] = useState<number | null>(null)
 
   // Extract keyframes from annotation
   const keyframes = annotation.boundingBoxSequence.boxes.filter(
@@ -132,7 +139,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
     // Render using requestAnimationFrame for smooth 60fps
     const render = () => {
-      renderer.render(renderOptions)
+      renderer.render(renderOptions, selectedKeyframes)
     }
 
     const rafId = requestAnimationFrame(render)
@@ -140,7 +147,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     return () => {
       cancelAnimationFrame(rafId)
     }
-  }, [currentFrame, keyframes, annotation.boundingBoxSequence.interpolationSegments, zoom, totalFrames, theme])
+  }, [currentFrame, keyframes, annotation.boundingBoxSequence.interpolationSegments, zoom, totalFrames, theme, selectedKeyframes])
 
   // Handle mouse down on canvas
   const handleMouseDown = useCallback(
@@ -153,16 +160,36 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       const x = e.clientX - rect.left
       const frame = renderer.xToFrame(x)
 
-      // Clamp to valid range
-      const clampedFrame = Math.max(0, Math.min(totalFrames - 1, frame))
+      // Check if clicking on a keyframe
+      const clickedKeyframe = renderer.getKeyframeAtX(x, keyframes)
 
-      setIsDragging(true)
-      onSeek(clampedFrame)
+      if (clickedKeyframe !== null) {
+        // Clicking on a keyframe
+        if (e.ctrlKey || e.metaKey) {
+          // Multi-select with Ctrl/Cmd
+          if (selectedKeyframes.includes(clickedKeyframe)) {
+            setLocalSelectedKeyframes(selectedKeyframes.filter(f => f !== clickedKeyframe))
+          } else {
+            setLocalSelectedKeyframes([...selectedKeyframes, clickedKeyframe])
+          }
+        } else {
+          // Select single keyframe and prepare for drag
+          setLocalSelectedKeyframes([clickedKeyframe])
+          setDraggingKeyframe(clickedKeyframe)
+          setDragStartFrame(clickedKeyframe)
+        }
+      } else {
+        // Clicking on timeline (not a keyframe)
+        const clampedFrame = Math.max(0, Math.min(totalFrames - 1, frame))
+        setIsDragging(true)
+        setLocalSelectedKeyframes([])
+        onSeek(clampedFrame)
+      }
     },
-    [totalFrames, onSeek]
+    [totalFrames, keyframes, selectedKeyframes, onSeek]
   )
 
-  // Handle mouse move (for dragging playhead)
+  // Handle mouse move (for dragging playhead or keyframe)
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!canvasRef.current || !rendererRef.current) return
@@ -179,7 +206,14 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       // Update hovered frame for tooltip
       setHoveredFrame(clampedFrame)
 
-      // If dragging, seek to frame
+      // If dragging keyframe, update preview position
+      if (draggingKeyframe !== null && dragStartFrame !== null) {
+        // Show preview at new position (actual move happens on mouse up)
+        // For now, just track the target frame
+        return
+      }
+
+      // If dragging playhead, seek to frame
       if (isDragging) {
         // Snap to nearest keyframe if within 3 frames
         let targetFrame = clampedFrame
@@ -193,17 +227,52 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         onSeek(targetFrame)
       }
     },
-    [isDragging, totalFrames, keyframes, onSeek]
+    [isDragging, draggingKeyframe, dragStartFrame, totalFrames, keyframes, onSeek]
   )
 
   // Handle mouse up
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false)
-  }, [])
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Handle keyframe drag completion
+      if (draggingKeyframe !== null && dragStartFrame !== null && canvasRef.current && rendererRef.current) {
+        const canvas = canvasRef.current
+        const renderer = rendererRef.current
+        const rect = canvas.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const newFrame = Math.max(0, Math.min(totalFrames - 1, renderer.xToFrame(x)))
+
+        // Only move if frame changed and not first/last keyframe
+        if (newFrame !== dragStartFrame) {
+          const isFirstOrLast =
+            dragStartFrame === keyframes[0].frameNumber ||
+            dragStartFrame === keyframes[keyframes.length - 1].frameNumber
+
+          if (!isFirstOrLast) {
+            // Dispatch move action
+            dispatch(
+              moveKeyframe({
+                videoId: annotation.videoId,
+                annotationId: annotation.id,
+                oldFrame: dragStartFrame,
+                newFrame,
+              })
+            )
+          }
+        }
+      }
+
+      setIsDragging(false)
+      setDraggingKeyframe(null)
+      setDragStartFrame(null)
+    },
+    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch]
+  )
 
   // Handle mouse leave
   const handleMouseLeave = useCallback(() => {
     setIsDragging(false)
+    setDraggingKeyframe(null)
+    setDragStartFrame(null)
     setHoveredFrame(null)
   }, [])
 

@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux'
 import annotationReducer from './annotationSlice'
 import videoReducer from './videoSlice'
 import personaReducer from './personaSlice'
@@ -17,3 +18,7 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch
+
+// Typed hooks
+export const useAppDispatch: () => AppDispatch = useDispatch
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector
