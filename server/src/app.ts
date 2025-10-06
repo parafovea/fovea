@@ -191,5 +191,8 @@ export async function buildApp() {
   const exportRoute = await import('./routes/export.js')
   await app.register(exportRoute.default)
 
+  const importRoute = await import('./routes/import.js')
+  await app.register(importRoute.default)
+
   return app
 }

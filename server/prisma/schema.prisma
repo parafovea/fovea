@@ -143,3 +143,18 @@ model Annotation {
 
   @@map("annotations")
 }
+
+/// ImportHistory tracks data imports from JSON Lines files
+model ImportHistory {
+  id            String   @id @default(uuid())
+  filename      String
+  importedBy    String?
+  importOptions Json
+  result        Json
+  success       Boolean
+  itemsImported Int
+  itemsSkipped  Int
+  createdAt     DateTime @default(now())
+
+  @@map("import_history")
+}
