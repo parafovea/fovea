@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse } from '../models/types'
+import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats } from '../models/types'
 
 const API_BASE = '/api'
 
@@ -194,5 +194,82 @@ export const api = {
       ...options,
     })
     return response.data
+  },
+
+  /**
+   * Get export statistics without performing the export.
+   * Useful for estimating file size before downloading.
+   *
+   * @param options - Export filter options
+   * @returns Promise resolving to export statistics
+   */
+  async getExportStats(options: ExportOptions = {}): Promise<ExportStats> {
+    const params = new URLSearchParams()
+
+    if (options.includeInterpolated !== undefined) {
+      params.append('includeInterpolated', options.includeInterpolated.toString())
+    }
+    if (options.personaIds && options.personaIds.length > 0) {
+      params.append('personaIds', options.personaIds.join(','))
+    }
+    if (options.videoIds && options.videoIds.length > 0) {
+      params.append('videoIds', options.videoIds.join(','))
+    }
+    if (options.annotationTypes && options.annotationTypes.length > 0) {
+      params.append('annotationTypes', options.annotationTypes.join(','))
+    }
+
+    const response = await axios.get(`${API_BASE}/export/stats?${params.toString()}`)
+    return response.data
+  },
+
+  /**
+   * Export annotations with bounding box sequences to JSON Lines format.
+   * Downloads the export file directly to the user's browser.
+   *
+   * @param options - Export filter and format options
+   */
+  async exportAnnotations(options: ExportOptions = {}): Promise<void> {
+    const params = new URLSearchParams()
+    params.append('format', 'jsonl')
+
+    if (options.includeInterpolated !== undefined) {
+      params.append('includeInterpolated', options.includeInterpolated.toString())
+    }
+    if (options.personaIds && options.personaIds.length > 0) {
+      params.append('personaIds', options.personaIds.join(','))
+    }
+    if (options.videoIds && options.videoIds.length > 0) {
+      params.append('videoIds', options.videoIds.join(','))
+    }
+    if (options.annotationTypes && options.annotationTypes.length > 0) {
+      params.append('annotationTypes', options.annotationTypes.join(','))
+    }
+
+    // Use blob response type to handle binary data
+    const response = await axios.get(`${API_BASE}/export?${params.toString()}`, {
+      responseType: 'blob'
+    })
+
+    // Extract filename from Content-Disposition header if available
+    const contentDisposition = response.headers['content-disposition']
+    let filename = 'annotations.jsonl'
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+      if (filenameMatch) {
+        filename = filenameMatch[1]
+      }
+    }
+
+    // Create download
+    const blob = new Blob([response.data], { type: 'application/x-ndjson' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   },
 }

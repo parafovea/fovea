@@ -683,6 +683,29 @@ export interface ImportRequest {
   includeRelations?: boolean
 }
 
+/**
+ * @interface ExportOptions
+ * @description Options for exporting annotations with bounding box sequences.
+ */
+export interface ExportOptions {
+  includeInterpolated?: boolean  // Export all interpolated frames vs. keyframes-only
+  personaIds?: string[]  // Filter by personas
+  videoIds?: string[]  // Filter by videos
+  annotationTypes?: ('type' | 'object')[]  // Filter by annotation type
+}
+
+/**
+ * @interface ExportStats
+ * @description Statistics about exported data.
+ */
+export interface ExportStats {
+  totalSize: number  // bytes
+  annotationCount: number
+  sequenceCount: number
+  keyframeCount: number
+  interpolatedFrameCount: number
+}
+
 // Video Summary
 export interface VideoSummary {
   id: string

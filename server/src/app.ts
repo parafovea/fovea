@@ -188,5 +188,8 @@ export async function buildApp() {
   const annotationsRoute = await import('./routes/annotations.js')
   await app.register(annotationsRoute.default)
 
+  const exportRoute = await import('./routes/export.js')
+  await app.register(exportRoute.default)
+
   return app
 }
