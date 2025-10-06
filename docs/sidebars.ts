@@ -107,6 +107,11 @@ const sidebars: SidebarsConfig = {
   ],
   apiSidebar: [
     'api-reference/overview',
+    'api-reference/personas',
+    'api-reference/ontology',
+    'api-reference/annotations',
+    'api-reference/videos',
+    'api-reference/export-import',
   ],
 };
 
