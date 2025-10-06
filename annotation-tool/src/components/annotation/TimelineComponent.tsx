@@ -86,7 +86,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect()
       canvas.width = rect.width
-      canvas.height = 120  // Fixed height for timeline
+      canvas.height = 140  // Updated height for timeline (includes visibility track)
     }
 
     resizeCanvas()
@@ -101,7 +101,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       resizeCanvas()
       if (rendererRef.current) {
         const rect = container.getBoundingClientRect()
-        rendererRef.current.resize(rect.width, 120)
+        rendererRef.current.resize(rect.width, 140)
         rendererRef.current.invalidate()
       }
     }
@@ -125,6 +125,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       currentFrame,
       keyframes,
       interpolationSegments: annotation.boundingBoxSequence.interpolationSegments,
+      visibilityRanges: annotation.boundingBoxSequence.visibilityRanges,
       zoom,
       theme: {
         backgroundColor: theme.palette.background.paper,
@@ -339,7 +340,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         ref={containerRef}
         sx={{
           width: '100%',
-          height: 120,
+          height: 140,
           position: 'relative',
           cursor: isDragging ? 'grabbing' : 'grab',
         }}

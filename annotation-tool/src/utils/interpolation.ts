@@ -23,11 +23,13 @@ export class BoundingBoxInterpolator {
    *
    * @param keyframes - User-defined keyframes
    * @param segments - Interpolation configuration per segment
+   * @param visibilityRanges - Optional visibility ranges for discontiguous sequences
    * @returns Complete sequence with interpolated frames
    */
   interpolate(
     keyframes: BoundingBox[],
-    segments: InterpolationSegment[]
+    segments: InterpolationSegment[],
+    visibilityRanges?: Array<{ startFrame: number; endFrame: number; visible: boolean }>
   ): BoundingBox[] {
     if (keyframes.length === 0) {
       return []
@@ -52,11 +54,18 @@ export class BoundingBoxInterpolator {
         s => s.startFrame === startKeyframe.frameNumber && s.endFrame === endKeyframe.frameNumber
       ) || { startFrame: startKeyframe.frameNumber, endFrame: endKeyframe.frameNumber, type: 'linear' as InterpolationType }
 
-      // Add start keyframe
-      result.push({ ...startKeyframe, isKeyframe: true })
+      // Add start keyframe (if visible)
+      if (!visibilityRanges || getVisibilityAtFrame(visibilityRanges, startKeyframe.frameNumber)) {
+        result.push({ ...startKeyframe, isKeyframe: true })
+      }
 
-      // Generate interpolated frames
+      // Generate interpolated frames (only for visible frames)
       for (let frame = startKeyframe.frameNumber + 1; frame < endKeyframe.frameNumber; frame++) {
+        // Check visibility
+        if (visibilityRanges && !getVisibilityAtFrame(visibilityRanges, frame)) {
+          continue // Skip hidden frames
+        }
+
         const interpolatedBox = this.interpolateFrame(
           startKeyframe,
           endKeyframe,
@@ -67,8 +76,11 @@ export class BoundingBoxInterpolator {
       }
     }
 
-    // Add final keyframe
-    result.push({ ...sortedKeyframes[sortedKeyframes.length - 1], isKeyframe: true })
+    // Add final keyframe (if visible)
+    const finalKeyframe = sortedKeyframes[sortedKeyframes.length - 1]
+    if (!visibilityRanges || getVisibilityAtFrame(visibilityRanges, finalKeyframe.frameNumber)) {
+      result.push({ ...finalKeyframe, isKeyframe: true })
+    }
 
     return result
   }
@@ -714,4 +726,114 @@ export class LazyBoundingBoxSequence {
   getCacheSize(): number {
     return this.cache.size
   }
+}
+
+/**
+ * Check visibility of a frame in a sequence.
+ *
+ * @param visibilityRanges - Visibility ranges from sequence
+ * @param frameNumber - Frame to check
+ * @returns True if frame is visible
+ */
+export function getVisibilityAtFrame(
+  visibilityRanges: Array<{ startFrame: number; endFrame: number; visible: boolean }>,
+  frameNumber: number
+): boolean {
+  if (visibilityRanges.length === 0) {
+    return true // Default to visible if no ranges defined
+  }
+
+  const range = visibilityRanges.find(
+    r => r.startFrame <= frameNumber && r.endFrame >= frameNumber
+  )
+
+  return range?.visible ?? true // Default to visible if no range found
+}
+
+/**
+ * Interpolate a bounding box sequence and return the box at a specific frame.
+ * This is a convenience function that respects visibility ranges.
+ *
+ * @param sequence - Bounding box sequence
+ * @param frameNumber - Frame number to get box for
+ * @returns Bounding box at frame, or null if frame is hidden
+ */
+export function interpolate(
+  sequence: BoundingBoxSequence,
+  frameNumber: number
+): BoundingBox | null {
+  // Step 1: Check visibility
+  const isVisible = getVisibilityAtFrame(sequence.visibilityRanges, frameNumber)
+  if (!isVisible) {
+    return null // Don't generate box for hidden frames
+  }
+
+  // Step 2: Find keyframes
+  const keyframes = sequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+  const prevKeyframe = findPreviousKeyframe(keyframes, frameNumber)
+  const nextKeyframe = findNextKeyframe(keyframes, frameNumber)
+
+  // If frame is exactly a keyframe, return it
+  const exactKeyframe = keyframes.find(k => k.frameNumber === frameNumber)
+  if (exactKeyframe) {
+    return exactKeyframe
+  }
+
+  if (!prevKeyframe || !nextKeyframe) {
+    return null
+  }
+
+  // Step 3: Get interpolation segment
+  const segment = sequence.interpolationSegments.find(
+    s => s.startFrame === prevKeyframe.frameNumber && s.endFrame === nextKeyframe.frameNumber
+  )
+
+  if (!segment) {
+    // No segment defined, use linear interpolation
+    const interpolator = new BoundingBoxInterpolator()
+    return interpolator['interpolateFrame'](
+      prevKeyframe,
+      nextKeyframe,
+      frameNumber,
+      { startFrame: prevKeyframe.frameNumber, endFrame: nextKeyframe.frameNumber, type: 'linear' }
+    )
+  }
+
+  // Step 4: Apply interpolation based on segment type
+  const interpolator = new BoundingBoxInterpolator()
+  return interpolator['interpolateFrame'](prevKeyframe, nextKeyframe, frameNumber, segment)
+}
+
+/**
+ * Find the previous keyframe before a given frame.
+ *
+ * @param keyframes - Array of keyframes
+ * @param frameNumber - Current frame
+ * @returns Previous keyframe or null
+ */
+function findPreviousKeyframe(keyframes: BoundingBox[], frameNumber: number): BoundingBox | null {
+  const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].frameNumber <= frameNumber) {
+      return sorted[i]
+    }
+  }
+  return null
+}
+
+/**
+ * Find the next keyframe after a given frame.
+ *
+ * @param keyframes - Array of keyframes
+ * @param frameNumber - Current frame
+ * @returns Next keyframe or null
+ */
+function findNextKeyframe(keyframes: BoundingBox[], frameNumber: number): BoundingBox | null {
+  const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].frameNumber >= frameNumber) {
+      return sorted[i]
+    }
+  }
+  return null
 }

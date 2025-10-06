@@ -6,7 +6,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { Paper, IconButton, Typography, Box, Tooltip } from '@mui/material'
-import { Annotation } from '../../models/types.js'
+import { Annotation, InterpolationType } from '../../models/types.js'
+import { InterpolationModeSelector } from './InterpolationModeSelector.js'
 
 /**
  * @interface QuickActionsPanelProps
@@ -25,8 +26,8 @@ export interface QuickActionsPanelProps {
   onDeleteKeyframe: () => void
   /** Callback to copy previous frame's box */
   onCopyPreviousFrame: () => void
-  /** Callback to open interpolation menu */
-  onOpenInterpolationMenu: () => void
+  /** Callback when interpolation mode is changed */
+  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: any) => void
   /** Whether current frame is a keyframe */
   isKeyframe: boolean
   /** Video width for edge detection */
@@ -44,11 +45,12 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   onAddKeyframe,
   onDeleteKeyframe,
   onCopyPreviousFrame,
-  onOpenInterpolationMenu,
+  onUpdateInterpolationSegment,
   isKeyframe,
   videoWidth,
 }) => {
   const [position, setPosition] = useState({ top: 0, left: 0 })
+  const [interpolationDialogOpen, setInterpolationDialogOpen] = useState(false)
 
   // Calculate position with edge detection
   useEffect(() => {
@@ -197,12 +199,12 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
       </Tooltip>
 
       {/* Interpolation Menu Button */}
-      <Tooltip title="Interpolation Mode (I) - Coming in Session 5" arrow placement="bottom">
+      <Tooltip title="Interpolation Mode (I)" arrow placement="bottom">
         <Box>
           <IconButton
             size="small"
-            onClick={onOpenInterpolationMenu}
-            disabled={true}
+            onClick={() => setInterpolationDialogOpen(true)}
+            disabled={false}
             sx={{
               width: '100%',
               display: 'flex',
@@ -222,6 +224,18 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
           </IconButton>
         </Box>
       </Tooltip>
+
+      {/* Interpolation Mode Selector Dialog */}
+      <InterpolationModeSelector
+        annotation={annotation}
+        currentFrame={currentFrame}
+        open={interpolationDialogOpen}
+        onClose={() => setInterpolationDialogOpen(false)}
+        onApply={(segmentIndex, type, controlPoints) => {
+          onUpdateInterpolationSegment(segmentIndex, type, controlPoints)
+          setInterpolationDialogOpen(false)
+        }}
+      />
     </Paper>
   )
 }

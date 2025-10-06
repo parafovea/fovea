@@ -4,13 +4,15 @@
  * Handles keyframe operations and bounding box manipulation.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { AppDispatch } from '../store/store.js'
 import {
   addKeyframe,
   removeKeyframe,
   selectAnnotation,
+  toggleVisibilityAtFrame,
+  setVisibilityRange,
 } from '../store/annotationSlice.js'
 import { Annotation } from '../models/types.js'
 
@@ -22,6 +24,9 @@ import { Annotation } from '../models/types.js'
  * - K: Add keyframe at current frame
  * - Delete: Remove keyframe at current frame
  * - Ctrl+C: Copy previous frame's box
+ * - V: Toggle visibility at current frame
+ * - [: Set in-point for visibility range
+ * - ]: Set out-point for visibility range
  * - Esc: Deselect annotation
  *
  * @param selectedAnnotation - Currently selected annotation
@@ -36,6 +41,9 @@ export function useAnnotationKeyboardShortcuts(
   onCopyPreviousFrame?: () => void
 ): void {
   const dispatch = useDispatch<AppDispatch>()
+
+  // Track in-point for visibility range
+  const [inPoint, setInPoint] = useState<number | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -101,10 +109,51 @@ export function useAnnotationKeyboardShortcuts(
           }
           break
 
-        case 'escape':
-          // Deselect annotation
+        case 'v':
+          // Toggle visibility at current frame
           e.preventDefault()
-          dispatch(selectAnnotation(null))
+          dispatch(
+            toggleVisibilityAtFrame({
+              videoId: selectedAnnotation.videoId,
+              annotationId: selectedAnnotation.id,
+              frameNumber: currentFrame,
+            })
+          )
+          break
+
+        case '[':
+          // Set in-point for visibility range
+          e.preventDefault()
+          setInPoint(currentFrame)
+          break
+
+        case ']':
+          // Set out-point for visibility range (requires in-point to be set)
+          if (inPoint !== null) {
+            e.preventDefault()
+            const startFrame = Math.min(inPoint, currentFrame)
+            const endFrame = Math.max(inPoint, currentFrame)
+            dispatch(
+              setVisibilityRange({
+                videoId: selectedAnnotation.videoId,
+                annotationId: selectedAnnotation.id,
+                startFrame,
+                endFrame,
+                visible: true,
+              })
+            )
+            setInPoint(null) // Reset in-point
+          }
+          break
+
+        case 'escape':
+          // Deselect annotation or clear in-point
+          e.preventDefault()
+          if (inPoint !== null) {
+            setInPoint(null) // Clear in-point first
+          } else {
+            dispatch(selectAnnotation(null))
+          }
           break
       }
     }
@@ -114,5 +163,5 @@ export function useAnnotationKeyboardShortcuts(
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedAnnotation, currentFrame, isKeyframe, onCopyPreviousFrame, dispatch])
+  }, [selectedAnnotation, currentFrame, isKeyframe, onCopyPreviousFrame, inPoint, dispatch])
 }

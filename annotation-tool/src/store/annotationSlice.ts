@@ -342,6 +342,118 @@ const annotationSlice = createSlice({
       // Sort visibility ranges
       sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
     },
+
+    updateInterpolationSegment: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      segmentIndex: number
+      type: InterpolationType
+      controlPoints?: any
+    }>) => {
+      const { videoId, annotationId, segmentIndex, type, controlPoints } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+      if (segmentIndex < 0 || segmentIndex >= sequence.interpolationSegments.length) return
+
+      const segment = sequence.interpolationSegments[segmentIndex]
+      segment.type = type
+
+      if (type === 'bezier' && controlPoints) {
+        segment.controlPoints = controlPoints
+      } else if (type !== 'bezier') {
+        // Clear control points for non-bezier modes
+        delete segment.controlPoints
+      }
+    },
+
+    toggleVisibilityAtFrame: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      frameNumber: number
+    }>) => {
+      const { videoId, annotationId, frameNumber } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+
+      // Find range containing this frame
+      const rangeIndex = sequence.visibilityRanges.findIndex(
+        r => r.startFrame <= frameNumber && r.endFrame >= frameNumber
+      )
+
+      if (rangeIndex !== -1) {
+        const range = sequence.visibilityRanges[rangeIndex]
+        const newVisibility = !range.visible
+
+        // Split the range if frame is in the middle
+        if (frameNumber === range.startFrame && frameNumber === range.endFrame) {
+          // Single frame range - just toggle it
+          range.visible = newVisibility
+        } else if (frameNumber === range.startFrame) {
+          // Toggle at start - split off first frame
+          range.startFrame = frameNumber + 1
+          sequence.visibilityRanges.splice(rangeIndex, 0, {
+            startFrame: frameNumber,
+            endFrame: frameNumber,
+            visible: newVisibility
+          })
+        } else if (frameNumber === range.endFrame) {
+          // Toggle at end - split off last frame
+          range.endFrame = frameNumber - 1
+          sequence.visibilityRanges.push({
+            startFrame: frameNumber,
+            endFrame: frameNumber,
+            visible: newVisibility
+          })
+        } else {
+          // Toggle in middle - split into three ranges
+          const originalEnd = range.endFrame
+          range.endFrame = frameNumber - 1
+          sequence.visibilityRanges.push(
+            {
+              startFrame: frameNumber,
+              endFrame: frameNumber,
+              visible: newVisibility
+            },
+            {
+              startFrame: frameNumber + 1,
+              endFrame: originalEnd,
+              visible: range.visible
+            }
+          )
+        }
+
+        // Sort and merge adjacent ranges with same visibility
+        sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
+
+        // Merge adjacent ranges
+        for (let i = sequence.visibilityRanges.length - 1; i > 0; i--) {
+          const curr = sequence.visibilityRanges[i]
+          const prev = sequence.visibilityRanges[i - 1]
+          if (prev.endFrame + 1 === curr.startFrame && prev.visible === curr.visible) {
+            prev.endFrame = curr.endFrame
+            sequence.visibilityRanges.splice(i, 1)
+          }
+        }
+      } else {
+        // No range found - create a new single-frame hidden range
+        sequence.visibilityRanges.push({
+          startFrame: frameNumber,
+          endFrame: frameNumber,
+          visible: false
+        })
+        sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
+      }
+    },
   },
 })
 
@@ -376,6 +488,8 @@ export const {
   moveKeyframe,
   setSegmentInterpolationMode,
   setVisibilityRange,
+  updateInterpolationSegment,
+  toggleVisibilityAtFrame,
 } = annotationSlice.actions
 
 // Selectors
@@ -523,5 +637,70 @@ export const selectMotionPath = createSelector(
     }))
   }
 )
+
+/**
+ * Select visibility ranges for an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @returns Visibility ranges
+ */
+export const selectVisibilityRanges = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string
+) => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  return annotation?.boundingBoxSequence.visibilityRanges || []
+}
+
+/**
+ * Check if a frame is visible in an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number to check
+ * @returns True if frame is visible
+ */
+export const selectIsVisibleAtFrame = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string,
+  frameNumber: number
+): boolean => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return false
+
+  const ranges = annotation.boundingBoxSequence.visibilityRanges
+  if (ranges.length === 0) return true
+
+  const range = ranges.find(r => r.startFrame <= frameNumber && r.endFrame >= frameNumber)
+  return range?.visible ?? true
+}
+
+/**
+ * Select interpolation segment containing a frame.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number
+ * @returns Interpolation segment or null
+ */
+export const selectInterpolationSegment = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string,
+  frameNumber: number
+) => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return null
+
+  return annotation.boundingBoxSequence.interpolationSegments.find(
+    s => s.startFrame <= frameNumber && s.endFrame >= frameNumber
+  ) || null
+}
 
 export default annotationSlice.reducer
