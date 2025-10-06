@@ -13,7 +13,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "docs": "typedoc --options typedoc.json"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -58,6 +59,8 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "jsdom": "^27.0.0",
     "msw": "^2.11.3",
+    "typedoc": "^0.28.13",
+    "typedoc-plugin-markdown": "^4.9.0",
     "typescript": "^5.3.3",
     "vite": "^5.1.4",
     "vite-tsconfig-paths": "^5.1.4",

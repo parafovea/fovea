@@ -112,6 +112,21 @@ const sidebars: SidebarsConfig = {
     'api-reference/annotations',
     'api-reference/videos',
     'api-reference/export-import',
+    {
+      type: 'link',
+      label: 'Frontend API',
+      href: '/docs/api-reference/frontend/',
+    },
+    {
+      type: 'link',
+      label: 'Backend API',
+      href: '/docs/api-reference/backend/',
+    },
+    {
+      type: 'link',
+      label: 'Model Service API',
+      href: '/api-reference/model-service/index.html',
+    },
   ],
 };
 

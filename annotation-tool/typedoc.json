@@ -1,0 +1,32 @@
+{
+  "entryPoints": ["src/"],
+  "entryPointStrategy": "expand",
+  "out": "../docs/docs/api-reference/frontend",
+  "plugin": ["typedoc-plugin-markdown"],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/vite-env.d.ts",
+    "**/setupTests.ts"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Components",
+    "Hooks",
+    "Store",
+    "Utils",
+    "Services",
+    "Types",
+    "*"
+  ],
+  "readme": "none",
+  "hideGenerator": true,
+  "includeVersion": false,
+  "disableSources": false,
+  "searchInComments": true
+}

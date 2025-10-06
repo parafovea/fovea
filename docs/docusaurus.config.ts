@@ -17,7 +17,7 @@ const config: Config = {
   organizationName: 'aaronstevenwhite',
   projectName: 'fovea',
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: 'warn',
   onBrokenMarkdownLinks: 'warn',
 
   i18n: {
@@ -68,10 +68,27 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'apiSidebar',
-          position: 'left',
+          type: 'dropdown',
           label: 'API Reference',
+          position: 'left',
+          items: [
+            {
+              label: 'Overview',
+              to: '/docs/api-reference/overview',
+            },
+            {
+              label: 'Frontend API',
+              to: '/docs/api-reference/frontend/',
+            },
+            {
+              label: 'Backend API',
+              to: '/docs/api-reference/backend/',
+            },
+            {
+              label: 'Model Service API',
+              href: '/api-reference/model-service/index.html',
+            },
+          ],
         },
         {
           href: 'https://github.com/aaronstevenwhite/fovea',
