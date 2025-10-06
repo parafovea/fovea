@@ -702,3 +702,52 @@ export interface OntologyExport {
   exportDate: string
   exportVersion: string
 }
+
+// Tracking Integration
+
+/**
+ * @interface TrackFrame
+ * @description Single frame in a tracking result with bounding box or mask.
+ * @property frameNumber - Frame number in video sequence
+ * @property box - Bounding box coordinates (x, y, width, height)
+ * @property mask - Optional segmentation mask as 2D array
+ * @property confidence - Model confidence score for this frame (0-1)
+ * @property occluded - Whether object is occluded in this frame
+ */
+export interface TrackFrame {
+  frameNumber: number
+  box: { x: number; y: number; width: number; height: number }
+  mask?: number[][]
+  confidence: number
+  occluded: boolean
+}
+
+/**
+ * @interface TrackingResult
+ * @description Result from automated tracking model for a single tracked object.
+ * @property trackId - Unique identifier for this track
+ * @property label - Object class label (e.g., "person", "car")
+ * @property confidence - Overall tracking confidence (0-1)
+ * @property model - Name of tracking model used (e.g., "samurai", "sam2")
+ * @property frames - Array of tracked frames with bounding boxes
+ */
+export interface TrackingResult {
+  trackId: string | number
+  label: string
+  confidence: number
+  model: string
+  frames: TrackFrame[]
+}
+
+/**
+ * @interface TrackingResponse
+ * @description Response from tracking API endpoint.
+ * @property success - Whether tracking operation succeeded
+ * @property tracks - Array of tracking results for detected objects
+ * @property processingTimeMs - Time taken to process tracking request
+ */
+export interface TrackingResponse {
+  success: boolean
+  tracks: TrackingResult[]
+  processingTimeMs: number
+}

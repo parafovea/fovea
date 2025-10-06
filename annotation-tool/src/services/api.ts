@@ -1,7 +1,24 @@
 import axios from 'axios'
-import { Ontology, Annotation, VideoMetadata, OntologyExport } from '../models/types'
+import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse } from '../models/types'
 
 const API_BASE = '/api'
+
+/**
+ * @interface TrackingOptions
+ * @description Configuration options for object tracking request.
+ * @property enableTracking - Whether to enable tracking (vs. detection only)
+ * @property trackingModel - Name of tracking model to use
+ * @property frameRange - Optional frame range as [start, end] tuple
+ * @property confidenceThreshold - Minimum confidence for detections (0-1)
+ * @property trackSingleObject - Whether to track only one object vs. all detected
+ */
+export interface TrackingOptions {
+  enableTracking: boolean
+  trackingModel: 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
+  frameRange?: [number, number]
+  confidenceThreshold?: number
+  trackSingleObject?: boolean
+}
 
 export const api = {
   // Videos
@@ -158,5 +175,24 @@ export const api = {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  },
+
+  /**
+   * Run object tracking on video frames.
+   * Sends tracking request to model service and returns tracked object candidates.
+   *
+   * @param videoId - ID of video to track objects in
+   * @param options - Tracking configuration options
+   * @returns Promise resolving to tracking response with candidate tracks
+   */
+  async runTracking(
+    videoId: string,
+    options: TrackingOptions
+  ): Promise<TrackingResponse> {
+    const response = await axios.post(`${API_BASE}/model/track`, {
+      videoId,
+      ...options,
+    })
+    return response.data
   },
 }

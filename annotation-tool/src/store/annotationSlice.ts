@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit'
-import { Annotation, Time, BoundingBox, InterpolationType } from '../models/types.js'
+import { Annotation, Time, BoundingBox, InterpolationType, TrackingResult } from '../models/types.js'
 import { DetectionResponse } from '../api/client.js'
 import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../utils/interpolation.js'
 
@@ -29,6 +29,11 @@ interface AnnotationState {
   detectionConfidenceThreshold: number
   showDetectionCandidates: boolean
 
+  // Tracking-specific state
+  trackingResults: TrackingResult[]
+  previewedTrackId: string | number | null
+  showTrackingResults: boolean
+
   // Sequence-specific state
   interpolationMode: InterpolationType
   selectedKeyframes: number[]  // Selected keyframe frame numbers
@@ -53,6 +58,11 @@ const initialState: AnnotationState = {
   detectionQuery: '',
   detectionConfidenceThreshold: 0.5,
   showDetectionCandidates: false,
+
+  // Tracking-specific state
+  trackingResults: [],
+  previewedTrackId: null,
+  showTrackingResults: false,
 
   // Sequence-specific state
   interpolationMode: 'linear',
@@ -155,6 +165,44 @@ const annotationSlice = createSlice({
       state.detectionResults = null
       state.detectionQuery = ''
       state.showDetectionCandidates = false
+    },
+
+    // Tracking-specific actions
+    setTrackingResults: (state, action: PayloadAction<TrackingResult[]>) => {
+      state.trackingResults = action.payload
+      state.showTrackingResults = action.payload.length > 0
+    },
+
+    setPreviewedTrack: (state, action: PayloadAction<string | number | null>) => {
+      state.previewedTrackId = action.payload
+    },
+
+    acceptTrack: (state, action: PayloadAction<string | number>) => {
+      state.trackingResults = state.trackingResults.filter(
+        (track) => track.trackId !== action.payload
+      )
+      if (state.previewedTrackId === action.payload) {
+        state.previewedTrackId = null
+      }
+    },
+
+    rejectTrack: (state, action: PayloadAction<string | number>) => {
+      state.trackingResults = state.trackingResults.filter(
+        (track) => track.trackId !== action.payload
+      )
+      if (state.previewedTrackId === action.payload) {
+        state.previewedTrackId = null
+      }
+    },
+
+    setShowTrackingResults: (state, action: PayloadAction<boolean>) => {
+      state.showTrackingResults = action.payload
+    },
+
+    clearTrackingState: (state) => {
+      state.trackingResults = []
+      state.previewedTrackId = null
+      state.showTrackingResults = false
     },
 
     // Sequence-specific actions
@@ -477,6 +525,12 @@ export const {
   setDetectionConfidenceThreshold,
   setShowDetectionCandidates,
   clearDetectionState,
+  setTrackingResults,
+  setPreviewedTrack,
+  acceptTrack,
+  rejectTrack,
+  setShowTrackingResults,
+  clearTrackingState,
   setCurrentFrame,
   setInterpolationMode,
   setSelectedKeyframes,
