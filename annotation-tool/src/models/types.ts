@@ -706,6 +706,141 @@ export interface ExportStats {
   interpolatedFrameCount: number
 }
 
+// Import Types
+
+/**
+ * @interface ImportOptions
+ * @description Configuration for importing annotations from JSON Lines files.
+ */
+export interface ImportOptions {
+  conflictResolution: {
+    personas: 'skip' | 'replace' | 'merge' | 'rename'
+    worldObjects: 'skip' | 'replace' | 'merge-assignments'
+    missingDependencies: 'skip-item' | 'create-placeholder' | 'fail-import'
+    duplicateIds: 'preserve-id' | 'regenerate-id'
+    sequences: {
+      duplicateSequenceIds: 'skip' | 'replace' | 'merge-keyframes' | 'create-new'
+      overlappingFrameRanges: 'split-ranges' | 'extend-range' | 'replace-overlap' | 'fail-import'
+      interpolationConflicts: 'use-imported' | 'use-existing' | 'fail-import'
+    }
+  }
+  scope: {
+    includePersonas: boolean
+    includeWorldState: boolean
+    includeAnnotations: boolean
+    specificPersonaIds?: string[]
+    specificObjectTypes?: ('entity' | 'event' | 'time' | 'collection')[]
+  }
+  validation: {
+    strictMode: boolean
+    validateReferences: boolean
+    validateSequenceIntegrity: boolean
+    validateInterpolationTypes: boolean
+    validateBoundingBoxRanges: boolean
+    recomputeInterpolation: boolean
+  }
+  transaction: {
+    atomic: boolean
+  }
+}
+
+/**
+ * @interface Conflict
+ * @description Represents a conflict detected during import preview.
+ */
+export interface Conflict {
+  type: 'duplicate-persona' | 'duplicate-object' | 'missing-dependency' | 'id-conflict' |
+        'duplicate-sequence' | 'overlapping-frames' | 'interpolation-conflict'
+  line: number
+  originalId: string
+  existingId?: string
+  details: string
+  frameRange?: { start: number; end: number }
+  interpolationType?: string
+}
+
+/**
+ * @interface ImportResult
+ * @description Result of an import operation with statistics and errors.
+ */
+export interface ImportResult {
+  success: boolean
+  summary: {
+    totalLines: number
+    processedLines: number
+    importedItems: {
+      personas: number
+      ontologies: number
+      entities: number
+      events: number
+      times: number
+      entityCollections: number
+      eventCollections: number
+      timeCollections: number
+      relations: number
+      annotations: number
+      totalKeyframes: number
+      totalInterpolatedFrames: number
+      singleKeyframeSequences: number
+    }
+    skippedItems: {
+      personas: number
+      worldObjects: number
+      annotations: number
+      sequenceAnnotations: number
+    }
+  }
+  warnings: Array<{
+    line: number
+    type: string
+    message: string
+    data?: any
+  }>
+  errors: Array<{
+    line: number
+    type: string
+    message: string
+    data?: any
+  }>
+  conflicts: Array<Conflict & { resolution: string }>
+}
+
+/**
+ * @interface ImportPreview
+ * @description Preview of import contents before committing.
+ */
+export interface ImportPreview {
+  counts: {
+    personas: number
+    ontologies: number
+    entities: number
+    events: number
+    times: number
+    entityCollections: number
+    eventCollections: number
+    timeCollections: number
+    relations: number
+    annotations: number
+    totalKeyframes: number
+    singleKeyframeSequences: number
+  }
+  conflicts: Conflict[]
+  warnings: string[]
+}
+
+/**
+ * @interface ImportHistoryItem
+ * @description Record of a past import operation.
+ */
+export interface ImportHistoryItem {
+  id: string
+  filename: string
+  success: boolean
+  itemsImported: number
+  itemsSkipped: number
+  createdAt: string
+}
+
 // Video Summary
 export interface VideoSummary {
   id: string

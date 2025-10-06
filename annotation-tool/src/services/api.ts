@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats } from '../models/types'
+import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats, ImportOptions, ImportPreview, ImportResult, ImportHistoryItem } from '../models/types'
 
 const API_BASE = '/api'
 
@@ -271,5 +271,56 @@ export const api = {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  },
+
+  /**
+   * Preview import file without committing to database.
+   *
+   * @param file - JSON Lines file to preview
+   * @returns Preview with counts, conflicts, warnings
+   */
+  async previewImport(file: File): Promise<ImportPreview> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await axios.post(`${API_BASE}/import/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  },
+
+  /**
+   * Upload and import JSON Lines file.
+   *
+   * @param file - JSON Lines file to import
+   * @param options - Import options with conflict resolution strategies
+   * @returns Import result with statistics and errors
+   */
+  async uploadImportFile(file: File, options: ImportOptions): Promise<ImportResult> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('options', JSON.stringify(options))
+
+    const response = await axios.post(`${API_BASE}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  },
+
+  /**
+   * Get import history.
+   *
+   * @param limit - Maximum number of records (default: 50)
+   * @param offset - Number of records to skip (default: 0)
+   * @returns List of past imports
+   */
+  async getImportHistory(limit = 50, offset = 0): Promise<{
+    imports: ImportHistoryItem[]
+    total: number
+  }> {
+    const response = await axios.get(`${API_BASE}/import/history`, {
+      params: { limit, offset }
+    })
+    return response.data
   },
 }
