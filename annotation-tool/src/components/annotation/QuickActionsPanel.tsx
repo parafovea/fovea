@@ -89,6 +89,9 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
     currentFrame === keyframes[keyframes.length - 1].frameNumber
   )
 
+  // Interpolation requires at least 2 keyframes
+  const canInterpolate = keyframes.length >= 2
+
   return (
     <Paper
       elevation={8}
@@ -204,7 +207,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
           <IconButton
             size="small"
             onClick={() => setInterpolationDialogOpen(true)}
-            disabled={false}
+            disabled={!canInterpolate}
             sx={{
               width: '100%',
               display: 'flex',

@@ -44,7 +44,7 @@ describe('QuickActionsPanel', () => {
     onAddKeyframe: vi.fn(),
     onDeleteKeyframe: vi.fn(),
     onCopyPreviousFrame: vi.fn(),
-    onOpenInterpolationMenu: vi.fn(),
+    onUpdateInterpolationSegment: vi.fn(),
     isKeyframe: false,
     videoWidth: 1920,
   }
@@ -128,7 +128,21 @@ describe('QuickActionsPanel', () => {
   })
 
   test('interpolation button is disabled (Session 5 feature)', () => {
-    render(<QuickActionsPanel {...defaultProps} />)
+    const annotationWithOneKeyframe: Annotation = {
+      ...mockAnnotation,
+      boundingBoxSequence: {
+        boxes: [
+          { x: 100, y: 100, width: 50, height: 50, frameNumber: 0, isKeyframe: true },
+        ],
+        interpolationSegments: [],
+        visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+        totalFrames: 1,
+        keyframeCount: 1,
+        interpolatedFrameCount: 0,
+      },
+    }
+
+    render(<QuickActionsPanel {...defaultProps} annotation={annotationWithOneKeyframe} />)
 
     const interpButton = screen.getByText('Interp.').closest('button')
     expect(interpButton).toBeDisabled()

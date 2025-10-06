@@ -6,8 +6,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
+import { Provider } from 'react-redux'
+import { configureStore } from '@reduxjs/toolkit'
 import { TimelineComponent } from './TimelineComponent.js'
 import { Annotation, BoundingBoxSequence } from '../../models/types.js'
+import annotationReducer from '../../store/annotationSlice.js'
 
 // Mock TimelineRenderer
 vi.mock('./TimelineRenderer.js', () => ({
@@ -18,6 +21,7 @@ vi.mock('./TimelineRenderer.js', () => ({
     resize: vi.fn(),
     frameToX: vi.fn((frame: number) => frame * 10),
     xToFrame: vi.fn((x: number) => Math.floor(x / 10)),
+    getKeyframeAtX: vi.fn(() => null),
     invalidate: vi.fn(),
     destroy: vi.fn(),
   })),
@@ -30,6 +34,42 @@ vi.mock('../../hooks/useTimelineKeyboardShortcuts.js', () => ({
 
 describe('TimelineComponent', () => {
   const mockOnSeek = vi.fn()
+
+  const createMockStore = () => {
+    return configureStore({
+      reducer: {
+        annotations: annotationReducer,
+      },
+      preloadedState: {
+        annotations: {
+          annotations: {},
+          selectedAnnotation: null,
+          selectedPersonaId: null,
+          annotationMode: 'type' as const,
+          isDrawing: false,
+          drawingMode: null,
+          selectedTypeId: null,
+          temporaryBox: null,
+          temporaryTime: null,
+          linkTargetId: null,
+          linkTargetType: null,
+          detectionResults: null,
+          detectionQuery: '',
+          detectionConfidenceThreshold: 0.5,
+          showDetectionCandidates: false,
+          interpolationMode: 'linear' as const,
+          selectedKeyframes: [],
+          showMotionPath: true,
+          timelineZoom: 1,
+          currentFrame: 0,
+        },
+      },
+    })
+  }
+
+  const renderWithStore = (component: React.ReactElement, store = createMockStore()) => {
+    return render(<Provider store={store}>{component}</Provider>)
+  }
 
   const createTestAnnotation = (keyframes: number[]): Annotation => {
     const sequence: BoundingBoxSequence = {
@@ -76,7 +116,7 @@ describe('TimelineComponent', () => {
   it('renders timeline with canvas', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -93,7 +133,7 @@ describe('TimelineComponent', () => {
   it('displays current frame counter', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -109,7 +149,7 @@ describe('TimelineComponent', () => {
   it('renders transport controls', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -128,7 +168,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -152,7 +192,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    const { container } = render(
+    const { container } = renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={50}
@@ -175,7 +215,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -199,7 +239,7 @@ describe('TimelineComponent', () => {
   it('displays keyframes from annotation sequence', () => {
     const annotation = createTestAnnotation([0, 25, 50, 75, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -219,7 +259,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    const { container } = render(
+    const { container } = renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={95}
@@ -241,7 +281,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -264,7 +304,7 @@ describe('TimelineComponent', () => {
   it('handles annotations with single keyframe', () => {
     const annotation = createTestAnnotation([42])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={42}
@@ -280,7 +320,7 @@ describe('TimelineComponent', () => {
   it('handles large frame counts', () => {
     const annotation = createTestAnnotation([0, 2500, 5000])
 
-    render(
+    renderWithStore(
       <TimelineComponent
         annotation={annotation}
         currentFrame={2500}
