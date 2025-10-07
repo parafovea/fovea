@@ -200,3 +200,20 @@ Access monitoring dashboards when running with Docker Compose:
 - **Bull Board** (Queue monitoring): http://localhost:3001/admin/queues
 
 **For detailed information** on metrics, tracing, custom instrumentation, and dashboard creation, see [OBSERVABILITY.md](OBSERVABILITY.md).
+
+## Contributing
+
+We welcome contributions from the community! Whether you're fixing bugs, adding features, improving documentation, or reporting issues, your help is appreciated.
+
+Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It includes:
+- Development environment setup
+- Coding standards and best practices
+- Pull request process
+- Testing requirements
+- Documentation guidelines
+
+For questions or discussions, visit our [GitHub Discussions](https://github.com/YOUR_ORG/fovea/discussions).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
