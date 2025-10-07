@@ -2,6 +2,17 @@
 
 A web-based tool for developing annotation ontologies for video data with AI-supported capabilities for automated video analysis, object detection, and intelligent ontology suggestions.
 
+## Documentation
+
+**Full documentation is available at: [https://fovea.video/docs](https://fovea.video/docs)**
+
+The documentation includes:
+- [Getting Started Guide](https://fovea.video/docs/getting-started/installation) - Install and configure FOVEA
+- [User Guides](https://fovea.video/docs/user-guides/annotation/creating-annotations) - How to use FOVEA features
+- [API Reference](https://fovea.video/docs/api-reference/overview) - Complete API documentation
+- [Deployment Guides](https://fovea.video/docs/deployment/overview) - Production deployment options
+- [Operations Guides](https://fovea.video/docs/operations/common-tasks) - Maintenance and troubleshooting
+
 ## Features
 
 ### Core Features

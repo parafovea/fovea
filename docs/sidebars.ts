@@ -34,7 +34,19 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Annotation',
-          items: ['user-guides/annotation/creating-annotations'],
+          items: [
+            'user-guides/annotation/creating-annotations',
+            'user-guides/annotation/bounding-box-sequences',
+            'user-guides/annotation/automated-tracking',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Data Management',
+          items: [
+            'user-guides/data-management/exporting-data',
+            'user-guides/data-management/importing-data',
+          ],
         },
       ],
     },

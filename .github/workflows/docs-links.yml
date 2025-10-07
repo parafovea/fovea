@@ -1,0 +1,22 @@
+name: Check Documentation Links
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**/*.md'
+      - '**.md'
+  schedule:
+    # Run weekly to catch external link rot
+    - cron: '0 0 * * 0'
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          config-file: '.github/markdown-link-check-config.json'
+          folder-path: 'docs/docs'

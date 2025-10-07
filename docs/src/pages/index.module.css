@@ -3,16 +3,68 @@
  * and scoped locally.
  */
 
+/* Hero Section */
 .heroBanner {
-  padding: 4rem 0;
+  padding: 8rem 2rem;
   text-align: center;
   position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
   overflow: hidden;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
+.heroBanner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.heroTitle {
+  font-size: 4.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.heroSubtitle {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+  opacity: 0.95;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.heroDescription {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  margin-bottom: 2.5rem;
+  opacity: 0.9;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -20,4 +72,235 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.6s ease-out 0.3s both;
+}
+
+.primaryButton {
+  background: white !important;
+  color: #667eea !important;
+  border: none !important;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.primaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  color: #667eea !important;
+}
+
+.secondaryButton {
+  background: transparent !important;
+  border: 2px solid white !important;
+  color: white !important;
+  font-weight: 600;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.secondaryButton:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+  color: white !important;
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 4rem 2rem;
+  }
+
+  .heroTitle {
+    font-size: 3rem;
+  }
+
+  .heroSubtitle {
+    font-size: 1.25rem;
+  }
+}
+
+/* Features Section */
+.featuresSection {
+  padding: 5rem 2rem;
+  background: var(--ifm-background-color);
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 3rem;
+  color: var(--ifm-heading-color);
+}
+
+.feature {
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  transition: transform 0.2s;
+}
+
+.feature:hover {
+  transform: translateY(-4px);
+}
+
+.featureIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.featureTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--ifm-heading-color);
+  text-align: center;
+}
+
+.featureDescription {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  text-align: center;
+}
+
+/* Use Case Section */
+.useCaseSection {
+  padding: 5rem 2rem;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.useCaseDescription {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.useCaseList {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.useCaseList li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  font-size: 1.0625rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.useCaseList li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #667eea;
+  font-weight: bold;
+  font-size: 1.25rem;
+}
+
+.codeBlock {
+  background: var(--ifm-code-background);
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.codeBlock h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  color: var(--ifm-heading-color);
+}
+
+.workflowSteps {
+  list-style: none;
+  counter-reset: step-counter;
+  padding-left: 0;
+}
+
+.workflowSteps li {
+  counter-increment: step-counter;
+  padding: 0.75rem 0;
+  padding-left: 3rem;
+  position: relative;
+  font-size: 1.0625rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.workflowSteps li::before {
+  content: counter(step-counter);
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  background: #667eea;
+  color: white;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.workflowNote {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--ifm-color-emphasis-200);
+  border-left: 4px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ifm-color-emphasis-900);
+}
+
+/* CTA Section */
+.ctaSection {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.ctaTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.ctaDescription {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+  opacity: 0.95;
+}
+
+.ctaButton {
+  margin: 0.5rem;
+}
+
+.ctaButton:first-child {
+  background: white !important;
+  color: #667eea !important;
+  border: none !important;
+}
+
+.ctaButton:first-child:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  color: #667eea !important;
+}
+
+.ctaButton:last-child {
+  background: transparent !important;
+  border: 2px solid white !important;
+  color: white !important;
+}
+
+.ctaButton:last-child:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+  color: white !important;
 }
