@@ -627,7 +627,7 @@ class YOLO11SegLoader(TrackingModelLoader):
     def load(self) -> None:
         """Load YOLO11n-seg model with configured settings."""
         try:
-            from ultralytics import YOLO
+            from ultralytics import YOLO  # type: ignore[attr-defined]
 
             logger.info(f"Loading YOLO11n-seg from {self.config.model_id}")
 

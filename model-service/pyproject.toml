@@ -62,6 +62,7 @@ dev = [
     "httpx==0.26.0",
     "ruff==0.2.1",
     "mypy==1.8.0",
+    "types-PyYAML>=6.0.0",
 ]
 docs = [
     "sphinx>=7.0.0",

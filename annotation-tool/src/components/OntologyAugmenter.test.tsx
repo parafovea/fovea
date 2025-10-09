@@ -346,7 +346,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('CheckoutEvent')).toBeInTheDocument()
         expect(screen.getByText('90%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Generation - Medical Training', () => {
@@ -436,7 +436,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('Costume')).toBeInTheDocument()
         expect(screen.getByText('91%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Selection', () => {

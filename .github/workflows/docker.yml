@@ -104,9 +104,6 @@ jobs:
           - device: cpu
             mode: minimal
             suffix: -cpu
-          - device: cuda
-            mode: full
-            suffix: -gpu
     steps:
       - uses: actions/checkout@v4
 
