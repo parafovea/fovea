@@ -33,8 +33,8 @@ interface InterpolationSegment {
  */
 interface BoundingBoxSequence {
   boxes: BoundingBox[]
-  interpolationSegments: InterpolationSegment[]
-  visibilityRanges: Array<{
+  interpolationSegments?: InterpolationSegment[]
+  visibilityRanges?: Array<{
     startFrame: number
     endFrame: number
     visible: boolean
@@ -42,9 +42,9 @@ interface BoundingBoxSequence {
   trackId?: string | number
   trackingSource?: 'manual' | 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
   trackingConfidence?: number
-  totalFrames: number
-  keyframeCount: number
-  interpolatedFrameCount: number
+  totalFrames?: number
+  keyframeCount?: number
+  interpolatedFrameCount?: number
 }
 
 /**
@@ -117,7 +117,7 @@ export class SequenceValidator {
     }
 
     // 2. Interpolation segment validation
-    if (keyframes.length > 1) {
+    if (keyframes.length > 1 && sequence.interpolationSegments) {
       const firstFrame = keyframes[0].frameNumber
       const lastFrame = keyframes[keyframes.length - 1].frameNumber
 
@@ -178,10 +178,11 @@ export class SequenceValidator {
             }
           }
 
-          if (segment.controlPoints.x) validateControlPoints(segment.controlPoints.x)
-          if (segment.controlPoints.y) validateControlPoints(segment.controlPoints.y)
-          if (segment.controlPoints.width) validateControlPoints(segment.controlPoints.width)
-          if (segment.controlPoints.height) validateControlPoints(segment.controlPoints.height)
+          const cp = segment.controlPoints as Record<string, unknown>
+          if (cp.x && Array.isArray(cp.x)) validateControlPoints(cp.x as Array<{ x: number; y: number }>)
+          if (cp.y && Array.isArray(cp.y)) validateControlPoints(cp.y as Array<{ x: number; y: number }>)
+          if (cp.width && Array.isArray(cp.width)) validateControlPoints(cp.width as Array<{ x: number; y: number }>)
+          if (cp.height && Array.isArray(cp.height)) validateControlPoints(cp.height as Array<{ x: number; y: number }>)
         }
 
         expectedFrame = segment.endFrame + 1
@@ -196,7 +197,7 @@ export class SequenceValidator {
       }
     } else if (keyframes.length === 1) {
       // Single-keyframe sequence
-      if (sequence.interpolationSegments.length > 0) {
+      if (sequence.interpolationSegments && sequence.interpolationSegments.length > 0) {
         warnings.push(
           `Single-keyframe sequence has interpolation segments. ` +
           `These will be ignored.`
@@ -205,7 +206,8 @@ export class SequenceValidator {
     }
 
     // 3. Visibility range validation
-    const sortedRanges = [...sequence.visibilityRanges].sort(
+    const visibilityRanges = sequence.visibilityRanges || []
+    const sortedRanges = [...visibilityRanges].sort(
       (a, b) => a.startFrame - b.startFrame
     )
 
@@ -226,12 +228,12 @@ export class SequenceValidator {
 
     // All keyframes must be within visible ranges
     for (const keyframe of keyframes) {
-      const inVisibleRange = sequence.visibilityRanges.some(
+      const inVisibleRange = visibilityRanges.some(
         range => range.visible &&
                  keyframe.frameNumber >= range.startFrame &&
                  keyframe.frameNumber <= range.endFrame
       )
-      if (!inVisibleRange && sequence.visibilityRanges.length > 0) {
+      if (!inVisibleRange && visibilityRanges.length > 0) {
         errors.push(
           `Keyframe at frame ${keyframe.frameNumber} is not in a visible range`
         )
@@ -239,7 +241,7 @@ export class SequenceValidator {
     }
 
     // Warn if no visibility ranges defined
-    if (sequence.visibilityRanges.length === 0 && keyframes.length > 0) {
+    if (visibilityRanges.length === 0 && keyframes.length > 0) {
       warnings.push(
         `No visibility ranges defined. Consider adding visibility ranges for discontiguous sequences.`
       )

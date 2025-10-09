@@ -74,9 +74,7 @@ class TestSummarizeEndpoint:
 
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
-    def test_summarize_video_success(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock
-    ) -> None:
+    def test_summarize_video_success(self, mock_get_video: Mock, mock_summarize: AsyncMock) -> None:
         """Test successful video summarization request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
         mock_summarize.return_value = SummarizeResponse(
@@ -290,9 +288,7 @@ class TestAugmentEndpoint:
         assert response.status_code == 422
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
-    def test_augment_ontology_default_max_suggestions(
-        self, mock_augment: AsyncMock
-    ) -> None:
+    def test_augment_ontology_default_max_suggestions(self, mock_augment: AsyncMock) -> None:
         """Test augmentation with default max_suggestions."""
         mock_augment.return_value = [
             OntologyType(
@@ -318,9 +314,7 @@ class TestAugmentEndpoint:
         assert len(data["suggestions"]) <= 10
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
-    def test_augment_response_suggestion_structure(
-        self, mock_augment: AsyncMock
-    ) -> None:
+    def test_augment_response_suggestion_structure(self, mock_augment: AsyncMock) -> None:
         """Test that suggestions have correct structure."""
         mock_augment.return_value = [
             OntologyType(
@@ -367,14 +361,18 @@ class TestDetectionEndpoint:
         import numpy as np
 
         mock_cap = Mock()
-        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0  # FPS and frame count
+        mock_cap.get.side_effect = (
+            lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        )  # FPS and frame count
         mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
         mock_cap.set.return_value = True
         mock_video_capture.return_value = mock_cap
 
         # Mock detection loader
         mock_loader = Mock()
-        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
         mock_create_loader.return_value = mock_loader
 
         response = client.post(
@@ -415,7 +413,9 @@ class TestDetectionEndpoint:
         mock_video_capture.return_value = mock_cap
 
         mock_loader = Mock()
-        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
         mock_create_loader.return_value = mock_loader
 
         response = client.post(
@@ -448,7 +448,9 @@ class TestDetectionEndpoint:
         mock_video_capture.return_value = mock_cap
 
         mock_loader = Mock()
-        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
         mock_create_loader.return_value = mock_loader
 
         response = client.post(
@@ -505,7 +507,9 @@ class TestDetectionEndpoint:
         mock_video_capture.return_value = mock_cap
 
         mock_loader = Mock()
-        mock_loader.detect.return_value = Mock(detections=[], image_width=1920, image_height=1080, processing_time=0.1)
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
         mock_create_loader.return_value = mock_loader
 
         response = client.post(

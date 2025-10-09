@@ -72,7 +72,9 @@ def test_parse_vlm_response_structured():
 
 def test_parse_vlm_response_unstructured():
     """Test parsing VLM response without clear structure."""
-    response = "The video contains footage of outdoor activities with multiple people moving around."
+    response = (
+        "The video contains footage of outdoor activities with multiple people moving around."
+    )
 
     summary, visual_analysis = parse_vlm_response(response)
 

@@ -3,6 +3,14 @@ import { FastifyPluginAsync } from 'fastify'
 import { AnnotationExporter } from '../services/export-handler.js'
 
 /**
+ * TypeBox schema for validation errors.
+ */
+const ValidationErrorSchema = Type.Object({
+  annotationId: Type.String(),
+  errors: Type.Array(Type.String())
+})
+
+/**
  * Fastify plugin for export-related routes.
  * Provides endpoints for exporting annotations with bounding box sequences.
  *
@@ -44,7 +52,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
         400: Type.Object({
           error: Type.String(),
           message: Type.String(),
-          validationErrors: Type.Array(Type.Any())
+          validationErrors: Type.Array(ValidationErrorSchema)
         })
       }
     }

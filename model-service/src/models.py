@@ -20,9 +20,7 @@ class SummarizeRequest(BaseModel):
     frame_sample_rate: int = Field(
         default=1, ge=1, le=10, description="Frames to sample per second"
     )
-    max_frames: int = Field(
-        default=30, ge=1, le=100, description="Maximum frames to process"
-    )
+    max_frames: int = Field(default=30, ge=1, le=100, description="Maximum frames to process")
 
 
 class KeyFrame(BaseModel):
@@ -34,9 +32,7 @@ class KeyFrame(BaseModel):
     frame_number: int = Field(..., description="Frame number in the video")
     timestamp: float = Field(..., description="Time in seconds from video start")
     description: str = Field(..., description="Frame description")
-    confidence: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Model confidence score"
-    )
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Model confidence score")
 
 
 class SummarizeResponse(BaseModel):
@@ -52,15 +48,11 @@ class SummarizeResponse(BaseModel):
     visual_analysis: str | None = Field(
         default=None, description="Detailed visual content analysis"
     )
-    audio_transcript: str | None = Field(
-        default=None, description="Transcribed audio content"
-    )
+    audio_transcript: str | None = Field(default=None, description="Transcribed audio content")
     key_frames: list[KeyFrame] = Field(
         default_factory=list, description="Key frames with descriptions"
     )
-    confidence: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Overall confidence score"
-    )
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Overall confidence score")
 
 
 class OntologyType(BaseModel):
@@ -72,12 +64,8 @@ class OntologyType(BaseModel):
     name: str = Field(..., description="Type name")
     description: str = Field(..., description="Type description")
     parent: str | None = Field(default=None, description="Parent type name")
-    confidence: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Confidence score"
-    )
-    examples: list[str] = Field(
-        default_factory=list, description="Example instances"
-    )
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence score")
+    examples: list[str] = Field(default_factory=list, description="Example instances")
 
 
 class AugmentRequest(BaseModel):
@@ -88,9 +76,7 @@ class AugmentRequest(BaseModel):
 
     persona_id: str = Field(..., description="Unique identifier for the persona")
     domain: str = Field(..., description="Domain description for context")
-    existing_types: list[str] = Field(
-        default_factory=list, description="Existing type names"
-    )
+    existing_types: list[str] = Field(default_factory=list, description="Existing type names")
     target_category: Literal["entity", "event", "role", "relation"] = Field(
         ..., description="Category to augment"
     )
@@ -109,9 +95,7 @@ class AugmentResponse(BaseModel):
     persona_id: str = Field(..., description="Persona identifier")
     target_category: str = Field(..., description="Category that was augmented")
     suggestions: list[OntologyType] = Field(..., description="Suggested types")
-    reasoning: str = Field(
-        ..., description="Explanation of why these types were suggested"
-    )
+    reasoning: str = Field(..., description="Explanation of why these types were suggested")
 
 
 class BoundingBox(BaseModel):
@@ -134,12 +118,8 @@ class Detection(BaseModel):
 
     label: str = Field(..., description="Detected object label")
     bounding_box: BoundingBox = Field(..., description="Bounding box coordinates")
-    confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Detection confidence score"
-    )
-    track_id: str | None = Field(
-        default=None, description="Tracking ID across frames"
-    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Detection confidence score")
+    track_id: str | None = Field(default=None, description="Tracking ID across frames")
 
 
 class DetectionRequest(BaseModel):
@@ -150,15 +130,11 @@ class DetectionRequest(BaseModel):
 
     video_id: str = Field(..., description="Unique identifier for the video")
     query: str = Field(..., description="Text query describing objects to detect")
-    frame_numbers: list[int] = Field(
-        default_factory=list, description="Specific frames to process"
-    )
+    frame_numbers: list[int] = Field(default_factory=list, description="Specific frames to process")
     confidence_threshold: float = Field(
         default=0.3, ge=0.0, le=1.0, description="Minimum confidence for detections"
     )
-    enable_tracking: bool = Field(
-        default=True, description="Whether to enable object tracking"
-    )
+    enable_tracking: bool = Field(default=True, description="Whether to enable object tracking")
 
 
 class FrameDetections(BaseModel):
@@ -182,9 +158,7 @@ class DetectionResponse(BaseModel):
     video_id: str = Field(..., description="Video identifier")
     query: str = Field(..., description="Query that was used")
     frames: list[FrameDetections] = Field(..., description="Frames with detections")
-    total_detections: int = Field(
-        ..., description="Total detections across all frames"
-    )
+    total_detections: int = Field(..., description="Total detections across all frames")
     processing_time: float = Field(..., description="Processing time in seconds")
 
 
@@ -198,12 +172,8 @@ class TrackingMaskData(BaseModel):
     mask_rle: dict[str, Any] = Field(
         ..., description="RLE-encoded mask with 'size' and 'counts' keys"
     )
-    confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Mask prediction confidence"
-    )
-    is_occluded: bool = Field(
-        default=False, description="Whether object is occluded in this frame"
-    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Mask prediction confidence")
+    is_occluded: bool = Field(default=False, description="Whether object is occluded in this frame")
 
 
 class TrackingFrameResult(BaseModel):
@@ -215,9 +185,7 @@ class TrackingFrameResult(BaseModel):
     frame_number: int = Field(..., description="Frame number in the video")
     timestamp: float = Field(..., description="Time in seconds from video start")
     masks: list[TrackingMaskData] = Field(..., description="Tracked object masks")
-    processing_time: float = Field(
-        ..., description="Processing time for this frame in seconds"
-    )
+    processing_time: float = Field(..., description="Processing time for this frame in seconds")
 
 
 class TrackingRequest(BaseModel):
@@ -244,9 +212,7 @@ class TrackingResponse(BaseModel):
 
     id: str = Field(..., description="Unique identifier for this tracking job")
     video_id: str = Field(..., description="Video identifier")
-    frames: list[TrackingFrameResult] = Field(
-        ..., description="Frames with tracked masks"
-    )
+    frames: list[TrackingFrameResult] = Field(..., description="Frames with tracked masks")
     video_width: int = Field(..., description="Video frame width in pixels")
     video_height: int = Field(..., description="Video frame height in pixels")
     total_frames: int = Field(..., description="Total frames processed")
@@ -262,6 +228,4 @@ class ErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Human-readable error message")
-    details: dict[str, Any] | None = Field(
-        default=None, description="Additional error details"
-    )
+    details: dict[str, Any] | None = Field(default=None, description="Additional error details")

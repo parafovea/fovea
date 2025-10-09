@@ -192,9 +192,7 @@ class LLMLoader:
                 self.model.eval()
 
             except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load model {self.config.model_id}: {e}"
-                ) from e
+                raise RuntimeError(f"Failed to load model {self.config.model_id}: {e}") from e
 
     async def generate(
         self,
@@ -251,9 +249,7 @@ class LLMLoader:
 
             input_length = inputs["input_ids"].shape[1]
             generated_tokens = outputs[0][input_length:]
-            generated_text = self.tokenizer.decode(
-                generated_tokens, skip_special_tokens=True
-            )
+            generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
             finish_reason = "eos" if outputs[0][-1] == self.tokenizer.eos_token_id else "length"
 

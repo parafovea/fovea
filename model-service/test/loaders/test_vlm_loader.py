@@ -87,9 +87,7 @@ class TestLlama4MaverickLoader:
     @patch("src.vlm_loader.AutoModelForVision2Seq")
     @patch("src.vlm_loader.AutoProcessor")
     @patch("src.vlm_loader.AutoTokenizer")
-    def test_load_with_transformers(
-        self, mock_tokenizer, mock_processor, mock_model, vlm_config
-    ):
+    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
         """Test loading model with HuggingFace Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -106,12 +104,8 @@ class TestLlama4MaverickLoader:
         assert loader.tokenizer == mock_tokenizer_instance
         assert loader.model == mock_model_instance
 
-        mock_processor.from_pretrained.assert_called_once_with(
-            "test-model", trust_remote_code=True
-        )
-        mock_tokenizer.from_pretrained.assert_called_once_with(
-            "test-model", trust_remote_code=True
-        )
+        mock_processor.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
+        mock_tokenizer.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
 
     @patch("src.vlm_loader.AutoModelForVision2Seq")
     @patch("src.vlm_loader.AutoProcessor")
@@ -228,9 +222,7 @@ class TestGemma3Loader:
     @patch("src.vlm_loader.AutoModelForVision2Seq.from_pretrained")
     @patch("src.vlm_loader.AutoProcessor.from_pretrained")
     @patch("src.vlm_loader.AutoTokenizer.from_pretrained")
-    def test_load_with_transformers(
-        self, mock_tokenizer, mock_processor, mock_model, vlm_config
-    ):
+    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
         """Test loading Gemma 3 with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -275,9 +267,7 @@ class TestInternVL3Loader:
 
     @patch("src.vlm_loader.AutoModel.from_pretrained")
     @patch("src.vlm_loader.AutoTokenizer.from_pretrained")
-    def test_generate(
-        self, mock_tokenizer_cls, mock_model_cls, vlm_config, sample_images
-    ):
+    def test_generate(self, mock_tokenizer_cls, mock_model_cls, vlm_config, sample_images):
         """Test text generation with InternVL3."""
         mock_tokenizer = MagicMock()
         mock_model = MagicMock()
@@ -312,9 +302,7 @@ class TestPixtralLargeLoader:
     @patch("src.vlm_loader.AutoModelForVision2Seq.from_pretrained")
     @patch("src.vlm_loader.AutoProcessor.from_pretrained")
     @patch("src.vlm_loader.AutoTokenizer.from_pretrained")
-    def test_load_with_transformers(
-        self, mock_tokenizer, mock_processor, mock_model, vlm_config
-    ):
+    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
         """Test loading Pixtral Large with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -344,9 +332,7 @@ class TestQwen25VLLoader:
     @patch("src.vlm_loader.Qwen2VLForConditionalGeneration")
     @patch("src.vlm_loader.AutoProcessor")
     @patch("src.vlm_loader.AutoTokenizer")
-    def test_load_with_transformers(
-        self, mock_tokenizer, mock_processor, mock_model, vlm_config
-    ):
+    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
         """Test loading Qwen2.5-VL with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()

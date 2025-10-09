@@ -99,7 +99,7 @@ def create_event_type(overrides: dict[str, Any] | None = None) -> dict[str, Any]
 def create_ontology(
     persona_id: str = "test-persona-1",
     entity_types: list[dict[str, Any]] | None = None,
-    event_types: list[dict[str, Any]] | None = None
+    event_types: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Factory function to create test ontology objects.
@@ -144,12 +144,14 @@ def create_baseball_scout_persona() -> dict[str, Any]:
         scout_persona = create_baseball_scout_persona()
         ```
     """
-    return create_persona({
-        "id": "baseball-scout",
-        "name": "Baseball Scout",
-        "role": "Professional Scout",
-        "information_need": "Evaluate pitcher mechanics and performance",
-    })
+    return create_persona(
+        {
+            "id": "baseball-scout",
+            "name": "Baseball Scout",
+            "role": "Professional Scout",
+            "information_need": "Evaluate pitcher mechanics and performance",
+        }
+    )
 
 
 def create_wildlife_researcher_persona() -> dict[str, Any]:
@@ -164,9 +166,11 @@ def create_wildlife_researcher_persona() -> dict[str, Any]:
         researcher_persona = create_wildlife_researcher_persona()
         ```
     """
-    return create_persona({
-        "id": "wildlife-researcher",
-        "name": "Wildlife Researcher",
-        "role": "Marine Biologist",
-        "information_need": "Document whale pod behavior and migration patterns",
-    })
+    return create_persona(
+        {
+            "id": "wildlife-researcher",
+            "name": "Wildlife Researcher",
+            "role": "Marine Biologist",
+            "information_need": "Document whale pod behavior and migration patterns",
+        }
+    )

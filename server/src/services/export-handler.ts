@@ -138,7 +138,32 @@ export class AnnotationExporter {
     }
 
     // Create export data
-    const exportData: Record<string, unknown> = {
+    interface ExportData {
+      type: string
+      data: {
+        id: string
+        videoId: string
+        annotationType: string
+        boundingBoxSequence: BoundingBoxSequence
+        createdAt: string
+        updatedAt: string
+        personaId?: string
+        typeCategory?: string
+        typeId?: string
+        linkedEntityId?: string
+        linkedEventId?: string
+        linkedTimeId?: string
+        linkedLocationId?: string
+        linkedCollectionId?: string
+        linkedCollectionType?: string
+        confidence?: number
+        notes?: string
+        metadata?: Record<string, unknown>
+        createdBy?: string
+      }
+    }
+
+    const exportData: ExportData = {
       type: 'annotation',
       data: {
         id: annotation.id,
@@ -203,7 +228,32 @@ export class AnnotationExporter {
     }
 
     // Create export data (same structure as keyframes-only)
-    const exportData: Record<string, unknown> = {
+    interface ExportData {
+      type: string
+      data: {
+        id: string
+        videoId: string
+        annotationType: string
+        boundingBoxSequence: BoundingBoxSequence
+        createdAt: string
+        updatedAt: string
+        personaId?: string
+        typeCategory?: string
+        typeId?: string
+        linkedEntityId?: string
+        linkedEventId?: string
+        linkedTimeId?: string
+        linkedLocationId?: string
+        linkedCollectionId?: string
+        linkedCollectionType?: string
+        confidence?: number
+        notes?: string
+        metadata?: Record<string, unknown>
+        createdBy?: string
+      }
+    }
+
+    const exportData: ExportData = {
       type: 'annotation',
       data: {
         id: annotation.id,
@@ -467,7 +517,9 @@ export class AnnotationExporter {
     }
 
     // Parse annotation type from frames data
-    const annotationType = frames.annotationType || 'type'
+    const annotationType = (frames.annotationType === 'type' || frames.annotationType === 'object')
+      ? frames.annotationType
+      : 'type'
 
     // Build the annotation object
     const annotation: Annotation = {

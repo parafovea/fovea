@@ -153,10 +153,7 @@ def identify_key_frames(
     if len(frames) <= num_key_frames:
         selected_frames = frames
     else:
-        indices = [
-            int(i * (len(frames) - 1) / (num_key_frames - 1))
-            for i in range(num_key_frames)
-        ]
+        indices = [int(i * (len(frames) - 1) / (num_key_frames - 1)) for i in range(num_key_frames)]
         selected_frames = [frames[i] for i in indices]
 
     key_frames = []
@@ -241,10 +238,7 @@ async def summarize_video_with_vlm(
 
             span.set_attribute("frames_extracted", len(frames_with_indices))
 
-            images = [
-                Image.fromarray(frame_array)
-                for _, frame_array in frames_with_indices
-            ]
+            images = [Image.fromarray(frame_array) for _, frame_array in frames_with_indices]
 
             logger.info(f"Loading VLM model: {model_name}")
             loader = create_vlm_loader(model_name, model_config)

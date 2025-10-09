@@ -1,5 +1,41 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
+
+/**
+ * TypeBox schemas for ontology responses.
+ */
+const PersonaSchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  role: Type.String(),
+  informationNeed: Type.String(),
+  details: Type.Union([Type.String(), Type.Null()]),
+  createdAt: Type.String(),
+  updatedAt: Type.String()
+})
+
+const PersonaOntologySchema = Type.Object({
+  id: Type.String(),
+  personaId: Type.String(),
+  entities: Type.Array(Type.Unknown()),
+  roles: Type.Array(Type.Unknown()),
+  events: Type.Array(Type.Unknown()),
+  relationTypes: Type.Array(Type.Unknown()),
+  relations: Type.Array(Type.Unknown()),
+  createdAt: Type.String(),
+  updatedAt: Type.String()
+})
+
+const WorldSchema = Type.Object({
+  entities: Type.Array(Type.Unknown()),
+  events: Type.Array(Type.Unknown()),
+  times: Type.Array(Type.Unknown()),
+  entityCollections: Type.Array(Type.Unknown()),
+  eventCollections: Type.Array(Type.Unknown()),
+  timeCollections: Type.Array(Type.Unknown()),
+  relations: Type.Array(Type.Unknown())
+})
 
 /**
  * Fastify plugin for ontology-related routes.
@@ -23,17 +59,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       tags: ['ontology'],
       response: {
         200: Type.Object({
-          personas: Type.Array(Type.Any()),
-          personaOntologies: Type.Array(Type.Any()),
-          world: Type.Optional(Type.Object({
-            entities: Type.Array(Type.Any()),
-            events: Type.Array(Type.Any()),
-            times: Type.Array(Type.Any()),
-            entityCollections: Type.Array(Type.Any()),
-            eventCollections: Type.Array(Type.Any()),
-            timeCollections: Type.Array(Type.Any()),
-            relations: Type.Array(Type.Any())
-          }))
+          personas: Type.Array(PersonaSchema),
+          personaOntologies: Type.Array(PersonaOntologySchema),
+          world: Type.Optional(WorldSchema)
         })
       }
     }
@@ -75,13 +103,13 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }))
 
     const worldData = worldState ? {
-      entities: worldState.entities as unknown[] || [],
-      events: worldState.events as unknown[] || [],
-      times: worldState.times as unknown[] || [],
-      entityCollections: worldState.entityCollections as unknown[] || [],
-      eventCollections: worldState.eventCollections as unknown[] || [],
-      timeCollections: worldState.timeCollections as unknown[] || [],
-      relations: worldState.relations as unknown[] || []
+      entities: (worldState.entities as Prisma.JsonArray) || [],
+      events: (worldState.events as Prisma.JsonArray) || [],
+      times: (worldState.times as Prisma.JsonArray) || [],
+      entityCollections: (worldState.entityCollections as Prisma.JsonArray) || [],
+      eventCollections: (worldState.eventCollections as Prisma.JsonArray) || [],
+      timeCollections: (worldState.timeCollections as Prisma.JsonArray) || [],
+      relations: (worldState.relations as Prisma.JsonArray) || []
     } : {
       entities: [],
       events: [],
@@ -112,47 +140,49 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       description: 'Save ontology data including world state',
       tags: ['ontology'],
       body: Type.Object({
-        personas: Type.Array(Type.Any()),
-        personaOntologies: Type.Array(Type.Any()),
-        world: Type.Optional(Type.Object({
-          entities: Type.Array(Type.Any()),
-          events: Type.Array(Type.Any()),
-          times: Type.Array(Type.Any()),
-          entityCollections: Type.Array(Type.Any()),
-          eventCollections: Type.Array(Type.Any()),
-          timeCollections: Type.Array(Type.Any()),
-          relations: Type.Array(Type.Any())
-        }))
+        personas: Type.Array(Type.Unknown()),
+        personaOntologies: Type.Array(Type.Unknown()),
+        world: Type.Optional(WorldSchema)
       }),
       response: {
         200: Type.Object({
-          personas: Type.Array(Type.Any()),
-          personaOntologies: Type.Array(Type.Any()),
-          world: Type.Optional(Type.Object({
-            entities: Type.Array(Type.Any()),
-            events: Type.Array(Type.Any()),
-            times: Type.Array(Type.Any()),
-            entityCollections: Type.Array(Type.Any()),
-            eventCollections: Type.Array(Type.Any()),
-            timeCollections: Type.Array(Type.Any()),
-            relations: Type.Array(Type.Any())
-          }))
+          personas: Type.Array(PersonaSchema),
+          personaOntologies: Type.Array(PersonaOntologySchema),
+          world: Type.Optional(WorldSchema)
         })
       }
     }
   }, async (request, reply) => {
+    interface PersonaInput {
+      id: string
+      name: string
+      role: string
+      informationNeed: string
+      details?: string
+    }
+
+    interface OntologyInput {
+      personaId: string
+      entities?: Prisma.InputJsonValue[]
+      roles?: Prisma.InputJsonValue[]
+      events?: Prisma.InputJsonValue[]
+      relationTypes?: Prisma.InputJsonValue[]
+    }
+
+    interface WorldInput {
+      entities: Prisma.InputJsonValue[]
+      events: Prisma.InputJsonValue[]
+      times: Prisma.InputJsonValue[]
+      entityCollections: Prisma.InputJsonValue[]
+      eventCollections: Prisma.InputJsonValue[]
+      timeCollections: Prisma.InputJsonValue[]
+      relations: Prisma.InputJsonValue[]
+    }
+
     const { personas, personaOntologies, world } = request.body as {
-      personas: unknown[]
-      personaOntologies: unknown[]
-      world?: {
-        entities: unknown[]
-        events: unknown[]
-        times: unknown[]
-        entityCollections: unknown[]
-        eventCollections: unknown[]
-        timeCollections: unknown[]
-        relations: unknown[]
-      }
+      personas: PersonaInput[]
+      personaOntologies: OntologyInput[]
+      world?: WorldInput
     }
 
     // Use a transaction to ensure atomicity - either all saves succeed or all fail
@@ -250,13 +280,13 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     const worldData = result.savedWorldState ? {
-      entities: result.savedWorldState.entities as unknown[] || [],
-      events: result.savedWorldState.events as unknown[] || [],
-      times: result.savedWorldState.times as unknown[] || [],
-      entityCollections: result.savedWorldState.entityCollections as unknown[] || [],
-      eventCollections: result.savedWorldState.eventCollections as unknown[] || [],
-      timeCollections: result.savedWorldState.timeCollections as unknown[] || [],
-      relations: result.savedWorldState.relations as unknown[] || []
+      entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
+      events: (result.savedWorldState.events as Prisma.JsonArray) || [],
+      times: (result.savedWorldState.times as Prisma.JsonArray) || [],
+      entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
+      eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
+      timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
+      relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
     } : undefined
 
     return reply.send({

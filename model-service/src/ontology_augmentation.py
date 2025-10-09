@@ -49,9 +49,7 @@ MIN_EXAMPLES_COUNT = 2
 HIGH_CONFIDENCE_THRESHOLD = 0.8
 
 
-def create_augmentation_prompt(
-    context: AugmentationContext, max_suggestions: int = 10
-) -> str:
+def create_augmentation_prompt(context: AugmentationContext, max_suggestions: int = 10) -> str:
     """Create a prompt for ontology type augmentation.
 
     Parameters
@@ -89,9 +87,7 @@ def create_augmentation_prompt(
         context.target_category, category_instructions["entity"]
     )
 
-    existing_types_str = (
-        ", ".join(context.existing_types) if context.existing_types else "None"
-    )
+    existing_types_str = ", ".join(context.existing_types) if context.existing_types else "None"
 
     persona_context = ""
     if context.persona_role:
@@ -190,9 +186,7 @@ def parse_llm_response(response_text: str) -> list[dict[str, Any]]:
             "description": str(item["description"]).strip(),
             "parent": str(item["parent"]).strip() if item.get("parent") else None,
             "examples": (
-                [str(ex).strip() for ex in item["examples"]]
-                if "examples" in item
-                else []
+                [str(ex).strip() for ex in item["examples"]] if "examples" in item else []
             ),
         }
 
@@ -201,9 +195,7 @@ def parse_llm_response(response_text: str) -> list[dict[str, Any]]:
     return validated_types
 
 
-def calculate_confidence(
-    suggestion: dict[str, Any], context: AugmentationContext
-) -> float:
+def calculate_confidence(suggestion: dict[str, Any], context: AugmentationContext) -> float:
     """Calculate confidence score for a type suggestion.
 
     Parameters

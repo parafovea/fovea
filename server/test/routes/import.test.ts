@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { PrismaClient } from '@prisma/client'
 import { ImportHandler } from '../../src/services/import-handler.js'
 import { SequenceValidator } from '../../src/services/import-validator.js'
 import { DEFAULT_IMPORT_OPTIONS } from '../../src/services/import-types.js'
@@ -27,7 +28,7 @@ const mockPrismaClient = {
     count: vi.fn().mockResolvedValue(0)
   },
   $transaction: vi.fn((callback) => callback(mockPrismaClient))
-} as unknown as ImportHandler['prisma']
+} as unknown as PrismaClient
 
 describe('ImportHandler', () => {
   let handler: ImportHandler

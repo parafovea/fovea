@@ -72,9 +72,7 @@ def sample_config():
 @pytest.fixture
 def config_file(sample_config):
     """Create temporary config file."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(sample_config, f)
         config_path = f.name
 
@@ -115,9 +113,7 @@ class TestModelConfig:
 
     def test_model_config_vram_bytes(self):
         """Test VRAM conversion from GB to bytes."""
-        config = ModelConfig(
-            {"model_id": "test", "framework": "pytorch", "vram_gb": 8}
-        )
+        config = ModelConfig({"model_id": "test", "framework": "pytorch", "vram_gb": 8})
         expected_bytes = 8 * 1024 * 1024 * 1024
         assert config.vram_bytes == expected_bytes
 
@@ -242,7 +238,12 @@ class TestModelManager:
     @patch("torch.cuda.get_device_properties")
     @patch("torch.cuda.memory_allocated")
     def test_get_available_vram(
-        self, mock_mem_allocated, mock_device_props, mock_current_device, mock_cuda_available, model_manager
+        self,
+        mock_mem_allocated,
+        mock_device_props,
+        mock_current_device,
+        mock_cuda_available,
+        model_manager,
     ):
         """Test getting available VRAM."""
         mock_cuda_available.return_value = True
@@ -267,7 +268,9 @@ class TestModelManager:
     @patch("torch.cuda.is_available")
     @patch("torch.cuda.current_device")
     @patch("torch.cuda.get_device_properties")
-    def test_get_total_vram(self, mock_device_props, mock_current_device, mock_cuda_available, model_manager):
+    def test_get_total_vram(
+        self, mock_device_props, mock_current_device, mock_cuda_available, model_manager
+    ):
         """Test getting total VRAM."""
         mock_cuda_available.return_value = True
         mock_current_device.return_value = 0
@@ -282,7 +285,12 @@ class TestModelManager:
     @patch("torch.cuda.memory_allocated")
     @patch("torch.cuda.get_device_properties")
     def test_get_memory_usage_percentage(
-        self, mock_device_props, mock_mem_allocated, mock_current_device, mock_cuda_available, model_manager
+        self,
+        mock_device_props,
+        mock_mem_allocated,
+        mock_current_device,
+        mock_cuda_available,
+        model_manager,
     ):
         """Test getting memory usage percentage."""
         mock_cuda_available.return_value = True
@@ -296,9 +304,7 @@ class TestModelManager:
 
     def test_check_memory_available(self, model_manager):
         """Test checking memory availability."""
-        with patch.object(
-            model_manager, "get_available_vram", return_value=16 * 1024**3
-        ):
+        with patch.object(model_manager, "get_available_vram", return_value=16 * 1024**3):
             assert model_manager.check_memory_available(8 * 1024**3) is True
             assert model_manager.check_memory_available(20 * 1024**3) is False
 
@@ -314,9 +320,7 @@ class TestModelManager:
         model_manager.model_load_times["test_task"] = 123456
         model_manager.model_memory_usage["test_task"] = 1000
 
-        with patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.empty_cache"
-        ):
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.empty_cache"):
             await model_manager.unload_model("test_task")
 
         assert "test_task" not in model_manager.loaded_models
@@ -338,9 +342,7 @@ class TestModelManager:
         model_manager.model_memory_usage["task1"] = 1000
         model_manager.model_memory_usage["task2"] = 2000
 
-        with patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.empty_cache"
-        ):
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.empty_cache"):
             evicted = await model_manager.evict_lru_model()
 
         assert evicted == "task1"
@@ -356,11 +358,9 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_load_model(self, model_manager):
         """Test loading a model."""
-        with patch.object(
-            model_manager, "check_memory_available", return_value=True
-        ), patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]
-        ):
+        with patch.object(model_manager, "check_memory_available", return_value=True), patch(
+            "torch.cuda.is_available", return_value=True
+        ), patch("torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]):
             model = await model_manager.load_model("video_summarization")
 
         assert model is not None
@@ -394,11 +394,9 @@ class TestModelManager:
             model_manager, "check_memory_available", side_effect=[False, True]
         ), patch.object(
             model_manager, "get_memory_usage_percentage", return_value=0.9
-        ), patch.object(
-            model_manager, "get_total_vram", return_value=32 * 1024**3
-        ), patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]
-        ), patch(
+        ), patch.object(model_manager, "get_total_vram", return_value=32 * 1024**3), patch(
+            "torch.cuda.is_available", return_value=True
+        ), patch("torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]), patch(
             "torch.cuda.empty_cache"
         ):
             _model = await model_manager.load_model("video_summarization")
@@ -419,11 +417,9 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_get_model(self, model_manager):
         """Test getting model (loads if needed)."""
-        with patch.object(
-            model_manager, "check_memory_available", return_value=True
-        ), patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]
-        ):
+        with patch.object(model_manager, "check_memory_available", return_value=True), patch(
+            "torch.cuda.is_available", return_value=True
+        ), patch("torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]):
             model = await model_manager.get_model("video_summarization")
 
         assert model is not None
@@ -461,10 +457,7 @@ class TestModelManager:
         await model_manager.set_selected_model("video_summarization", "test-model-2")
 
         assert model_manager.tasks["video_summarization"].selected == "test-model-2"
-        assert (
-            model_manager.config["models"]["video_summarization"]["selected"]
-            == "test-model-2"
-        )
+        assert model_manager.config["models"]["video_summarization"]["selected"] == "test-model-2"
 
     @pytest.mark.asyncio
     async def test_set_selected_model_invalid_task(self, model_manager):
@@ -476,9 +469,7 @@ class TestModelManager:
     async def test_set_selected_model_invalid_model(self, model_manager):
         """Test changing selected model with invalid model name."""
         with pytest.raises(ValueError, match="Invalid model name"):
-            await model_manager.set_selected_model(
-                "video_summarization", "nonexistent-model"
-            )
+            await model_manager.set_selected_model("video_summarization", "nonexistent-model")
 
     @pytest.mark.asyncio
     async def test_set_selected_model_with_reload(self, model_manager):
@@ -487,16 +478,12 @@ class TestModelManager:
         model_manager.model_load_times["video_summarization"] = 100
         model_manager.model_memory_usage["video_summarization"] = 1000
 
-        with patch.object(
-            model_manager, "check_memory_available", return_value=True
-        ), patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.memory_allocated", side_effect=[0, 3 * 1024**3]
-        ), patch(
+        with patch.object(model_manager, "check_memory_available", return_value=True), patch(
+            "torch.cuda.is_available", return_value=True
+        ), patch("torch.cuda.memory_allocated", side_effect=[0, 3 * 1024**3]), patch(
             "torch.cuda.empty_cache"
         ):
-            await model_manager.set_selected_model(
-                "video_summarization", "test-model-2"
-            )
+            await model_manager.set_selected_model("video_summarization", "test-model-2")
 
         assert model_manager.tasks["video_summarization"].selected == "test-model-2"
         assert "video_summarization" in model_manager.loaded_models
@@ -534,11 +521,9 @@ class TestModelManager:
         """Test warmup when enabled in config."""
         model_manager.inference_config.warmup_on_startup = True
 
-        with patch.object(
-            model_manager, "check_memory_available", return_value=True
-        ), patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3, 0, 2 * 1024**3]
-        ):
+        with patch.object(model_manager, "check_memory_available", return_value=True), patch(
+            "torch.cuda.is_available", return_value=True
+        ), patch("torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3, 0, 2 * 1024**3]):
             await model_manager.warmup_models()
 
         assert len(model_manager.loaded_models) == 2
@@ -553,9 +538,7 @@ class TestModelManager:
         model_manager.model_memory_usage["task1"] = 1000
         model_manager.model_memory_usage["task2"] = 2000
 
-        with patch("torch.cuda.is_available", return_value=True), patch(
-            "torch.cuda.empty_cache"
-        ):
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.empty_cache"):
             await model_manager.shutdown()
 
         assert len(model_manager.loaded_models) == 0

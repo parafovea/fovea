@@ -145,9 +145,7 @@ def extract_frame(video_path: str, frame_number: int) -> NDArray[Any]:
             ret, frame = cap.read()
 
             if not ret:
-                raise VideoProcessingError(
-                    f"Could not read frame {frame_number} from {video_path}"
-                )
+                raise VideoProcessingError(f"Could not read frame {frame_number} from {video_path}")
 
             # Convert BGR to RGB
             return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -192,9 +190,7 @@ def extract_frames_uniform(
             num_frames = info.frame_count
 
         # Calculate frame indices for uniform sampling
-        frame_indices = np.linspace(
-            0, info.frame_count - 1, num_frames, dtype=int
-        ).tolist()
+        frame_indices = np.linspace(0, info.frame_count - 1, num_frames, dtype=int).tolist()
 
         frames = []
         cap = cv2.VideoCapture(video_path)
@@ -418,7 +414,8 @@ def check_ffmpeg_available() -> bool:
         result = subprocess.run(
             ["ffmpeg", "-version"],
             capture_output=True,
-            timeout=5, check=False,
+            timeout=5,
+            check=False,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):

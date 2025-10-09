@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import {
   ImportLine,
@@ -11,6 +11,81 @@ import {
   ExistingData
 } from './import-types.js'
 import { SequenceValidator } from './import-validator.js'
+
+/**
+ * Interface for parsed annotation data with bounding box fields.
+ */
+interface BoundingBoxData {
+  x: number
+  y: number
+  width: number
+  height: number
+  frameNumber: number
+  isKeyframe?: boolean
+  confidence?: number
+  metadata?: Record<string, unknown>
+}
+
+interface BoundingBoxSequenceData {
+  boxes: BoundingBoxData[]
+  [key: string]: unknown
+}
+
+interface AnnotationData {
+  id: string
+  videoId: string
+  personaId?: string
+  annotationType?: string
+  typeCategory?: string
+  typeId?: string
+  linkedEntityId?: string
+  linkedEventId?: string
+  linkedTimeId?: string
+  linkedLocationId?: string
+  linkedCollectionId?: string
+  confidence?: number
+  boundingBoxSequence: BoundingBoxSequenceData
+  createdAt?: string
+  updatedAt?: string
+  [key: string]: unknown
+}
+
+interface PersonaData {
+  id: string
+  [key: string]: unknown
+}
+
+interface OntologyData {
+  id: string
+  personaId: string
+  [key: string]: unknown
+}
+
+
+interface EntityData {
+  id: string
+  typeAssignments?: Array<{ personaId: string }>
+  [key: string]: unknown
+}
+
+interface EventData {
+  id: string
+  personaInterpretations?: Array<{
+    personaId: string
+    participants?: Array<{ entityId: string }>
+  }>
+  [key: string]: unknown
+}
+
+interface TimeData {
+  id: string
+  [key: string]: unknown
+}
+
+interface CollectionData {
+  id: string
+  [key: string]: unknown
+}
 
 /**
  * @class ImportHandler
@@ -74,8 +149,8 @@ export class ImportHandler {
         if (!line.data.boundingBoxSequence) {
           errors.push('Annotation missing required field: boundingBoxSequence')
         } else {
-          // Validate sequence
-          const seqValidation = this.validator.validateSequence(line.data.boundingBoxSequence)
+          // Validate sequence - safely cast to the type expected by validator
+          const seqValidation = this.validator.validateSequence(line.data.boundingBoxSequence as BoundingBoxSequenceData)
           errors.push(...seqValidation.errors)
           warnings.push(...seqValidation.warnings)
         }
@@ -166,66 +241,77 @@ export class ImportHandler {
 
     for (const line of lines) {
       switch (line.type) {
-        case 'ontology':
+        case 'ontology': {
+          const ontologyData = line.data as { personas?: PersonaData[]; personaOntologies?: OntologyData[] }
           // Track personas
-          for (const persona of line.data.personas || []) {
+          for (const persona of ontologyData.personas || []) {
             graph.personas.add(persona.id)
           }
           // Track ontologies
-          for (const ontology of line.data.personaOntologies || []) {
+          for (const ontology of ontologyData.personaOntologies || []) {
             graph.ontologies.set(ontology.id, ontology.personaId)
           }
           break
+        }
 
-        case 'entity':
-          graph.entities.add(line.data.id)
+        case 'entity': {
+          const entityData = line.data as EntityData
+          graph.entities.add(entityData.id)
           // Track persona references
-          for (const assignment of line.data.typeAssignments || []) {
-            this.addReference(graph, assignment.personaId, line.data.id)
+          for (const assignment of entityData.typeAssignments || []) {
+            this.addReference(graph, assignment.personaId, entityData.id)
           }
           break
+        }
 
-        case 'event':
-          graph.events.add(line.data.id)
+        case 'event': {
+          const eventData = line.data as EventData
+          graph.events.add(eventData.id)
           // Track persona references
-          for (const interpretation of line.data.personaInterpretations || []) {
-            this.addReference(graph, interpretation.personaId, line.data.id)
+          for (const interpretation of eventData.personaInterpretations || []) {
+            this.addReference(graph, interpretation.personaId, eventData.id)
             // Track entity references (participants)
             for (const participant of interpretation.participants || []) {
-              this.addReference(graph, participant.entityId, line.data.id)
+              this.addReference(graph, participant.entityId, eventData.id)
             }
           }
           break
+        }
 
-        case 'time':
-          graph.times.add(line.data.id)
+        case 'time': {
+          const timeData = line.data as TimeData
+          graph.times.add(timeData.id)
           break
+        }
 
         case 'entityCollection':
         case 'eventCollection':
-        case 'timeCollection':
-          graph.collections.add(line.data.id)
+        case 'timeCollection': {
+          const collectionData = line.data as CollectionData
+          graph.collections.add(collectionData.id)
           break
+        }
 
         case 'annotation': {
+          const annotationData = line.data as AnnotationData
           const deps: string[] = []
 
           // Add video dependency
-          deps.push(line.data.videoId)
+          deps.push(annotationData.videoId)
 
           // Add persona dependency (for type annotations)
-          if (line.data.personaId) {
-            deps.push(line.data.personaId)
+          if (annotationData.personaId) {
+            deps.push(annotationData.personaId)
           }
 
           // Add linked object dependencies
-          if (line.data.linkedEntityId) deps.push(line.data.linkedEntityId)
-          if (line.data.linkedEventId) deps.push(line.data.linkedEventId)
-          if (line.data.linkedTimeId) deps.push(line.data.linkedTimeId)
-          if (line.data.linkedLocationId) deps.push(line.data.linkedLocationId)
-          if (line.data.linkedCollectionId) deps.push(line.data.linkedCollectionId)
+          if (annotationData.linkedEntityId) deps.push(annotationData.linkedEntityId)
+          if (annotationData.linkedEventId) deps.push(annotationData.linkedEventId)
+          if (annotationData.linkedTimeId) deps.push(annotationData.linkedTimeId)
+          if (annotationData.linkedLocationId) deps.push(annotationData.linkedLocationId)
+          if (annotationData.linkedCollectionId) deps.push(annotationData.linkedCollectionId)
 
-          graph.annotations.set(line.data.id, deps)
+          graph.annotations.set(annotationData.id, deps)
           break
         }
       }
@@ -256,11 +342,12 @@ export class ImportHandler {
 
     for (const line of lines) {
       switch (line.type) {
-        case 'annotation':
+        case 'annotation': {
+          const annotationData = line.data as AnnotationData
           // Check for duplicate annotation ID
-          if (existingData.annotationIds.has(line.data.id)) {
-            const sequence = line.data.boundingBoxSequence
-            const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
+          if (existingData.annotationIds.has(annotationData.id)) {
+            const sequence = annotationData.boundingBoxSequence
+            const keyframes = sequence.boxes.filter((b) => b.isKeyframe)
             const frameRange = keyframes.length > 0 ? {
               start: keyframes[0].frameNumber,
               end: keyframes[keyframes.length - 1].frameNumber
@@ -269,57 +356,62 @@ export class ImportHandler {
             conflicts.push({
               type: 'duplicate-sequence',
               line: line.lineNumber,
-              originalId: line.data.id,
-              existingId: line.data.id,
-              details: `Annotation with ID ${line.data.id} already exists`,
+              originalId: annotationData.id,
+              existingId: annotationData.id,
+              details: `Annotation with ID ${annotationData.id} already exists`,
               frameRange,
-              interpolationType: sequence.interpolationSegments[0]?.type
+              interpolationType: (sequence.interpolationSegments as Array<{ type?: string }>)[0]?.type
             })
           }
 
           // Check for missing dependencies
-          if (line.data.videoId && !existingData.videoIds.has(line.data.videoId)) {
+          if (annotationData.videoId && !existingData.videoIds.has(annotationData.videoId)) {
             conflicts.push({
               type: 'missing-dependency',
               line: line.lineNumber,
-              originalId: line.data.id,
-              details: `Video ${line.data.videoId} does not exist`
+              originalId: annotationData.id,
+              details: `Video ${annotationData.videoId} does not exist`
             })
           }
 
-          if (line.data.linkedEntityId && !existingData.entityIds.has(line.data.linkedEntityId)) {
+          if (annotationData.linkedEntityId && !existingData.entityIds.has(annotationData.linkedEntityId)) {
             conflicts.push({
               type: 'missing-dependency',
               line: line.lineNumber,
-              originalId: line.data.id,
-              details: `Entity ${line.data.linkedEntityId} does not exist`
+              originalId: annotationData.id,
+              details: `Entity ${annotationData.linkedEntityId} does not exist`
             })
           }
           break
+        }
 
-        case 'entity':
-          if (existingData.entityIds.has(line.data.id)) {
+        case 'entity': {
+          const entityData = line.data as EntityData
+          if (existingData.entityIds.has(entityData.id)) {
             conflicts.push({
               type: 'duplicate-object',
               line: line.lineNumber,
-              originalId: line.data.id,
-              existingId: line.data.id,
-              details: `Entity with ID ${line.data.id} already exists`
+              originalId: entityData.id,
+              existingId: entityData.id,
+              details: `Entity with ID ${entityData.id} already exists`
             })
           }
           break
+        }
 
-        case 'event':
-          if (existingData.eventIds.has(line.data.id)) {
+        case 'event': {
+          const eventData = line.data as EventData
+          if (existingData.eventIds.has(eventData.id)) {
             conflicts.push({
               type: 'duplicate-object',
               line: line.lineNumber,
-              originalId: line.data.id,
-              existingId: line.data.id,
-              details: `Event with ID ${line.data.id} already exists`
+              originalId: eventData.id,
+              existingId: eventData.id,
+              details: `Event with ID ${eventData.id} already exists`
             })
           }
           break
+        }
       }
     }
 
@@ -453,11 +545,11 @@ export class ImportHandler {
   /**
    * Recursively remap IDs in an object.
    */
-  private remapObjectIds(obj: unknown, idMap: Map<string, string>): unknown {
+  private remapObjectIds(obj: unknown, idMap: Map<string, string>): ImportLine['data'] {
     if (Array.isArray(obj)) {
-      return obj.map(item => this.remapObjectIds(item, idMap))
+      return obj.map(item => this.remapObjectIds(item, idMap)) as unknown as ImportLine['data']
     } else if (obj && typeof obj === 'object') {
-      const remapped: Record<string, unknown> = {}
+      const remapped: ImportLine['data'] = {}
       for (const [key, value] of Object.entries(obj)) {
         // Remap ID fields
         if (key === 'id' && typeof value === 'string' && idMap.has(value)) {
@@ -477,7 +569,7 @@ export class ImportHandler {
       }
       return remapped
     }
-    return obj
+    return obj as ImportLine['data']
   }
 
   /**
@@ -503,50 +595,62 @@ export class ImportHandler {
     }
 
     if (worldState) {
-      const ws = worldState as {
-        entities?: Array<{ id: string }>
-        events?: Array<{ id: string }>
-        times?: Array<{ id: string }>
-        entityCollections?: Array<{ id: string }>
-        eventCollections?: Array<{ id: string }>
-        timeCollections?: Array<{ id: string }>
+      const ws = worldState as unknown as {
+        entities?: Prisma.JsonValue
+        events?: Prisma.JsonValue
+        times?: Prisma.JsonValue
+        entityCollections?: Prisma.JsonValue
+        eventCollections?: Prisma.JsonValue
+        timeCollections?: Prisma.JsonValue
       }
 
       // Extract entity IDs
       if (Array.isArray(ws.entities)) {
         for (const entity of ws.entities) {
-          existingData.entityIds.add(entity.id)
+          if (entity && typeof entity === 'object' && 'id' in entity) {
+            existingData.entityIds.add(entity.id as string)
+          }
         }
       }
 
       // Extract event IDs
       if (Array.isArray(ws.events)) {
         for (const event of ws.events) {
-          existingData.eventIds.add(event.id)
+          if (event && typeof event === 'object' && 'id' in event) {
+            existingData.eventIds.add(event.id as string)
+          }
         }
       }
 
       // Extract time IDs
       if (Array.isArray(ws.times)) {
         for (const time of ws.times) {
-          existingData.timeIds.add(time.id)
+          if (time && typeof time === 'object' && 'id' in time) {
+            existingData.timeIds.add(time.id as string)
+          }
         }
       }
 
       // Extract collection IDs
       if (Array.isArray(ws.entityCollections)) {
         for (const collection of ws.entityCollections) {
-          existingData.collectionIds.add(collection.id)
+          if (collection && typeof collection === 'object' && 'id' in collection) {
+            existingData.collectionIds.add(collection.id as string)
+          }
         }
       }
       if (Array.isArray(ws.eventCollections)) {
         for (const collection of ws.eventCollections) {
-          existingData.collectionIds.add(collection.id)
+          if (collection && typeof collection === 'object' && 'id' in collection) {
+            existingData.collectionIds.add(collection.id as string)
+          }
         }
       }
       if (Array.isArray(ws.timeCollections)) {
         for (const collection of ws.timeCollections) {
-          existingData.collectionIds.add(collection.id)
+          if (collection && typeof collection === 'object' && 'id' in collection) {
+            existingData.collectionIds.add(collection.id as string)
+          }
         }
       }
     }
@@ -674,7 +778,17 @@ export class ImportHandler {
 
     // Import annotations
     for (const line of annotationLines) {
-      const resolution = resolutionMap.get(line.data.id)
+      const annotationId = line.data.id
+      if (!annotationId) {
+        result.errors.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: 'Annotation missing required id field'
+        })
+        continue
+      }
+
+      const resolution = resolutionMap.get(annotationId)
 
       // Skip if resolution says to skip
       if (resolution && resolution.action === 'skip') {
@@ -709,11 +823,11 @@ export class ImportHandler {
         }
 
         // Import annotation
-        const annotation = line.data
+        const annotation = line.data as AnnotationData
         const sequence = annotation.boundingBoxSequence
 
         // Count keyframes
-        const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
+        const keyframes = sequence.boxes.filter((b) => b.isKeyframe ?? false)
         result.summary.importedItems.totalKeyframes += keyframes.length
 
         if (keyframes.length === 1) {
@@ -733,10 +847,10 @@ export class ImportHandler {
           data: {
             id: annotation.id,
             videoId: annotation.videoId,
-            personaId: annotation.personaId || '',
-            type: annotation.annotationType || 'type',
-            label: annotation.typeId || annotation.linkedEntityId || '',
-            frames: annotation,
+            personaId: annotation.personaId ?? '',
+            type: annotation.annotationType ?? 'type',
+            label: annotation.typeId ?? annotation.linkedEntityId ?? '',
+            frames: annotation as unknown as Prisma.InputJsonValue,
             confidence: annotation.confidence,
             source: 'import',
             createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),

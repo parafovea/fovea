@@ -344,9 +344,7 @@ class TestConfidenceScoring:
             "examples": ["Examine Package", "Check Price"],
         }
 
-        confidence_with = calculate_confidence(
-            suggestion_with_parent, retail_analysis_context
-        )
+        confidence_with = calculate_confidence(suggestion_with_parent, retail_analysis_context)
         confidence_without = calculate_confidence(
             suggestion_without_parent, retail_analysis_context
         )
@@ -371,9 +369,7 @@ class TestConfidenceScoring:
             "examples": ["Person A", "Person B"],
         }
 
-        confidence_relevant = calculate_confidence(
-            relevant_suggestion, medical_training_context
-        )
+        confidence_relevant = calculate_confidence(relevant_suggestion, medical_training_context)
         confidence_irrelevant = calculate_confidence(
             irrelevant_suggestion, medical_training_context
         )
@@ -420,9 +416,7 @@ class TestReasoningGeneration:
             ),
         ]
 
-        reasoning = generate_augmentation_reasoning(
-            suggestions, wildlife_research_context
-        )
+        reasoning = generate_augmentation_reasoning(suggestions, wildlife_research_context)
 
         assert wildlife_research_context.domain in reasoning
         assert "2 entity type suggestions" in reasoning
@@ -443,9 +437,7 @@ class TestReasoningGeneration:
             ),
         ]
 
-        reasoning = generate_augmentation_reasoning(
-            suggestions, sports_analytics_context
-        )
+        reasoning = generate_augmentation_reasoning(suggestions, sports_analytics_context)
 
         assert "Splitter" in reasoning
         assert "high confidence" in reasoning.lower()
@@ -456,9 +448,7 @@ class TestReasoningGeneration:
         """Test reasoning with no suggestions."""
         suggestions: list[OntologyType] = []
 
-        reasoning = generate_augmentation_reasoning(
-            suggestions, retail_analysis_context
-        )
+        reasoning = generate_augmentation_reasoning(suggestions, retail_analysis_context)
 
         assert "No suitable" in reasoning
         assert retail_analysis_context.domain in reasoning
@@ -592,10 +582,7 @@ class TestEndToEndAugmentation:
         """Test that suggestions are limited to max_suggestions."""
         mock_response = GenerationResult(
             text=json.dumps(
-                [
-                    {"name": f"Event{i}", "description": f"Description {i}"}
-                    for i in range(20)
-                ]
+                [{"name": f"Event{i}", "description": f"Description {i}"} for i in range(20)]
             ),
             tokens_used=500,
             finish_reason="eos",
@@ -624,9 +611,7 @@ class TestEndToEndAugmentation:
         with patch("src.ontology_augmentation.LLMLoader") as mock_loader_class:
             mock_loader = AsyncMock()
             mock_loader.load = AsyncMock()
-            mock_loader.generate = AsyncMock(
-                side_effect=RuntimeError("Generation failed")
-            )
+            mock_loader.generate = AsyncMock(side_effect=RuntimeError("Generation failed"))
             mock_loader.unload = AsyncMock()
             mock_loader_class.return_value = mock_loader
 
@@ -641,41 +626,31 @@ class TestEndToEndAugmentation:
 class TestDiverseDomainCoverage:
     """Test suite ensuring diverse domain examples."""
 
-    def test_wildlife_research_domain(
-        self, wildlife_research_context: AugmentationContext
-    ) -> None:
+    def test_wildlife_research_domain(self, wildlife_research_context: AugmentationContext) -> None:
         """Test wildlife research domain context."""
         assert "whale" in wildlife_research_context.domain.lower()
         assert wildlife_research_context.persona_role == "Marine Biologist"
         assert wildlife_research_context.target_category == "entity"
 
-    def test_sports_analytics_domain(
-        self, sports_analytics_context: AugmentationContext
-    ) -> None:
+    def test_sports_analytics_domain(self, sports_analytics_context: AugmentationContext) -> None:
         """Test sports analytics domain context."""
         assert "baseball" in sports_analytics_context.domain.lower()
         assert sports_analytics_context.persona_role == "Baseball Scout"
         assert sports_analytics_context.target_category == "event"
 
-    def test_retail_analysis_domain(
-        self, retail_analysis_context: AugmentationContext
-    ) -> None:
+    def test_retail_analysis_domain(self, retail_analysis_context: AugmentationContext) -> None:
         """Test retail analysis domain context."""
         assert "retail" in retail_analysis_context.domain.lower()
         assert retail_analysis_context.persona_role == "Store Manager"
         assert retail_analysis_context.target_category == "event"
 
-    def test_medical_training_domain(
-        self, medical_training_context: AugmentationContext
-    ) -> None:
+    def test_medical_training_domain(self, medical_training_context: AugmentationContext) -> None:
         """Test medical training domain context."""
         assert "surgical" in medical_training_context.domain.lower()
         assert medical_training_context.persona_role == "Surgical Resident"
         assert medical_training_context.target_category == "role"
 
-    def test_film_production_domain(
-        self, film_production_context: AugmentationContext
-    ) -> None:
+    def test_film_production_domain(self, film_production_context: AugmentationContext) -> None:
         """Test film production domain context."""
         assert "film" in film_production_context.domain.lower()
         assert film_production_context.persona_role == "Continuity Editor"

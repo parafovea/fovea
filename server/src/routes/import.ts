@@ -1,8 +1,26 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import multipart from '@fastify/multipart'
+import { Prisma } from '@prisma/client'
 import { ImportHandler } from '../services/import-handler.js'
 import { DEFAULT_IMPORT_OPTIONS, ImportOptions } from '../services/import-types.js'
+
+/**
+ * TypeBox schemas for import responses.
+ */
+const WarningSchema = Type.Object({
+  line: Type.Number(),
+  type: Type.String(),
+  message: Type.String()
+})
+
+const ErrorSchema = Type.Object({
+  line: Type.Number(),
+  type: Type.String(),
+  message: Type.String()
+})
+
+const ConflictSchema = Type.Unknown()
 
 /**
  * Fastify plugin for import-related routes.
@@ -49,17 +67,9 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
               annotations: Type.Number()
             })
           }),
-          warnings: Type.Array(Type.Object({
-            line: Type.Number(),
-            type: Type.String(),
-            message: Type.String()
-          })),
-          errors: Type.Array(Type.Object({
-            line: Type.Number(),
-            type: Type.String(),
-            message: Type.String()
-          })),
-          conflicts: Type.Array(Type.Any())
+          warnings: Type.Array(WarningSchema),
+          errors: Type.Array(ErrorSchema),
+          conflicts: Type.Array(ConflictSchema)
         }),
         400: Type.Object({
           error: Type.String(),
@@ -134,8 +144,8 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
-            importOptions: options as unknown as Record<string, unknown>,
-            result: result as unknown as Record<string, unknown>,
+            importOptions: options as unknown as Prisma.InputJsonValue,
+            result: result as unknown as Prisma.InputJsonValue,
             success: result.success,
             itemsImported: result.summary.importedItems.annotations,
             itemsSkipped: result.summary.skippedItems.annotations,
@@ -176,7 +186,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
             totalKeyframes: Type.Number(),
             singleKeyframeSequences: Type.Number()
           }),
-          conflicts: Type.Array(Type.Any()),
+          conflicts: Type.Array(ConflictSchema),
           warnings: Type.Array(Type.String())
         }),
         400: Type.Object({
@@ -240,9 +250,9 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           counts.annotations++
 
           // Count keyframes
-          const sequence = line.data.boundingBoxSequence
+          const sequence = line.data.boundingBoxSequence as { boxes?: Array<{ isKeyframe?: boolean }> } | undefined
           if (sequence && sequence.boxes) {
-            const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
+            const keyframes = sequence.boxes.filter((b) => b.isKeyframe)
             counts.totalKeyframes += keyframes.length
 
             if (keyframes.length === 1) {

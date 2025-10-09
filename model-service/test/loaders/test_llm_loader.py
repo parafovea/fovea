@@ -174,9 +174,7 @@ class TestLLMLoader:
         assert quant_config is None
 
     @pytest.mark.asyncio
-    async def test_load_model_success(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_load_model_success(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test successful model loading."""
         config = LLMConfig(
             model_id="meta-llama/Llama-4-Scout",
@@ -203,9 +201,7 @@ class TestLLMLoader:
             mock_model.eval.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_load_model_sets_pad_token(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_load_model_sets_pad_token(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test that pad token is set if missing."""
         mock_tokenizer.pad_token = None
         config = LLMConfig(
@@ -249,9 +245,7 @@ class TestLLMLoader:
             assert not loader.is_loaded()
 
     @pytest.mark.asyncio
-    async def test_load_model_idempotent(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_load_model_idempotent(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test that loading an already-loaded model is idempotent."""
         config = LLMConfig(
             model_id="meta-llama/Llama-3.3-70B-Instruct",
@@ -277,9 +271,7 @@ class TestLLMLoader:
             mock_model_load.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_generate_text_success(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_generate_text_success(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test successful text generation."""
         config = LLMConfig(
             model_id="deepseek-ai/DeepSeek-V3",
@@ -406,9 +398,7 @@ class TestLLMLoader:
 
         with patch("src.llm_loader.torch.cuda.is_available", return_value=True), patch(
             "src.llm_loader.torch.cuda.memory_allocated", return_value=1024 * 1024 * 1024
-        ), patch(
-            "src.llm_loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024
-        ):
+        ), patch("src.llm_loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024):
             usage = loader.get_memory_usage()
 
             assert usage["allocated"] == 1024 * 1024 * 1024
@@ -527,9 +517,7 @@ class TestFallbackLoading:
                 return_value=mock_model,
             ),
         ):
-            loader = await create_llm_loader_with_fallback(
-                primary, [fallback1, fallback2]
-            )
+            loader = await create_llm_loader_with_fallback(primary, [fallback1, fallback2])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "meta-llama/Llama-4-Scout"
@@ -605,9 +593,7 @@ class TestDiverseExamples:
     """Tests using diverse domain examples (not tactical analysis)."""
 
     @pytest.mark.asyncio
-    async def test_medical_research_use_case(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_medical_research_use_case(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test LLM generation for medical research ontology augmentation."""
         config = LLMConfig(
             model_id="meta-llama/Llama-4-Scout",
@@ -627,9 +613,7 @@ class TestDiverseExamples:
         assert len(result.text) > 0
 
     @pytest.mark.asyncio
-    async def test_retail_analytics_use_case(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_retail_analytics_use_case(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test LLM generation for retail customer behavior ontology."""
         config = LLMConfig(
             model_id="deepseek-ai/DeepSeek-V3",
@@ -649,9 +633,7 @@ class TestDiverseExamples:
         assert result.tokens_used > 0
 
     @pytest.mark.asyncio
-    async def test_wildlife_biology_use_case(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_wildlife_biology_use_case(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test LLM generation for wildlife tracking ontology."""
         config = LLMConfig(
             model_id="google/gemma-3-27b-it",
@@ -671,9 +653,7 @@ class TestDiverseExamples:
         assert result.finish_reason in ["eos", "length"]
 
     @pytest.mark.asyncio
-    async def test_sports_analytics_use_case(
-        self, mock_model: Mock, mock_tokenizer: Mock
-    ) -> None:
+    async def test_sports_analytics_use_case(self, mock_model: Mock, mock_tokenizer: Mock) -> None:
         """Test LLM generation for basketball game analysis ontology."""
         config = LLMConfig(
             model_id="meta-llama/Llama-3.3-70B-Instruct",

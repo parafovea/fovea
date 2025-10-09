@@ -1,5 +1,22 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
+
+/**
+ * TypeBox schema for Annotation response.
+ */
+const AnnotationResponseSchema = Type.Object({
+  id: Type.String(),
+  videoId: Type.String(),
+  personaId: Type.String(),
+  type: Type.String(),
+  label: Type.String(),
+  frames: Type.Unknown(),
+  confidence: Type.Union([Type.Number(), Type.Null()]),
+  source: Type.String(),
+  createdAt: Type.String(),
+  updatedAt: Type.String()
+})
 
 /**
  * Fastify plugin for annotation-related routes.
@@ -27,7 +44,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         videoId: Type.String()
       }),
       response: {
-        200: Type.Array(Type.Any())
+        200: Type.Array(AnnotationResponseSchema)
       }
     }
   }, async (request, reply) => {
@@ -68,12 +85,12 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         personaId: Type.String(),
         type: Type.String(),
         label: Type.String(),
-        frames: Type.Any(),
+        frames: Type.Unknown(),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
       }),
       response: {
-        201: Type.Any()
+        201: AnnotationResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -82,7 +99,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: string
       type: string
       label: string
-      frames: unknown
+      frames: Prisma.InputJsonValue
       confidence?: number
       source?: string
     }
@@ -131,12 +148,12 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       body: Type.Object({
         type: Type.Optional(Type.String()),
         label: Type.Optional(Type.String()),
-        frames: Type.Optional(Type.Any()),
+        frames: Type.Optional(Type.Unknown()),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
       }),
       response: {
-        200: Type.Any()
+        200: AnnotationResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -144,7 +161,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const data = request.body as {
       type?: string
       label?: string
-      frames?: unknown
+      frames?: Prisma.InputJsonValue
       confidence?: number
       source?: string
     }

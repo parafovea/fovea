@@ -284,16 +284,10 @@ class Llama4MaverickLoader(VLMLoader):
 
         try:
             if self.config.framework == InferenceFramework.SGLANG:
-                return self._generate_with_sglang(
-                    images, prompt, max_new_tokens, temperature
-                )
+                return self._generate_with_sglang(images, prompt, max_new_tokens, temperature)
             if self.config.framework == InferenceFramework.VLLM:
-                return self._generate_with_vllm(
-                    images, prompt, max_new_tokens, temperature
-                )
-            return self._generate_with_transformers(
-                images, prompt, max_new_tokens, temperature
-            )
+                return self._generate_with_vllm(images, prompt, max_new_tokens, temperature)
+            return self._generate_with_transformers(images, prompt, max_new_tokens, temperature)
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Text generation failed: {e}") from e
@@ -328,9 +322,7 @@ class Llama4MaverickLoader(VLMLoader):
         """Generate using vLLM engine."""
         from vllm import SamplingParams
 
-        sampling_params = SamplingParams(
-            max_tokens=max_new_tokens, temperature=temperature
-        )
+        sampling_params = SamplingParams(max_tokens=max_new_tokens, temperature=temperature)
 
         # vLLM expects images in specific format
         outputs = self.model.generate(  # type: ignore[attr-defined]
@@ -468,16 +460,10 @@ class Gemma3Loader(VLMLoader):
 
         try:
             if self.config.framework == InferenceFramework.SGLANG:
-                return self._generate_with_sglang(
-                    images, prompt, max_new_tokens, temperature
-                )
+                return self._generate_with_sglang(images, prompt, max_new_tokens, temperature)
             if self.config.framework == InferenceFramework.VLLM:
-                return self._generate_with_vllm(
-                    images, prompt, max_new_tokens, temperature
-                )
-            return self._generate_with_transformers(
-                images, prompt, max_new_tokens, temperature
-            )
+                return self._generate_with_vllm(images, prompt, max_new_tokens, temperature)
+            return self._generate_with_transformers(images, prompt, max_new_tokens, temperature)
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Text generation failed: {e}") from e
@@ -512,9 +498,7 @@ class Gemma3Loader(VLMLoader):
         """Generate using vLLM engine."""
         from vllm import SamplingParams
 
-        sampling_params = SamplingParams(
-            max_tokens=max_new_tokens, temperature=temperature
-        )
+        sampling_params = SamplingParams(max_tokens=max_new_tokens, temperature=temperature)
 
         outputs = self.model.generate(  # type: ignore[attr-defined]
             {"prompt": prompt, "multi_modal_data": {"image": images}},
@@ -599,9 +583,7 @@ class InternVL3Loader(VLMLoader):
         try:
             pixel_values_list = []
             for image in images:
-                pixel_values = self.model.load_image(
-                    image, max_num=12
-                ).to(torch.bfloat16).cuda()
+                pixel_values = self.model.load_image(image, max_num=12).to(torch.bfloat16).cuda()
                 pixel_values_list.append(pixel_values)
 
             generation_config = {
@@ -610,12 +592,14 @@ class InternVL3Loader(VLMLoader):
                 "do_sample": True,
             }
 
-            return str(self.model.chat(
-                self.tokenizer,
-                pixel_values_list[0] if len(pixel_values_list) == 1 else pixel_values_list,
-                prompt,
-                generation_config,
-            ))
+            return str(
+                self.model.chat(
+                    self.tokenizer,
+                    pixel_values_list[0] if len(pixel_values_list) == 1 else pixel_values_list,
+                    prompt,
+                    generation_config,
+                )
+            )
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Text generation failed: {e}") from e
@@ -703,12 +687,8 @@ class PixtralLargeLoader(VLMLoader):
 
         try:
             if self.config.framework == InferenceFramework.VLLM:
-                return self._generate_with_vllm(
-                    images, prompt, max_new_tokens, temperature
-                )
-            return self._generate_with_transformers(
-                images, prompt, max_new_tokens, temperature
-            )
+                return self._generate_with_vllm(images, prompt, max_new_tokens, temperature)
+            return self._generate_with_transformers(images, prompt, max_new_tokens, temperature)
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Text generation failed: {e}") from e
@@ -723,9 +703,7 @@ class PixtralLargeLoader(VLMLoader):
         """Generate using vLLM engine."""
         from vllm import SamplingParams
 
-        sampling_params = SamplingParams(
-            max_tokens=max_new_tokens, temperature=temperature
-        )
+        sampling_params = SamplingParams(max_tokens=max_new_tokens, temperature=temperature)
 
         outputs = self.model.generate(  # type: ignore[attr-defined]
             {"prompt": prompt, "multi_modal_data": {"image": images}},
@@ -865,16 +843,10 @@ class Qwen25VLLoader(VLMLoader):
 
         try:
             if self.config.framework == InferenceFramework.SGLANG:
-                return self._generate_with_sglang(
-                    images, prompt, max_new_tokens, temperature
-                )
+                return self._generate_with_sglang(images, prompt, max_new_tokens, temperature)
             if self.config.framework == InferenceFramework.VLLM:
-                return self._generate_with_vllm(
-                    images, prompt, max_new_tokens, temperature
-                )
-            return self._generate_with_transformers(
-                images, prompt, max_new_tokens, temperature
-            )
+                return self._generate_with_vllm(images, prompt, max_new_tokens, temperature)
+            return self._generate_with_transformers(images, prompt, max_new_tokens, temperature)
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Text generation failed: {e}") from e
@@ -909,9 +881,7 @@ class Qwen25VLLoader(VLMLoader):
         """Generate using vLLM engine."""
         from vllm import SamplingParams
 
-        sampling_params = SamplingParams(
-            max_tokens=max_new_tokens, temperature=temperature
-        )
+        sampling_params = SamplingParams(max_tokens=max_new_tokens, temperature=temperature)
 
         outputs = self.model.generate(  # type: ignore[attr-defined]
             {"prompt": prompt, "multi_modal_data": {"image": images}},

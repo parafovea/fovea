@@ -191,9 +191,7 @@ class TestExtractFramesByRate:
 
     def test_extract_frames_by_rate_with_resize(self, test_video_path):
         """Test rate-based extraction with resizing."""
-        frames = extract_frames_by_rate(
-            test_video_path, sample_rate=10, max_dimension=320
-        )
+        frames = extract_frames_by_rate(test_video_path, sample_rate=10, max_dimension=320)
 
         assert len(frames) == 3
         for _, frame_array in frames:

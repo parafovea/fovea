@@ -236,7 +236,10 @@ class TestOWLv2Loader:
     @patch("transformers.Owlv2Processor")
     @patch("transformers.Owlv2ForObjectDetection")
     def test_load_owlv2_success(
-        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig  # noqa: ARG002
+        self,
+        mock_model_class: Mock,
+        mock_processor_class: Mock,
+        detection_config: DetectionConfig,  # noqa: ARG002
     ) -> None:
         """Test successful OWLv2 model loading."""
         mock_model = MagicMock()
@@ -305,7 +308,10 @@ class TestFlorence2Loader:
     @patch("transformers.AutoProcessor")
     @patch("transformers.AutoModelForCausalLM")
     def test_load_florence2_success(
-        self, mock_model_class: Mock, mock_processor_class: Mock, detection_config: DetectionConfig  # noqa: ARG002
+        self,
+        mock_model_class: Mock,
+        mock_processor_class: Mock,
+        detection_config: DetectionConfig,  # noqa: ARG002
     ) -> None:
         """Test successful Florence-2 model loading."""
         mock_model = MagicMock()
@@ -443,7 +449,11 @@ class TestDetectionModelUnload:
     @patch("torch.cuda.empty_cache")
     @patch("ultralytics.YOLO")
     def test_unload_releases_memory(
-        self, mock_yolo_class: Mock, mock_empty_cache: Mock, mock_cuda_available: Mock, detection_config: DetectionConfig
+        self,
+        mock_yolo_class: Mock,
+        mock_empty_cache: Mock,
+        mock_cuda_available: Mock,
+        detection_config: DetectionConfig,
     ) -> None:
         """Test model unload releases GPU memory."""
         mock_model = MagicMock()
