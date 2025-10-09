@@ -1,7 +1,24 @@
 import axios from 'axios'
-import { Ontology, Annotation, VideoMetadata, OntologyExport } from '../models/types'
+import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats, ImportOptions, ImportPreview, ImportResult, ImportHistoryItem } from '../models/types'
 
 const API_BASE = '/api'
+
+/**
+ * @interface TrackingOptions
+ * @description Configuration options for object tracking request.
+ * @property enableTracking - Whether to enable tracking (vs. detection only)
+ * @property trackingModel - Name of tracking model to use
+ * @property frameRange - Optional frame range as [start, end] tuple
+ * @property confidenceThreshold - Minimum confidence for detections (0-1)
+ * @property trackSingleObject - Whether to track only one object vs. all detected
+ */
+export interface TrackingOptions {
+  enableTracking: boolean
+  trackingModel: 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
+  frameRange?: [number, number]
+  confidenceThreshold?: number
+  trackSingleObject?: boolean
+}
 
 export const api = {
   // Videos
@@ -158,5 +175,152 @@ export const api = {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  },
+
+  /**
+   * Run object tracking on video frames.
+   * Sends tracking request to model service and returns tracked object candidates.
+   *
+   * @param videoId - ID of video to track objects in
+   * @param options - Tracking configuration options
+   * @returns Promise resolving to tracking response with candidate tracks
+   */
+  async runTracking(
+    videoId: string,
+    options: TrackingOptions
+  ): Promise<TrackingResponse> {
+    const response = await axios.post(`${API_BASE}/model/track`, {
+      videoId,
+      ...options,
+    })
+    return response.data
+  },
+
+  /**
+   * Get export statistics without performing the export.
+   * Useful for estimating file size before downloading.
+   *
+   * @param options - Export filter options
+   * @returns Promise resolving to export statistics
+   */
+  async getExportStats(options: ExportOptions = {}): Promise<ExportStats> {
+    const params = new URLSearchParams()
+
+    if (options.includeInterpolated !== undefined) {
+      params.append('includeInterpolated', options.includeInterpolated.toString())
+    }
+    if (options.personaIds && options.personaIds.length > 0) {
+      params.append('personaIds', options.personaIds.join(','))
+    }
+    if (options.videoIds && options.videoIds.length > 0) {
+      params.append('videoIds', options.videoIds.join(','))
+    }
+    if (options.annotationTypes && options.annotationTypes.length > 0) {
+      params.append('annotationTypes', options.annotationTypes.join(','))
+    }
+
+    const response = await axios.get(`${API_BASE}/export/stats?${params.toString()}`)
+    return response.data
+  },
+
+  /**
+   * Export annotations with bounding box sequences to JSON Lines format.
+   * Downloads the export file directly to the user's browser.
+   *
+   * @param options - Export filter and format options
+   */
+  async exportAnnotations(options: ExportOptions = {}): Promise<void> {
+    const params = new URLSearchParams()
+    params.append('format', 'jsonl')
+
+    if (options.includeInterpolated !== undefined) {
+      params.append('includeInterpolated', options.includeInterpolated.toString())
+    }
+    if (options.personaIds && options.personaIds.length > 0) {
+      params.append('personaIds', options.personaIds.join(','))
+    }
+    if (options.videoIds && options.videoIds.length > 0) {
+      params.append('videoIds', options.videoIds.join(','))
+    }
+    if (options.annotationTypes && options.annotationTypes.length > 0) {
+      params.append('annotationTypes', options.annotationTypes.join(','))
+    }
+
+    // Use blob response type to handle binary data
+    const response = await axios.get(`${API_BASE}/export?${params.toString()}`, {
+      responseType: 'blob'
+    })
+
+    // Extract filename from Content-Disposition header if available
+    const contentDisposition = response.headers['content-disposition']
+    let filename = 'annotations.jsonl'
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+      if (filenameMatch) {
+        filename = filenameMatch[1]
+      }
+    }
+
+    // Create download
+    const blob = new Blob([response.data], { type: 'application/x-ndjson' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  },
+
+  /**
+   * Preview import file without committing to database.
+   *
+   * @param file - JSON Lines file to preview
+   * @returns Preview with counts, conflicts, warnings
+   */
+  async previewImport(file: File): Promise<ImportPreview> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await axios.post(`${API_BASE}/import/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  },
+
+  /**
+   * Upload and import JSON Lines file.
+   *
+   * @param file - JSON Lines file to import
+   * @param options - Import options with conflict resolution strategies
+   * @returns Import result with statistics and errors
+   */
+  async uploadImportFile(file: File, options: ImportOptions): Promise<ImportResult> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('options', JSON.stringify(options))
+
+    const response = await axios.post(`${API_BASE}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  },
+
+  /**
+   * Get import history.
+   *
+   * @param limit - Maximum number of records (default: 50)
+   * @param offset - Number of records to skip (default: 0)
+   * @returns List of past imports
+   */
+  async getImportHistory(limit = 50, offset = 0): Promise<{
+    imports: ImportHistoryItem[]
+    total: number
+  }> {
+    const response = await axios.get(`${API_BASE}/import/history`, {
+      params: { limit, offset }
+    })
+    return response.data
   },
 }

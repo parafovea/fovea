@@ -1,0 +1,17 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^http://localhost"
+    },
+    {
+      "pattern": "^https://fovea.video"
+    },
+    {
+      "pattern": "^/api-reference/model-service/"
+    }
+  ],
+  "aliveStatusCodes": [200, 206],
+  "timeout": "20s",
+  "retryOn429": true,
+  "retryCount": 3
+}

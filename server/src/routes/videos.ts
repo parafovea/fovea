@@ -426,10 +426,16 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           }>
         }
 
+        // Transform snake_case to camelCase for response schema
+        const frameResults = (detectionResult.frame_results || detectionResult.frameResults || []).map(frame => ({
+          frameNumber: 'frame_number' in frame ? frame.frame_number : frame.frameNumber,
+          detections: frame.detections,
+        }))
+
         return reply.send({
           videoId,
           query,
-          frameResults: detectionResult.frame_results || detectionResult.frameResults || [],
+          frameResults,
         })
       } catch (error) {
         fastify.log.error(error)

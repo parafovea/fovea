@@ -228,6 +228,9 @@ export async function closeQueues(): Promise<void> {
   await videoWorker.close();
   await queueEvents.close();
   await videoSummarizationQueue.close();
-  await connection.quit();
+  // Only quit connection if it's still open
+  if (connection.status === 'ready' || connection.status === 'connecting') {
+    await connection.quit();
+  }
   await prisma.$disconnect();
 }

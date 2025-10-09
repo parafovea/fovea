@@ -1,6 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { Annotation, Time } from '../models/types'
-import { DetectionResponse } from '../api/client'
+import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit'
+import { Annotation, Time, BoundingBox, InterpolationType, TrackingResult } from '../models/types.js'
+import { DetectionResponse } from '../api/client.js'
+import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../utils/interpolation.js'
 
 type AnnotationMode =
   | 'type'    // Assign types from persona ontology (requires persona)
@@ -27,6 +28,18 @@ interface AnnotationState {
   detectionQuery: string
   detectionConfidenceThreshold: number
   showDetectionCandidates: boolean
+
+  // Tracking-specific state
+  trackingResults: TrackingResult[]
+  previewedTrackId: string | number | null
+  showTrackingResults: boolean
+
+  // Sequence-specific state
+  interpolationMode: InterpolationType
+  selectedKeyframes: number[]  // Selected keyframe frame numbers
+  showMotionPath: boolean
+  timelineZoom: number  // 1-10x
+  currentFrame: number  // Current video frame
 }
 
 const initialState: AnnotationState = {
@@ -45,7 +58,22 @@ const initialState: AnnotationState = {
   detectionQuery: '',
   detectionConfidenceThreshold: 0.5,
   showDetectionCandidates: false,
+
+  // Tracking-specific state
+  trackingResults: [],
+  previewedTrackId: null,
+  showTrackingResults: false,
+
+  // Sequence-specific state
+  interpolationMode: 'linear',
+  selectedKeyframes: [],
+  showMotionPath: false,
+  timelineZoom: 1,
+  currentFrame: 0,
 }
+
+// Interpolator instance (shared across all actions)
+const interpolator = new BoundingBoxInterpolator()
 
 const annotationSlice = createSlice({
   name: 'annotations',
@@ -138,6 +166,385 @@ const annotationSlice = createSlice({
       state.detectionQuery = ''
       state.showDetectionCandidates = false
     },
+
+    // Tracking-specific actions
+    setTrackingResults: (state, action: PayloadAction<TrackingResult[]>) => {
+      state.trackingResults = action.payload
+      state.showTrackingResults = action.payload.length > 0
+    },
+
+    setPreviewedTrack: (state, action: PayloadAction<string | number | null>) => {
+      state.previewedTrackId = action.payload
+    },
+
+    acceptTrack: (state, action: PayloadAction<string | number>) => {
+      state.trackingResults = state.trackingResults.filter(
+        (track) => track.trackId !== action.payload
+      )
+      if (state.previewedTrackId === action.payload) {
+        state.previewedTrackId = null
+      }
+    },
+
+    rejectTrack: (state, action: PayloadAction<string | number>) => {
+      state.trackingResults = state.trackingResults.filter(
+        (track) => track.trackId !== action.payload
+      )
+      if (state.previewedTrackId === action.payload) {
+        state.previewedTrackId = null
+      }
+    },
+
+    setShowTrackingResults: (state, action: PayloadAction<boolean>) => {
+      state.showTrackingResults = action.payload
+    },
+
+    clearTrackingState: (state) => {
+      state.trackingResults = []
+      state.previewedTrackId = null
+      state.showTrackingResults = false
+    },
+
+    // Sequence-specific actions
+    setCurrentFrame: (state, action: PayloadAction<number>) => {
+      state.currentFrame = action.payload
+    },
+
+    setInterpolationMode: (state, action: PayloadAction<InterpolationType>) => {
+      state.interpolationMode = action.payload
+    },
+
+    setSelectedKeyframes: (state, action: PayloadAction<number[]>) => {
+      state.selectedKeyframes = action.payload
+    },
+
+    setShowMotionPath: (state, action: PayloadAction<boolean>) => {
+      state.showMotionPath = action.payload
+    },
+
+    setTimelineZoom: (state, action: PayloadAction<number>) => {
+      state.timelineZoom = Math.max(1, Math.min(10, action.payload))
+    },
+
+    addKeyframe: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      frameNumber: number
+      box?: Partial<BoundingBox>
+      fps?: number
+    }>) => {
+      const { videoId, annotationId, frameNumber, box, fps = 30 } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const updatedSequence = interpolator.addKeyframe(
+        annotation.boundingBoxSequence,
+        frameNumber
+      )
+
+      // If box values provided, update the new keyframe
+      if (box) {
+        const keyframeIndex = updatedSequence.boxes.findIndex(b => b.frameNumber === frameNumber)
+        if (keyframeIndex !== -1) {
+          updatedSequence.boxes[keyframeIndex] = {
+            ...updatedSequence.boxes[keyframeIndex],
+            ...box,
+          }
+        }
+      }
+
+      annotation.boundingBoxSequence = updatedSequence
+
+      // Update annotation timeSpan to cover all keyframes
+      if (updatedSequence.boxes.length > 0) {
+        const keyframes = updatedSequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
+    },
+
+    removeKeyframe: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      frameNumber: number
+      fps?: number
+    }>) => {
+      const { videoId, annotationId, frameNumber, fps = 30 } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      annotation.boundingBoxSequence = interpolator.removeKeyframe(
+        annotation.boundingBoxSequence,
+        frameNumber
+      )
+
+      // Update annotation timeSpan to cover remaining keyframes
+      const updatedSequence = annotation.boundingBoxSequence
+      if (updatedSequence.boxes.length > 0) {
+        const keyframes = updatedSequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
+    },
+
+    updateKeyframe: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      frameNumber: number
+      box: Partial<BoundingBox>
+    }>) => {
+      const { videoId, annotationId, frameNumber, box } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      annotation.boundingBoxSequence = interpolator.updateKeyframe(
+        annotation.boundingBoxSequence,
+        frameNumber,
+        box
+      )
+    },
+
+    moveKeyframe: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      oldFrame: number
+      newFrame: number
+      fps?: number
+    }>) => {
+      const { videoId, annotationId, oldFrame, newFrame, fps = 30 } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      // Find the keyframe at oldFrame
+      const keyframe = annotation.boundingBoxSequence.boxes.find(
+        b => b.frameNumber === oldFrame && (b.isKeyframe || b.isKeyframe === undefined)
+      )
+      if (!keyframe) return
+
+      // Remove old keyframe
+      const withoutOld = interpolator.removeKeyframe(
+        annotation.boundingBoxSequence,
+        oldFrame
+      )
+
+      // Add at new location
+      const withNew = interpolator.addKeyframe(withoutOld, newFrame)
+
+      // Update the new keyframe with old values
+      const newKeyframeIndex = withNew.boxes.findIndex(b => b.frameNumber === newFrame)
+      if (newKeyframeIndex !== -1) {
+        withNew.boxes[newKeyframeIndex] = {
+          ...keyframe,
+          frameNumber: newFrame,
+        }
+      }
+
+      annotation.boundingBoxSequence = withNew
+
+      // Update annotation timeSpan to cover all keyframes
+      if (withNew.boxes.length > 0) {
+        const keyframes = withNew.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
+    },
+
+    setSegmentInterpolationMode: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      startFrame: number
+      endFrame: number
+      mode: InterpolationType
+    }>) => {
+      const { videoId, annotationId, startFrame, endFrame, mode } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+      const segmentIndex = sequence.interpolationSegments.findIndex(
+        s => s.startFrame === startFrame && s.endFrame === endFrame
+      )
+
+      if (segmentIndex !== -1) {
+        sequence.interpolationSegments[segmentIndex].type = mode
+      }
+    },
+
+    setVisibilityRange: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      startFrame: number
+      endFrame: number
+      visible: boolean
+    }>) => {
+      const { videoId, annotationId, startFrame, endFrame, visible } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+
+      // Add or update visibility range
+      const existingRange = sequence.visibilityRanges.find(
+        r => r.startFrame === startFrame && r.endFrame === endFrame
+      )
+
+      if (existingRange) {
+        existingRange.visible = visible
+      } else {
+        sequence.visibilityRanges.push({ startFrame, endFrame, visible })
+      }
+
+      // Sort visibility ranges
+      sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
+    },
+
+    updateInterpolationSegment: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      segmentIndex: number
+      type: InterpolationType
+      controlPoints?: any
+    }>) => {
+      const { videoId, annotationId, segmentIndex, type, controlPoints } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+      if (segmentIndex < 0 || segmentIndex >= sequence.interpolationSegments.length) return
+
+      const segment = sequence.interpolationSegments[segmentIndex]
+      segment.type = type
+
+      if (type === 'bezier' && controlPoints) {
+        segment.controlPoints = controlPoints
+      } else if (type !== 'bezier') {
+        // Clear control points for non-bezier modes
+        delete segment.controlPoints
+      }
+    },
+
+    toggleVisibilityAtFrame: (state, action: PayloadAction<{
+      videoId: string
+      annotationId: string
+      frameNumber: number
+    }>) => {
+      const { videoId, annotationId, frameNumber } = action.payload
+      const videoAnnotations = state.annotations[videoId]
+      if (!videoAnnotations) return
+
+      const annotation = videoAnnotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const sequence = annotation.boundingBoxSequence
+
+      // Find range containing this frame
+      const rangeIndex = sequence.visibilityRanges.findIndex(
+        r => r.startFrame <= frameNumber && r.endFrame >= frameNumber
+      )
+
+      if (rangeIndex !== -1) {
+        const range = sequence.visibilityRanges[rangeIndex]
+        const newVisibility = !range.visible
+
+        // Split the range if frame is in the middle
+        if (frameNumber === range.startFrame && frameNumber === range.endFrame) {
+          // Single frame range - just toggle it
+          range.visible = newVisibility
+        } else if (frameNumber === range.startFrame) {
+          // Toggle at start - split off first frame
+          range.startFrame = frameNumber + 1
+          sequence.visibilityRanges.splice(rangeIndex, 0, {
+            startFrame: frameNumber,
+            endFrame: frameNumber,
+            visible: newVisibility
+          })
+        } else if (frameNumber === range.endFrame) {
+          // Toggle at end - split off last frame
+          range.endFrame = frameNumber - 1
+          sequence.visibilityRanges.push({
+            startFrame: frameNumber,
+            endFrame: frameNumber,
+            visible: newVisibility
+          })
+        } else {
+          // Toggle in middle - split into three ranges
+          const originalEnd = range.endFrame
+          range.endFrame = frameNumber - 1
+          sequence.visibilityRanges.push(
+            {
+              startFrame: frameNumber,
+              endFrame: frameNumber,
+              visible: newVisibility
+            },
+            {
+              startFrame: frameNumber + 1,
+              endFrame: originalEnd,
+              visible: range.visible
+            }
+          )
+        }
+
+        // Sort and merge adjacent ranges with same visibility
+        sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
+
+        // Merge adjacent ranges
+        for (let i = sequence.visibilityRanges.length - 1; i > 0; i--) {
+          const curr = sequence.visibilityRanges[i]
+          const prev = sequence.visibilityRanges[i - 1]
+          if (prev.endFrame + 1 === curr.startFrame && prev.visible === curr.visible) {
+            prev.endFrame = curr.endFrame
+            sequence.visibilityRanges.splice(i, 1)
+          }
+        }
+      } else {
+        // No range found - create a new single-frame hidden range
+        sequence.visibilityRanges.push({
+          startFrame: frameNumber,
+          endFrame: frameNumber,
+          visible: false
+        })
+        sequence.visibilityRanges.sort((a, b) => a.startFrame - b.startFrame)
+      }
+    },
   },
 })
 
@@ -161,6 +568,236 @@ export const {
   setDetectionConfidenceThreshold,
   setShowDetectionCandidates,
   clearDetectionState,
+  setTrackingResults,
+  setPreviewedTrack,
+  acceptTrack,
+  rejectTrack,
+  setShowTrackingResults,
+  clearTrackingState,
+  setCurrentFrame,
+  setInterpolationMode,
+  setSelectedKeyframes,
+  setShowMotionPath,
+  setTimelineZoom,
+  addKeyframe,
+  removeKeyframe,
+  updateKeyframe,
+  moveKeyframe,
+  setSegmentInterpolationMode,
+  setVisibilityRange,
+  updateInterpolationSegment,
+  toggleVisibilityAtFrame,
 } = annotationSlice.actions
+
+// Selectors
+export const selectAnnotations = (state: { annotations: AnnotationState }, videoId: string) =>
+  state.annotations.annotations[videoId] || []
+
+export const selectSelectedAnnotation = (state: { annotations: AnnotationState }) =>
+  state.annotations.selectedAnnotation
+
+export const selectCurrentFrame = (state: { annotations: AnnotationState }) =>
+  state.annotations.currentFrame
+
+export const selectInterpolationMode = (state: { annotations: AnnotationState }) =>
+  state.annotations.interpolationMode
+
+export const selectSelectedKeyframes = (state: { annotations: AnnotationState }) =>
+  state.annotations.selectedKeyframes
+
+export const selectShowMotionPath = (state: { annotations: AnnotationState }) =>
+  state.annotations.showMotionPath
+
+export const selectTimelineZoom = (state: { annotations: AnnotationState }) =>
+  state.annotations.timelineZoom
+
+/**
+ * Select annotation at a specific frame with interpolation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number
+ * @returns Interpolated bounding box at frame
+ */
+export const selectAnnotationAtFrame = createSelector(
+  [
+    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) =>
+      state.annotations.annotations[videoId]?.find(a => a.id === annotationId),
+    (_state: { annotations: AnnotationState }, _videoId: string, _annotationId: string, frameNumber: number) => frameNumber,
+  ],
+  (annotation, frameNumber) => {
+    if (!annotation) return null
+
+    const lazy = new LazyBoundingBoxSequence(
+      annotation.boundingBoxSequence.boxes,
+      annotation.boundingBoxSequence.interpolationSegments
+    )
+
+    return lazy.getBoxAtFrame(frameNumber)
+  }
+)
+
+/**
+ * Select keyframes for an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @returns Keyframe bounding boxes
+ */
+export const selectKeyframes = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string
+): BoundingBox[] => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return []
+
+  return annotation.boundingBoxSequence.boxes.filter(
+    b => b.isKeyframe || b.isKeyframe === undefined
+  )
+}
+
+/**
+ * Select interpolation segments for an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @returns Interpolation segments
+ */
+export const selectInterpolationSegments = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string
+) => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return []
+
+  return annotation.boundingBoxSequence.interpolationSegments
+}
+
+/**
+ * Check if a frame is a keyframe.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number to check
+ * @returns True if frame is a keyframe
+ */
+export const selectIsKeyframe = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string,
+  frameNumber: number
+): boolean => {
+  const keyframes = selectKeyframes(state, videoId, annotationId)
+  return keyframes.some(k => k.frameNumber === frameNumber)
+}
+
+/**
+ * Select motion path for visualization.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @returns Motion path points
+ */
+export const selectMotionPath = createSelector(
+  [
+    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) =>
+      state.annotations.annotations[videoId]?.find(a => a.id === annotationId),
+  ],
+  (annotation) => {
+    if (!annotation) return []
+
+    const keyframes = annotation.boundingBoxSequence.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    )
+
+    if (keyframes.length < 2) return []
+
+    // Generate all interpolated frames
+    const allBoxes = interpolator.interpolate(
+      keyframes,
+      annotation.boundingBoxSequence.interpolationSegments
+    )
+
+    // Return path points (center of each box)
+    return allBoxes.map(box => ({
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2,
+      frameNumber: box.frameNumber,
+      isKeyframe: box.isKeyframe || false,
+    }))
+  }
+)
+
+/**
+ * Select visibility ranges for an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @returns Visibility ranges
+ */
+export const selectVisibilityRanges = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string
+) => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  return annotation?.boundingBoxSequence.visibilityRanges || []
+}
+
+/**
+ * Check if a frame is visible in an annotation.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number to check
+ * @returns True if frame is visible
+ */
+export const selectIsVisibleAtFrame = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string,
+  frameNumber: number
+): boolean => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return false
+
+  const ranges = annotation.boundingBoxSequence.visibilityRanges
+  if (ranges.length === 0) return true
+
+  const range = ranges.find(r => r.startFrame <= frameNumber && r.endFrame >= frameNumber)
+  return range?.visible ?? true
+}
+
+/**
+ * Select interpolation segment containing a frame.
+ *
+ * @param state - Redux state
+ * @param videoId - Video ID
+ * @param annotationId - Annotation ID
+ * @param frameNumber - Frame number
+ * @returns Interpolation segment or null
+ */
+export const selectInterpolationSegment = (
+  state: { annotations: AnnotationState },
+  videoId: string,
+  annotationId: string,
+  frameNumber: number
+) => {
+  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  if (!annotation) return null
+
+  return annotation.boundingBoxSequence.interpolationSegments.find(
+    s => s.startFrame <= frameNumber && s.endFrame >= frameNumber
+  ) || null
+}
 
 export default annotationSlice.reducer

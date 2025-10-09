@@ -28,6 +28,7 @@ import {
   videoBrowserShortcuts,
   ontologyWorkspaceShortcuts,
   objectWorkspaceShortcuts,
+  annotationWorkspaceShortcuts,
   formatShortcut,
   ShortcutDefinition,
 } from '../../utils/shortcuts'
@@ -36,7 +37,7 @@ import { useDialogKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 interface KeyboardShortcutsDialogProps {
   open: boolean
   onClose: () => void
-  currentContext?: 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'settings'
+  currentContext?: 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'annotationWorkspace' | 'settings'
 }
 
 interface TabPanelProps {
@@ -116,6 +117,7 @@ export default function KeyboardShortcutsDialog({
     if (currentContext === 'videoBrowser') setTabValue(1)
     else if (currentContext === 'ontologyWorkspace') setTabValue(2)
     else if (currentContext === 'objectWorkspace') setTabValue(3)
+    else if (currentContext === 'annotationWorkspace') setTabValue(4)
     else setTabValue(0)
   })
   
@@ -154,35 +156,43 @@ export default function KeyboardShortcutsDialog({
             <Tab label="Video Browser" />
             <Tab label="Ontology Builder" />
             <Tab label="Object Builder" />
+            <Tab label="Annotation Workspace" />
           </Tabs>
         </Box>
-        
+
         <TabPanel value={tabValue} index={0}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             These shortcuts work everywhere in the application
           </Typography>
           <ShortcutTable shortcuts={globalShortcuts} />
         </TabPanel>
-        
+
         <TabPanel value={tabValue} index={1}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available when browsing videos
           </Typography>
           <ShortcutTable shortcuts={videoBrowserShortcuts} />
         </TabPanel>
-        
+
         <TabPanel value={tabValue} index={2}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Ontology Builder workspace
           </Typography>
           <ShortcutTable shortcuts={ontologyWorkspaceShortcuts} />
         </TabPanel>
-        
+
         <TabPanel value={tabValue} index={3}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Object Builder workspace
           </Typography>
           <ShortcutTable shortcuts={objectWorkspaceShortcuts} />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
+          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+            Available in the Annotation Workspace (video annotation)
+          </Typography>
+          <ShortcutTable shortcuts={annotationWorkspaceShortcuts} />
         </TabPanel>
       </DialogContent>
       

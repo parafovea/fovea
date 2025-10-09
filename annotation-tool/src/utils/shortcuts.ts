@@ -1,7 +1,7 @@
 // Keyboard shortcut definitions and utilities
 
 export type ModifierKey = 'cmd' | 'ctrl' | 'alt' | 'shift'
-export type ShortcutContext = 'global' | 'workspace' | 'dialog' | 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'settings'
+export type ShortcutContext = 'global' | 'workspace' | 'dialog' | 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'annotationWorkspace' | 'settings'
 
 export interface ShortcutDefinition {
   key: string
@@ -321,6 +321,38 @@ export const objectWorkspaceShortcuts: ShortcutDefinition[] = [
   },
 ]
 
+// Annotation Workspace shortcuts
+export const annotationWorkspaceShortcuts: ShortcutDefinition[] = [
+  {
+    key: 't',
+    modifiers: [],
+    action: 'timeline.toggle',
+    description: 'Toggle timeline view',
+    context: 'annotationWorkspace',
+  },
+  {
+    key: ' ',
+    modifiers: [],
+    action: 'video.playPause',
+    description: 'Play/pause video',
+    context: 'annotationWorkspace',
+  },
+  {
+    key: 'ArrowLeft',
+    modifiers: [],
+    action: 'video.previousFrame',
+    description: 'Previous frame',
+    context: 'annotationWorkspace',
+  },
+  {
+    key: 'ArrowRight',
+    modifiers: [],
+    action: 'video.nextFrame',
+    description: 'Next frame',
+    context: 'annotationWorkspace',
+  },
+]
+
 // Get all shortcuts for a given context
 export const getShortcutsForContext = (
   context: ShortcutContext
@@ -330,8 +362,9 @@ export const getShortcutsForContext = (
     ...videoBrowserShortcuts,
     ...ontologyWorkspaceShortcuts,
     ...objectWorkspaceShortcuts,
+    ...annotationWorkspaceShortcuts,
   ]
-  
+
   return allShortcuts.filter(shortcut => {
     if (Array.isArray(shortcut.context)) {
       return shortcut.context.includes(context) || shortcut.context.includes('global')

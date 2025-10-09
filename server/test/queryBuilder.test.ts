@@ -24,6 +24,7 @@ describe('Query Builder', () => {
   beforeEach(async () => {
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
+    await prisma.video.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
   })
@@ -167,6 +168,14 @@ describe('Query Builder', () => {
     })
 
     it('includes entity instances from annotations', async () => {
+      // Create videos first to satisfy foreign key constraint
+      await prisma.video.createMany({
+        data: [
+          { id: 'qb-entity-video-1', filename: 'qb-entity-test1.mp4', path: '/data/qb-entity-test1.mp4' },
+          { id: 'qb-entity-video-2', filename: 'qb-entity-test2.mp4', path: '/data/qb-entity-test2.mp4' },
+        ],
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Baseball Scout',
@@ -189,7 +198,7 @@ describe('Query Builder', () => {
       await prisma.annotation.createMany({
         data: [
           {
-            videoId: 'video-1',
+            videoId: 'qb-entity-video-1',
             personaId: persona.id,
             type: 'entity',
             label: 'John Smith',
@@ -197,7 +206,7 @@ describe('Query Builder', () => {
             source: 'manual',
           },
           {
-            videoId: 'video-2',
+            videoId: 'qb-entity-video-2',
             personaId: persona.id,
             type: 'entity',
             label: 'Derek Jeter',
@@ -217,6 +226,14 @@ describe('Query Builder', () => {
     })
 
     it('includes location instances from annotations', async () => {
+      // Create videos first to satisfy foreign key constraint
+      await prisma.video.createMany({
+        data: [
+          { id: 'qb-loc-video-1', filename: 'qb-loc-test-1.mp4', path: '/data/qb-loc-test-1.mp4' },
+          { id: 'qb-loc-video-2', filename: 'qb-loc-test-2.mp4', path: '/data/qb-loc-test-2.mp4' },
+        ],
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Baseball Scout',
@@ -237,7 +254,7 @@ describe('Query Builder', () => {
       await prisma.annotation.createMany({
         data: [
           {
-            videoId: 'video-1',
+            videoId: 'qb-loc-video-1',
             personaId: persona.id,
             type: 'location',
             label: 'Yankee Stadium',
@@ -245,7 +262,7 @@ describe('Query Builder', () => {
             source: 'manual',
           },
           {
-            videoId: 'video-2',
+            videoId: 'qb-loc-video-2',
             personaId: persona.id,
             type: 'location',
             label: 'Fenway Park',
@@ -263,6 +280,14 @@ describe('Query Builder', () => {
     })
 
     it('includes event and time instances from annotations', async () => {
+      // Create videos first to satisfy foreign key constraint
+      await prisma.video.createMany({
+        data: [
+          { id: 'qb-evt-video-1', filename: 'qb-evt-test-1.mp4', path: '/data/qb-evt-test-1.mp4' },
+          { id: 'qb-evt-video-2', filename: 'qb-evt-test-2.mp4', path: '/data/qb-evt-test-2.mp4' },
+        ],
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Baseball Scout',
@@ -283,7 +308,7 @@ describe('Query Builder', () => {
       await prisma.annotation.createMany({
         data: [
           {
-            videoId: 'video-1',
+            videoId: 'qb-evt-video-1',
             personaId: persona.id,
             type: 'event',
             label: 'First Pitch',
@@ -291,7 +316,7 @@ describe('Query Builder', () => {
             source: 'manual',
           },
           {
-            videoId: 'video-1',
+            videoId: 'qb-evt-video-1',
             personaId: persona.id,
             type: 'time',
             label: '2:30 PM',
@@ -311,6 +336,14 @@ describe('Query Builder', () => {
     })
 
     it('deduplicates instance labels across videos', async () => {
+      // Create videos first to satisfy foreign key constraint
+      await prisma.video.createMany({
+        data: [
+          { id: 'qb-dup-video-1', filename: 'qb-dup-test-1.mp4', path: '/data/qb-dup-test-1.mp4' },
+          { id: 'qb-dup-video-2', filename: 'qb-dup-test-2.mp4', path: '/data/qb-dup-test-2.mp4' },
+        ],
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Test Persona',
@@ -331,7 +364,7 @@ describe('Query Builder', () => {
       await prisma.annotation.createMany({
         data: [
           {
-            videoId: 'video-1',
+            videoId: 'qb-dup-video-1',
             personaId: persona.id,
             type: 'entity',
             label: 'John Smith',
@@ -339,7 +372,7 @@ describe('Query Builder', () => {
             source: 'manual',
           },
           {
-            videoId: 'video-2',
+            videoId: 'qb-dup-video-2',
             personaId: persona.id,
             type: 'entity',
             label: 'John Smith',

@@ -23,6 +23,7 @@ import {
   Inventory2 as ObjectIcon,
   Save as SaveIcon,
   Download as ExportIcon,
+  Upload as ImportIcon,
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
   Settings as SettingsIcon,
@@ -37,6 +38,7 @@ import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
 import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
 import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
+import ImportDataDialog from './ImportDataDialog'
 
 const DRAWER_WIDTH = 240
 
@@ -47,6 +49,7 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
@@ -208,8 +211,8 @@ export default function Layout() {
           </Tooltip>
           <Tooltip title="Export (Cmd/Ctrl+E)">
             <span>
-              <Button 
-                color="inherit" 
+              <Button
+                color="inherit"
                 startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
                 onClick={handleExport}
                 disabled={exporting}
@@ -217,6 +220,15 @@ export default function Layout() {
                 Export
               </Button>
             </span>
+          </Tooltip>
+          <Tooltip title="Import Data">
+            <IconButton
+              color="inherit"
+              onClick={() => setImportDialogOpen(true)}
+              sx={{ ml: 1 }}
+            >
+              <ImportIcon />
+            </IconButton>
           </Tooltip>
           <Tooltip title="Keyboard Shortcuts (?)">
             <IconButton
@@ -308,7 +320,20 @@ export default function Layout() {
         onClose={() => setShortcutsDialogOpen(false)}
         currentContext={getCurrentContext()}
       />
-      
+
+      <ImportDataDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImportComplete={(result) => {
+          console.log('Import completed:', result)
+          setNotification({
+            open: true,
+            message: `Import successful: ${result.summary.importedItems.annotations} annotations imported`,
+            severity: 'success',
+          })
+        }}
+      />
+
       <KeyboardShortcutHint />
     </Box>
   )

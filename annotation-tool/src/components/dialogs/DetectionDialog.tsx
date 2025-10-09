@@ -57,6 +57,8 @@ export interface DetectionQueryOptions {
 /**
  * Request payload for object detection.
  */
+export type TrackingModel = 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
+
 export interface DetectionRequest {
   videoId: string
   personaId?: string
@@ -65,6 +67,8 @@ export interface DetectionRequest {
   frameNumbers?: number[]
   confidenceThreshold?: number
   enableTracking?: boolean
+  trackingModel?: TrackingModel
+  trackSingleObject?: boolean
 }
 
 /**
@@ -109,6 +113,11 @@ export function DetectionDialog({
   const [frameStart, setFrameStart] = useState(0)
   const [frameEnd, setFrameEnd] = useState(0)
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.3)
+
+  // Tracking options
+  const [enableTracking, setEnableTracking] = useState(false)
+  const [trackingModel, setTrackingModel] = useState<TrackingModel>('samurai')
+  const [trackSingleObject, setTrackSingleObject] = useState(false)
 
   // Query options state (default: only entity types, no glosses)
   const [queryOptions, setQueryOptions] = useState<DetectionQueryOptions>({
@@ -159,7 +168,9 @@ export function DetectionDialog({
       videoId,
       frameNumbers,
       confidenceThreshold,
-      enableTracking: frameMode !== 'current',
+      enableTracking: enableTracking && frameMode !== 'current',
+      trackingModel: enableTracking ? trackingModel : undefined,
+      trackSingleObject: enableTracking ? trackSingleObject : undefined,
     }
 
     if (queryMode === 'persona') {
@@ -443,6 +454,59 @@ export function DetectionDialog({
               ]}
             />
           </Box>
+
+          {/* Tracking Configuration */}
+          {frameMode !== 'current' && (
+            <>
+              <Divider />
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={enableTracking}
+                      onChange={(e) => setEnableTracking(e.target.checked)}
+                    />
+                  }
+                  label="Enable Tracking"
+                />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
+                  Track objects across frames using automation
+                </Typography>
+              </Box>
+
+              {enableTracking && (
+                <Stack spacing={2}>
+                  <FormControl fullWidth>
+                    <InputLabel>Tracking Model</InputLabel>
+                    <Select
+                      value={trackingModel}
+                      onChange={(e) => setTrackingModel(e.target.value as TrackingModel)}
+                      label="Tracking Model"
+                    >
+                      <MenuItem value="samurai">SAMURAI (Recommended)</MenuItem>
+                      <MenuItem value="sam2long">SAM2Long (Long videos)</MenuItem>
+                      <MenuItem value="sam2">SAM2 (Fast)</MenuItem>
+                      <MenuItem value="yolo11seg">YOLO11n-seg (Segmentation)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={trackSingleObject}
+                        onChange={(e) => setTrackSingleObject(e.target.checked)}
+                      />
+                    }
+                    label="Track Single Object Only"
+                  />
+
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Tracking will generate candidate annotations that you can preview and accept/reject.
+                  </Alert>
+                </Stack>
+              )}
+            </>
+          )}
 
           {error && (
             <Alert severity="error">

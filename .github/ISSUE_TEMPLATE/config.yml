@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/YOUR_ORG/fovea/discussions
+    about: Ask questions, share ideas, or discuss FOVEA with the community
+  - name: Documentation
+    url: https://fovea-docs.example.com
+    about: Check the documentation for guides, API references, and examples
+  - name: Security Vulnerability
+    url: https://github.com/YOUR_ORG/fovea/security/advisories/new
+    about: Report a security vulnerability privately

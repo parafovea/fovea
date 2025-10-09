@@ -175,27 +175,27 @@ export function isValidObjectAnnotation(annotation: ObjectAnnotation): boolean {
     hasLocationLink(annotation),
     hasCollectionLink(annotation),
   ].filter(Boolean).length
-  
+
   if (linkCount !== 1) return false
-  
+
   // Must have spatial or temporal information
-  const hasSpatial = !!(annotation.boundingBox || annotation.boundingBoxSequence)
+  const hasSpatial = !!annotation.boundingBoxSequence
   const hasTemporal = !!(annotation.time || annotation.timeSpan)
-  
+
   return hasSpatial || hasTemporal
 }
 
 export function isValidTypeAnnotation(annotation: TypeAnnotation): boolean {
   // Must have persona
   if (!annotation.personaId) return false
-  
+
   // Must have type category and ID
   if (!annotation.typeCategory || !annotation.typeId) return false
-  
+
   // Must have spatial or temporal information
-  const hasSpatial = !!(annotation.boundingBox || annotation.boundingBoxSequence)
+  const hasSpatial = !!annotation.boundingBoxSequence
   const hasTemporal = !!(annotation.time || annotation.timeSpan)
-  
+
   return hasSpatial || hasTemporal
 }
 

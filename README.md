@@ -2,6 +2,17 @@
 
 A web-based tool for developing annotation ontologies for video data with AI-supported capabilities for automated video analysis, object detection, and intelligent ontology suggestions.
 
+## Documentation
+
+**Full documentation is available at: [https://fovea.video/docs](https://fovea.video/docs)**
+
+The documentation includes:
+- [Getting Started Guide](https://fovea.video/docs/getting-started/installation) - Install and configure FOVEA
+- [User Guides](https://fovea.video/docs/user-guides/annotation/creating-annotations) - How to use FOVEA features
+- [API Reference](https://fovea.video/docs/api-reference/overview) - Complete API documentation
+- [Deployment Guides](https://fovea.video/docs/deployment/overview) - Production deployment options
+- [Operations Guides](https://fovea.video/docs/operations/common-tasks) - Maintenance and troubleshooting
+
 ## Features
 
 ### Core Features
@@ -179,6 +190,67 @@ ruff check .         # Lint Python code
 mypy src/            # Type checking
 ```
 
+### Developer Testing Mode
+
+For rapid development and testing, the frontend can be pre-populated with test data instead of starting with an empty state. This mode seeds the Redux store with a tactical analyst persona, Wikidata-referenced ontology types, and sample entities/locations extracted from video metadata.
+
+**Enable Test Data Mode:**
+
+1. Create `.env.local` in the `annotation-tool/` directory:
+   ```bash
+   cd annotation-tool
+   cat > .env.local << 'EOF'
+   # Developer Testing Mode
+   # WARNING: This enables pre-populated test data. Only use during development.
+   # Set to 'false' or remove this file to disable.
+   VITE_ENABLE_TEST_DATA=true
+   EOF
+   ```
+
+2. Start the frontend development server:
+   ```bash
+   npm run dev
+   ```
+
+3. The application will display console warnings indicating test mode is active:
+   ```
+   ⚠️  DEVELOPER TEST MODE ENABLED
+   ⚠️  Pre-populating with test data
+   ⚠️  Set VITE_ENABLE_TEST_DATA=false to disable
+   ```
+
+**Pre-Populated Test Data:**
+
+When enabled, the application loads with:
+- **Persona**: Tactical Disaster Response Analyst focused on natural disaster impact assessment
+- **Entity Types**: Infrastructure (Q121359), Natural Phenomenon (Q1322005), Organization (Q43229), Person (Q5)
+- **Event Types**: Disaster Event (Q3839081), Response Action (Q1460335), Impact Event (Q1190554)
+- **Role Types**: Affected Party (Q1802668), Responder (Q1473346), Reporter (Q1930187)
+- **Entities**: Port of Long Beach (Q1144228), Phoenix Sky Harbor Airport (Q845278), ABC7 Eyewitness News (Q4649870), National Weather Service (Q850795)
+- **Locations**: Phoenix, AZ (Q16556), Long Beach, CA (Q49085), Kunar Province, Afghanistan (Q173570), Black Rock Desert, NV (Q894825)
+
+All ontology types include Wikidata IDs and locations include GPS coordinates.
+
+**Disable Test Data Mode:**
+
+To return to normal mode where data loads from the API:
+```bash
+# Option 1: Remove the file
+rm annotation-tool/.env.local
+
+# Option 2: Set to false
+echo "VITE_ENABLE_TEST_DATA=false" > annotation-tool/.env.local
+
+# Option 3: Comment out the variable
+sed -i '' 's/VITE_ENABLE_TEST_DATA=true/# VITE_ENABLE_TEST_DATA=true/' annotation-tool/.env.local
+```
+
+**Safety Notes:**
+- The `.env.local` file is already in `.gitignore` and will not be committed
+- Test data only exists in browser memory and does not persist to the database
+- Console warnings appear whenever test mode is active
+- Requires explicit `VITE_ENABLE_TEST_DATA=true` to prevent accidental activation
+
 ### Observability
 
 The application includes a complete observability stack with distributed tracing, metrics collection, and monitoring dashboards.
@@ -189,3 +261,20 @@ Access monitoring dashboards when running with Docker Compose:
 - **Bull Board** (Queue monitoring): http://localhost:3001/admin/queues
 
 **For detailed information** on metrics, tracing, custom instrumentation, and dashboard creation, see [OBSERVABILITY.md](OBSERVABILITY.md).
+
+## Contributing
+
+We welcome contributions from the community! Whether you're fixing bugs, adding features, improving documentation, or reporting issues, your help is appreciated.
+
+Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It includes:
+- Development environment setup
+- Coding standards and best practices
+- Pull request process
+- Testing requirements
+- Documentation guidelines
+
+For questions or discussions, visit our [GitHub Discussions](https://github.com/YOUR_ORG/fovea/discussions).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -60,6 +60,10 @@ import {
   setDetectionResults,
   setShowDetectionCandidates,
   clearDetectionState,
+  addKeyframe,
+  removeKeyframe,
+  updateKeyframe,
+  updateInterpolationSegment,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -73,6 +77,7 @@ import { formatTimestamp } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
+import { TimelineComponent } from './annotation/TimelineComponent'
 
 const DRAWER_WIDTH = 300
 
@@ -98,10 +103,27 @@ export default function AnnotationWorkspace() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [currentFrame, setCurrentFrame] = useState(0)
+  const [totalFrames, setTotalFrames] = useState(0)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState<any>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
+  const [timelineExpanded, setTimelineExpanded] = useState(false)
+  const [timelineMounted, setTimelineMounted] = useState(false)
+
+  // Delayed mount/unmount for smooth animation
+  useEffect(() => {
+    if (timelineExpanded) {
+      // Delay mount to allow slide-in animation to start
+      const timer = setTimeout(() => setTimelineMounted(true), 50)
+      return () => clearTimeout(timer)
+    } else {
+      // Unmount after slide-out animation completes
+      const timer = setTimeout(() => setTimelineMounted(false), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [timelineExpanded])
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
@@ -139,12 +161,140 @@ export default function AnnotationWorkspace() {
     },
   })
 
+  // Keyframe control callbacks
+  const handleAddKeyframe = useCallback(() => {
+    if (!selectedAnnotation) return
+
+    // Get current box from annotation sequence (interpolated or existing)
+    const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
+    let currentBox = allBoxes.find(b => b.frameNumber === currentFrame)
+
+    // If no box exists at current frame, compute interpolated position
+    if (!currentBox) {
+      const keyframes = allBoxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+      if (keyframes.length === 0) return
+
+      // Find surrounding keyframes
+      const prevKeyframes = keyframes.filter(k => k.frameNumber < currentFrame)
+      const nextKeyframes = keyframes.filter(k => k.frameNumber > currentFrame)
+
+      if (prevKeyframes.length === 0 && nextKeyframes.length === 0) return
+
+      // Use nearest keyframe or interpolate
+      if (prevKeyframes.length === 0) {
+        currentBox = { ...nextKeyframes[0], frameNumber: currentFrame }
+      } else if (nextKeyframes.length === 0) {
+        currentBox = { ...prevKeyframes[prevKeyframes.length - 1], frameNumber: currentFrame }
+      } else {
+        // Linear interpolation
+        const prev = prevKeyframes[prevKeyframes.length - 1]
+        const next = nextKeyframes[0]
+        const t = (currentFrame - prev.frameNumber) / (next.frameNumber - prev.frameNumber)
+        currentBox = {
+          x: prev.x + (next.x - prev.x) * t,
+          y: prev.y + (next.y - prev.y) * t,
+          width: prev.width + (next.width - prev.width) * t,
+          height: prev.height + (next.height - prev.height) * t,
+          frameNumber: currentFrame,
+        }
+      }
+    }
+
+    dispatch(addKeyframe({
+      videoId: selectedAnnotation.videoId,
+      annotationId: selectedAnnotation.id,
+      frameNumber: currentFrame,
+      box: currentBox,
+      fps: currentVideo?.fps || 30,
+    }))
+  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+
+  const handleDeleteKeyframe = useCallback(() => {
+    if (!selectedAnnotation) return
+
+    dispatch(removeKeyframe({
+      videoId: selectedAnnotation.videoId,
+      annotationId: selectedAnnotation.id,
+      frameNumber: currentFrame,
+      fps: currentVideo?.fps || 30,
+    }))
+  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+
+  const handleCopyPreviousFrame = useCallback(() => {
+    if (!selectedAnnotation) return
+
+    const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
+    const keyframes = allBoxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+
+    // Find nearest previous keyframe
+    const prevKeyframes = keyframes.filter(k => k.frameNumber < currentFrame)
+    if (prevKeyframes.length === 0) {
+      return
+    }
+
+    const prevBox = prevKeyframes[prevKeyframes.length - 1]
+
+    const isCurrentKeyframe = keyframes.some(k => k.frameNumber === currentFrame)
+
+    if (isCurrentKeyframe) {
+      dispatch(updateKeyframe({
+        videoId: selectedAnnotation.videoId,
+        annotationId: selectedAnnotation.id,
+        frameNumber: currentFrame,
+        box: { ...prevBox, frameNumber: currentFrame },
+      }))
+    } else {
+      dispatch(addKeyframe({
+        videoId: selectedAnnotation.videoId,
+        annotationId: selectedAnnotation.id,
+        frameNumber: currentFrame,
+        box: { ...prevBox, frameNumber: currentFrame },
+        fps: currentVideo?.fps || 30,
+      }))
+    }
+  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+
+  const handleUpdateInterpolationSegment = useCallback(
+    (segmentIndex: number, type: any, controlPoints?: any) => {
+      if (!selectedAnnotation) return
+
+      dispatch(updateInterpolationSegment({
+        videoId: selectedAnnotation.videoId,
+        annotationId: selectedAnnotation.id,
+        segmentIndex,
+        type,
+        controlPoints,
+      }))
+    },
+    [selectedAnnotation, dispatch]
+  )
+
   // Track this as the last annotation when we load the component
   useEffect(() => {
     if (videoId) {
       dispatch(setLastAnnotation({ videoId, timestamp: Date.now() }))
     }
   }, [videoId, dispatch])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Toggle timeline with 'T' key
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        setTimelineExpanded(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   useEffect(() => {
     if (!videoRef.current || !videoId) return
@@ -175,7 +325,6 @@ export default function AnnotationWorkspace() {
       playerRef.current = player
 
       player.ready(() => {
-        console.log('Player ready for video:', videoId)
         // Ensure the video element is visible
         const videoEl = player.el().querySelector('video')
         if (videoEl) {
@@ -186,7 +335,6 @@ export default function AnnotationWorkspace() {
 
       player.on('loadedmetadata', () => {
         setDuration(player.duration() ?? 0)
-        console.log('Video loaded, duration:', player.duration())
       })
 
       player.on('timeupdate', () => {
@@ -237,6 +385,24 @@ export default function AnnotationWorkspace() {
   useEffect(() => {
     loadVideo()
   }, [loadVideo])
+
+  // Calculate total frames when duration and fps are available
+  useEffect(() => {
+    if (duration) {
+      // Default to 30 FPS if not provided in metadata
+      const fps = currentVideo?.fps || 30
+      const frames = Math.floor(duration * fps)
+      setTotalFrames(frames)
+    }
+  }, [duration, currentVideo?.fps])
+
+  // Sync currentFrame with video currentTime
+  useEffect(() => {
+    // Default to 30 FPS if not provided in metadata
+    const fps = currentVideo?.fps || 30
+    const frame = Math.floor(currentTime * fps)
+    setCurrentFrame(frame)
+  }, [currentTime, currentVideo?.fps])
 
   /**
    * Toggles video playback between play and pause states.
@@ -526,144 +692,215 @@ export default function AnnotationWorkspace() {
         </Box>
 
         <Paper sx={{ p: 2, mt: 2 }}>
-          {/* Playback Controls Row */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            {/* Mode Toggle (now to the left of play button) */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2">Mode:</Typography>
-              <ToggleButtonGroup
-                value={annotationMode}
-                exclusive
-                onChange={(_, newMode) => {
-                  if (newMode) {
-                    dispatch(setAnnotationMode(newMode))
-                    if (newMode === 'object') {
-                      dispatch(setSelectedPersona(null))
-                    }
-                  }
-                }}
-                size="small"
-              >
-                <ToggleButton value="type">
-                  Type
-                </ToggleButton>
-                <ToggleButton value="object">
-                  Object
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton onClick={handlePlayPause}>
-                {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              </IconButton>
-              <IconButton onClick={handlePrevFrame}>
-                <PrevFrameIcon />
-              </IconButton>
-              <IconButton onClick={handleNextFrame}>
-                <NextFrameIcon />
-              </IconButton>
-            </Box>
-
-            <Typography variant="body2" sx={{ minWidth: 100 }}>
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </Typography>
-            <Slider
-              value={currentTime}
-              max={duration}
-              onChange={handleSeek}
-              sx={{ flexGrow: 1 }}
-            />
-          </Box>
-
-          {/* Second Row: Persona Selector and Type/Object Selection */}
-          <Stack spacing={2}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Persona Selector (left side) */}
-              <FormControl size="small" sx={{ width: 250 }} disabled={annotationMode === 'object'}>
-                <InputLabel id="persona-select-label">Select Persona</InputLabel>
-                <Select
-                  labelId="persona-select-label"
-                  id="persona-select"
-                  value={selectedPersonaId || ''}
-                  label="Select Persona"
-                  onChange={(e) => dispatch(setSelectedPersona(e.target.value || null))}
-                  disabled={annotationMode === 'object'}
-                >
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {personas.map((persona) => (
-                    <MenuItem key={persona.id} value={persona.id}>
-                      {persona.name} - {persona.role}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              {/* Type/Object Selection (right of persona selector) */}
-              {(annotationMode === 'type' || annotationMode === 'object') && (
-                <Box sx={{ flex: 1, maxWidth: 400 }}>
-                  <AnnotationAutocomplete
-                    mode={annotationMode}
-                    personaId={selectedPersonaId}
-                    onSelect={(option) => {
-                      if (option) {
-                        // Set drawing mode based on selection
-                        if (annotationMode === 'type') {
-                          const drawMode = option.type as 'entity' | 'role' | 'event'
-                          dispatch(setSelectedType({ 
-                            typeId: option.id, 
-                            category: drawMode 
-                          }))
-                        } else {
-                          // For object mode, we'll use entity drawing mode
-                          dispatch(setDrawingMode('entity'))
+          {/* Container for sliding panels */}
+          <Box data-testid="dynamic-controls-wrapper" sx={{ position: 'relative', overflow: 'hidden', minHeight: '140px' }}>
+            {/* Standard Controls Panel - slides left */}
+            <Box
+              data-testid="standard-controls-panel"
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                transform: timelineExpanded ? 'translateX(-100%)' : 'translateX(0)',
+                opacity: timelineExpanded ? 0 : 1,
+                pointerEvents: timelineExpanded ? 'none' : 'auto',
+              }}
+            >
+              {/* Playback Controls Row */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                {/* Mode Toggle */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2">Mode:</Typography>
+                  <ToggleButtonGroup
+                    value={annotationMode}
+                    exclusive
+                    onChange={(_, newMode) => {
+                      if (newMode) {
+                        dispatch(setAnnotationMode(newMode))
+                        if (newMode === 'object') {
+                          dispatch(setSelectedPersona(null))
                         }
-                      } else {
-                        dispatch(setSelectedType({ typeId: null, category: null }))
                       }
                     }}
-                    disabled={annotationMode === 'type' && !selectedPersonaId}
-                  />
-                </Box>
-              )}
-              
-              {/* Action Buttons - right aligned */}
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                {/* Detect Objects Button */}
-                {currentVideo && videoId && (
-                  <Tooltip title={isCpuOnly ? 'GPU required for object detection (CPU-only mode detected)' : ''}>
-                    <span>
-                      <Button
-                        variant="outlined"
-                        startIcon={<DetectIcon />}
-                        onClick={() => setDetectionDialogOpen(true)}
-                        size="small"
-                        disabled={isCpuOnly}
-                      >
-                        Detect Objects
-                      </Button>
-                    </span>
-                  </Tooltip>
-                )}
-
-                {/* Video Summary Button */}
-                {currentVideo && videoId && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={() => setSummaryDialogOpen(true)}
                     size="small"
                   >
-                    Edit Summary
+                    <ToggleButton value="type">
+                      Type
+                    </ToggleButton>
+                    <ToggleButton value="object">
+                      Object
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+
+                {/* Play/pause controls */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <IconButton onClick={handlePlayPause}>
+                    {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                  </IconButton>
+                  <IconButton onClick={handlePrevFrame}>
+                    <PrevFrameIcon />
+                  </IconButton>
+                  <IconButton onClick={handleNextFrame}>
+                    <NextFrameIcon />
+                  </IconButton>
+                </Box>
+
+                {/* Time slider */}
+                <Box sx={{ flexGrow: 1, px: 2 }}>
+                  <Slider
+                    value={currentTime}
+                    max={duration}
+                    onChange={handleSeek}
+                    size="small"
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) => formatTime(value)}
+                  />
+                </Box>
+
+                {/* Current time display */}
+                <Typography variant="body2" sx={{ minWidth: 100, fontFamily: 'monospace' }}>
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </Typography>
+
+                {/* Timeline Toggle Button */}
+                <Tooltip title={timelineExpanded ? 'Hide timeline' : 'Show timeline'}>
+                  <Button
+                    variant={timelineExpanded ? 'contained' : 'outlined'}
+                    onClick={() => setTimelineExpanded(!timelineExpanded)}
+                    size="small"
+                  >
+                    {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
                   </Button>
+                </Tooltip>
+              </Box>
+
+              {/* Second Row: Persona Selector and Type/Object Selection */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {/* Persona Selector */}
+                <FormControl size="small" sx={{ width: 250 }} disabled={annotationMode === 'object'}>
+                  <InputLabel id="persona-select-label">Select Persona</InputLabel>
+                  <Select
+                    labelId="persona-select-label"
+                    id="persona-select"
+                    value={selectedPersonaId || ''}
+                    label="Select Persona"
+                    onChange={(e) => dispatch(setSelectedPersona(e.target.value || null))}
+                    disabled={annotationMode === 'object'}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {personas.map((persona) => (
+                      <MenuItem key={persona.id} value={persona.id}>
+                        {persona.name} - {persona.role}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Type/Object Selection */}
+                {(annotationMode === 'type' || annotationMode === 'object') && (
+                  <Box sx={{ flex: 1, maxWidth: 400 }}>
+                    <AnnotationAutocomplete
+                      mode={annotationMode}
+                      personaId={selectedPersonaId}
+                      onSelect={(option) => {
+                        if (option) {
+                          if (annotationMode === 'type') {
+                            const drawMode = option.type as 'entity' | 'role' | 'event'
+                            dispatch(setSelectedType({
+                              typeId: option.id,
+                              category: drawMode
+                            }))
+                          } else {
+                            dispatch(setDrawingMode('entity'))
+                          }
+                        } else {
+                          dispatch(setSelectedType({ typeId: null, category: null }))
+                        }
+                      }}
+                      disabled={annotationMode === 'type' && !selectedPersonaId}
+                    />
+                  </Box>
                 )}
+
+                {/* Right-aligned action buttons */}
+                <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                  {/* Detect Objects Button */}
+                  {currentVideo && videoId && (
+                    <Tooltip title={isCpuOnly ? 'GPU required for object detection (CPU-only mode detected)' : ''}>
+                      <span>
+                        <Button
+                          variant="outlined"
+                          startIcon={<DetectIcon />}
+                          onClick={() => setDetectionDialogOpen(true)}
+                          size="small"
+                          disabled={isCpuOnly}
+                        >
+                          Detect Objects
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  )}
+
+                  {/* Video Summary Button */}
+                  {currentVideo && videoId && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<EditIcon />}
+                      onClick={() => setSummaryDialogOpen(true)}
+                      size="small"
+                    >
+                      Edit Summary
+                    </Button>
+                  )}
+                </Box>
               </Box>
             </Box>
-            
-          </Stack>
+
+            {/* Timeline Panel - slides in from right to replace standard controls */}
+            <Box
+              data-testid="timeline-panel"
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+                transform: timelineExpanded ? 'translateX(0)' : 'translateX(100%)',
+                opacity: timelineExpanded ? 1 : 0,
+                pointerEvents: timelineExpanded ? 'auto' : 'none',
+                visibility: timelineExpanded ? 'visible' : 'hidden',
+              }}
+            >
+              {timelineMounted && (
+                <TimelineComponent
+                  annotation={selectedAnnotation}
+                  currentFrame={currentFrame}
+                  totalFrames={totalFrames}
+                  videoFps={currentVideo?.fps || 30}
+                  onSeek={(frameNumber) => {
+                    if (playerRef.current) {
+                      const fps = currentVideo?.fps || 30
+                      const newTime = frameNumber / fps
+                      playerRef.current.currentTime(newTime)
+                    }
+                  }}
+                  videoRef={videoRef}
+                  onAddKeyframe={handleAddKeyframe}
+                  onDeleteKeyframe={handleDeleteKeyframe}
+                  onCopyPreviousFrame={handleCopyPreviousFrame}
+                  onUpdateInterpolationSegment={handleUpdateInterpolationSegment}
+                  onClose={() => setTimelineExpanded(false)}
+                />
+              )}
+            </Box>
+          </Box>
         </Paper>
+
       </Box>
 
       <Drawer
@@ -699,15 +936,14 @@ export default function AnnotationWorkspace() {
               return (
                 <React.Fragment key={annotation.id}>
                   <ListItem
-                    selected={isSelected}
                     onClick={() => handleAnnotationClick(annotation)}
                     onDoubleClick={() => {
                       setEditingAnnotation(annotation)
                       setEditorOpen(true)
                     }}
-                    sx={{ 
+                    sx={{
                       cursor: 'pointer',
-                      backgroundColor: isActive ? 'action.hover' : 'transparent',
+                      backgroundColor: isSelected ? 'action.selected' : (isActive ? 'action.hover' : 'transparent'),
                       borderLeft: isActive ? '3px solid' : '3px solid transparent',
                       borderLeftColor: isActive ? 'primary.main' : 'transparent',
                       '&:hover': {
@@ -756,6 +992,8 @@ export default function AnnotationWorkspace() {
                           )}
                         </Box>
                       }
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                     <ListItemSecondaryAction>
                       <IconButton

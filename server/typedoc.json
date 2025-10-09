@@ -1,0 +1,28 @@
+{
+  "entryPoints": ["src/"],
+  "entryPointStrategy": "expand",
+  "out": "../docs/docs/api-reference/backend",
+  "plugin": ["typedoc-plugin-markdown"],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/test/**",
+    "**/tracing.ts"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Routes",
+    "Services",
+    "Models",
+    "Middleware",
+    "Utils",
+    "*"
+  ],
+  "readme": "none",
+  "hideGenerator": true,
+  "includeVersion": false,
+  "disableSources": false
+}

@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
@@ -11,8 +11,9 @@ env:
   PYTHON_VERSION: '3.12'
 
 jobs:
+  # Frontend jobs run in parallel
   lint-frontend:
-    name: Lint Frontend
+    name: Frontend / Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,9 +38,8 @@ jobs:
         run: npx tsc --noEmit
 
   test-frontend:
-    name: Test Frontend
+    name: Frontend / Unit Tests
     runs-on: ubuntu-latest
-    needs: lint-frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -54,20 +54,49 @@ jobs:
         working-directory: annotation-tool
         run: npm ci
 
-      - name: Run unit tests
+      - name: Run tests
         working-directory: annotation-tool
         run: npm run test:coverage
 
-      - name: Upload coverage artifacts
-        if: always()
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: frontend-coverage
           path: annotation-tool/coverage/
           retention-days: 30
 
+  build-frontend:
+    name: Frontend / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: annotation-tool/package-lock.json
+
+      - name: Install dependencies
+        working-directory: annotation-tool
+        run: npm ci
+
+      - name: Build
+        working-directory: annotation-tool
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: annotation-tool/dist/
+          retention-days: 7
+
+  # Backend jobs run in parallel
   lint-backend:
-    name: Lint Backend
+    name: Backend / Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,9 +121,8 @@ jobs:
         run: npx tsc --noEmit
 
   test-backend:
-    name: Test Backend
+    name: Backend / Unit Tests
     runs-on: ubuntu-latest
-    needs: lint-backend
     services:
       postgres:
         image: postgres:16-alpine
@@ -134,24 +162,64 @@ jobs:
         working-directory: server
         run: npm ci
 
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Run migrations
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/fovea_test
+        run: npx prisma migrate deploy
+
       - name: Run tests
         working-directory: server
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/fovea_test
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          NODE_ENV: test
         run: npm run test:coverage
 
-      - name: Upload coverage artifacts
-        if: always()
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: backend-coverage
           path: server/coverage/
           retention-days: 30
 
+  build-backend:
+    name: Backend / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Build
+        working-directory: server
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: server/dist/
+          retention-days: 7
+
+  # Model service jobs run in parallel
   lint-model-service:
-    name: Lint Model Service
+    name: Model Service / Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,9 +250,8 @@ jobs:
         run: mypy src/
 
   test-model-service:
-    name: Test Model Service
+    name: Model Service / Unit Tests
     runs-on: ubuntu-latest
-    needs: lint-model-service
     steps:
       - uses: actions/checkout@v4
 
@@ -201,13 +268,13 @@ jobs:
           pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run pytest
+      - name: Run tests
         working-directory: model-service
         run: pytest --cov=src --cov-report=json --cov-report=term --cov-report=html -v
 
-      - name: Upload coverage artifacts
-        if: always()
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: model-service-coverage
           path: |
@@ -215,10 +282,11 @@ jobs:
             model-service/htmlcov/
           retention-days: 30
 
+  # E2E tests require all services passing
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [test-frontend, test-backend]
+    needs: [test-frontend, test-backend, test-model-service]
     steps:
       - uses: actions/checkout@v4
 
@@ -229,7 +297,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: annotation-tool/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         working-directory: annotation-tool
         run: npm ci
 
@@ -242,147 +310,88 @@ jobs:
         run: npm run test:e2e
 
       - name: Upload Playwright report
-        if: always()
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: playwright-report
           path: annotation-tool/playwright-report/
           retention-days: 30
 
-      - name: Upload E2E test results
-        if: always()
+      - name: Upload test results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: e2e-test-results
           path: annotation-tool/test-results/
           retention-days: 30
 
-  build-frontend:
-    name: Build Frontend
+  # Quality gate - all checks must pass
+  quality-gate:
+    name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [test-frontend]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: annotation-tool/package-lock.json
-
-      - name: Install dependencies
-        working-directory: annotation-tool
-        run: npm ci
-
-      - name: Build production bundle
-        working-directory: annotation-tool
-        run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: annotation-tool/dist/
-          retention-days: 30
-
-  build-backend:
-    name: Build Backend
-    runs-on: ubuntu-latest
-    needs: [test-backend]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: server/package-lock.json
-
-      - name: Install dependencies
-        working-directory: server
-        run: npm ci
-
-      - name: Build TypeScript
-        working-directory: server
-        run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-build
-          path: server/dist/
-          retention-days: 30
-
-  build-docker-images:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: [test-frontend, test-backend, test-model-service]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./annotation-tool
-          push: false
-          tags: fovea-frontend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/frontend-image.tar
-
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./server
-          push: false
-          tags: fovea-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/backend-image.tar
-
-      - name: Build model service image (CPU)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./model-service
-          push: false
-          tags: fovea-model-service:${{ github.sha }}
-          build-args: |
-            DEVICE=cpu
-            BUILD_MODE=minimal
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/model-service-image.tar
-
-      - name: Upload Docker images
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-images
-          path: /tmp/*-image.tar
-          retention-days: 7
-
-  summary:
-    name: CI Summary
-    runs-on: ubuntu-latest
-    needs: [lint-frontend, test-frontend, build-frontend, lint-backend, test-backend, build-backend, lint-model-service, test-model-service, build-docker-images, test-e2e]
+    needs:
+      - lint-frontend
+      - test-frontend
+      - build-frontend
+      - lint-backend
+      - test-backend
+      - build-backend
+      - lint-model-service
+      - test-model-service
+      - test-e2e
     if: always()
     steps:
-      - name: Check job status
+      - name: Check all jobs passed
         run: |
-          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend Lint**: ${{ needs.lint-frontend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend Tests**: ${{ needs.test-frontend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend Build**: ${{ needs.build-frontend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend Lint**: ${{ needs.lint-backend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend Tests**: ${{ needs.test-backend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend Build**: ${{ needs.build-backend.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Model Service Lint**: ${{ needs.lint-model-service.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Model Service Tests**: ${{ needs.test-model-service.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **E2E Tests**: ${{ needs.test-e2e.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Images**: ${{ needs.build-docker-images.result }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Quality Gate Results"
+            echo ""
+            echo "### Frontend"
+            echo "- Lint: ${{ needs.lint-frontend.result }}"
+            echo "- Tests: ${{ needs.test-frontend.result }}"
+            echo "- Build: ${{ needs.build-frontend.result }}"
+            echo ""
+            echo "### Backend"
+            echo "- Lint: ${{ needs.lint-backend.result }}"
+            echo "- Tests: ${{ needs.test-backend.result }}"
+            echo "- Build: ${{ needs.build-backend.result }}"
+            echo ""
+            echo "### Model Service"
+            echo "- Lint: ${{ needs.lint-model-service.result }}"
+            echo "- Tests: ${{ needs.test-model-service.result }}"
+            echo ""
+            echo "### Integration"
+            echo "- E2E Tests: ${{ needs.test-e2e.result }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail if any required job failed
+          LINT_FRONTEND="${{ needs.lint-frontend.result }}"
+          TEST_FRONTEND="${{ needs.test-frontend.result }}"
+          BUILD_FRONTEND="${{ needs.build-frontend.result }}"
+          LINT_BACKEND="${{ needs.lint-backend.result }}"
+          TEST_BACKEND="${{ needs.test-backend.result }}"
+          BUILD_BACKEND="${{ needs.build-backend.result }}"
+          LINT_MODEL="${{ needs.lint-model-service.result }}"
+          TEST_MODEL="${{ needs.test-model-service.result }}"
+          TEST_E2E="${{ needs.test-e2e.result }}"
+
+          if [ "$LINT_FRONTEND" != "success" ] || \
+             [ "$TEST_FRONTEND" != "success" ] || \
+             [ "$BUILD_FRONTEND" != "success" ] || \
+             [ "$LINT_BACKEND" != "success" ] || \
+             [ "$TEST_BACKEND" != "success" ] || \
+             [ "$BUILD_BACKEND" != "success" ] || \
+             [ "$LINT_MODEL" != "success" ] || \
+             [ "$TEST_MODEL" != "success" ] || \
+             [ "$TEST_E2E" != "success" ]; then
+            {
+              echo ""
+              echo "❌ Quality gate FAILED"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          {
+            echo ""
+            echo "✅ Quality gate PASSED"
+          } >> "$GITHUB_STEP_SUMMARY"

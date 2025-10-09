@@ -143,8 +143,8 @@ describe('Database Connection', () => {
     it('should create a new video', async () => {
       const video = await app.prisma.video.create({
         data: {
-          filename: 'test-video.mp4',
-          path: '/data/videos/test-video.mp4',
+          filename: 'db-test-video.mp4',
+          path: '/data/videos/db-test-video.mp4',
           duration: 120.5,
           frameRate: 30,
           resolution: '1920x1080'
@@ -152,22 +152,22 @@ describe('Database Connection', () => {
       })
 
       expect(video.id).toBeDefined()
-      expect(video.filename).toBe('test-video.mp4')
+      expect(video.filename).toBe('db-test-video.mp4')
       expect(video.duration).toBe(120.5)
     })
 
     it('should enforce unique filename constraint', async () => {
       await app.prisma.video.create({
         data: {
-          filename: 'unique-test.mp4',
-          path: '/data/videos/unique-test.mp4'
+          filename: 'db-unique-test.mp4',
+          path: '/data/videos/db-unique-test.mp4'
         }
       })
 
       await expect(
         app.prisma.video.create({
           data: {
-            filename: 'unique-test.mp4',
+            filename: 'db-unique-test.mp4',
             path: '/data/videos/another-path.mp4'
           }
         })
@@ -248,8 +248,8 @@ describe('Database Connection', () => {
 
       const video = await app.prisma.video.create({
         data: {
-          filename: 'summary-test.mp4',
-          path: '/data/videos/summary-test.mp4'
+          filename: 'db-summary-test.mp4',
+          path: '/data/videos/db-summary-test.mp4'
         }
       })
 
@@ -278,8 +278,8 @@ describe('Database Connection', () => {
 
       const video = await app.prisma.video.create({
         data: {
-          filename: 'unique-summary.mp4',
-          path: '/data/videos/unique-summary.mp4'
+          filename: 'db-unique-summary.mp4',
+          path: '/data/videos/db-unique-summary.mp4'
         }
       })
 
@@ -315,8 +315,8 @@ describe('Database Connection', () => {
 
       const video = await app.prisma.video.create({
         data: {
-          filename: 'annotation-test.mp4',
-          path: '/data/videos/annotation-test.mp4'
+          filename: 'db-annotation-test.mp4',
+          path: '/data/videos/db-annotation-test.mp4'
         }
       })
 

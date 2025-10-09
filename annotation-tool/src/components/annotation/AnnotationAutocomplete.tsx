@@ -232,19 +232,24 @@ export default function AnnotationAutocomplete({
           }}
         />
       )}
-      renderOption={(props, option) => (
-        <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {option.icon}
-          <Typography>{option.label}</Typography>
-        </Box>
-      )}
+      renderOption={(props, option) => {
+        const { key, ...otherProps } = props as any
+        return (
+          <Box component="li" key={key} {...otherProps} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {option.icon}
+            <Typography>{option.label}</Typography>
+          </Box>
+        )
+      }}
       renderGroup={(params) => (
-        <li key={params.key}>
+        <Box component="li" key={params.key}>
           <ListSubheader component="div" sx={{ backgroundColor: 'background.paper' }}>
             {params.group} ({groupedOptions[params.group].length})
           </ListSubheader>
-          {params.children}
-        </li>
+          <Box component="ul" sx={{ padding: 0 }}>
+            {params.children}
+          </Box>
+        </Box>
       )}
       PaperComponent={(props) => (
         <Paper {...props} elevation={8} />

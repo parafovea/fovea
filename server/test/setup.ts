@@ -8,6 +8,7 @@ import { beforeAll, afterAll, afterEach, vi } from 'vitest'
 beforeAll(() => {
   // Set test environment variables
   process.env.NODE_ENV = 'test'
+  process.env.MODEL_SERVICE_URL = 'http://localhost:8000'
 })
 
 afterEach(() => {
