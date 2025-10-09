@@ -2,9 +2,20 @@ import { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from '@mui/material/styles'
-import { theme } from '../../src/theme.ts'
-import { store } from '../../src/store/index.ts'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
+import { store } from '../../src/store/store.js'
+
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+  },
+})
 
 /**
  * Custom render function that wraps components with all required providers.

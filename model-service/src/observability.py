@@ -5,6 +5,7 @@ for FastAPI and Redis clients.
 """
 
 import os
+from typing import TYPE_CHECKING
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -17,6 +18,9 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
 
 def configure_observability() -> None:
     """Configure OpenTelemetry tracing and metrics with OTLP exporters.
@@ -24,10 +28,12 @@ def configure_observability() -> None:
     Sets up trace and metric providers with OTLP exporters. Configures service
     resource attributes for identification in observability backend.
     """
-    resource = Resource.create({
-        "service.name": "fovea-model-service",
-        "service.version": "1.0.0",
-    })
+    resource = Resource.create(
+        {
+            "service.name": "fovea-model-service",
+            "service.version": "0.1.0",
+        }
+    )
 
     trace_provider = TracerProvider(resource=resource)
     trace_provider.add_span_processor(
@@ -43,39 +49,32 @@ def configure_observability() -> None:
         OTLPMetricExporter(
             endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/metrics")
         ),
-        export_interval_millis=60000
+        export_interval_millis=60000,
     )
     metric_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(metric_provider)
 
 
-def instrument_app(app: object) -> None:
+def instrument_app(app: "FastAPI") -> None:
     """Instrument FastAPI application with OpenTelemetry tracing.
 
     Adds automatic tracing for HTTP requests and Redis operations.
 
     Parameters
     ----------
-    app : object
+    app : FastAPI
         FastAPI application instance to instrument.
     """
-    from typing import cast
-
-    from fastapi import FastAPI
-
-    FastAPIInstrumentor.instrument_app(cast(FastAPI, app))
+    FastAPIInstrumentor.instrument_app(app)
     RedisInstrumentor().instrument()
 
 
 meter = metrics.get_meter(__name__)
 
 model_inference_counter = meter.create_counter(
-    "model.inference.count",
-    description="Number of model inference calls"
+    "model.inference.count", description="Number of model inference calls"
 )
 
 model_inference_duration = meter.create_histogram(
-    "model.inference.duration",
-    description="Model inference duration in seconds",
-    unit="s"
+    "model.inference.duration", description="Model inference duration in seconds", unit="s"
 )

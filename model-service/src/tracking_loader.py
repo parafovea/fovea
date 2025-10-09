@@ -298,7 +298,11 @@ class SAMURAILoader(TrackingModelLoader):
                             mask = mask.cpu().numpy()
 
                         # Detect occlusion based on mask quality
-                        confidence_tensor = mask_data[0].max() if isinstance(mask_data[0], torch.Tensor) else mask_data[0]
+                        confidence_tensor = (
+                            mask_data[0].max()
+                            if isinstance(mask_data[0], torch.Tensor)
+                            else mask_data[0]
+                        )
                         if isinstance(confidence_tensor, torch.Tensor):
                             confidence = float(confidence_tensor.cpu().numpy())
                         else:
@@ -435,7 +439,11 @@ class SAM2LongLoader(TrackingModelLoader):
                             if isinstance(mask, torch.Tensor):
                                 mask = mask.cpu().numpy()
 
-                            confidence_tensor = mask_data[0].max() if isinstance(mask_data[0], torch.Tensor) else mask_data[0]
+                            confidence_tensor = (
+                                mask_data[0].max()
+                                if isinstance(mask_data[0], torch.Tensor)
+                                else mask_data[0]
+                            )
                             if isinstance(confidence_tensor, torch.Tensor):
                                 confidence = float(confidence_tensor.cpu().numpy())
                             else:
@@ -562,7 +570,11 @@ class SAM2Loader(TrackingModelLoader):
                         if isinstance(mask, torch.Tensor):
                             mask = mask.cpu().numpy()
 
-                        confidence_tensor = mask_data[0].max() if isinstance(mask_data[0], torch.Tensor) else mask_data[0]
+                        confidence_tensor = (
+                            mask_data[0].max()
+                            if isinstance(mask_data[0], torch.Tensor)
+                            else mask_data[0]
+                        )
                         if isinstance(confidence_tensor, torch.Tensor):
                             confidence = float(confidence_tensor.cpu().numpy())
                         else:
@@ -615,7 +627,7 @@ class YOLO11SegLoader(TrackingModelLoader):
     def load(self) -> None:
         """Load YOLO11n-seg model with configured settings."""
         try:
-            from ultralytics import YOLO
+            from ultralytics import YOLO  # type: ignore[attr-defined]
 
             logger.info(f"Loading YOLO11n-seg from {self.config.model_id}")
 
@@ -684,6 +696,7 @@ class YOLO11SegLoader(TrackingModelLoader):
                                 # Resize detected mask to match frame dimensions if needed
                                 if det_mask.shape != (height, width):
                                     import cv2
+
                                     det_mask_resized = cv2.resize(
                                         det_mask.astype(np.uint8),
                                         (width, height),
@@ -765,9 +778,7 @@ class YOLO11SegLoader(TrackingModelLoader):
         return float(intersection / union)
 
 
-def create_tracking_loader(
-    model_name: str, config: TrackingConfig
-) -> TrackingModelLoader:
+def create_tracking_loader(model_name: str, config: TrackingConfig) -> TrackingModelLoader:
     """Factory function to create appropriate tracking loader based on model name.
 
     Parameters
@@ -803,6 +814,5 @@ def create_tracking_loader(
         return YOLO11SegLoader(config)
 
     raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "samurai, sam2long, sam2, yolo11n-seg"
+        f"Unknown model name: {model_name}. Supported models: samurai, sam2long, sam2, yolo11n-seg"
     )

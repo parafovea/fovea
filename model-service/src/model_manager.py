@@ -94,8 +94,7 @@ class TaskConfig:
         self.task_name = task_name
         self.selected = config_dict["selected"]
         self.options: dict[str, ModelConfig] = {
-            name: ModelConfig(opt_dict)
-            for name, opt_dict in config_dict["options"].items()
+            name: ModelConfig(opt_dict) for name, opt_dict in config_dict["options"].items()
         }
 
     def get_selected_config(self) -> ModelConfig:
@@ -357,9 +356,7 @@ class ModelManager:
 
             evicted = await self.evict_lru_model()
             if evicted is None:
-                raise RuntimeError(
-                    f"Insufficient memory for {task_type} and no models to evict"
-                )
+                raise RuntimeError(f"Insufficient memory for {task_type} and no models to evict")
 
         memory_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
 
@@ -379,9 +376,7 @@ class ModelManager:
 
         return model
 
-    async def _load_model_implementation(
-        self, task_type: str, model_config: ModelConfig
-    ) -> Any:
+    async def _load_model_implementation(self, task_type: str, model_config: ModelConfig) -> Any:
         """
         Load model implementation based on framework.
 
@@ -395,9 +390,7 @@ class ModelManager:
         Returns:
             Loaded model object
         """
-        logger.info(
-            f"Loading {model_config.framework} model: {model_config.model_id}"
-        )
+        logger.info(f"Loading {model_config.framework} model: {model_config.model_id}")
 
         return {
             "task_type": task_type,
@@ -469,18 +462,14 @@ class ModelManager:
 
         task_config = self.tasks[task_type]
         if model_name not in task_config.options:
-            raise ValueError(
-                f"Invalid model name: {model_name} for task {task_type}"
-            )
+            raise ValueError(f"Invalid model name: {model_name} for task {task_type}")
 
         old_selection = task_config.selected
         task_config.selected = model_name
 
         self.config["models"][task_type]["selected"] = model_name
 
-        logger.info(
-            f"Changed {task_type} model from {old_selection} to {model_name}"
-        )
+        logger.info(f"Changed {task_type} model from {old_selection} to {model_name}")
 
         if task_type in self.loaded_models:
             await self.unload_model(task_type)

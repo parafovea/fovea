@@ -68,8 +68,8 @@ def get_model_manager() -> "ModelManager":
             status_code=500,
             detail="Model manager not initialized",
         )
-    from .model_manager import ModelManager
-    return cast(ModelManager, _model_manager)
+
+    return cast("ModelManager", _model_manager)
 
 
 @router.post(
@@ -268,9 +268,7 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
             span.set_attribute("suggestions_generated", len(suggestions))
             span.set_attribute(
                 "avg_confidence",
-                sum(s.confidence for s in suggestions) / len(suggestions)
-                if suggestions
-                else 0.0,
+                sum(s.confidence for s in suggestions) / len(suggestions) if suggestions else 0.0,
             )
 
             return AugmentResponse(
@@ -378,9 +376,7 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noq
                 cache_dir=PathlibPath.home() / ".cache" / "huggingface",
             )
 
-            loader = create_detection_loader(
-                task_config.selected, detection_config
-            )
+            loader = create_detection_loader(task_config.selected, detection_config)
             loader.load()
 
             cap = cv2.VideoCapture(str(video_path))
@@ -586,9 +582,7 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:  # noqa: 
             for mask_b64 in request.initial_masks:
                 try:
                     mask_bytes = base64.b64decode(mask_b64)
-                    mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(
-                        height, width
-                    )
+                    mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(height, width)
                     initial_masks_np.append(mask_array)
                 except Exception as e:
                     raise HTTPException(
@@ -642,9 +636,7 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:  # noqa: 
                             object_id=mask.object_id,
                             mask_rle=mask_rle,
                             confidence=mask.confidence,
-                            is_occluded=tracking_frame.occlusions.get(
-                                mask.object_id, False
-                            ),
+                            is_occluded=tracking_frame.occlusions.get(mask.object_id, False),
                         )
                     )
 
@@ -777,21 +769,23 @@ async def get_model_status() -> dict[str, object]:
     # Convert loaded_models dict to array format expected by frontend
     loaded_models = []
     for task_type, model_info in loaded_models_dict.items():
-        loaded_models.append({
-            "task_type": task_type,
-            "model_id": model_info["model_id"],
-            "model_name": manager.tasks[task_type].selected,
-            "framework": manager.tasks[task_type].get_selected_config().framework,
-            "quantization": manager.tasks[task_type].get_selected_config().quantization,
-            "health": "loaded",
-            "vram_allocated_gb": model_info["memory_usage_gb"],
-            "vram_used_gb": model_info["memory_usage_gb"],
-            "warm_up_complete": True,
-            "last_used": None,
-            "load_time_ms": model_info["load_time"] * 1000 if model_info["load_time"] else None,
-            "performance_metrics": None,
-            "error_message": None,
-        })
+        loaded_models.append(
+            {
+                "task_type": task_type,
+                "model_id": model_info["model_id"],
+                "model_name": manager.tasks[task_type].selected,
+                "framework": manager.tasks[task_type].get_selected_config().framework,
+                "quantization": manager.tasks[task_type].get_selected_config().quantization,
+                "health": "loaded",
+                "vram_allocated_gb": model_info["memory_usage_gb"],
+                "vram_used_gb": model_info["memory_usage_gb"],
+                "warm_up_complete": True,
+                "last_used": None,
+                "load_time_ms": model_info["load_time"] * 1000 if model_info["load_time"] else None,
+                "performance_metrics": None,
+                "error_message": None,
+            }
+        )
 
     return {
         "loaded_models": loaded_models,

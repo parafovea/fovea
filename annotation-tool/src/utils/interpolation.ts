@@ -521,7 +521,7 @@ export class BoundingBoxInterpolator {
    */
   private expandVisibilityForKeyframe(
     ranges: Array<{ startFrame: number; endFrame: number; visible: boolean }>,
-    frameNumber: number,
+    _frameNumber: number,
     keyframes: BoundingBox[]
   ): Array<{ startFrame: number; endFrame: number; visible: boolean }> {
     // Sort keyframes to find first and last

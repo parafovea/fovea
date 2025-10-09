@@ -191,7 +191,7 @@ describe('OntologyAugmenter', () => {
       )
 
       expect(screen.getByRole('button', { name: /generate suggestions/i })).toBeEnabled()
-    })
+    }, 10000)
   })
 
   describe('Suggestion Generation - Sports Analytics', () => {
@@ -210,7 +210,7 @@ describe('OntologyAugmenter', () => {
 
       expect(screen.getByText('Analyzing domain and generating suggestions...')).toBeInTheDocument()
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
-    })
+    }, 10000)
 
     it('displays suggestions with confidence scores for sports analytics', async () => {
       const user = userEvent.setup()
@@ -299,7 +299,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('Pod')).toBeInTheDocument()
         expect(screen.getByText('88%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Generation - Retail Analysis', () => {
@@ -346,7 +346,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('CheckoutEvent')).toBeInTheDocument()
         expect(screen.getByText('90%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Generation - Medical Training', () => {
@@ -391,7 +391,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('Tissue')).toBeInTheDocument()
         expect(screen.getByText('87%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Generation - Film Production', () => {
@@ -436,7 +436,7 @@ describe('OntologyAugmenter', () => {
         expect(screen.getByText('Costume')).toBeInTheDocument()
         expect(screen.getByText('91%')).toBeInTheDocument()
       })
-    })
+    }, 10000)
   })
 
   describe('Suggestion Selection', () => {

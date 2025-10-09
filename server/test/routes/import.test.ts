@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { PrismaClient } from '@prisma/client'
 import { ImportHandler } from '../../src/services/import-handler.js'
 import { SequenceValidator } from '../../src/services/import-validator.js'
 import { DEFAULT_IMPORT_OPTIONS } from '../../src/services/import-types.js'
@@ -27,7 +28,7 @@ const mockPrismaClient = {
     count: vi.fn().mockResolvedValue(0)
   },
   $transaction: vi.fn((callback) => callback(mockPrismaClient))
-} as any
+} as unknown as PrismaClient
 
 describe('ImportHandler', () => {
   let handler: ImportHandler
@@ -511,7 +512,7 @@ describe('SequenceValidator', () => {
           {
             startFrame: 0,
             endFrame: 100,
-            type: 'invalid-type' as any
+            type: 'invalid-type' as 'linear'
           }
         ],
         visibilityRanges: [{ startFrame: 0, endFrame: 100, visible: true }],
@@ -590,7 +591,7 @@ describe('SequenceValidator', () => {
         ],
         interpolationSegments: [],
         visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
-        trackingSource: 'invalid-source' as any,
+        trackingSource: 'invalid-source' as 'manual',
         totalFrames: 1,
         keyframeCount: 1,
         interpolatedFrameCount: 0

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useDispatch } from 'react-redux'
 import { Chip, Tooltip } from '@mui/material'
 import { AppDispatch } from '../../store/store'
-import { updateAnnotation, updateKeyframe } from '../../store/annotationSlice'
+import { updateAnnotation, updateKeyframe, addKeyframe } from '../../store/annotationSlice'
 import { BoundingBox } from '../../models/types.js'
 import { BoundingBoxInterpolator } from '../../utils/interpolation.js'
 
@@ -95,10 +95,10 @@ export default function InteractiveBoundingBox({
 
     // If seeking beyond annotation range, show the nearest keyframe as ghost
     if (annotation.boundingBoxSequence?.boxes?.length > 0) {
-      const keyframes = annotation.boundingBoxSequence.boxes.filter(b => b.isKeyframe !== false)
+      const keyframes = annotation.boundingBoxSequence.boxes.filter((b: BoundingBox) => b.isKeyframe !== false)
       if (keyframes.length > 0) {
         // Find nearest keyframe
-        const nearest = keyframes.reduce((prev, curr) => {
+        const nearest = keyframes.reduce((prev: BoundingBox, curr: BoundingBox) => {
           return Math.abs(curr.frameNumber - currentFrame) < Math.abs(prev.frameNumber - currentFrame) ? curr : prev
         })
         return nearest
@@ -329,8 +329,6 @@ export default function InteractiveBoundingBox({
   if (!currentBox) {
     return null
   }
-
-  const isKeyframe = mode === 'keyframe'
 
   return (
     <g

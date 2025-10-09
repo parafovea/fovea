@@ -72,7 +72,9 @@ def test_parse_vlm_response_structured():
 
 def test_parse_vlm_response_unstructured():
     """Test parsing VLM response without clear structure."""
-    response = "The video contains footage of outdoor activities with multiple people moving around."
+    response = (
+        "The video contains footage of outdoor activities with multiple people moving around."
+    )
 
     summary, visual_analysis = parse_vlm_response(response)
 
@@ -205,8 +207,7 @@ async def test_summarize_video_with_vlm_success():
 
         mock_loader = MagicMock()
         mock_loader.generate.return_value = (
-            "Summary: Test video shows random frames. "
-            "Visual Analysis: Contains RGB noise patterns."
+            "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
         )
 
         with patch("src.summarization.create_vlm_loader", return_value=mock_loader):

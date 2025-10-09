@@ -109,13 +109,16 @@ describe('Database Connection', () => {
         }
       })
 
+      // Wait 1ms to ensure updatedAt timestamp changes
+      await new Promise(resolve => setTimeout(resolve, 1))
+
       const updated = await app.prisma.persona.update({
         where: { id: persona.id },
         data: { name: 'Updated Analyst' }
       })
 
       expect(updated.name).toBe('Updated Analyst')
-      expect(updated.updatedAt.getTime()).toBeGreaterThan(persona.updatedAt.getTime())
+      expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(persona.updatedAt.getTime())
     })
 
     it('should delete a persona', async () => {

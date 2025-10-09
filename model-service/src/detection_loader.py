@@ -211,7 +211,7 @@ class YOLOWorldLoader(DetectionModelLoader):
     def load(self) -> None:
         """Load YOLO-World v2.1 model with configured settings."""
         try:
-            from ultralytics import YOLO
+            from ultralytics import YOLO  # type: ignore[attr-defined]
 
             logger.info(f"Loading YOLO-World v2.1 from {self.config.model_id}")
 
@@ -263,9 +263,7 @@ class YOLOWorldLoader(DetectionModelLoader):
                             y2=float(y2) / height,
                         )
 
-                        detections.append(
-                            Detection(bbox=bbox, confidence=conf, label=label)
-                        )
+                        detections.append(Detection(bbox=bbox, confidence=conf, label=label))
 
             processing_time = time.time() - start_time
 
@@ -346,9 +344,7 @@ class GroundingDINOLoader(DetectionModelLoader):
 
                 bbox = BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
 
-                detections.append(
-                    Detection(bbox=bbox, confidence=float(conf), label=phrase)
-                )
+                detections.append(Detection(bbox=bbox, confidence=float(conf), label=phrase))
 
             processing_time = time.time() - start_time
 
@@ -416,9 +412,7 @@ class OWLv2Loader(DetectionModelLoader):
 
             text_queries = [c.strip() for c in text_prompt.split(".") if c.strip()]
 
-            inputs = self.processor(
-                text=text_queries, images=image, return_tensors="pt"
-            )
+            inputs = self.processor(text=text_queries, images=image, return_tensors="pt")
             inputs = {k: v.to(self.config.device) for k, v in inputs.items()}
 
             with torch.no_grad():
@@ -446,9 +440,7 @@ class OWLv2Loader(DetectionModelLoader):
 
                 label = text_queries[int(label_idx)]
 
-                detections.append(
-                    Detection(bbox=bbox, confidence=float(score), label=label)
-                )
+                detections.append(Detection(bbox=bbox, confidence=float(score), label=label))
 
             processing_time = time.time() - start_time
 
@@ -522,9 +514,7 @@ class Florence2Loader(DetectionModelLoader):
 
             task_prompt = f"<CAPTION_TO_PHRASE_GROUNDING>{text_prompt}"
 
-            inputs = self.processor(
-                text=task_prompt, images=image, return_tensors="pt"
-            )
+            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt")
             inputs = {k: v.to(self.config.device) for k, v in inputs.items()}
 
             with torch.no_grad():
@@ -551,9 +541,7 @@ class Florence2Loader(DetectionModelLoader):
             logger.error(f"Detection failed: {e}")
             raise RuntimeError(f"Object detection failed: {e}") from e
 
-    def _parse_florence_output(
-        self, result: str, width: int, height: int
-    ) -> list[Detection]:
+    def _parse_florence_output(self, result: str, width: int, height: int) -> list[Detection]:
         """Parse Florence-2 output format into Detection objects.
 
         Parameters
@@ -601,9 +589,7 @@ class Florence2Loader(DetectionModelLoader):
         return detections
 
 
-def create_detection_loader(
-    model_name: str, config: DetectionConfig
-) -> DetectionModelLoader:
+def create_detection_loader(model_name: str, config: DetectionConfig) -> DetectionModelLoader:
     """Factory function to create appropriate detection loader based on model name.
 
     Parameters

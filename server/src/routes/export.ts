@@ -3,6 +3,14 @@ import { FastifyPluginAsync } from 'fastify'
 import { AnnotationExporter } from '../services/export-handler.js'
 
 /**
+ * TypeBox schema for validation errors.
+ */
+const ValidationErrorSchema = Type.Object({
+  annotationId: Type.String(),
+  errors: Type.Array(Type.String())
+})
+
+/**
  * Fastify plugin for export-related routes.
  * Provides endpoints for exporting annotations with bounding box sequences.
  *
@@ -44,7 +52,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
         400: Type.Object({
           error: Type.String(),
           message: Type.String(),
-          validationErrors: Type.Array(Type.Any())
+          validationErrors: Type.Array(ValidationErrorSchema)
         })
       }
     }
@@ -71,7 +79,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       : undefined
 
     // Build Prisma query filters
-    const where: any = {}
+    const where: {
+      personaId?: { in: string[] }
+      videoId?: { in: string[] }
+    } = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
       where.personaId = { in: personaIdArray }
@@ -226,7 +237,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       : undefined
 
     // Build Prisma query filters
-    const where: any = {}
+    const where: {
+      personaId?: { in: string[] }
+      videoId?: { in: string[] }
+    } = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
       where.personaId = { in: personaIdArray }
@@ -259,7 +273,15 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     const sizeInMB = (stats.totalSize / (1024 * 1024)).toFixed(2)
 
     // Prepare response
-    const response: any = {
+    const response: {
+      totalSize: number
+      totalSizeMB: string
+      annotationCount: number
+      sequenceCount: number
+      keyframeCount: number
+      interpolatedFrameCount: number
+      warning?: string
+    } = {
       totalSize: stats.totalSize,
       totalSizeMB: `${sizeInMB}MB`,
       annotationCount: stats.annotationCount,

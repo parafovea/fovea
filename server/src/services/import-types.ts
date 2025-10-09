@@ -10,7 +10,26 @@
 export interface ImportLine {
   type: 'ontology' | 'entity' | 'event' | 'time' | 'entityCollection' |
         'eventCollection' | 'timeCollection' | 'relation' | 'annotation' | 'video' | 'metadata'
-  data: any
+  data: {
+    id?: string
+    videoId?: string
+    personaId?: string
+    annotationType?: string
+    typeCategory?: string
+    typeId?: string
+    linkedEntityId?: string
+    linkedEventId?: string
+    linkedTimeId?: string
+    linkedLocationId?: string
+    linkedCollectionId?: string
+    boundingBoxSequence?: unknown
+    personas?: unknown[]
+    personaOntologies?: unknown[]
+    name?: string
+    typeAssignments?: unknown[]
+    personaInterpretations?: unknown[]
+    [key: string]: unknown
+  }
   lineNumber: number
 }
 
@@ -122,13 +141,13 @@ export interface ImportResult {
     line: number
     type: string
     message: string
-    data?: any
+    data?: unknown
   }>
   errors: Array<{
     line: number
     type: string
     message: string
-    data?: any
+    data?: unknown
   }>
   conflicts: Array<Conflict & { resolution: string }>
 }

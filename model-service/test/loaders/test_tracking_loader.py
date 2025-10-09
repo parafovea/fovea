@@ -22,13 +22,14 @@ from src.tracking_loader import (
     create_tracking_loader,
 )
 
+pytestmark = pytest.mark.requires_models
+
 
 @pytest.fixture
 def sample_frames() -> list[Image.Image]:
     """Create sample video frames for testing."""
     return [
-        Image.fromarray(np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8))
-        for _ in range(5)
+        Image.fromarray(np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)) for _ in range(5)
     ]
 
 
@@ -54,8 +55,7 @@ def sports_tracking_frames() -> list[Image.Image]:
 def vehicle_tracking_frames() -> list[Image.Image]:
     """Create sample frames for vehicle tracking scenario."""
     return [
-        Image.fromarray(np.random.randint(0, 255, (600, 800, 3), dtype=np.uint8))
-        for _ in range(6)
+        Image.fromarray(np.random.randint(0, 255, (600, 800, 3), dtype=np.uint8)) for _ in range(6)
     ]
 
 
@@ -240,9 +240,7 @@ class TestSAMURAILoader:
         )
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="samurai", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAMURAILoader(config)
         loader.load()
@@ -272,9 +270,7 @@ class TestSAMURAILoader:
         )
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="samurai", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAMURAILoader(config)
         loader.load()
@@ -326,9 +322,7 @@ class TestSAMURAILoader:
         )
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="samurai", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAMURAILoader(config)
         loader.load()
@@ -340,9 +334,7 @@ class TestSAMURAILoader:
         # Other frames should not be occluded
         assert result.frames[0].occlusions[1] is False
 
-    def _create_mock_predictor(
-        self, num_frames: int, object_ids: list[int]
-    ) -> MagicMock:
+    def _create_mock_predictor(self, num_frames: int, object_ids: list[int]) -> MagicMock:
         """Create a mock SAM2 predictor with tracking results."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
@@ -353,17 +345,13 @@ class TestSAMURAILoader:
         # Create mock video segments
         video_segments = {}
         for obj_id in object_ids:
-            video_segments[obj_id] = {
-                i: [torch.ones((480, 640)) * 0.9] for i in range(num_frames)
-            }
+            video_segments[obj_id] = {i: [torch.ones((480, 640)) * 0.9] for i in range(num_frames)}
 
         mock_predictor.propagate_in_video.return_value = video_segments
 
         return mock_predictor
 
-    def _create_mock_predictor_with_occlusion(
-        self, num_frames: int, object_id: int
-    ) -> MagicMock:
+    def _create_mock_predictor_with_occlusion(self, num_frames: int, object_id: int) -> MagicMock:
         """Create a mock predictor with varying confidence (occlusion simulation)."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
@@ -374,8 +362,7 @@ class TestSAMURAILoader:
         # Frame 2 has low confidence (occluded)
         video_segments = {
             object_id: {
-                i: [torch.ones((480, 640)) * (0.3 if i == 2 else 0.9)]
-                for i in range(num_frames)
+                i: [torch.ones((480, 640)) * (0.3 if i == 2 else 0.9)] for i in range(num_frames)
             }
         }
 
@@ -389,16 +376,16 @@ class TestSAM2LongLoader:
 
     @patch("sam2.build_sam.build_sam2_video_predictor")
     def test_load_sam2long_success(
-        self, mock_build_predictor: Mock, tracking_config: TrackingConfig  # noqa: ARG002
+        self,
+        mock_build_predictor: Mock,
+        tracking_config: TrackingConfig,  # noqa: ARG002
     ) -> None:
         """Test successful SAM2Long model loading."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2LongLoader(config)
         loader.load()
@@ -416,14 +403,10 @@ class TestSAM2LongLoader:
             for _ in range(90)
         ]
 
-        mock_predictor = self._create_mock_predictor_long(
-            num_frames=90, object_ids=[1, 2]
-        )
+        mock_predictor = self._create_mock_predictor_long(num_frames=90, object_ids=[1, 2])
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2LongLoader(config)
         loader.load()
@@ -439,7 +422,10 @@ class TestSAM2LongLoader:
 
     @patch("sam2.build_sam.build_sam2_video_predictor")
     def test_chunked_processing_reduces_error_accumulation(
-        self, mock_build_predictor: Mock, vehicle_tracking_frames: list[Image.Image], vehicle_initial_masks: list[np.ndarray]
+        self,
+        mock_build_predictor: Mock,
+        vehicle_tracking_frames: list[Image.Image],
+        vehicle_initial_masks: list[np.ndarray],
     ) -> None:
         """Test that SAM2Long processes in chunks to avoid error accumulation."""
         mock_predictor = self._create_mock_predictor_long(
@@ -447,9 +433,7 @@ class TestSAM2LongLoader:
         )
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2LongLoader(config)
         loader.load()
@@ -462,9 +446,7 @@ class TestSAM2LongLoader:
 
         assert len(result.frames) == len(vehicle_tracking_frames)
 
-    def _create_mock_predictor_long(
-        self, num_frames: int, object_ids: list[int]
-    ) -> MagicMock:
+    def _create_mock_predictor_long(self, num_frames: int, object_ids: list[int]) -> MagicMock:
         """Create a mock predictor for long video testing."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
@@ -473,13 +455,13 @@ class TestSAM2LongLoader:
         mock_predictor.init_state.return_value = mock_inference_state
 
         def propagate_side_effect(
-            inference_state: Any, start_frame_idx: int = 0, max_frame_num_to_track: int | None = None
+            inference_state: Any,
+            start_frame_idx: int = 0,
+            max_frame_num_to_track: int | None = None,
         ) -> dict[int, dict[int, list[torch.Tensor]]]:
             """Mock propagate_in_video with frame range support."""
             end_idx = (
-                start_frame_idx + max_frame_num_to_track
-                if max_frame_num_to_track
-                else num_frames
+                start_frame_idx + max_frame_num_to_track if max_frame_num_to_track else num_frames
             )
             video_segments = {}
             for obj_id in object_ids:
@@ -499,16 +481,16 @@ class TestSAM2Loader:
 
     @patch("sam2.build_sam.build_sam2_video_predictor")
     def test_load_sam2_success(
-        self, mock_build_predictor: Mock, tracking_config: TrackingConfig  # noqa: ARG002
+        self,
+        mock_build_predictor: Mock,
+        tracking_config: TrackingConfig,  # noqa: ARG002
     ) -> None:
         """Test successful SAM2.1 model loading."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2Loader(config)
         loader.load()
@@ -528,9 +510,7 @@ class TestSAM2Loader:
         )
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2Loader(config)
         loader.load()
@@ -552,14 +532,10 @@ class TestSAM2Loader:
         initial_mask: np.ndarray,
     ) -> None:
         """Test that SAM2.1 baseline does not detect occlusions."""
-        mock_predictor = self._create_mock_predictor(
-            num_frames=len(sample_frames), object_ids=[1]
-        )
+        mock_predictor = self._create_mock_predictor(num_frames=len(sample_frames), object_ids=[1])
         mock_build_predictor.return_value = mock_predictor
 
-        config = TrackingConfig(
-            model_id="sam2", framework=TrackingFramework.SAM2, device="cpu"
-        )
+        config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
         loader = SAM2Loader(config)
         loader.load()
@@ -570,9 +546,7 @@ class TestSAM2Loader:
         for frame in result.frames:
             assert frame.occlusions[1] is False
 
-    def _create_mock_predictor(
-        self, num_frames: int, object_ids: list[int]
-    ) -> MagicMock:
+    def _create_mock_predictor(self, num_frames: int, object_ids: list[int]) -> MagicMock:
         """Create a mock SAM2 predictor."""
         mock_predictor = MagicMock()
         mock_predictor.model = MagicMock()
@@ -582,9 +556,7 @@ class TestSAM2Loader:
 
         video_segments = {}
         for obj_id in object_ids:
-            video_segments[obj_id] = {
-                i: [torch.ones((480, 640)) * 0.9] for i in range(num_frames)
-            }
+            video_segments[obj_id] = {i: [torch.ones((480, 640)) * 0.9] for i in range(num_frames)}
 
         mock_predictor.propagate_in_video.return_value = video_segments
 
@@ -596,7 +568,9 @@ class TestYOLO11SegLoader:
 
     @patch("ultralytics.YOLO")
     def test_load_yolo11seg_success(
-        self, mock_yolo_class: Mock, tracking_config: TrackingConfig  # noqa: ARG002
+        self,
+        mock_yolo_class: Mock,
+        tracking_config: TrackingConfig,  # noqa: ARG002
     ) -> None:
         """Test successful YOLO11n-seg model loading."""
         mock_model = MagicMock()
@@ -798,9 +772,7 @@ class TestCreateTrackingLoader:
         loader = create_tracking_loader("sam2long", tracking_config)
         assert isinstance(loader, SAM2LongLoader)
 
-    def test_create_sam2long_loader_with_alias(
-        self, tracking_config: TrackingConfig
-    ) -> None:
+    def test_create_sam2long_loader_with_alias(self, tracking_config: TrackingConfig) -> None:
         """Test creating SAM2Long loader with hyphenated alias."""
         loader = create_tracking_loader("sam2-long", tracking_config)
         assert isinstance(loader, SAM2LongLoader)
@@ -815,9 +787,7 @@ class TestCreateTrackingLoader:
         loader = create_tracking_loader("yolo11n-seg", tracking_config)
         assert isinstance(loader, YOLO11SegLoader)
 
-    def test_create_yolo11seg_loader_with_alias(
-        self, tracking_config: TrackingConfig
-    ) -> None:
+    def test_create_yolo11seg_loader_with_alias(self, tracking_config: TrackingConfig) -> None:
         """Test creating YOLO11n-seg loader with alternative naming."""
         loader = create_tracking_loader("yolo11seg", tracking_config)
         assert isinstance(loader, YOLO11SegLoader)

@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Fovea Model Service",
     description="AI model inference service for video annotation",
-    version="1.0.0",
+    version="0.1.0",
     lifespan=lifespan,
 )
 
@@ -123,7 +123,7 @@ async def root() -> JSONResponse:
     return JSONResponse(
         content={
             "service": "Fovea Model Service",
-            "version": "1.0.0",
+            "version": "0.1.0",
             "docs": "/docs",
         }
     )
