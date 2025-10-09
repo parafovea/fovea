@@ -1,0 +1,110 @@
+# Docker Compose configuration for E2E testing
+# Lightweight stack for running Playwright E2E tests in CI
+name: fovea-e2e
+
+services:
+  frontend:
+    build:
+      context: ./annotation-tool
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:3001
+      - VITE_MODEL_SERVICE_URL=http://localhost:8000
+      - NODE_ENV=test
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - e2e-network
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://fovea:fovea_password@postgres:5432/fovea_test
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODEL_SERVICE_URL=http://model-service:8000
+    volumes:
+      - ./test-data:/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - e2e-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Model service not needed for basic E2E tests
+  # Can be enabled if tests require AI features
+  model-service:
+    build:
+      context: ./model-service
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: minimal
+        DEVICE: cpu
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_CONFIG_PATH=/config/models.yaml
+    volumes:
+      - ./model-service/config:/config
+    networks:
+      - e2e-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    profiles: ["with-models"]  # Only start if explicitly requested
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=fovea
+      - POSTGRES_PASSWORD=fovea_password
+      - POSTGRES_DB=fovea_test
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    networks:
+      - e2e-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fovea"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data  # Use tmpfs for faster tests
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    networks:
+      - e2e-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    tmpfs:
+      - /data  # Use tmpfs for faster tests
+
+networks:
+  e2e-network:
+    driver: bridge
