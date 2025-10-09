@@ -814,6 +814,5 @@ def create_tracking_loader(model_name: str, config: TrackingConfig) -> TrackingM
         return YOLO11SegLoader(config)
 
     raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "samurai, sam2long, sam2, yolo11n-seg"
+        f"Unknown model name: {model_name}. Supported models: samurai, sam2long, sam2, yolo11n-seg"
     )

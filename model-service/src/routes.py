@@ -68,9 +68,8 @@ def get_model_manager() -> "ModelManager":
             status_code=500,
             detail="Model manager not initialized",
         )
-    from .model_manager import ModelManager
 
-    return cast(ModelManager, _model_manager)
+    return cast("ModelManager", _model_manager)
 
 
 @router.post(

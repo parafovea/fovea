@@ -4,9 +4,6 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-
-pytestmark = pytest.mark.requires_models
-
 import torch
 
 from src.llm_loader import (
@@ -18,6 +15,8 @@ from src.llm_loader import (
     create_llm_config_from_dict,
     create_llm_loader_with_fallback,
 )
+
+pytestmark = pytest.mark.requires_models
 
 
 @pytest.fixture
@@ -365,9 +364,10 @@ class TestLLMLoader:
 
         assert loader.is_loaded()
 
-        with patch("src.llm_loader.torch.cuda.is_available", return_value=True), patch(
-            "src.llm_loader.torch.cuda.empty_cache"
-        ) as mock_empty_cache:
+        with (
+            patch("src.llm_loader.torch.cuda.is_available", return_value=True),
+            patch("src.llm_loader.torch.cuda.empty_cache") as mock_empty_cache,
+        ):
             await loader.unload()
 
             assert not loader.is_loaded()
@@ -399,9 +399,11 @@ class TestLLMLoader:
         )
         loader = LLMLoader(config)
 
-        with patch("src.llm_loader.torch.cuda.is_available", return_value=True), patch(
-            "src.llm_loader.torch.cuda.memory_allocated", return_value=1024 * 1024 * 1024
-        ), patch("src.llm_loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024):
+        with (
+            patch("src.llm_loader.torch.cuda.is_available", return_value=True),
+            patch("src.llm_loader.torch.cuda.memory_allocated", return_value=1024 * 1024 * 1024),
+            patch("src.llm_loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024),
+        ):
             usage = loader.get_memory_usage()
 
             assert usage["allocated"] == 1024 * 1024 * 1024

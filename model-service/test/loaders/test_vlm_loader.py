@@ -3,9 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-pytestmark = pytest.mark.requires_models
-
 import torch
 from PIL import Image
 
@@ -20,6 +17,8 @@ from src.vlm_loader import (
     VLMConfig,
     create_vlm_loader,
 )
+
+pytestmark = pytest.mark.requires_models
 
 
 @pytest.fixture

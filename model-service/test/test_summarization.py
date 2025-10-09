@@ -207,8 +207,7 @@ async def test_summarize_video_with_vlm_success():
 
         mock_loader = MagicMock()
         mock_loader.generate.return_value = (
-            "Summary: Test video shows random frames. "
-            "Visual Analysis: Contains RGB noise patterns."
+            "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
         )
 
         with patch("src.summarization.create_vlm_loader", return_value=mock_loader):

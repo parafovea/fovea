@@ -5,6 +5,7 @@ for FastAPI and Redis clients.
 """
 
 import os
+from typing import TYPE_CHECKING
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -16,6 +17,9 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 
 def configure_observability() -> None:
@@ -51,21 +55,17 @@ def configure_observability() -> None:
     metrics.set_meter_provider(metric_provider)
 
 
-def instrument_app(app: object) -> None:
+def instrument_app(app: "FastAPI") -> None:
     """Instrument FastAPI application with OpenTelemetry tracing.
 
     Adds automatic tracing for HTTP requests and Redis operations.
 
     Parameters
     ----------
-    app : object
+    app : FastAPI
         FastAPI application instance to instrument.
     """
-    from typing import cast
-
-    from fastapi import FastAPI
-
-    FastAPIInstrumentor.instrument_app(cast(FastAPI, app))
+    FastAPIInstrumentor.instrument_app(app)
     RedisInstrumentor().instrument()
 
 

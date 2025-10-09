@@ -102,10 +102,10 @@ Domain: {context.domain}{persona_context}
 Existing {context.target_category} types: {existing_types_str}
 
 Definition:
-{instructions['definition']}
+{instructions["definition"]}
 
 Example from a different domain:
-{instructions['examples']}
+{instructions["examples"]}
 
 Task:
 Suggest {max_suggestions} new {context.target_category} types that would be useful for this domain. For each type:

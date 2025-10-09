@@ -186,8 +186,7 @@ def extract_frames_uniform(
 
         info = get_video_info(video_path)
 
-        if num_frames > info.frame_count:
-            num_frames = info.frame_count
+        num_frames = min(num_frames, info.frame_count)
 
         # Calculate frame indices for uniform sampling
         frame_indices = np.linspace(0, info.frame_count - 1, num_frames, dtype=int).tolist()
