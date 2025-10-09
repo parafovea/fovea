@@ -186,10 +186,11 @@ Master these shortcuts to annotate efficiently:
 | Action | Shortcut |
 |--------|----------|
 | Draw bounding box | **B** |
+| Toggle timeline | **T** |
 | Add keyframe | **K** |
 | Delete keyframe | **Delete** |
 | Toggle visibility | **V** |
-| Copy previous frame | **Ctrl+C** |
+| Copy previous frame | **C** |
 | Next frame | **→** |
 | Previous frame | **←** |
 | Jump 10 frames | **Shift + →** / **Shift + ←** |
@@ -201,7 +202,7 @@ See the full list in [Keyboard Shortcuts Reference](../../reference/keyboard-sho
 
 ## Understanding the Timeline
 
-The timeline component shows all keyframes and interpolation for the selected sequence:
+The timeline panel displays keyframes and interpolation for the selected annotation. Press **T** to toggle the timeline visibility. The timeline slides in from the right and replaces the standard video controls when expanded.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -211,11 +212,13 @@ The timeline component shows all keyframes and interpolation for the selected se
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **●** Keyframe marker
-- **═** Interpolation segment
-- **▓** Visible range
-- **░** Hidden range
-- **Red line** Current frame indicator
+- **●** Keyframe marker (click to select, drag to move in time)
+- **═** Interpolation segment (line connecting keyframes)
+- **▓** Visible range (annotation is shown)
+- **░** Hidden range (annotation is hidden)
+- **Red line** Current frame indicator (playhead)
+
+The timeline includes transport controls for frame navigation and action buttons for keyframe operations (Add Keyframe, Delete Keyframe, Copy Previous, Toggle Visibility). Press **T** or click "Hide Timeline" to return to standard controls.
 
 ## Export Modes
 

@@ -12,11 +12,12 @@ Bounding box sequences allow you to annotate moving objects across video frames 
 | Task | Shortcut | Mouse Action |
 |------|----------|-------------|
 | Draw initial box | **B** | Click "Draw Bounding Box" button |
-| Add keyframe | **K** | Click "Keyframe" in Quick Actions Panel |
-| Delete keyframe | **Delete** | Click "Delete" in Quick Actions Panel |
-| Copy previous frame | **Ctrl+C** | Click "Previous" in Quick Actions Panel |
-| Toggle visibility | **V** | Click visibility track on timeline |
-| Jump 10 frames | **Shift + →** / **Shift + ←** | Drag playhead on timeline |
+| Toggle timeline | **T** | Click "Show Timeline" or "Hide Timeline" button |
+| Add keyframe | **K** | Click "Add Keyframe" button on timeline |
+| Delete keyframe | **Delete** | Click "Delete Keyframe" button on timeline |
+| Copy previous frame | **C** | Click "Copy Previous" button on timeline |
+| Toggle visibility | **V** | Click visibility toggle on timeline |
+| Jump 10 frames | **Shift + →** / **Shift + ←** | Use transport buttons on timeline |
 | Jump to next keyframe | **Ctrl + →** | Click keyframe marker on timeline |
 
 ## Step 1: Draw the Initial Bounding Box
@@ -37,6 +38,20 @@ The system creates a sequence with one keyframe at the current frame.
 - Leave minimal padding (system interpolates size changes)
 - Ensure the box is within the video frame bounds
 - Use the 8 resize handles to adjust after drawing
+
+### Opening the Timeline Panel
+
+After creating a bounding box, open the timeline panel for precise keyframe control:
+
+1. **Press T** or click the "Show Timeline" button in the video controls
+2. The timeline panel slides in from the right, replacing the standard controls
+3. The timeline displays frame markers, keyframe positions, and interpolation segments
+4. Transport controls (play, step forward/backward, frame navigation) appear at the top
+5. Action buttons (Add Keyframe, Delete Keyframe, Copy Previous, Toggle Visibility) appear below
+
+The timeline remains open until you press **T** again or click "Hide Timeline". While the timeline is visible, the standard video controls (persona selector, type selector, mode toggle) are hidden. The action buttons for model services (Edit Summary, Detect Objects) move to a separate row below the timeline when expanded.
+
+To close the timeline and return to standard controls, press **T** or click "Hide Timeline".
 
 ## Step 2: Advance to the Next Keyframe Position
 
@@ -70,10 +85,12 @@ Add a keyframe when:
 
 Once you've advanced to the desired frame:
 
-1. **Press K** or click the "Keyframe" button in the Quick Actions Panel
+1. **Press K** or click the "Add Keyframe" button on the timeline
 2. The system adds a keyframe at the current frame
-3. A keyframe marker appears on the timeline
+3. A keyframe marker appears on the timeline ruler
 4. The bounding box becomes editable (8 resize handles)
+
+If the timeline is not visible, press **T** to open it. The Add Keyframe button is disabled when the current frame already contains a keyframe.
 
 ### Adjusting the Keyframe Box
 
@@ -204,20 +221,21 @@ You cannot delete the first or last keyframe. Sequences require at least one key
 2. **Shift+Click** to select a range of keyframes
 3. **Drag selected keyframes** together to adjust timing while preserving relative positions
 
-## Step 8: Use the Quick Actions Panel
+## Step 8: Use Timeline Action Buttons
 
-The Quick Actions Panel appears when you select a bounding box. It provides one-click access to common actions:
+The timeline panel contains action buttons for keyframe management. These buttons are located at the bottom of the timeline panel:
 
-### Panel Buttons
+### Action Buttons
 
 | Button | Shortcut | Action |
 |--------|----------|--------|
-| **Keyframe** | K | Add keyframe at current frame |
-| **Delete** | Del | Remove keyframe at current frame |
-| **Previous** | Ctrl+C | Copy previous frame's box to current frame |
-| **Interp.** | I | Open interpolation mode selector |
+| **Add Keyframe (K)** | K | Add keyframe at current frame |
+| **Delete Keyframe (Del)** | Del | Remove keyframe at current frame (disabled on first/last keyframe) |
+| **Copy Previous (C)** | C | Copy previous frame's box to current frame |
+| **Toggle Visibility (V)** | V | Show or hide annotation at current frame |
+| **Interpolation Mode** | I | Select interpolation type for current segment |
 
-The panel automatically positions itself near the selected box, flipping to the opposite side if near screen edges.
+Buttons are enabled or disabled based on context. For example, Delete Keyframe is disabled when fewer than three keyframes exist or when on the first or last keyframe.
 
 ## Step 9: Review and Save
 
@@ -272,34 +290,58 @@ For physics-based motion (falling objects, oscillation):
 
 ## Timeline Component Reference
 
-The timeline shows all keyframes and interpolation for the selected sequence:
+The timeline displays keyframes and interpolation for the selected annotation. Press **T** or click "Show Timeline" to open the panel.
+
+### Timeline Layout
+
+The timeline panel contains four sections from top to bottom:
+
+1. **Transport Controls**: Play/pause button and frame navigation (step forward/backward by 1 or 10 frames)
+2. **Timeline Ruler**: Horizontal ruler showing frame numbers with time markers
+3. **Keyframe Track**: Visual representation of keyframes (circles) connected by interpolation segments (lines)
+4. **Action Buttons**: Add Keyframe, Delete Keyframe, Copy Previous, Toggle Visibility, and interpolation mode selector
 
 ### Timeline Elements
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│ ◄  ▐▐  ►    ◄◄  ►►                          [Hide]     │
 │ Frame: 0    10    20    30    40    50    60    70    80│
 │        ●═════●══════════●═══════════●═════════●         │
 │        ▓▓▓▓▓▓▓▓▓▓░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓         │
 │        Visible   Hidden Visible Range                  │
+│ [K]  [Del]  [C]  [V]  [Interp: Linear ▼]              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **●** Keyframe marker (click to select, drag to move)
-- **═** Interpolation segment (shows interpolation type with line style)
-- **▓** Visible range (filled bar)
-- **░** Hidden range (unfilled bar)
-- **Red line** Playhead (current frame indicator)
+- **●** Keyframe marker (circle on timeline ruler)
+- **═** Interpolation segment (line connecting keyframes)
+- **▓** Visible range (annotation is shown in video)
+- **░** Hidden range (annotation is not visible)
+- **Vertical red line** Playhead (current frame indicator)
 
 ### Timeline Interactions
 
-- **Click ruler** to seek to a frame
-- **Drag playhead** to scrub through frames
-- **Click keyframe** to select it
-- **Ctrl+Click keyframes** to multi-select
-- **Drag keyframe** to move it in time
-- **Click visibility bar** to toggle visibility at that frame
-- **Scroll** to zoom in/out (or use zoom slider)
+- **Click ruler** to seek to a specific frame
+- **Click keyframe marker** to select it (marker highlights)
+- **Drag keyframe marker** left or right to move it in time
+- **Click Add Keyframe button** to add keyframe at current frame (or press **K**)
+- **Click Delete Keyframe button** to remove keyframe at current frame (or press **Delete**)
+- **Click Copy Previous button** to copy the previous keyframe box to current frame (or press **C**)
+- **Click Toggle Visibility button** to show/hide annotation at current frame (or press **V**)
+- **Click interpolation dropdown** to change interpolation mode between keyframes
+
+### Slide-Out Behavior
+
+When the timeline is expanded:
+
+- The timeline panel slides in from the right with a 300ms animation
+- The standard controls (persona selector, type/object toggle, annotation mode) slide out to the left
+- Transport controls move from the standard controls into the timeline panel
+- The timeline takes full width of the control area
+- Press **T** or click "Hide Timeline" to reverse the animation and restore standard controls
+
+The timeline uses absolute positioning with CSS transforms for the slide animation. The standard controls have `pointer-events: none` and `opacity: 0` when hidden, while the timeline has `pointer-events: auto` and `opacity: 1` when visible.
 
 ## Troubleshooting
 
@@ -341,12 +383,22 @@ The timeline shows all keyframes and interpolation for the selected sequence:
 
 ### Timeline Not Showing
 
-**Problem**: Timeline component doesn't appear.
+**Problem**: Timeline panel doesn't appear when pressing T.
 
 **Solution**:
-- Click a bounding box to select it
+- Select a bounding box annotation first (click on a box in the video)
 - Check that the annotation has at least one keyframe
-- Expand the timeline panel if it's collapsed
+- Press **T** again or click the "Show Timeline" button in the video controls
+- Verify an annotation is selected in the annotation list
+
+### Cannot Access Standard Controls
+
+**Problem**: Persona selector and mode toggle are not visible.
+
+**Solution**:
+- The timeline hides standard controls when expanded
+- Press **T** or click "Hide Timeline" to collapse the timeline panel
+- Standard controls slide back in from the left when timeline is hidden
 
 ## Performance Tips
 

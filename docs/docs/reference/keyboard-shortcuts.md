@@ -21,9 +21,11 @@ Press **B** to begin drawing a new bounding box. Once you have a box selected, *
 
 The **V** key toggles visibility for the selected annotation at the current frame. This creates visibility ranges when objects enter or leave the video frame. For more precise control, **[** and **]** mark in and out points for visibility.
 
-To copy the previous frame's bounding box to the current frame, use **Ctrl+C**. This is useful for tracking slowly moving objects where interpolation might overshoot the actual position.
+To copy the previous frame's bounding box to the current frame, use **C**. This is useful for tracking slowly moving objects where interpolation might overshoot the actual position.
 
 Press **I** to open the interpolation mode selector for the current segment. This lets you change how the system calculates intermediate frames between keyframes.
+
+Press **T** to toggle the timeline panel visibility. The timeline replaces the standard video controls when expanded, showing keyframe markers and interpolation segments for precise editing.
 
 ## Timeline Editing
 

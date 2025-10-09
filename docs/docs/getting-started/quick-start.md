@@ -115,6 +115,10 @@ As you add keyframes, FOVEA automatically **interpolates** the boxes for all fra
 
 This is the power of keyframe annotation: **3 keyframes** can create annotations for **30+ frames**.
 
+:::tip Timeline Panel
+Press **T** to open the timeline panel. The timeline shows all your keyframes as markers on a ruler, with lines connecting them to show interpolation segments. You can click keyframes to select them or drag them to adjust timing. The timeline includes buttons for adding keyframes, deleting them, and toggling visibility.
+:::
+
 ## Step 8: Save Your Annotation
 
 1. The annotation auto-saves as you work
