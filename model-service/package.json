@@ -1,6 +1,6 @@
 {
   "name": "fovea-model-service",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "AI model inference service for video annotation",
   "scripts": {
     "dev": "source venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",

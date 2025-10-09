@@ -76,7 +76,7 @@ def test_root_endpoint(client):
 
     data = response.json()
     assert data["service"] == "Fovea Model Service"
-    assert data["version"] == "1.0.0"
+    assert data["version"] == "0.1.0"
     assert data["docs"] == "/docs"
 
 
@@ -113,7 +113,7 @@ def test_openapi_docs_available(client):
 
     openapi_data = response.json()
     assert openapi_data["info"]["title"] == "Fovea Model Service"
-    assert openapi_data["info"]["version"] == "1.0.0"
+    assert openapi_data["info"]["version"] == "0.1.0"
 
     # Test Swagger UI
     response = client.get("/docs")

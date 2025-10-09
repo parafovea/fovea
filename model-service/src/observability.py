@@ -31,7 +31,7 @@ def configure_observability() -> None:
     resource = Resource.create(
         {
             "service.name": "fovea-model-service",
-            "service.version": "1.0.0",
+            "service.version": "0.1.0",
         }
     )
 
