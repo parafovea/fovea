@@ -5,6 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import fs from 'fs'
 
 test.describe('Visibility Range and Discontiguous Sequences', () => {
   test.beforeEach(async ({ page }) => {
@@ -100,7 +101,6 @@ test.describe('Visibility Range and Discontiguous Sequences', () => {
     await download.saveAs(downloadPath)
 
     // Read file and verify visibility ranges
-    const fs = require('fs')
     const content = fs.readFileSync(downloadPath, 'utf-8')
     const annotation = JSON.parse(content.split('\n')[0])
 
@@ -334,7 +334,6 @@ test.describe('Visibility Range and Discontiguous Sequences', () => {
 
   test('import discontiguous sequence', async ({ page }) => {
     // Create file with discontiguous sequence
-    const fs = require('fs')
     const annotation = {
       id: 'test-discontiguous',
       videoId: 'test-video',

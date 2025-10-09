@@ -27,8 +27,8 @@ import { BezierCurveEditor } from './BezierCurveEditor.js'
  * @description Props for InterpolationModeSelector component.
  */
 export interface InterpolationModeSelectorProps {
-  /** Annotation being edited */
-  annotation: Annotation
+  /** Annotation being edited (optional) */
+  annotation: Annotation | null
   /** Current frame number */
   currentFrame: number
   /** Whether dialog is open */
@@ -52,16 +52,16 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
 }) => {
   // Find segment containing current frame
   const segment = useMemo(() => {
-    return annotation.boundingBoxSequence.interpolationSegments.find(
+    return annotation?.boundingBoxSequence?.interpolationSegments.find(
       s => s.startFrame <= currentFrame && s.endFrame >= currentFrame
     )
-  }, [annotation.boundingBoxSequence.interpolationSegments, currentFrame])
+  }, [annotation?.boundingBoxSequence?.interpolationSegments, currentFrame])
 
   const segmentIndex = useMemo(() => {
-    return annotation.boundingBoxSequence.interpolationSegments.findIndex(
+    return annotation?.boundingBoxSequence?.interpolationSegments.findIndex(
       s => s.startFrame <= currentFrame && s.endFrame >= currentFrame
-    )
-  }, [annotation.boundingBoxSequence.interpolationSegments, currentFrame])
+    ) ?? -1
+  }, [annotation?.boundingBoxSequence?.interpolationSegments, currentFrame])
 
   // State
   const [selectedMode, setSelectedMode] = useState<InterpolationType>(

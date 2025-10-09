@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Paper, IconButton, Typography, Box, Tooltip } from '@mui/material'
 import { Annotation, InterpolationType } from '../../models/types.js'
 import { InterpolationModeSelector } from './InterpolationModeSelector.js'
@@ -54,6 +55,8 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 
   // Calculate position with edge detection
   useEffect(() => {
+    if (!boundingBoxRect) return
+
     const panelWidth = 250
     const panelHeight = 80
     const margin = 10
@@ -67,8 +70,8 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
     }
 
     // Shift left if near right edge
-    if (left + panelWidth > videoWidth - margin) {
-      left = videoWidth - panelWidth - margin
+    if (left + panelWidth > window.innerWidth - margin) {
+      left = window.innerWidth - panelWidth - margin
     }
 
     // Shift right if near left edge
@@ -92,7 +95,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   // Interpolation requires at least 2 keyframes
   const canInterpolate = keyframes.length >= 2
 
-  return (
+  return createPortal(
     <Paper
       elevation={8}
       sx={{
@@ -239,6 +242,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
           setInterpolationDialogOpen(false)
         }}
       />
-    </Paper>
+    </Paper>,
+    document.body
   )
 }

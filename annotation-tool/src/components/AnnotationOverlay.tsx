@@ -171,10 +171,32 @@ export default function AnnotationOverlay({
     if (annotationMode === 'object' && !linkTargetId) return
 
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
+      const fps = 30
+      const currentFrame = Math.floor(currentTime * fps)
+
       const annotation: any = {
         id: generateId(),
         videoId,
-        boundingBox: temporaryBox,
+        annotationType: annotationMode,
+        boundingBoxSequence: {
+          boxes: [{
+            x: temporaryBox.x,
+            y: temporaryBox.y,
+            width: temporaryBox.width,
+            height: temporaryBox.height,
+            frameNumber: currentFrame,
+            isKeyframe: true
+          }],
+          interpolationSegments: [],
+          visibilityRanges: [{
+            startFrame: currentFrame,
+            endFrame: currentFrame,
+            visible: true
+          }],
+          totalFrames: 1,
+          keyframeCount: 1,
+          interpolatedFrameCount: 0
+        },
         timeSpan: {
           startTime: currentTime,
           endTime: currentTime + 1,
@@ -182,13 +204,12 @@ export default function AnnotationOverlay({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
-      
+
       if (annotationMode === 'type') {
         annotation.personaId = selectedPersonaId
         annotation.typeCategory = drawingMode
         annotation.typeId = selectedTypeId || 'temp-type'
       } else {
-        // Object linking mode
         if (linkTargetType === 'entity') {
           annotation.linkedEntityId = linkTargetId
         } else if (linkTargetType === 'event') {
@@ -200,10 +221,12 @@ export default function AnnotationOverlay({
           annotation.linkedCollectionType = linkTargetType.replace('-collection', '')
         }
       }
-      
+
       dispatch(addAnnotation(annotation))
+      // Auto-select the newly created annotation to show timeline
+      dispatch(selectAnnotation(annotation))
     }
-    
+
     setIsDrawing(false)
     dispatch(clearDrawingState())
   }
@@ -217,9 +240,14 @@ export default function AnnotationOverlay({
    * @returns Array of annotations enriched with linkedObject and linkedType fields
    */
   const annotationsWithInfo = useMemo(() => {
-    return annotations.filter(ann =>
-      ann.timeSpan && ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
-    ).map(ann => {
+    return annotations.filter(ann => {
+      // Always show selected annotation (for ghost box after last keyframe)
+      if (selectedAnnotation && ann.id === selectedAnnotation.id) {
+        return true
+      }
+      // Show annotations within their timeSpan
+      return ann.timeSpan && ann.timeSpan.startTime <= currentTime && ann.timeSpan.endTime >= currentTime
+    }).map(ann => {
       const displayInfo: any = { ...ann }
 
       // Get linked object info (only for object annotations)
@@ -301,7 +329,7 @@ export default function AnnotationOverlay({
         width="100%"
         height="100%"
         style={{
-          cursor: ((annotationMode === 'type' && drawingMode) || 
+          cursor: ((annotationMode === 'type' && drawingMode) ||
                    (annotationMode === 'object' && linkTargetId))
                    ? 'crosshair' : 'default',
           backgroundColor: 'transparent',
@@ -314,15 +342,22 @@ export default function AnnotationOverlay({
         onMouseLeave={handleMouseUp}
       >
         {annotationsWithInfo.map((ann) => {
-          // Calculate current frame (assuming 30fps for now, will need proper videoFps later)
+          if (!ann.boundingBoxSequence) return null
+
           const fps = 30
           const currentFrame = Math.floor(currentTime * fps)
 
-          // Determine mode based on whether current frame is a keyframe
           const isKeyframe = ann.boundingBoxSequence.boxes.some(
             (b: any) => (b.isKeyframe || b.isKeyframe === undefined) && b.frameNumber === currentFrame
           )
-          const mode: 'keyframe' | 'interpolated' | 'ghost' = isKeyframe ? 'keyframe' : 'interpolated'
+
+          // Check if current frame is within any visibility range
+          const isVisible = ann.boundingBoxSequence.visibilityRanges?.some(
+            (range: any) => currentFrame >= range.startFrame && currentFrame <= range.endFrame && range.visible
+          ) || false
+
+          const mode: 'keyframe' | 'interpolated' | 'ghost' =
+            !isVisible ? 'ghost' : (isKeyframe ? 'keyframe' : 'interpolated')
 
           return (
             <g key={ann.id} style={{ pointerEvents: 'auto' }}>

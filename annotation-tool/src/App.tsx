@@ -12,6 +12,7 @@ import { AppDispatch } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { setWorldData } from './store/worldSlice'
 import { api } from './services/api'
+import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
@@ -89,7 +90,20 @@ function App() {
   }, [dispatch])
 
   useEffect(() => {
-    loadOntology()
+    const initializeData = async () => {
+      // Check if developer test mode is enabled
+      if (isTestDataEnabled()) {
+        console.warn('⚠️  DEVELOPER TEST MODE ENABLED')
+        console.warn('⚠️  Pre-populating with test data')
+        console.warn('⚠️  Set VITE_ENABLE_TEST_DATA=false to disable')
+        await seedTestData()
+      } else {
+        // Normal mode: load from API
+        await loadOntology()
+      }
+    }
+
+    initializeData()
   }, [loadOntology])
 
   return (

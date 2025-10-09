@@ -15,11 +15,6 @@ export interface RenderOptions {
   currentFrame: number
   keyframes: BoundingBox[]
   interpolationSegments: InterpolationSegment[]
-  visibilityRanges?: Array<{
-    startFrame: number
-    endFrame: number
-    visible: boolean
-  }>
   zoom: number  // 1-10x
   theme: {
     backgroundColor: string
@@ -50,10 +45,9 @@ export class TimelineRenderer {
   private pixelsPerFrame: number = 10
 
   // Layout constants
-  private readonly FRAME_RULER_HEIGHT = 30
-  private readonly KEYFRAME_TRACK_HEIGHT = 40
-  private readonly VISIBILITY_TRACK_HEIGHT = 20
-  private readonly PADDING = 8
+  private readonly FRAME_RULER_HEIGHT = 20
+  private readonly KEYFRAME_TRACK_HEIGHT = 30
+  private readonly PADDING = 5
 
   /**
    * Create a timeline renderer.
@@ -146,7 +140,6 @@ export class TimelineRenderer {
     // Render timeline elements
     this.renderFrameRuler(targetCtx, options)
     this.renderKeyframes(targetCtx, options, selectedKeyframes)
-    this.renderVisibilityTrack(targetCtx, options)
     this.renderPlayhead(targetCtx, options)
 
     // Copy offscreen canvas to visible canvas if using double buffering
@@ -209,7 +202,7 @@ export class TimelineRenderer {
     // Draw ticks and numbers
     ctx.strokeStyle = options.theme.dividerColor
     ctx.fillStyle = options.theme.textSecondary
-    ctx.font = '10px monospace'
+    ctx.font = '9px monospace'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
 
@@ -219,16 +212,16 @@ export class TimelineRenderer {
       // Draw major ticks with frame numbers
       if (frame % majorTickInterval === 0) {
         ctx.beginPath()
-        ctx.moveTo(x, y + height - 10)
+        ctx.moveTo(x, y + height - 7)
         ctx.lineTo(x, y + height)
         ctx.stroke()
 
-        ctx.fillText(frame.toString(), x, y + 2)
+        ctx.fillText(frame.toString(), x, y + 1)
       }
       // Draw minor ticks
       else if (frame % minorTickInterval === 0) {
         ctx.beginPath()
-        ctx.moveTo(x, y + height - 5)
+        ctx.moveTo(x, y + height - 3)
         ctx.lineTo(x, y + height)
         ctx.stroke()
       }
@@ -262,7 +255,8 @@ export class TimelineRenderer {
     ctx.fillStyle = options.theme.backgroundColor
     ctx.fillRect(0, y, this.canvas.width, height)
 
-    // Draw interpolation segment lines with different visual indicators
+    // Draw interpolation segment lines
+    ctx.strokeStyle = options.theme.primaryLight
     ctx.lineWidth = 2
 
     for (const segment of options.interpolationSegments) {
@@ -272,67 +266,26 @@ export class TimelineRenderer {
 
       const startX = this.frameToX(segment.startFrame)
       const endX = this.frameToX(segment.endFrame)
-      const midX = (startX + endX) / 2
 
+      // Draw straight line for linear interpolation
+      // For bezier, will draw curves in Session 5
       ctx.beginPath()
       ctx.moveTo(startX, centerY)
 
-      // Draw different line styles based on interpolation type
       if (segment.type === 'linear' || !segment.type) {
-        // Straight line for linear
-        ctx.strokeStyle = options.theme.primaryLight
-        ctx.setLineDash([])
         ctx.lineTo(endX, centerY)
       } else if (segment.type === 'hold') {
         // Step function for hold
-        ctx.strokeStyle = options.theme.primaryLight
-        ctx.setLineDash([4, 4])
-        ctx.lineTo(endX, centerY)
-      } else if (segment.type === 'ease-in-out' || segment.type === 'ease-in' || segment.type === 'ease-out') {
-        // S-curve for easing
-        ctx.strokeStyle = options.theme.primaryLight
-        ctx.setLineDash([])
-        const cp1X = startX + (endX - startX) * 0.3
-        const cp2X = startX + (endX - startX) * 0.7
-        const curveHeight = segment.type === 'ease-in-out' ? 8 : 5
-        ctx.bezierCurveTo(
-          cp1X, centerY - curveHeight,
-          cp2X, centerY - curveHeight,
-          endX, centerY
-        )
-      } else if (segment.type === 'bezier') {
-        // Custom bezier curve
-        ctx.strokeStyle = '#4caf50' // Green for custom
-        ctx.setLineDash([])
-        ctx.quadraticCurveTo(midX, centerY - 10, endX, centerY)
+        ctx.lineTo(endX - 5, centerY)
+        ctx.lineTo(endX - 5, centerY - 10)
+        ctx.lineTo(endX, centerY - 10)
       } else {
-        // Default to linear for unknown types
-        ctx.strokeStyle = options.theme.primaryLight
-        ctx.setLineDash([])
+        // For other types (bezier, easing), draw straight for now
+        // Session 5 will add curve visualization
         ctx.lineTo(endX, centerY)
       }
 
       ctx.stroke()
-      ctx.setLineDash([]) // Reset dash pattern
-
-      // Draw interpolation mode icon at midpoint
-      const iconMap: Record<string, string> = {
-        'linear': '—',
-        'ease-in-out': '~',
-        'ease-in': '/',
-        'ease-out': '\\',
-        'hold': '⊏',
-        'bezier': '⌢'
-      }
-
-      const icon = iconMap[segment.type || 'linear']
-      if (icon && (endX - startX) > 30) { // Only show icon if segment is wide enough
-        ctx.font = '12px monospace'
-        ctx.fillStyle = '#666'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'top'
-        ctx.fillText(icon, midX, centerY + 10)
-      }
     }
 
     // Draw keyframe dots
@@ -389,66 +342,6 @@ export class TimelineRenderer {
   }
 
   /**
-   * Render visibility track showing visible/hidden frame ranges.
-   *
-   * @param ctx - Canvas rendering context
-   * @param options - Render options
-   */
-  private renderVisibilityTrack(
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    options: RenderOptions
-  ): void {
-    const y = this.PADDING + this.FRAME_RULER_HEIGHT + this.PADDING + this.KEYFRAME_TRACK_HEIGHT + this.PADDING
-    const height = this.VISIBILITY_TRACK_HEIGHT
-
-    // Draw track background
-    ctx.fillStyle = options.theme.backgroundColor
-    ctx.fillRect(0, y, this.canvas.width, height)
-
-    // If no visibility ranges defined, assume all visible
-    if (!options.visibilityRanges || options.visibilityRanges.length === 0) {
-      ctx.fillStyle = options.theme.primaryLight + '40' // Semi-transparent
-      ctx.fillRect(0, y, this.canvas.width, height)
-      return
-    }
-
-    // Render visibility ranges
-    for (const range of options.visibilityRanges) {
-      if (range.endFrame < this.viewportStartFrame || range.startFrame > this.viewportEndFrame) {
-        continue
-      }
-
-      const startX = this.frameToX(Math.max(range.startFrame, this.viewportStartFrame))
-      const endX = this.frameToX(Math.min(range.endFrame, this.viewportEndFrame))
-      const width = endX - startX
-
-      if (range.visible) {
-        // Visible range - filled bar
-        ctx.fillStyle = options.theme.primaryLight + '60' // Semi-transparent primary color
-        ctx.fillRect(startX, y, width, height)
-      } else {
-        // Hidden range - crosshatch pattern
-        ctx.fillStyle = '#ccc'
-        ctx.fillRect(startX, y, width, height)
-
-        // Draw crosshatch
-        ctx.strokeStyle = '#999'
-        ctx.lineWidth = 1
-        for (let x = startX; x < endX; x += 5) {
-          ctx.beginPath()
-          ctx.moveTo(x, y)
-          ctx.lineTo(x + 5, y + height)
-          ctx.stroke()
-        }
-      }
-    }
-
-    // Draw border
-    ctx.strokeStyle = options.theme.dividerColor
-    ctx.strokeRect(0, y, this.canvas.width, height)
-  }
-
-  /**
    * Render playhead as vertical red line.
    *
    * @param ctx - Canvas rendering context
@@ -462,7 +355,7 @@ export class TimelineRenderer {
     const rulerY = this.PADDING
     const rulerHeight = this.FRAME_RULER_HEIGHT
     const trackY = rulerY + rulerHeight + this.PADDING
-    const trackHeight = this.KEYFRAME_TRACK_HEIGHT + this.PADDING + this.VISIBILITY_TRACK_HEIGHT
+    const trackHeight = this.KEYFRAME_TRACK_HEIGHT
 
     // Draw vertical line
     ctx.strokeStyle = options.theme.errorMain
@@ -475,9 +368,9 @@ export class TimelineRenderer {
     // Draw draggable triangle handle at top
     ctx.fillStyle = options.theme.errorMain
     ctx.beginPath()
-    ctx.moveTo(x, rulerY)
-    ctx.lineTo(x - 8, rulerY - 10)
-    ctx.lineTo(x + 8, rulerY - 10)
+    ctx.moveTo(x, rulerY + 6)
+    ctx.lineTo(x - 6, rulerY)
+    ctx.lineTo(x + 6, rulerY)
     ctx.closePath()
     ctx.fill()
 

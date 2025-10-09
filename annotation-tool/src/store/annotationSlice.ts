@@ -231,8 +231,9 @@ const annotationSlice = createSlice({
       annotationId: string
       frameNumber: number
       box?: Partial<BoundingBox>
+      fps?: number
     }>) => {
-      const { videoId, annotationId, frameNumber, box } = action.payload
+      const { videoId, annotationId, frameNumber, box, fps = 30 } = action.payload
       const videoAnnotations = state.annotations[videoId]
       if (!videoAnnotations) return
 
@@ -256,14 +257,28 @@ const annotationSlice = createSlice({
       }
 
       annotation.boundingBoxSequence = updatedSequence
+
+      // Update annotation timeSpan to cover all keyframes
+      if (updatedSequence.boxes.length > 0) {
+        const keyframes = updatedSequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
     },
 
     removeKeyframe: (state, action: PayloadAction<{
       videoId: string
       annotationId: string
       frameNumber: number
+      fps?: number
     }>) => {
-      const { videoId, annotationId, frameNumber } = action.payload
+      const { videoId, annotationId, frameNumber, fps = 30 } = action.payload
       const videoAnnotations = state.annotations[videoId]
       if (!videoAnnotations) return
 
@@ -274,6 +289,20 @@ const annotationSlice = createSlice({
         annotation.boundingBoxSequence,
         frameNumber
       )
+
+      // Update annotation timeSpan to cover remaining keyframes
+      const updatedSequence = annotation.boundingBoxSequence
+      if (updatedSequence.boxes.length > 0) {
+        const keyframes = updatedSequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
     },
 
     updateKeyframe: (state, action: PayloadAction<{
@@ -301,8 +330,9 @@ const annotationSlice = createSlice({
       annotationId: string
       oldFrame: number
       newFrame: number
+      fps?: number
     }>) => {
-      const { videoId, annotationId, oldFrame, newFrame } = action.payload
+      const { videoId, annotationId, oldFrame, newFrame, fps = 30 } = action.payload
       const videoAnnotations = state.annotations[videoId]
       if (!videoAnnotations) return
 
@@ -334,6 +364,19 @@ const annotationSlice = createSlice({
       }
 
       annotation.boundingBoxSequence = withNew
+
+      // Update annotation timeSpan to cover all keyframes
+      if (withNew.boxes.length > 0) {
+        const keyframes = withNew.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+        const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+        const startTime = sortedKeyframes[0].frameNumber / fps
+        const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+        // Ensure minimum 1 second duration for single keyframe to show ghost box
+        annotation.timeSpan = {
+          startTime,
+          endTime: Math.max(endTime, startTime + 1),
+        }
+      }
     },
 
     setSegmentInterpolationMode: (state, action: PayloadAction<{

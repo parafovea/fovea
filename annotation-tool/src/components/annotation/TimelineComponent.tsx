@@ -6,26 +6,27 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { useDispatch } from 'react-redux'
-import { Box, Slider, IconButton, Typography, useTheme } from '@mui/material'
+import { Box, Slider, IconButton, Typography, useTheme, Tooltip, Button } from '@mui/material'
 import {
   SkipPrevious,
   FastRewind,
   FastForward,
   SkipNext,
 } from '@mui/icons-material'
-import { Annotation } from '../../models/types.js'
+import { Annotation, InterpolationType } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
 import { useTimelineKeyboardShortcuts } from '../../hooks/useTimelineKeyboardShortcuts.js'
 import { AppDispatch } from '../../store/store.js'
 import { moveKeyframe } from '../../store/annotationSlice.js'
+import { InterpolationModeSelector } from './InterpolationModeSelector.js'
 
 /**
  * @interface TimelineComponentProps
  * @description Props for TimelineComponent.
  */
 export interface TimelineComponentProps {
-  /** Annotation with boundingBoxSequence */
-  annotation: Annotation
+  /** Annotation with boundingBoxSequence (optional - when null, controls are disabled) */
+  annotation: Annotation | null
   /** Current frame number */
   currentFrame: number
   /** Total frames in video */
@@ -36,6 +37,16 @@ export interface TimelineComponentProps {
   onSeek: (frameNumber: number) => void
   /** Optional video element ref for playback sync */
   videoRef?: React.RefObject<HTMLVideoElement>
+  /** Callback to add keyframe at current frame */
+  onAddKeyframe: () => void
+  /** Callback to delete keyframe at current frame */
+  onDeleteKeyframe: () => void
+  /** Callback to copy previous frame's box */
+  onCopyPreviousFrame: () => void
+  /** Callback when interpolation mode is changed */
+  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: any) => void
+  /** Callback to close/hide timeline */
+  onClose: () => void
 }
 
 /**
@@ -49,23 +60,48 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   videoFps,
   onSeek,
   videoRef,
+  onAddKeyframe,
+  onDeleteKeyframe,
+  onCopyPreviousFrame,
+  onUpdateInterpolationSegment,
+  onClose,
 }) => {
   const theme = useTheme()
   const dispatch = useDispatch<AppDispatch>()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<TimelineRenderer | null>(null)
+  const currentFrameRef = useRef(currentFrame)
   const [isDragging, setIsDragging] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [hoveredFrame, setHoveredFrame] = useState<number | null>(null)
+
+  // Update ref without triggering re-render
+  useEffect(() => {
+    currentFrameRef.current = currentFrame
+  }, [currentFrame])
   const [selectedKeyframes, setLocalSelectedKeyframes] = useState<number[]>([])
   const [draggingKeyframe, setDraggingKeyframe] = useState<number | null>(null)
   const [dragStartFrame, setDragStartFrame] = useState<number | null>(null)
+  const [interpolationDialogOpen, setInterpolationDialogOpen] = useState(false)
 
   // Extract keyframes from annotation
-  const keyframes = annotation.boundingBoxSequence.boxes.filter(
+  const keyframes = annotation?.boundingBoxSequence?.boxes.filter(
     b => b.isKeyframe || b.isKeyframe === undefined
+  ) || []
+
+  // Check if current frame is a keyframe
+  const isKeyframe = keyframes.some(kf => kf.frameNumber === currentFrame)
+
+  // Check if delete is allowed
+  const isFirstOrLastKeyframe = isKeyframe && (
+    keyframes.length <= 2 ||
+    currentFrame === keyframes[0].frameNumber ||
+    currentFrame === keyframes[keyframes.length - 1].frameNumber
   )
+
+  // Interpolation requires at least 2 keyframes
+  const canInterpolate = keyframes.length >= 2
 
   // Setup keyboard shortcuts
   useTimelineKeyboardShortcuts(
@@ -86,7 +122,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect()
       canvas.width = rect.width
-      canvas.height = 140  // Updated height for timeline (includes visibility track)
+      canvas.height = 60  // Fixed height for timeline
     }
 
     resizeCanvas()
@@ -101,7 +137,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       resizeCanvas()
       if (rendererRef.current) {
         const rect = container.getBoundingClientRect()
-        rendererRef.current.resize(rect.width, 140)
+        rendererRef.current.resize(rect.width, 60)
         rendererRef.current.invalidate()
       }
     }
@@ -114,41 +150,51 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     }
   }, [totalFrames, zoom])
 
-  // Render loop
+  // Render loop - use ref to avoid triggering React re-renders on every frame
   useEffect(() => {
     if (!rendererRef.current) return
 
     const renderer = rendererRef.current
+    let lastRenderTime = 0
+    let rafId: number | null = null
 
-    const renderOptions: RenderOptions = {
-      totalFrames,
-      currentFrame,
-      keyframes,
-      interpolationSegments: annotation.boundingBoxSequence.interpolationSegments,
-      visibilityRanges: annotation.boundingBoxSequence.visibilityRanges,
-      zoom,
-      theme: {
-        backgroundColor: theme.palette.background.paper,
-        textColor: theme.palette.text.primary,
-        textSecondary: theme.palette.text.secondary,
-        dividerColor: theme.palette.divider,
-        primaryMain: theme.palette.primary.main,
-        primaryLight: theme.palette.primary.light,
-        errorMain: theme.palette.error.main,
-      },
-    }
+    const render = (timestamp: number) => {
+      // Throttle to max 15fps (66ms between frames) to avoid affecting video playback
+      if (timestamp - lastRenderTime < 66) {
+        rafId = requestAnimationFrame(render)
+        return
+      }
+      lastRenderTime = timestamp
 
-    // Render using requestAnimationFrame for smooth 60fps
-    const render = () => {
+      const renderOptions: RenderOptions = {
+        totalFrames,
+        currentFrame: currentFrameRef.current,
+        keyframes,
+        interpolationSegments: annotation?.boundingBoxSequence?.interpolationSegments || [],
+        zoom,
+        theme: {
+          backgroundColor: theme.palette.background.paper,
+          textColor: theme.palette.text.primary,
+          textSecondary: theme.palette.text.secondary,
+          dividerColor: theme.palette.divider,
+          primaryMain: theme.palette.primary.main,
+          primaryLight: theme.palette.primary.light,
+          errorMain: theme.palette.error.main,
+        },
+      }
+
       renderer.render(renderOptions, selectedKeyframes)
+      rafId = requestAnimationFrame(render)
     }
 
-    const rafId = requestAnimationFrame(render)
+    rafId = requestAnimationFrame(render)
 
     return () => {
-      cancelAnimationFrame(rafId)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
     }
-  }, [currentFrame, keyframes, annotation.boundingBoxSequence.interpolationSegments, zoom, totalFrames, theme, selectedKeyframes])
+  }, [keyframes, annotation?.boundingBoxSequence?.interpolationSegments, zoom, totalFrames, theme, selectedKeyframes])
 
   // Handle mouse down on canvas
   const handleMouseDown = useCallback(
@@ -235,7 +281,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       // Handle keyframe drag completion
-      if (draggingKeyframe !== null && dragStartFrame !== null && canvasRef.current && rendererRef.current) {
+      if (draggingKeyframe !== null && dragStartFrame !== null && canvasRef.current && rendererRef.current && annotation) {
         const canvas = canvasRef.current
         const renderer = rendererRef.current
         const rect = canvas.getBoundingClientRect()
@@ -256,6 +302,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 annotationId: annotation.id,
                 oldFrame: dragStartFrame,
                 newFrame,
+                fps: videoFps,
               })
             )
           }
@@ -310,19 +357,23 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
   // Transport control handlers
   const handleStepBackward = () => {
-    onSeek(Math.max(0, currentFrame - 1))
+    const newFrame = Math.max(0, currentFrame - 1)
+    onSeek(newFrame)
   }
 
   const handleStepForward = () => {
-    onSeek(Math.min(totalFrames - 1, currentFrame + 1))
+    const newFrame = Math.min(totalFrames - 1, currentFrame + 1)
+    onSeek(newFrame)
   }
 
   const handleJumpBackward = () => {
-    onSeek(Math.max(0, currentFrame - 10))
+    const newFrame = Math.max(0, currentFrame - 10)
+    onSeek(newFrame)
   }
 
   const handleJumpForward = () => {
-    onSeek(Math.min(totalFrames - 1, currentFrame + 10))
+    const newFrame = Math.min(totalFrames - 1, currentFrame + 10)
+    onSeek(newFrame)
   }
 
   return (
@@ -340,7 +391,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         ref={containerRef}
         sx={{
           width: '100%',
-          height: 140,
+          height: 60,
           position: 'relative',
           cursor: isDragging ? 'grabbing' : 'grab',
         }}
@@ -387,6 +438,15 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           mt: 1,
         }}
       >
+        {/* Hide Timeline Button */}
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onClose}
+        >
+          Hide Timeline
+        </Button>
+
         {/* Transport controls */}
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)">
@@ -401,6 +461,109 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)">
             <SkipNext />
           </IconButton>
+        </Box>
+
+        {/* Keyframe controls */}
+        <Box sx={{ display: 'flex', gap: 0.5, borderLeft: `1px solid ${theme.palette.divider}`, pl: 1 }}>
+          <Tooltip title="Add Keyframe (K)" arrow placement="top">
+            <Box>
+              <IconButton
+                size="small"
+                onClick={onAddKeyframe}
+                disabled={!annotation || isKeyframe}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 0.5,
+                  '&:disabled': {
+                    opacity: 0.5,
+                  },
+                }}
+              >
+                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
+                  🔑
+                </Typography>
+              </IconButton>
+            </Box>
+          </Tooltip>
+
+          <Tooltip
+            title={
+              !annotation
+                ? 'No annotation selected'
+                : !isKeyframe
+                ? 'Not a keyframe'
+                : isFirstOrLastKeyframe
+                ? 'Cannot delete first/last keyframe'
+                : 'Delete Keyframe (Del)'
+            }
+            arrow
+            placement="top"
+          >
+            <Box>
+              <IconButton
+                size="small"
+                onClick={onDeleteKeyframe}
+                disabled={!annotation || !isKeyframe || isFirstOrLastKeyframe}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 0.5,
+                  '&:disabled': {
+                    opacity: 0.5,
+                  },
+                }}
+              >
+                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
+                  ╳
+                </Typography>
+              </IconButton>
+            </Box>
+          </Tooltip>
+
+          <Tooltip title="Copy Previous Frame (Ctrl+C)" arrow placement="top">
+            <Box>
+              <IconButton
+                size="small"
+                onClick={onCopyPreviousFrame}
+                disabled={!annotation || currentFrame === 0}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 0.5,
+                  '&:disabled': {
+                    opacity: 0.5,
+                  },
+                }}
+              >
+                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
+                  ↻
+                </Typography>
+              </IconButton>
+            </Box>
+          </Tooltip>
+
+          <Tooltip title="Interpolation Mode (I)" arrow placement="top">
+            <Box>
+              <IconButton
+                size="small"
+                onClick={() => setInterpolationDialogOpen(true)}
+                disabled={!annotation || !canInterpolate}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 0.5,
+                  '&:disabled': {
+                    opacity: 0.5,
+                  },
+                }}
+              >
+                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
+                  ~
+                </Typography>
+              </IconButton>
+            </Box>
+          </Tooltip>
         </Box>
 
         {/* Zoom slider */}
@@ -426,6 +589,18 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           Frame {currentFrame} / {totalFrames - 1}
         </Typography>
       </Box>
+
+      {/* Interpolation Mode Selector Dialog */}
+      <InterpolationModeSelector
+        annotation={annotation}
+        currentFrame={currentFrame}
+        open={interpolationDialogOpen}
+        onClose={() => setInterpolationDialogOpen(false)}
+        onApply={(segmentIndex, type, controlPoints) => {
+          onUpdateInterpolationSegment(segmentIndex, type, controlPoints)
+          setInterpolationDialogOpen(false)
+        }}
+      />
     </Box>
   )
 }

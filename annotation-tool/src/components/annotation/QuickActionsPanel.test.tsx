@@ -206,9 +206,12 @@ describe('QuickActionsPanel', () => {
   })
 
   test('positions above bounding box by default', () => {
-    const { container } = render(<QuickActionsPanel {...defaultProps} />)
+    render(<QuickActionsPanel {...defaultProps} />)
 
-    const panel = container.querySelector('[class*="MuiPaper"]')
+    // Panel is rendered via portal to document.body
+    const panel = document.body.querySelector('[class*="MuiPaper"]')
+    expect(panel).not.toBeNull()
+
     const style = window.getComputedStyle(panel!)
 
     // Should be positioned above the box (top - panelHeight - margin)
@@ -218,11 +221,14 @@ describe('QuickActionsPanel', () => {
   test('flips below bounding box when near top edge', () => {
     const nearTopRect = { ...mockBoundingBoxRect, top: 10 }
 
-    const { container } = render(
+    render(
       <QuickActionsPanel {...defaultProps} boundingBoxRect={nearTopRect} />
     )
 
-    const panel = container.querySelector('[class*="MuiPaper"]')
+    // Panel is rendered via portal to document.body
+    const panel = document.body.querySelector('[class*="MuiPaper"]')
+    expect(panel).not.toBeNull()
+
     const style = window.getComputedStyle(panel!)
 
     expect(style.position).toBe('absolute')

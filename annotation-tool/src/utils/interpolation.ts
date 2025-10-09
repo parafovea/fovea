@@ -439,12 +439,39 @@ export class BoundingBoxInterpolator {
       return sequence
     }
 
-    // Generate current interpolated value
+    // Generate current interpolated value (ignore visibility for interpolation)
     const allBoxes = this.interpolate(sequence.boxes, sequence.interpolationSegments)
-    const interpolatedBox = allBoxes.find(b => b.frameNumber === frameNumber)
+    let interpolatedBox = allBoxes.find(b => b.frameNumber === frameNumber)
 
+    // If no interpolated box exists, create one from nearest keyframe
     if (!interpolatedBox) {
-      return sequence
+      const keyframes = sequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
+      if (keyframes.length === 0) return sequence
+
+      const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+      const prevKeyframes = sorted.filter(k => k.frameNumber < frameNumber)
+      const nextKeyframes = sorted.filter(k => k.frameNumber > frameNumber)
+
+      if (prevKeyframes.length === 0 && nextKeyframes.length === 0) {
+        return sequence
+      } else if (prevKeyframes.length === 0) {
+        interpolatedBox = { ...nextKeyframes[0], frameNumber, isKeyframe: false }
+      } else if (nextKeyframes.length === 0) {
+        interpolatedBox = { ...prevKeyframes[prevKeyframes.length - 1], frameNumber, isKeyframe: false }
+      } else {
+        // Linear interpolation
+        const prev = prevKeyframes[prevKeyframes.length - 1]
+        const next = nextKeyframes[0]
+        const t = (frameNumber - prev.frameNumber) / (next.frameNumber - prev.frameNumber)
+        interpolatedBox = {
+          x: prev.x + (next.x - prev.x) * t,
+          y: prev.y + (next.y - prev.y) * t,
+          width: prev.width + (next.width - prev.width) * t,
+          height: prev.height + (next.height - prev.height) * t,
+          frameNumber,
+          isKeyframe: false,
+        }
+      }
     }
 
     // Add as keyframe
@@ -463,17 +490,74 @@ export class BoundingBoxInterpolator {
       frameNumber
     )
 
+    // Update visibility ranges to include new keyframe
+    const updatedVisibilityRanges = this.expandVisibilityForKeyframe(
+      sequence.visibilityRanges || [],
+      frameNumber,
+      updatedKeyframes
+    )
+
     // Re-interpolate
-    const interpolatedBoxes = this.interpolate(updatedKeyframes, updatedSegments)
+    const interpolatedBoxes = this.interpolate(updatedKeyframes, updatedSegments, updatedVisibilityRanges)
 
     return {
       ...sequence,
       boxes: interpolatedBoxes.filter(b => b.isKeyframe),
       interpolationSegments: updatedSegments,
+      visibilityRanges: updatedVisibilityRanges,
       keyframeCount: updatedKeyframes.length,
       interpolatedFrameCount: interpolatedBoxes.length - updatedKeyframes.length,
       totalFrames: interpolatedBoxes.length,
     }
+  }
+
+  /**
+   * Expand visibility ranges to include a new keyframe.
+   *
+   * @param ranges - Current visibility ranges
+   * @param frameNumber - New keyframe frame number
+   * @param keyframes - All keyframes including the new one
+   * @returns Updated visibility ranges
+   */
+  private expandVisibilityForKeyframe(
+    ranges: Array<{ startFrame: number; endFrame: number; visible: boolean }>,
+    frameNumber: number,
+    keyframes: BoundingBox[]
+  ): Array<{ startFrame: number; endFrame: number; visible: boolean }> {
+    // Sort keyframes to find first and last
+    const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+    const firstFrame = sorted[0].frameNumber
+    const lastFrame = sorted[sorted.length - 1].frameNumber
+
+    if (ranges.length === 0) {
+      // Create initial range spanning all keyframes
+      return [{
+        startFrame: firstFrame,
+        endFrame: lastFrame,
+        visible: true,
+      }]
+    }
+
+    // Check if new keyframe extends beyond current range
+    const visibleRanges = ranges.filter(r => r.visible)
+
+    if (visibleRanges.length === 0) {
+      // No visible ranges, create one spanning all keyframes
+      return [...ranges, { startFrame: firstFrame, endFrame: lastFrame, visible: true }]
+    }
+
+    // Expand main visible range to include all keyframes
+    const mainRange = visibleRanges[0]
+    const otherRanges = ranges.filter(r => r !== mainRange)
+
+    return [
+      {
+        ...mainRange,
+        startFrame: Math.min(mainRange.startFrame, firstFrame),
+        endFrame: Math.max(mainRange.endFrame, lastFrame),
+      },
+      ...otherRanges
+    ]
   }
 
   /**
