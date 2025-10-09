@@ -1,9 +1,9 @@
 # Configuration file for the Sphinx documentation builder.
-import os
 import sys
+from pathlib import Path
 
 # Add src directory to Python path for autodoc
-sys.path.insert(0, os.path.abspath('../src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # -- Project information
 project = 'Fovea Model Service'

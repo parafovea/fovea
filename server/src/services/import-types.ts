@@ -10,7 +10,7 @@
 export interface ImportLine {
   type: 'ontology' | 'entity' | 'event' | 'time' | 'entityCollection' |
         'eventCollection' | 'timeCollection' | 'relation' | 'annotation' | 'video' | 'metadata'
-  data: any
+  data: Record<string, unknown>
   lineNumber: number
 }
 
@@ -122,13 +122,13 @@ export interface ImportResult {
     line: number
     type: string
     message: string
-    data?: any
+    data?: unknown
   }>
   errors: Array<{
     line: number
     type: string
     message: string
-    data?: any
+    data?: unknown
   }>
   conflicts: Array<Conflict & { resolution: string }>
 }

@@ -91,18 +91,19 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const fileContent = fileBuffer.toString('utf-8')
 
       // Parse options from fields
-      const fields = data.fields as any
+      const fields = data.fields as Record<string, { value: string }>
       let options: ImportOptions = { ...DEFAULT_IMPORT_OPTIONS }
 
       if (fields.options) {
         try {
           const parsedOptions = JSON.parse(fields.options.value)
           options = { ...DEFAULT_IMPORT_OPTIONS, ...parsedOptions }
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
           reply.code(400)
           return reply.send({
             error: 'Bad Request',
-            message: `Invalid options JSON: ${error.message}`
+            message: `Invalid options JSON: ${errorMessage}`
           })
         }
       }
@@ -115,11 +116,12 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         try {
           const importLine = handler.parseLine(lines[i], i + 1)
           importLines.push(importLine)
-        } catch (error: any) {
+        } catch (error) {
+          const parseErrorMessage = error instanceof Error ? error.message : 'Unknown parse error'
           reply.code(400)
           return reply.send({
             error: 'Parse Error',
-            message: error.message
+            message: parseErrorMessage
           })
         }
       }
@@ -132,8 +134,8 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
-            importOptions: options as any,
-            result: result as any,
+            importOptions: options as unknown as Record<string, unknown>,
+            result: result as unknown as Record<string, unknown>,
             success: result.success,
             itemsImported: result.summary.importedItems.annotations,
             itemsSkipped: result.summary.skippedItems.annotations,
@@ -143,12 +145,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send(result)
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
       reply.code(500)
       return reply.send({
         error: 'Internal Server Error',
-        message: error.message
+        message: errorMessage
       })
     }
   })
@@ -213,11 +216,12 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         try {
           const importLine = handler.parseLine(lines[i], i + 1)
           importLines.push(importLine)
-        } catch (error: any) {
+        } catch (error) {
+          const parseErrorMessage = error instanceof Error ? error.message : 'Unknown parse error'
           reply.code(400)
           return reply.send({
             error: 'Parse Error',
-            message: error.message
+            message: parseErrorMessage
           })
         }
       }
@@ -238,7 +242,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           // Count keyframes
           const sequence = line.data.boundingBoxSequence
           if (sequence && sequence.boxes) {
-            const keyframes = sequence.boxes.filter((b: any) => b.isKeyframe)
+            const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
             counts.totalKeyframes += keyframes.length
 
             if (keyframes.length === 1) {
@@ -266,12 +270,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         conflicts,
         warnings
       })
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
       reply.code(500)
       return reply.send({
         error: 'Internal Server Error',
-        message: error.message
+        message: errorMessage
       })
     }
   })
@@ -341,12 +346,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         })),
         total
       })
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
       reply.code(500)
       return reply.send({
         error: 'Internal Server Error',
-        message: error.message
+        message: errorMessage
       })
     }
   })

@@ -12,7 +12,7 @@ interface BoundingBox {
   frameNumber: number
   confidence?: number
   isKeyframe?: boolean
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -23,8 +23,8 @@ interface InterpolationSegment {
   startFrame: number
   endFrame: number
   type: 'linear' | 'bezier' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'hold' | 'parametric'
-  controlPoints?: any
-  parametric?: any
+  controlPoints?: unknown
+  parametric?: unknown
 }
 
 /**
@@ -158,7 +158,7 @@ export class SequenceValidator {
         }
 
         // Validate interpolation type
-        if (!SUPPORTED_INTERPOLATION_TYPES.includes(segment.type as any)) {
+        if (!SUPPORTED_INTERPOLATION_TYPES.includes(segment.type as typeof SUPPORTED_INTERPOLATION_TYPES[number])) {
           errors.push(
             `Unsupported interpolation type: ${segment.type}. ` +
             `Supported types: ${SUPPORTED_INTERPOLATION_TYPES.join(', ')}`
@@ -167,7 +167,7 @@ export class SequenceValidator {
 
         // Validate bezier control points
         if (segment.type === 'bezier' && segment.controlPoints) {
-          const validateControlPoints = (points: any[]) => {
+          const validateControlPoints = (points: Array<{ x: number; y: number }>) => {
             if (!Array.isArray(points)) return
             for (const point of points) {
               if (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) {

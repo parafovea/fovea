@@ -1,5 +1,4 @@
-import { Persona } from '../../src/types/index.js'
-import { EntityType, EventType, RoleType, RelationType } from '../../src/types/ontology.js'
+import { Persona, EntityType, EventType, RoleType, RelationType } from '../../src/models/types.js'
 
 /**
  * Factory function to create test persona objects.
@@ -18,6 +17,7 @@ export function createPersona(overrides: Partial<Persona> = {}): Persona {
     name: 'Test Analyst',
     role: 'Intelligence Analyst',
     informationNeed: 'Analyze test scenarios',
+    details: 'A test persona for unit testing',
     createdAt: '2025-10-01T10:00:00Z',
     updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
@@ -39,10 +39,9 @@ export function createEntityType(overrides: Partial<EntityType> = {}): EntityTyp
   return {
     id: 'test-entity-type-1',
     name: 'Test Entity',
-    description: 'A test entity type',
-    parent: null,
-    properties: {},
-    wikidataId: null,
+    gloss: [{ type: 'text', content: 'A test entity type' }],
+    createdAt: '2025-10-01T10:00:00Z',
+    updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
   }
 }
@@ -62,10 +61,10 @@ export function createEventType(overrides: Partial<EventType> = {}): EventType {
   return {
     id: 'test-event-type-1',
     name: 'Test Event',
-    description: 'A test event type',
-    parent: null,
-    properties: {},
-    wikidataId: null,
+    gloss: [{ type: 'text', content: 'A test event type' }],
+    roles: [],
+    createdAt: '2025-10-01T10:00:00Z',
+    updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
   }
 }
@@ -85,9 +84,10 @@ export function createRoleType(overrides: Partial<RoleType> = {}): RoleType {
   return {
     id: 'test-role-type-1',
     name: 'Test Role',
-    description: 'A test role type',
-    parent: null,
-    properties: {},
+    gloss: [{ type: 'text', content: 'A test role type' }],
+    allowedFillerTypes: ['entity', 'event'],
+    createdAt: '2025-10-01T10:00:00Z',
+    updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
   }
 }
@@ -107,10 +107,11 @@ export function createRelationType(overrides: Partial<RelationType> = {}): Relat
   return {
     id: 'test-relation-type-1',
     name: 'Test Relation',
-    description: 'A test relation type',
-    sourceType: 'entity',
-    targetType: 'entity',
-    properties: {},
+    gloss: [{ type: 'text', content: 'A test relation type' }],
+    sourceTypes: ['entity'],
+    targetTypes: ['entity'],
+    createdAt: '2025-10-01T10:00:00Z',
+    updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
   }
 }
@@ -132,6 +133,7 @@ export function createBaseballScoutPersona(): Persona {
     name: 'Baseball Scout',
     role: 'Professional Scout',
     informationNeed: 'Evaluate pitcher mechanics and performance',
+    details: 'Specializes in analyzing pitching form and delivery',
   })
 }
 
@@ -152,12 +154,13 @@ export function createWildlifeResearcherPersona(): Persona {
     name: 'Wildlife Researcher',
     role: 'Marine Biologist',
     informationNeed: 'Document whale pod behavior and migration patterns',
+    details: 'Studies marine mammal behavior in natural habitats',
   })
 }
 
 /**
  * Creates a hierarchical ontology tree for testing.
- * Includes parent-child relationships.
+ * Includes parent references.
  *
  * @returns Array of entity types with hierarchical structure
  *
@@ -171,22 +174,25 @@ export function createHierarchicalOntology(): EntityType[] {
   const animal = createEntityType({
     id: 'animal',
     name: 'Animal',
-    description: 'Any living organism',
-    parent: null,
+    gloss: [{ type: 'text', content: 'Any living organism' }],
   })
 
   const mammal = createEntityType({
     id: 'mammal',
     name: 'Mammal',
-    description: 'Warm-blooded vertebrate',
-    parent: 'animal',
+    gloss: [
+      { type: 'text', content: 'Warm-blooded vertebrate, subtype of ' },
+      { type: 'typeRef', content: 'Animal', refType: 'entity' },
+    ],
   })
 
   const whale = createEntityType({
     id: 'whale',
     name: 'Whale',
-    description: 'Large marine mammal',
-    parent: 'mammal',
+    gloss: [
+      { type: 'text', content: 'Large marine ' },
+      { type: 'typeRef', content: 'Mammal', refType: 'entity' },
+    ],
   })
 
   return [animal, mammal, whale]

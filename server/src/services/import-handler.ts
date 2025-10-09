@@ -45,8 +45,9 @@ export class ImportHandler {
         data: parsed.data,
         lineNumber
       }
-    } catch (error: any) {
-      throw new Error(`Failed to parse line ${lineNumber}: ${error.message}`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to parse line ${lineNumber}: ${errorMessage}`)
     }
   }
 
@@ -259,7 +260,7 @@ export class ImportHandler {
           // Check for duplicate annotation ID
           if (existingData.annotationIds.has(line.data.id)) {
             const sequence = line.data.boundingBoxSequence
-            const keyframes = sequence.boxes.filter((b: any) => b.isKeyframe)
+            const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
             const frameRange = keyframes.length > 0 ? {
               start: keyframes[0].frameNumber,
               end: keyframes[keyframes.length - 1].frameNumber
@@ -452,11 +453,11 @@ export class ImportHandler {
   /**
    * Recursively remap IDs in an object.
    */
-  private remapObjectIds(obj: any, idMap: Map<string, string>): any {
+  private remapObjectIds(obj: unknown, idMap: Map<string, string>): unknown {
     if (Array.isArray(obj)) {
       return obj.map(item => this.remapObjectIds(item, idMap))
     } else if (obj && typeof obj === 'object') {
-      const remapped: any = {}
+      const remapped: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(obj)) {
         // Remap ID fields
         if (key === 'id' && typeof value === 'string' && idMap.has(value)) {
@@ -502,7 +503,14 @@ export class ImportHandler {
     }
 
     if (worldState) {
-      const ws = worldState as any
+      const ws = worldState as {
+        entities?: Array<{ id: string }>
+        events?: Array<{ id: string }>
+        times?: Array<{ id: string }>
+        entityCollections?: Array<{ id: string }>
+        eventCollections?: Array<{ id: string }>
+        timeCollections?: Array<{ id: string }>
+      }
 
       // Extract entity IDs
       if (Array.isArray(ws.entities)) {
@@ -637,11 +645,12 @@ export class ImportHandler {
       }
 
       result.success = true
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       result.errors.push({
         line: 0,
         type: 'execution',
-        message: `Import execution failed: ${error.message}`,
+        message: `Import execution failed: ${errorMessage}`,
         data: error
       })
       result.success = false
@@ -704,7 +713,7 @@ export class ImportHandler {
         const sequence = annotation.boundingBoxSequence
 
         // Count keyframes
-        const keyframes = sequence.boxes.filter((b: any) => b.isKeyframe)
+        const keyframes = sequence.boxes.filter((b: { isKeyframe?: boolean }) => b.isKeyframe)
         result.summary.importedItems.totalKeyframes += keyframes.length
 
         if (keyframes.length === 1) {
@@ -737,11 +746,12 @@ export class ImportHandler {
 
         result.summary.importedItems.annotations++
         result.summary.processedLines++
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         result.errors.push({
           line: line.lineNumber,
           type: 'import',
-          message: `Failed to import annotation: ${error.message}`,
+          message: `Failed to import annotation: ${errorMessage}`,
           data: line.data
         })
 

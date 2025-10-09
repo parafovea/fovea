@@ -77,7 +77,15 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const data = request.body as any
+    const data = request.body as {
+      videoId: string
+      personaId: string
+      type: string
+      label: string
+      frames: unknown
+      confidence?: number
+      source?: string
+    }
 
     const annotation = await fastify.prisma.annotation.create({
       data: {
@@ -133,7 +141,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const data = request.body as any
+    const data = request.body as {
+      type?: string
+      label?: string
+      frames?: unknown
+      confidence?: number
+      source?: string
+    }
 
     const annotation = await fastify.prisma.annotation.update({
       where: { id },

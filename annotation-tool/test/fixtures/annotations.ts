@@ -1,4 +1,16 @@
-import { Annotation, Keyframe, InterpolationMode } from '../../src/types/annotation.js'
+import { Annotation, BoundingBox, InterpolationType } from '../../src/models/types.js'
+
+/**
+ * Helper to calculate metadata for a bounding box sequence.
+ */
+function calculateSequenceMetadata(boxes: BoundingBox[], endFrame: number) {
+  const keyframes = boxes.filter(b => b.isKeyframe !== false)
+  return {
+    totalFrames: endFrame + 1,
+    keyframeCount: keyframes.length,
+    interpolatedFrameCount: Math.max(0, endFrame + 1 - keyframes.length),
+  }
+}
 
 /**
  * Factory function to create test annotation objects.
@@ -9,27 +21,41 @@ import { Annotation, Keyframe, InterpolationMode } from '../../src/types/annotat
  *
  * @example
  * ```ts
- * const annotation = createAnnotation({ entityTypeId: 'my-entity-type' })
+ * const annotation = createAnnotation({ typeId: 'my-entity-type' })
  * ```
  */
 export function createAnnotation(overrides: Partial<Annotation> = {}): Annotation {
+  const boxes = [
+    createBoundingBox({ frameNumber: 0 }),
+    createBoundingBox({ frameNumber: 100 }),
+  ]
+  const metadata = calculateSequenceMetadata(boxes, 100)
+
   return {
     id: 'test-annotation-1',
     videoId: 'test-video-1',
+    annotationType: 'type',
     personaId: 'test-persona-1',
-    entityTypeId: 'test-entity-type-1',
-    eventTypeId: null,
-    entityId: null,
-    eventId: null,
-    locationId: null,
-    collectionId: null,
-    keyframes: [
-      createKeyframe({ frameNumber: 0 }),
-      createKeyframe({ frameNumber: 100 }),
-    ],
-    interpolationMode: 'linear',
-    visibilityRanges: [[0, 100]],
-    metadata: {},
+    typeCategory: 'entity',
+    typeId: 'test-entity-type-1',
+    boundingBoxSequence: {
+      boxes,
+      interpolationSegments: [
+        {
+          startFrame: 0,
+          endFrame: 100,
+          type: 'linear',
+        },
+      ],
+      visibilityRanges: [
+        {
+          startFrame: 0,
+          endFrame: 100,
+          visible: true,
+        },
+      ],
+      ...metadata,
+    },
     createdAt: '2025-10-01T10:00:00Z',
     updatedAt: '2025-10-01T10:00:00Z',
     ...overrides,
@@ -37,49 +63,50 @@ export function createAnnotation(overrides: Partial<Annotation> = {}): Annotatio
 }
 
 /**
- * Factory function to create test keyframe objects.
+ * Factory function to create test bounding box objects.
  *
- * @param overrides - Partial keyframe properties to override defaults
- * @returns A complete Keyframe object for testing
+ * @param overrides - Partial bounding box properties to override defaults
+ * @returns A complete BoundingBox object for testing
  *
  * @example
  * ```ts
- * const keyframe = createKeyframe({ frameNumber: 50, x: 0.5 })
+ * const box = createBoundingBox({ frameNumber: 50, x: 0.5 })
  * ```
  */
-export function createKeyframe(overrides: Partial<Keyframe> = {}): Keyframe {
+export function createBoundingBox(overrides: Partial<BoundingBox> = {}): BoundingBox {
   return {
     frameNumber: 0,
     x: 0.1,
     y: 0.1,
     width: 0.2,
     height: 0.2,
+    isKeyframe: true,
     ...overrides,
   }
 }
 
 /**
- * Creates a series of keyframes at regular intervals.
+ * Creates a series of bounding boxes at regular intervals.
  * Useful for testing interpolation and tracking.
  *
- * @param count - Number of keyframes to create
+ * @param count - Number of boxes to create
  * @param startFrame - Starting frame number (default: 0)
- * @param interval - Frame interval between keyframes (default: 10)
- * @returns Array of keyframes
+ * @param interval - Frame interval between boxes (default: 10)
+ * @returns Array of bounding boxes
  *
  * @example
  * ```ts
- * const keyframes = createKeyframeSequence(5, 0, 10)
- * // Creates keyframes at frames 0, 10, 20, 30, 40
+ * const boxes = createBoundingBoxSequence(5, 0, 10)
+ * // Creates boxes at frames 0, 10, 20, 30, 40
  * ```
  */
-export function createKeyframeSequence(
+export function createBoundingBoxSequence(
   count: number,
   startFrame = 0,
   interval = 10
-): Keyframe[] {
+): BoundingBox[] {
   return Array.from({ length: count }, (_, i) =>
-    createKeyframe({
+    createBoundingBox({
       frameNumber: startFrame + i * interval,
       x: 0.1 + i * 0.05,
       y: 0.1 + i * 0.05,
@@ -88,11 +115,11 @@ export function createKeyframeSequence(
 }
 
 /**
- * Creates an annotation with tracking-style keyframes.
- * Each keyframe has slight position changes to simulate object movement.
+ * Creates an annotation with tracking-style boxes.
+ * Each box has slight position changes to simulate object movement.
  *
  * @param frameCount - Number of frames to track
- * @returns Annotation with dense keyframe sequence
+ * @returns Annotation with dense box sequence
  *
  * @example
  * ```ts
@@ -100,8 +127,8 @@ export function createKeyframeSequence(
  * ```
  */
 export function createTrackingAnnotation(frameCount: number): Annotation {
-  const keyframes = Array.from({ length: frameCount }, (_, i) =>
-    createKeyframe({
+  const boxes = Array.from({ length: frameCount }, (_, i) =>
+    createBoundingBox({
       frameNumber: i,
       x: 0.3 + Math.sin(i * 0.1) * 0.1,
       y: 0.4 + Math.cos(i * 0.1) * 0.1,
@@ -109,10 +136,27 @@ export function createTrackingAnnotation(frameCount: number): Annotation {
       height: 0.15,
     })
   )
+  const metadata = calculateSequenceMetadata(boxes, frameCount - 1)
 
   return createAnnotation({
-    keyframes,
-    visibilityRanges: [[0, frameCount - 1]],
+    boundingBoxSequence: {
+      boxes,
+      interpolationSegments: [
+        {
+          startFrame: 0,
+          endFrame: frameCount - 1,
+          type: 'linear',
+        },
+      ],
+      visibilityRanges: [
+        {
+          startFrame: 0,
+          endFrame: frameCount - 1,
+          visible: true,
+        },
+      ],
+      ...metadata,
+    },
   })
 }
 
@@ -129,27 +173,38 @@ export function createTrackingAnnotation(frameCount: number): Annotation {
  * ```
  */
 export function createDiscontiguousAnnotation(): Annotation {
+  const boxes = [
+    createBoundingBox({ frameNumber: 0 }),
+    createBoundingBox({ frameNumber: 50 }),
+    createBoundingBox({ frameNumber: 100 }),
+    createBoundingBox({ frameNumber: 150 }),
+    createBoundingBox({ frameNumber: 200 }),
+    createBoundingBox({ frameNumber: 250 }),
+  ]
+  const metadata = calculateSequenceMetadata(boxes, 250)
+
   return createAnnotation({
-    keyframes: [
-      createKeyframe({ frameNumber: 0 }),
-      createKeyframe({ frameNumber: 50 }),
-      createKeyframe({ frameNumber: 100 }),
-      createKeyframe({ frameNumber: 150 }),
-      createKeyframe({ frameNumber: 200 }),
-      createKeyframe({ frameNumber: 250 }),
-    ],
-    visibilityRanges: [
-      [0, 50],
-      [100, 150],
-      [200, 250],
-    ],
+    boundingBoxSequence: {
+      boxes,
+      interpolationSegments: [
+        { startFrame: 0, endFrame: 50, type: 'linear' },
+        { startFrame: 100, endFrame: 150, type: 'linear' },
+        { startFrame: 200, endFrame: 250, type: 'linear' },
+      ],
+      visibilityRanges: [
+        { startFrame: 0, endFrame: 50, visible: true },
+        { startFrame: 100, endFrame: 150, visible: true },
+        { startFrame: 200, endFrame: 250, visible: true },
+      ],
+      ...metadata,
+    },
   })
 }
 
 /**
- * Available interpolation modes for testing.
+ * Available interpolation types for testing.
  */
-export const interpolationModes: InterpolationMode[] = [
+export const interpolationTypes: InterpolationType[] = [
   'linear',
   'ease-in',
   'ease-out',
@@ -158,22 +213,41 @@ export const interpolationModes: InterpolationMode[] = [
 ]
 
 /**
- * Creates annotations with different interpolation modes.
+ * Creates annotations with different interpolation types.
  * Useful for testing interpolation algorithm switching.
  *
- * @returns Array of annotations, one for each interpolation mode
+ * @returns Array of annotations, one for each interpolation type
  *
  * @example
  * ```ts
- * const annotations = createAnnotationsWithAllInterpolationModes()
+ * const annotations = createAnnotationsWithAllInterpolationTypes()
  * ```
  */
-export function createAnnotationsWithAllInterpolationModes(): Annotation[] {
-  return interpolationModes.map((mode, i) =>
-    createAnnotation({
+export function createAnnotationsWithAllInterpolationTypes(): Annotation[] {
+  return interpolationTypes.map((mode, i) => {
+    const boxes = createBoundingBoxSequence(3, i * 100, 50)
+    const metadata = calculateSequenceMetadata(boxes, i * 100 + 100)
+
+    return createAnnotation({
       id: `annotation-${mode}`,
-      interpolationMode: mode,
-      keyframes: createKeyframeSequence(3, i * 100, 50),
+      boundingBoxSequence: {
+        boxes,
+        interpolationSegments: [
+          {
+            startFrame: i * 100,
+            endFrame: i * 100 + 100,
+            type: mode,
+          },
+        ],
+        visibilityRanges: [
+          {
+            startFrame: i * 100,
+            endFrame: i * 100 + 100,
+            visible: true,
+          },
+        ],
+        ...metadata,
+      },
     })
-  )
+  })
 }

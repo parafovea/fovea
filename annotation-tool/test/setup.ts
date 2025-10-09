@@ -33,21 +33,21 @@ afterAll(() => {
  * Mock IntersectionObserver for components that use it.
  * Many UI components rely on this browser API which is not available in jsdom.
  */
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+globalThis.IntersectionObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn()
-}))
+})) as unknown as typeof IntersectionObserver
 
 /**
  * Mock ResizeObserver for components that use it.
  * Required by some Material-UI components.
  */
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn()
-}))
+})) as unknown as typeof ResizeObserver
 
 /**
  * Mock matchMedia for responsive components.

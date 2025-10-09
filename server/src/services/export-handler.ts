@@ -12,7 +12,7 @@ interface BoundingBox {
   frameNumber: number
   confidence?: number
   isKeyframe?: boolean
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -23,8 +23,8 @@ interface InterpolationSegment {
   startFrame: number
   endFrame: number
   type: 'linear' | 'bezier' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'hold' | 'parametric'
-  controlPoints?: any
-  parametric?: any
+  controlPoints?: unknown
+  parametric?: unknown
 }
 
 /**
@@ -67,7 +67,7 @@ interface Annotation {
   boundingBoxSequence: BoundingBoxSequence
   confidence?: number
   notes?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -138,7 +138,7 @@ export class AnnotationExporter {
     }
 
     // Create export data
-    const exportData: any = {
+    const exportData: Record<string, unknown> = {
       type: 'annotation',
       data: {
         id: annotation.id,
@@ -203,7 +203,7 @@ export class AnnotationExporter {
     }
 
     // Create export data (same structure as keyframes-only)
-    const exportData: any = {
+    const exportData: Record<string, unknown> = {
       type: 'annotation',
       data: {
         id: annotation.id,
@@ -450,7 +450,21 @@ export class AnnotationExporter {
    * @returns Typed annotation
    */
   convertPrismaAnnotation(prismaAnnotation: PrismaAnnotation): Annotation {
-    const frames = prismaAnnotation.frames as any
+    const frames = prismaAnnotation.frames as Record<string, unknown> & {
+      annotationType?: string
+      boundingBoxSequence: BoundingBoxSequence
+      typeCategory?: 'entity' | 'role' | 'event'
+      typeId?: string
+      linkedEntityId?: string
+      linkedEventId?: string
+      linkedTimeId?: string
+      linkedLocationId?: string
+      linkedCollectionId?: string
+      linkedCollectionType?: 'entity' | 'event' | 'time'
+      notes?: string
+      metadata?: Record<string, unknown>
+      createdBy?: string
+    }
 
     // Parse annotation type from frames data
     const annotationType = frames.annotationType || 'type'

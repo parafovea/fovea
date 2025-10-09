@@ -75,13 +75,13 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }))
 
     const worldData = worldState ? {
-      entities: worldState.entities as any[] || [],
-      events: worldState.events as any[] || [],
-      times: worldState.times as any[] || [],
-      entityCollections: worldState.entityCollections as any[] || [],
-      eventCollections: worldState.eventCollections as any[] || [],
-      timeCollections: worldState.timeCollections as any[] || [],
-      relations: worldState.relations as any[] || []
+      entities: worldState.entities as unknown[] || [],
+      events: worldState.events as unknown[] || [],
+      times: worldState.times as unknown[] || [],
+      entityCollections: worldState.entityCollections as unknown[] || [],
+      eventCollections: worldState.eventCollections as unknown[] || [],
+      timeCollections: worldState.timeCollections as unknown[] || [],
+      relations: worldState.relations as unknown[] || []
     } : {
       entities: [],
       events: [],
@@ -141,7 +141,19 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const { personas, personaOntologies, world } = request.body as any
+    const { personas, personaOntologies, world } = request.body as {
+      personas: unknown[]
+      personaOntologies: unknown[]
+      world?: {
+        entities: unknown[]
+        events: unknown[]
+        times: unknown[]
+        entityCollections: unknown[]
+        eventCollections: unknown[]
+        timeCollections: unknown[]
+        relations: unknown[]
+      }
+    }
 
     // Use a transaction to ensure atomicity - either all saves succeed or all fail
     const result = await fastify.prisma.$transaction(async (tx) => {
@@ -238,13 +250,13 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     const worldData = result.savedWorldState ? {
-      entities: result.savedWorldState.entities as any[] || [],
-      events: result.savedWorldState.events as any[] || [],
-      times: result.savedWorldState.times as any[] || [],
-      entityCollections: result.savedWorldState.entityCollections as any[] || [],
-      eventCollections: result.savedWorldState.eventCollections as any[] || [],
-      timeCollections: result.savedWorldState.timeCollections as any[] || [],
-      relations: result.savedWorldState.relations as any[] || []
+      entities: result.savedWorldState.entities as unknown[] || [],
+      events: result.savedWorldState.events as unknown[] || [],
+      times: result.savedWorldState.times as unknown[] || [],
+      entityCollections: result.savedWorldState.entityCollections as unknown[] || [],
+      eventCollections: result.savedWorldState.eventCollections as unknown[] || [],
+      timeCollections: result.savedWorldState.timeCollections as unknown[] || [],
+      relations: result.savedWorldState.relations as unknown[] || []
     } : undefined
 
     return reply.send({

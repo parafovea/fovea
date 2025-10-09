@@ -17,7 +17,6 @@ import {
 } from '../store/personaSlice'
 import { addEntity } from '../store/worldSlice'
 import { generateId } from './uuid'
-import { GlossItem } from '../models/types'
 
 /**
  * Seed test data into Redux store for developer testing.
@@ -141,6 +140,7 @@ export async function seedTestData(): Promise<void> {
       name: 'Affected Party',
       gloss: [{ type: 'text' as const, content: 'Individual or entity impacted by disaster event' }],
       wikidataId: 'Q1802668', // Victim
+      allowedFillerTypes: ['entity' as const, 'event' as const],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -149,6 +149,7 @@ export async function seedTestData(): Promise<void> {
       name: 'Responder',
       gloss: [{ type: 'text' as const, content: 'Person or organization providing emergency response' }],
       wikidataId: 'Q1473346', // First responder
+      allowedFillerTypes: ['entity' as const, 'event' as const],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -157,6 +158,7 @@ export async function seedTestData(): Promise<void> {
       name: 'Reporter',
       gloss: [{ type: 'text' as const, content: 'Individual or organization documenting the event' }],
       wikidataId: 'Q1930187', // Journalist
+      allowedFillerTypes: ['entity' as const, 'event' as const],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
