@@ -5,6 +5,7 @@ This file is automatically loaded by pytest and provides fixtures available to a
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.main import app
 
 

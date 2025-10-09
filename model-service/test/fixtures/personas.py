@@ -3,10 +3,10 @@ Test fixtures for persona-related data.
 Provides factory functions for creating test personas and ontologies.
 """
 
-from typing import Dict, Any, List
+from typing import Any
 
 
-def create_persona(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
+def create_persona(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Factory function to create test persona objects.
 
@@ -36,7 +36,7 @@ def create_persona(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
     return persona
 
 
-def create_entity_type(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
+def create_entity_type(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Factory function to create test entity type objects.
 
@@ -66,7 +66,7 @@ def create_entity_type(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
     return entity_type
 
 
-def create_event_type(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
+def create_event_type(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Factory function to create test event type objects.
 
@@ -98,9 +98,9 @@ def create_event_type(overrides: Dict[str, Any] = None) -> Dict[str, Any]:
 
 def create_ontology(
     persona_id: str = "test-persona-1",
-    entity_types: List[Dict[str, Any]] = None,
-    event_types: List[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    entity_types: list[dict[str, Any]] | None = None,
+    event_types: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """
     Factory function to create test ontology objects.
 
@@ -132,7 +132,7 @@ def create_ontology(
     }
 
 
-def create_baseball_scout_persona() -> Dict[str, Any]:
+def create_baseball_scout_persona() -> dict[str, Any]:
     """
     Creates a baseball scout persona for domain-specific testing.
 
@@ -152,7 +152,7 @@ def create_baseball_scout_persona() -> Dict[str, Any]:
     })
 
 
-def create_wildlife_researcher_persona() -> Dict[str, Any]:
+def create_wildlife_researcher_persona() -> dict[str, Any]:
     """
     Creates a wildlife researcher persona for domain-specific testing.
 

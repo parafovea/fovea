@@ -3,8 +3,8 @@ import { render, RenderOptions } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
-import { theme } from '../../src/theme.ts'
-import { store } from '../../src/store/index.ts'
+import { theme } from '../../src/theme.js'
+import { store } from '../../src/store/index.js'
 
 /**
  * Custom render function that wraps components with all required providers.

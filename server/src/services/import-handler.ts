@@ -206,7 +206,7 @@ export class ImportHandler {
           graph.collections.add(line.data.id)
           break
 
-        case 'annotation':
+        case 'annotation': {
           const deps: string[] = []
 
           // Add video dependency
@@ -226,6 +226,7 @@ export class ImportHandler {
 
           graph.annotations.set(line.data.id, deps)
           break
+        }
       }
     }
 
@@ -338,7 +339,7 @@ export class ImportHandler {
       let resolution: Resolution
 
       switch (conflict.type) {
-        case 'duplicate-sequence':
+        case 'duplicate-sequence': {
           const strategy = options.conflictResolution.sequences.duplicateSequenceIds
           resolution = {
             conflictType: conflict.type,
@@ -354,8 +355,9 @@ export class ImportHandler {
             resolution.newId = randomUUID()
           }
           break
+        }
 
-        case 'duplicate-object':
+        case 'duplicate-object': {
           const objStrategy = options.conflictResolution.worldObjects
           resolution = {
             conflictType: conflict.type,
@@ -366,8 +368,9 @@ export class ImportHandler {
                     objStrategy === 'merge-assignments' ? 'merge' : 'skip'
           }
           break
+        }
 
-        case 'missing-dependency':
+        case 'missing-dependency': {
           const depStrategy = options.conflictResolution.missingDependencies
           resolution = {
             conflictType: conflict.type,
@@ -378,8 +381,9 @@ export class ImportHandler {
                     'fail'
           }
           break
+        }
 
-        case 'overlapping-frames':
+        case 'overlapping-frames': {
           const frameStrategy = options.conflictResolution.sequences.overlappingFrameRanges
           resolution = {
             conflictType: conflict.type,
@@ -388,8 +392,9 @@ export class ImportHandler {
             action: frameStrategy === 'fail-import' ? 'fail' : 'skip'
           }
           break
+        }
 
-        case 'interpolation-conflict':
+        case 'interpolation-conflict': {
           const interpStrategy = options.conflictResolution.sequences.interpolationConflicts
           resolution = {
             conflictType: conflict.type,
@@ -399,6 +404,7 @@ export class ImportHandler {
                     interpStrategy === 'use-imported' ? 'replace' : 'skip'
           }
           break
+        }
 
         default:
           resolution = {

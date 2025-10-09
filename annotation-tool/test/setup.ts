@@ -2,7 +2,14 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 import { setupServer } from 'msw/node'
-import { handlers } from './mocks/handlers.ts'
+import { handlers } from './mocks/handlers.js'
+
+declare global {
+  // eslint-disable-next-line no-var
+  var IntersectionObserver: typeof IntersectionObserver
+  // eslint-disable-next-line no-var
+  var ResizeObserver: typeof ResizeObserver
+}
 
 /**
  * MSW server instance for intercepting network requests in tests.

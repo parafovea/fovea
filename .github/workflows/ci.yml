@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -266,7 +266,7 @@ jobs:
         working-directory: model-service
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,quantization,sam2]"
 
       - name: Run tests
         working-directory: model-service

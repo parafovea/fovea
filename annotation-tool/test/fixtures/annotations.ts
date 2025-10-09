@@ -1,4 +1,4 @@
-import { Annotation, Keyframe, InterpolationMode } from '../../src/types/annotation.ts'
+import { Annotation, Keyframe, InterpolationMode } from '../../src/types/annotation.js'
 
 /**
  * Factory function to create test annotation objects.

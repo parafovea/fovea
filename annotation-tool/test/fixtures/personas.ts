@@ -1,5 +1,5 @@
-import { Persona } from '../../src/types/index.ts'
-import { EntityType, EventType, RoleType, RelationType } from '../../src/types/ontology.ts'
+import { Persona } from '../../src/types/index.js'
+import { EntityType, EventType, RoleType, RelationType } from '../../src/types/ontology.js'
 
 /**
  * Factory function to create test persona objects.
