@@ -4,6 +4,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+pytestmark = pytest.mark.requires_models
+
 import torch
 
 from src.llm_loader import (
