@@ -8,7 +8,7 @@
   padding: 8rem 2rem;
   text-align: center;
   position: relative;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4e878c 0%, #00241b 100%);
   color: white;
   overflow: hidden;
 }
@@ -79,7 +79,7 @@
 
 .primaryButton {
   background: white !important;
-  color: #667eea !important;
+  color: #4e878c !important;
   border: none !important;
   font-weight: 600;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -88,7 +88,7 @@
 .primaryButton:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  color: #667eea !important;
+  color: #00241b !important;
 }
 
 .secondaryButton {
@@ -195,7 +195,7 @@
   content: '✓';
   position: absolute;
   left: 0;
-  color: #667eea;
+  color: #65b891;
   font-weight: bold;
   font-size: 1.25rem;
 }
@@ -234,7 +234,7 @@
   position: absolute;
   left: 0;
   top: 0.5rem;
-  background: #667eea;
+  background: #4e878c;
   color: white;
   width: 2rem;
   height: 2rem;
@@ -250,7 +250,7 @@
   margin-top: 1.5rem;
   padding: 1rem;
   background: var(--ifm-color-emphasis-200);
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #65b891;
   border-radius: 4px;
   font-size: 0.9375rem;
   line-height: 1.5;
@@ -261,7 +261,7 @@
 .ctaSection {
   padding: 5rem 2rem;
   text-align: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4e878c 0%, #00241b 100%);
   color: white;
 }
 
@@ -283,14 +283,14 @@
 
 .ctaButton:first-child {
   background: white !important;
-  color: #667eea !important;
+  color: #4e878c !important;
   border: none !important;
 }
 
 .ctaButton:first-child:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  color: #667eea !important;
+  color: #00241b !important;
 }
 
 .ctaButton:last-child {

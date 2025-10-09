@@ -1,10 +1,10 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  Box, 
-  Button, 
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Box,
+  Button,
   IconButton,
   Drawer,
   List,
@@ -17,6 +17,7 @@ import {
   CircularProgress,
   Tooltip,
 } from '@mui/material'
+import logo from '../assets/fovea-logo.svg'
 import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
@@ -189,6 +190,16 @@ export default function Layout() {
           >
             <MenuIcon />
           </IconButton>
+          <Box
+            component="img"
+            src={logo}
+            alt="FOVEA Logo"
+            sx={{
+              height: 40,
+              width: 40,
+              mr: 2,
+            }}
+          />
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             FOVEA: Flexible Ontology Visual Event Analyzer
           </Typography>

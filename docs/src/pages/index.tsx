@@ -16,8 +16,8 @@ function HomepageHeader() {
             Flexible Ontology Visual Event Analyzer
           </p>
           <p className={styles.heroDescription}>
-            A web-based video annotation tool for developing annotation ontologies
-            with persona-based approaches, keyframe sequences, and AI-powered analysis
+            Build video annotation ontologies that capture how different analysts
+            interpret the same events. Multiple perspectives, shared reality, semantic grounding.
           </p>
           <div className={styles.buttons}>
             <Link
@@ -50,41 +50,41 @@ function Feature({title, icon, description}) {
 function FeatureSection() {
   const features = [
     {
+      title: 'Types vs. Instances',
+      icon: '🔗',
+      description: 'Separate analyst interpretations (EntityType, EventType) from shared world objects (Entity, Event). Different analysts assign different types to the same real-world objects.',
+    },
+    {
       title: 'Persona-Based Ontologies',
       icon: '👥',
-      description: 'Multiple analysts can annotate the same video with different perspectives and ontologies. Each persona maintains their own interpretive framework.',
+      description: 'Each analyst maintains their own ontology with distinct entity types, event types, and role definitions. Capture tactical, operational, and strategic perspectives on the same video.',
     },
     {
-      title: 'Temporal Sequences',
-      icon: '🎬',
-      description: 'Keyframe-based bounding box sequences with automatic interpolation. Support for linear, bezier, and custom easing functions.',
+      title: 'Semantic Grounding',
+      icon: '🌐',
+      description: 'Link types to Wikidata entities for semantic interoperability. Import definitions, GPS coordinates, and temporal data directly from external knowledge bases.',
     },
     {
-      title: 'AI-Powered Analysis',
-      icon: '🤖',
-      description: 'Integrated video summarization, object detection, and automated tracking with state-of-the-art vision models.',
-    },
-    {
-      title: 'Flexible Deployment',
-      icon: '⚙️',
-      description: 'Run on CPU or GPU, locally or in production. Docker-based deployment with support for NVIDIA GPUs.',
+      title: 'Collections & Relations',
+      icon: '🔀',
+      description: 'Group entities and events into semantic collections. Define custom relation types to capture organizational hierarchies, causal links, and temporal patterns.',
     },
     {
       title: 'Rich Temporal Model',
       icon: '⏱️',
-      description: 'Represent vague time, deictic references, and complex temporal relationships across multiple videos.',
+      description: 'Express vague time (early morning, late 2024), deictic references (yesterday, next week), cyclical patterns, and temporal relationships across multiple videos.',
     },
     {
-      title: 'Import & Export',
-      icon: '📦',
-      description: 'Full data portability with JSON Lines format. Import with intelligent conflict resolution and validation.',
+      title: 'Advanced Keyframes',
+      icon: '🎬',
+      description: 'Keyframe-based annotation with linear, bezier, ease-in-out interpolation. Toggle visibility for occlusion handling. AI-powered tracking acceleration.',
     },
   ];
 
   return (
     <section className={styles.featuresSection}>
       <div className="container">
-        <h2 className={styles.sectionTitle}>Key Features</h2>
+        <h2 className={styles.sectionTitle}>What Makes FOVEA Different</h2>
         <div className="row">
           {features.map((feature, idx) => (
             <Feature key={idx} {...feature} />
@@ -101,35 +101,35 @@ function UseCaseSection() {
       <div className="container">
         <div className="row">
           <div className="col col--6">
-            <h2 className={styles.sectionTitle}>For Every Domain</h2>
+            <h2 className={styles.sectionTitle}>When Different Perspectives Matter</h2>
             <p className={styles.useCaseDescription}>
-              FOVEA is a general-purpose video annotation tool used across diverse
-              domains. Develop specialized ontologies tailored to your specific
-              needs, from wildlife research to sports analytics.
+              FOVEA is designed for situations where multiple analysts need to
+              interpret the same video footage through different analytical lenses,
+              while maintaining a shared understanding of underlying reality.
             </p>
             <ul className={styles.useCaseList}>
-              <li>Sports analytics and performance tracking</li>
-              <li>Wildlife research and behavioral studies</li>
-              <li>Medical procedure review and training</li>
-              <li>Retail analytics and customer behavior</li>
-              <li>Film production and continuity tracking</li>
-              <li>Urban planning and traffic analysis</li>
+              <li>Intelligence analysis with tactical, operational, and strategic viewpoints</li>
+              <li>Disaster response coordination across emergency services and NGOs</li>
+              <li>Clinical research where radiologists and specialists interpret the same scans</li>
+              <li>Legal proceedings with prosecution, defense, and expert witness perspectives</li>
+              <li>Ecological monitoring where biologists track different interaction types</li>
+              <li>Ethnographic research capturing participant and observer interpretations</li>
             </ul>
           </div>
           <div className="col col--6">
             <div className={styles.codeBlock}>
-              <h3>Annotation Workflow</h3>
+              <h3>Core Concepts</h3>
               <ol className={styles.workflowSteps}>
-                <li>Define your ontology with entity and event types</li>
-                <li>Load video and create initial bounding box</li>
-                <li>Add keyframes to track object movement</li>
-                <li>Choose interpolation mode (linear, bezier, ease-in-out)</li>
-                <li>Use AI tracking to accelerate annotation</li>
-                <li>Export annotations with full temporal sequences</li>
+                <li>Create personas representing different analytical roles</li>
+                <li>Build persona-specific ontologies with entity and event types</li>
+                <li>Annotate video linking regions to types OR shared world objects</li>
+                <li>Ground types semantically using Wikidata references</li>
+                <li>Define collections and relations to capture structure</li>
+                <li>Export with conflict resolution for collaborative workflows</li>
               </ol>
               <div className={styles.workflowNote}>
-                <strong>Keyframe Interpolation:</strong> Draw boxes at key positions,
-                FOVEA automatically generates intermediate frames with smooth motion.
+                <strong>Example:</strong> A disaster analyst sees "Infrastructure Damage" while a
+                humanitarian sees "Shelter Need" on the same collapsed building instance.
               </div>
             </div>
           </div>
@@ -143,15 +143,15 @@ function CTASection() {
   return (
     <section className={styles.ctaSection}>
       <div className="container">
-        <h2 className={styles.ctaTitle}>Ready to start annotating?</h2>
+        <h2 className={styles.ctaTitle}>Build ontologies that capture how analysts think</h2>
         <p className={styles.ctaDescription}>
-          Get FOVEA running with Docker in less than 5 minutes
+          Open source, Docker-based deployment, runs on CPU or GPU
         </p>
         <div className={styles.buttons}>
           <Link
             className={clsx('button button--primary button--lg', styles.ctaButton)}
             to="/docs/getting-started/installation">
-            Get Started Now
+            Get Started
           </Link>
           <Link
             className={clsx('button button--secondary button--lg', styles.ctaButton)}
