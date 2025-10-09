@@ -7,18 +7,22 @@ services:
     build:
       context: ./annotation-tool
       dockerfile: Dockerfile
-      target: development
+      target: production
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:3001
-      - VITE_MODEL_SERVICE_URL=http://localhost:8000
-      - NODE_ENV=test
+      - NODE_ENV=production
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - e2e-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   backend:
     build:
