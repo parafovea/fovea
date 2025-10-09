@@ -273,7 +273,7 @@ Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It include
 - Testing requirements
 - Documentation guidelines
 
-For questions or discussions, visit our [GitHub Discussions](https://github.com/YOUR_ORG/fovea/discussions).
+For questions or discussions, visit our [GitHub Discussions](https://github.com/parafovea/fovea/discussions).
 
 ## License
 

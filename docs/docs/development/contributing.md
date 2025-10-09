@@ -4,11 +4,11 @@ title: Contributing Guide
 
 # Contributing Guide
 
-This page provides an overview of contributing to FOVEA. For the complete contributing guide with detailed instructions, see [CONTRIBUTING.md](https://github.com/aaronstevenwhite/fovea/blob/main/CONTRIBUTING.md) in the repository root.
+This page provides an overview of contributing to FOVEA. For the complete contributing guide with detailed instructions, see [CONTRIBUTING.md](https://github.com/parafovea/fovea/blob/main/CONTRIBUTING.md) in the repository root.
 
 ## Quick Links
 
-- **[Full Contributing Guide](https://github.com/aaronstevenwhite/fovea/blob/main/CONTRIBUTING.md)** - Complete guide to contributing
+- **[Full Contributing Guide](https://github.com/parafovea/fovea/blob/main/CONTRIBUTING.md)** - Complete guide to contributing
 - **[Frontend Development](./frontend-dev.md)** - Frontend-specific development guide
 - **[Backend Development](./backend-dev.md)** - Backend-specific development guide
 - **[Python Development](./python-dev.md)** - Model service development guide
@@ -41,7 +41,7 @@ git clone https://github.com/YOUR_USERNAME/fovea.git
 cd fovea
 
 # Add upstream remote
-git remote add upstream https://github.com/aaronstevenwhite/fovea.git
+git remote add upstream https://github.com/parafovea/fovea.git
 
 # Create a branch
 git checkout -b feature/my-feature
@@ -136,4 +136,4 @@ pytest --cov=src
 - **GitHub Discussions** - For questions and ideas
 - **GitHub Issues** - For bug reports and feature requests
 
-For complete details, see the [full Contributing Guide](https://github.com/aaronstevenwhite/fovea/blob/main/CONTRIBUTING.md).
+For complete details, see the [full Contributing Guide](https://github.com/parafovea/fovea/blob/main/CONTRIBUTING.md).
