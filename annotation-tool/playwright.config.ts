@@ -2,10 +2,10 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Playwright E2E testing configuration.
- * Tests are located in the ./e2e directory.
+ * Tests are located in the ./test/e2e directory.
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './test/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
