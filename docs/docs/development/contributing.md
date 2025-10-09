@@ -76,7 +76,6 @@ git push origin feature/my-feature
 
 ### Documentation
 
-- Follow [DOCUMENTATION_STANDARDS.md](https://github.com/aaronstevenwhite/fovea/blob/main/DOCUMENTATION_STANDARDS.md)
 - Use factual language (avoid marketing terms)
 - Include examples where helpful
 - Update API docs when changing interfaces

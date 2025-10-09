@@ -277,4 +277,4 @@ For questions or discussions, visit our [GitHub Discussions](https://github.com/
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
