@@ -30,7 +30,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha
 
       - name: Log in to Container Registry
         if: github.event_name == 'push'
@@ -71,7 +71,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha
 
       - name: Log in to Container Registry
         if: github.event_name == 'push'
@@ -121,7 +121,7 @@ jobs:
           tags: |
             type=ref,event=branch,suffix=${{ matrix.variant.suffix }}
             type=ref,event=pr,suffix=${{ matrix.variant.suffix }}
-            type=sha,prefix={{branch}}-,suffix=${{ matrix.variant.suffix }}
+            type=sha,suffix=${{ matrix.variant.suffix }}
 
       - name: Log in to Container Registry
         if: github.event_name == 'push'
