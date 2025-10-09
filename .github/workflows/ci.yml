@@ -266,7 +266,7 @@ jobs:
         working-directory: model-service
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev,quantization,sam2]"
+          pip install --no-cache-dir -e ".[dev,quantization,sam2]"
 
       - name: Run tests
         working-directory: model-service

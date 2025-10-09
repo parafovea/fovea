@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: 'model-service/requirements.txt'
+          cache-dependency-path: 'model-service/pyproject.toml'
 
       - name: Install documentation dependencies
         run: |
@@ -55,8 +55,7 @@ jobs:
       - name: Install model-service dependencies (for Sphinx)
         run: |
           cd model-service
-          pip install -r requirements.txt
-          pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+          pip install -e ".[docs]"
 
       - name: Generate API documentation
         run: |
