@@ -12,9 +12,31 @@ Tests serve as executable documentation and regression prevention. Each test sho
 
 ## Frontend Testing
 
+The frontend test suite is organized with unit tests co-located with source files, E2E tests in a separate directory, and shared test utilities for fixtures, mocks, and helpers. See `annotation-tool/test/README.md` for complete documentation.
+
+### Test Organization
+
+```
+annotation-tool/
+├── src/
+│   └── components/
+│       └── MyComponent.tsx
+│       └── MyComponent.test.tsx    # Unit tests co-located
+├── test/
+│   ├── e2e/                        # Playwright E2E tests
+│   ├── integration/                # Integration tests
+│   ├── mocks/
+│   │   └── handlers.ts            # MSW mock handlers
+│   ├── fixtures/
+│   │   ├── annotations.ts         # Test data factories
+│   │   └── personas.ts
+│   └── utils/
+│       └── test-utils.tsx         # Render helpers
+```
+
 ### Unit Tests with Vitest
 
-The frontend uses Vitest as the test runner with Testing Library for component testing. Vitest provides fast execution with native ESM support and TypeScript integration. Tests live in `annotation-tool/test/unit/` organized to mirror the source structure.
+Unit tests are co-located with source files (e.g., `Component.tsx` → `Component.test.tsx`). Use the `renderWithProviders()` helper to wrap components with Redux, React Query, and MUI providers.
 
 Run unit tests:
 
@@ -26,57 +48,61 @@ npm run test:coverage     # Generate coverage report
 npm run test -- MyComponent.test.tsx  # Run specific file
 ```
 
-Example component test:
+Example component test using test utilities:
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import { EntityEditor } from '../../src/components/world/EntityEditor';
-import worldReducer from '../../src/store/worldSlice';
+import { describe, it, expect } from 'vitest';
+import { renderWithProviders, screen, fireEvent } from '@test/utils/test-utils';
+import { createAnnotation } from '@test/fixtures';
+import { AnnotationCard } from './AnnotationCard';
 
-describe('EntityEditor', () => {
-  const createTestStore = () => {
-    return configureStore({
-      reducer: {
-        world: worldReducer
-      }
+describe('AnnotationCard', () => {
+  it('displays annotation details', () => {
+    const annotation = createAnnotation({
+      entityTypeId: 'player'
     });
-  };
 
-  it('renders entity form fields', () => {
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <EntityEditor entityId={null} />
-      </Provider>
-    );
+    renderWithProviders(<AnnotationCard annotation={annotation} />);
 
-    expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
+    expect(screen.getByText(/player/i)).toBeInTheDocument();
   });
 
-  it('calls onSave when form submitted', async () => {
-    const store = createTestStore();
-    const handleSave = vi.fn();
+  it('handles delete action', () => {
+    const annotation = createAnnotation();
+    const onDelete = vi.fn();
 
-    render(
-      <Provider store={store}>
-        <EntityEditor entityId={null} onSave={handleSave} />
-      </Provider>
+    renderWithProviders(
+      <AnnotationCard annotation={annotation} onDelete={onDelete} />
     );
 
-    fireEvent.change(screen.getByLabelText(/name/i), {
-      target: { value: 'Test Entity' }
-    });
-    fireEvent.click(screen.getByText(/save/i));
-
-    expect(handleSave).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Test Entity' })
-    );
+    fireEvent.click(screen.getByLabelText(/delete/i));
+    expect(onDelete).toHaveBeenCalledWith(annotation.id);
   });
 });
+```
+
+### Test Fixtures
+
+Use fixture factories from `test/fixtures/` to create consistent test data:
+
+```typescript
+import {
+  createAnnotation,
+  createKeyframeSequence,
+  createPersona
+} from '@test/fixtures';
+
+// Create annotation with defaults
+const annotation = createAnnotation();
+
+// Override specific properties
+const customAnnotation = createAnnotation({
+  videoId: 'my-video',
+  keyframes: createKeyframeSequence(5, 0, 10)
+});
+
+// Create persona
+const persona = createPersona({ name: 'Baseball Scout' });
 ```
 
 ### Redux Store Testing
@@ -155,18 +181,21 @@ export const handlers = [
 ];
 ```
 
-Configure MSW in test setup:
+MSW handlers are centralized in `test/mocks/handlers.ts` and configured in `test/setup.ts`. Override handlers in specific tests:
 
 ```typescript
-import { beforeAll, afterEach, afterAll } from 'vitest';
-import { setupServer } from 'msw/node';
-import { handlers } from './mocks/handlers';
+import { server } from '@test/setup';
+import { http, HttpResponse } from 'msw';
 
-const server = setupServer(...handlers);
+test('handles API error', () => {
+  server.use(
+    http.get('/api/personas', () => {
+      return new HttpResponse(null, { status: 500 })
+    })
+  );
 
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+  // Test error handling...
+});
 ```
 
 ### E2E Tests with Playwright
@@ -246,9 +275,33 @@ test.describe('Annotation Workflow', () => {
 
 ## Backend Testing
 
+The backend test suite mirrors the `src/` directory structure with tests organized by domain (routes, models, queues, services). Shared test utilities and fixtures reduce duplication. See `server/test/README.md` for complete documentation.
+
+### Test Organization
+
+```
+server/
+├── src/
+│   ├── routes/
+│   │   └── personas.ts
+│   ├── models/
+│   └── queues/
+└── test/
+    ├── routes/
+    │   ├── personas.test.ts     # Mirrors src structure
+    │   └── videos.test.ts
+    ├── models/
+    ├── queues/
+    ├── fixtures/
+    │   ├── personas.ts          # Test data factories
+    │   └── annotations.ts
+    └── utils/
+        └── test-server.ts       # Server factory
+```
+
 ### API Tests with Vitest
 
-The backend uses Vitest with Fastify's injection API for testing routes without starting a server. Tests verify request handling, validation, and database operations.
+The backend uses Vitest with Fastify's injection API. Use the `createTestServer()` helper and fixture factories for consistent tests.
 
 Run backend tests:
 
@@ -256,74 +309,47 @@ Run backend tests:
 cd server
 npm run test                    # Run all tests
 npm run test:coverage           # Generate coverage
-npm run test -- models.test.ts  # Run specific file
+npm run test test/routes/       # Run route tests
+npm run test test/routes/personas.test.ts  # Run specific file
 ```
 
-Example API test:
+Example API test using test utilities:
 
 ```typescript
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildApp } from '../src/app';
-import type { FastifyInstance } from 'fastify';
+import { describe, it, expect, afterAll } from 'vitest';
+import { createTestServer, injectJSON } from '@test/utils/test-server';
+import { createPersona } from '@test/fixtures';
 
-describe('Video Routes', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp();
-  });
+describe('Personas API', () => {
+  const server = await createTestServer();
 
   afterAll(async () => {
-    await app.close();
+    await server.close();
   });
 
-  it('GET /api/videos returns video list', async () => {
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/videos'
-    });
+  it('creates persona', async () => {
+    const payload = createPersona({ name: 'Test Scout' });
 
-    expect(response.statusCode).toBe(200);
-    const videos = response.json();
-    expect(Array.isArray(videos)).toBe(true);
+    const { json, statusCode } = await injectJSON(
+      server,
+      'POST',
+      '/api/personas',
+      payload
+    );
+
+    expect(statusCode).toBe(201);
+    expect(json.name).toBe('Test Scout');
   });
 
-  it('POST /api/videos validates request body', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/videos',
-      payload: {
-        // Missing required filename field
-        duration: 120
-      }
-    });
+  it('validates required fields', async () => {
+    const { statusCode } = await injectJSON(
+      server,
+      'POST',
+      '/api/personas',
+      { name: 'Test' } // Missing required fields
+    );
 
-    expect(response.statusCode).toBe(400);
-  });
-
-  it('GET /api/videos/:id returns single video', async () => {
-    // First create a video
-    const createResponse = await app.inject({
-      method: 'POST',
-      url: '/api/videos',
-      payload: {
-        filename: 'test.mp4',
-        duration: 120
-      }
-    });
-
-    const { id } = createResponse.json();
-
-    // Then fetch it
-    const response = await app.inject({
-      method: 'GET',
-      url: `/api/videos/${id}`
-    });
-
-    expect(response.statusCode).toBe(200);
-    const video = response.json();
-    expect(video.id).toBe(id);
-    expect(video.filename).toBe('test.mp4');
+    expect(statusCode).toBe(400);
   });
 });
 ```
@@ -353,60 +379,73 @@ afterEach(async () => {
 
 ## Model Service Testing
 
+The model service test suite mirrors the `src/` directory structure with tests organized by domain (routes, loaders, utils). Pytest fixtures in `conftest.py` provide shared test resources. See `model-service/test/README.md` for complete documentation.
+
+### Test Organization
+
+```
+model-service/
+├── src/
+│   ├── routes.py
+│   ├── detection_loader.py
+│   └── video_utils.py
+└── test/
+    ├── routes/
+    │   └── test_routes.py       # Mirrors src structure
+    ├── loaders/
+    │   └── test_detection_loader.py
+    ├── utils/
+    │   └── test_video_utils.py
+    ├── fixtures/
+    │   └── personas.py          # Test data factories
+    └── conftest.py              # Pytest fixtures
+```
+
 ### Async API Tests with pytest
 
-The model service uses pytest with httpx for async API testing. Tests mock model inference to avoid loading large models during tests.
+The model service uses pytest with httpx and FastAPI TestClient. Use fixtures from `conftest.py` and test data factories for consistent tests.
 
 Run model service tests:
 
 ```bash
 cd model-service
 pytest                                    # Run all tests
-pytest --cov=src                          # Run with coverage
-pytest test/test_routes.py -v             # Run specific file with verbose output
-pytest -k "test_summarize" -v             # Run tests matching pattern
-pytest test/test_routes.py::TestSummarizeEndpoint::test_summarize_video_success -v  # Run single test
+pytest --cov=src --cov-report=term-missing  # Run with coverage
+pytest test/routes/ -v                    # Run route tests
+pytest test/routes/test_routes.py::TestSummarizeEndpoint -v  # Run specific test class
 ```
 
-Example async test:
+Example async test using fixtures:
 
 ```python
 import pytest
-from httpx import AsyncClient
-from src.main import app
+from test.fixtures import create_persona
 
-@pytest.mark.asyncio
-async def test_summarize_video_success():
-    """Test video summarization endpoint with valid input."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/summarize",
-            json={
-                "video_path": "/data/test.mp4",
-                "persona_context": "Security analyst",
-                "sample_rate": 30
-            }
+class TestSummarizeEndpoint:
+    """Tests for video summarization endpoint."""
+
+    def test_summarize_video_success(self, client, mock_video_id):
+        """Test successful video summarization request."""
+        persona = create_persona({"name": "Baseball Scout"})
+
+        response = client.post(
+            f"/api/videos/{mock_video_id}/summarize",
+            json={"persona_id": persona["id"]}
         )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "summary" in data
-    assert "frame_count" in data
-    assert data["frame_count"] > 0
+        assert response.status_code == 200
+        data = response.json()
+        assert data["video_id"] == mock_video_id
+        assert data["persona_id"] == persona["id"]
 
-@pytest.mark.asyncio
-async def test_summarize_missing_video():
-    """Test summarization with non-existent video."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/summarize",
-            json={
-                "video_path": "/data/nonexistent.mp4",
-                "persona_context": "Analyst"
-            }
+    def test_summarize_missing_video(self, client):
+        """Test summarization with invalid video ID."""
+        response = client.post(
+            "/api/videos/invalid-id/summarize",
+            json={"persona_id": "persona-1"}
         )
 
-    assert response.status_code == 404
+        assert response.status_code == 404
 ```
 
 ### Mocking Model Inference

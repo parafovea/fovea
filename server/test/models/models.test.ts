@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 import axios from 'axios'
-import modelsRoute from '../src/routes/models.js'
+import modelsRoute from '../../src/routes/models.js'
 
 /**
  * Test suite for model service API routes.
@@ -69,7 +69,7 @@ describe('Model Routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual(mockConfig)
       expect(mockedAxios.get).toHaveBeenCalledWith(
-        'http://model-service:8000/api/models/config',
+        'http://localhost:8000/api/models/config',
         { timeout: 10000 }
       )
     })
@@ -187,7 +187,7 @@ describe('Model Routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual(mockStatus)
       expect(mockedAxios.get).toHaveBeenCalledWith(
-        'http://model-service:8000/api/models/status',
+        'http://localhost:8000/api/models/status',
         { timeout: 10000 }
       )
     })
@@ -283,7 +283,7 @@ describe('Model Routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual(mockResult)
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        'http://model-service:8000/api/models/select',
+        'http://localhost:8000/api/models/select',
         null,
         {
           params: { task_type: 'detection', model_name: 'yolov8n' },
@@ -440,7 +440,7 @@ describe('Model Routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual(mockValidation)
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        'http://model-service:8000/api/models/validate',
+        'http://localhost:8000/api/models/validate',
         null,
         { timeout: 10000 }
       )

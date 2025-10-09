@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags "$(git rev-list --tags --skip=1 --max-count=1)" 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # First release
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
+          else
+            # Generate changelog from previous tag
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)")
+          fi
+
+          {
+            echo "CHANGELOG<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ## Docker Images
+
+            Pull the images:
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/frontend:${{ github.ref_name }}
+            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/backend:${{ github.ref_name }}
+            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/model-service:${{ github.ref_name }}-cpu
+            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/model-service:${{ github.ref_name }}-gpu
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  build-and-push-images:
+    name: Build Release Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - name: frontend
+            context: ./annotation-tool
+            platforms: linux/amd64,linux/arm64
+          - name: backend
+            context: ./server
+            platforms: linux/amd64,linux/arm64
+          - name: model-service-cpu
+            context: ./model-service
+            platforms: linux/amd64
+            build-args: |
+              DEVICE=cpu
+              BUILD_MODE=minimal
+          - name: model-service-gpu
+            context: ./model-service
+            platforms: linux/amd64
+            build-args: |
+              DEVICE=cuda
+              BUILD_MODE=full
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          platforms: ${{ matrix.service.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.service.build-args }}
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
+
+  update-deployment:
+    name: Update Deployment Manifests
+    runs-on: ubuntu-latest
+    needs: [build-and-push-images]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update version in documentation
+        run: |
+          # Update version references in docs if needed
+          echo "Release ${{ github.ref_name }} created"
+          echo "Docker images pushed with tags:"
+          echo "  - ${{ github.ref_name }}"
+          echo "  - latest"

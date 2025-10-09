@@ -1,233 +1,151 @@
-# CI/CD Pipeline Documentation
+# GitHub Actions Workflows
 
-## Overview
+This directory contains CI/CD workflows organized by responsibility following industry best practices.
 
-The fovea project uses GitHub Actions for continuous integration and continuous deployment. The pipeline tests, lints, and builds all three services (frontend, backend, and model service) on every push and pull request.
+## Workflows
 
-## Branch Strategy
+### ci.yml
+**Primary CI pipeline** that runs on every push and PR to `main` and `develop` branches.
 
-Following git-flow conventions:
+**Jobs:**
+- **Frontend** (parallel execution):
+  - `lint-frontend`: ESLint + TypeScript type checking
+  - `test-frontend`: Unit tests with coverage (451 tests)
+  - `build-frontend`: Production build validation
 
-### main branch
-- Production-ready code only
-- Always deployable to production
-- Source for versioned releases (tags)
-- Docker images built and optionally deployed
+- **Backend** (parallel execution):
+  - `lint-backend`: ESLint + TypeScript type checking
+  - `test-backend`: Unit tests with PostgreSQL + Redis (130 tests)
+  - `build-backend`: Production build validation
 
-### develop branch
-- Integration branch for ongoing development
-- Feature branches merge here first
-- Deploys to staging/dev environments
-- Docker images built for testing
+- **Model Service** (parallel execution):
+  - `lint-model-service`: Ruff + mypy checks
+  - `test-model-service`: pytest with coverage (288 tests)
 
-### Workflow
-```
-feature/xyz → develop (staging) → main (production)
-```
+- **Integration**:
+  - `test-e2e`: Playwright E2E tests (runs after unit tests pass)
 
-## Workflow Structure
+- **Quality Gate**:
+  - Aggregates all results and enforces pass/fail
+  - Provides summary of all check results
 
-### Main CI/CD Workflow (`ci.yml`)
+**Total duration:** ~5-8 minutes (with maximum parallelization)
 
-The workflow runs on:
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
+### docker.yml
+**Docker image builds** for all services.
 
-### Jobs
+**Jobs:**
+- `build-frontend`: Builds frontend container image
+- `build-backend`: Builds backend container image
+- `build-model-service`: Matrix strategy builds both CPU and GPU variants
+- `verify-compose`: Validates docker-compose.yml syntax
 
-#### 1. Frontend Jobs
+**Behavior:**
+- **On PR**: Builds images for validation (no push)
+- **On push to main/develop**: Builds and pushes to GitHub Container Registry
 
-**lint-frontend**
-- Runs ESLint on TypeScript/TSX files
-- Performs TypeScript type checking with `tsc --noEmit`
-- Uses Node.js 22
+**Registry:** `ghcr.io/<owner>/<repo>/<service>:<tag>`
 
-**test-frontend**
-- Runs Vitest unit tests with coverage
-- Uploads coverage artifacts to GitHub
-- Depends on successful linting
+### security.yml
+**Security scanning** pipeline.
 
-**build-frontend**
-- Compiles TypeScript and builds production bundle with Vite
-- Uploads build artifacts to GitHub
-- Depends on successful tests
+**Jobs:**
+- `dependency-scan-*`: npm audit / pip safety checks
+- `codeql-analysis`: GitHub CodeQL for JavaScript and Python
+- `secret-scan`: TruffleHog for exposed secrets
 
-#### 2. Backend Jobs
+**Trigger:**
+- Every push/PR
+- Weekly scheduled scan (Sundays at 00:00 UTC)
 
-**lint-backend**
-- Runs ESLint on TypeScript files
-- Performs TypeScript type checking with `tsc --noEmit`
-- Uses Node.js 22
+### release.yml
+**Release automation** for tagged versions.
 
-**test-backend**
-- Runs Vitest tests with coverage
-- Uses PostgreSQL 16 and Redis 7 service containers
-- Tests database integration
-- Uploads coverage artifacts to GitHub
-- Depends on successful linting
+**Jobs:**
+- `create-release`: Generates changelog and creates GitHub release
+- `build-and-push-images`: Multi-platform Docker images (amd64 + arm64)
+- `update-deployment`: Updates deployment manifests
 
-**build-backend**
-- Compiles TypeScript to JavaScript
-- Outputs to `dist/` directory
-- Uploads build artifacts to GitHub
-- Depends on successful tests
+**Trigger:** Push to version tags (`v*.*.*`)
 
-#### 3. Model Service Jobs
+**Image tags:**
+- `v1.2.3` (exact version)
+- `v1.2` (minor version)
+- `v1` (major version)
+- `latest` (always latest release)
 
-**lint-model-service**
-- Runs `ruff check` for code quality
-- Runs `ruff format --check` for formatting
-- Runs `mypy` for type checking
-- Uses Python 3.12
+## Architecture Decisions
 
-**test-model-service**
-- Runs pytest with coverage reporting
-- Generates JSON, HTML, and terminal coverage reports
-- Uploads coverage artifacts to GitHub
-- Depends on successful linting
+### Parallel Execution
+All service jobs (lint, test, build) run in parallel for maximum speed. E2E tests run only after unit tests pass.
 
-#### 4. End-to-End Tests
+### Job Independence
+Each job is independent and can be run in isolation. No hidden dependencies between jobs except explicit `needs:` declarations.
 
-**test-e2e**
-- Runs Playwright E2E tests
-- Tests frontend and backend integration
-- Only runs on Chromium browser in CI
-- Uploads test results and Playwright HTML report
-- Depends on frontend and backend tests passing
+### Artifact Retention
+- Coverage reports: 30 days
+- Build artifacts: 7 days
+- Docker images: Per registry policy
 
-#### 5. Docker Image Builds
+### Quality Gate Pattern
+The `quality-gate` job aggregates all results and provides a single pass/fail status. This allows:
+- Clear visibility into which checks failed
+- Branch protection rules to require just one status check
+- Detailed summary in GitHub UI
 
-**build-docker-images**
-- Only runs on push to `main` or `develop` branches
-- Builds Docker images for all three services
-- Uses BuildKit cache for faster builds
-- Exports images as tar files
-- Uploads images as artifacts for 7 days
-- Model service built in CPU-only minimal mode for CI
+### Separated Workflows
+Workflows are separated by concern:
+- **ci.yml**: Fast feedback loop (tests, lints, builds)
+- **docker.yml**: Container image management
+- **security.yml**: Security posture
+- **release.yml**: Release process
 
-#### 6. Summary
+This separation allows:
+- Independent triggering
+- Clear responsibilities
+- Easier maintenance
+- Selective CI runs (e.g., skip Docker builds on draft PRs)
 
-**summary**
-- Runs after all jobs complete
-- Generates a summary report in GitHub Actions UI
-- Shows pass/fail status for all jobs
-- Always runs even if previous jobs fail
+## Best Practices Implemented
 
-## Artifacts
-
-The workflow uploads several types of artifacts:
-
-1. **Coverage Reports** (30 days retention)
-   - `frontend-coverage`: HTML and JSON coverage for React components
-   - `backend-coverage`: HTML and JSON coverage for Node.js backend
-   - `model-service-coverage`: JSON and HTML coverage for Python code
-
-2. **Build Artifacts** (30 days retention)
-   - `frontend-build`: Production-ready Vite bundle
-   - `backend-build`: Compiled TypeScript output
-
-3. **Test Reports** (30 days retention)
-   - `playwright-report`: Interactive HTML report for E2E tests
-   - `e2e-test-results`: Raw Playwright test results
-
-4. **Docker Images** (7 days retention)
-   - `docker-images`: Tar archives of built Docker images
-
-## Service Dependencies
-
-The workflow sets up service containers for backend tests:
-
-- **PostgreSQL 16**: Database with health checks
-- **Redis 7**: Cache and queue with health checks
-
-## Environment Variables
-
-- `NODE_VERSION`: 22 (Node.js LTS)
-- `PYTHON_VERSION`: 3.12
-
-## Caching
-
-The workflow uses caching to speed up builds:
-
-- **Node.js**: npm cache based on `package-lock.json`
-- **Python**: pip cache based on `pyproject.toml`
-- **Docker**: GitHub Actions cache for layer caching
-
-## Triggering the Workflow
-
-The workflow runs automatically on:
-- Any push to tracked branches
-- Any pull request to `main` or `develop`
-
-To skip the workflow, add `[skip ci]` or `[ci skip]` to your commit message.
+1. ✅ **Caching**: npm and pip caching enabled
+2. ✅ **Matrix builds**: Model service CPU/GPU variants
+3. ✅ **Service containers**: PostgreSQL + Redis for backend tests
+4. ✅ **Artifact uploads**: Coverage and build outputs preserved
+5. ✅ **Conditional execution**: Docker pushes only on main/develop
+6. ✅ **Health checks**: Database services wait for readiness
+7. ✅ **Fail-fast disabled**: Security scans don't block CI
+8. ✅ **Shellcheck validation**: All bash scripts validated
+9. ✅ **Permissions**: Least-privilege GITHUB_TOKEN scopes
+10. ✅ **Multi-platform builds**: amd64 + arm64 support
 
 ## Local Testing
 
-To test the same checks locally before pushing:
-
-### Frontend
+Validate workflows locally:
 ```bash
-cd annotation-tool
-npm run lint
-npx tsc --noEmit
-npm run test:coverage
-npm run build
+# Install actionlint
+brew install actionlint
+
+# Validate all workflows
+actionlint .github/workflows/*.yml
+
+# Run tests locally (matches CI exactly)
+cd annotation-tool && npm run test:coverage
+cd server && npm run test:coverage
+cd model-service && pytest --cov=src
 ```
 
-### Backend
-```bash
-cd server
-npm run lint
-npx tsc --noEmit
-npm run test:coverage
-npm run build
-```
+## Monitoring
 
-### Model Service
-```bash
-cd model-service
-ruff check .
-ruff format --check .
-mypy src/
-pytest --cov=src --cov-report=term
-```
+- **GitHub Actions UI**: View workflow runs and logs
+- **Status badges**: Add to README for visibility
+- **Branch protection**: Require `quality-gate` status check
 
-### E2E Tests
-```bash
-cd annotation-tool
-npx playwright install chromium
-npm run test:e2e
-```
+## Future Enhancements
 
-## Troubleshooting
-
-### Failed Linting
-- Run `npm run lint` locally to see detailed error messages
-- For Python, run `ruff check .` and `mypy src/`
-
-### Failed Tests
-- Check the test logs in GitHub Actions
-- Download coverage artifacts to see which tests failed
-- Run tests locally with the same environment variables
-
-### Failed Docker Builds
-- Check the Docker build logs for errors
-- Verify Dockerfile syntax
-- Test locally with `docker build`
-
-### Service Container Issues
-- Ensure PostgreSQL and Redis services are healthy
-- Check health check commands in the workflow
-- Verify connection strings in test environment
-
-## Future Improvements
-
-Planned enhancements to the CI/CD pipeline:
-
-1. Deploy stage for staging/production environments
-2. Integration with AWS ECR for Docker registry
-3. ECS deployment automation
-4. Performance benchmarking
-5. Security scanning with Snyk or Trivy
-6. Dependency updates with Dependabot
-7. Code quality metrics with SonarCloud
+Potential improvements:
+- [ ] Add performance benchmarking job
+- [ ] Integrate Codecov/Coveralls for coverage tracking
+- [ ] Add automatic dependency updates (Dependabot/Renovate)
+- [ ] Implement canary deployments
+- [ ] Add infrastructure-as-code validation

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
-import { buildApp } from '../src/app.js'
+import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
