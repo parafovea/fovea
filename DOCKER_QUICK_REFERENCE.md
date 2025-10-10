@@ -154,7 +154,7 @@ curl http://localhost:8000/health  # Model service (CPU or GPU)
 - **Backend API**: http://localhost:3001
 - **Model Service**: http://localhost:8000/docs (Swagger UI)
 
-**For detailed metrics, dashboards, and troubleshooting**, see [OBSERVABILITY.md](OBSERVABILITY.md).
+**For detailed metrics, dashboards, and troubleshooting**, see the [Monitoring Guide](https://fovea.video/docs/operations/monitoring/overview).
 
 ## Troubleshooting
 
@@ -227,4 +227,4 @@ Key variables to configure in `.env`:
 - **Dockerfiles**: `*/Dockerfile`
 - **Config**: `otel-collector-config.yaml`, `prometheus.yml`, `model-service/config/models.yaml`
 - **Dashboards**: `grafana-dashboards/`
-- **Documentation**: `DEPLOYMENT.md`, `OBSERVABILITY.md`, `DOCKER_DEPLOYMENT.md`
+- **Documentation**: https://fovea.video/docs
