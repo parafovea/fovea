@@ -194,8 +194,5 @@ export async function buildApp() {
   const importRoute = await import('./routes/import.js')
   await app.register(importRoute.default)
 
-  const apiKeysRoute = await import('./routes/api-keys.js')
-  await app.register(apiKeysRoute.default)
-
   return app
 }

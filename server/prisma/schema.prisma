@@ -27,7 +27,6 @@ model Persona {
   ontology        Ontology?
   videoSummaries  VideoSummary[]
   annotations     Annotation[]
-  apiKeys         ApiKey[]
 
   @@map("personas")
 }
@@ -158,33 +157,4 @@ model ImportHistory {
   createdAt     DateTime @default(now())
 
   @@map("import_history")
-}
-
-/// ApiKey stores encrypted API keys for external services (persona-level or admin-level)
-model ApiKey {
-  id           String    @id @default(uuid())
-  personaId    String?
-  persona      Persona?  @relation(fields: [personaId], references: [id], onDelete: Cascade)
-
-  /// Provider: anthropic, openai, google, cohere, mistral, aws, azure, roboflow, cloudsight, edenai
-  provider     String
-  /// User-friendly label for this key
-  keyName      String
-  /// AES-256-GCM encrypted API key
-  encryptedKey String
-  /// Last 4 characters for display (e.g., "...Xy9Z")
-  keyMask      String
-  /// Whether this key is active
-  isActive     Boolean   @default(true)
-  /// Last time this key was used
-  lastUsed     DateTime?
-  /// Number of times this key has been used
-  usageCount   Int       @default(0)
-
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  @@unique([personaId, provider])
-  @@index([provider])
-  @@map("api_keys")
 }
