@@ -65,6 +65,9 @@ def mock_model_manager() -> Mock:
         "video_tracking": mock_tracking_task,
     }
 
+    # Mock is_external_api to return False (use self-hosted models in tests)
+    mock_manager.is_external_api.return_value = False
+
     with patch("src.routes._model_manager", mock_manager):
         yield mock_manager
 

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .external_apis.base import ExternalAPIConfig
+from .external_apis.router import ExternalModelRouter
 from .llm_loader import GenerationConfig, LLMConfig, LLMLoader
 from .models import OntologyType
 
@@ -235,6 +237,113 @@ def calculate_confidence(suggestion: dict[str, Any], context: AugmentationContex
         confidence += 0.1
 
     return min(confidence, 1.0)
+
+
+def extract_json_from_response(response_text: str) -> str:
+    """Extract JSON from LLM response, handling markdown code blocks.
+
+    Parameters
+    ----------
+    response_text : str
+        Raw text response from LLM.
+
+    Returns
+    -------
+    str
+        Extracted JSON string.
+    """
+    text = response_text.strip()
+
+    json_code_block = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if json_code_block:
+        return json_code_block.group(1).strip()
+
+    code_block = re.search(r"```\s*(.*?)\s*```", text, re.DOTALL)
+    if code_block:
+        return code_block.group(1).strip()
+
+    return text
+
+
+async def augment_ontology_with_external_api(
+    context: AugmentationContext,
+    api_config: ExternalAPIConfig,
+    provider: str,
+    max_suggestions: int = 10,
+) -> list[OntologyType]:
+    """Suggest new ontology types using external LLM API.
+
+    Parameters
+    ----------
+    context : AugmentationContext
+        Context containing domain, existing types, and target category.
+    api_config : ExternalAPIConfig
+        Configuration for external API client.
+    provider : str
+        Provider name (anthropic, openai, google).
+    max_suggestions : int, default=10
+        Maximum number of type suggestions to generate.
+
+    Returns
+    -------
+    list[OntologyType]
+        List of suggested ontology types with confidence scores.
+
+    Raises
+    ------
+    RuntimeError
+        If API call fails.
+    ValueError
+        If API response cannot be parsed.
+    """
+    try:
+        prompt = create_augmentation_prompt(context, max_suggestions)
+
+        logger.info(f"Calling {provider} API for ontology augmentation")
+        router = ExternalModelRouter()
+
+        try:
+            result = await router.generate_text(
+                config=api_config,
+                provider=provider,
+                prompt=prompt,
+                max_tokens=2048,
+                temperature=0.7,
+            )
+
+            response_text = result["text"]
+            usage = result.get("usage", {})
+
+            logger.info(
+                f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
+            )
+
+            json_text = extract_json_from_response(response_text)
+            parsed_suggestions = parse_llm_response(json_text)
+
+            suggestions = []
+            for suggestion_dict in parsed_suggestions:
+                confidence = calculate_confidence(suggestion_dict, context)
+
+                suggestion = OntologyType(
+                    name=suggestion_dict["name"],
+                    description=suggestion_dict["description"],
+                    parent=suggestion_dict.get("parent"),
+                    confidence=confidence,
+                    examples=suggestion_dict.get("examples", []),
+                )
+                suggestions.append(suggestion)
+
+            suggestions.sort(key=lambda x: x.confidence, reverse=True)
+
+            return suggestions[:max_suggestions]
+
+        finally:
+            await router.close_all()
+
+    except Exception as e:
+        logger.error(f"External API ontology augmentation failed: {e}")
+        raise RuntimeError(f"External API augmentation failed: {e}") from e
 
 
 async def augment_ontology_with_llm(

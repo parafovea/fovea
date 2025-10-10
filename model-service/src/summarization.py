@@ -5,6 +5,7 @@ It extracts frames, generates descriptions, and produces structured summaries
 tailored to specific personas and their information needs.
 """
 
+import io
 import logging
 import uuid
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Any
 from opentelemetry import trace
 from PIL import Image
 
+from .external_apis.base import ExternalAPIConfig
+from .external_apis.router import ExternalModelRouter
 from .models import KeyFrame, SummarizeRequest, SummarizeResponse
 from .video_utils import extract_frames_uniform, get_video_info
 from .vlm_loader import VLMConfig, create_vlm_loader
@@ -177,6 +180,226 @@ def identify_key_frames(
         )
 
     return key_frames
+
+
+def convert_image_to_base64(
+    image: Image.Image, format: str = "JPEG", max_dimension: int = 1024
+) -> bytes:
+    """Convert PIL Image to base64-encoded bytes.
+
+    Parameters
+    ----------
+    image : Image.Image
+        PIL Image to convert.
+    format : str, default="JPEG"
+        Image format for encoding (JPEG or PNG).
+    max_dimension : int, default=1024
+        Maximum dimension for resizing (maintains aspect ratio).
+
+    Returns
+    -------
+    bytes
+        Base64-encoded image bytes.
+    """
+    if max(image.size) > max_dimension:
+        ratio = max_dimension / max(image.size)
+        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        image = image.resize(new_size, Image.Resampling.LANCZOS)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format=format, quality=85)
+    return buffer.getvalue()
+
+
+def calculate_frame_sample_count(
+    total_frames: int,
+    provider: str,
+    max_frames: int,
+) -> int:
+    """Calculate appropriate number of frames to sample for external API.
+
+    Parameters
+    ----------
+    total_frames : int
+        Total number of frames in video.
+    provider : str
+        External API provider (anthropic, openai, google).
+    max_frames : int
+        User-requested maximum frames.
+
+    Returns
+    -------
+    int
+        Number of frames to sample (respects provider limits).
+    """
+    provider_limits = {
+        "anthropic": 20,
+        "openai": 10,
+        "google": 50,
+    }
+
+    provider_limit = provider_limits.get(provider, 10)
+    return min(max_frames, provider_limit, total_frames)
+
+
+def get_external_api_prompt(
+    frame_count: int,
+    duration: float,
+    timestamps: list[float],
+) -> str:
+    """Generate prompt for external API video summarization.
+
+    Parameters
+    ----------
+    frame_count : int
+        Number of frames being analyzed.
+    duration : float
+        Video duration in seconds.
+    timestamps : list[float]
+        Timestamp in seconds for each frame.
+
+    Returns
+    -------
+    str
+        Formatted prompt for external API.
+    """
+    timestamp_str = ", ".join(f"{t:.1f}s" for t in timestamps)
+
+    return f"""You are analyzing a video. I have provided {frame_count} frames sampled evenly throughout the video.
+
+Please provide a summary that describes:
+1. What is happening in the video
+2. Key objects, people, and actions
+3. Scene changes and transitions
+4. Any notable events or moments
+
+Focus on factual descriptions of visual content.
+
+Video duration: {duration:.1f} seconds
+Frames sampled at: {timestamp_str}"""
+
+
+async def summarize_video_with_external_api(
+    request: SummarizeRequest,
+    video_path: str,
+    api_config: ExternalAPIConfig,
+    provider: str,
+) -> SummarizeResponse:
+    """Summarize video using external VLM API.
+
+    Parameters
+    ----------
+    request : SummarizeRequest
+        Request containing parameters for summarization.
+    video_path : str
+        Path to the video file to summarize.
+    api_config : ExternalAPIConfig
+        Configuration for external API client.
+    provider : str
+        Provider name (anthropic, openai, google).
+
+    Returns
+    -------
+    SummarizeResponse
+        Generated video summary with analysis and key frames.
+
+    Raises
+    ------
+    SummarizationError
+        If video processing or API call fails.
+    """
+    with tracer.start_as_current_span("summarize_video_external_api") as span:
+        span.set_attribute("video_id", request.video_id)
+        span.set_attribute("persona_id", request.persona_id)
+        span.set_attribute("provider", provider)
+
+        try:
+            video_info = get_video_info(video_path)
+            logger.info(
+                f"Processing video with external API ({provider}): {video_path} "
+                f"({video_info.frame_count} frames, {video_info.duration:.2f}s)"
+            )
+
+            num_frames = calculate_frame_sample_count(
+                total_frames=video_info.frame_count,
+                provider=provider,
+                max_frames=request.max_frames,
+            )
+
+            frames_with_indices = extract_frames_uniform(
+                video_path,
+                num_frames=num_frames,
+                max_dimension=1024,
+            )
+
+            if not frames_with_indices:
+                raise SummarizationError("No frames could be extracted from video")
+
+            span.set_attribute("frames_extracted", len(frames_with_indices))
+
+            images_bytes = []
+            timestamps = []
+            for frame_idx, frame_array in frames_with_indices:
+                image = Image.fromarray(frame_array)
+                image_bytes = convert_image_to_base64(image, format="JPEG", max_dimension=1024)
+                images_bytes.append(image_bytes)
+                timestamps.append(frame_idx / video_info.fps if video_info.fps > 0 else 0.0)
+
+            prompt = get_external_api_prompt(
+                frame_count=len(images_bytes),
+                duration=video_info.duration,
+                timestamps=timestamps,
+            )
+
+            logger.info(f"Calling {provider} API with {len(images_bytes)} frames")
+            router = ExternalModelRouter()
+
+            try:
+                result = await router.generate_from_images(
+                    config=api_config,
+                    provider=provider,
+                    images=images_bytes,
+                    prompt=prompt,
+                    max_tokens=1024,
+                )
+
+                response_text = result["text"]
+                usage = result.get("usage", {})
+
+                logger.info(
+                    f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
+                )
+
+                summary, visual_analysis = parse_vlm_response(response_text)
+
+                key_frames = identify_key_frames(
+                    frames_with_indices,
+                    video_info.fps,
+                    num_key_frames=min(3, len(frames_with_indices)),
+                )
+
+                span.set_attribute("summary_length", len(summary))
+                span.set_attribute("key_frames_identified", len(key_frames))
+                span.set_attribute("tokens_used", usage.get("total_tokens", 0))
+
+                return SummarizeResponse(
+                    id=str(uuid.uuid4()),
+                    video_id=request.video_id,
+                    persona_id=request.persona_id,
+                    summary=summary,
+                    visual_analysis=visual_analysis,
+                    audio_transcript=None,
+                    key_frames=key_frames,
+                    confidence=0.85,
+                )
+
+            finally:
+                await router.close_all()
+
+        except Exception as e:
+            logger.error(f"External API video summarization failed: {e}")
+            span.set_attribute("error", str(e))
+            raise SummarizationError(f"External API summarization failed: {e}") from e
 
 
 async def summarize_video_with_vlm(
