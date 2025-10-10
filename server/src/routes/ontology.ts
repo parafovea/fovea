@@ -190,6 +190,15 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       const savedPersonas = []
       const savedOntologies = []
 
+      // Get default user for persona creation
+      const defaultUser = await tx.user.findUnique({
+        where: { username: 'user' }
+      })
+
+      if (!defaultUser) {
+        throw new Error('Default user not found')
+      }
+
       // Save all personas
       for (const persona of personas) {
         const savedPersona = await tx.persona.upsert({
@@ -205,7 +214,8 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
             name: persona.name,
             role: persona.role,
             informationNeed: persona.informationNeed,
-            details: persona.details
+            details: persona.details,
+            userId: defaultUser.id
           }
         })
         savedPersonas.push(savedPersona)

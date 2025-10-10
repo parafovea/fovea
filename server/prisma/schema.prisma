@@ -12,9 +12,79 @@ datasource db {
   extensions = [pgvector(map: "vector")]
 }
 
+/// User represents an authenticated user of the system
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String?   // Nullable for single-user mode default user
+  displayName  String
+  isAdmin      Boolean   @default(false)
+
+  // Relationships
+  personas     Persona[]
+  apiKeys      ApiKey[]
+  sessions     Session[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
+}
+
+/// Session stores user authentication sessions
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+/// ApiKey stores encrypted API keys for external services (user-level or admin-level)
+model ApiKey {
+  id           String    @id @default(uuid())
+  userId       String?   // NULL for admin-level keys
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Provider: anthropic, openai, google, cohere, mistral, aws, azure, roboflow, cloudsight, edenai
+  provider     String
+  /// User-friendly label for this key
+  keyName      String
+  /// AES-256-GCM encrypted API key
+  encryptedKey String
+  /// Last 4 characters for display (e.g., "...Xy9Z")
+  keyMask      String
+  /// Whether this key is active
+  isActive     Boolean   @default(true)
+  /// Last time this key was used
+  lastUsed     DateTime?
+  /// Number of times this key has been used
+  usageCount   Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([provider])
+  @@map("api_keys")
+}
+
 /// Persona represents an analyst or user with their own ontology and interpretations
 model Persona {
   id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   name            String
   role            String
   informationNeed String

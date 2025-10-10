@@ -4,6 +4,7 @@ import fastifySwaggerUI from '@fastify/swagger-ui'
 import fastifyCors from '@fastify/cors'
 import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
+import fastifyCookie from '@fastify/cookie'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
@@ -66,7 +67,13 @@ export async function buildApp() {
   })
 
   await app.register(fastifyCors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000']
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    credentials: true
+  })
+
+  // Cookie support for session management
+  await app.register(fastifyCookie, {
+    secret: process.env.COOKIE_SECRET || 'dev-secret-change-in-production',
   })
 
   // OpenAPI documentation
@@ -170,6 +177,18 @@ export async function buildApp() {
   })
 
   // Register routes
+  const authRoute = await import('./routes/auth.js')
+  await app.register(authRoute.default)
+
+  const usersRoute = await import('./routes/users.js')
+  await app.register(usersRoute.default)
+
+  const sessionsRoute = await import('./routes/sessions.js')
+  await app.register(sessionsRoute.default)
+
+  const apiKeysRoute = await import('./routes/api-keys.js')
+  await app.register(apiKeysRoute.default)
+
   const ontologyRoute = await import('./routes/ontology.js')
   await app.register(ontologyRoute.default)
 

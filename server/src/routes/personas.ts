@@ -99,11 +99,23 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         hidden: Type.Optional(Type.Boolean())
       }),
       response: {
-        201: PersonaSchema
+        201: PersonaSchema,
+        500: Type.Object({
+          error: Type.String()
+        })
       }
     }
   }, async (request, reply) => {
     const validatedData = createPersonaSchema.parse(request.body)
+
+    // Get default user for persona creation
+    const defaultUser = await fastify.prisma.user.findUnique({
+      where: { username: 'user' }
+    })
+
+    if (!defaultUser) {
+      return reply.code(500).send({ error: 'Default user not found' })
+    }
 
     const persona = await fastify.prisma.persona.create({
       data: {
@@ -113,6 +125,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         details: validatedData.details || null,
         isSystemGenerated: validatedData.isSystemGenerated,
         hidden: validatedData.hidden,
+        userId: defaultUser.id,
         ontology: {
           create: {
             entityTypes: [],
