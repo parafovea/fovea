@@ -32,8 +32,8 @@ This project adheres to a code of professional conduct. By participating, you ar
 
 Found a bug? Help us fix it by:
 
-1. Checking if the bug has already been reported in [GitHub Issues](https://github.com/YOUR_ORG/fovea/issues)
-2. If not, [create a new issue](https://github.com/YOUR_ORG/fovea/issues/new/choose) using the bug report template
+1. Checking if the bug has already been reported in [GitHub Issues](https://github.com/parafovea/fovea/issues)
+2. If not, [create a new issue](https://github.com/parafovea/fovea/issues/new/choose) using the bug report template
 3. Provide detailed information to help us reproduce and fix the issue
 
 **Good bug reports include:**
@@ -48,7 +48,7 @@ Found a bug? Help us fix it by:
 
 Have an idea for a new feature? We'd love to hear it:
 
-1. Check [existing feature requests](https://github.com/YOUR_ORG/fovea/labels/enhancement) to avoid duplicates
+1. Check [existing feature requests](https://github.com/parafovea/fovea/labels/enhancement) to avoid duplicates
 2. Create a new issue using the feature request template
 3. Describe the problem you're trying to solve, not just the solution
 4. Explain your use case and why existing features don't meet your needs
@@ -94,7 +94,7 @@ Before contributing, ensure you have:
 
 3. **Add the upstream remote** to sync with the main repository:
    ```bash
-   git remote add upstream https://github.com/YOUR_ORG/fovea.git
+   git remote add upstream https://github.com/parafovea/fovea.git
    ```
 
 4. **Install dependencies** for each component:
@@ -300,7 +300,7 @@ git rebase --continue
    git push origin feature/your-feature-name
    ```
 
-2. Go to the [main repository](https://github.com/YOUR_ORG/fovea) and click "New Pull Request"
+2. Go to the [main repository](https://github.com/parafovea/fovea) and click "New Pull Request"
 
 3. Fill out the PR template completely:
    - Provide a clear description of changes
@@ -552,7 +552,7 @@ make html -C docs
 
 ### Getting Help
 
-- **Documentation**: Check the [docs](https://fovea-docs.example.com) first
+- **Documentation**: Check the [docs](https://fovea.video/docs) first
 - **GitHub Discussions**: For questions and general discussion
 - **GitHub Issues**: For bug reports and feature requests
 - **Code Review**: Ask questions in pull requests
@@ -583,8 +583,8 @@ By contributing to FOVEA, you agree that your contributions will be licensed und
 If you have questions not covered in this guide:
 
 1. Check the [documentation](docs/)
-2. Search [existing issues](https://github.com/YOUR_ORG/fovea/issues)
-3. Ask in [GitHub Discussions](https://github.com/YOUR_ORG/fovea/discussions)
+2. Search [existing issues](https://github.com/parafovea/fovea/issues)
+3. Ask in [GitHub Discussions](https://github.com/parafovea/fovea/discussions)
 4. Open a new issue with your question
 
 Thank you for contributing to FOVEA!

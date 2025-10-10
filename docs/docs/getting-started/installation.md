@@ -33,7 +33,7 @@ The fastest way to get FOVEA running is with Docker Compose:
 
 ```bash
 # Clone the repository (if not already done)
-git clone https://github.com/your-org/fovea.git
+git clone https://github.com/parafovea/fovea.git
 cd fovea
 
 # Start all services in CPU mode (default)

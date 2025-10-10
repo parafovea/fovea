@@ -101,7 +101,7 @@ git --version
 ## Clone Repository
 
 ```bash
-git clone https://github.com/your-org/fovea.git
+git clone https://github.com/parafovea/fovea.git
 cd fovea
 ```
 

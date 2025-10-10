@@ -36,7 +36,7 @@ Ensure you have met the [CPU mode prerequisites](./prerequisites.md#cpu-mode-min
 Clone the FOVEA repository to your local machine:
 
 ```bash
-git clone https://github.com/your-org/fovea.git
+git clone https://github.com/parafovea/fovea.git
 cd fovea
 ```
 

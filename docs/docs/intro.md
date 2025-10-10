@@ -55,4 +55,4 @@ Learn more about the [architecture](./concepts/architecture.md).
 
 - [Common Operations](./operations/common-tasks.md) - Frequently needed operations
 - [Troubleshooting](./operations/troubleshooting/common-issues.md) - Solutions to common problems
-- [GitHub Issues](https://github.com/aaronstevenwhite/fovea/issues) - Report bugs or request features
+- [GitHub Issues](https://github.com/parafovea/fovea/issues) - Report bugs or request features
