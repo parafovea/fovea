@@ -548,3 +548,115 @@ class TestModelManager:
             await model_manager.shutdown()
 
         assert len(model_manager.loaded_models) == 0
+
+
+class TestExternalAPISupport:
+    """Tests for external API support in ModelManager."""
+
+    @pytest.fixture
+    def external_api_config(self):
+        """Sample configuration with external API models."""
+        return {
+            "models": {
+                "video_summarization": {
+                    "selected": "claude-sonnet-4-5",
+                    "options": {
+                        "claude-sonnet-4-5": {
+                            "model_id": "claude-sonnet-4-5",
+                            "framework": "external_api",
+                            "provider": "anthropic",
+                            "api_endpoint": "https://api.anthropic.com/v1/messages",
+                            "requires_api_key": True,
+                            "speed": "fast",
+                            "description": "Claude Sonnet",
+                        },
+                        "local-model": {
+                            "model_id": "test/local",
+                            "framework": "sglang",
+                            "vram_gb": 10,
+                            "speed": "fast",
+                            "description": "Local model",
+                        },
+                    },
+                },
+                "ontology_augmentation": {
+                    "selected": "gpt-4o",
+                    "options": {
+                        "gpt-4o": {
+                            "model_id": "gpt-4o",
+                            "framework": "external_api",
+                            "provider": "openai",
+                            "api_endpoint": "https://api.openai.com/v1/chat/completions",
+                            "requires_api_key": True,
+                            "speed": "fast",
+                            "description": "GPT-4 Omni",
+                        },
+                    },
+                },
+            },
+            "inference": {
+                "max_memory_per_model": "auto",
+                "offload_threshold": 0.85,
+                "warmup_on_startup": False,
+                "default_batch_size": 1,
+                "max_batch_size": 8,
+            },
+        }
+
+    @pytest.fixture
+    def external_api_config_file(self, external_api_config):
+        """Create temporary config file with external API models."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(external_api_config, f)
+            config_path = f.name
+
+        yield config_path
+
+        Path(config_path).unlink()
+
+    @pytest.fixture
+    def external_api_manager(self, external_api_config_file):
+        """Create ModelManager instance with external API configuration."""
+        return ModelManager(external_api_config_file)
+
+    def test_is_external_api_true(self, external_api_manager):
+        """Test is_external_api returns True for external API models."""
+        assert external_api_manager.is_external_api("video_summarization") is True
+        assert external_api_manager.is_external_api("ontology_augmentation") is True
+
+    def test_is_external_api_false(self, model_manager):
+        """Test is_external_api returns False for local models."""
+        assert model_manager.is_external_api("video_summarization") is False
+        assert model_manager.is_external_api("object_detection") is False
+
+    def test_is_external_api_invalid_task(self, model_manager):
+        """Test is_external_api raises error for invalid task."""
+        with pytest.raises(ValueError, match="Invalid task type"):
+            model_manager.is_external_api("nonexistent_task")
+
+    def test_get_external_api_config_success(self, external_api_manager):
+        """Test getting external API configuration."""
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test-key"}):
+            config = external_api_manager.get_external_api_config("video_summarization")
+
+            assert config.api_key == "sk-test-key"
+            assert config.api_endpoint == "https://api.anthropic.com/v1/messages"
+            assert config.model_id == "claude-sonnet-4-5"
+            assert config.timeout == 30
+            assert config.max_retries == 3
+
+    def test_get_external_api_config_missing_api_key(self, external_api_manager):
+        """Test getting external API config without API key."""
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(ValueError, match="Missing API key: ANTHROPIC_API_KEY"):
+                external_api_manager.get_external_api_config("video_summarization")
+
+    def test_get_external_api_config_not_external_api(self, model_manager):
+        """Test getting external API config for local model raises error."""
+        with pytest.raises(ValueError, match="does not use external API"):
+            model_manager.get_external_api_config("video_summarization")
+
+    def test_get_external_api_config_invalid_task(self, external_api_manager):
+        """Test getting external API config for invalid task."""
+        with pytest.raises(ValueError, match="Invalid task type"):
+            external_api_manager.is_external_api("nonexistent_task")

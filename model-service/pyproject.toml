@@ -31,6 +31,8 @@ dependencies = [
     "ultralytics>=8.3.0",
     "supervision>=0.22.0",
     "pycocotools>=2.0.10",
+    "httpx>=0.27.0",
+    "tenacity>=8.5.0",
 ]
 
 [project.optional-dependencies]
@@ -99,12 +101,14 @@ ignore = [
     "S101",    # use of assert (allowed in tests)
     "ANN101",  # missing type annotation for self in method
     "ANN102",  # missing type annotation for cls in classmethod
+    "ANN003",  # missing type annotation for **kwargs (standard idiom)
     "ANN401",  # typing.Any is disallowed (too strict, needed for model objects)
     "T201",    # print found (logging is not set up yet, using print)
     "PLW0603", # global statement (needed for FastAPI lifespan)
     "S603",    # subprocess without shell (ffmpeg is system tool, safe)
     "S607",    # partial executable path (ffmpeg is in PATH)
     "ARG001",  # unused function argument (FastAPI requires signature)
+    "ARG002",  # unused method argument (kwargs is standard idiom)
     "PLR0913", # too many arguments (VideoInfo dataclass needs 7 params)
 ]
 
@@ -146,5 +150,9 @@ follow_imports = "skip"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*"]
+module = ["external_apis", "external_apis.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
 ignore_missing_imports = true

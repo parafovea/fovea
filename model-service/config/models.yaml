@@ -40,6 +40,30 @@ models:
         vram_gb: 36
         speed: "fast"
         description: "Proven stable, good baseline"
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, vision capable, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
     selected: "llama-4-scout"
@@ -72,6 +96,30 @@ models:
         vram_gb: 14
         speed: "very_fast"
         description: "Lightweight, fast iteration"
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, text-only, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, text-only, API-based"
 
   object_detection:
     selected: "yolo-world-v2"
