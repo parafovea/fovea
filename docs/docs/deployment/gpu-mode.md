@@ -58,7 +58,7 @@ This should display GPU information from inside a container.
 ### Step 2: Clone Repository
 
 ```bash
-git clone https://github.com/your-org/fovea.git
+git clone https://github.com/parafovea/fovea.git
 cd fovea
 ```
 

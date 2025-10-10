@@ -19,7 +19,7 @@ Get FOVEA running in 5 minutes with a single command. This guide uses Docker Com
 Clone the repository and start all services:
 
 ```bash
-git clone https://github.com/your-org/fovea.git
+git clone https://github.com/parafovea/fovea.git
 cd fovea
 docker compose up
 ```
