@@ -1,280 +1,151 @@
-# Video Annotation Ontology Development Tool
+# FOVEA
 
-A web-based tool for developing annotation ontologies for video data with AI-supported capabilities for automated video analysis, object detection, and intelligent ontology suggestions.
+[![CI](https://github.com/parafovea/fovea/actions/workflows/ci.yml/badge.svg)](https://github.com/parafovea/fovea/actions/workflows/ci.yml)
+[![Documentation](https://github.com/parafovea/fovea/actions/workflows/docs.yml/badge.svg)](https://fovea.video/docs)
+[![Docker](https://github.com/parafovea/fovea/actions/workflows/docker.yml/badge.svg)](https://github.com/parafovea/fovea/actions/workflows/docker.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Documentation
+> **Note:** This project is currently in prerelease. APIs and features may change.
 
-**Full documentation is available at: [https://fovea.video/docs](https://fovea.video/docs)**
+FOVEA (Flexible Ontology Visual Event Analyzer) is a web-based video annotation tool designed for analysts who need to develop custom annotation ontologies for video data. The system supports a persona-based approach, where different analysts can define their own interpretive frameworks and assign different semantic types to the same real-world objects.
 
-The documentation includes:
-- [Getting Started Guide](https://fovea.video/docs/getting-started/installation) - Install and configure FOVEA
-- [User Guides](https://fovea.video/docs/user-guides/annotation/creating-annotations) - How to use FOVEA features
-- [API Reference](https://fovea.video/docs/api-reference/overview) - Complete API documentation
-- [Deployment Guides](https://fovea.video/docs/deployment/overview) - Production deployment options
-- [Operations Guides](https://fovea.video/docs/operations/common-tasks) - Maintenance and troubleshooting
+The platform combines manual annotation capabilities with AI-supported features including automated video summarization, object detection, and intelligent ontology suggestions.
+
+**Documentation:** [https://fovea.video/docs](https://fovea.video/docs)
 
 ## Features
 
-### Core Features
-- **Video Browser**: Browse and search through available video data with metadata display
-- **Ontology Builder**: Create and manage entities, roles, and events with a persona-based approach
-- **Annotation Workspace**: Draw bounding boxes and create temporal annotations on videos
-- **Gloss Editor**: Rich text definitions with type references for semantic relationships
-- **JSON Schema Validation**: Ensures data integrity for exports
-- **JSON Lines Export**: Export ontologies and annotations in a structured format
+FOVEA provides tools for browsing video collections, building custom ontologies, and creating spatial-temporal annotations. The ontology builder lets you define entities, roles, events, and their relationships using a persona-specific approach. The annotation workspace supports bounding box drawing with keyframe-based tracking and multiple interpolation modes.
 
-### AI-Supported Features
-- **Video Summarization**: Automatic video analysis using Vision Language Models
-- **Job Status Monitoring**: Real-time progress tracking for AI tasks with visual indicators
-- **Background Processing**: Asynchronous job queue system for long-running AI operations
+Rich text definitions can include references to Wikidata entities and type relationships. All exports use JSON Lines format with schema validation to ensure data integrity.
 
-## Installation
+AI capabilities include video summarization using Vision Language Models, with background job processing and real-time progress monitoring for long-running tasks.
 
-### Prerequisites
-- Docker and Docker Compose (recommended)
-- OR: Node.js 22+, Python 3.12+, PostgreSQL 16, Redis 7 (for manual setup)
-- Video files in MP4 format with accompanying metadata JSON files
+## Quick Start
 
-### Quick Start with Docker Compose (Recommended)
+The recommended way to run FOVEA is with Docker Compose. If you prefer manual setup, you'll need Node.js 22+, Python 3.12+, PostgreSQL 16, and Redis 7.
 
-1. **CPU Mode (Default)** - For local development:
+### Docker Compose (Recommended)
+
+For local development with CPU-based inference:
+
 ```bash
 docker compose up
 ```
 
-2. **GPU Mode** - For production with NVIDIA GPUs:
+For production deployment with NVIDIA GPU support:
+
 ```bash
 docker compose --profile gpu up
 ```
 
-3. Open your browser and navigate to: http://localhost:3000
+Open your browser to [http://localhost:3000](http://localhost:3000) after the services start.
 
-The Docker Compose setup includes:
-- Frontend (port 3000)
-- Backend API (port 3001)
-- Model Service with AI capabilities (port 8000) - CPU or GPU variant
-- PostgreSQL database (port 5432)
-- Redis queue (port 6379)
-- OpenTelemetry Collector, Prometheus, and Grafana for observability
-
-**Note**: The project uses Docker Compose profiles for CPU/GPU deployment. CPU mode (default) runs the model service with minimal dependencies. GPU mode (`--profile gpu`) enables NVIDIA GPU support with full inference engines. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed configuration options.
+The stack includes frontend (port 3000), backend API (port 3001), model service (port 8000), PostgreSQL (port 5432), Redis (port 6379), and observability services (OpenTelemetry Collector, Prometheus, Grafana). CPU mode runs with minimal dependencies, while GPU mode enables NVIDIA GPU support with full inference engines. See the [Deployment Guide](https://fovea.video/docs/deployment/overview) for configuration details.
 
 ### Manual Development Setup
 
-For active development, you can run services individually:
+For active development with individual service control:
 
-1. Start PostgreSQL and Redis:
 ```bash
+# Start infrastructure
 docker compose up postgres redis
-```
 
-2. Install and start backend:
-```bash
-cd server
-npm install
-npm run dev
-```
+# Backend
+cd server && npm install && npm run dev
 
-3. Install and start frontend:
-```bash
-cd annotation-tool
-npm install
-npm run dev
-```
+# Frontend
+cd annotation-tool && npm install && npm run dev
 
-4. Install and start model service (optional, for AI features):
-```bash
-cd model-service
-pip install -r requirements.txt
+# Model service (optional)
+cd model-service && pip install -r requirements.txt
 uvicorn src.main:app --reload --port 8000
 ```
 
 ## Usage
 
-### Video Browser
-- View all available videos from the data directory
-- Search by title, description, or tags
-- Click "Annotate" to open a video in the annotation workspace
+Place video files (`.mp4`) and their metadata files (`.info.json`) in the `/data` directory. The video browser will display all available videos with searchable metadata.
 
-### Ontology Builder
-1. Create a new ontology by defining a persona (role, information need, details)
-2. Add entity types (e.g., "Container", "Truck", "Ship")
-3. Define roles that can be filled by entities or events
-4. Create event types with associated roles
-5. Use the gloss editor to create rich definitions with type references
+### Creating Annotations
 
-### Annotation Workspace
-1. Open a video from the browser
-2. Select an annotation mode (Entity, Role, or Event)
-3. Draw bounding boxes on the video
-4. Navigate frame-by-frame for precision
-5. View current annotations in the sidebar
+Open a video from the browser to enter the annotation workspace. Select an annotation mode (Entity, Role, or Event) and draw bounding boxes on the video. Use keyboard shortcuts to navigate frame-by-frame for precision. The system supports keyframe-based tracking with automatic interpolation between frames.
 
-### Data Export
-- Click "Export" to generate JSON Lines format
-- Exports include the ontology, annotations, and video metadata
-- All exports are validated against the JSON schema
+### Building Ontologies
 
-### AI Features
+Start by defining a persona that describes your analytical role and information needs. Add entity types, event types, and role types that reflect your interpretive framework. The gloss editor supports rich text definitions with references to other types and Wikidata entities.
 
-#### Video Summarization
-The system uses Vision Language Models to automatically generate summaries of video content:
-1. Navigate to a video in the Video Browser
-2. Click "Generate Summary"
-3. Monitor job progress with the real-time status indicator
-4. View the generated summary when complete
+### AI-Assisted Analysis
 
-The summarization pipeline runs as a background job, allowing you to continue working while the AI processes the video.
+Generate video summaries by clicking "Generate Summary" in the video browser. The system uses Vision Language Models to analyze video content and runs the job in the background so you can continue working. Progress indicators show real-time status updates.
 
-## Data Format
+### Exporting Data
 
-The tool works with video files and metadata in the following format:
-- Video files: `.mp4` format
-- Metadata files: `.info.json` containing video information
-- Both files should be in the `/data` directory
+Click "Export" to generate JSON Lines format output. Exports include ontology definitions, annotations, and video metadata, all validated against the JSON schema to ensure data integrity.
 
 ## Architecture
 
-### Frontend
-- **Framework**: React 18 + TypeScript 5.3+ + Vite 5
-- **UI**: Material-UI v6, CSS-in-JS with Emotion
-- **State Management**: Redux Toolkit + TanStack Query v5
-- **Video Player**: video.js with custom annotation overlay
-- **Testing**: Vitest, Playwright, Testing Library, MSW 2.0
+FOVEA uses a three-tier architecture with a React frontend, Node.js backend, and Python model service. All services communicate via REST APIs and use PostgreSQL for persistence with Redis for job queuing.
 
-### Backend
-- **Framework**: Node.js 22 LTS + Fastify 5 + TypeScript 5.3+
-- **Database**: PostgreSQL 16 with Prisma 6 ORM
-- **Queue**: BullMQ 5 with Redis 7
-- **Validation**: Zod for type-safe schema validation
-- **Development**: tsx for hot reload
+The frontend uses React 18 with TypeScript, Material-UI v6, and Redux Toolkit for state management. TanStack Query v5 handles server state synchronization. The video player is built on video.js with custom annotation overlays. Testing uses Vitest, Playwright, and MSW 2.0.
 
-### Model Service
-- **Framework**: Python 3.12 + FastAPI 0.110+ + Pydantic v2
-- **ML Stack**: PyTorch 2.5+, Transformers 4.47+
-- **Inference**: SGLang 0.4+ (primary) with vLLM 0.6+ fallback
-- **Async**: asyncio + aiohttp for non-blocking I/O
+The backend runs on Node.js 22 LTS with Fastify 5 and TypeScript. PostgreSQL 16 with Prisma 6 ORM provides data persistence. BullMQ 5 and Redis 7 handle background job processing. Schema validation uses Zod for type safety.
 
-### Infrastructure
-- **Containerization**: Docker with BuildKit, Compose Spec
-- **Observability**: OpenTelemetry, Prometheus, Grafana, Loki
-- **Logging**: Structured logging with pino (Node.js), structlog (Python)
+The model service is built with Python 3.12, FastAPI 0.110+, and Pydantic v2. Machine learning capabilities use PyTorch 2.5+ and Transformers 4.47+. Inference runs on SGLang 0.4+ with vLLM 0.6+ fallback. All I/O operations are non-blocking with asyncio and aiohttp.
+
+Infrastructure uses Docker with BuildKit and Compose Spec for containerization. Observability is provided by OpenTelemetry, Prometheus, Grafana, and Loki. Structured logging uses pino for Node.js and structlog for Python.
 
 ## Development
 
-### Frontend Development
+Each service has its own development workflow. The frontend and backend support hot reload for rapid iteration.
+
+**Frontend:**
 ```bash
 cd annotation-tool
-npm run dev          # Start development server
-npm run test         # Run unit tests with Vitest
-npm run test:e2e     # Run E2E tests with Playwright
-npm run lint         # Run ESLint
+npm run dev          # Development server
+npm run test         # Unit tests (Vitest)
+npm run test:e2e     # E2E tests (Playwright)
+npm run lint         # ESLint
 npx tsc --noEmit     # Type checking
 ```
 
-### Backend Development
+**Backend:**
 ```bash
 cd server
-npm run dev          # Start with hot reload (tsx)
+npm run dev          # Development server with hot reload
 npm run build        # Compile TypeScript
 npm run test         # Run tests
-npm run lint         # Run ESLint
+npm run lint         # ESLint
 ```
 
-### Model Service Development
+**Model Service:**
 ```bash
 cd model-service
 pip install -r requirements-dev.txt
-pytest --cov=src     # Run tests with coverage
-ruff check .         # Lint Python code
+pytest --cov=src     # Tests with coverage
+ruff check .         # Lint
 mypy src/            # Type checking
 ```
 
-### Developer Testing Mode
+### Testing Mode
 
-For rapid development and testing, the frontend can be pre-populated with test data instead of starting with an empty state. This mode seeds the Redux store with a tactical analyst persona, Wikidata-referenced ontology types, and sample entities/locations extracted from video metadata.
+The frontend supports a developer testing mode that pre-populates the Redux store with sample data (tactical analyst persona, Wikidata-referenced ontology types, and sample entities/locations). Enable it by creating `annotation-tool/.env.local` with `VITE_ENABLE_TEST_DATA=true`. The application will display console warnings when test mode is active. This data exists only in browser memory and does not persist to the database.
 
-**Enable Test Data Mode:**
+### Monitoring
 
-1. Create `.env.local` in the `annotation-tool/` directory:
-   ```bash
-   cd annotation-tool
-   cat > .env.local << 'EOF'
-   # Developer Testing Mode
-   # WARNING: This enables pre-populated test data. Only use during development.
-   # Set to 'false' or remove this file to disable.
-   VITE_ENABLE_TEST_DATA=true
-   EOF
-   ```
+When running with Docker Compose, access monitoring dashboards at:
 
-2. Start the frontend development server:
-   ```bash
-   npm run dev
-   ```
+- Grafana: [http://localhost:3002](http://localhost:3002) (admin/admin)
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Bull Board: [http://localhost:3001/admin/queues](http://localhost:3001/admin/queues)
 
-3. The application will display console warnings indicating test mode is active:
-   ```
-   ⚠️  DEVELOPER TEST MODE ENABLED
-   ⚠️  Pre-populating with test data
-   ⚠️  Set VITE_ENABLE_TEST_DATA=false to disable
-   ```
-
-**Pre-Populated Test Data:**
-
-When enabled, the application loads with:
-- **Persona**: Tactical Disaster Response Analyst focused on natural disaster impact assessment
-- **Entity Types**: Infrastructure (Q121359), Natural Phenomenon (Q1322005), Organization (Q43229), Person (Q5)
-- **Event Types**: Disaster Event (Q3839081), Response Action (Q1460335), Impact Event (Q1190554)
-- **Role Types**: Affected Party (Q1802668), Responder (Q1473346), Reporter (Q1930187)
-- **Entities**: Port of Long Beach (Q1144228), Phoenix Sky Harbor Airport (Q845278), ABC7 Eyewitness News (Q4649870), National Weather Service (Q850795)
-- **Locations**: Phoenix, AZ (Q16556), Long Beach, CA (Q49085), Kunar Province, Afghanistan (Q173570), Black Rock Desert, NV (Q894825)
-
-All ontology types include Wikidata IDs and locations include GPS coordinates.
-
-**Disable Test Data Mode:**
-
-To return to normal mode where data loads from the API:
-```bash
-# Option 1: Remove the file
-rm annotation-tool/.env.local
-
-# Option 2: Set to false
-echo "VITE_ENABLE_TEST_DATA=false" > annotation-tool/.env.local
-
-# Option 3: Comment out the variable
-sed -i '' 's/VITE_ENABLE_TEST_DATA=true/# VITE_ENABLE_TEST_DATA=true/' annotation-tool/.env.local
-```
-
-**Safety Notes:**
-- The `.env.local` file is already in `.gitignore` and will not be committed
-- Test data only exists in browser memory and does not persist to the database
-- Console warnings appear whenever test mode is active
-- Requires explicit `VITE_ENABLE_TEST_DATA=true` to prevent accidental activation
-
-### Observability
-
-The application includes a complete observability stack with distributed tracing, metrics collection, and monitoring dashboards.
-
-Access monitoring dashboards when running with Docker Compose:
-- **Grafana**: http://localhost:3002 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Bull Board** (Queue monitoring): http://localhost:3001/admin/queues
-
-**For detailed information** on metrics, tracing, custom instrumentation, and dashboard creation, see [OBSERVABILITY.md](OBSERVABILITY.md).
+See the [Monitoring Guide](https://fovea.video/docs/operations/monitoring/overview) for details on metrics, tracing, and custom instrumentation.
 
 ## Contributing
 
-We welcome contributions from the community! Whether you're fixing bugs, adding features, improving documentation, or reporting issues, your help is appreciated.
+Contributions are welcome in all forms: bug fixes, feature additions, documentation improvements, and issue reports. See `CONTRIBUTING.md` for development environment setup, coding standards, pull request process, testing requirements, and documentation guidelines.
 
-Please read our [Contributing Guide](CONTRIBUTING.md) to get started. It includes:
-- Development environment setup
-- Coding standards and best practices
-- Pull request process
-- Testing requirements
-- Documentation guidelines
-
-For questions or discussions, visit our [GitHub Discussions](https://github.com/parafovea/fovea/discussions).
+For questions or discussions, visit [GitHub Discussions](https://github.com/parafovea/fovea/discussions).
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License. See `LICENSE` for details.
