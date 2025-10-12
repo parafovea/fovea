@@ -33,6 +33,15 @@ const sidebars: SidebarsConfig = {
       items: [
         {
           type: 'category',
+          label: 'Authentication',
+          items: [
+            'user-guides/authentication/overview',
+            'user-guides/authentication/managing-users',
+            'user-guides/authentication/sessions',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Annotation',
           items: [
             'user-guides/annotation/creating-annotations',
@@ -119,6 +128,7 @@ const sidebars: SidebarsConfig = {
   ],
   apiSidebar: [
     'api-reference/overview',
+    'api-reference/authentication',
     'api-reference/personas',
     'api-reference/ontology',
     'api-reference/annotations',

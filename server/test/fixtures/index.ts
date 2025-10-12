@@ -5,3 +5,4 @@
 
 export * from './personas.js'
 export * from './annotations.js'
+export * from './users.js'
