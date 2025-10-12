@@ -56,15 +56,6 @@ async function main() {
   })
   console.log('✓ Created default user for single-user mode:', defaultUser.username)
 
-  // Update any existing personas without a userId to belong to the default user
-  const updateResult = await prisma.persona.updateMany({
-    where: { userId: null },
-    data: { userId: defaultUser.id },
-  })
-  if (updateResult.count > 0) {
-    console.log(`✓ Updated ${updateResult.count} existing persona(s) to belong to default user`)
-  }
-
   // Create the Automated persona if it doesn't exist
   const existingAutomated = await prisma.persona.findFirst({
     where: { name: 'Automated' },
@@ -72,12 +63,8 @@ async function main() {
 
   let automatedPersona
   if (existingAutomated) {
-    // Update to ensure it has the correct userId
-    automatedPersona = await prisma.persona.update({
-      where: { id: existingAutomated.id },
-      data: { userId: defaultUser.id },
-    })
-    console.log('✓ Updated Automated persona:', automatedPersona.name)
+    automatedPersona = existingAutomated
+    console.log('✓ Automated persona already exists:', automatedPersona.name)
   } else {
     automatedPersona = await prisma.persona.create({
       data: {

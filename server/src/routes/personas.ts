@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { requireAuth, optionalAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schema for Persona response.
@@ -58,21 +59,40 @@ const updatePersonaSchema = z.object({
 const personasRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * List all personas.
-   * Returns an array of all personas in the database.
+   * In single-user mode, returns all personas.
+   * In multi-user mode with authentication, returns current user's personas only.
+   * Without authentication, returns public/system personas.
    *
    * @route GET /api/personas
    * @returns Array of personas
    */
   fastify.get('/api/personas', {
+    onRequest: [optionalAuth],
     schema: {
-      description: 'Retrieve all personas',
+      description: 'Retrieve personas',
       tags: ['personas'],
       response: {
         200: Type.Array(PersonaSchema)
       }
     }
-  }, async (_request, reply) => {
+  }, async (request, reply) => {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    let where: { userId?: string; isSystemGenerated?: boolean } = {}
+
+    if (mode === 'single-user') {
+      // Single-user mode: return all personas
+      where = {}
+    } else if (request.user) {
+      // Multi-user mode with auth: return user's personas
+      where = { userId: request.user.id }
+    } else {
+      // Multi-user mode without auth: return only system personas
+      where = { isSystemGenerated: true }
+    }
+
     const personas = await fastify.prisma.persona.findMany({
+      where,
       orderBy: { createdAt: 'desc' }
     })
     return reply.send(personas)
@@ -81,12 +101,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Create a new persona.
    * Creates a persona and its associated ontology in the database.
+   * Requires authentication. Persona is created for the authenticated user.
    *
    * @route POST /api/personas
    * @param request.body - Persona data
    * @returns Created persona
    */
   fastify.post('/api/personas', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Create a new persona',
       tags: ['personas'],
@@ -99,23 +121,11 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         hidden: Type.Optional(Type.Boolean())
       }),
       response: {
-        201: PersonaSchema,
-        500: Type.Object({
-          error: Type.String()
-        })
+        201: PersonaSchema
       }
     }
   }, async (request, reply) => {
     const validatedData = createPersonaSchema.parse(request.body)
-
-    // Get default user for persona creation
-    const defaultUser = await fastify.prisma.user.findUnique({
-      where: { username: 'user' }
-    })
-
-    if (!defaultUser) {
-      return reply.code(500).send({ error: 'Default user not found' })
-    }
 
     const persona = await fastify.prisma.persona.create({
       data: {
@@ -125,7 +135,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         details: validatedData.details || null,
         isSystemGenerated: validatedData.isSystemGenerated,
         hidden: validatedData.hidden,
-        userId: defaultUser.id,
+        userId: request.user!.id,
         ontology: {
           create: {
             entityTypes: [],
@@ -142,12 +152,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
   /**
    * Get a specific persona by ID.
+   * In multi-user mode, verifies user owns the persona or it's a system persona.
    *
    * @route GET /api/personas/:id
    * @param request.params.id - Persona UUID
    * @returns Persona object
    */
   fastify.get<{ Params: { id: string } }>('/api/personas/:id', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Get a specific persona by ID',
       tags: ['personas'],
@@ -156,6 +168,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         200: PersonaSchema,
+        403: Type.Object({
+          error: Type.String()
+        }),
         404: Type.Object({
           error: Type.String()
         })
@@ -163,6 +178,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    const mode = process.env.FOVEA_MODE || 'multi-user'
 
     const persona = await fastify.prisma.persona.findUnique({
       where: { id }
@@ -172,12 +188,20 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'Persona not found' })
     }
 
+    // In multi-user mode, verify access
+    if (mode === 'multi-user' && request.user) {
+      if (persona.userId !== request.user.id && !persona.isSystemGenerated) {
+        return reply.code(403).send({ error: 'Access denied' })
+      }
+    }
+
     return reply.send(persona)
   })
 
   /**
    * Update a persona.
    * Performs partial update of persona fields.
+   * Requires authentication and ownership verification.
    *
    * @route PUT /api/personas/:id
    * @param request.params.id - Persona UUID
@@ -185,6 +209,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Updated persona
    */
   fastify.put<{ Params: { id: string } }>('/api/personas/:id', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Update a persona',
       tags: ['personas'],
@@ -201,6 +226,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         200: PersonaSchema,
+        403: Type.Object({
+          error: Type.String()
+        }),
         404: Type.Object({
           error: Type.String()
         })
@@ -209,6 +237,19 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { id } = request.params
     const validatedData = updatePersonaSchema.parse(request.body)
+
+    // Verify ownership
+    const existingPersona = await fastify.prisma.persona.findUnique({
+      where: { id }
+    })
+
+    if (!existingPersona) {
+      return reply.code(404).send({ error: 'Persona not found' })
+    }
+
+    if (existingPersona.userId !== request.user!.id) {
+      return reply.code(403).send({ error: 'Cannot update another user\'s persona' })
+    }
 
     try {
       const persona = await fastify.prisma.persona.update({
@@ -227,12 +268,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Delete a persona.
    * Deletes the persona and its associated ontology (cascade).
+   * Requires authentication and ownership verification.
    *
    * @route DELETE /api/personas/:id
    * @param request.params.id - Persona UUID
    * @returns Success message
    */
   fastify.delete<{ Params: { id: string } }>('/api/personas/:id', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Delete a persona',
       tags: ['personas'],
@@ -243,6 +286,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         200: Type.Object({
           message: Type.String()
         }),
+        403: Type.Object({
+          error: Type.String()
+        }),
         404: Type.Object({
           error: Type.String()
         })
@@ -250,6 +296,19 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+
+    // Verify ownership
+    const existingPersona = await fastify.prisma.persona.findUnique({
+      where: { id }
+    })
+
+    if (!existingPersona) {
+      return reply.code(404).send({ error: 'Persona not found' })
+    }
+
+    if (existingPersona.userId !== request.user!.id) {
+      return reply.code(403).send({ error: 'Cannot delete another user\'s persona' })
+    }
 
     try {
       await fastify.prisma.persona.delete({
