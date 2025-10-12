@@ -40,6 +40,8 @@ import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
 import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
 import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 import ImportDataDialog from './ImportDataDialog'
+import UserMenu from './auth/UserMenu.js'
+import UserSettingsDialog from './settings/UserSettingsDialog.js'
 
 const DRAWER_WIDTH = 240
 
@@ -52,6 +54,7 @@ export default function Layout() {
   const [exporting, setExporting] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
+  const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
@@ -250,6 +253,7 @@ export default function Layout() {
               <KeyboardIcon />
             </IconButton>
           </Tooltip>
+          <UserMenu onSettingsClick={() => setUserSettingsDialogOpen(true)} />
         </Toolbar>
       </AppBar>
 
@@ -343,6 +347,11 @@ export default function Layout() {
             severity: 'success',
           })
         }}
+      />
+
+      <UserSettingsDialog
+        open={userSettingsDialogOpen}
+        onClose={() => setUserSettingsDialogOpen(false)}
       />
 
       <KeyboardShortcutHint />

@@ -3,7 +3,20 @@ import { render, RenderOptions } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
+import { MemoryRouter } from 'react-router-dom'
+import { configureStore } from '@reduxjs/toolkit'
 import { store } from '../../src/store/store.js'
+import annotationReducer from '../../src/store/annotationSlice.js'
+import videoReducer from '../../src/store/videoSlice.js'
+import personaReducer from '../../src/store/personaSlice.js'
+import worldReducer from '../../src/store/worldSlice.js'
+import videoSummaryReducer from '../../src/store/videoSummarySlice.js'
+import userReducer from '../../src/store/userSlice.js'
+
+/**
+ * Root state type from the main store.
+ */
+type RootState = ReturnType<typeof store.getState>
 
 const theme = createTheme({
   palette: {
@@ -18,12 +31,43 @@ const theme = createTheme({
 })
 
 /**
+ * Extended render options that include preloadedState for Redux store.
+ */
+interface ExtendedRenderOptions extends Omit<RenderOptions, 'wrapper'> {
+  preloadedState?: Partial<RootState>
+  initialEntries?: string[]
+  withRouter?: boolean
+}
+
+/**
+ * Creates a test store with optional preloaded state.
+ *
+ * Note: Redux Toolkit's configureStore with preloadedState has strict typing that expects
+ * the state shape to exactly match the reducers. However, at runtime Redux correctly handles
+ * partial preloaded state by using each reducer's initial state for missing slices. The type
+ * assertion ensures TypeScript accepts partial state while maintaining runtime correctness.
+ */
+function createTestStore(preloadedState?: Partial<RootState>) {
+  return configureStore({
+    reducer: {
+      annotations: annotationReducer,
+      videos: videoReducer,
+      persona: personaReducer,
+      world: worldReducer,
+      videoSummaries: videoSummaryReducer,
+      user: userReducer,
+    },
+    preloadedState: preloadedState as RootState | undefined,
+  })
+}
+
+/**
  * Custom render function that wraps components with all required providers.
  * Use this instead of @testing-library/react's render for testing components
  * that depend on Redux, React Query, or Material-UI theming.
  *
  * @param ui - The component to render
- * @param options - Additional render options
+ * @param options - Additional render options including preloadedState for Redux
  * @returns Render result from @testing-library/react
  *
  * @example
@@ -34,11 +78,29 @@ const theme = createTheme({
  *   const { getByText } = renderWithProviders(<MyComponent />)
  *   expect(getByText('Hello')).toBeInTheDocument()
  * })
+ *
+ * test('renders with preloaded state', () => {
+ *   const { getByText } = renderWithProviders(<MyComponent />, {
+ *     preloadedState: {
+ *       user: {
+ *         currentUser: { id: '1', username: 'test', displayName: 'Test User', isAdmin: false },
+ *         isAuthenticated: true,
+ *         isLoading: false,
+ *         mode: 'multi-user',
+ *       }
+ *     }
+ *   })
+ * })
  * ```
  */
 export function renderWithProviders(
   ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
+  {
+    preloadedState,
+    initialEntries = ['/'],
+    withRouter = false,
+    ...renderOptions
+  }: ExtendedRenderOptions = {}
 ) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -48,9 +110,11 @@ export function renderWithProviders(
     },
   })
 
+  const testStore = preloadedState ? createTestStore(preloadedState) : store
+
   function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <Provider store={store}>
+    const content = (
+      <Provider store={testStore}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider theme={theme}>
             {children}
@@ -58,9 +122,19 @@ export function renderWithProviders(
         </QueryClientProvider>
       </Provider>
     )
+
+    if (withRouter) {
+      return (
+        <MemoryRouter initialEntries={initialEntries}>
+          {content}
+        </MemoryRouter>
+      )
+    }
+
+    return content
   }
 
-  return render(ui, { wrapper: Wrapper, ...options })
+  return render(ui, { wrapper: Wrapper, ...renderOptions })
 }
 
 /**

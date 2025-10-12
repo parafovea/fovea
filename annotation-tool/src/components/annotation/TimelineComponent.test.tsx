@@ -212,7 +212,6 @@ describe('TimelineComponent', () => {
   })
 
   it('handles zoom level changes', async () => {
-    const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
     renderWithStore(

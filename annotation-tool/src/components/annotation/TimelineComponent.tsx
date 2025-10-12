@@ -4,7 +4,7 @@
  * Provides canvas-based rendering with 60fps performance for smooth playhead updates.
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useDispatch } from 'react-redux'
 import { Box, Slider, IconButton, Typography, useTheme, Tooltip, Button } from '@mui/material'
 import {
@@ -86,9 +86,12 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   const [interpolationDialogOpen, setInterpolationDialogOpen] = useState(false)
 
   // Extract keyframes from annotation
-  const keyframes = annotation?.boundingBoxSequence?.boxes.filter(
-    b => b.isKeyframe || b.isKeyframe === undefined
-  ) || []
+  const keyframes = useMemo(() =>
+    annotation?.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || [],
+    [annotation]
+  )
 
   // Check if current frame is a keyframe
   const isKeyframe = keyframes.some(kf => kf.frameNumber === currentFrame)
@@ -313,7 +316,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       setDraggingKeyframe(null)
       setDragStartFrame(null)
     },
-    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch]
+    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch, videoFps]
   )
 
   // Handle mouse leave

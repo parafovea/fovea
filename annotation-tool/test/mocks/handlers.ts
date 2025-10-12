@@ -333,5 +333,281 @@ export const handlers = [
       timestamp: '2025-10-03T10:00:00Z',
       cuda_available: true,
     })
-  })
+  }),
+
+  // Auth endpoints
+  http.get('/api/config', () => {
+    return HttpResponse.json({
+      mode: 'multi-user',
+      allowRegistration: true,
+    })
+  }),
+
+  http.post('/api/auth/login', async ({ request }) => {
+    const body = await request.json() as { username: string; password: string }
+    if (body.username === 'admin' && body.password === 'admin123') {
+      return HttpResponse.json({
+        user: {
+          id: 'user-1',
+          username: 'admin',
+          displayName: 'Admin User',
+          email: 'admin@example.com',
+          isAdmin: true,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+        },
+      })
+    }
+    if (body.username === 'testuser' && body.password === 'test123') {
+      return HttpResponse.json({
+        user: {
+          id: 'user-2',
+          username: 'testuser',
+          displayName: 'Test User',
+          email: 'test@example.com',
+          isAdmin: false,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+        },
+      })
+    }
+    return HttpResponse.json({ message: 'Invalid credentials' }, { status: 401 })
+  }),
+
+  http.post('/api/auth/logout', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('/api/auth/me', () => {
+    return HttpResponse.json({
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    })
+  }),
+
+  http.post('/api/auth/register', async ({ request }) => {
+    const body = await request.json() as {
+      username: string
+      password: string
+      displayName: string
+      email?: string
+    }
+    return HttpResponse.json({
+      user: {
+        id: 'user-new',
+        username: body.username,
+        displayName: body.displayName,
+        email: body.email,
+        isAdmin: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    }, { status: 201 })
+  }),
+
+  // Admin user management endpoints
+  http.get('/api/admin/users', () => {
+    return HttpResponse.json([
+      {
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+        personaCount: 3,
+        sessionCount: 1,
+      },
+      {
+        id: 'user-2',
+        username: 'testuser',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        isAdmin: false,
+        createdAt: '2025-01-02T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+        personaCount: 1,
+        sessionCount: 0,
+      },
+    ])
+  }),
+
+  http.get('/api/admin/users/:userId', ({ params }) => {
+    const { userId } = params
+    if (userId === 'user-1') {
+      return HttpResponse.json({
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+        personaCount: 3,
+        sessionCount: 1,
+      })
+    }
+    return HttpResponse.json({ message: 'User not found' }, { status: 404 })
+  }),
+
+  http.post('/api/admin/users', async ({ request }) => {
+    const body = await request.json() as {
+      username: string
+      password: string
+      displayName: string
+      email?: string
+      isAdmin: boolean
+    }
+    return HttpResponse.json({
+      id: 'user-new',
+      username: body.username,
+      displayName: body.displayName,
+      email: body.email,
+      isAdmin: body.isAdmin,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('/api/admin/users/:userId', async ({ request }) => {
+    const body = await request.json() as {
+      displayName?: string
+      email?: string
+      isAdmin?: boolean
+      password?: string
+    }
+    return HttpResponse.json({
+      id: 'user-1',
+      username: 'admin',
+      displayName: body.displayName || 'Admin User',
+      email: body.email || 'admin@example.com',
+      isAdmin: body.isAdmin !== undefined ? body.isAdmin : true,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('/api/admin/users/:userId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // Session management endpoints
+  http.get('/api/admin/sessions', () => {
+    return HttpResponse.json([
+      {
+        id: 'session-1',
+        userId: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        createdAt: '2025-10-10T10:00:00Z',
+        expiresAt: '2025-10-17T10:00:00Z',
+      },
+      {
+        id: 'session-2',
+        userId: 'user-2',
+        username: 'testuser',
+        displayName: 'Test User',
+        ipAddress: '192.168.1.101',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        createdAt: '2025-10-10T12:00:00Z',
+        expiresAt: '2025-10-17T12:00:00Z',
+      },
+    ])
+  }),
+
+  http.delete('/api/admin/sessions/:sessionId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // API key management endpoints
+  http.get('/api/api-keys', () => {
+    return HttpResponse.json([
+      {
+        id: 'key-1',
+        userId: 'user-1',
+        provider: 'anthropic',
+        keyName: 'My Anthropic Key',
+        keyMask: 'sk-ant-...abc123',
+        isActive: true,
+        lastUsedAt: '2025-10-10T10:00:00Z',
+        createdAt: '2025-10-01T00:00:00Z',
+        updatedAt: '2025-10-01T00:00:00Z',
+      },
+      {
+        id: 'key-2',
+        userId: 'user-1',
+        provider: 'openai',
+        keyName: 'OpenAI Development',
+        keyMask: 'sk-...xyz789',
+        isActive: false,
+        createdAt: '2025-10-05T00:00:00Z',
+        updatedAt: '2025-10-05T00:00:00Z',
+      },
+    ])
+  }),
+
+  http.get('/api/admin/api-keys', () => {
+    return HttpResponse.json([
+      {
+        id: 'admin-key-1',
+        userId: null,
+        provider: 'google',
+        keyName: 'Shared Google Key',
+        keyMask: 'AIza...def456',
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    ])
+  }),
+
+  http.post('/api/api-keys', async ({ request }) => {
+    const body = await request.json() as {
+      provider: string
+      keyName: string
+      apiKey: string
+    }
+    return HttpResponse.json({
+      id: 'key-new',
+      userId: 'user-1',
+      provider: body.provider,
+      keyName: body.keyName,
+      keyMask: body.apiKey.substring(0, 7) + '...' + body.apiKey.slice(-6),
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('/api/api-keys/:keyId', async ({ request }) => {
+    const body = await request.json() as {
+      keyName?: string
+      apiKey?: string
+      isActive?: boolean
+    }
+    return HttpResponse.json({
+      id: 'key-1',
+      userId: 'user-1',
+      provider: 'anthropic',
+      keyName: body.keyName || 'My Anthropic Key',
+      keyMask: 'sk-ant-...abc123',
+      isActive: body.isActive !== undefined ? body.isActive : true,
+      createdAt: '2025-10-01T00:00:00Z',
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('/api/api-keys/:keyId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import {
   Dialog,
@@ -57,17 +57,10 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load export statistics when options change
-  useEffect(() => {
-    if (open) {
-      loadExportStats()
-    }
-  }, [open, includeInterpolated, selectedPersonaIds, selectedVideoIds, selectedAnnotationTypes])
-
   /**
    * Load export statistics from the backend.
    */
-  const loadExportStats = async () => {
+  const loadExportStats = useCallback(async () => {
     setIsLoadingStats(true)
     setError(null)
 
@@ -87,7 +80,14 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
     } finally {
       setIsLoadingStats(false)
     }
-  }
+  }, [includeInterpolated, selectedPersonaIds, selectedVideoIds, selectedAnnotationTypes])
+
+  // Load export statistics when options change
+  useEffect(() => {
+    if (open) {
+      loadExportStats()
+    }
+  }, [open, loadExportStats])
 
   /**
    * Perform the export and trigger download.

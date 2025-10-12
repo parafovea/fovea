@@ -189,6 +189,9 @@ export async function buildApp() {
   const apiKeysRoute = await import('./routes/api-keys.js')
   await app.register(apiKeysRoute.default)
 
+  const configRoute = await import('./routes/config.js')
+  await app.register(configRoute.default)
+
   const ontologyRoute = await import('./routes/ontology.js')
   await app.register(ontologyRoute.default)
 

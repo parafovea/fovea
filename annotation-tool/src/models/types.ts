@@ -1,9 +1,20 @@
+export interface User {
+  id: string
+  username: string
+  email?: string
+  displayName: string
+  isAdmin: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Persona {
   id: string
   name: string
   role: string
   informationNeed: string
   details: string
+  userId?: string
   createdAt: string
   updatedAt: string
 }

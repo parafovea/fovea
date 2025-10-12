@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react'
-import { Routes, Route } from 'react-router-dom'
-import { useDispatch } from 'react-redux'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
+import { Box, CircularProgress, Typography } from '@mui/material'
 import { generateId } from './utils/uuid'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
@@ -8,14 +9,88 @@ import AnnotationWorkspace from './components/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
 import Settings from './pages/Settings'
-import { AppDispatch } from './store/store'
+import LoginPage from './components/auth/LoginPage.js'
+import RegisterPage from './components/auth/RegisterPage.js'
+import AdminPanel from './components/admin/AdminPanel.js'
+import { AppDispatch, RootState } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { setWorldData } from './store/worldSlice'
+import { setConfig } from './store/userSlice.js'
 import { api } from './services/api'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
+import { useSession } from './hooks/auth/useSession.js'
+
+/**
+ * Loading screen component.
+ * Displays while checking authentication status.
+ */
+function LoadingScreen() {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        gap: 2,
+      }}
+    >
+      <CircularProgress size={60} />
+      <Typography variant="h6" color="text.secondary">
+        Loading...
+      </Typography>
+    </Box>
+  )
+}
+
+/**
+ * Protected route wrapper.
+ * Redirects to login if user is not authenticated in multi-user mode.
+ *
+ * @param children - Child components to render if authenticated
+ * @returns Protected content or redirect to login
+ */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, mode } = useSelector((state: RootState) => state.user)
+  const location = useLocation()
+
+  if (isLoading) {
+    return <LoadingScreen />
+  }
+
+  if (mode === 'multi-user' && !isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  return <>{children}</>
+}
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
+
+  // Restore session on mount
+  useSession()
+
+  // Fetch application config on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/config', { credentials: 'include' })
+        if (response.ok) {
+          const config = await response.json()
+          dispatch(setConfig({
+            mode: config.mode,
+            allowRegistration: config.allowRegistration,
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to fetch config:', error)
+      }
+    }
+
+    fetchConfig()
+  }, [dispatch])
 
   const loadOntology = useCallback(async () => {
     try {
@@ -108,12 +183,25 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
+      {/* Protected routes */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<VideoBrowser />} />
         <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
         <Route path="ontology" element={<OntologyWorkspace />} />
         <Route path="objects" element={<ObjectWorkspace />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="admin" element={<AdminPanel />} />
       </Route>
     </Routes>
   )

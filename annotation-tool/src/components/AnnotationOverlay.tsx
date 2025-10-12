@@ -283,7 +283,7 @@ export default function AnnotationOverlay({
 
       return displayInfo
     })
-  }, [annotations, currentTime, entities, events, entityCollections, eventCollections])
+  }, [annotations, currentTime, entities, events, entityCollections, eventCollections, selectedAnnotation])
 
   /**
    * Extract detection bounding boxes for current video time.

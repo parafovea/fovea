@@ -304,7 +304,7 @@ export default function InteractiveBoundingBox({
         updatedAt: new Date().toISOString(),
       }))
     }
-  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, dispatch])
+  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, dispatch, onUpdate, mode, currentFrame])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {

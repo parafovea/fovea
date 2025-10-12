@@ -5,6 +5,7 @@ import videoReducer from './videoSlice'
 import personaReducer from './personaSlice'
 import worldReducer from './worldSlice'
 import videoSummaryReducer from './videoSummarySlice'
+import userReducer from './userSlice'
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ export const store = configureStore({
     persona: personaReducer,
     world: worldReducer,
     videoSummaries: videoSummaryReducer,
+    user: userReducer,
   },
 })
 
