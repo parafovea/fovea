@@ -152,27 +152,82 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const token = request.cookies.session_token
+      const mode = process.env.FOVEA_MODE || 'single-user'
 
-      if (!token) {
-        return reply.code(401).send({ error: 'Not authenticated' })
+      // Handle session-based authentication
+      if (token) {
+        const user = await authService.validateSession(token)
+
+        if (!user) {
+          reply.clearCookie('session_token', { path: '/' })
+          return reply.code(401).send({ error: 'Session expired' })
+        }
+
+        return {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            displayName: user.displayName,
+            isAdmin: user.isAdmin,
+          },
+        }
       }
 
-      const user = await authService.validateSession(token)
+      // In single-user mode, auto-authenticate with default user
+      if (mode === 'single-user') {
+        // Find or create default user
+        let defaultUser = await prisma.user.findUnique({
+          where: { username: 'user' },
+        })
 
-      if (!user) {
-        reply.clearCookie('session_token', { path: '/' })
-        return reply.code(401).send({ error: 'Session expired' })
+        if (!defaultUser) {
+          // Create default user if doesn't exist
+          const bcryptRounds = 12
+          const defaultPassword = await bcrypt.hash('password', bcryptRounds)
+          defaultUser = await prisma.user.create({
+            data: {
+              username: 'user',
+              displayName: 'Default User',
+              email: null,
+              passwordHash: defaultPassword,
+              isAdmin: false,
+            },
+          })
+        }
+
+        // Create session for default user
+        const { token: sessionToken, expiresAt } = await authService.createSession(
+          defaultUser.id,
+          {
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+            expiresInDays: 30,
+          }
+        )
+
+        // Set session cookie
+        reply.setCookie('session_token', sessionToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          expires: expiresAt,
+          path: '/',
+        })
+
+        return {
+          user: {
+            id: defaultUser.id,
+            username: defaultUser.username,
+            email: defaultUser.email,
+            displayName: defaultUser.displayName,
+            isAdmin: defaultUser.isAdmin,
+          },
+        }
       }
 
-      return {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          displayName: user.displayName,
-          isAdmin: user.isAdmin,
-        },
-      }
+      // Multi-user mode requires authentication
+      return reply.code(401).send({ error: 'Not authenticated' })
     }
   )
 

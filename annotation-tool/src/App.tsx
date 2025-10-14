@@ -15,7 +15,6 @@ import AdminPanel from './components/admin/AdminPanel.js'
 import { AppDispatch, RootState } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { setWorldData } from './store/worldSlice'
-import { setConfig } from './store/userSlice.js'
 import { api } from './services/api'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession.js'
@@ -69,28 +68,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   const dispatch = useDispatch<AppDispatch>()
 
-  // Restore session on mount
+  // Restore session on mount (also fetches config)
   useSession()
-
-  // Fetch application config on mount
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await fetch('/api/config', { credentials: 'include' })
-        if (response.ok) {
-          const config = await response.json()
-          dispatch(setConfig({
-            mode: config.mode,
-            allowRegistration: config.allowRegistration,
-          }))
-        }
-      } catch (error) {
-        console.error('Failed to fetch config:', error)
-      }
-    }
-
-    fetchConfig()
-  }, [dispatch])
 
   const loadOntology = useCallback(async () => {
     try {
