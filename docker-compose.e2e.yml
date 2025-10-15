@@ -36,6 +36,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MODEL_SERVICE_URL=http://model-service:8000
+      - FOVEA_MODE=single-user
+      - DEFAULT_USER_USERNAME=default-user
+      - DEFAULT_USER_DISPLAY_NAME=Default User
     volumes:
       - ./test-data:/data:ro
     depends_on:

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { buildApp } from '../../src/app.js'
+import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -10,6 +11,7 @@ import { PrismaClient } from '@prisma/client'
 describe('Videos API - Detection', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
+  let testUserId: string
 
   beforeAll(async () => {
     app = await buildApp()
@@ -21,10 +23,26 @@ describe('Videos API - Detection', () => {
   })
 
   beforeEach(async () => {
+    // Clean database in dependency order
+    await prisma.apiKey.deleteMany()
+    await prisma.session.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
+    await prisma.user.deleteMany()
+
+    // Create test user
+    const user = await prisma.user.create({
+      data: {
+        username: 'test-user',
+        email: 'test@example.com',
+        passwordHash: await hashPassword('testpass123'),
+        displayName: 'Test User',
+        isAdmin: false
+      }
+    })
+    testUserId = user.id
   })
 
   describe('POST /api/videos/:videoId/detect', () => {
@@ -47,6 +65,7 @@ describe('Videos API - Detection', () => {
           name: 'Test Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -106,6 +125,7 @@ describe('Videos API - Detection', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -187,6 +207,7 @@ describe('Videos API - Detection', () => {
           name: 'No Ontology',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
         },
       })
 
@@ -208,6 +229,7 @@ describe('Videos API - Detection', () => {
           name: 'Empty Ontology',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -244,6 +266,7 @@ describe('Videos API - Detection', () => {
           name: 'Test Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
@@ -287,6 +310,7 @@ describe('Videos API - Detection', () => {
           name: 'Test Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],

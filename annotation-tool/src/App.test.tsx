@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup.js'
 import { renderWithProviders } from '../test/utils/test-utils.js'
 import App from './App.js'
+import * as useSessionModule from './hooks/auth/useSession.js'
 
 // Mock the useSession hook to prevent actual session checks during tests
 vi.mock('./hooks/auth/useSession.js', () => ({
@@ -201,6 +202,12 @@ describe('App', () => {
         })
       })
     )
+
+    // Mock useSession to actually fetch the config
+    vi.mocked(useSessionModule.useSession).mockImplementationOnce(() => {
+      // Simulate the config fetch
+      fetch('/api/config', { credentials: 'include' })
+    })
 
     renderWithProviders(<App />, {
       withRouter: true,

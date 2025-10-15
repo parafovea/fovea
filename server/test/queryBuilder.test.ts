@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/app.js'
+import { hashPassword } from '../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { buildDetectionQueryFromPersona, buildPersonaPrompts } from '../src/utils/queryBuilder.js'
@@ -11,6 +12,7 @@ import { buildDetectionQueryFromPersona, buildPersonaPrompts } from '../src/util
 describe('Query Builder', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
+  let testUserId: string
 
   beforeAll(async () => {
     app = await buildApp()
@@ -22,11 +24,27 @@ describe('Query Builder', () => {
   })
 
   beforeEach(async () => {
+    // Clean database in dependency order
+    await prisma.apiKey.deleteMany()
+    await prisma.session.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.video.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
+    await prisma.user.deleteMany()
+
+    // Create test user
+    const user = await prisma.user.create({
+      data: {
+        username: 'test-user',
+        email: 'test@example.com',
+        passwordHash: await hashPassword('testpass123'),
+        displayName: 'Test User',
+        isAdmin: false
+      }
+    })
+    testUserId = user.id
   })
 
   describe('buildDetectionQueryFromPersona', () => {
@@ -36,6 +54,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -64,6 +83,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -93,6 +113,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -131,6 +152,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -181,6 +203,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -239,6 +262,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking games',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -293,6 +317,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Tracking events',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -349,6 +374,7 @@ describe('Query Builder', () => {
           name: 'Test Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -397,6 +423,7 @@ describe('Query Builder', () => {
           name: 'Empty Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -421,6 +448,7 @@ describe('Query Builder', () => {
           name: 'Wildlife Researcher',
           role: 'Biologist',
           informationNeed: 'Animal behavior',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -452,6 +480,7 @@ describe('Query Builder', () => {
           name: 'No Ontology',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
         },
       })
 
@@ -466,6 +495,7 @@ describe('Query Builder', () => {
           name: 'Test Persona',
           role: 'Analyst',
           informationNeed: 'Testing',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [
@@ -493,6 +523,7 @@ describe('Query Builder', () => {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
           informationNeed: 'Evaluating pitcher mechanics and pitch selection',
+          userId: testUserId,
         },
       })
 
@@ -514,6 +545,7 @@ describe('Query Builder', () => {
           name: 'Automated',
           role: 'Analyst',
           informationNeed: 'Understanding the content and events in this video',
+          userId: testUserId,
         },
       })
 
