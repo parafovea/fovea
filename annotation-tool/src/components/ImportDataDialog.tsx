@@ -502,7 +502,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
                   {/* Overview */}
                   <Paper sx={{ p: 2, bgcolor: 'primary.50', borderLeft: 3, borderColor: 'primary.main' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                      JSON Lines format with one object per line. Each line must contain a <code style={{ bgcolor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: 3 }}>type</code> field and corresponding <code style={{ bgcolor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: 3 }}>data</code> object.
+                      JSON Lines format with one object per line. Each line must contain a <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.1)', padding: '2px 6px', borderRadius: 3 }}>type</code> field and corresponding <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.1)', padding: '2px 6px', borderRadius: 3 }}>data</code> object.
                     </Typography>
                   </Paper>
 
@@ -677,7 +677,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
                       <Grid item xs={6}>
                         <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>annotationType</code>
+                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>annotationType</code>
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             "type" assigns a persona's ontology type to a video region. "object" links to an existing world entity, event, or location.
@@ -687,7 +687,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
                       <Grid item xs={6}>
                         <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>boxes</code>
+                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>boxes</code>
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Keyframe positions defining bounding box movement. Only boxes marked isKeyframe:true are stored; intermediate frames are interpolated.
@@ -697,7 +697,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
                       <Grid item xs={6}>
                         <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>interpolationSegments</code>
+                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>interpolationSegments</code>
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Controls how boxes move between keyframes. Linear for constant motion, ease-in/out for acceleration/deceleration, bezier for custom curves.
@@ -707,7 +707,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
                       <Grid item xs={6}>
                         <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>visibilityRanges</code>
+                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>visibilityRanges</code>
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Defines when the annotation is visible. Supports gaps for objects that leave and re-enter the frame (e.g., occlusion).

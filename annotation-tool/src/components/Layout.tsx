@@ -27,7 +27,6 @@ import {
   Upload as ImportIcon,
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
-  Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
