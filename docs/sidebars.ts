@@ -24,6 +24,8 @@ const sidebars: SidebarsConfig = {
         'concepts/temporal-model',
         'concepts/observability',
         'concepts/data-flow',
+        'concepts/external-api-integration',
+        'concepts/audio-processing',
       ],
     },
     {
@@ -40,6 +42,15 @@ const sidebars: SidebarsConfig = {
             'user-guides/authentication/sessions',
           ],
         },
+        {
+          type: 'category',
+          label: 'Audio & Transcription',
+          items: [
+            'user-guides/audio/transcription-overview',
+            'user-guides/audio/fusion-strategies',
+          ],
+        },
+        'user-guides/external-apis',
         {
           type: 'category',
           label: 'Annotation',
@@ -134,6 +145,7 @@ const sidebars: SidebarsConfig = {
     'api-reference/annotations',
     'api-reference/videos',
     'api-reference/export-import',
+    'api-reference/audio-transcription',
     {
       type: 'link',
       label: 'Frontend API',
