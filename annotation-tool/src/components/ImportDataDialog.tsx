@@ -32,10 +32,12 @@ import {
   Error as ErrorIcon,
   Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material'
 import { api } from '../services/api'
 import { ImportOptions, ImportPreview, ImportResult, Conflict } from '../models/types'
 import ImportResultDialog from './ImportResultDialog'
+import ExpandableJsonViewer from './shared/ExpandableJsonViewer'
 
 /**
  * @interface ImportDataDialogProps
@@ -474,6 +476,256 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
             {/* Import Progress */}
             {importing && <LinearProgress />}
+
+            {/* Information Banner */}
+            <Alert severity="info" icon={<InfoIcon />}>
+              <Typography variant="body2">
+                Upload a JSON Lines (.jsonl) file exported from FOVEA. Expand the section below for format details and examples.
+              </Typography>
+            </Alert>
+
+            {/* Format Documentation Accordion */}
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  bgcolor: 'action.hover',
+                  '&:hover': { bgcolor: 'action.selected' }
+                }}
+              >
+                <Typography variant="subtitle2">
+                  Format Specification & Example
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ bgcolor: 'background.default' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {/* Overview */}
+                  <Paper sx={{ p: 2, bgcolor: 'primary.50', borderLeft: 3, borderColor: 'primary.main' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      JSON Lines format with one object per line. Each line must contain a <code style={{ bgcolor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: 3 }}>type</code> field and corresponding <code style={{ bgcolor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: 3 }}>data</code> object.
+                    </Typography>
+                  </Paper>
+
+                  {/* Example */}
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <FileIcon color="action" fontSize="small" />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                        Realistic Example: Container Ship Tracking
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                      Based on "Imports/Exports Analyst" persona tracking a cargo ship arrival with containers
+                    </Typography>
+                    <ExpandableJsonViewer
+                      data={{
+                        type: "annotation",
+                        data: {
+                          id: "7f8d9c2b-4a1e-4d6f-9c8b-2e5a1f3d7c4b",
+                          videoId: "f3e2d1c0-5b4a-3c2d-1e0f-9a8b7c6d5e4f",
+                          annotationType: "type",
+                          personaId: "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
+                          typeCategory: "entity",
+                          typeId: "container_ship",
+                          boundingBoxSequence: {
+                            boxes: [
+                              {
+                                x: 245,
+                                y: 180,
+                                width: 420,
+                                height: 285,
+                                frameNumber: 0,
+                                isKeyframe: true,
+                                confidence: 0.98,
+                                metadata: {
+                                  shipName: "MSC MEDITERRANEAN",
+                                  imo: "9876543",
+                                  callSign: "3FQM7",
+                                  flag: "Panama",
+                                  vesselLength: 366,
+                                  vesselBeam: 51,
+                                  dwt: 140000,
+                                  teu: 13800
+                                }
+                              },
+                              {
+                                x: 320,
+                                y: 195,
+                                width: 450,
+                                height: 310,
+                                frameNumber: 120,
+                                isKeyframe: true,
+                                confidence: 0.99
+                              },
+                              {
+                                x: 410,
+                                y: 210,
+                                width: 485,
+                                height: 335,
+                                frameNumber: 240,
+                                isKeyframe: true,
+                                confidence: 0.97
+                              },
+                              {
+                                x: 520,
+                                y: 225,
+                                width: 515,
+                                height: 360,
+                                frameNumber: 360,
+                                isKeyframe: true,
+                                confidence: 0.98,
+                                metadata: {
+                                  containersDischarged: 247,
+                                  containersLoaded: 189,
+                                  netMovement: -58,
+                                  estimatedDepartureTime: "2025-01-15T18:30:00Z"
+                                }
+                              }
+                            ],
+                            interpolationSegments: [
+                              {
+                                startFrame: 0,
+                                endFrame: 120,
+                                type: "ease-in-out"
+                              },
+                              {
+                                startFrame: 120,
+                                endFrame: 240,
+                                type: "linear"
+                              },
+                              {
+                                startFrame: 240,
+                                endFrame: 360,
+                                type: "ease-out"
+                              }
+                            ],
+                            visibilityRanges: [
+                              {
+                                startFrame: 0,
+                                endFrame: 360,
+                                visible: true
+                              }
+                            ],
+                            trackId: 1,
+                            trackingSource: "manual",
+                            trackingConfidence: 0.98,
+                            totalFrames: 361,
+                            keyframeCount: 4,
+                            interpolatedFrameCount: 357
+                          },
+                          confidence: 0.98,
+                          notes: "Container ship MSC MEDITERRANEAN arriving at berth 12 for discharge/load operations. Ship approached from southwest channel, berthed at 08:45 UTC. Gantry cranes 3, 4, and 5 assigned for operations. Weather conditions: clear, wind 8 knots NE.",
+                          metadata: {
+                            vesselData: {
+                              shipType: "Container Ship",
+                              operator: "Mediterranean Shipping Company",
+                              buildYear: 2018,
+                              port: "Long Beach",
+                              terminal: "Pacific Container Terminal",
+                              berth: "PCT-12",
+                              arrivalTime: "2025-01-15T08:45:00Z",
+                              berthingDuration: 12,
+                              operationType: "discharge-load"
+                            },
+                            cargoOperations: {
+                              containersOnBoard: 8543,
+                              containerTypes: {
+                                "20ft": 3245,
+                                "40ft": 4812,
+                                "40ft_hc": 486
+                              },
+                              refrigeratedContainers: 842,
+                              hazmatContainers: 67,
+                              companiesObserved: [
+                                "MAERSK",
+                                "MSC",
+                                "CMA CGM",
+                                "COSCO",
+                                "EVERGREEN",
+                                "HAPAG-LLOYD",
+                                "ONE"
+                              ],
+                              loadingEquipment: [
+                                "Gantry Crane 3",
+                                "Gantry Crane 4",
+                                "Gantry Crane 5"
+                              ]
+                            },
+                            weatherConditions: {
+                              visibility: "excellent",
+                              windSpeed: 8,
+                              windDirection: "NE",
+                              temperature: 18,
+                              seaState: "calm"
+                            }
+                          },
+                          createdBy: "analyst_maritime_ops_01",
+                          createdAt: "2025-01-15T09:15:23Z",
+                          updatedAt: "2025-01-15T14:35:47Z"
+                        }
+                      }}
+                      initialCollapsed={true}
+                    />
+                  </Box>
+
+                  {/* Field Descriptions */}
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
+                      Key Field Descriptions
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>annotationType</code>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            "type" assigns a persona's ontology type to a video region. "object" links to an existing world entity, event, or location.
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>boxes</code>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Keyframe positions defining bounding box movement. Only boxes marked isKeyframe:true are stored; intermediate frames are interpolated.
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>interpolationSegments</code>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Controls how boxes move between keyframes. Linear for constant motion, ease-in/out for acceleration/deceleration, bezier for custom curves.
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                            <code style={{ bgcolor: 'action.selected', padding: '2px 6px', borderRadius: 3 }}>visibilityRanges</code>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Defines when the annotation is visible. Supports gaps for objects that leave and re-enter the frame (e.g., occlusion).
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  {/* Footer Note */}
+                  <Alert severity="success" variant="outlined" sx={{ borderRadius: 1 }}>
+                    <Typography variant="caption">
+                      <strong>Tip:</strong> Export a sample file using the Export button to examine the complete structure with all supported fields.
+                    </Typography>
+                  </Alert>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
 
             {/* File Upload Area */}
             <Box>

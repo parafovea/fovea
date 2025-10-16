@@ -238,15 +238,13 @@ export default function Layout() {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Import Data">
-            <IconButton
-              color="inherit"
-              onClick={() => setImportDialogOpen(true)}
-              sx={{ ml: 1 }}
-            >
-              <ImportIcon />
-            </IconButton>
-          </Tooltip>
+          <Button
+            color="inherit"
+            startIcon={<ImportIcon />}
+            onClick={() => setImportDialogOpen(true)}
+          >
+            Import
+          </Button>
           <Tooltip title="Keyboard Shortcuts (?)">
             <IconButton
               color="inherit"
