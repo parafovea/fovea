@@ -206,9 +206,30 @@ export default function Layout() {
               mr: 2,
             }}
           />
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            FOVEA: Flexible Ontology Visual Event Analyzer
-          </Typography>
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                fontSize: '1.25rem'
+              }}
+            >
+              FOVEA
+            </Typography>
+            <Typography
+              variant="body2"
+              component="div"
+              sx={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontWeight: 300,
+                display: { xs: 'none', md: 'block' }
+              }}
+            >
+              Flexible Ontology Visual Event Analyzer
+            </Typography>
+          </Box>
           {unsavedChanges && (
             <Typography variant="body2" sx={{ mr: 2, color: 'yellow' }}>
               Unsaved changes
