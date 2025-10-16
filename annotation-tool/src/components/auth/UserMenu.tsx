@@ -15,6 +15,8 @@ import {
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
   Logout as LogoutIcon,
+  Dashboard as DashboardIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../../hooks/auth/useAuth.js'
 import { useCurrentUser } from '../../hooks/auth/useCurrentUser.js'
@@ -25,14 +27,22 @@ import { RootState } from '../../store/store.js'
  */
 export interface UserMenuProps {
   onSettingsClick?: () => void
+  onModelSettingsClick?: () => void
+  onAboutClick?: () => void
+  onAdminPanelClick?: () => void
 }
 
 /**
  * User menu component.
- * Displays user avatar and dropdown menu with profile, settings, admin panel, and logout options.
+ * Displays user avatar and dropdown menu with user settings, model settings, about, admin panel, and logout options.
  * Only shown when user is authenticated.
  */
-export default function UserMenu({ onSettingsClick }: UserMenuProps) {
+export default function UserMenu({
+  onSettingsClick,
+  onModelSettingsClick,
+  onAboutClick,
+  onAdminPanelClick,
+}: UserMenuProps) {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const { user, isAdmin } = useCurrentUser()
@@ -85,11 +95,33 @@ export default function UserMenu({ onSettingsClick }: UserMenuProps) {
   }
 
   /**
-   * Navigates to admin panel.
+   * Opens admin panel dialog.
    */
   const handleAdmin = () => {
     handleClose()
-    navigate('/admin')
+    if (onAdminPanelClick) {
+      onAdminPanelClick()
+    }
+  }
+
+  /**
+   * Opens model settings dialog.
+   */
+  const handleModelSettings = () => {
+    handleClose()
+    if (onModelSettingsClick) {
+      onModelSettingsClick()
+    }
+  }
+
+  /**
+   * Opens about dialog.
+   */
+  const handleAbout = () => {
+    handleClose()
+    if (onAboutClick) {
+      onAboutClick()
+    }
   }
 
   /**
@@ -139,16 +171,33 @@ export default function UserMenu({ onSettingsClick }: UserMenuProps) {
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
-          Settings
+          User Settings
+        </MenuItem>
+
+        <MenuItem onClick={handleModelSettings}>
+          <ListItemIcon>
+            <DashboardIcon fontSize="small" />
+          </ListItemIcon>
+          Model Settings
+        </MenuItem>
+
+        <MenuItem onClick={handleAbout}>
+          <ListItemIcon>
+            <InfoIcon fontSize="small" />
+          </ListItemIcon>
+          About
         </MenuItem>
 
         {isAdmin && (
-          <MenuItem onClick={handleAdmin}>
-            <ListItemIcon>
-              <AdminIcon fontSize="small" />
-            </ListItemIcon>
-            Admin Panel
-          </MenuItem>
+          <>
+            <Divider />
+            <MenuItem onClick={handleAdmin}>
+              <ListItemIcon>
+                <AdminIcon fontSize="small" />
+              </ListItemIcon>
+              Admin Panel
+            </MenuItem>
+          </>
         )}
 
         {mode === 'multi-user' && (

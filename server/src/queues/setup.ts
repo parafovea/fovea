@@ -13,6 +13,15 @@ interface ModelSummarizeResponse {
   audio_transcript: string;
   key_frames: number[];
   confidence: number;
+  transcript_json?: any;
+  audio_language?: string;
+  speaker_count?: number;
+  audio_model_used?: string;
+  visual_model_used?: string;
+  fusion_strategy?: string;
+  processing_time_audio?: number;
+  processing_time_visual?: number;
+  processing_time_fusion?: number;
 }
 
 /**
@@ -85,6 +94,10 @@ export interface VideoSummarizationJobData {
   personaId: string;
   frameSampleRate?: number;
   maxFrames?: number;
+  enableAudio?: boolean;
+  enableSpeakerDiarization?: boolean;
+  fusionStrategy?: string;
+  audioLanguage?: string;
 }
 
 /**
@@ -112,7 +125,16 @@ export interface VideoSummarizationResult {
 export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizationResult>(
   'video-summarization',
   async (job): Promise<VideoSummarizationResult> => {
-    const { videoId, personaId, frameSampleRate = 1, maxFrames = 30 } = job.data;
+    const {
+      videoId,
+      personaId,
+      frameSampleRate = 1,
+      maxFrames = 30,
+      enableAudio,
+      enableSpeakerDiarization,
+      fusionStrategy,
+      audioLanguage,
+    } = job.data;
 
     await job.updateProgress(10);
 
@@ -139,17 +161,32 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
     const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
     const modelStartTime = Date.now();
 
+    const requestBody: any = {
+      video_id: videoId,
+      persona_id: personaId,
+      frame_sample_rate: frameSampleRate,
+      max_frames: maxFrames,
+      persona_role: personaRole,
+      information_need: informationNeed,
+    };
+
+    if (enableAudio !== undefined) {
+      requestBody.enable_audio = enableAudio;
+    }
+    if (enableSpeakerDiarization !== undefined) {
+      requestBody.enable_speaker_diarization = enableSpeakerDiarization;
+    }
+    if (fusionStrategy !== undefined) {
+      requestBody.fusion_strategy = fusionStrategy;
+    }
+    if (audioLanguage !== undefined) {
+      requestBody.audio_language = audioLanguage;
+    }
+
     const response = await fetch(`${modelServiceUrl}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        video_id: videoId,
-        persona_id: personaId,
-        frame_sample_rate: frameSampleRate,
-        max_frames: maxFrames,
-        persona_role: personaRole,
-        information_need: informationNeed,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const modelDuration = Date.now() - modelStartTime;
@@ -184,6 +221,15 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
+        transcriptJson: modelResponse.transcript_json || undefined,
+        audioLanguage: modelResponse.audio_language || undefined,
+        speakerCount: modelResponse.speaker_count || undefined,
+        audioModelUsed: modelResponse.audio_model_used || undefined,
+        visualModelUsed: modelResponse.visual_model_used || undefined,
+        fusionStrategy: modelResponse.fusion_strategy || undefined,
+        processingTimeAudio: modelResponse.processing_time_audio || undefined,
+        processingTimeVisual: modelResponse.processing_time_visual || undefined,
+        processingTimeFusion: modelResponse.processing_time_fusion || undefined,
         updatedAt: new Date(),
       },
       create: {
@@ -194,6 +240,15 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
+        transcriptJson: modelResponse.transcript_json || undefined,
+        audioLanguage: modelResponse.audio_language || undefined,
+        speakerCount: modelResponse.speaker_count || undefined,
+        audioModelUsed: modelResponse.audio_model_used || undefined,
+        visualModelUsed: modelResponse.visual_model_used || undefined,
+        fusionStrategy: modelResponse.fusion_strategy || undefined,
+        processingTimeAudio: modelResponse.processing_time_audio || undefined,
+        processingTimeVisual: modelResponse.processing_time_visual || undefined,
+        processingTimeFusion: modelResponse.processing_time_fusion || undefined,
       },
     });
 

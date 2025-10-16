@@ -48,6 +48,18 @@ vllm = [
 sam2 = [
     "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
 ]
+audio = [
+    "openai-whisper>=20240930",
+    "faster-whisper>=1.1.0",
+    "pyannote.audio>=3.3.0",
+    "torch-audiomentations>=0.11.0",
+    "pydub>=0.25.1",
+    "assemblyai>=0.40.0",
+    "deepgram-sdk>=3.8.0",
+    "boto3>=1.35.0",
+    "google-cloud-speech>=2.30.0",
+    "azure-cognitiveservices-speech>=1.42.0",
+]
 recommended = [
     "bitsandbytes>=0.42.0",
 ]
@@ -155,4 +167,8 @@ ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
 ignore_missing_imports = true

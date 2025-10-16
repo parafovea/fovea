@@ -19,6 +19,24 @@ export interface VideoSummary {
   confidence: number | null
   createdAt: string
   updatedAt: string
+  /** Structured transcript with segments, speakers, and language. */
+  transcriptJson?: any | null
+  /** ISO language code detected from audio (e.g., "en", "es"). */
+  audioLanguage?: string | null
+  /** Number of distinct speakers detected. */
+  speakerCount?: number | null
+  /** Name of audio transcription model used (e.g., "whisper-v3-turbo", "assemblyai-universal"). */
+  audioModelUsed?: string | null
+  /** Name of visual analysis model used (e.g., "gemini-2-5-flash", "gpt-4o"). */
+  visualModelUsed?: string | null
+  /** Audio-visual fusion strategy used (e.g., "sequential", "timestamp_aligned"). */
+  fusionStrategy?: string | null
+  /** Processing time for audio transcription in seconds. */
+  processingTimeAudio?: number | null
+  /** Processing time for visual analysis in seconds. */
+  processingTimeVisual?: number | null
+  /** Processing time for audio-visual fusion in seconds. */
+  processingTimeFusion?: number | null
 }
 
 /**
@@ -29,6 +47,10 @@ export interface GenerateSummaryRequest {
   personaId: string
   frameSampleRate?: number
   maxFrames?: number
+  enableAudio?: boolean
+  enableSpeakerDiarization?: boolean
+  fusionStrategy?: string
+  audioLanguage?: string
 }
 
 /**

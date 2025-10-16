@@ -3,7 +3,8 @@
  * Provides access to model configuration, status monitoring, and application information.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Box,
   Container,
@@ -69,15 +70,32 @@ function TabPanel(props: TabPanelProps) {
  * ```
  */
 export default function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState(0)
   const [notification, setNotification] = useState<{
     message: string
     severity: 'success' | 'error'
   } | null>(null)
 
+  // Initialize tab from URL parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam === 'models') {
+      setActiveTab(0)
+    } else if (tabParam === 'status') {
+      setActiveTab(1)
+    } else if (tabParam === 'about') {
+      setActiveTab(2)
+    }
+  }, [searchParams])
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue)
     setNotification(null)
+
+    // Update URL parameter
+    const tabNames = ['models', 'status', 'about']
+    setSearchParams({ tab: tabNames[newValue] })
   }
 
   const handleSaveSuccess = () => {

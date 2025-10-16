@@ -9,13 +9,6 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { videoSummarizationQueue } from '../queues/setup.js'
 
-const KeyFrameSchema = Type.Object({
-  frameNumber: Type.Number(),
-  timestamp: Type.Number(),
-  description: Type.String(),
-  confidence: Type.Number({ minimum: 0, maximum: 1 }),
-})
-
 const VideoSummarySchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   videoId: Type.String(),
@@ -23,8 +16,17 @@ const VideoSummarySchema = Type.Object({
   summary: Type.String(),
   visualAnalysis: Type.Union([Type.String(), Type.Null()]),
   audioTranscript: Type.Union([Type.String(), Type.Null()]),
-  keyFrames: Type.Union([Type.Array(KeyFrameSchema), Type.Null()]),
+  keyFrames: Type.Union([Type.Any(), Type.Null()]),
   confidence: Type.Union([Type.Number({ minimum: 0, maximum: 1 }), Type.Null()]),
+  transcriptJson: Type.Optional(Type.Union([Type.Any(), Type.Null()])),
+  audioLanguage: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  speakerCount: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+  audioModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  visualModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  fusionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  processingTimeAudio: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+  processingTimeVisual: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+  processingTimeFusion: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
 })
@@ -34,6 +36,10 @@ const CreateSummaryRequestSchema = Type.Object({
   personaId: Type.String({ format: 'uuid' }),
   frameSampleRate: Type.Optional(Type.Number({ minimum: 1, maximum: 10, default: 1 })),
   maxFrames: Type.Optional(Type.Number({ minimum: 1, maximum: 100, default: 30 })),
+  enableAudio: Type.Optional(Type.Boolean()),
+  enableSpeakerDiarization: Type.Optional(Type.Boolean()),
+  fusionStrategy: Type.Optional(Type.String()),
+  audioLanguage: Type.Optional(Type.String()),
 })
 
 const SummaryJobSchema = Type.Object({
@@ -117,7 +123,16 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { videoId, personaId, frameSampleRate = 1, maxFrames = 30 } = request.body
+      const {
+        videoId,
+        personaId,
+        frameSampleRate = 1,
+        maxFrames = 30,
+        enableAudio,
+        enableSpeakerDiarization,
+        fusionStrategy,
+        audioLanguage,
+      } = request.body
 
       const video = await fastify.prisma.video.findUnique({
         where: { id: videoId },
@@ -135,14 +150,29 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: 'Persona not found' })
       }
 
+      const jobData: any = {
+        videoId,
+        personaId,
+        frameSampleRate,
+        maxFrames,
+      }
+
+      if (enableAudio !== undefined) {
+        jobData.enableAudio = enableAudio
+      }
+      if (enableSpeakerDiarization !== undefined) {
+        jobData.enableSpeakerDiarization = enableSpeakerDiarization
+      }
+      if (fusionStrategy !== undefined) {
+        jobData.fusionStrategy = fusionStrategy
+      }
+      if (audioLanguage !== undefined) {
+        jobData.audioLanguage = audioLanguage
+      }
+
       const job = await videoSummarizationQueue.add(
         'summarize',
-        {
-          videoId,
-          personaId,
-          frameSampleRate,
-          maxFrames,
-        },
+        jobData,
         {
           jobId: `${videoId}-${personaId}-${Date.now()}`,
         }
@@ -223,6 +253,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           audioTranscript: Type.Union([Type.String(), Type.Null()]),
           keyFrames: Type.Union([Type.Any(), Type.Null()]),
           confidence: Type.Union([Type.Number(), Type.Null()]),
+          transcriptJson: Type.Optional(Type.Union([Type.Any(), Type.Null()])),
+          audioLanguage: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+          speakerCount: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+          audioModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+          visualModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+          fusionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+          processingTimeAudio: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+          processingTimeVisual: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+          processingTimeFusion: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
         }),
         response: {
           201: VideoSummarySchema,
@@ -231,7 +270,24 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { videoId, personaId, summary, visualAnalysis, audioTranscript, keyFrames, confidence } = request.body
+      const {
+        videoId,
+        personaId,
+        summary,
+        visualAnalysis,
+        audioTranscript,
+        keyFrames,
+        confidence,
+        transcriptJson,
+        audioLanguage,
+        speakerCount,
+        audioModelUsed,
+        visualModelUsed,
+        fusionStrategy,
+        processingTimeAudio,
+        processingTimeVisual,
+        processingTimeFusion,
+      } = request.body
 
       const savedSummary = await fastify.prisma.videoSummary.upsert({
         where: {
@@ -246,6 +302,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           audioTranscript,
           keyFrames: keyFrames || undefined,
           confidence,
+          transcriptJson: transcriptJson || undefined,
+          audioLanguage: audioLanguage || undefined,
+          speakerCount: speakerCount || undefined,
+          audioModelUsed: audioModelUsed || undefined,
+          visualModelUsed: visualModelUsed || undefined,
+          fusionStrategy: fusionStrategy || undefined,
+          processingTimeAudio: processingTimeAudio || undefined,
+          processingTimeVisual: processingTimeVisual || undefined,
+          processingTimeFusion: processingTimeFusion || undefined,
           updatedAt: new Date(),
         },
         create: {
@@ -256,6 +321,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           audioTranscript,
           keyFrames: keyFrames || undefined,
           confidence,
+          transcriptJson: transcriptJson || undefined,
+          audioLanguage: audioLanguage || undefined,
+          speakerCount: speakerCount || undefined,
+          audioModelUsed: audioModelUsed || undefined,
+          visualModelUsed: visualModelUsed || undefined,
+          fusionStrategy: fusionStrategy || undefined,
+          processingTimeAudio: processingTimeAudio || undefined,
+          processingTimeVisual: processingTimeVisual || undefined,
+          processingTimeFusion: processingTimeFusion || undefined,
         },
       })
 

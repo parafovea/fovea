@@ -182,6 +182,32 @@ model VideoSummary {
   keyFrames       Json?
   confidence      Float?
 
+  /// Audio metadata fields
+  /// JSON structure: {segments: [{start, end, text, speaker, confidence, sentiment}], speakers, language}
+  transcriptJson  Json?
+  /// ISO language code detected from audio (e.g., "en", "es")
+  audioLanguage   String?
+  /// Number of distinct speakers detected
+  speakerCount    Int?
+
+  /// Model metadata
+  /// Name of audio transcription model used (e.g., "whisper-v3-turbo", "assemblyai-universal")
+  audioModelUsed  String?
+  /// Name of visual analysis model used (e.g., "gemini-2-5-flash", "gpt-4o")
+  visualModelUsed String?
+  /// Audio-visual fusion strategy used (e.g., "sequential", "timestamp_aligned", "native_multimodal", "hybrid")
+  fusionStrategy  String?
+
+  /// Processing time metadata (in seconds)
+  processingTimeAudio  Float?
+  processingTimeVisual Float?
+  processingTimeFusion Float?
+
+  /// Processing completion timestamps
+  processedAtAudio  DateTime?
+  processedAtVisual DateTime?
+  processedAtFusion DateTime?
+
   /// Vector embedding for semantic search (1536 dimensions for OpenAI embeddings)
   embedding       Unsupported("vector(1536)")?
 

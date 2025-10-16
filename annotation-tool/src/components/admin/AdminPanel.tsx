@@ -22,7 +22,7 @@ import {
 } from '@mui/icons-material'
 import { RootState } from '../../store/store.js'
 import UserManagementPage from './UserManagementPage.js'
-import SessionManagementDialog from './SessionManagementDialog.js'
+import SessionManagementPage from './SessionManagementPage.js'
 
 /**
  * Tab panel component.
@@ -55,7 +55,6 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 export default function AdminPanel() {
   const { currentUser } = useSelector((state: RootState) => state.user)
   const [currentTab, setCurrentTab] = useState(0)
-  const [sessionDialogOpen, setSessionDialogOpen] = useState(false)
 
   // Redirect if not admin
   if (!currentUser?.isAdmin) {
@@ -70,11 +69,6 @@ export default function AdminPanel() {
    */
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue)
-
-    // Open session dialog when Sessions tab is clicked
-    if (newValue === 1) {
-      setSessionDialogOpen(true)
-    }
   }
 
   return (
@@ -123,11 +117,7 @@ export default function AdminPanel() {
         </TabPanel>
 
         <TabPanel value={currentTab} index={1}>
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body1" color="text.secondary">
-              Session management is available through the dialog.
-            </Typography>
-          </Box>
+          <SessionManagementPage />
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
@@ -141,15 +131,6 @@ export default function AdminPanel() {
           </Box>
         </TabPanel>
       </Paper>
-
-      {/* Session Management Dialog */}
-      <SessionManagementDialog
-        open={sessionDialogOpen}
-        onClose={() => {
-          setSessionDialogOpen(false)
-          setCurrentTab(0) // Return to Users tab
-        }}
-      />
     </Container>
   )
 }

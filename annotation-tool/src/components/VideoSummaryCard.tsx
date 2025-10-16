@@ -13,9 +13,11 @@ import {
   Chip,
   Box,
   IconButton,
-  Collapse,
   Alert,
   Skeleton,
+  Tabs,
+  Tab,
+  Divider,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -27,6 +29,8 @@ import {
 } from '@mui/icons-material'
 import { format } from 'date-fns'
 import { VideoSummary } from '../api/client'
+import { TranscriptViewer } from './video-summary/TranscriptViewer.js'
+import { TranscriptJson } from './video-summary/types.js'
 
 /**
  * Props for VideoSummaryCard component.
@@ -43,6 +47,10 @@ export interface VideoSummaryCardProps {
   showActions?: boolean
   expanded?: boolean
   onExpandChange?: (expanded: boolean) => void
+  /** Current video playback time in seconds (for transcript highlighting). */
+  currentTime?: number
+  /** Callback to seek video to specific timestamp. */
+  onSeek?: (time: number) => void
 }
 
 /**
@@ -64,8 +72,11 @@ export function VideoSummaryCard({
   showActions = true,
   expanded: controlledExpanded,
   onExpandChange,
+  currentTime = 0,
+  onSeek,
 }: VideoSummaryCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false)
+  const [activeTab, setActiveTab] = useState(0)
 
   const isControlled = controlledExpanded !== undefined
   const expanded = isControlled ? controlledExpanded : internalExpanded
@@ -77,6 +88,10 @@ export function VideoSummaryCard({
     } else {
       setInternalExpanded(newExpanded)
     }
+  }
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue)
   }
 
   const handleEdit = () => {
@@ -183,49 +198,182 @@ export function VideoSummaryCard({
           )}
         </Box>
 
-        <Collapse in={expanded} timeout="auto" unmountOnExit>
+{expanded && (
           <Box sx={{ mt: 2 }}>
-            {summary.visualAnalysis && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Visual Analysis
-                </Typography>
-                <Typography variant="body2">{summary.visualAnalysis}</Typography>
+            {/* Show tabs if transcript exists, otherwise show summary details directly */}
+            {summary.transcriptJson ? (
+              <Box>
+                <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                  <Tab label="Summary" />
+                  <Tab label="Transcript" />
+                </Tabs>
+
+                {/* Summary Tab Content */}
+                {activeTab === 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    {summary.visualAnalysis && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Visual Analysis
+                        </Typography>
+                        <Typography variant="body2">{summary.visualAnalysis}</Typography>
+                      </Box>
+                    )}
+
+                    {summary.audioTranscript && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Audio Transcript (Legacy)
+                        </Typography>
+                        <Typography variant="body2">{summary.audioTranscript}</Typography>
+                      </Box>
+                    )}
+
+                    {summary.keyFrames && summary.keyFrames.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Key Frames
+                        </Typography>
+                        <Typography variant="body2">
+                          Frames: {summary.keyFrames.join(', ')}
+                        </Typography>
+                      </Box>
+                    )}
+
+                    {/* Audio Metadata */}
+                    {(summary.audioLanguage || summary.speakerCount || summary.audioModelUsed || summary.visualModelUsed || summary.fusionStrategy) && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Processing Details
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          {summary.audioLanguage && (
+                            <Typography variant="body2">
+                              Language: <strong>{summary.audioLanguage}</strong>
+                            </Typography>
+                          )}
+                          {summary.speakerCount != null && (
+                            <Typography variant="body2">
+                              Speakers: <strong>{summary.speakerCount}</strong>
+                            </Typography>
+                          )}
+                          {summary.audioModelUsed && (
+                            <Typography variant="body2">
+                              Audio Model: <strong>{summary.audioModelUsed}</strong>
+                            </Typography>
+                          )}
+                          {summary.visualModelUsed && (
+                            <Typography variant="body2">
+                              Visual Model: <strong>{summary.visualModelUsed}</strong>
+                            </Typography>
+                          )}
+                          {summary.fusionStrategy && (
+                            <Typography variant="body2">
+                              Fusion Strategy: <strong>{summary.fusionStrategy}</strong>
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* Processing Times */}
+                    {(summary.processingTimeAudio != null || summary.processingTimeVisual != null || summary.processingTimeFusion != null) && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          Processing Times
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          {summary.processingTimeAudio != null && (
+                            <Typography variant="body2">
+                              Audio: <strong>{summary.processingTimeAudio.toFixed(2)}s</strong>
+                            </Typography>
+                          )}
+                          {summary.processingTimeVisual != null && (
+                            <Typography variant="body2">
+                              Visual: <strong>{summary.processingTimeVisual.toFixed(2)}s</strong>
+                            </Typography>
+                          )}
+                          {summary.processingTimeFusion != null && (
+                            <Typography variant="body2">
+                              Fusion: <strong>{summary.processingTimeFusion.toFixed(2)}s</strong>
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Created: {format(new Date(summary.createdAt), 'PPpp')}
+                      </Typography>
+                      {summary.updatedAt !== summary.createdAt && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Updated: {format(new Date(summary.updatedAt), 'PPpp')}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Transcript Tab Content */}
+                {activeTab === 1 && (
+                  <Box sx={{ mt: 2 }}>
+                    <TranscriptViewer
+                      transcript={summary.transcriptJson as TranscriptJson}
+                      currentTime={currentTime}
+                      onSeek={onSeek || (() => {})}
+                    />
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              /* No transcript - show summary details directly without tabs */
+              <Box sx={{ mt: 2 }}>
+                {summary.visualAnalysis && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Visual Analysis
+                    </Typography>
+                    <Typography variant="body2">{summary.visualAnalysis}</Typography>
+                  </Box>
+                )}
+
+                {summary.audioTranscript && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Audio Transcript
+                    </Typography>
+                    <Typography variant="body2">{summary.audioTranscript}</Typography>
+                  </Box>
+                )}
+
+                {summary.keyFrames && summary.keyFrames.length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Key Frames
+                    </Typography>
+                    <Typography variant="body2">
+                      Frames: {summary.keyFrames.join(', ')}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Created: {format(new Date(summary.createdAt), 'PPpp')}
+                  </Typography>
+                  {summary.updatedAt !== summary.createdAt && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Updated: {format(new Date(summary.updatedAt), 'PPpp')}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             )}
-
-            {summary.audioTranscript && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Audio Transcript
-                </Typography>
-                <Typography variant="body2">{summary.audioTranscript}</Typography>
-              </Box>
-            )}
-
-            {summary.keyFrames && summary.keyFrames.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Key Frames
-                </Typography>
-                <Typography variant="body2">
-                  Frames: {summary.keyFrames.join(', ')}
-                </Typography>
-              </Box>
-            )}
-
-            <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Created: {format(new Date(summary.createdAt), 'PPpp')}
-              </Typography>
-              {summary.updatedAt !== summary.createdAt && (
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Updated: {format(new Date(summary.updatedAt), 'PPpp')}
-                </Typography>
-              )}
-            </Box>
           </Box>
-        </Collapse>
+        )}
       </CardContent>
 
       {showActions && (

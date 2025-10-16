@@ -386,20 +386,84 @@ class ModelManager:
         return model
 
     async def _load_model_implementation(self, task_type: str, model_config: ModelConfig) -> Any:
-        """
-        Load model implementation based on framework.
+        """Load model implementation based on framework and task type.
 
-        This is a placeholder that will be replaced with actual model loading
-        logic when model loaders are implemented in Phase 3.
+        Parameters
+        ----------
+        task_type : str
+            Task type being loaded (audio_transcription, speaker_diarization, vad, etc.).
+        model_config : ModelConfig
+            Model configuration.
 
-        Args:
-            task_type: Task type being loaded
-            model_config: Model configuration
+        Returns
+        -------
+        Any
+            Loaded model object (loader instance for audio models, placeholder dict for others).
 
-        Returns:
-            Loaded model object
+        Raises
+        ------
+        ImportError
+            If required audio dependencies are not installed.
+        ValueError
+            If framework or model configuration is invalid.
         """
         logger.info(f"Loading {model_config.framework} model: {model_config.model_id}")
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if task_type == "audio_transcription":
+            from src.audio_loader import AudioFramework, TranscriptionConfig, WhisperLoader, FasterWhisperLoader
+
+            framework_map = {
+                "whisper": AudioFramework.WHISPER,
+                "faster_whisper": AudioFramework.FASTER_WHISPER,
+                "transformers": AudioFramework.TRANSFORMERS,
+            }
+            framework = framework_map.get(model_config.framework, AudioFramework.WHISPER)
+
+            config = TranscriptionConfig(
+                model_id=model_config.model_id,
+                framework=framework,
+                device=device,
+                compute_type="float16" if device == "cuda" else "int8",
+            )
+
+            if framework == AudioFramework.WHISPER:
+                loader = WhisperLoader(config)
+            elif framework == AudioFramework.FASTER_WHISPER:
+                loader = FasterWhisperLoader(config)
+            else:
+                loader = WhisperLoader(config)
+
+            loader.load()
+            logger.info(f"Audio transcription model loaded: {model_config.model_id}")
+            return loader
+
+        elif task_type == "speaker_diarization":
+            from src.audio_loader import DiarizationConfig, PyannoteLoader
+
+            config = DiarizationConfig(
+                model_id=model_config.model_id,
+                device=device,
+            )
+
+            loader = PyannoteLoader(config)
+            loader.load()
+            logger.info(f"Speaker diarization model loaded: {model_config.model_id}")
+            return loader
+
+        elif task_type == "voice_activity_detection":
+            from src.audio_loader import VADConfig, SileroVADLoader
+
+            config = VADConfig(
+                model_id=model_config.model_id,
+                device=device,
+            )
+
+            loader = SileroVADLoader(config)
+            loader.load()
+            logger.info(f"VAD model loaded: {model_config.model_id}")
+            return loader
 
         return {
             "task_type": task_type,

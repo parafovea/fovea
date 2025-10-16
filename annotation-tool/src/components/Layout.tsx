@@ -42,6 +42,9 @@ import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 import ImportDataDialog from './ImportDataDialog'
 import UserMenu from './auth/UserMenu.js'
 import UserSettingsDialog from './settings/UserSettingsDialog.js'
+import ModelSettingsDialog from './settings/ModelSettingsDialog.js'
+import AboutDialog from './settings/AboutDialog.js'
+import AdminPanelDialog from './settings/AdminPanelDialog.js'
 
 const DRAWER_WIDTH = 240
 
@@ -55,6 +58,9 @@ export default function Layout() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
   const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false)
+  const [modelSettingsDialogOpen, setModelSettingsDialogOpen] = useState(false)
+  const [aboutDialogOpen, setAboutDialogOpen] = useState(false)
+  const [adminPanelDialogOpen, setAdminPanelDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
@@ -72,7 +78,6 @@ export default function Layout() {
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
     { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
-    { text: 'Settings', icon: <SettingsIcon />, path: '/settings', shortcut: 'Cmd/Ctrl+,' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -145,15 +150,13 @@ export default function Layout() {
     if (location.pathname === '/') return 'videoBrowser'
     if (location.pathname === '/ontology') return 'ontologyWorkspace'
     if (location.pathname === '/objects') return 'objectWorkspace'
-    if (location.pathname === '/settings') return 'settings'
     return undefined
   }
-  
+
   useGlobalKeyboardShortcuts({
     'navigate.videoBrowser': () => navigate('/'),
     'navigate.ontologyBuilder': () => navigate('/ontology'),
     'navigate.objectBuilder': () => navigate('/objects'),
-    'navigate.settings': () => navigate('/settings'),
     'navigate.toggle': () => {
       // If we're in the ontology builder and there's a last annotation, go back to it
       if (location.pathname === '/ontology' && lastAnnotation.videoId) {
@@ -253,7 +256,12 @@ export default function Layout() {
               <KeyboardIcon />
             </IconButton>
           </Tooltip>
-          <UserMenu onSettingsClick={() => setUserSettingsDialogOpen(true)} />
+          <UserMenu
+            onSettingsClick={() => setUserSettingsDialogOpen(true)}
+            onModelSettingsClick={() => setModelSettingsDialogOpen(true)}
+            onAboutClick={() => setAboutDialogOpen(true)}
+            onAdminPanelClick={() => setAdminPanelDialogOpen(true)}
+          />
         </Toolbar>
       </AppBar>
 
@@ -352,6 +360,21 @@ export default function Layout() {
       <UserSettingsDialog
         open={userSettingsDialogOpen}
         onClose={() => setUserSettingsDialogOpen(false)}
+      />
+
+      <ModelSettingsDialog
+        open={modelSettingsDialogOpen}
+        onClose={() => setModelSettingsDialogOpen(false)}
+      />
+
+      <AboutDialog
+        open={aboutDialogOpen}
+        onClose={() => setAboutDialogOpen(false)}
+      />
+
+      <AdminPanelDialog
+        open={adminPanelDialogOpen}
+        onClose={() => setAdminPanelDialogOpen(false)}
       />
 
       <KeyboardShortcutHint />
