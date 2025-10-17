@@ -331,4 +331,336 @@ describe('TimelineComponent', () => {
 
     expect(screen.getByText(/Frame 2500 \/ 4999/)).toBeTruthy()
   })
+
+  describe('Keyframe operations', () => {
+    const mockOnAddKeyframe = vi.fn()
+    const mockOnDeleteKeyframe = vi.fn()
+    const mockOnCopyPreviousFrame = vi.fn()
+    const mockOnUpdateInterpolationSegment = vi.fn()
+    const mockOnClose = vi.fn()
+
+    beforeEach(() => {
+      mockOnAddKeyframe.mockClear()
+      mockOnDeleteKeyframe.mockClear()
+      mockOnCopyPreviousFrame.mockClear()
+      mockOnUpdateInterpolationSegment.mockClear()
+      mockOnClose.mockClear()
+    })
+
+    it('should add keyframe when add button clicked', async () => {
+      const user = userEvent.setup()
+      const annotation = createTestAnnotation([0, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={50}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const addButton = screen.getByText('🔑').closest('button')
+      expect(addButton).toBeTruthy()
+
+      await user.click(addButton!)
+      expect(mockOnAddKeyframe).toHaveBeenCalled()
+    })
+
+    it('should disable add button when at keyframe', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={50}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const addButton = screen.getByText('🔑').closest('button')
+      expect(addButton).toBeDisabled()
+    })
+
+    it('should delete keyframe when delete button clicked', async () => {
+      const user = userEvent.setup()
+      const annotation = createTestAnnotation([0, 25, 50, 75, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={50}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const deleteButton = screen.getByText('╳').closest('button')
+      expect(deleteButton).toBeTruthy()
+      expect(deleteButton).not.toBeDisabled()
+
+      await user.click(deleteButton!)
+      expect(mockOnDeleteKeyframe).toHaveBeenCalled()
+    })
+
+    it('should disable delete for first keyframe', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={0}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const deleteButton = screen.getByText('╳').closest('button')
+      expect(deleteButton).toBeDisabled()
+    })
+
+    it('should disable delete for last keyframe', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={100}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const deleteButton = screen.getByText('╳').closest('button')
+      expect(deleteButton).toBeDisabled()
+    })
+
+    it('should copy previous frame when copy button clicked', async () => {
+      const user = userEvent.setup()
+      const annotation = createTestAnnotation([0, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={50}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const copyButton = screen.getByText('↻').closest('button')
+      expect(copyButton).toBeTruthy()
+
+      await user.click(copyButton!)
+      expect(mockOnCopyPreviousFrame).toHaveBeenCalled()
+    })
+
+    it('should disable copy at frame 0', () => {
+      const annotation = createTestAnnotation([0, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={0}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const copyButton = screen.getByText('↻').closest('button')
+      expect(copyButton).toBeDisabled()
+    })
+
+    it('should open interpolation dialog when interpolation button clicked', async () => {
+      const user = userEvent.setup()
+      const annotation = createTestAnnotation([0, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={50}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const interpButton = screen.getByText('~').closest('button')
+      expect(interpButton).toBeTruthy()
+      expect(interpButton).not.toBeDisabled()
+
+      await user.click(interpButton!)
+      // Dialog should open (component should not crash)
+    })
+
+    it('should disable interpolation with less than 2 keyframes', () => {
+      const annotation = createTestAnnotation([0])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={0}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const interpButton = screen.getByText('~').closest('button')
+      expect(interpButton).toBeDisabled()
+    })
+
+    it('should call onClose when hide button clicked', async () => {
+      const user = userEvent.setup()
+      const annotation = createTestAnnotation([0, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={0}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      const hideButton = screen.getByText('Hide Timeline')
+      await user.click(hideButton)
+
+      expect(mockOnClose).toHaveBeenCalled()
+    })
+  })
+
+  describe('Edge cases', () => {
+    it('should handle null annotation', () => {
+      const mockOnAddKeyframe = vi.fn()
+      const mockOnDeleteKeyframe = vi.fn()
+      const mockOnCopyPreviousFrame = vi.fn()
+      const mockOnUpdateInterpolationSegment = vi.fn()
+      const mockOnClose = vi.fn()
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={null}
+          currentFrame={0}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+          onAddKeyframe={mockOnAddKeyframe}
+          onDeleteKeyframe={mockOnDeleteKeyframe}
+          onCopyPreviousFrame={mockOnCopyPreviousFrame}
+          onUpdateInterpolationSegment={mockOnUpdateInterpolationSegment}
+          onClose={mockOnClose}
+        />
+      )
+
+      // Should render without crashing
+      expect(screen.getByText(/Frame 0 \/ 99/)).toBeTruthy()
+
+      // All keyframe buttons should be disabled
+      const addButton = screen.getByText('🔑').closest('button')
+      const deleteButton = screen.getByText('╳').closest('button')
+      const copyButton = screen.getByText('↻').closest('button')
+      const interpButton = screen.getByText('~').closest('button')
+
+      expect(addButton).toBeDisabled()
+      expect(deleteButton).toBeDisabled()
+      expect(copyButton).toBeDisabled()
+      expect(interpButton).toBeDisabled()
+    })
+
+    it('should handle currentFrame beyond totalFrames', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={500}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+        />
+      )
+
+      // Should render without crashing
+      const canvas = document.querySelector('canvas')
+      expect(canvas).toBeTruthy()
+    })
+
+    it('should handle negative currentFrame', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
+
+      renderWithStore(
+        <TimelineComponent
+          annotation={annotation}
+          currentFrame={-10}
+          totalFrames={100}
+          videoFps={30}
+          onSeek={mockOnSeek}
+        />
+      )
+
+      // Should render without crashing
+      const canvas = document.querySelector('canvas')
+      expect(canvas).toBeTruthy()
+    })
+  })
 })

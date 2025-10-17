@@ -186,6 +186,8 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         },
       }
 
+      // Invalidate renderer to ensure it renders on every frame
+      renderer.invalidate()
       renderer.render(renderOptions, selectedKeyframes)
       rafId = requestAnimationFrame(render)
     }
