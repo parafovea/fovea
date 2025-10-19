@@ -18,6 +18,8 @@ import { setWorldData } from './store/worldSlice'
 import { api } from './services/api'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession.js'
+import { CommandPalette } from './components/CommandPalette.js'
+import { initializeCommands, initializeGlobalContext } from './lib/commands/init-commands.js'
 
 /**
  * Loading screen component.
@@ -70,6 +72,12 @@ function App() {
 
   // Restore session on mount (also fetches config)
   useSession()
+
+  // Initialize command registry
+  useEffect(() => {
+    initializeCommands()
+    initializeGlobalContext()
+  }, [])
 
   const loadOntology = useCallback(async () => {
     try {
@@ -161,28 +169,31 @@ function App() {
   }, [loadOntology])
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+    <>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<VideoBrowser />} />
-        <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
-        <Route path="ontology" element={<OntologyWorkspace />} />
-        <Route path="objects" element={<ObjectWorkspace />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="admin" element={<AdminPanel />} />
-      </Route>
-    </Routes>
+        {/* Protected routes */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<VideoBrowser />} />
+          <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
+          <Route path="ontology" element={<OntologyWorkspace />} />
+          <Route path="objects" element={<ObjectWorkspace />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="admin" element={<AdminPanel />} />
+        </Route>
+      </Routes>
+      <CommandPalette />
+    </>
   )
 }
 

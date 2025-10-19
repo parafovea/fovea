@@ -1,7 +1,7 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from './fixtures/test-context.js'
 
 /**
- * E2E tests specifically for timeline rendering quality and performance.
+ * E2E tests for timeline rendering quality and performance.
  * Tests focus on:
  * - Timeline canvas rendering (no graininess)
  * - Playhead position and movement
@@ -12,184 +12,102 @@ import { test, expect, Page } from '@playwright/test'
  */
 
 test.describe('Timeline Rendering Quality', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await expect(page.getByText('FOVEA')).toBeVisible()
+  test.beforeEach(async ({ videoBrowser }) => {
+    await videoBrowser.navigateToHome()
   })
 
-  test('timeline canvas renders without graininess', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('timeline canvas renders without graininess', async ({ annotationWorkspace }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    await annotationWorkspace.timeline.show()
+    await annotationWorkspace.timeline.expectVisible()
 
-    // Find timeline canvas
-    const canvas = await page.locator('canvas').first()
-    await expect(canvas).toBeVisible()
-
-    // Verify canvas has high-DPI scaling
-    const canvasInfo = await canvas.evaluate((el: HTMLCanvasElement) => ({
-      cssWidth: el.getBoundingClientRect().width,
-      cssHeight: el.getBoundingClientRect().height,
-      canvasWidth: el.width,
-      canvasHeight: el.height,
-      dpr: window.devicePixelRatio || 1
-    }))
-
-    // Canvas dimensions should be scaled by devicePixelRatio
-    // For non-grainy rendering, canvas.width should be cssWidth * dpr
-    expect(canvasInfo.canvasWidth).toBeGreaterThanOrEqual(canvasInfo.cssWidth)
-    expect(canvasInfo.canvasHeight).toBeGreaterThanOrEqual(canvasInfo.cssHeight)
-
-    // On high-DPI displays (dpr > 1), canvas dimensions should be significantly larger
-    if (canvasInfo.dpr > 1) {
-      expect(canvasInfo.canvasWidth).toBeGreaterThan(canvasInfo.cssWidth * 1.5)
-    }
+    await annotationWorkspace.timeline.expectHighDPIRendering()
   })
 
-  test('playhead renders at correct position', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('playhead renders at correct position', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    await annotationWorkspace.video.expectCurrentFrame(0)
 
-    const video = page.locator('video')
-    const canvas = page.locator('canvas').first()
-
-    // Get current video time
-    const currentTime = await video.evaluate((v: HTMLVideoElement) => v.currentTime)
-    expect(currentTime).toBe(0)
-
-    // Take screenshot of timeline at frame 0
-    const screenshot1 = await canvas.screenshot()
+    const screenshot1 = await annotationWorkspace.timeline.screenshot()
     expect(screenshot1.byteLength).toBeGreaterThan(0)
 
-    // Advance to frame 30
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(20)
-    }
-    await page.waitForTimeout(200)
+    // Use direct seek to frame 30 instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(30)
 
-    // Take screenshot of timeline at frame 30
-    const screenshot2 = await canvas.screenshot()
+    // Wait for React to re-render with new frame position
+    await page.waitForTimeout(300)
+    await annotationWorkspace.video.expectCurrentFrame(30)
+
+    const screenshot2 = await annotationWorkspace.timeline.screenshot()
     expect(screenshot2.byteLength).toBeGreaterThan(0)
 
-    // Screenshots should be different (playhead moved)
-    expect(screenshot1.equals(screenshot2)).toBe(false)
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
   })
 
-  test('keyframes render as visible circles on timeline', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('keyframes render as visible circles on timeline', async ({ annotationWorkspace }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    const screenshot1 = await annotationWorkspace.timeline.screenshot()
 
-    const canvas = page.locator('canvas').first()
+    // Use direct seek instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(30)
+    await annotationWorkspace.timeline.addKeyframe()
 
-    // Take screenshot with 1 keyframe (initial)
-    const screenshot1 = await canvas.screenshot()
+    // Wait for React to re-render with new keyframe
+    await annotationWorkspace.page.waitForTimeout(300)
 
-    // Add keyframe at frame 30
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(300)
+    const screenshot2 = await annotationWorkspace.timeline.screenshot()
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
 
-    // Take screenshot with 2 keyframes
-    const screenshot2 = await canvas.screenshot()
+    // Use direct seek instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(60)
+    await annotationWorkspace.timeline.addKeyframe()
 
-    // Screenshots should be different (new keyframe added)
-    expect(screenshot1.equals(screenshot2)).toBe(false)
-
-    // Add keyframe at frame 60
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(300)
-
-    // Take screenshot with 3 keyframes
-    const screenshot3 = await canvas.screenshot()
-
-    // Screenshots should be different (third keyframe added)
-    expect(screenshot2.equals(screenshot3)).toBe(false)
+    const screenshot3 = await annotationWorkspace.timeline.screenshot()
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot2, screenshot3)
   })
 
-  test('interpolation segments render between keyframes', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('interpolation segments render between keyframes', async ({ annotationWorkspace }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
-
-    const canvas = page.locator('canvas').first()
-
-    // Add keyframe at frame 50 to create interpolation segment
     for (let i = 0; i < 50; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
+      await annotationWorkspace.video.seekForwardOneFrame()
     }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(500)
+    await annotationWorkspace.timeline.addKeyframe()
 
-    // Go back to frame 0 to see full timeline
-    await page.keyboard.press('Home')
-    await page.waitForTimeout(300)
+    await annotationWorkspace.video.jumpToStart()
 
-    // Take screenshot showing interpolation segment
-    const screenshot = await canvas.screenshot()
+    const screenshot = await annotationWorkspace.timeline.screenshot()
     expect(screenshot.byteLength).toBeGreaterThan(0)
-
-    // Verify timeline shows continuous line between keyframes
-    // (visual inspection via screenshot)
-    // In real implementation, could analyze canvas pixels to verify line drawing
   })
 
-  test('frame ruler renders with tick marks and numbers', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('frame ruler renders with tick marks and numbers', async ({ annotationWorkspace }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
-
-    const canvas = page.locator('canvas').first()
-
-    // Take screenshot of ruler
-    const screenshot = await canvas.screenshot()
+    const screenshot = await annotationWorkspace.timeline.screenshot()
     expect(screenshot.byteLength).toBeGreaterThan(0)
 
-    // Ruler should show frame numbers (would require OCR or canvas pixel analysis to verify)
-    // For now, we verify canvas is rendered
-    const isVisible = await canvas.isVisible()
-    expect(isVisible).toBe(true)
+    await annotationWorkspace.timeline.expectVisible()
   })
 
-  test('timeline renders correctly at different zoom levels', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('timeline renders correctly at different zoom levels', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    const screenshot1 = await annotationWorkspace.timeline.screenshot()
 
-    const canvas = page.locator('canvas').first()
-
-    // Take screenshot at zoom level 1
-    const screenshot1 = await canvas.screenshot()
-
-    // Zoom in (if zoom controls exist)
     const zoomIn = page.getByRole('button', { name: /zoom in/i }).or(
       page.getByLabel(/zoom in/i)
     )
@@ -198,232 +116,128 @@ test.describe('Timeline Rendering Quality', () => {
       await zoomIn.click()
       await page.waitForTimeout(500)
 
-      // Take screenshot at zoom level 2
-      const screenshot2 = await canvas.screenshot()
+      const screenshot2 = await annotationWorkspace.timeline.screenshot()
+      annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
 
-      // Screenshots should be different (zoom changed)
-      expect(screenshot1.equals(screenshot2)).toBe(false)
-
-      // Zoom in again
       await zoomIn.click()
       await page.waitForTimeout(500)
 
-      // Take screenshot at zoom level 3
-      const screenshot3 = await canvas.screenshot()
-
-      // Screenshots should be different
-      expect(screenshot2.equals(screenshot3)).toBe(false)
+      const screenshot3 = await annotationWorkspace.timeline.screenshot()
+      annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot2, screenshot3)
     }
   })
 
-  test('playhead continues to update during video playback', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('playhead continues to update during video playback', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    await annotationWorkspace.video.play()
+    await page.waitForTimeout(300)
 
-    const video = page.locator('video')
-    const canvas = page.locator('canvas').first()
+    await annotationWorkspace.video.expectPlaying()
 
-    // Start playback
-    await page.keyboard.press('Space')
-    await page.waitForTimeout(200)
+    const screenshot1 = await annotationWorkspace.timeline.screenshot()
+    await page.waitForTimeout(800)
 
-    // Verify video is playing
-    const isPaused = await video.evaluate((v: HTMLVideoElement) => v.paused)
-    expect(isPaused).toBe(false)
+    const screenshot2 = await annotationWorkspace.timeline.screenshot()
+    await page.waitForTimeout(800)
 
-    // Take screenshot at start of playback
-    const screenshot1 = await canvas.screenshot()
+    const screenshot3 = await annotationWorkspace.timeline.screenshot()
 
-    // Wait for video to advance
-    await page.waitForTimeout(500)
+    await annotationWorkspace.video.pause()
 
-    // Take screenshot after advancement
-    const screenshot2 = await canvas.screenshot()
-
-    // Wait more
-    await page.waitForTimeout(500)
-
-    // Take screenshot after more advancement
-    const screenshot3 = await canvas.screenshot()
-
-    // Pause playback
-    await page.keyboard.press('Space')
-    await page.waitForTimeout(200)
-
-    // All screenshots should be different (playhead moved)
-    expect(screenshot1.equals(screenshot2)).toBe(false)
-    expect(screenshot2.equals(screenshot3)).toBe(false)
-    expect(screenshot1.equals(screenshot3)).toBe(false)
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot2, screenshot3)
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot3)
   })
 
-  test('selected keyframe highlights correctly', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('selected keyframe highlights correctly', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
-
-    const canvas = page.locator('canvas').first()
-
-    // Add keyframes at frames 30 and 60
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(300)
-
-    // Take screenshot with keyframe at 30 selected (current frame)
-    const screenshotSelected30 = await canvas.screenshot()
-
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(300)
-
-    // Take screenshot with keyframe at 60 selected (current frame)
-    const screenshotSelected60 = await canvas.screenshot()
-
-    // Screenshots should be different (different keyframe selected)
-    expect(screenshotSelected30.equals(screenshotSelected60)).toBe(false)
-
-    // Go back to frame 30
-    await page.keyboard.press('Home')
+    // Use direct seek instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(30)
     await page.waitForTimeout(200)
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
+    await annotationWorkspace.video.expectCurrentFrame(30)
+    await annotationWorkspace.timeline.addKeyframe()
     await page.waitForTimeout(300)
 
-    // Take screenshot with keyframe at 30 selected again
-    const screenshotSelected30Again = await canvas.screenshot()
+    const screenshotSelected30 = await annotationWorkspace.timeline.screenshot()
 
-    // Should match original screenshot at frame 30
-    // (Note: exact pixel match may be flaky, so we just verify it's different from frame 60)
-    expect(screenshotSelected30Again.equals(screenshotSelected60)).toBe(false)
+    // Use direct seek instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(60)
+    await page.waitForTimeout(200)
+    await annotationWorkspace.video.expectCurrentFrame(60)
+    await annotationWorkspace.timeline.addKeyframe()
+    await page.waitForTimeout(300)
+
+    const screenshotSelected60 = await annotationWorkspace.timeline.screenshot()
+
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshotSelected30, screenshotSelected60)
+
+    // Use direct seek instead of iterative seeking
+    await annotationWorkspace.video.seekToFrame(30)
+    await page.waitForTimeout(300)
+    await annotationWorkspace.video.expectCurrentFrame(30)
+
+    const screenshotSelected30Again = await annotationWorkspace.timeline.screenshot()
+
+    annotationWorkspace.timeline.expectScreenshotsDifferent(screenshotSelected30Again, screenshotSelected60)
   })
 
-  test('timeline renders correctly after window resize', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('timeline renders correctly after window resize', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
-    await page.waitForTimeout(500)
+    const initialInfo = await annotationWorkspace.timeline.getCanvasInfo()
 
-    const canvas = page.locator('canvas').first()
-
-    // Get initial canvas dimensions
-    const initialInfo = await canvas.evaluate((el: HTMLCanvasElement) => ({
-      width: el.width,
-      height: el.height
-    }))
-
-    // Resize window
     await page.setViewportSize({ width: 1200, height: 800 })
     await page.waitForTimeout(500)
 
-    // Get new canvas dimensions
-    const resizedInfo = await canvas.evaluate((el: HTMLCanvasElement) => ({
-      width: el.width,
-      height: el.height
-    }))
+    const resizedInfo = await annotationWorkspace.timeline.getCanvasInfo()
 
-    // Canvas dimensions should have changed
-    expect(resizedInfo.width).not.toBe(initialInfo.width)
+    expect(resizedInfo.canvasWidth).not.toBe(initialInfo.canvasWidth)
 
-    // Canvas should still be visible and properly rendered
-    await expect(canvas).toBeVisible()
+    await annotationWorkspace.timeline.expectVisible()
 
-    // Take screenshot to verify rendering
-    const screenshot = await canvas.screenshot()
+    const screenshot = await annotationWorkspace.timeline.screenshot()
     expect(screenshot.byteLength).toBeGreaterThan(0)
   })
 
-  test('ghost box renders when annotation is beyond timespan', async ({ page }) => {
-    await navigateToAnnotationWorkspace(page)
-    await createAnnotation(page)
+  test('ghost box renders when annotation is beyond timespan', async ({ annotationWorkspace, page }) => {
+    await annotationWorkspace.navigateFromVideoBrowser()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.timeline.show()
 
-    // Show timeline
-    await page.keyboard.press('t')
+    await annotationWorkspace.video.seekToFrame(30)
+    await page.waitForTimeout(300)
+    await annotationWorkspace.timeline.addKeyframe()
+    await page.waitForTimeout(300)
+
+    // Click on the box to select the annotation
+    const bbox = page.locator('[data-testid="bounding-box"]').first()
+    await bbox.click({ force: true })
+    await page.waitForTimeout(300)
+
+    // Seek beyond the annotation timespan (beyond frame 30)
+    await annotationWorkspace.video.seekToFrame(50)
     await page.waitForTimeout(500)
 
-    // Add keyframe at frame 30 (last keyframe)
-    for (let i = 0; i < 30; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.keyboard.press('k')
-    await page.waitForTimeout(300)
+    // Box should still be visible as a ghost box with reduced opacity
+    const isVisible = await bbox.isVisible().catch(() => false)
+    expect(isVisible).toBe(true)
 
-    // Move beyond last keyframe to frame 50
-    for (let i = 0; i < 20; i++) {
-      await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(15)
-    }
-    await page.waitForTimeout(300)
-
-    // Ghost box should be visible (dashed outline at last keyframe position)
-    const ghostBox = page.locator('[data-testid="ghost-box"]').or(
-      page.locator('.ghost-box')
-    )
-
-    // Check if ghost box exists or if bounding box has dashed style
-    const hasGhostBox = await ghostBox.isVisible().catch(() => false)
-
-    if (!hasGhostBox) {
-      // Check if regular bounding box is shown with dashed style
-      const bbox = page.locator('[data-testid="bounding-box"]').or(page.locator('.bounding-box')).first()
-      if (await bbox.isVisible().catch(() => false)) {
-        const isDashed = await bbox.evaluate((el: HTMLElement) => {
-          return el.style.borderStyle === 'dashed' ||
-                 window.getComputedStyle(el).borderStyle === 'dashed' ||
-                 el.style.opacity === '0.5'
-        })
-        expect(isDashed).toBe(true)
-      }
-    }
+    // Ghost box should have strokeDasharray (dashed outline)
+    const hasDasharray = await bbox.evaluate((el: SVGElement) => {
+      const rect = el.querySelector('rect')
+      if (!rect) return false
+      const strokeDasharray = rect.getAttribute('stroke-dasharray')
+      return strokeDasharray !== null && strokeDasharray !== '' && strokeDasharray !== 'none'
+    })
+    expect(hasDasharray).toBe(true)
   })
 })
 
-/**
- * Helper functions
- */
-async function navigateToAnnotationWorkspace(page: Page) {
-  await expect(page.getByText('Video Browser')).toBeVisible({ timeout: 10000 })
-  const firstVideo = page.locator('.MuiCard-root').first()
-  await expect(firstVideo).toBeVisible()
-  await firstVideo.click()
-  await page.waitForTimeout(2000)
-}
-
-async function createAnnotation(page: Page) {
-  await page.waitForSelector('video', { state: 'visible' })
-  await page.waitForTimeout(1500)
-
-  const addButton = page.getByRole('button', { name: /add annotation/i }).or(
-    page.getByRole('button', { name: /new annotation/i })
-  )
-  if (await addButton.isVisible().catch(() => false)) {
-    await addButton.click()
-    await page.waitForTimeout(500)
-  }
-
-  const video = page.locator('video')
-  const box = await video.boundingBox()
-  if (box) {
-    await page.mouse.move(box.x + 100, box.y + 100)
-    await page.mouse.down()
-    await page.mouse.move(box.x + 300, box.y + 300)
-    await page.mouse.up()
-    await page.waitForTimeout(500)
-  }
-}

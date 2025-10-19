@@ -332,6 +332,7 @@ export default function InteractiveBoundingBox({
 
   return (
     <g
+      data-testid="bounding-box"
       data-annotation-id={annotation.id}
       onMouseEnter={() => isEditable && setHovering(true)}
       onMouseLeave={() => setHovering(false)}

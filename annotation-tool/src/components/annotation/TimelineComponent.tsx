@@ -15,7 +15,6 @@ import {
 } from '@mui/icons-material'
 import { Annotation, InterpolationType } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
-import { useTimelineKeyboardShortcuts } from '../../hooks/useTimelineKeyboardShortcuts.js'
 import { AppDispatch } from '../../store/store.js'
 import { moveKeyframe } from '../../store/annotationSlice.js'
 import { InterpolationModeSelector } from './InterpolationModeSelector.js'
@@ -105,14 +104,6 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
   // Interpolation requires at least 2 keyframes
   const canInterpolate = keyframes.length >= 2
-
-  // Setup keyboard shortcuts
-  useTimelineKeyboardShortcuts(
-    currentFrame,
-    totalFrames,
-    keyframes,
-    onSeek
-  )
 
   // Initialize renderer
   useEffect(() => {

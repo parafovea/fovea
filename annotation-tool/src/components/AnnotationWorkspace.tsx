@@ -78,6 +78,7 @@ import { VideoMetadata } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
+import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 
 const DRAWER_WIDTH = 300
 
@@ -276,25 +277,80 @@ export default function AnnotationWorkspace() {
     }
   }, [videoId, dispatch])
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input field
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
+  // Set command context for when clauses
+  useCommandContext({
+    annotationWorkspaceActive: true,
+    ontologyWorkspaceActive: false,
+    objectWorkspaceActive: false,
+    videoBrowserActive: false,
+    dialogOpen: editorOpen || summaryDialogOpen || detectionDialogOpen,
+    inputFocused: false, // Updated dynamically by focus events
+    annotationSelected: !!selectedAnnotation,
+    keyframeSelected: !!selectedAnnotation && (selectedAnnotation.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || []).some(kf => kf.frameNumber === currentFrame),
+    hasKeyframes: !!selectedAnnotation && (selectedAnnotation.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || []).length > 0,
+    timelineVisible: timelineExpanded,
+    drawingMode: false, // TODO: track drawing mode state
+  })
 
-      // Toggle timeline with 'T' key
-      if (e.key === 't' || e.key === 'T') {
-        e.preventDefault()
-        setTimelineExpanded(prev => !prev)
+  // Register command handlers
+  useCommands({
+    'timeline.toggle': () => {
+      setTimelineExpanded(prev => !prev)
+    },
+    'video.playPause': () => {
+      if (!playerRef.current) return
+      if (isPlaying) {
+        playerRef.current.pause()
+      } else {
+        playerRef.current.play()
       }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+    },
+    'video.nextFrame': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+    },
+    'video.previousFrame': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+    },
+    'video.nextFrame10': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(playerRef.current.currentTime() + 10/fps)
+    },
+    'video.previousFrame10': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 10/fps))
+    },
+    'video.jumpToStart': () => {
+      if (!playerRef.current) return
+      playerRef.current.currentTime(0)
+    },
+    'video.jumpToEnd': () => {
+      if (!playerRef.current) return
+      playerRef.current.currentTime(duration)
+    },
+    'annotation.addKeyframe': () => {
+      handleAddKeyframe()
+    },
+    'annotation.copyPreviousKeyframe': () => {
+      handleCopyPreviousFrame()
+    },
+    'annotation.deleteKeyframe': () => {
+      handleDeleteKeyframe()
+    },
+  }, {
+    context: 'annotationWorkspace',
+    enabled: true,
+    enableOnFormTags: false
+  })
 
   useEffect(() => {
     if (!videoRef.current || !videoId) return

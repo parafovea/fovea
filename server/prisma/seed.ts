@@ -79,6 +79,42 @@ async function main() {
     console.log('✓ Created Automated persona:', automatedPersona.name)
   }
 
+  // Create test ontology for Automated persona (for E2E tests)
+  const existingOntology = await prisma.ontology.findUnique({
+    where: { personaId: automatedPersona.id },
+  })
+
+  if (!existingOntology) {
+    await prisma.ontology.create({
+      data: {
+        personaId: automatedPersona.id,
+        entityTypes: [
+          {
+            id: 'test-entity-person',
+            name: 'Person',
+            description: 'A person in the video',
+            color: '#FF5722',
+          },
+          {
+            id: 'test-entity-vehicle',
+            name: 'Vehicle',
+            description: 'A vehicle in the video',
+            color: '#2196F3',
+          },
+          {
+            id: 'test-entity-object',
+            name: 'Object',
+            description: 'An object in the video',
+            color: '#4CAF50',
+          },
+        ],
+      },
+    })
+    console.log('✓ Created test ontology for Automated persona')
+  } else {
+    console.log('✓ Ontology for Automated persona already exists')
+  }
+
   console.log('Database seed completed successfully')
 }
 

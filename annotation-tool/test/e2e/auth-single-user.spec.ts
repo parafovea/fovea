@@ -1,49 +1,47 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/test-context.js'
 
 /**
  * E2E tests for single-user mode authentication.
- * Tests Phase 10.4 requirements for single-user mode:
+ * Tests single-user mode requirements:
  * - Auto-login on application start
  * - No authentication UI shown
  * - Default user persona creation
  * - Direct access to all features
  */
 test.describe('Single-User Mode', () => {
-  test('auto-login on application start', async ({ page }) => {
-    await page.goto('/')
+  test('auto-login on application start', async ({ videoBrowser }) => {
+    await videoBrowser.navigateToHome()
 
     // Should NOT show login page
-    await expect(page.getByRole('heading', { name: /sign in/i })).not.toBeVisible()
+    await videoBrowser.expectNoLoginUI()
 
     // Should show default user's display name
-    await expect(page.getByText('Default User')).toBeVisible()
+    await videoBrowser.expectUserLoggedIn()
 
     // Should show main app
-    await expect(page.getByText('FOVEA')).toBeVisible()
+    await videoBrowser.expectPageLoaded()
   })
 
-  test('no authentication UI visible', async ({ page }) => {
-    await page.goto('/')
+  test('no authentication UI visible', async ({ videoBrowser }) => {
+    await videoBrowser.navigateToHome()
 
     // Should NOT have login/register links
-    await expect(page.getByRole('link', { name: /sign in/i })).not.toBeVisible()
-    await expect(page.getByRole('link', { name: /register/i })).not.toBeVisible()
+    await videoBrowser.expectNoLoginUI()
 
     // Should show user is logged in
-    await expect(page.getByText('Default User')).toBeVisible()
+    await videoBrowser.expectUserLoggedIn()
   })
 
-  test('direct access to all features', async ({ page }) => {
-    await page.goto('/')
+  test('direct access to all features', async ({ videoBrowser }) => {
+    await videoBrowser.navigateToHome()
 
     // Should show action buttons without requiring login
-    await expect(page.getByRole('button', { name: /save/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /export/i })).toBeVisible()
+    await videoBrowser.expectActionButtonsVisible()
 
     // Should show video browser
-    await expect(page.getByText('Video Browser')).toBeVisible()
+    await videoBrowser.expectPageLoaded()
 
     // Should have video search available
-    await expect(page.getByPlaceholder(/search videos/i)).toBeVisible()
+    await videoBrowser.expectSearchAvailable()
   })
 })

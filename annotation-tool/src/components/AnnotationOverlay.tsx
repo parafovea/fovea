@@ -173,6 +173,7 @@ export default function AnnotationOverlay({
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
       const fps = 30
       const currentFrame = Math.floor(currentTime * fps)
+      const endFrame = currentFrame + fps  // 1 second duration
 
       const annotation: any = {
         id: generateId(),
@@ -190,12 +191,12 @@ export default function AnnotationOverlay({
           interpolationSegments: [],
           visibilityRanges: [{
             startFrame: currentFrame,
-            endFrame: currentFrame,
+            endFrame: endFrame,
             visible: true
           }],
-          totalFrames: 1,
+          totalFrames: endFrame - currentFrame + 1,
           keyframeCount: 1,
-          interpolatedFrameCount: 0
+          interpolatedFrameCount: endFrame - currentFrame
         },
         timeSpan: {
           startTime: currentTime,

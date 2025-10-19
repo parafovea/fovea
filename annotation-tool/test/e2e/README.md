@@ -1,6 +1,68 @@
 # End-to-End Tests for Annotation Timeline
 
-This directory contains comprehensive Playwright E2E tests for the video annotation workflow with timeline functionality.
+This directory contains E2E tests for the video annotation workflow using Playwright with Page Object Model architecture.
+
+## Architecture: Page Object Model
+
+Tests use the Page Object Model pattern for maintainability and reusability:
+
+```
+test/e2e/
+├── page-objects/           # Page object classes
+│   ├── base/
+│   │   └── BasePage.ts    # Base class with common functionality
+│   ├── AnnotationWorkspacePage.ts
+│   ├── VideoBrowserPage.ts
+│   └── components/        # Reusable component objects
+│       ├── VideoPlayerComponent.ts
+│       └── TimelineComponent.ts
+├── fixtures/              # Test fixtures with dependency injection
+│   └── test-context.ts   # Extended Playwright test with fixtures
+└── utils/                # Test utilities
+    └── database-helpers.ts
+```
+
+### Using Page Objects in Tests
+
+```typescript
+import { test, expect } from './fixtures/test-context.js'
+
+test('example test', async ({ annotationWorkspace, videoBrowser }) => {
+  await videoBrowser.navigateToHome()
+  await videoBrowser.selectFirstVideo()
+
+  await annotationWorkspace.drawSimpleBoundingBox()
+  await annotationWorkspace.timeline.show()
+  await annotationWorkspace.timeline.addKeyframe()
+
+  await annotationWorkspace.expectBoundingBoxVisible()
+})
+```
+
+### Available Page Objects
+
+**AnnotationWorkspacePage**
+- Video navigation and workspace actions
+- Bounding box creation and manipulation
+- Keyframe management via timeline component
+- Annotation saving and persistence
+
+**VideoBrowserPage**
+- Home page navigation
+- Video selection and search
+- Authentication state checks
+
+**VideoPlayerComponent**
+- Playback controls (play, pause, seek)
+- Frame navigation (arrows, Home, End)
+- Current time and frame queries
+
+**TimelineComponent**
+- Timeline visibility toggle
+- Keyframe operations (add, delete, copy)
+- Visibility toggling
+- Zoom controls
+- High-DPI rendering verification
 
 ## Test Files
 
