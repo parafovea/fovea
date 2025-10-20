@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures/test-context.js'
+import { test, expect } from '../../fixtures/test-context.js'
 
 /**
  * E2E tests for timeline rendering quality and performance.

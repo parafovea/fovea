@@ -27,7 +27,6 @@ describe('LoginPage', () => {
   })
 
   it('displays validation error when trying to submit empty form', async () => {
-    const user = userEvent.setup()
     renderWithProviders(
       <MemoryRouter>
         <LoginPage />

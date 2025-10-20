@@ -5,9 +5,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 
 describe('Timeline Rendering Performance', () => {
   beforeEach(() => {
@@ -18,8 +15,6 @@ describe('Timeline Rendering Performance', () => {
   describe('frame rate performance', () => {
     it('renders 5000 frame timeline at 60fps', async () => {
       // This test verifies timeline can handle long videos without performance degradation
-
-      const totalFrames = 5000
       const frameTimings: number[] = []
 
       // Simulate rapid frame updates
@@ -88,9 +83,7 @@ describe('Timeline Rendering Performance', () => {
       for (let i = 0; i < zoomSteps; i++) {
         const start = performance.now()
 
-        // Simulate zoom calculation and render
-        const zoomLevel = 1 + (i / zoomSteps) * 9 // 1x to 10x
-
+        // Simulate zoom calculation and render (1x to 10x)
         // Simulate work (viewport recalculation, canvas redraw)
         await new Promise((resolve) => setTimeout(resolve, 1))
 
@@ -169,15 +162,14 @@ describe('Timeline Rendering Performance', () => {
     it('only redraws dirty regions', () => {
       // Test that timeline only redraws what changed
 
-      let clearRectCallCount = 0
       let fillRectCallCount = 0
 
       const mockCanvas = {
         getContext: () => ({
-          clearRect: (x: number, y: number, w: number, h: number) => {
-            clearRectCallCount++
+          clearRect: (_x: number, _y: number, _w: number, _h: number) => {
+            // Intentionally unused - just tracking that clearRect is called
           },
-          fillRect: (x: number, y: number, w: number, h: number) => {
+          fillRect: (_x: number, _y: number, _w: number, _h: number) => {
             fillRectCallCount++
           },
           save: () => {},
@@ -255,7 +247,6 @@ describe('Timeline Rendering Performance', () => {
     })
 
     it('handles pan without full redraw', () => {
-      const totalFrames = 50000
       const viewportFrames = 500
 
       // Simulate panning by 100 frames

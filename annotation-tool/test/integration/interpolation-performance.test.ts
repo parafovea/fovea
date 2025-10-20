@@ -120,7 +120,7 @@ describe('Interpolation Performance Benchmarks', () => {
 
       // Eager: Interpolate all frames upfront
       const eagerStart = performance.now()
-      const allFrames = interpolator.interpolate(keyframes, segments)
+      interpolator.interpolate(keyframes, segments)
       const eagerDuration = performance.now() - eagerStart
 
       // Lazy: Access only 100 random frames

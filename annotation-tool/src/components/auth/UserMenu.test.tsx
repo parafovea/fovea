@@ -5,11 +5,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { renderWithProviders } from '../../../test/utils/test-utils.js'
 import UserMenu from './UserMenu.js'
-import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
 
 describe('UserMenu', () => {
   const mockOnSettingsClick = vi.fn()
@@ -105,7 +103,7 @@ describe('UserMenu', () => {
     })
   })
 
-  it('shows Settings menu item', async () => {
+  it('shows User Settings menu item', async () => {
     const user = userEvent.setup()
 
     renderWithProviders(
@@ -135,7 +133,7 @@ describe('UserMenu', () => {
     await user.click(screen.getByRole('button'))
 
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument()
+      expect(screen.getByText('User Settings')).toBeInTheDocument()
     })
   })
 
@@ -275,7 +273,7 @@ describe('UserMenu', () => {
     })
   })
 
-  it('clicking Settings calls onSettingsClick prop', async () => {
+  it('clicking User Settings calls onSettingsClick prop', async () => {
     const user = userEvent.setup()
     mockOnSettingsClick.mockClear()
 
@@ -304,36 +302,21 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
-    await user.click(screen.getByText('Settings'))
+    await user.click(screen.getByText('User Settings'))
 
     expect(mockOnSettingsClick).toHaveBeenCalledOnce()
   })
 
-  it('clicking Admin Panel navigates to /admin', async () => {
+  it('clicking Admin Panel calls onAdminPanelClick prop', async () => {
     const user = userEvent.setup()
-
-    let currentPath = '/'
+    const mockOnAdminPanelClick = vi.fn()
 
     renderWithProviders(
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route
-            path="/"
-            element={<UserMenu onSettingsClick={mockOnSettingsClick} />}
-          />
-          <Route
-            path="/admin"
-            element={
-              <div
-                ref={() => {
-                  currentPath = '/admin'
-                }}
-              >
-                Admin Page
-              </div>
-            }
-          />
-        </Routes>
+      <MemoryRouter>
+        <UserMenu
+          onSettingsClick={mockOnSettingsClick}
+          onAdminPanelClick={mockOnAdminPanelClick}
+        />
       </MemoryRouter>,
       {
         preloadedState: {
@@ -358,9 +341,7 @@ describe('UserMenu', () => {
     await user.click(screen.getByRole('button'))
     await user.click(screen.getByText('Admin Panel'))
 
-    await waitFor(() => {
-      expect(screen.getByText('Admin Page')).toBeInTheDocument()
-    })
+    expect(mockOnAdminPanelClick).toHaveBeenCalledOnce()
   })
 
   it('clicking Logout logs out user', async () => {

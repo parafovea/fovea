@@ -11,7 +11,7 @@ import annotationSlice, {
   updateAnnotation,
   deleteAnnotation,
 } from '../../src/store/annotationSlice.js'
-import { Annotation, BoundingBoxSequence } from '../../src/models/types.js'
+import { Annotation } from '../../src/models/types.js'
 
 describe('Redux State Management', () => {
   let store: ReturnType<typeof configureStore>
@@ -410,7 +410,7 @@ describe('Redux State Management', () => {
       const start = performance.now()
 
       for (let i = 0; i < 1000; i++) {
-        const state = store.getState().annotations.annotations
+        store.getState().annotations.annotations
       }
 
       const duration = performance.now() - start

@@ -30,6 +30,18 @@ export interface Annotation {
   personaId: string
 }
 
+export interface EntityType {
+  id: string
+  name: string
+  definition: string
+}
+
+export interface EventType {
+  id: string
+  name: string
+  definition: string
+}
+
 /**
  * Database helper for managing test data in E2E tests.
  * Provides utilities for creating and cleaning up test fixtures.
@@ -144,6 +156,80 @@ export class DatabaseHelper {
     await fetch(`${this.baseURL}/api/annotations/${annotationId}`, {
       method: 'DELETE'
     })
+  }
+
+  /**
+   * Create a test entity type.
+   * @param personaId - ID of persona to add type to
+   * @param data - Partial entity type data
+   */
+  async createEntityType(personaId: string, data: Partial<EntityType>): Promise<EntityType> {
+    // Get the current ontology
+    const getResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    // Add the new entity type
+    const newEntityType = {
+      id: data.id || `entity-type-${Date.now()}`,
+      name: data.name || 'Test Entity Type',
+      definition: data.definition || 'Test entity type definition'
+    }
+
+    ontology.entityTypes = ontology.entityTypes || []
+    ontology.entityTypes.push(newEntityType)
+
+    // Update the ontology
+    const updateResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
+    }
+
+    return newEntityType
+  }
+
+  /**
+   * Create a test event type.
+   * @param personaId - ID of persona to add type to
+   * @param data - Partial event type data
+   */
+  async createEventType(personaId: string, data: Partial<EventType>): Promise<EventType> {
+    // Get the current ontology
+    const getResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    // Add the new event type
+    const newEventType = {
+      id: data.id || `event-type-${Date.now()}`,
+      name: data.name || 'Test Event Type',
+      definition: data.definition || 'Test event type definition'
+    }
+
+    ontology.eventTypes = ontology.eventTypes || []
+    ontology.eventTypes.push(newEventType)
+
+    // Update the ontology
+    const updateResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
+    }
+
+    return newEventType
   }
 
   /**

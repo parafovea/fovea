@@ -141,7 +141,7 @@ describe('TranscriptViewer', () => {
     it('highlights segment when currentTime is within segment range', () => {
       const onSeek = vi.fn()
 
-      const { container } = render(
+      render(
         <TranscriptViewer transcript={mockTranscript} currentTime={7} onSeek={onSeek} />
       )
 

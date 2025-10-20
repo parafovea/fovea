@@ -52,6 +52,6 @@ export function initializeGlobalContext(): void {
 
   // Expose command registry globally for E2E tests
   if (typeof window !== 'undefined') {
-    ;(window as any).__commandRegistry = commandRegistry
+    (window as any).__commandRegistry = commandRegistry
   }
 }

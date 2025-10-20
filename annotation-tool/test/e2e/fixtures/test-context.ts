@@ -1,7 +1,9 @@
 import { test as base } from '@playwright/test'
 import { AnnotationWorkspacePage } from '../page-objects/AnnotationWorkspacePage.js'
 import { VideoBrowserPage } from '../page-objects/VideoBrowserPage.js'
-import { DatabaseHelper, User, Persona, Video } from '../utils/database-helpers.js'
+import { OntologyWorkspacePage } from '../page-objects/OntologyWorkspacePage.js'
+import { ObjectWorkspacePage } from '../page-objects/ObjectWorkspacePage.js'
+import { DatabaseHelper, User, Persona, Video, EntityType, EventType } from '../utils/database-helpers.js'
 
 /**
  * Extended test fixtures for E2E tests.
@@ -10,10 +12,14 @@ import { DatabaseHelper, User, Persona, Video } from '../utils/database-helpers.
 type Fixtures = {
   annotationWorkspace: AnnotationWorkspacePage
   videoBrowser: VideoBrowserPage
+  ontologyWorkspace: OntologyWorkspacePage
+  objectWorkspace: ObjectWorkspacePage
   db: DatabaseHelper
   testUser: User
   testPersona: Persona
   testVideo: Video
+  testEntityType: EntityType
+  testEventType: EventType
 }
 
 /**
@@ -90,6 +96,52 @@ export const test = base.extend<Fixtures>({
       fps: 30
     })
     await use(video)
+  },
+
+  /**
+   * Ontology workspace page object.
+   * Automatically created for each test.
+   */
+  ontologyWorkspace: async ({ page }, use) => {
+    const workspace = new OntologyWorkspacePage(page)
+    await use(workspace)
+  },
+
+  /**
+   * Object workspace page object.
+   * Automatically created for each test.
+   */
+  objectWorkspace: async ({ page }, use) => {
+    const workspace = new ObjectWorkspacePage(page)
+    await use(workspace)
+  },
+
+  /**
+   * Test entity type fixture.
+   * Creates a test entity type before the test and cleans up after.
+   * Depends on testPersona fixture.
+   */
+  testEntityType: async ({ db, testPersona }, use) => {
+    const entityType = await db.createEntityType(testPersona.id, {
+      name: 'Test Entity Type',
+      definition: 'A test entity type for E2E testing'
+    })
+    await use(entityType)
+    // Cleanup is handled by persona deletion
+  },
+
+  /**
+   * Test event type fixture.
+   * Creates a test event type before the test and cleans up after.
+   * Depends on testPersona fixture.
+   */
+  testEventType: async ({ db, testPersona }, use) => {
+    const eventType = await db.createEventType(testPersona.id, {
+      name: 'Test Event Type',
+      definition: 'A test event type for E2E testing'
+    })
+    await use(eventType)
+    // Cleanup is handled by persona deletion
   }
 })
 

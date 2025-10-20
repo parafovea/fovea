@@ -26,24 +26,11 @@ vi.mock('./SessionManagementDialog.js', () => ({
 
 describe('AdminPanel', () => {
   it('redirects non-admin users to home page', () => {
-    let redirected = false
-
     renderWithProviders(
       <MemoryRouter initialEntries={['/admin']}>
         <Routes>
           <Route path="/admin" element={<AdminPanel />} />
-          <Route
-            path="/"
-            element={
-              <div
-                ref={() => {
-                  redirected = true
-                }}
-              >
-                Home Page
-              </div>
-            }
-          />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>,
       {
@@ -127,7 +114,7 @@ describe('AdminPanel', () => {
     expect(screen.getByText('User Management Page')).toBeInTheDocument()
   })
 
-  it('shows SessionManagementDialog when Sessions tab clicked', async () => {
+  it('shows SessionManagementPage when Sessions tab clicked', async () => {
     const user = userEvent.setup()
 
     renderWithProviders(
@@ -157,7 +144,8 @@ describe('AdminPanel', () => {
     await user.click(screen.getByRole('tab', { name: /sessions/i }))
 
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: /session management dialog/i })).toBeInTheDocument()
+      // SessionManagementPage should be displayed with session content
+      expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument()
     })
   })
 
@@ -196,7 +184,7 @@ describe('AdminPanel', () => {
   })
 
   it('only renders for admin users', () => {
-    const { container } = renderWithProviders(
+    renderWithProviders(
       <MemoryRouter>
         <AdminPanel />
       </MemoryRouter>,
@@ -216,7 +204,7 @@ describe('AdminPanel', () => {
     expect(screen.queryByText('Admin Panel')).not.toBeInTheDocument()
   })
 
-  it('closes session dialog and returns to Users tab', async () => {
+  it('switches between Sessions and Users tabs', async () => {
     const user = userEvent.setup()
 
     renderWithProviders(
@@ -243,21 +231,21 @@ describe('AdminPanel', () => {
       }
     )
 
-    // Open Sessions tab
+    // Initially on Users tab
+    expect(screen.getByText('User Management Page')).toBeInTheDocument()
+
+    // Switch to Sessions tab
     await user.click(screen.getByRole('tab', { name: /sessions/i }))
 
     await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument()
     })
 
-    // Close dialog
-    await user.click(screen.getByText('Close Dialog'))
+    // Switch back to Users tab
+    await user.click(screen.getByRole('tab', { name: /users/i }))
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByText('User Management Page')).toBeInTheDocument()
     })
-
-    // Should return to Users tab
-    expect(screen.getByText('User Management Page')).toBeInTheDocument()
   })
 })

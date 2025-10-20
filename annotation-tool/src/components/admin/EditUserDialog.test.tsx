@@ -208,7 +208,6 @@ describe('EditUserDialog', () => {
   })
 
   it('leaving password blank keeps existing password', async () => {
-    const user = userEvent.setup()
     let updatePayload: any = null
 
     server.use(
@@ -261,8 +260,6 @@ describe('EditUserDialog', () => {
   })
 
   it('displays error on update failure', async () => {
-    const user = userEvent.setup()
-
     server.use(
       http.put('/api/admin/users/:userId', () => {
         return HttpResponse.json(

@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures/test-context.js'
+import { test } from '../../fixtures/test-context.js'
 
 /**
  * E2E tests for single-user mode authentication.
