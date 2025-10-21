@@ -192,7 +192,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
 
       // Get default user for persona creation
       const defaultUser = await tx.user.findUnique({
-        where: { username: 'user' }
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
 
       if (!defaultUser) {

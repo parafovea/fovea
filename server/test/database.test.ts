@@ -8,7 +8,7 @@
  * - Graceful shutdown disconnects properly
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/app.js'
 import { hashPassword } from '../src/lib/password.js'
 import type { FastifyInstance } from 'fastify'

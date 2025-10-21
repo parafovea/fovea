@@ -108,10 +108,11 @@ function TabPanel(props: TabPanelProps) {
  */
 export default function OntologyWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  const { entities, events, times } = useSelector((state: RootState) => state.world)
-  const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cuda_available
+  const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
+  const { entities = [], events = [], times = [] } = useSelector((state: RootState) => state.world)
+  const { data: modelConfig, error: modelConfigError } = useModelConfig()
+  // Treat model service as CPU-only if unavailable (e.g., in E2E tests)
+  const isCpuOnly = !!modelConfigError || !modelConfig?.cuda_available
 
   // Use preferences for smart defaults
   const {
@@ -544,7 +545,7 @@ export default function OntologyWorkspace() {
                     <Box>
                       <GlossRenderer gloss={role.gloss} personaId={selectedPersonaId} />
                       <Typography variant="caption" component="div">
-                        Allowed fillers: {role.allowedFillerTypes.join(', ')}
+                        Allowed fillers: {(role.allowedFillerTypes || []).join(', ')}
                       </Typography>
                     </Box>
                   }

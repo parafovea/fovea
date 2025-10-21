@@ -177,8 +177,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // In single-user mode, auto-authenticate with default user
       if (mode === 'single-user') {
         // Find or create default user
+        const defaultUsername = process.env.DEFAULT_USER_USERNAME || 'default-user'
         let defaultUser = await prisma.user.findUnique({
-          where: { username: 'user' },
+          where: { username: defaultUsername },
         })
 
         if (!defaultUser) {
@@ -187,8 +188,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           const defaultPassword = await bcrypt.hash('password', bcryptRounds)
           defaultUser = await prisma.user.create({
             data: {
-              username: 'user',
-              displayName: 'Default User',
+              username: defaultUsername,
+              displayName: process.env.DEFAULT_USER_DISPLAY_NAME || 'Default User',
               email: null,
               passwordHash: defaultPassword,
               isAdmin: false,

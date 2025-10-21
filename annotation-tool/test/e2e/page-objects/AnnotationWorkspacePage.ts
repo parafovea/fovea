@@ -61,7 +61,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async navigateFromVideoBrowser(): Promise<void> {
     await this.goto('/')
-    await expect(this.page.getByText('Video Browser')).toBeVisible()
+    await expect(this.page.getByPlaceholder(/search videos/i)).toBeVisible()
 
     const firstVideo = this.page.locator('.MuiCard-root').first()
     await expect(firstVideo).toBeVisible()
@@ -122,23 +122,32 @@ export class AnnotationWorkspacePage extends BasePage {
    * Useful for quick test setup.
    */
   async drawSimpleBoundingBox(): Promise<void> {
-    // Select persona
+    // Select persona - click to open dropdown, then click first "Test Analyst" option
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
+    await expect(personaSelect).toBeVisible({ timeout: 5000 })
     await personaSelect.click()
-    await this.page.waitForTimeout(300)
+    await this.page.waitForTimeout(500)
 
-    // Click the "Automated - Analyst" option
-    await this.page.getByRole('option', { name: /Automated/i }).click()
+    // Wait for listbox and click first "Test Analyst" option
+    const personaListbox = this.page.getByRole('listbox', { name: /select persona/i })
+    await expect(personaListbox).toBeVisible({ timeout: 5000 })
+    const testAnalystOption = personaListbox.getByRole('option', { name: /test analyst.*intelligence analyst/i }).first()
+    await expect(testAnalystOption).toBeVisible({ timeout: 5000 })
+    await testAnalystOption.click()
     await this.page.waitForTimeout(1500)
 
     // Wait for type select to become enabled and select first type
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
     await expect(typeSelect).toBeEnabled({ timeout: 10000 })
     await typeSelect.click()
-    await this.page.waitForTimeout(300)
+    await this.page.waitForTimeout(500)
 
-    // Click the "Person" option
-    await this.page.getByRole('option', { name: /Person/i }).click()
+    // Wait for type listbox and click first "Test Entity Type" option
+    const typeListbox = this.page.getByRole('listbox', { name: /select type/i })
+    await expect(typeListbox).toBeVisible({ timeout: 5000 })
+    const testEntityOption = typeListbox.getByRole('option', { name: /test entity type/i }).first()
+    await expect(testEntityOption).toBeVisible({ timeout: 5000 })
+    await testEntityOption.click()
     await this.page.waitForTimeout(1000)
 
     await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })

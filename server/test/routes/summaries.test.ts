@@ -305,8 +305,8 @@ describe('Video Summaries API', () => {
       expect(body).toHaveLength(2)
 
       // Find summaries by audioLanguage (order not guaranteed)
-      const enSummary = body.find((s: any) => s.audioLanguage === 'en')
-      const esSummary = body.find((s: any) => s.audioLanguage === 'es')
+      const enSummary = body.find((s: { audioLanguage?: string }) => s.audioLanguage === 'en')
+      const esSummary = body.find((s: { audioLanguage?: string }) => s.audioLanguage === 'es')
 
       expect(enSummary).toBeDefined()
       expect(enSummary.speakerCount).toBe(1)

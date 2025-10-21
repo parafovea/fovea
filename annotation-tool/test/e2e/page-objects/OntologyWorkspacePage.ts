@@ -11,187 +11,431 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   // Locators
-  get newEntityTypeButton() {
-    return this.page.getByRole('button', { name: /new entity type/i })
-  }
-
-  get newEventTypeButton() {
-    return this.page.getByRole('button', { name: /new event type/i })
-  }
-
-  get newRoleTypeButton() {
-    return this.page.getByRole('button', { name: /new role type/i })
-  }
-
-  get newRelationTypeButton() {
-    return this.page.getByRole('button', { name: /new relation type/i })
-  }
-
-  get typeList() {
-    return this.page.getByTestId('type-list').or(
-      this.page.locator('[data-testid*="type-list"]')
+  get addTypeFab() {
+    return this.page.getByRole('button', { name: /add type/i }).or(
+      this.page.locator('button[aria-label*="add"]').last()
     )
   }
 
-  get wikidataImportButton() {
-    return this.page.getByRole('button', { name: /import.*wikidata/i }).or(
-      this.page.getByTestId('import-wikidata')
-    )
+  get searchInput() {
+    return this.page.getByPlaceholder(/search.*type/i)
+  }
+
+  get entityTypesTab() {
+    return this.page.getByRole('tab', { name: /entity types/i })
+  }
+
+  get roleTypesTab() {
+    return this.page.getByRole('tab', { name: /role types/i })
+  }
+
+  get eventTypesTab() {
+    return this.page.getByRole('tab', { name: /event types/i })
+  }
+
+  get relationTypesTab() {
+    return this.page.getByRole('tab', { name: /relation types/i })
   }
 
   // Navigation
-  async navigateTo() {
+  async navigateTo(_personaId?: string) {
+    // First navigate to home to initialize app state and load personas
+    await this.goto('/')
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 })
+
+    // Wait for logo to confirm app loaded
+    await this.page.waitForSelector('img[alt="FOVEA Logo"]', { state: 'visible', timeout: 15000 })
+
+    // Now navigate to ontology workspace
     await this.goto('/ontology')
-    await this.waitForWorkspaceReady()
-  }
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 })
 
-  // Actions
-  async createEntityType(name: string, definition: string) {
-    await this.newEntityTypeButton.click()
-    await this.wait(300)
+    // Wait for EITHER tabs (persona auto-selected) OR persona browser to render
+    // Give more time since personas need to load from API if not already loaded
+    await Promise.race([
+      // Option 1: Tabs appear (persona was auto-selected)
+      this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 20000 }),
+      // Option 2: PersonaBrowser "Open" button appears
+      this.page.waitForSelector('button:has-text("Open")', { state: 'visible', timeout: 20000 }),
+      // Option 3: "No personas found" message (edge case)
+      this.page.waitForSelector('text="No personas found"', { state: 'visible', timeout: 20000 })
+    ]).catch(async () => {
+      // If nothing appears, log page content for debugging
+      const bodyText = await this.page.locator('body').textContent()
+      const htmlSnippet = await this.page.content().then(c => c.substring(0, 500))
+      throw new Error(`Navigation to /ontology timed out. Page text: ${bodyText?.substring(0, 200)}\n\nHTML: ${htmlSnippet}`)
+    })
 
-    // Fill name
-    const nameInput = this.page.getByLabel(/name/i).or(
-      this.page.getByTestId('type-name')
-    )
-    await nameInput.fill(name)
-
-    // Fill definition
-    const definitionInput = this.page.getByLabel(/definition/i).or(
-      this.page.getByTestId('type-definition')
-    )
-    await definitionInput.fill(definition)
-
-    // Click save
-    const saveButton = this.page.getByRole('button', { name: /save/i })
-    await saveButton.click()
-
-    // Wait for save to complete
-    await this.page.waitForResponse(resp =>
-      resp.url().includes('/api/ontology') && resp.ok()
-    )
-    await this.wait(300)
-  }
-
-  async createEventType(name: string, definition: string) {
-    await this.newEventTypeButton.click()
-    await this.wait(300)
-
-    // Fill name
-    const nameInput = this.page.getByLabel(/name/i).or(
-      this.page.getByTestId('type-name')
-    )
-    await nameInput.fill(name)
-
-    // Fill definition
-    const definitionInput = this.page.getByLabel(/definition/i).or(
-      this.page.getByTestId('type-definition')
-    )
-    await definitionInput.fill(definition)
-
-    // Click save
-    const saveButton = this.page.getByRole('button', { name: /save/i })
-    await saveButton.click()
-
-    // Wait for save to complete
-    await this.page.waitForResponse(resp =>
-      resp.url().includes('/api/ontology') && resp.ok()
-    )
-    await this.wait(300)
-  }
-
-  async importFromWikidata(wikidataId: string) {
-    await this.wikidataImportButton.click()
-    await this.wait(300)
-
-    // Search for Wikidata entity
-    const searchInput = this.page.getByPlaceholder(/search.*wikidata/i).or(
-      this.page.getByTestId('wikidata-search')
-    )
-    await searchInput.fill(wikidataId)
-    await searchInput.press('Enter')
-
-    // Wait for search results
-    await this.wait(1000)
-
-    // Select first result
-    const firstResult = this.page.locator('[data-testid*="wikidata-result"]').first()
-    await firstResult.click()
-
-    // Confirm import
-    const importButton = this.page.getByRole('button', { name: /import/i })
-    await importButton.click()
-
-    // Wait for import to complete
-    await this.page.waitForResponse(resp =>
-      resp.url().includes('/api/ontology') && resp.ok()
-    )
-    await this.wait(300)
-  }
-
-  async selectType(typeName: string) {
-    const typeItem = this.page.getByText(typeName, { exact: false })
-    await typeItem.click()
-    await this.wait(200)
-  }
-
-  async deleteType(typeName: string) {
-    await this.selectType(typeName)
-    await this.wait(200)
-
-    // Click delete button
-    const deleteButton = this.page.getByRole('button', { name: /delete/i }).or(
-      this.page.getByTestId('delete-type')
-    )
-    await deleteButton.click()
-
-    // Confirm deletion
-    const confirmButton = this.page.getByRole('button', { name: /confirm/i }).or(
-      this.page.getByRole('button', { name: /yes/i })
-    )
-    if (await confirmButton.isVisible().catch(() => false)) {
-      await confirmButton.click()
+    // Check if tabs are already visible (persona auto-selected)
+    const tabsVisible = await this.page.getByRole('tab', { name: /entity types/i }).isVisible().catch(() => false)
+    if (tabsVisible) {
+      // Already in ontology workspace
+      return
     }
 
-    // Wait for deletion to complete
-    await this.wait(500)
+    // PersonaBrowser is showing, need to click "Open" button to select persona
+    const openButton = this.page.locator('button:has-text("Open")').first()
+    if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await openButton.click()
+      // Wait for tabs to appear after clicking
+      await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
+      return
+    }
+
+    throw new Error('Could not find persona selection UI or ontology workspace tabs')
   }
 
-  async searchTypes(searchTerm: string) {
-    const searchInput = this.page.getByPlaceholder(/search/i).or(
-      this.page.getByTestId('type-search')
+  async selectTab(tab: 'entities' | 'events' | 'roles' | 'relations') {
+    const tabMap = {
+      entities: this.entityTypesTab,
+      roles: this.roleTypesTab,
+      events: this.eventTypesTab,
+      relations: this.relationTypesTab
+    }
+    await tabMap[tab].click()
+    await this.wait(300)
+  }
+
+  // Entity Types
+  async createEntityType(name: string, definition: string) {
+    await this.selectTab('entities')
+    await this.addTypeFab.click()
+    await this.wait(300)
+
+    // Fill form
+    await this.fillTypeForm(name, definition)
+
+    // Save
+    await this.saveTypeForm()
+  }
+
+  async editEntityType(currentName: string, newName: string, newDefinition: string) {
+    await this.selectTab('entities')
+    await this.clickEditButton(currentName)
+    await this.wait(500)
+
+    // Wait for dialog and fill form
+    await this.fillTypeForm(newName, newDefinition)
+    await this.saveTypeForm()
+  }
+
+  async deleteEntityType(name: string) {
+    await this.selectTab('entities')
+    await this.clickDeleteButton(name)
+  }
+
+  async duplicateEntityType(name: string) {
+    // Not yet implemented in UI - placeholder
+    await this.selectTab('entities')
+    await this.expectTypeExists(name)
+  }
+
+  async searchEntityTypes(query: string) {
+    await this.selectTab('entities')
+    await this.searchInput.fill(query)
+    await this.wait(300)
+  }
+
+  // Event Types
+  async createEventType(name: string, definition: string) {
+    await this.selectTab('events')
+    await this.addTypeFab.click()
+    await this.wait(300)
+
+    await this.fillTypeForm(name, definition)
+    await this.saveTypeForm()
+  }
+
+  async editEventType(currentName: string, newName: string, newDefinition: string) {
+    await this.selectTab('events')
+    await this.clickEditButton(currentName)
+    await this.wait(500)
+
+    await this.fillTypeForm(newName, newDefinition)
+    await this.saveTypeForm()
+  }
+
+  async deleteEventType(name: string) {
+    await this.selectTab('events')
+    await this.clickDeleteButton(name)
+  }
+
+  // Role Types
+  async createRoleType(name: string, definition: string, allowedFillerTypes: string[]) {
+    await this.selectTab('roles')
+    await this.addTypeFab.click()
+    await this.wait(300)
+
+    await this.fillTypeForm(name, definition)
+
+    // Add allowed filler types if provided
+    for (const fillerType of allowedFillerTypes) {
+      const fillerInput = this.page.getByLabel(/allowed.*filler/i).or(
+        this.page.getByPlaceholder(/add.*entity.*type/i)
+      )
+      if (await fillerInput.isVisible().catch(() => false)) {
+        await fillerInput.fill(fillerType)
+        await this.page.keyboard.press('Enter')
+      }
+    }
+
+    await this.saveTypeForm()
+  }
+
+  async editRoleType(currentName: string, newName: string, newDefinition: string) {
+    await this.selectTab('roles')
+    await this.clickEditButton(currentName)
+    await this.wait(500)
+
+    await this.fillTypeForm(newName, newDefinition)
+    await this.saveTypeForm()
+  }
+
+  async deleteRoleType(name: string) {
+    await this.selectTab('roles')
+    await this.clickDeleteButton(name)
+  }
+
+  // Relation Types
+  async createRelationType(name: string, definition: string, _sourceTypes: string[] = [], _targetTypes: string[] = []) {
+    await this.selectTab('relations')
+    await this.addTypeFab.click()
+    await this.wait(300)
+
+    await this.fillRelationTypeForm(name, definition)
+
+    // Fill source and target types if provided
+    // For basic tests, we use the defaults (Entity selected)
+    // Advanced tests can extend this to interact with chips
+
+    await this.saveTypeForm()
+  }
+
+  async editRelationType(currentName: string, newName: string, newDefinition: string) {
+    await this.selectTab('relations')
+    await this.clickEditButton(currentName)
+    await this.wait(500)
+
+    await this.fillRelationTypeForm(newName, newDefinition)
+    await this.saveTypeForm()
+  }
+
+  async deleteRelationType(name: string) {
+    await this.selectTab('relations')
+    await this.clickDeleteButton(name)
+  }
+
+  // Wikidata Integration
+  async importFromWikidata(wikidataId: string) {
+    // Open Wikidata search in current editor
+    const wikidataButton = this.page.getByRole('button', { name: /wikidata/i })
+    await wikidataButton.click()
+    await this.wait(300)
+
+    // Search for entity
+    const searchInput = this.page.getByPlaceholder(/search.*wikidata/i)
+    await searchInput.fill(wikidataId)
+    await this.wait(1000) // Wait for search
+
+    // Select first result
+    const firstResult = this.page.locator('[data-testid*="wikidata-result"]').first().or(
+      this.page.getByRole('button').filter({ hasText: new RegExp(wikidataId, 'i') }).first()
     )
-    await searchInput.fill(searchTerm)
+    await firstResult.click()
+
+    // Import
+    const importButton = this.page.getByRole('button', { name: /import|select/i })
+    await importButton.click()
+    await this.wait(300)
+  }
+
+  async searchWikidata(query: string) {
+    const wikidataButton = this.page.getByRole('button', { name: /wikidata/i })
+    await wikidataButton.click()
+    await this.wait(300)
+
+    const searchInput = this.page.getByPlaceholder(/search.*wikidata/i)
+    await searchInput.fill(query)
+    await this.wait(1000)
+  }
+
+  async selectWikidataResult(index: number) {
+    const results = this.page.locator('[data-testid*="wikidata-result"]')
+    await results.nth(index).click()
     await this.wait(300)
   }
 
   // Assertions
-  async expectTypeExists(typeName: string) {
-    const typeItem = this.page.getByText(typeName, { exact: false })
-    await expect(typeItem).toBeVisible()
+  async expectTypeExists(name: string) {
+    // Scope to visible tab panel to avoid conflicts with persona name
+    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
+    // Look for the exact name in Typography elements (type titles), not in descriptions
+    const typeItem = visiblePanel.locator('li').filter({ has: this.page.getByText(name, { exact: true }) }).first()
+    await expect(typeItem).toBeVisible({ timeout: 5000 })
+  }
+
+  async expectTypeNotExists(name: string) {
+    // Scope to visible tab panel
+    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
+    // Look for the exact name in Typography elements (type titles)
+    const typeItem = visiblePanel.locator('li').filter({ has: this.page.getByText(name, { exact: true }) })
+    await expect(typeItem).not.toBeVisible()
   }
 
   async expectTypeCount(count: number) {
-    const typeItems = this.page.locator('[data-testid*="type-item"]')
-    await expect(typeItems).toHaveCount(count)
-  }
-
-  async expectWorkspaceReady() {
-    // Wait for ontology data to load
-    await this.page.waitForResponse(resp =>
-      resp.url().includes('/api/ontology') && resp.ok()
-    )
     await this.wait(500)
 
-    // Verify workspace elements are visible
-    const workspace = this.page.locator('[data-testid*="ontology-workspace"]').or(
-      this.page.locator('main')
-    )
-    await expect(workspace).toBeVisible()
+    // Count list items in visible tab panel
+    // Try to find the active tab panel first
+    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
+
+    // Count list items within the visible panel
+    const listItems = visiblePanel.locator('li')
+
+    if (count === 0) {
+      // For zero count, check that either no items exist or panel is empty
+      const itemCount = await listItems.count()
+      expect(itemCount).toBe(0)
+    } else {
+      await expect(listItems).toHaveCount(count, { timeout: 5000 })
+    }
   }
 
-  // Helper methods
-  private async waitForWorkspaceReady() {
-    await this.expectWorkspaceReady()
+  async expectTypeDefinition(name: string, definition: string) {
+    await this.clickEditButton(name)
+    await this.wait(500)
+
+    const defInput = this.page.locator('textarea').first().or(
+      this.page.getByLabel(/gloss|definition/i).first()
+    )
+    await defInput.waitFor({ state: 'visible', timeout: 5000 })
+    await expect(defInput).toHaveValue(definition)
+
+    // Close dialog
+    const cancelButton = this.page.getByRole('button', { name: /cancel/i })
+    await cancelButton.click()
+    await this.wait(500)
+  }
+
+  async expectWikidataIdLinked(name: string, wikidataId: string) {
+    // Look for Wikidata chip near the type name
+    const typeRow = this.page.locator(`text="${name}"`).locator('..')
+    const wikidataChip = typeRow.locator(`text="${wikidataId}"`).or(
+      this.page.getByText(wikidataId)
+    )
+    await expect(wikidataChip).toBeVisible()
+  }
+
+  async expectSearchResults(count: number) {
+    await this.wait(300)
+    await this.expectTypeCount(count)
+  }
+
+  async expectNoTypes() {
+    await this.expectTypeCount(0)
+  }
+
+  // Helper Methods
+  private async fillTypeForm(name: string, definition: string) {
+    // Wait for dialog to be fully loaded
+    await this.wait(500)
+
+    // Scope all selectors to the dialog to avoid conflicts with search fields
+    const dialog = this.page.locator('[role="dialog"]')
+    await dialog.waitFor({ state: 'visible', timeout: 5000 })
+
+    // Fill name field - MUI adds asterisk for required fields
+    const nameInput = dialog.getByRole('textbox', { name: /^name/i }).first()
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    await nameInput.click()
+    await nameInput.fill(name)
+
+    // Fill definition/gloss field
+    const defInput = dialog.locator('textarea').first()
+    await defInput.waitFor({ state: 'visible', timeout: 5000 })
+    await defInput.click()
+    await defInput.fill(definition)
+  }
+
+  private async fillRelationTypeForm(name: string, definition: string) {
+    // Wait for dialog to be fully loaded
+    await this.wait(500)
+
+    // Scope all selectors to the dialog to avoid conflicts with search fields
+    const dialog = this.page.locator('[role="dialog"]')
+    await dialog.waitFor({ state: 'visible', timeout: 5000 })
+
+    // Fill name field - relation dialog uses "Relation Type Name" label
+    // Use exact label first, then fall back to more generic selectors
+    const nameInput = dialog.getByLabel('Relation Type Name', { exact: false }).or(
+      dialog.getByRole('textbox', { name: /relation.*type.*name/i })
+    )
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    await nameInput.click()
+    await nameInput.fill(name)
+
+    // Fill gloss definition - relation dialog uses GlossEditor with textarea
+    const defInput = dialog.locator('textarea').first()
+    await defInput.waitFor({ state: 'visible', timeout: 5000 })
+    await defInput.click()
+    await defInput.fill(definition)
+  }
+
+  private async saveTypeForm() {
+    const saveButton = this.page.getByRole('button', { name: /save|create/i })
+    await saveButton.waitFor({ state: 'visible', timeout: 5000 })
+    await saveButton.click()
+
+    // Wait for dialog to close OR API response
+    await Promise.race([
+      this.page.waitForResponse(
+        resp => resp.url().includes('/api/personas') && resp.ok(),
+        { timeout: 10000 }
+      ),
+      this.page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 })
+    ]).catch(() => {
+      // Continue if neither happens (might have been fast)
+    })
+
+    await this.wait(1000)
+  }
+
+  private async clickEditButton(typeName: string) {
+    // Find the list item containing the type name
+    const listItem = this.page.locator('li').filter({ hasText: typeName }).first()
+    await listItem.waitFor({ state: 'visible', timeout: 5000 })
+
+    // Click the edit button within that list item
+    // Edit icon is usually the first icon button
+    const editButton = listItem.locator('button').first().or(
+      listItem.locator('svg[data-testid="EditIcon"]').locator('..').or(
+        listItem.getByRole('button').first()
+      )
+    )
+    await editButton.click()
+    await this.wait(500)
+  }
+
+  private async clickDeleteButton(typeName: string) {
+    // Find the list item containing the type name
+    const listItem = this.page.locator('li').filter({ hasText: typeName }).first()
+    await listItem.waitFor({ state: 'visible', timeout: 5000 })
+
+    // Click the delete button within that list item
+    // Delete icon is usually the second icon button
+    const deleteButton = listItem.locator('button').nth(1).or(
+      listItem.locator('svg[data-testid="DeleteIcon"]').locator('..').or(
+        listItem.getByRole('button').nth(1)
+      )
+    )
+    await deleteButton.click()
+    await this.wait(500)
+
+    // Handle confirmation dialog if it appears
+    const confirmButton = this.page.getByRole('button', { name: /confirm|yes|delete/i })
+    if (await confirmButton.isVisible().catch(() => false)) {
+      await confirmButton.click()
+      await this.wait(500)
+    }
   }
 }

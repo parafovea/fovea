@@ -100,6 +100,10 @@ export default function RelationTypeEditor({
   const handleSave = () => {
     if (!personaId) return
 
+    // Validate required fields
+    if (!name.trim() || !gloss.some(g => g.content.trim())) return
+    if (sourceTypes.length === 0 || targetTypes.length === 0) return
+
     const relationTypeData: RelationType = {
       id: relationType?.id || generateId(),
       name,
@@ -506,7 +510,7 @@ export default function RelationTypeEditor({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={!name || sourceTypes.length === 0 || targetTypes.length === 0}
+          disabled={!name.trim() || !gloss.some(g => g.content.trim()) || sourceTypes.length === 0 || targetTypes.length === 0}
         >
           {relationType ? 'Save Changes' : 'Create'}
         </Button>

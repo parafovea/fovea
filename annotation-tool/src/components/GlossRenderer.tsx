@@ -14,6 +14,11 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
   const { entities, events, times } = useSelector((state: RootState) => state.world)
   const activeOntology = personaOntologies.find(o => o.personaId === personaId)
 
+  // Handle undefined or null gloss
+  if (!gloss || !Array.isArray(gloss)) {
+    return inline ? <span /> : <Box />
+  }
+
   const getItemDisplay = (item: GlossItem): { name: string; found: boolean; isObject?: boolean } => {
     if (item.type === 'text') {
       return { name: item.content, found: true }

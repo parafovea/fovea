@@ -64,9 +64,11 @@ export function CommandPalette() {
     }
   }, [open])
 
-  // Get all commands
+  // Get all available commands (filtered by context)
+  // Re-evaluate when dialog opens to get current context
   const allCommands = useMemo(() => {
-    return commandRegistry.getCommands().filter(cmd => {
+    const commands = commandRegistry.getCommands() || []
+    return commands.filter(cmd => {
       // Hide command palette toggle from palette
       if (cmd.id === 'commandPalette.toggle') return false
 
@@ -77,7 +79,9 @@ export function CommandPalette() {
 
       return true
     })
-  }, [])
+    // Re-evaluate when dialog opens to refresh context-dependent commands
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   // Filter commands based on search
   const filteredCommands = useMemo(() => {

@@ -12,6 +12,7 @@ import { decryptApiKey } from '../../src/lib/encryption.js'
 describe('API Key Routes', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let adminUserId: string
   let adminSessionToken: string
   let regularUserId: string

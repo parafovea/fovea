@@ -116,7 +116,7 @@ export class VideoBrowserPage extends BasePage {
    */
   async expectPageLoaded(): Promise<void> {
     await expect(this.appTitle).toBeVisible()
-    await expect(this.heading).toBeVisible()
+    await expect(this.searchInput).toBeVisible()
   }
 
   /**

@@ -69,7 +69,7 @@ export default function Layout() {
   const unsavedChanges = useSelector((state: RootState) =>
     state.persona.unsavedChanges
   )
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
   const world = useSelector((state: RootState) => state.world)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
@@ -88,13 +88,13 @@ export default function Layout() {
         personas,
         personaOntologies,
         world: {
-          entities: world.entities,
-          events: world.events,
-          times: world.times,
-          entityCollections: world.entityCollections,
-          eventCollections: world.eventCollections,
-          timeCollections: world.timeCollections,
-          relations: world.relations,
+          entities: world.entities || [],
+          events: world.events || [],
+          times: world.times || [],
+          entityCollections: world.entityCollections || [],
+          eventCollections: world.eventCollections || [],
+          timeCollections: world.timeCollections || [],
+          relations: world.relations || [],
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

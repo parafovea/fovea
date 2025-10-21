@@ -13,7 +13,9 @@ describe('Session Management Routes', () => {
   let prisma: PrismaClient
   let adminSessionToken: string
   let regularSessionToken: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let adminUserId: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let regularUserId: string
   let regularSessionId: string
 

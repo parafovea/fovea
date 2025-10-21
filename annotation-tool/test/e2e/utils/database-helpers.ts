@@ -42,15 +42,32 @@ export interface EventType {
   definition: string
 }
 
+export interface RoleType {
+  id: string
+  name: string
+  definition: string
+  allowedFillerTypes?: string[]
+}
+
+export interface RelationType {
+  id: string
+  name: string
+  definition: string
+  sourceTypes?: string[]
+  targetTypes?: string[]
+}
+
 /**
  * Database helper for managing test data in E2E tests.
  * Provides utilities for creating and cleaning up test fixtures.
  */
 export class DatabaseHelper {
-  private baseURL: string
+  private apiURL: string
 
   constructor(baseURL: string = 'http://localhost:3000') {
-    this.baseURL = baseURL
+    // baseURL is used to derive apiURL
+    // API is on port 3001 in E2E environment
+    this.apiURL = baseURL.replace(':3000', ':3001')
   }
 
   /**
@@ -79,25 +96,33 @@ export class DatabaseHelper {
 
   /**
    * Create a test persona.
+   * Always creates a fresh persona with an empty ontology for test isolation.
    * @param data - Partial persona data
    */
   async createPersona(data: Partial<Persona>): Promise<Persona> {
-    // This would make an API call to create a persona
-    const response = await fetch(`${this.baseURL}/api/personas`, {
+    // Always create a new persona for test isolation
+    const response = await fetch(`${this.apiURL}/api/personas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: data.name || 'Test Analyst',
         role: data.role || 'Intelligence Analyst',
-        informationNeed: 'Test information need'
+        informationNeed: data.informationNeed || 'Test information need'
       })
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to create persona: ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`Failed to create persona: ${response.statusText} - ${errorText}`)
     }
 
-    return response.json()
+    const persona = await response.json()
+    return {
+      id: persona.id,
+      userId: persona.userId,
+      name: persona.name,
+      role: persona.role
+    }
   }
 
   /**
@@ -105,7 +130,7 @@ export class DatabaseHelper {
    * @param personaId - ID of persona to delete
    */
   async deletePersona(personaId: string): Promise<void> {
-    await fetch(`${this.baseURL}/api/personas/${personaId}`, {
+    await fetch(`${this.apiURL}/api/personas/${personaId}`, {
       method: 'DELETE'
     })
   }
@@ -131,7 +156,7 @@ export class DatabaseHelper {
    * @param data - Partial annotation data
    */
   async createAnnotation(data: Partial<Annotation>): Promise<Annotation> {
-    const response = await fetch(`${this.baseURL}/api/annotations`, {
+    const response = await fetch(`${this.apiURL}/api/annotations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -153,7 +178,7 @@ export class DatabaseHelper {
    * @param annotationId - ID of annotation to delete
    */
   async deleteAnnotation(annotationId: string): Promise<void> {
-    await fetch(`${this.baseURL}/api/annotations/${annotationId}`, {
+    await fetch(`${this.apiURL}/api/annotations/${annotationId}`, {
       method: 'DELETE'
     })
   }
@@ -165,24 +190,25 @@ export class DatabaseHelper {
    */
   async createEntityType(personaId: string, data: Partial<EntityType>): Promise<EntityType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
     const ontology = await getResponse.json()
 
-    // Add the new entity type
+    // Add the new entity type (uses 'gloss' not 'definition' in actual data model)
     const newEntityType = {
       id: data.id || `entity-type-${Date.now()}`,
       name: data.name || 'Test Entity Type',
-      definition: data.definition || 'Test entity type definition'
+      gloss: [{ type: 'text', content: data.definition || 'Test entity type definition' }],
+      examples: []
     }
 
-    ontology.entityTypes = ontology.entityTypes || []
-    ontology.entityTypes.push(newEntityType)
+    ontology.entities = ontology.entities || []
+    ontology.entities.push(newEntityType)
 
     // Update the ontology
-    const updateResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`, {
+    const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ontology)
@@ -192,7 +218,12 @@ export class DatabaseHelper {
       throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
     }
 
-    return newEntityType
+    // Return the simplified interface expected by tests
+    return {
+      id: newEntityType.id,
+      name: newEntityType.name,
+      definition: data.definition || 'Test entity type definition'
+    }
   }
 
   /**
@@ -202,7 +233,7 @@ export class DatabaseHelper {
    */
   async createEventType(personaId: string, data: Partial<EventType>): Promise<EventType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -212,14 +243,15 @@ export class DatabaseHelper {
     const newEventType = {
       id: data.id || `event-type-${Date.now()}`,
       name: data.name || 'Test Event Type',
-      definition: data.definition || 'Test event type definition'
+      gloss: [{ type: 'text', content: data.definition || 'Test event type definition' }],
+      roles: []
     }
 
-    ontology.eventTypes = ontology.eventTypes || []
-    ontology.eventTypes.push(newEventType)
+    ontology.events = ontology.events || []
+    ontology.events.push(newEventType)
 
     // Update the ontology
-    const updateResponse = await fetch(`${this.baseURL}/api/personas/${personaId}/ontology`, {
+    const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ontology)
@@ -229,7 +261,204 @@ export class DatabaseHelper {
       throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
     }
 
-    return newEventType
+    return {
+      id: newEventType.id,
+      name: newEventType.name,
+      definition: data.definition || 'Test event type definition'
+    }
+  }
+
+  /**
+   * Create a test role type.
+   * @param personaId - ID of persona to add type to
+   * @param data - Partial role type data
+   */
+  async createRoleType(personaId: string, data: Partial<RoleType>): Promise<RoleType> {
+    // Get the current ontology
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    // Add the new role type
+    const newRoleType = {
+      id: data.id || `role-type-${Date.now()}`,
+      name: data.name || 'Test Role Type',
+      gloss: [{ type: 'text', content: data.definition || 'Test role type definition' }],
+      allowedFillerTypes: data.allowedFillerTypes || []
+    }
+
+    ontology.roles = ontology.roles || []
+    ontology.roles.push(newRoleType)
+
+    // Update the ontology
+    const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
+    }
+
+    return {
+      id: newRoleType.id,
+      name: newRoleType.name,
+      definition: data.definition || 'Test role type definition',
+      allowedFillerTypes: newRoleType.allowedFillerTypes
+    }
+  }
+
+  /**
+   * Create a test relation type.
+   * @param personaId - ID of persona to add type to
+   * @param data - Partial relation type data
+   */
+  async createRelationType(personaId: string, data: Partial<RelationType>): Promise<RelationType> {
+    // Get the current ontology
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    // Add the new relation type
+    const newRelationType = {
+      id: data.id || `relation-type-${Date.now()}`,
+      name: data.name || 'Test Relation Type',
+      gloss: [{ type: 'text', content: data.definition || 'Test relation type definition' }],
+      sourceTypes: data.sourceTypes || [],
+      targetTypes: data.targetTypes || []
+    }
+
+    ontology.relationTypes = ontology.relationTypes || []
+    ontology.relationTypes.push(newRelationType)
+
+    // Update the ontology
+    const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update ontology: ${updateResponse.statusText}`)
+    }
+
+    return {
+      id: newRelationType.id,
+      name: newRelationType.name,
+      definition: data.definition || 'Test relation type definition',
+      sourceTypes: newRelationType.sourceTypes,
+      targetTypes: newRelationType.targetTypes
+    }
+  }
+
+  /**
+   * Get an entity type by ID.
+   * @param personaId - ID of persona
+   * @param entityTypeId - ID of entity type
+   */
+  async getEntityType(personaId: string, entityTypeId: string): Promise<EntityType | null> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      return null
+    }
+    const ontology = await getResponse.json()
+    const entityType = ontology.entities?.find((e: any) => e.id === entityTypeId)
+    return entityType ? {
+      id: entityType.id,
+      name: entityType.name,
+      definition: Array.isArray(entityType.gloss)
+        ? entityType.gloss.find((g: any) => g.type === 'text')?.content || ''
+        : entityType.gloss
+    } : null
+  }
+
+  /**
+   * Delete an entity type.
+   * @param personaId - ID of persona
+   * @param entityTypeId - ID of entity type to delete
+   */
+  async deleteEntityType(personaId: string, entityTypeId: string): Promise<void> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    ontology.entities = ontology.entities?.filter((e: any) => e.id !== entityTypeId) || []
+
+    await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+  }
+
+  /**
+   * Delete an event type.
+   * @param personaId - ID of persona
+   * @param eventTypeId - ID of event type to delete
+   */
+  async deleteEventType(personaId: string, eventTypeId: string): Promise<void> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    ontology.events = ontology.events?.filter((e: any) => e.id !== eventTypeId) || []
+
+    await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+  }
+
+  /**
+   * Delete a role type.
+   * @param personaId - ID of persona
+   * @param roleTypeId - ID of role type to delete
+   */
+  async deleteRoleType(personaId: string, roleTypeId: string): Promise<void> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    ontology.roles = ontology.roles?.filter((r: any) => r.id !== roleTypeId) || []
+
+    await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
+  }
+
+  /**
+   * Delete a relation type.
+   * @param personaId - ID of persona
+   * @param relationTypeId - ID of relation type to delete
+   */
+  async deleteRelationType(personaId: string, relationTypeId: string): Promise<void> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
+    }
+    const ontology = await getResponse.json()
+
+    ontology.relationTypes = ontology.relationTypes?.filter((r: any) => r.id !== relationTypeId) || []
+
+    await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ontology)
+    })
   }
 
   /**

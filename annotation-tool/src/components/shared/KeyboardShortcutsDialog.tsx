@@ -124,7 +124,7 @@ export default function KeyboardShortcutsDialog({
   }
 
   const commandsByCategory = useMemo(() => {
-    const allCommands = commandRegistry.getCommands()
+    const allCommands = commandRegistry.getCommands() || []
 
     return {
       global: allCommands.filter(cmd => cmd.category === 'global' || cmd.category === 'navigation' || cmd.category === 'file'),

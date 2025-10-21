@@ -7,7 +7,7 @@ import type { User } from '@prisma/client'
  *
  * The default user:
  * - Has ID: "default-user"
- * - Username: "user"
+ * - Username: from DEFAULT_USER_USERNAME env var (defaults to "default-user")
  * - No password (passwordHash: null)
  * - Admin privileges
  *
@@ -34,8 +34,8 @@ export async function ensureDefaultUser(): Promise<User> {
   const defaultUser = await prisma.user.create({
     data: {
       id: 'default-user',
-      username: 'user',
-      displayName: 'Default User',
+      username: process.env.DEFAULT_USER_USERNAME || 'default-user',
+      displayName: process.env.DEFAULT_USER_DISPLAY_NAME || 'Default User',
       email: null,
       passwordHash: null, // No password in single-user mode
       isAdmin: true

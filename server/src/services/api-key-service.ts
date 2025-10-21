@@ -23,6 +23,7 @@ export async function getApiKeys(
     orderBy: { createdAt: 'desc' }
   })
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return keys.map(({ encryptedKey, ...rest }) => rest)
 }
 
@@ -50,6 +51,7 @@ export async function getApiKey(
     return null
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { encryptedKey, ...rest } = key
   return rest
 }
@@ -88,6 +90,7 @@ export async function createApiKey(
     }
   })
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { encryptedKey, ...rest } = key
   return rest
 }
@@ -143,6 +146,7 @@ export async function updateApiKey(
       data: updateData
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { encryptedKey, ...rest } = key
     return rest
   } catch (error: unknown) {

@@ -3,7 +3,7 @@ import { AnnotationWorkspacePage } from '../page-objects/AnnotationWorkspacePage
 import { VideoBrowserPage } from '../page-objects/VideoBrowserPage.js'
 import { OntologyWorkspacePage } from '../page-objects/OntologyWorkspacePage.js'
 import { ObjectWorkspacePage } from '../page-objects/ObjectWorkspacePage.js'
-import { DatabaseHelper, User, Persona, Video, EntityType, EventType } from '../utils/database-helpers.js'
+import { DatabaseHelper, User, Persona, Video, EntityType, EventType, RoleType, RelationType } from '../utils/database-helpers.js'
 
 /**
  * Extended test fixtures for E2E tests.
@@ -20,6 +20,8 @@ type Fixtures = {
   testVideo: Video
   testEntityType: EntityType
   testEventType: EventType
+  testRoleType: RoleType
+  testRelationType: RelationType
 }
 
 /**
@@ -141,6 +143,37 @@ export const test = base.extend<Fixtures>({
       definition: 'A test event type for E2E testing'
     })
     await use(eventType)
+    // Cleanup is handled by persona deletion
+  },
+
+  /**
+   * Test role type fixture.
+   * Creates a test role type before the test and cleans up after.
+   * Depends on testPersona fixture.
+   */
+  testRoleType: async ({ db, testPersona }, use) => {
+    const roleType = await db.createRoleType(testPersona.id, {
+      name: 'Test Role Type',
+      definition: 'A test role type for E2E testing',
+      allowedFillerTypes: ['Person', 'Organization']
+    })
+    await use(roleType)
+    // Cleanup is handled by persona deletion
+  },
+
+  /**
+   * Test relation type fixture.
+   * Creates a test relation type before the test and cleans up after.
+   * Depends on testPersona fixture.
+   */
+  testRelationType: async ({ db, testPersona }, use) => {
+    const relationType = await db.createRelationType(testPersona.id, {
+      name: 'Test Relation Type',
+      definition: 'A test relation type for E2E testing',
+      sourceTypes: ['Person'],
+      targetTypes: ['Organization']
+    })
+    await use(relationType)
     // Cleanup is handled by persona deletion
   }
 })

@@ -12,31 +12,41 @@ export default function KeyboardShortcutHint() {
   // Get the most relevant shortcuts for the current context
   const getRelevantShortcuts = () => {
     const shortcuts = []
-    
+
     // Always show help shortcut
-    shortcuts.push(globalShortcuts.find(s => s.action === 'help.show'))
-    
+    if (globalShortcuts) {
+      shortcuts.push(globalShortcuts.find(s => s.action === 'help.show'))
+    }
+
     // Add context-specific shortcuts
     if (location.pathname === '/') {
-      shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'search.focus'))
-      shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'video.open'))
+      if (videoBrowserShortcuts) {
+        shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'search.focus'))
+        shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'video.open'))
+      }
     } else if (location.pathname === '/ontology') {
-      shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'type.new'))
-      shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'search.focus'))
-      shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'navigate.personaBrowser'))
+      if (ontologyWorkspaceShortcuts) {
+        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'type.new'))
+        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'search.focus'))
+        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'navigate.personaBrowser'))
+      }
     } else if (location.pathname === '/objects') {
-      shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'object.new'))
-      shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'search.focus'))
-      shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'tab.next'))
+      if (objectWorkspaceShortcuts) {
+        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'object.new'))
+        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'search.focus'))
+        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'tab.next'))
+      }
     }
-    
+
     // Add navigation shortcuts
-    shortcuts.push(globalShortcuts.find(s => s.action === 'navigate.toggle'))
-    
+    if (globalShortcuts) {
+      shortcuts.push(globalShortcuts.find(s => s.action === 'navigate.toggle'))
+    }
+
     return shortcuts.filter(Boolean).slice(0, 4) // Show max 4 shortcuts
   }
-  
-  const shortcuts = getRelevantShortcuts()
+
+  const shortcuts = getRelevantShortcuts() || []
   
   // Auto-collapse after 10 seconds
   useEffect(() => {
