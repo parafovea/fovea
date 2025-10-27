@@ -681,9 +681,9 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                 <MenuItem value="">None</MenuItem>
                 {times.map(time => (
                   <MenuItem key={time.id} value={time.id}>
-                    {time.type === 'instant' 
+                    {time.label || (time.type === 'instant'
                       ? `Instant: ${(time as any).timestamp}`
-                      : `Interval: ${(time as any).startTime || '?'} - ${(time as any).endTime || '?'}`}
+                      : `Interval: ${(time as any).startTime || '?'} - ${(time as any).endTime || '?'}`)}
                   </MenuItem>
                 ))}
               </Select>

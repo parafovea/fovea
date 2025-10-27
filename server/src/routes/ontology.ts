@@ -274,6 +274,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         } else {
           savedWorldState = await tx.worldState.create({
             data: {
+              userId: defaultUser.id,
               entities: world.entities || [],
               events: world.events || [],
               times: world.times || [],

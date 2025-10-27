@@ -49,27 +49,28 @@ export const test = base.extend<Fixtures>({
 
   /**
    * Database helper for creating and cleaning up test data.
+   * Cleans up before and after each test to ensure isolation.
    */
   db: async ({ baseURL }, use) => {
     const db = new DatabaseHelper(baseURL)
     await db.connect()
+    await db.cleanup() // Clean up before test (clear residual data)
     await use(db)
-    await db.cleanup()
+    await db.cleanup() // Clean up after test
     await db.disconnect()
   },
 
   /**
    * Test user fixture.
-   * Creates a test user before the test and cleans up after.
+   * Returns the default single-user mode user that all E2E tests share.
+   * Tests rely on cleanup() to ensure isolation between runs.
    */
   testUser: async ({ db }, use) => {
-    const user = await db.createUser({
-      username: 'test-user',
-      email: 'test@example.com',
-      displayName: 'Test User'
-    })
+    // In single-user mode, all tests share the default user
+    // The user should already exist from backend initialization
+    const user = await db.getDefaultUser()
     await use(user)
-    await db.deleteUser(user.id)
+    // Don't delete - this is the shared default user
   },
 
   /**

@@ -1,0 +1,206 @@
+import { Type } from '@sinclair/typebox'
+import { FastifyPluginAsync } from 'fastify'
+import { optionalAuth } from '../middleware/auth.js'
+
+/**
+ * Fastify plugin for world state routes.
+ * Provides GET and PUT operations for user's world state (entities, events, times, collections, relations).
+ * World state is user-scoped and shared across all personas.
+ * In single-user mode, uses the default user automatically.
+ *
+ * Routes:
+ * - GET /api/world - Get current user's world state
+ * - PUT /api/world - Update current user's world state
+ */
+const worldRoute: FastifyPluginAsync = async (fastify) => {
+  /**
+   * Get world state for the current authenticated user.
+   * Creates an empty world state if one doesn't exist.
+   * In single-user mode, uses default user if not authenticated.
+   *
+   * @route GET /api/world
+   * @returns WorldState object with all entity, event, time, collection, and relation data
+   */
+  fastify.get('/api/world', {
+    onRequest: [optionalAuth],
+    schema: {
+      description: 'Get world state for current user',
+      tags: ['world'],
+      response: {
+        200: Type.Object({
+          id: Type.String({ format: 'uuid' }),
+          userId: Type.String({ format: 'uuid' }),
+          entities: Type.Array(Type.Any()),
+          events: Type.Array(Type.Any()),
+          times: Type.Array(Type.Any()),
+          entityCollections: Type.Array(Type.Any()),
+          eventCollections: Type.Array(Type.Any()),
+          timeCollections: Type.Array(Type.Any()),
+          relations: Type.Array(Type.Any()),
+          createdAt: Type.String({ format: 'date-time' }),
+          updatedAt: Type.String({ format: 'date-time' })
+        }),
+        401: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
+      }
+    }
+  }, async (request, reply) => {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    // Get user ID: use authenticated user or find default user in single-user mode
+    let userId: string
+    if (request.user) {
+      userId = request.user.id
+    } else if (mode === 'single-user') {
+      // Find default user
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+      })
+      if (!defaultUser) {
+        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+      }
+      userId = defaultUser.id
+    } else {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
+
+    // Find or create world state for this user
+    let worldState = await fastify.prisma.worldState.findUnique({
+      where: { userId }
+    })
+
+    if (!worldState) {
+      // Create empty world state for new user
+      worldState = await fastify.prisma.worldState.create({
+        data: {
+          userId,
+          entities: [],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        }
+      })
+    }
+
+    return reply.send({
+      id: worldState.id,
+      userId: worldState.userId,
+      entities: worldState.entities || [],
+      events: worldState.events || [],
+      times: worldState.times || [],
+      entityCollections: worldState.entityCollections || [],
+      eventCollections: worldState.eventCollections || [],
+      timeCollections: worldState.timeCollections || [],
+      relations: worldState.relations || [],
+      createdAt: worldState.createdAt.toISOString(),
+      updatedAt: worldState.updatedAt.toISOString()
+    })
+  })
+
+  /**
+   * Update world state for the current authenticated user.
+   * All fields are optional. Only provided fields will be updated.
+   * In single-user mode, uses default user if not authenticated.
+   *
+   * @route PUT /api/world
+   * @body Partial world state with any combination of entities, events, times, collections, relations
+   * @returns Updated WorldState object
+   */
+  fastify.put('/api/world', {
+    onRequest: [optionalAuth],
+    schema: {
+      description: 'Update world state for current user',
+      tags: ['world'],
+      body: Type.Object({
+        entities: Type.Optional(Type.Array(Type.Any())),
+        events: Type.Optional(Type.Array(Type.Any())),
+        times: Type.Optional(Type.Array(Type.Any())),
+        entityCollections: Type.Optional(Type.Array(Type.Any())),
+        eventCollections: Type.Optional(Type.Array(Type.Any())),
+        timeCollections: Type.Optional(Type.Array(Type.Any())),
+        relations: Type.Optional(Type.Array(Type.Any()))
+      }),
+      response: {
+        200: Type.Object({
+          id: Type.String({ format: 'uuid' }),
+          userId: Type.String({ format: 'uuid' }),
+          entities: Type.Array(Type.Any()),
+          events: Type.Array(Type.Any()),
+          times: Type.Array(Type.Any()),
+          entityCollections: Type.Array(Type.Any()),
+          eventCollections: Type.Array(Type.Any()),
+          timeCollections: Type.Array(Type.Any()),
+          relations: Type.Array(Type.Any()),
+          createdAt: Type.String({ format: 'date-time' }),
+          updatedAt: Type.String({ format: 'date-time' })
+        }),
+        401: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
+      }
+    }
+  }, async (request, reply) => {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    // Get user ID: use authenticated user or find default user in single-user mode
+    let userId: string
+    if (request.user) {
+      userId = request.user.id
+    } else if (mode === 'single-user') {
+      // Find default user
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+      })
+      if (!defaultUser) {
+        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+      }
+      userId = defaultUser.id
+    } else {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
+
+    const updateData = request.body as any
+
+    // Upsert world state (create if doesn't exist, update if it does)
+    const worldState = await fastify.prisma.worldState.upsert({
+      where: { userId },
+      create: {
+        userId,
+        entities: updateData.entities || [],
+        events: updateData.events || [],
+        times: updateData.times || [],
+        entityCollections: updateData.entityCollections || [],
+        eventCollections: updateData.eventCollections || [],
+        timeCollections: updateData.timeCollections || [],
+        relations: updateData.relations || []
+      },
+      update: {
+        entities: updateData.entities !== undefined ? updateData.entities : undefined,
+        events: updateData.events !== undefined ? updateData.events : undefined,
+        times: updateData.times !== undefined ? updateData.times : undefined,
+        entityCollections: updateData.entityCollections !== undefined ? updateData.entityCollections : undefined,
+        eventCollections: updateData.eventCollections !== undefined ? updateData.eventCollections : undefined,
+        timeCollections: updateData.timeCollections !== undefined ? updateData.timeCollections : undefined,
+        relations: updateData.relations !== undefined ? updateData.relations : undefined
+      }
+    })
+
+    return reply.send({
+      id: worldState.id,
+      userId: worldState.userId,
+      entities: worldState.entities || [],
+      events: worldState.events || [],
+      times: worldState.times || [],
+      entityCollections: worldState.entityCollections || [],
+      eventCollections: worldState.eventCollections || [],
+      timeCollections: worldState.timeCollections || [],
+      relations: worldState.relations || [],
+      createdAt: worldState.createdAt.toISOString(),
+      updatedAt: worldState.updatedAt.toISOString()
+    })
+  })
+}
+
+export default worldRoute

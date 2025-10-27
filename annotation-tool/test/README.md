@@ -41,14 +41,17 @@ npm run test test/integration/
 E2E tests are in `test/e2e/` and use Playwright to test complete user workflows.
 
 **Current E2E Coverage:**
-- `auth-single-user.spec.ts`: Tests single-user mode authentication (auto-login, no auth UI, feature access)
+- **Authentication:** Single-user mode authentication (auto-login, no auth UI)
+- **Object Management:** 60 tests covering entities, events, locations, times, collections
+- **Annotation Workflow:** Timeline-based video annotation with keyframes
+- **Persistence:** Cross-reload data persistence tests
 
 **Running E2E tests:**
 ```bash
 # Start E2E infrastructure (Docker Compose)
 docker compose -f docker-compose.e2e.yml up -d
 
-# Run E2E tests
+# Run E2E tests (uses workers: 1 for test isolation)
 npm run test:e2e
 
 # Run with Playwright UI
@@ -66,6 +69,8 @@ E2E tests run against a Docker Compose stack (`docker-compose.e2e.yml`) that inc
 - Redis (with tmpfs for speed)
 
 Database migrations run automatically via `npx prisma migrate deploy` before tests.
+
+**Important:** E2E tests currently run with `workers: 1` (serial execution) to avoid race conditions in single-user mode. This is a temporary workaround. See `test/e2e/README.md` for details on test isolation and the planned migration to worker-specific test users for parallel execution.
 
 ## Shared Resources
 

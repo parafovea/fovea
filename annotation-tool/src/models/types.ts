@@ -267,12 +267,13 @@ export const INTERPOLATION_PRESETS = {
 // Temporal Model
 export interface Time {
   id: string
+  label?: string  // Human-readable label for display
   type: 'instant' | 'interval'
   wikidataId?: string  // Q-identifier from Wikidata
   wikidataUrl?: string // Full URL to Wikidata entry
   importedFrom?: 'wikidata' | 'persona' // Track import source
   importedAt?: string  // ISO timestamp of import
-  
+
   // Multiple videos can represent the same time
   videoReferences?: Array<{
     videoId: string
@@ -281,7 +282,7 @@ export interface Time {
     milliseconds?: number
     millisecondRange?: [number, number]
   }>
-  
+
   // Vagueness handling
   vagueness?: {
     type: 'approximate' | 'bounded' | 'fuzzy'
@@ -293,14 +294,14 @@ export interface Time {
     }
     granularity?: 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
   }
-  
+
   // Deictic reference
   deictic?: {
     anchorType: 'annotation_time' | 'video_time' | 'reference_time'
     anchorTime?: string
     expression?: string
   }
-  
+
   certainty?: number
   metadata?: Record<string, any>
 }

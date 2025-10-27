@@ -239,14 +239,41 @@ docker compose -f docker-compose.e2e.yml logs -f
 
 ## Known Issues and Limitations
 
+### Test Isolation and Parallel Execution
+
+**Current Status:** Object regression tests require `workers: 1` (serial execution) due to shared database state in single-user mode.
+
+**Root Cause:**
+- All tests use the same default user in single-user mode
+- All tests write to the same WorldState database record
+- Parallel workers overwrite each other's data, causing persistence test failures
+
+**Current Configuration (playwright.config.ts:46):**
+```typescript
+workers: 1  // Temporary workaround for test isolation
+```
+
+**Performance Impact:**
+- 60 tests with 1 worker: ~12 minutes
+- Parallel execution would reduce this to ~3-4 minutes
+
+**Permanent Solution (Planned):**
+Implement worker-specific test users to enable parallel execution:
+- Each Playwright worker gets a separate test user
+- Each user has their own WorldState database record
+- No shared state between workers
+- Restores `workers: 5` for 4x faster execution
+
+See `E2E_TEST_ISOLATION_ANALYSIS.md` in project root for detailed analysis and implementation plan.
+
 ### Browser Support
 - Currently configured for Chromium only (CI performance)
 - Firefox and WebKit can be enabled in `playwright.config.ts`
 
 ### Timing Sensitivity
-- Some tests use `waitForTimeout()` for animation/render completion
-- May need adjustment on slower machines
-- Video loading times vary by file size
+- Persistence tests use 1500ms wait after save operations
+- Accounts for 1-second debounce + network/database write time
+- May need adjustment on slower machines or CI environments
 
 ### Docker Startup Time
 - First run may be slow (building images)
@@ -293,30 +320,63 @@ Use provided helpers for common tasks:
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+### GitHub Actions Configuration
+
+E2E tests in CI use `workers: 1` (configured in playwright.config.ts via `workers: process.env.CI ? 1 : undefined`).
+
+**Current CI Configuration (.github/workflows/ci.yml):**
 ```yaml
-- name: Start E2E services
-  run: docker compose -f docker-compose.e2e.yml up -d
+test-e2e:
+  name: E2E Tests
+  runs-on: ubuntu-latest
+  needs: [test-frontend, test-backend]
+  steps:
+    - uses: actions/checkout@v4
 
-- name: Wait for services
-  run: docker compose -f docker-compose.e2e.yml logs --follow --until=5m
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: annotation-tool/package-lock.json
 
-- name: Run E2E tests
-  run: |
-    cd annotation-tool
-    npm run test:e2e
+    - name: Install frontend dependencies
+      working-directory: annotation-tool
+      run: npm ci
 
-- name: Upload test results
-  if: always()
-  uses: actions/upload-artifact@v3
-  with:
-    name: playwright-report
-    path: annotation-tool/playwright-report/
+    - name: Install Playwright browsers
+      working-directory: annotation-tool
+      run: npx playwright install --with-deps chromium
 
-- name: Cleanup
-  if: always()
-  run: docker compose -f docker-compose.e2e.yml down -v
+    - name: Start Docker Compose services
+      run: |
+        docker compose -f docker-compose.e2e.yml up -d
+        echo "Waiting for services to be healthy..."
+        timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
+
+    - name: Run E2E tests (serial execution)
+      working-directory: annotation-tool
+      env:
+        BASE_URL: http://localhost:3000
+        CI: true  # Enables workers: 1 in playwright.config.ts
+      run: npm run test:e2e
+
+    - name: Stop Docker Compose services
+      if: always()
+      run: docker compose -f docker-compose.e2e.yml down -v
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: annotation-tool/playwright-report/
+        retention-days: 30
 ```
+
+**Expected Duration:**
+- Serial execution (workers: 1): ~12-15 minutes
+- With worker-specific users (workers: 5): ~3-4 minutes (future optimization)
 
 ## Performance Benchmarks
 

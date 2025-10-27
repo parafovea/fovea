@@ -95,11 +95,24 @@ export class DatabaseHelper {
   }
 
   /**
+   * Get the default single-user mode user.
+   * Returns the default user that all E2E tests share.
+   */
+  async getDefaultUser(): Promise<User> {
+    return {
+      id: 'default-user-id',
+      username: 'default-user',
+      email: undefined,
+      displayName: 'Default User'
+    }
+  }
+
+  /**
    * Create a test persona.
    * Always creates a fresh persona with an empty ontology for test isolation.
    * @param data - Partial persona data
    */
-  async createPersona(data: Partial<Persona>): Promise<Persona> {
+  async createPersona(data: Partial<Persona> = {}): Promise<Persona> {
     // Always create a new persona for test isolation
     const response = await fetch(`${this.apiURL}/api/personas`, {
       method: 'POST',
@@ -107,7 +120,7 @@ export class DatabaseHelper {
       body: JSON.stringify({
         name: data.name || 'Test Analyst',
         role: data.role || 'Intelligence Analyst',
-        informationNeed: data.informationNeed || 'Test information need'
+        informationNeed: (data as any).informationNeed || 'Test information need'
       })
     })
 
@@ -463,10 +476,23 @@ export class DatabaseHelper {
 
   /**
    * Clean up all test data created during a test.
+   * Clears world state (entities, events, times, collections, relations).
    */
   async cleanup(): Promise<void> {
-    // Cleanup implementation
-    // This would delete all test data created during the test run
+    // Clear world state by sending empty arrays
+    await fetch(`${this.apiURL}/api/world`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entities: [],
+        events: [],
+        times: [],
+        entityCollections: [],
+        eventCollections: [],
+        timeCollections: [],
+        relations: []
+      })
+    })
   }
 
   /**

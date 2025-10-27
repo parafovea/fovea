@@ -25,6 +25,7 @@ model User {
   personas     Persona[]
   apiKeys      ApiKey[]
   sessions     Session[]
+  worldState   WorldState?
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -124,8 +125,11 @@ model Ontology {
 
 /// WorldState stores the actual instances of entities, events, locations, times, and collections
 /// This is shared across all personas (personas assign types to these instances)
+/// Each user has their own world state
 model WorldState {
   id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// JSON structure: Entity[]
   entities          Json     @default("[]")

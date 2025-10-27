@@ -38,11 +38,16 @@ export default defineConfig({
     },
 
     // Regression tests - full coverage
+    // Note: Uses workers: 1 to avoid race conditions in single-user mode
+    // All tests share the same default user and WorldState database record
+    // Parallel execution causes tests to overwrite each other's data
+    // See E2E_TEST_ISOLATION_ANALYSIS.md for permanent solution (worker-specific users)
     {
       name: 'regression',
       testDir: './test/e2e/regression',
       timeout: 60000,
       retries: 1,
+      workers: 1,  // Serial execution required for test isolation
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }

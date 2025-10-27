@@ -62,10 +62,13 @@ export async function buildApp() {
     }
   })
 
-  await app.register(fastifyRateLimit, {
-    max: 1000,
-    timeWindow: '1 minute'
-  })
+  // Disable rate limiting in test environment to prevent E2E test failures
+  if (process.env.NODE_ENV !== 'test') {
+    await app.register(fastifyRateLimit, {
+      max: 1000,
+      timeWindow: '1 minute'
+    })
+  }
 
   await app.register(fastifyCors, {
     origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
@@ -198,6 +201,9 @@ export async function buildApp() {
 
   const personasRoute = await import('./routes/personas.js')
   await app.register(personasRoute.default)
+
+  const worldRoute = await import('./routes/world.js')
+  await app.register(worldRoute.default)
 
   const summariesRoute = await import('./routes/summaries.js')
   await app.register(summariesRoute.default)
