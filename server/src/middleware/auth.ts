@@ -57,6 +57,11 @@ export async function requireAuth(
  * Admin authorization middleware.
  * Requires authentication and admin role.
  *
+ * Test Mode Bypass:
+ * When NODE_ENV=test and ALLOW_TEST_ADMIN_BYPASS=true,
+ * automatically grants admin access without authentication.
+ * This enables E2E tests to create worker-specific users via admin API.
+ *
  * @param request - Fastify request object
  * @param reply - Fastify reply object
  * @throws 401 if not authenticated, 403 if not admin
@@ -65,6 +70,20 @@ export async function requireAdmin(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  // Test mode bypass for E2E tests
+  // Allows admin API access without authentication in isolated test environment
+  if (process.env.NODE_ENV === 'test' && process.env.ALLOW_TEST_ADMIN_BYPASS === 'true') {
+    // Auto-authenticate as test admin user
+    request.user = {
+      id: 'test-admin',
+      username: 'test-admin',
+      email: null,
+      displayName: 'Test Admin',
+      isAdmin: true
+    }
+    return
+  }
+
   // First check authentication
   await requireAuth(request, reply)
 

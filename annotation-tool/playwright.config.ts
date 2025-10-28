@@ -10,7 +10,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Workers configured per-project to allow different parallelization strategies
   reporter: [
     ['html'],
     ['json', { outputFile: 'test-results/results.json' }],
@@ -31,6 +31,7 @@ export default defineConfig({
       testDir: './test/e2e/smoke',
       timeout: 30000,
       retries: 2,
+      workers: undefined,  // Use all available cores
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }
@@ -38,16 +39,16 @@ export default defineConfig({
     },
 
     // Regression tests - full coverage
-    // Note: Uses workers: 1 to avoid race conditions in single-user mode
-    // All tests share the same default user and WorldState database record
-    // Parallel execution causes tests to overwrite each other's data
-    // See E2E_TEST_ISOLATION_ANALYSIS.md for permanent solution (worker-specific users)
+    // Uses parallel execution with worker-scoped users for optimal performance
+    // Each worker creates isolated test user with separate WorldState
+    // Admin endpoint used for cleanup between tests (ALLOW_TEST_ADMIN_BYPASS=true)
+    // See test/e2e/fixtures/test-context.ts for worker-scoped user implementation
     {
       name: 'regression',
       testDir: './test/e2e/regression',
       timeout: 60000,
       retries: 1,
-      workers: 1,  // Serial execution required for test isolation
+      workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }

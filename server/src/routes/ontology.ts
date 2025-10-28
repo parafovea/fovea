@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
+import { optionalAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -49,11 +50,14 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Get all personas, their ontologies, and world state.
    * Returns data in the multi-persona format expected by the frontend.
+   * In multi-user mode, filters personas and world state by authenticated user.
+   * In single-user mode, uses default user.
    *
    * @route GET /api/ontology
    * @returns Object with personas, personaOntologies, and world state
    */
   fastify.get('/api/ontology', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Retrieve all personas, their ontologies, and world state',
       tags: ['ontology'],
@@ -62,20 +66,44 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
           personas: Type.Array(PersonaSchema),
           personaOntologies: Type.Array(PersonaOntologySchema),
           world: Type.Optional(WorldSchema)
-        })
+        }),
+        401: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
       }
     }
-  }, async (_request, reply) => {
-    // Fetch all personas with their ontologies
+  }, async (request, reply) => {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    // Get user ID: use authenticated user or find default user in single-user mode
+    let userId: string
+    if (request.user) {
+      userId = request.user.id
+    } else if (mode === 'single-user') {
+      // Find default user
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+      })
+      if (!defaultUser) {
+        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+      }
+      userId = defaultUser.id
+    } else {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
+
+    // Fetch personas for this user with their ontologies
     const personas = await fastify.prisma.persona.findMany({
+      where: { userId },
       include: {
         ontology: true
       },
       orderBy: { createdAt: 'desc' }
     })
 
-    // Fetch world state (there should only be one record)
-    const worldState = await fastify.prisma.worldState.findFirst()
+    // Fetch world state for this user
+    const worldState = await fastify.prisma.worldState.findUnique({
+      where: { userId }
+    })
 
     // Transform to frontend format
     const personasData = personas.map(p => ({
@@ -130,12 +158,15 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Save ontology data (personas, ontologies, and world state).
    * Creates or updates personas, their associated ontologies, and world state.
+   * In multi-user mode, saves to authenticated user's data.
+   * In single-user mode, uses default user.
    *
    * @route PUT /api/ontology
    * @param ontology - Ontology data with personas, personaOntologies, and world state
    * @returns Saved ontology data
    */
   fastify.put('/api/ontology', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Save ontology data including world state',
       tags: ['ontology'],
@@ -149,10 +180,31 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
           personas: Type.Array(PersonaSchema),
           personaOntologies: Type.Array(PersonaOntologySchema),
           world: Type.Optional(WorldSchema)
-        })
+        }),
+        401: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
       }
     }
   }, async (request, reply) => {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    // Get user ID: use authenticated user or find default user in single-user mode
+    let userId: string
+    if (request.user) {
+      userId = request.user.id
+    } else if (mode === 'single-user') {
+      // Find default user
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+      })
+      if (!defaultUser) {
+        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+      }
+      userId = defaultUser.id
+    } else {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
+
     interface PersonaInput {
       id: string
       name: string
@@ -190,16 +242,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       const savedPersonas = []
       const savedOntologies = []
 
-      // Get default user for persona creation
-      const defaultUser = await tx.user.findUnique({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
-      })
-
-      if (!defaultUser) {
-        throw new Error('Default user not found')
-      }
-
-      // Save all personas
+      // Save all personas for this user
       for (const persona of personas) {
         const savedPersona = await tx.persona.upsert({
           where: { id: persona.id },
@@ -215,7 +258,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
             role: persona.role,
             informationNeed: persona.informationNeed,
             details: persona.details,
-            userId: defaultUser.id
+            userId: userId
           }
         })
         savedPersonas.push(savedPersona)
@@ -252,39 +295,31 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      // Save world state if provided
+      // Save world state if provided (for this user)
       let savedWorldState = null
       if (world) {
-        // There should only be one WorldState record
-        const existingWorldState = await tx.worldState.findFirst()
-
-        if (existingWorldState) {
-          savedWorldState = await tx.worldState.update({
-            where: { id: existingWorldState.id },
-            data: {
-              entities: world.entities || [],
-              events: world.events || [],
-              times: world.times || [],
-              entityCollections: world.entityCollections || [],
-              eventCollections: world.eventCollections || [],
-              timeCollections: world.timeCollections || [],
-              relations: world.relations || []
-            }
-          })
-        } else {
-          savedWorldState = await tx.worldState.create({
-            data: {
-              userId: defaultUser.id,
-              entities: world.entities || [],
-              events: world.events || [],
-              times: world.times || [],
-              entityCollections: world.entityCollections || [],
-              eventCollections: world.eventCollections || [],
-              timeCollections: world.timeCollections || [],
-              relations: world.relations || []
-            }
-          })
-        }
+        savedWorldState = await tx.worldState.upsert({
+          where: { userId },
+          create: {
+            userId,
+            entities: world.entities || [],
+            events: world.events || [],
+            times: world.times || [],
+            entityCollections: world.entityCollections || [],
+            eventCollections: world.eventCollections || [],
+            timeCollections: world.timeCollections || [],
+            relations: world.relations || []
+          },
+          update: {
+            entities: world.entities || [],
+            events: world.events || [],
+            times: world.times || [],
+            entityCollections: world.entityCollections || [],
+            eventCollections: world.eventCollections || [],
+            timeCollections: world.timeCollections || [],
+            relations: world.relations || []
+          }
+        })
       }
 
       return { savedPersonas, savedOntologies, savedWorldState }

@@ -41,17 +41,18 @@ npm run test test/integration/
 E2E tests are in `test/e2e/` and use Playwright to test complete user workflows.
 
 **Current E2E Coverage:**
-- **Authentication:** Single-user mode authentication (auto-login, no auth UI)
+- **Authentication:** Multi-user mode with worker-specific test users
 - **Object Management:** 60 tests covering entities, events, locations, times, collections
 - **Annotation Workflow:** Timeline-based video annotation with keyframes
 - **Persistence:** Cross-reload data persistence tests
+- **Worker Isolation:** Parallel execution with isolated test users
 
 **Running E2E tests:**
 ```bash
 # Start E2E infrastructure (Docker Compose)
 docker compose -f docker-compose.e2e.yml up -d
 
-# Run E2E tests (uses workers: 1 for test isolation)
+# Run E2E tests (parallel execution with 5 workers)
 npm run test:e2e
 
 # Run with Playwright UI
@@ -64,13 +65,13 @@ docker compose -f docker-compose.e2e.yml down -v
 **E2E Infrastructure:**
 E2E tests run against a Docker Compose stack (`docker-compose.e2e.yml`) that includes:
 - Frontend (production build)
-- Backend (with FOVEA_MODE=single-user)
+- Backend (with FOVEA_MODE=multi-user)
 - PostgreSQL (with tmpfs for speed)
 - Redis (with tmpfs for speed)
 
 Database migrations run automatically via `npx prisma migrate deploy` before tests.
 
-**Important:** E2E tests currently run with `workers: 1` (serial execution) to avoid race conditions in single-user mode. This is a temporary workaround. See `test/e2e/README.md` for details on test isolation and the planned migration to worker-specific test users for parallel execution.
+**Worker Isolation:** E2E tests use parallel execution with 5 workers. Each worker creates its own isolated test user with a separate WorldState database record. This enables 4x faster test execution compared to serial execution. See `test/e2e/README.md` for implementation details.
 
 ## Shared Resources
 

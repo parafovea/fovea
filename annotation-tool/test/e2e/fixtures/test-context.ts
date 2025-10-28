@@ -6,10 +6,18 @@ import { ObjectWorkspacePage } from '../page-objects/ObjectWorkspacePage.js'
 import { DatabaseHelper, User, Persona, Video, EntityType, EventType, RoleType, RelationType } from '../utils/database-helpers.js'
 
 /**
- * Extended test fixtures for E2E tests.
- * Provides dependency injection of page objects and test data.
+ * Worker-scoped fixtures (shared across all tests in a worker).
  */
-type Fixtures = {
+type WorkerFixtures = {
+  workerDb: DatabaseHelper
+  workerUser: User
+  workerSessionToken: string
+}
+
+/**
+ * Test-scoped fixtures (created fresh for each test).
+ */
+type TestFixtures = {
   annotationWorkspace: AnnotationWorkspacePage
   videoBrowser: VideoBrowserPage
   ontologyWorkspace: OntologyWorkspacePage
@@ -28,7 +36,7 @@ type Fixtures = {
  * Extended test with custom fixtures.
  * Use this instead of @playwright/test's test export to get access to fixtures.
  */
-export const test = base.extend<Fixtures>({
+export const test = base.extend<TestFixtures, WorkerFixtures>({
   /**
    * Annotation workspace page object.
    * Automatically created for each test.
@@ -47,30 +55,79 @@ export const test = base.extend<Fixtures>({
     await use(browser)
   },
 
-  /**
-   * Database helper for creating and cleaning up test data.
-   * Cleans up before and after each test to ensure isolation.
-   */
-  db: async ({ baseURL }, use) => {
-    const db = new DatabaseHelper(baseURL)
+  // Worker-scoped fixtures (shared across all tests in worker)
+  workerDb: [async ({ browser }, use) => {
+    const db = new DatabaseHelper('http://localhost:3000')
     await db.connect()
-    await db.cleanup() // Clean up before test (clear residual data)
     await use(db)
-    await db.cleanup() // Clean up after test
     await db.disconnect()
+  }, { scope: 'worker' }],
+
+  workerUser: [async ({ workerDb }, use, workerInfo) => {
+    const timestamp = Date.now()
+    const username = `test-worker-${workerInfo.workerIndex}-${timestamp}`
+    const displayName = `Test User (Worker ${workerInfo.workerIndex})`
+    const password = 'test-password-123'
+
+    const user = await workerDb.createUser({
+      username,
+      displayName,
+      password,
+      isAdmin: false
+    })
+
+    await use(user)
+
+    // Cleanup: delete user and all associated data
+    await workerDb.deleteUser(user.id)
+  }, { scope: 'worker' }],
+
+  workerSessionToken: [async ({ workerUser }, use) => {
+    const password = 'test-password-123'
+
+    // Authenticate to get session token
+    const loginResponse = await fetch('http://localhost:3001/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: workerUser.username, password })
+    })
+
+    if (!loginResponse.ok) {
+      throw new Error(`Failed to login as ${workerUser.username}: ${loginResponse.status}`)
+    }
+
+    // Extract session token
+    const cookies = loginResponse.headers.get('set-cookie')
+    const cookieMatch = cookies?.match(/session_token=([^;]+)/)
+
+    if (!cookieMatch) {
+      throw new Error('Failed to extract session token from login response')
+    }
+
+    await use(cookieMatch[1])
+  }, { scope: 'worker' }],
+
+  // Test-scoped fixtures (use worker fixtures)
+  db: async ({ workerDb, workerUser }, use) => {
+    // Clean WorldState before each test to ensure isolation
+    // (all tests in a worker share the same user/WorldState)
+    await workerDb.cleanup(workerUser.id)
+    await use(workerDb)
+    // No cleanup after - let the next test's beforeEach cleanup handle it
   },
 
-  /**
-   * Test user fixture.
-   * Returns the default single-user mode user that all E2E tests share.
-   * Tests rely on cleanup() to ensure isolation between runs.
-   */
-  testUser: async ({ db }, use) => {
-    // In single-user mode, all tests share the default user
-    // The user should already exist from backend initialization
-    const user = await db.getDefaultUser()
-    await use(user)
-    // Don't delete - this is the shared default user
+  testUser: async ({ workerUser, workerSessionToken, context }, use) => {
+    // Add authentication cookie to this test's browser context
+    await context.addCookies([{
+      name: 'session_token',
+      value: workerSessionToken,
+      domain: 'localhost',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax'
+    }])
+
+    await use(workerUser)
   },
 
   /**
@@ -78,12 +135,12 @@ export const test = base.extend<Fixtures>({
    * Creates a test persona before the test and cleans up after.
    * Depends on testUser fixture.
    */
-  testPersona: async ({ db, testUser }, use) => {
+  testPersona: async ({ db, testUser, workerSessionToken }, use) => {
     const persona = await db.createPersona({
       userId: testUser.id,
       name: 'Test Analyst',
       role: 'Intelligence Analyst'
-    })
+    }, workerSessionToken)
     await use(persona)
     await db.deletePersona(persona.id)
   },

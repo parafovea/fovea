@@ -241,30 +241,38 @@ docker compose -f docker-compose.e2e.yml logs -f
 
 ### Test Isolation and Parallel Execution
 
-**Current Status:** Object regression tests require `workers: 1` (serial execution) due to shared database state in single-user mode.
+**Current Status:** E2E tests use worker-specific test users for parallel execution.
 
-**Root Cause:**
-- All tests use the same default user in single-user mode
-- All tests write to the same WorldState database record
-- Parallel workers overwrite each other's data, causing persistence test failures
+**Implementation:**
+- Each Playwright worker creates a unique test user (e.g., `test-worker-0-1234567890`)
+- Each user has their own WorldState database record for isolation
+- Tests run in parallel with `workers: 5` in CI (full isolation, no shared state)
+- User cleanup happens automatically after each test via fixture teardown
 
-**Current Configuration (playwright.config.ts:46):**
+**Configuration (playwright.config.ts):**
 ```typescript
-workers: 1  // Temporary workaround for test isolation
+workers: process.env.CI ? 5 : undefined  // Parallel execution with test isolation
 ```
 
-**Performance Impact:**
+**Performance:**
+- 60 tests with 5 workers: ~3-4 minutes
 - 60 tests with 1 worker: ~12 minutes
-- Parallel execution would reduce this to ~3-4 minutes
+- **4x speedup** compared to serial execution
 
-**Permanent Solution (Planned):**
-Implement worker-specific test users to enable parallel execution:
-- Each Playwright worker gets a separate test user
-- Each user has their own WorldState database record
-- No shared state between workers
-- Restores `workers: 5` for 4x faster execution
+**How It Works:**
+1. Playwright starts multiple workers (5 in CI, all cores locally)
+2. Each worker runs the `testUser` fixture before tests
+3. Fixture creates user `test-worker-{workerIndex}-{timestamp}` via admin API
+4. All tests in that worker use the worker-specific user with isolated WorldState
+5. After tests complete, fixture deletes the user (cascades to WorldState, personas, etc.)
 
-See `E2E_TEST_ISOLATION_ANALYSIS.md` in project root for detailed analysis and implementation plan.
+**Implementation Details:**
+- See `test/e2e/fixtures/test-context.ts` for fixture implementation
+- See `test/e2e/utils/database-helpers.ts` for user creation/deletion methods
+- Requires `ALLOW_TEST_ADMIN_BYPASS=true` in E2E environment (docker-compose.e2e.yml)
+- Admin API bypass enabled only in test mode for isolated E2E environment
+
+See `E2E_TEST_ISOLATION_ANALYSIS.md` in project root for the original analysis.
 
 ### Browser Support
 - Currently configured for Chromium only (CI performance)
@@ -322,7 +330,7 @@ Use provided helpers for common tasks:
 
 ### GitHub Actions Configuration
 
-E2E tests in CI use `workers: 1` (configured in playwright.config.ts via `workers: process.env.CI ? 1 : undefined`).
+E2E tests in CI use `workers: 5` (configured in playwright.config.ts via `workers: process.env.CI ? 5 : undefined`).
 
 **Current CI Configuration (.github/workflows/ci.yml):**
 ```yaml
@@ -354,12 +362,13 @@ test-e2e:
         echo "Waiting for services to be healthy..."
         timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
 
-    - name: Run E2E tests (serial execution)
+    - name: Run E2E tests (parallel execution with worker isolation)
       working-directory: annotation-tool
       env:
         BASE_URL: http://localhost:3000
-        CI: true  # Enables workers: 1 in playwright.config.ts
+        CI: true  # Enables workers: 5 in playwright.config.ts
       run: npm run test:e2e
+      timeout-minutes: 8  # Reduced from 20 minutes (parallel is ~3-4 min)
 
     - name: Stop Docker Compose services
       if: always()
@@ -375,8 +384,9 @@ test-e2e:
 ```
 
 **Expected Duration:**
-- Serial execution (workers: 1): ~12-15 minutes
-- With worker-specific users (workers: 5): ~3-4 minutes (future optimization)
+- Parallel execution (workers: 5): ~3-4 minutes
+- Previous serial execution (workers: 1): ~12-15 minutes
+- **4x speedup** with worker-specific test users
 
 ## Performance Benchmarks
 

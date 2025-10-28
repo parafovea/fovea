@@ -36,9 +36,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MODEL_SERVICE_URL=http://mock-model-service:8000
-      - FOVEA_MODE=single-user
+      - FOVEA_MODE=multi-user
       - DEFAULT_USER_USERNAME=default-user
       - DEFAULT_USER_DISPLAY_NAME=Default User
+      - ALLOW_TEST_ADMIN_BYPASS=true
     volumes:
       - ./test-data:/data:ro
     depends_on:

@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { optionalAuth } from '../middleware/auth.js'
+import { optionalAuth, requireAdmin } from '../middleware/auth.js'
 
 /**
  * Fastify plugin for world state routes.
@@ -11,6 +11,7 @@ import { optionalAuth } from '../middleware/auth.js'
  * Routes:
  * - GET /api/world - Get current user's world state
  * - PUT /api/world - Update current user's world state
+ * - DELETE /api/admin/world/:userId - Clear specific user's world state (admin only, test mode)
  */
 const worldRoute: FastifyPluginAsync = async (fastify) => {
   /**
@@ -199,6 +200,79 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       relations: worldState.relations || [],
       createdAt: worldState.createdAt.toISOString(),
       updatedAt: worldState.updatedAt.toISOString()
+    })
+  })
+
+  /**
+   * Clear world state for a specific user (admin only).
+   *
+   * Use cases:
+   * - User support: Reset corrupted or problematic world state
+   * - Account management: User requests fresh start without account deletion
+   * - Demo accounts: Periodic cleanup of training/demo user data
+   * - Privacy compliance: Clear user's annotation data while preserving account
+   * - Troubleshooting: Admin needs to reset state for debugging
+   *
+   * @route DELETE /api/admin/world/:userId
+   * @param userId - ID of user whose WorldState should be cleared
+   * @returns Success message
+   */
+  fastify.delete('/api/admin/world/:userId', {
+    onRequest: [requireAdmin],
+    schema: {
+      description: 'Clear world state for specific user (admin only)',
+      tags: ['admin', 'world'],
+      params: Type.Object({
+        userId: Type.String({ format: 'uuid' })
+      }),
+      response: {
+        200: Type.Object({
+          message: Type.String(),
+          userId: Type.String({ format: 'uuid' })
+        }),
+        404: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
+      }
+    }
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string }
+
+    // Check if user exists
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: userId }
+    })
+
+    if (!user) {
+      return reply.code(404).send({ error: 'User not found' })
+    }
+
+    // Clear the user's world state by updating with empty arrays
+    await fastify.prisma.worldState.upsert({
+      where: { userId },
+      create: {
+        userId,
+        entities: [],
+        events: [],
+        times: [],
+        entityCollections: [],
+        eventCollections: [],
+        timeCollections: [],
+        relations: []
+      },
+      update: {
+        entities: [],
+        events: [],
+        times: [],
+        entityCollections: [],
+        eventCollections: [],
+        timeCollections: [],
+        relations: []
+      }
+    })
+
+    return reply.send({
+      message: 'World state cleared successfully',
+      userId
     })
   })
 }

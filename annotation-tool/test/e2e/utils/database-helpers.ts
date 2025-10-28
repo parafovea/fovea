@@ -71,27 +71,67 @@ export class DatabaseHelper {
   }
 
   /**
-   * Create a test user.
-   * @param data - Partial user data
+   * Create a test user via admin API.
+   * Each user gets their own WorldState database record for test isolation.
+   * Requires ALLOW_TEST_ADMIN_BYPASS=true in E2E environment.
+   *
+   * @param data - User data
+   * @returns Created user object
+   * @throws Error if user creation fails
    */
-  async createUser(data: Partial<User>): Promise<User> {
-    // In single-user mode, return the default user
-    // In multi-user mode, this would make an API call
+  async createUser(data: {
+    username: string
+    displayName: string
+    password?: string
+    email?: string | null
+    isAdmin?: boolean
+  }): Promise<User> {
+    const response = await fetch(`${this.apiURL}/api/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username: data.username,
+        email: data.email ?? `${data.username}@test.local`,
+        password: data.password ?? 'test-password-123',
+        displayName: data.displayName,
+        isAdmin: data.isAdmin ?? false
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Failed to create user: ${response.status} ${error}`)
+    }
+
+    const user = await response.json()
     return {
-      id: 'default-user-id',
-      username: data.username || 'test-user',
-      email: data.email,
-      displayName: data.displayName || 'Test User'
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      displayName: user.displayName
     }
   }
 
   /**
-   * Delete a test user.
-   * @param _userId - ID of user to delete
+   * Delete a test user and all associated data.
+   * Cascade deletion handles cleanup of personas, WorldState, sessions, and API keys.
+   * Requires ALLOW_TEST_ADMIN_BYPASS=true in E2E environment.
+   *
+   * @param userId - ID of user to delete
+   * @throws Error if deletion fails (except 404 which is ignored)
    */
-  async deleteUser(_userId: string): Promise<void> {
-    // Cleanup implementation
-    // In single-user mode, this is a no-op
+  async deleteUser(userId: string): Promise<void> {
+    const response = await fetch(`${this.apiURL}/api/admin/users/${userId}`, {
+      method: 'DELETE'
+    })
+
+    // 404 is OK (user already deleted or never existed)
+    if (!response.ok && response.status !== 404) {
+      const error = await response.text()
+      throw new Error(`Failed to delete user: ${response.status} ${error}`)
+    }
   }
 
   /**
@@ -111,12 +151,18 @@ export class DatabaseHelper {
    * Create a test persona.
    * Always creates a fresh persona with an empty ontology for test isolation.
    * @param data - Partial persona data
+   * @param sessionToken - Optional session token for authentication (required in multi-user mode)
    */
-  async createPersona(data: Partial<Persona> = {}): Promise<Persona> {
+  async createPersona(data: Partial<Persona> = {}, sessionToken?: string): Promise<Persona> {
     // Always create a new persona for test isolation
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (sessionToken) {
+      headers['Cookie'] = `session_token=${sessionToken}`
+    }
+
     const response = await fetch(`${this.apiURL}/api/personas`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         name: data.name || 'Test Analyst',
         role: data.role || 'Intelligence Analyst',
@@ -477,22 +523,22 @@ export class DatabaseHelper {
   /**
    * Clean up all test data created during a test.
    * Clears world state (entities, events, times, collections, relations).
+   * Uses admin endpoint with test-mode bypass for reliable cleanup.
+   *
+   * @param userId - User ID whose WorldState should be cleared
    */
-  async cleanup(): Promise<void> {
-    // Clear world state by sending empty arrays
-    await fetch(`${this.apiURL}/api/world`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
-      })
+  async cleanup(userId: string): Promise<void> {
+    // Use admin endpoint to clear WorldState
+    // This bypasses authentication in test mode (ALLOW_TEST_ADMIN_BYPASS=true)
+    const response = await fetch(`${this.apiURL}/api/admin/world/${userId}`, {
+      method: 'DELETE'
     })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[CLEANUP] Failed to clear WorldState for user ${userId}: ${response.status} ${errorText}`)
+      throw new Error(`Failed to cleanup WorldState: ${response.status} ${errorText}`)
+    }
   }
 
   /**
