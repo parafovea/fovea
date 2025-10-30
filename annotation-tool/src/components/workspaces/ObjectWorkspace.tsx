@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
 import {
   Box,
   Typography,
@@ -41,7 +42,6 @@ import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
 import CollectionEditor from '../world/CollectionEditor'
 import { WikidataChip } from '../shared/WikidataChip'
-import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -314,12 +314,23 @@ export default function ObjectWorkspace() {
     }
   }
   
-  // Setup keyboard shortcuts
-  useWorkspaceKeyboardShortcuts('objectWorkspace', {
+  // Set command context for when clauses
+  useCommandContext({
+    objectWorkspaceActive: true,
+    annotationWorkspaceActive: false,
+    ontologyWorkspaceActive: false,
+    videoBrowserActive: false,
+    dialogOpen: entityEditorOpen || eventEditorOpen || locationEditorOpen || timeEditorOpen || collectionEditorOpen,
+    inputFocused: false, // Updated dynamically by focus events in App.tsx
+    objectSelected: selectedItemIndex >= 0,
+  })
+
+  // Register command handlers
+  useCommands({
     'object.new': () => handleAddNew(),
-    'tab.next': () => setTabValue((prev) => (prev + 1) % 5),
-    'tab.previous': () => setTabValue((prev) => (prev - 1 + 5) % 5),
-    'item.edit': () => {
+    'object.nextTab': () => setTabValue((prev) => (prev + 1) % 5),
+    'object.previousTab': () => setTabValue((prev) => (prev - 1 + 5) % 5),
+    'object.edit': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex] as any
@@ -336,7 +347,7 @@ export default function ObjectWorkspace() {
         }
       }
     },
-    'item.delete': () => {
+    'object.delete': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex] as any
@@ -359,17 +370,12 @@ export default function ObjectWorkspace() {
       // TODO: Implement duplication logic
       console.log('Duplicate object not yet implemented')
     },
-    'search.focus': () => {
+    'object.search': () => {
       searchInputRef.current?.focus()
     },
-    'collection.open': () => {
-      // TODO: Implement collection builder opening
-      console.log('Collection builder not yet implemented')
-    },
-    'time.open': () => {
-      setSelectedTime(null)
-      setTimeEditorOpen(true)
-    },
+  }, {
+    context: 'objectWorkspace',
+    enabled: true
   })
   
   // Handle item selection with mouse
@@ -513,10 +519,11 @@ export default function ObjectWorkspace() {
                     <IconButton
                       edge="end"
                       onClick={() => entityIsLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
+                      aria-label={`Edit ${entity.name}`}
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))}>
+                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))} aria-label={`Delete ${entity.name}`}>
                       <DeleteIcon />
                     </IconButton>
                   </ListItemSecondaryAction>
@@ -556,10 +563,10 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEvent(event)}>
+                  <IconButton edge="end" onClick={() => handleEditEvent(event)} aria-label={`Edit ${event.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEvent(event.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteEvent(event.id))} aria-label={`Delete ${event.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -598,10 +605,10 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditLocation(location)}>
+                  <IconButton edge="end" onClick={() => handleEditLocation(location)} aria-label={`Edit ${location.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(location.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(location.id))} aria-label={`Delete ${location.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -642,10 +649,10 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditTime(time)}>
+                  <IconButton edge="end" onClick={() => handleEditTime(time)} aria-label={`Edit time ${formatTimeDisplay(time)}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteTime(time.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteTime(time.id))} aria-label={`Delete time ${formatTimeDisplay(time)}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -694,12 +701,14 @@ export default function ObjectWorkspace() {
                           setSelectedCollectionType('entity')
                           setCollectionEditorOpen(true)
                         }}
+                        aria-label={`Edit ${collection.name}`}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
                         edge="end"
                         onClick={() => dispatch(deleteEntityCollection(collection.id))}
+                        aria-label={`Delete ${collection.name}`}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -749,12 +758,14 @@ export default function ObjectWorkspace() {
                           setSelectedCollectionType('event')
                           setCollectionEditorOpen(true)
                         }}
+                        aria-label={`Edit ${collection.name}`}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
                         edge="end"
                         onClick={() => dispatch(deleteEventCollection(collection.id))}
+                        aria-label={`Delete ${collection.name}`}
                       >
                         <DeleteIcon />
                       </IconButton>

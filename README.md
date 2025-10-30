@@ -103,7 +103,10 @@ Each service has its own development workflow. The frontend and backend support 
 cd annotation-tool
 npm run dev          # Development server
 npm run test         # Unit tests (Vitest)
-npm run test:e2e     # E2E tests (Playwright)
+npm run test:e2e     # All E2E tests (Playwright)
+npm run test:e2e -- --project=functional     # Keyboard shortcuts (35 tests)
+npm run test:e2e -- --project=smoke          # Critical paths (17 tests)
+npm run test:e2e -- --project=accessibility  # WCAG 2.1 AA compliance (50 tests)
 npm run lint         # ESLint
 npx tsc --noEmit     # Type checking
 ```

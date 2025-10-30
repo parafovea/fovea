@@ -114,7 +114,7 @@ export default function BaseTypeEditor({
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {icon}
-            <Typography variant="h6">{title || `${isEditing ? 'Edit' : 'Create'} ${typeCategory} Type`}</Typography>
+            <Typography sx={{ fontSize: '1.25rem', fontWeight: 500 }}>{title || `${isEditing ? 'Edit' : 'Create'} ${typeCategory} Type`}</Typography>
             <TypeObjectBadge isType={true} />
           </Box>
         </DialogTitle>
@@ -123,7 +123,7 @@ export default function BaseTypeEditor({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
             {/* Mode Selection */}
             <Box>
-              <Typography variant="subtitle2" gutterBottom>Creation Mode</Typography>
+              <Typography variant="subtitle2" component="div" gutterBottom>Creation Mode</Typography>
               <ModeSelector 
                 mode={mode} 
                 onChange={setMode}
@@ -159,7 +159,7 @@ export default function BaseTypeEditor({
                 />
                 
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom>Description</Typography>
+                  <Typography variant="subtitle2" component="div" gutterBottom>Description</Typography>
                   <GlossEditor
                     gloss={gloss}
                     onChange={setGloss}
@@ -174,7 +174,7 @@ export default function BaseTypeEditor({
             {/* Wikidata Import Mode */}
             {mode === 'wikidata' && (
               <Box>
-                <Typography variant="subtitle2" gutterBottom>Search Wikidata</Typography>
+                <Typography variant="subtitle2" component="div" gutterBottom>Search Wikidata</Typography>
                 <WikidataSearch
                   onImport={onWikidataSelect || (() => {})}
                   entityType="type"
@@ -187,7 +187,7 @@ export default function BaseTypeEditor({
               <>
                 <Divider />
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom>
+                  <Typography variant="subtitle2" component="div" gutterBottom>
                     Add to Personas
                   </Typography>
                   <FormGroup>

@@ -403,6 +403,9 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
             width: '100%',
             height: '100%',
           }}
+          aria-label="Video annotation timeline showing keyframes and interpolated positions"
+          role="img"
+          data-testid="timeline-canvas"
         />
 
         {/* Tooltip for hovered frame */}
@@ -445,16 +448,16 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
         {/* Transport controls */}
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)">
+          <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)" aria-label="Jump 10 frames back">
             <SkipPrevious />
           </IconButton>
-          <IconButton size="small" onClick={handleStepBackward} title="Step 1 frame back (←)">
+          <IconButton size="small" onClick={handleStepBackward} title="Step 1 frame back (←)" aria-label="Step 1 frame back">
             <FastRewind />
           </IconButton>
-          <IconButton size="small" onClick={handleStepForward} title="Step 1 frame forward (→)">
+          <IconButton size="small" onClick={handleStepForward} title="Step 1 frame forward (→)" aria-label="Step 1 frame forward">
             <FastForward />
           </IconButton>
-          <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)">
+          <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)" aria-label="Jump 10 frames forward">
             <SkipNext />
           </IconButton>
         </Box>
@@ -467,6 +470,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onAddKeyframe}
                 disabled={!annotation || isKeyframe}
+                aria-label="Add Keyframe"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -501,6 +505,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onDeleteKeyframe}
                 disabled={!annotation || !isKeyframe || isFirstOrLastKeyframe}
+                aria-label="Delete Keyframe"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -523,6 +528,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onCopyPreviousFrame}
                 disabled={!annotation || currentFrame === 0}
+                aria-label="Copy Previous Frame"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -545,6 +551,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={() => setInterpolationDialogOpen(true)}
                 disabled={!annotation || !canInterpolate}
+                aria-label="Interpolation Mode"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',

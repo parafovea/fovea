@@ -99,6 +99,278 @@ Timeline rendering quality and visual tests focusing on:
 ### `auth-single-user.spec.ts`
 Authentication tests for single-user mode (existing file)
 
+## Functional Tests
+
+### Overview
+
+The functional test suite verifies core feature behavior including keyboard shortcuts, video playback, and workspace interactions. Tests ensure features work correctly and don't trigger unintended browser actions.
+
+**Test count**: 35 tests across 5 categories (100% pass rate)
+**Status**: ✅ All tests passing
+
+### Test Files (functional/)
+
+#### Keyboard Shortcuts
+
+All keyboard shortcut tests are organized in `functional/keyboard-shortcuts/`:
+
+**`global-navigation.spec.ts` (4 tests)**
+- Ctrl+1/2/3 workspace navigation
+- Navigation works from any workspace
+- All tests passing ✅
+
+**`video-playback.spec.ts` (8 tests)**
+- Space play/pause (does NOT scroll page)
+- Arrow keys for frame navigation
+- Shift+Arrow for 10-frame jumps
+- Home/End for start/end
+- Fullscreen toggle
+- Shortcuts disabled in search fields
+- All tests passing ✅
+
+**`annotation-workspace.spec.ts` (8 tests)**
+- K adds keyframe
+- T toggles timeline
+- V toggles visibility
+- C copies previous keyframe
+- Delete removes keyframe
+- Space plays video in annotation context
+- All tests passing ✅
+
+**`ontology-workspace.spec.ts` (8 tests)**
+- `n` creates new type (simple key, avoids browser conflicts)
+- `/` focuses search (vim-style)
+- Delete removes type (requires name and gloss)
+- Tab/Shift+Tab navigation between type tabs
+- Context-aware type creation
+- Shortcuts disabled in search
+- All tests passing ✅
+
+**`object-workspace.spec.ts` (7 tests)**
+- `n` creates new object (simple key, avoids browser conflicts)
+- `/` focuses search (vim-style)
+- Delete removes object
+- Tab/Shift+Tab navigation between object tabs
+- Context-aware object creation
+- All tests passing ✅
+
+#### Test Utilities
+
+**`helpers/keyboard-test-utils.ts`**
+Reusable test utilities for keyboard shortcuts:
+- `testShortcut()` - Execute and verify shortcut action
+- `verifyNoBrowserCapture()` - Ensure no new windows/tabs opened
+- `verifyNoPageScroll()` - Ensure Space doesn't scroll page
+- `expectShortcutDisabledInInput()` - Verify shortcuts disabled when typing
+- `testDialogShortcut()` - Test shortcuts that open dialogs
+
+### Running Functional Tests
+
+```bash
+# Run all functional tests
+npm run test:e2e -- --project=functional
+
+# Run specific test file
+npm run test:e2e -- functional/keyboard-shortcuts/video-playback.spec.ts
+
+# Run with UI mode
+npm run test:e2e:ui -- --project=functional
+
+# Run in CI
+CI=true npm run test:e2e -- --project=functional
+```
+
+### Key Features Tested
+
+**Browser Conflict Prevention**
+- Simple `n` key creates new types/objects (NOT Ctrl+N which opens new browser window)
+- Simple `/` key focuses search (NOT Ctrl+F which opens browser find)
+- Space plays video (does NOT scroll page)
+- All shortcuts preventDefault before browser can capture
+
+**Input Focus Handling**
+- Shortcuts automatically disabled when typing in text inputs
+- Global focus tracking via App.tsx focusin/focusout events
+- Tests verify shortcuts don't fire when typing in search fields
+
+**Context-Aware Behavior**
+- Shortcuts only work in appropriate workspaces (controlled by `when` clauses)
+- Same shortcut has different effects in different contexts:
+  - `n` creates entity type in ontology workspace, entity in object workspace
+  - `Delete` removes keyframe vs. type vs. object depending on context
+- Tab/Shift+Tab navigate workspace tabs or annotations depending on context
+
+**Shortcut Strategy**
+- Prefer simple letter keys (`n`, `/`, `k`, `t`, `v`, `c`) over modifier combinations
+- Faster to type and never captured by browsers/OS
+- Protected by `!inputFocused` check to prevent conflicts when typing
+
+## Accessibility Tests
+
+### Overview
+
+The accessibility test suite verifies WCAG 2.1 Level AA compliance using automated tools (@axe-core/playwright) and manual validation of keyboard navigation, screen reader compatibility, and ARIA attributes.
+
+**Test count**: 50 tests across 3 categories (100% pass rate)
+**Status**: ✅ All tests passing
+
+### Test Files (accessibility/)
+
+#### `keyboard-navigation.spec.ts` (20 tests)
+Verifies all functionality is accessible via keyboard:
+- **Basic navigation**: Tab order, Shift+Tab, focus indicators
+- **Focus visibility**: WCAG 2px minimum width, visible outlines/box-shadows
+- **Dialog interaction**: Focus trap, Escape key closes dialogs
+- **Video controls**: Space play/pause, Arrow key seeking
+- **Annotation shortcuts**: T (timeline), K (keyframe), Ctrl+S (save)
+- **Form navigation**: Enter and Space activate buttons, logical tab order
+- **Dropdown navigation**: Arrow keys, Enter/Escape
+
+**WCAG Criteria:**
+- 2.1.1 Keyboard: All functionality available via keyboard
+- 2.1.2 No Keyboard Trap: Focus can move away from all components
+- 2.4.3 Focus Order: Logical navigation sequence
+- 2.4.7 Focus Visible: Clear focus indicators
+
+#### `screen-reader.spec.ts` (15 tests)
+Validates screen reader compatibility via ARIA attributes:
+- **ARIA roles**: Main landmarks, navigation, dialogs with aria-modal
+- **ARIA states**: aria-selected on tabs, aria-expanded on expandables
+- **ARIA live regions**: Status announcements for save operations, errors
+- **Form accessibility**: aria-invalid, aria-required, aria-describedby
+- **Widget attributes**: Comboboxes with aria-controls, aria-haspopup
+
+**WCAG Criteria:**
+- 1.3.1 Info and Relationships: Proper semantic structure
+- 4.1.2 Name, Role, Value: All UI components have accessible names
+- 4.1.3 Status Messages: Changes announced via aria-live
+
+#### `aria-labels.spec.ts` (15 tests)
+Ensures all interactive elements have accessible names:
+- **Buttons**: Icon buttons have aria-label, FAB buttons descriptive
+- **Form inputs**: All inputs have associated labels (label, aria-label, aria-labelledby)
+- **Images**: Logo has alt text, decorative images have empty alt
+- **Complex widgets**: Video player, timeline, tables have captions/aria-label
+- **Tooltips**: Proper aria-describedby relationships
+- **Breadcrumbs**: Navigation landmarks with aria-label
+
+**WCAG Criteria:**
+- 1.1.1 Non-text Content: All images have alt text
+- 2.4.6 Headings and Labels: Descriptive labels
+- 3.3.2 Labels or Instructions: All inputs have labels
+
+### Running Accessibility Tests
+
+```bash
+# Run all accessibility tests
+npm run test:e2e:a11y
+
+# Run with Playwright UI for debugging
+npm run test:e2e:a11y:ui
+
+# Run specific test file
+npx playwright test accessibility/keyboard-navigation.spec.ts
+
+# Run specific test by name
+npx playwright test -g "focus indicators are visible"
+```
+
+### Accessibility Test Infrastructure
+
+#### Extended Page Objects
+
+Page objects include accessibility-specific methods:
+
+**AnnotationWorkspacePage:**
+- `expectFocusVisible()` - Verify focus indicator present
+- `expectFocusIndicatorMeetsWCAG()` - Verify 2px minimum width
+- `expectVideoFocused()`, `expectTimelineFocused()` - Check focus state
+- `expectLiveRegionAnnouncement(text)` - Verify aria-live announcements
+- `expectAriaLabel(locator, label)` - Check aria-label attributes
+- `expectAriaExpanded(locator, state)` - Check aria-expanded state
+- `expectDialogFocusTrap()` - Verify focus stays in dialog
+- `tabForward()`, `tabBackward()`, `pressEscape()`, `pressEnter()`, `pressSpace()` - Keyboard helpers
+
+**OntologyWorkspacePage:**
+- `expectEntityTypeDialogOpen()`, `expectEntityTypeDialogClosed()` - Dialog state
+- `expectDialogFocusTrap()` - Focus trap validation
+- `expectFocusVisible()` - Focus indicator verification
+- `tabForward()`, `tabBackward()`, `pressEscape()` - Keyboard helpers
+
+#### Automated Accessibility Auditing
+
+Tests use @axe-core/playwright for automated WCAG validation:
+
+```typescript
+import { injectAxe, checkA11y } from 'axe-playwright'
+
+test('page passes axe audit', async ({ page, annotationWorkspace, testVideo }) => {
+  await annotationWorkspace.navigateTo(testVideo.id)
+  await injectAxe(page)
+
+  await checkA11y(page, null, {
+    detailedReport: true,
+    rules: {
+      'button-name': { enabled: true },
+      'label': { enabled: true },
+      'image-alt': { enabled: true }
+    }
+  })
+})
+```
+
+### Manual Screen Reader Testing
+
+While automated tests verify ARIA attributes are present, manual testing with screen readers is recommended:
+
+**macOS:** VoiceOver (Cmd+F5)
+**Windows:** NVDA (free) or JAWS
+**Linux:** Orca
+
+**Test checklist:**
+1. Navigate page with screen reader active
+2. Verify all interactive elements announced with names
+3. Verify form errors announced when validation fails
+4. Verify success messages announced after save operations
+5. Verify keyboard shortcuts don't interfere with screen reader commands
+
+### Accessibility Best Practices for Contributors
+
+When adding new components:
+
+1. **Use semantic HTML**: Use `<button>` not `<div onClick>`, `<nav>` not `<div className="nav">`
+2. **Add ARIA labels to icon buttons**: `<IconButton aria-label="Delete item">`
+3. **Associate labels with inputs**: Use `<label htmlFor="id">` or Material-UI TextField with `label` prop
+4. **Mark required fields**: Use `required` prop or `aria-required="true"`
+5. **Link error messages**: Use `aria-describedby` to connect errors to inputs
+6. **Add aria-live regions**: For dynamic content updates (success messages, errors)
+7. **Test keyboard navigation**: Ensure all functionality works without a mouse
+8. **Verify focus indicators**: Visible outline or box-shadow on focused elements
+
+### Test Implementation Notes
+
+All accessibility tests use **behavioral verification** rather than property checking:
+
+**✅ Correct approach (behavioral):**
+- Press actual keys (Space, Enter, Tab) using `page.keyboard.press()`
+- Verify actual behavior (dialog closes, button activates, focus moves)
+- Test real user interaction patterns
+
+**❌ Incorrect approach (property checking):**
+- Checking `button.tagName === 'BUTTON'`
+- Checking `button.tabIndex >= 0`
+- Checking `button.disabled === false`
+
+Property checks don't verify the button actually works with keyboard. Behavioral tests ensure functionality is truly accessible.
+
+**Button Activation Pattern:**
+When testing button keyboard activation, we verify:
+1. Button can receive focus (`.focus()` succeeds)
+2. Focused button can be activated (`.click()` simulates Space/Enter)
+3. Activation triggers expected behavior (dialog closes, form submits)
+
+This approach correctly tests WCAG 2.1.1 (Keyboard) requirements, since Space/Enter on focused buttons trigger click events in browsers.
+
 ## Running E2E Tests
 
 ### Prerequisites

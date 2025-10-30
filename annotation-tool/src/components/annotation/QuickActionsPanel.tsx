@@ -120,6 +120,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
             size="small"
             onClick={onAddKeyframe}
             disabled={isKeyframe}
+            aria-label="Add Keyframe"
             sx={{
               width: '100%',
               display: 'flex',
@@ -157,6 +158,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
             size="small"
             onClick={onDeleteKeyframe}
             disabled={!isKeyframe || isFirstOrLastKeyframe}
+            aria-label="Delete Keyframe"
             sx={{
               width: '100%',
               display: 'flex',
@@ -184,6 +186,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
             size="small"
             onClick={onCopyPreviousFrame}
             disabled={currentFrame === 0}
+            aria-label="Copy Previous Frame"
             sx={{
               width: '100%',
               display: 'flex',
@@ -211,6 +214,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
             size="small"
             onClick={() => setInterpolationDialogOpen(true)}
             disabled={!canInterpolate}
+            aria-label="Interpolation Mode"
             sx={{
               width: '100%',
               display: 'flex',

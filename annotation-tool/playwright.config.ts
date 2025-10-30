@@ -38,6 +38,21 @@ export default defineConfig({
       }
     },
 
+    // Functional tests - feature behavior and keyboard shortcuts
+    // Tests verify core features work correctly including keyboard shortcut execution
+    // and browser capture prevention
+    {
+      name: 'functional',
+      testDir: './test/e2e/functional',
+      timeout: 45000,
+      retries: 1,
+      workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 }
+      }
+    },
+
     // Regression tests - full coverage
     // Uses parallel execution with worker-scoped users for optimal performance
     // Each worker creates isolated test user with separate WorldState
@@ -52,6 +67,25 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }
+      }
+    },
+
+    // Accessibility tests - WCAG 2.1 AA compliance validation
+    // Tests keyboard navigation, screen reader compatibility, and ARIA attributes
+    // Uses axe-core for automated accessibility auditing
+    {
+      name: 'accessibility',
+      testDir: './test/e2e/accessibility',
+      timeout: 45000,
+      retries: 1,
+      workers: process.env.CI ? 5 : undefined,  // Same parallelization as regression tests
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+        // Enable accessibility tree in Chrome DevTools
+        launchOptions: {
+          args: ['--force-renderer-accessibility']
+        }
       }
     }
   ]

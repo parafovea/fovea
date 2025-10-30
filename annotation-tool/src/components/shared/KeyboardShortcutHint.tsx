@@ -63,12 +63,15 @@ export default function KeyboardShortcutHint() {
   
   return (
     <Box
+      role="complementary"
+      aria-label="Keyboard shortcuts hint"
       sx={{
         position: 'fixed',
         bottom: 16,
         left: 16,
         zIndex: 1200,
         maxWidth: 400,
+        pointerEvents: 'none', // Allow clicks to pass through to elements behind
       }}
     >
       <Collapse in={isExpanded}>
@@ -80,6 +83,7 @@ export default function KeyboardShortcutHint() {
             border: 1,
             borderColor: 'divider',
             position: 'relative',
+            pointerEvents: 'auto', // Re-enable pointer events for this Paper
           }}
         >
           <IconButton
@@ -90,6 +94,7 @@ export default function KeyboardShortcutHint() {
               top: 4,
               right: 4,
             }}
+            aria-label="Dismiss keyboard shortcuts hint"
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -135,6 +140,7 @@ export default function KeyboardShortcutHint() {
           sx={{
             p: 1,
             cursor: 'pointer',
+            pointerEvents: 'auto', // Re-enable pointer events for this Paper
             '&:hover': {
               backgroundColor: 'action.hover',
             },

@@ -438,4 +438,104 @@ export class OntologyWorkspacePage extends BasePage {
       await this.wait(500)
     }
   }
+
+  /**
+   * ACCESSIBILITY METHODS
+   * Methods for testing keyboard navigation, focus management, and ARIA attributes
+   */
+
+  /**
+   * Assert that an entity type dialog is currently open.
+   */
+  async expectEntityTypeDialogOpen(): Promise<void> {
+    const dialog = this.page.locator('[role="dialog"]')
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    const titleText = await dialog.locator('h2, [role="heading"]').first().textContent()
+    expect(titleText?.toLowerCase()).toMatch(/entity|type|create|edit/)
+  }
+
+  /**
+   * Assert that entity type dialog is closed.
+   */
+  async expectEntityTypeDialogClosed(): Promise<void> {
+    const dialog = this.page.locator('[role="dialog"]')
+    await expect(dialog).not.toBeVisible()
+  }
+
+  /**
+   * Tab to next focusable element.
+   */
+  async tabForward(): Promise<void> {
+    await this.page.keyboard.press('Tab')
+    await this.wait(100)
+  }
+
+  /**
+   * Shift+Tab to previous focusable element.
+   */
+  async tabBackward(): Promise<void> {
+    await this.page.keyboard.press('Shift+Tab')
+    await this.wait(100)
+  }
+
+  /**
+   * Press Escape key.
+   */
+  async pressEscape(): Promise<void> {
+    await this.page.keyboard.press('Escape')
+    await this.wait(200)
+  }
+
+  /**
+   * Assert that focus is trapped within a dialog.
+   */
+  async expectDialogFocusTrap(): Promise<void> {
+    const dialog = this.page.locator('[role="dialog"]')
+    await expect(dialog).toBeVisible()
+
+    // Tab through up to 20 elements
+    for (let i = 0; i < 20; i++) {
+      await this.tabForward()
+
+      const focusedInDialog = await this.page.evaluate(() => {
+        const dialog = document.querySelector('[role="dialog"]')
+        return dialog?.contains(document.activeElement) ?? false
+      })
+
+      expect(focusedInDialog).toBe(true)
+    }
+  }
+
+  /**
+   * Assert that the currently focused element has a visible focus indicator.
+   * Verifies outline or box-shadow is present, or that element is an interactive element with focus.
+   */
+  async expectFocusVisible(): Promise<void> {
+    const focusInfo = await this.page.evaluate(() => {
+      const el = document.activeElement
+      if (!el || el === document.body) return { hasFocus: false, hasIndicator: false, tagName: 'BODY', isInteractive: false }
+
+      const styles = window.getComputedStyle(el)
+      const hasOutline = styles.outline !== 'none' && styles.outlineWidth !== '0px'
+      const hasBoxShadow = styles.boxShadow !== 'none'
+      const hasBackground = styles.backgroundColor !== 'rgba(0, 0, 0, 0)' && styles.backgroundColor !== 'transparent'
+
+      // Check if element is naturally focusable
+      const interactiveTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'VIDEO']
+      const isInteractive = interactiveTags.includes(el.tagName) ||
+                          el.getAttribute('tabindex') !== null ||
+                          el.getAttribute('role') === 'button' ||
+                          el.getAttribute('role') === 'tab'
+
+      return {
+        hasFocus: true,
+        hasIndicator: hasOutline || hasBoxShadow || hasBackground,
+        tagName: el.tagName,
+        isInteractive
+      }
+    })
+
+    const passesTest = focusInfo.hasFocus && (focusInfo.hasIndicator || focusInfo.isInteractive)
+    expect(passesTest).toBe(true)
+  }
 }

@@ -156,7 +156,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   // Additional fields for entity types
   const additionalFields = (
     <Box>
-      <Typography variant="subtitle2" gutterBottom>Examples</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom>Examples</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
         <TextField
           size="small"
@@ -170,8 +170,9 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             }
           }}
           fullWidth
+          aria-label="Add example"
         />
-        <IconButton onClick={handleAddExample} size="small">
+        <IconButton onClick={handleAddExample} size="small" aria-label="Add example">
           <AddIcon />
         </IconButton>
       </Box>

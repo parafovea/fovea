@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { usePreferences } from '../../hooks/usePreferences'
+import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
 import {
   Box,
   Tabs,
@@ -48,7 +49,6 @@ import {
   deleteEventFromPersona,
   deleteRelationType,
 } from '../../store/personaSlice'
-import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
 import { useModelConfig } from '../../hooks/useModelConfig'
 
@@ -298,11 +298,22 @@ export default function OntologyWorkspace() {
     }
   }
   
-  // Setup keyboard shortcuts
-  useWorkspaceKeyboardShortcuts('ontologyWorkspace', {
-    'type.new': () => handleAddType(),
-    'tab.next': () => setTabValue((prev) => (prev + 1) % 4),
-    'tab.previous': () => setTabValue((prev) => (prev - 1 + 4) % 4),
+  // Set command context for when clauses
+  useCommandContext({
+    ontologyWorkspaceActive: selectedPersonaId !== null,
+    annotationWorkspaceActive: false,
+    objectWorkspaceActive: false,
+    videoBrowserActive: false,
+    dialogOpen: personaEditorOpen || entityTypeEditorOpen || roleEditorOpen || eventTypeEditorOpen || relationTypeEditorOpen || augmenterOpen,
+    inputFocused: false, // Updated dynamically by focus events in App.tsx
+    typeSelected: selectedItemIndex >= 0,
+  })
+
+  // Register command handlers
+  useCommands({
+    'ontology.newType': () => handleAddType(),
+    'ontology.nextTab': () => setTabValue((prev) => (prev + 1) % 4),
+    'ontology.previousTab': () => setTabValue((prev) => (prev - 1 + 4) % 4),
     'ontology.suggestTypes': () => {
       const categoryMap: Record<number, OntologyCategory> = {
         0: 'entity',
@@ -313,7 +324,7 @@ export default function OntologyWorkspace() {
       const category = categoryMap[tabValue] || 'entity'
       handleOpenAugmenter(category)
     },
-    'item.edit': () => {
+    'ontology.editType': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex]
@@ -325,7 +336,7 @@ export default function OntologyWorkspace() {
         }
       }
     },
-    'item.delete': () => {
+    'ontology.deleteType': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length && selectedPersonaId) {
         const item = items[selectedItemIndex]
@@ -337,17 +348,17 @@ export default function OntologyWorkspace() {
         }
       }
     },
-    'type.duplicate': () => {
+    'ontology.duplicateType': () => {
       // TODO: Implement duplication logic
       console.log('Duplicate type not yet implemented')
     },
-    'search.focus': () => {
+    'ontology.search': () => {
       searchInputRef.current?.focus()
     },
-    'navigate.personaBrowser': () => {
-      handleBackToBrowser()
-    },
-  }, selectedPersonaId !== null)
+  }, {
+    context: 'ontologyWorkspace',
+    enabled: selectedPersonaId !== null
+  })
   
   // Handle item selection with mouse
   const handleItemClick = (index: number) => {
@@ -402,7 +413,7 @@ export default function OntologyWorkspace() {
 
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
-          <IconButton edge="start" onClick={handleBackToBrowser} sx={{ mr: 2 }}>
+          <IconButton edge="start" onClick={handleBackToBrowser} sx={{ mr: 2 }} aria-label="Back to persona browser">
             <BackIcon />
           </IconButton>
           <Box sx={{ flexGrow: 1 }}>
@@ -485,15 +496,16 @@ export default function OntologyWorkspace() {
                   secondary={<GlossRenderer gloss={entity.gloss} personaId={selectedPersonaId} />}
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEntityType(entity)}>
+                  <IconButton edge="end" onClick={() => handleEditEntityType(entity)} aria-label={`Edit ${entity.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton 
-                    edge="end" 
-                    onClick={() => dispatch(deleteEntityFromPersona({ 
-                      personaId: selectedPersonaId, 
-                      entityId: entity.id 
+                  <IconButton
+                    edge="end"
+                    onClick={() => dispatch(deleteEntityFromPersona({
+                      personaId: selectedPersonaId,
+                      entityId: entity.id
                     }))}
+                    aria-label={`Delete ${entity.name}`}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -551,15 +563,16 @@ export default function OntologyWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditRole(role)}>
+                  <IconButton edge="end" onClick={() => handleEditRole(role)} aria-label={`Edit ${role.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton 
-                    edge="end" 
-                    onClick={() => dispatch(deleteRoleFromPersona({ 
-                      personaId: selectedPersonaId, 
-                      roleId: role.id 
+                  <IconButton
+                    edge="end"
+                    onClick={() => dispatch(deleteRoleFromPersona({
+                      personaId: selectedPersonaId,
+                      roleId: role.id
                     }))}
+                    aria-label={`Delete ${role.name}`}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -619,15 +632,16 @@ export default function OntologyWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEventType(event)}>
+                  <IconButton edge="end" onClick={() => handleEditEventType(event)} aria-label={`Edit ${event.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton 
-                    edge="end" 
-                    onClick={() => dispatch(deleteEventFromPersona({ 
-                      personaId: selectedPersonaId, 
-                      eventId: event.id 
+                  <IconButton
+                    edge="end"
+                    onClick={() => dispatch(deleteEventFromPersona({
+                      personaId: selectedPersonaId,
+                      eventId: event.id
                     }))}
+                    aria-label={`Delete ${event.name}`}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -685,15 +699,16 @@ export default function OntologyWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditRelationType(relation)}>
+                  <IconButton edge="end" onClick={() => handleEditRelationType(relation)} aria-label={`Edit ${relation.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton 
-                    edge="end" 
-                    onClick={() => dispatch(deleteRelationType({ 
-                      personaId: selectedPersonaId, 
-                      relationTypeId: relation.id 
+                  <IconButton
+                    edge="end"
+                    onClick={() => dispatch(deleteRelationType({
+                      personaId: selectedPersonaId,
+                      relationTypeId: relation.id
                     }))}
+                    aria-label={`Delete ${relation.name}`}
                   >
                     <DeleteIcon />
                   </IconButton>

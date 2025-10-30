@@ -156,7 +156,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
   // Additional fields for role types
   const additionalFields = (
     <Box>
-      <Typography variant="subtitle2" gutterBottom>Allowed Filler Types</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom>Allowed Filler Types</Typography>
       <FormGroup row>
         <FormControlLabel
           control={
@@ -178,7 +178,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
         />
       </FormGroup>
 
-      <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
         <TextField
           size="small"

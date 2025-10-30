@@ -146,7 +146,7 @@ export function useCommands(
     return () => {
       disposables.forEach(d => d.dispose())
     }
-  }, [handlers, enabled])
+  }, [enabled]) // handlers intentionally excluded to prevent re-registration
 
   // Register keyboard shortcuts once
   useEffect(() => {
@@ -176,12 +176,22 @@ export function useCommands(
             return
           }
 
+          // Prevent browser default BEFORE checking when clause to avoid browser capture
+          // This ensures shortcuts like Ctrl+N don't open new windows even if when clause fails
+          event.preventDefault()
+          event.stopPropagation()
+
+          // Check if focus is on form element (unless explicitly enabled)
+          const target = event.target as HTMLElement
+          const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+          if (isFormElement && !enableOnFormTags) {
+            return
+          }
+
           // Check when clause
           if (command.when && !commandRegistry.evaluateWhenClause(command.when)) {
             return
           }
-
-          event.preventDefault()
 
           if (command.canExecute && !command.canExecute()) {
             return

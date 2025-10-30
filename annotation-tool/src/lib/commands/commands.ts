@@ -51,13 +51,6 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
     description: 'Navigate to object builder workspace'
   },
   {
-    id: 'navigate.settings',
-    title: 'Go to Settings',
-    category: 'navigation',
-    keybinding: 'mod+comma',
-    description: 'Navigate to settings page'
-  },
-  {
     id: 'navigate.toggle',
     title: 'Toggle Workspace',
     category: 'navigation',
@@ -177,14 +170,6 @@ export const videoCommands: Omit<Command, 'execute'>[] = [
     keybinding: 'end',
     when: 'annotationWorkspaceActive && !inputFocused',
     description: 'Jump to last frame'
-  },
-  {
-    id: 'video.toggleMute',
-    title: 'Toggle Mute',
-    category: 'video',
-    keybinding: 'm',
-    when: 'annotationWorkspaceActive && !inputFocused',
-    description: 'Mute/unmute video audio'
   },
   {
     id: 'video.toggleFullscreen',
@@ -314,7 +299,7 @@ export const ontologyCommands: Omit<Command, 'execute'>[] = [
     id: 'ontology.newType',
     title: 'New Type',
     category: 'ontology',
-    keybinding: 'mod+n',
+    keybinding: 'n',
     when: 'ontologyWorkspaceActive && !inputFocused',
     description: 'Create new type (context-aware)'
   },
@@ -346,8 +331,8 @@ export const ontologyCommands: Omit<Command, 'execute'>[] = [
     id: 'ontology.search',
     title: 'Search Types',
     category: 'ontology',
-    keybinding: 'mod+f',
-    when: 'ontologyWorkspaceActive',
+    keybinding: '/',
+    when: 'ontologyWorkspaceActive && !inputFocused',
     description: 'Focus search field'
   },
   {
@@ -384,7 +369,7 @@ export const objectCommands: Omit<Command, 'execute'>[] = [
     id: 'object.new',
     title: 'New Object',
     category: 'object',
-    keybinding: 'mod+n',
+    keybinding: 'n',
     when: 'objectWorkspaceActive && !inputFocused',
     description: 'Create new object (context-aware)'
   },
@@ -416,25 +401,9 @@ export const objectCommands: Omit<Command, 'execute'>[] = [
     id: 'object.search',
     title: 'Search Objects',
     category: 'object',
-    keybinding: 'mod+f',
-    when: 'objectWorkspaceActive',
+    keybinding: '/',
+    when: 'objectWorkspaceActive && !inputFocused',
     description: 'Focus search field'
-  },
-  {
-    id: 'object.openCollectionBuilder',
-    title: 'Open Collection Builder',
-    category: 'object',
-    keybinding: 'c',
-    when: 'objectWorkspaceActive && !inputFocused',
-    description: 'Open entity/event collection builder'
-  },
-  {
-    id: 'object.openTimeBuilder',
-    title: 'Open Time Builder',
-    category: 'object',
-    keybinding: 't',
-    when: 'objectWorkspaceActive && !inputFocused',
-    description: 'Open temporal object builder'
   },
   {
     id: 'object.nextTab',

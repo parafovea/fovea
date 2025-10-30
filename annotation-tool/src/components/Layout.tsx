@@ -34,9 +34,8 @@ import { RootState, AppDispatch } from '../store/store'
 import { markSaved as markPersonaSaved } from '../store/personaSlice'
 import { api } from '../services/api'
 import { Ontology } from '../models/types'
-import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
-import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
 import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 import ImportDataDialog from './ImportDataDialog'
 import UserMenu from './auth/UserMenu.js'
@@ -152,7 +151,17 @@ export default function Layout() {
     return undefined
   }
 
-  useGlobalKeyboardShortcuts({
+  // Set command context for global shortcuts
+  useCommandContext({
+    videoBrowserActive: location.pathname === '/',
+    ontologyWorkspaceActive: location.pathname === '/ontology',
+    objectWorkspaceActive: location.pathname === '/objects',
+    annotationWorkspaceActive: location.pathname.startsWith('/annotate'),
+    dialogOpen: shortcutsDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
+    inputFocused: false, // Updated dynamically by App.tsx
+  })
+
+  useCommands({
     'navigate.videoBrowser': () => navigate('/'),
     'navigate.ontologyBuilder': () => navigate('/ontology'),
     'navigate.objectBuilder': () => navigate('/objects'),
@@ -192,6 +201,7 @@ export default function Layout() {
             edge="start"
             onClick={() => setDrawerOpen(!drawerOpen)}
             sx={{ mr: 2 }}
+            aria-label="Toggle navigation menu"
           >
             <MenuIcon />
           </IconButton>
@@ -207,7 +217,7 @@ export default function Layout() {
           />
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'baseline', gap: 1 }}>
             <Typography
-              variant="h6"
+              variant="h1"
               component="div"
               sx={{
                 fontWeight: 700,
@@ -230,7 +240,7 @@ export default function Layout() {
             </Typography>
           </Box>
           {unsavedChanges && (
-            <Typography variant="body2" sx={{ mr: 2, color: 'yellow' }}>
+            <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes
             </Typography>
           )}
@@ -270,6 +280,7 @@ export default function Layout() {
               color="inherit"
               onClick={() => setShortcutsDialogOpen(true)}
               sx={{ ml: 1 }}
+              aria-label="Keyboard Shortcuts (?)"
             >
               <KeyboardIcon />
             </IconButton>
@@ -394,8 +405,6 @@ export default function Layout() {
         open={adminPanelDialogOpen}
         onClose={() => setAdminPanelDialogOpen(false)}
       />
-
-      <KeyboardShortcutHint />
     </Box>
   )
 }

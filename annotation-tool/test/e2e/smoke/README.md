@@ -32,6 +32,8 @@ Only add a test if:
 9. Export annotations
 10. Import annotations
 
+**Note:** Comprehensive keyboard shortcut testing (35 tests) is in the `functional` test project. Smoke tests only verify critical shortcuts work in happy path scenarios.
+
 ## Running Smoke Tests
 
 ```bash

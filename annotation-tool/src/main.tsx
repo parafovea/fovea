@@ -47,6 +47,11 @@ const theme = createTheme({
       light: '#65b891',
       dark: '#00241b',
     },
+    text: {
+      primary: 'rgba(0, 0, 0, 0.87)',
+      secondary: 'rgba(0, 0, 0, 0.70)',
+      disabled: 'rgba(0, 0, 0, 0.50)',
+    },
   },
 })
 

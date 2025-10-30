@@ -40,8 +40,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   /**
    * Annotation workspace page object.
    * Automatically created for each test.
+   * Depends on testUser to ensure authentication is set up.
    */
-  annotationWorkspace: async ({ page }, use) => {
+  annotationWorkspace: async ({ page, testUser }, use) => {
     const workspace = new AnnotationWorkspacePage(page)
     await use(workspace)
   },
@@ -49,8 +50,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   /**
    * Video browser page object.
    * Automatically created for each test.
+   * Depends on testUser to ensure authentication is set up.
    */
-  videoBrowser: async ({ page }, use) => {
+  videoBrowser: async ({ page, testUser }, use) => {
     const browser = new VideoBrowserPage(page)
     await use(browser)
   },
@@ -147,22 +149,33 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   /**
    * Test video fixture.
-   * Provides a test video for annotation.
+   * Fetches the first available video from the backend.
    */
-  testVideo: async ({ db }, use) => {
-    const video = await db.createVideo({
-      filename: 'test-video.mp4',
-      duration: 60,
-      fps: 30
+  testVideo: async ({}, use) => {
+    // Fetch actual videos from backend
+    const response = await fetch('http://localhost:3001/api/videos')
+    const videos = await response.json()
+
+    if (!videos || videos.length === 0) {
+      throw new Error('No videos found in test environment. Ensure test-data directory has videos.')
+    }
+
+    // Use the first video (dust-storm.webm)
+    const video = videos[0]
+    await use({
+      id: video.id,
+      filename: video.filename,
+      duration: video.duration,
+      fps: video.fps || 30
     })
-    await use(video)
   },
 
   /**
    * Ontology workspace page object.
    * Automatically created for each test.
+   * Depends on testUser to ensure authentication is set up.
    */
-  ontologyWorkspace: async ({ page }, use) => {
+  ontologyWorkspace: async ({ page, testUser }, use) => {
     const workspace = new OntologyWorkspacePage(page)
     await use(workspace)
   },
@@ -170,8 +183,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   /**
    * Object workspace page object.
    * Automatically created for each test.
+   * Depends on testUser to ensure authentication is set up.
    */
-  objectWorkspace: async ({ page }, use) => {
+  objectWorkspace: async ({ page, testUser }, use) => {
     const workspace = new ObjectWorkspacePage(page)
     await use(workspace)
   },

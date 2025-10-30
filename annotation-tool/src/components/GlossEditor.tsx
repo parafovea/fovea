@@ -520,11 +520,8 @@ export default function GlossEditor({
 
   return (
     <Box>
-      <Typography variant="subtitle1" gutterBottom>
-        {label}
-      </Typography>
-      
       <TextField
+        label={label}
         inputRef={inputRef}
         fullWidth
         multiline
@@ -534,10 +531,16 @@ export default function GlossEditor({
         value={inputValue}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
-        placeholder={includeAnnotations 
+        placeholder={includeAnnotations
           ? "Type your gloss definition. Use #`name` for types, @`name` for objects, and ^`name` for annotations."
           : "Type your gloss definition. Use #`name` for types and @`name` for objects."}
         variant="outlined"
+        InputLabelProps={{ shrink: true }}
+        InputProps={{
+          inputProps: {
+            'aria-label': label
+          }
+        }}
         sx={{ mb: 2 }}
       />
 

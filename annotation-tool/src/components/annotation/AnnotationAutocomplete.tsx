@@ -216,19 +216,24 @@ export default function AnnotationAutocomplete({
           size="small"
           label={getTypeLabel()}
           placeholder={
-            mode === 'type' && !personaId 
-              ? 'Please select a persona first' 
-              : mode === 'type' 
-                ? 'Search for entity, role, or event type...' 
+            mode === 'type' && !personaId
+              ? 'Please select a persona first'
+              : mode === 'type'
+                ? 'Search for entity, role, or event type...'
                 : 'Search for world object...'
           }
           InputProps={{
             ...params.InputProps,
+            'aria-label': getTypeLabel(),
             startAdornment: value && (
               <InputAdornment position="start">
                 {value.icon}
               </InputAdornment>
             ),
+          }}
+          inputProps={{
+            ...params.inputProps,
+            'aria-label': getTypeLabel(),
           }}
         />
       )}

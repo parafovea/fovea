@@ -256,7 +256,7 @@ export default function RelationTypeEditor({
             />
 
             <Box>
-              <Typography variant="subtitle2" gutterBottom>
+              <Typography variant="subtitle2" component="div" gutterBottom>
                 Source Types (can be)
               </Typography>
               <Stack direction="row" spacing={1}>
@@ -279,7 +279,7 @@ export default function RelationTypeEditor({
             </Box>
 
             <Box>
-              <Typography variant="subtitle2" gutterBottom>
+              <Typography variant="subtitle2" component="div" gutterBottom>
                 Target Types (can be)
               </Typography>
               <Stack direction="row" spacing={1}>
@@ -323,7 +323,7 @@ export default function RelationTypeEditor({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Gloss (Definition)
             </Typography>
             <GlossEditor
@@ -335,7 +335,7 @@ export default function RelationTypeEditor({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Examples
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
@@ -454,8 +454,8 @@ export default function RelationTypeEditor({
             </Box>
             
             <Divider sx={{ my: 2 }} />
-            
-            <Typography variant="subtitle2" gutterBottom>
+
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Existing Instances
             </Typography>
             

@@ -644,7 +644,7 @@ export default function AnnotationWorkspace() {
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack spacing={1}>
             {/* Uploader as main title with clickable link */}
-            <Typography variant="h6">
+            <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
               {currentVideo?.uploader || currentVideo?.uploader_id || 'Loading...'}
               {currentVideo?.uploader_id && currentVideo?.uploader_url && (
                 <>
@@ -730,6 +730,7 @@ export default function AnnotationWorkspace() {
               playsInline
               muted={false}
               preload="auto"
+              aria-label="Video being annotated"
             >
               <p className="vjs-no-js">
                 To view this video please enable JavaScript, and consider upgrading to a web browser that supports HTML5 video
@@ -793,13 +794,13 @@ export default function AnnotationWorkspace() {
 
                 {/* Play/pause controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton onClick={handlePlayPause}>
+                  <IconButton onClick={handlePlayPause} aria-label={isPlaying ? "Pause video" : "Play video"}>
                     {isPlaying ? <PauseIcon /> : <PlayIcon />}
                   </IconButton>
-                  <IconButton onClick={handlePrevFrame}>
+                  <IconButton onClick={handlePrevFrame} aria-label="Previous frame">
                     <PrevFrameIcon />
                   </IconButton>
-                  <IconButton onClick={handleNextFrame}>
+                  <IconButton onClick={handleNextFrame} aria-label="Next frame">
                     <NextFrameIcon />
                   </IconButton>
                 </Box>
@@ -973,7 +974,7 @@ export default function AnnotationWorkspace() {
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto', p: 2 }}>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h3" sx={{ fontSize: '1.25rem' }} gutterBottom>
             All Annotations ({sortedAnnotations.length})
           </Typography>
           <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mb: 2 }}>
@@ -981,9 +982,11 @@ export default function AnnotationWorkspace() {
           </Typography>
           <List dense>
             {sortedAnnotations.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                No annotations yet. Select a mode above and draw on the video.
-              </Typography>
+              <ListItem>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', width: '100%' }}>
+                  No annotations yet. Select a mode above and draw on the video.
+                </Typography>
+              </ListItem>
             )}
             {sortedAnnotations.map((annotation) => {
               const isActive = isAnnotationActive(annotation)
@@ -1059,6 +1062,7 @@ export default function AnnotationWorkspace() {
                           e.stopPropagation()
                           dispatch(deleteAnnotation({ videoId: videoId || '', annotationId: annotation.id }))
                         }}
+                        aria-label="Delete annotation"
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -1143,21 +1147,23 @@ export default function AnnotationWorkspace() {
       )}
 
       {/* Floating Action Button to go to Ontology */}
-      <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
-        <Fab
-          color="primary"
-          aria-label="go to ontology"
-          onClick={handleGoToOntology}
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 1000,
-          }}
-        >
-          <BuildIcon />
-        </Fab>
-      </Tooltip>
+      <Box role="complementary" aria-label="Quick actions">
+        <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
+          <Fab
+            color="primary"
+            aria-label="go to ontology"
+            onClick={handleGoToOntology}
+            sx={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1000,
+            }}
+          >
+            <BuildIcon />
+          </Fab>
+        </Tooltip>
+      </Box>
     </Box>
   )
 }

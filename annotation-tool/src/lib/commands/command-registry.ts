@@ -88,10 +88,8 @@ export class CommandRegistry {
    * ```
    */
   register(command: Command): Disposable {
-    if (this.commands.has(command.id)) {
-      console.warn(`Command ${command.id} is already registered`)
-    }
-
+    // Silently allow re-registration to update command handlers
+    // This is the intended pattern for components to override placeholder handlers
     this.commands.set(command.id, command)
 
     return {

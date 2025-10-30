@@ -20,6 +20,7 @@ import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { initializeCommands, initializeGlobalContext } from './lib/commands/init-commands.js'
+import { commandRegistry } from './lib/commands/command-registry.js'
 
 /**
  * Loading screen component.
@@ -77,6 +78,41 @@ function App() {
   useEffect(() => {
     initializeCommands()
     initializeGlobalContext()
+  }, [])
+
+  // Track input focus globally to prevent shortcuts when typing
+  useEffect(() => {
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement
+      const isInputElement =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.contentEditable === 'true'
+
+      commandRegistry.setContext('inputFocused', isInputElement)
+    }
+
+    const handleFocusOut = (event: FocusEvent) => {
+      const target = event.target as HTMLElement
+      const isInputElement =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.contentEditable === 'true'
+
+      if (isInputElement) {
+        commandRegistry.setContext('inputFocused', false)
+      }
+    }
+
+    document.addEventListener('focusin', handleFocusIn)
+    document.addEventListener('focusout', handleFocusOut)
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn)
+      document.removeEventListener('focusout', handleFocusOut)
+    }
   }, [])
 
   const loadOntology = useCallback(async () => {

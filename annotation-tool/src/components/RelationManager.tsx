@@ -319,6 +319,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
                             <IconButton
                               edge="end"
                               onClick={() => handleDeleteRelation(relation.id)}
+                              aria-label={`Delete relation from ${getItemName(relation.sourceType, relation.sourceId)} to ${getItemName(relation.targetType, relation.targetId)}`}
                             >
                               <DeleteIcon />
                             </IconButton>

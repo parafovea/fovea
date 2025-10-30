@@ -104,7 +104,7 @@ export default function PersonaBrowser({
                         <PersonIcon />
                       </Avatar>
                       <Box>
-                        <Typography variant="h6" component="div" noWrap>
+                        <Typography variant="h3" sx={{ fontSize: '1.25rem' }} component="div" noWrap>
                           {persona.name}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
@@ -194,7 +194,7 @@ export default function PersonaBrowser({
           alignItems="center"
           height="300px"
         >
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h3" sx={{ fontSize: '1.25rem' }} color="text.secondary">
             No personas found
           </Typography>
           {searchTerm && (
