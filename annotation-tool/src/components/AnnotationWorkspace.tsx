@@ -44,6 +44,7 @@ import {
   OpenInNew as ExternalLinkIcon,
   Build as BuildIcon,
   Search as DetectIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
@@ -64,6 +65,8 @@ import {
   removeKeyframe,
   updateKeyframe,
   updateInterpolationSegment,
+  updateAnnotation,
+  setAnnotations,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -79,6 +82,7 @@ import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
+import { api } from '../services/api'
 
 const DRAWER_WIDTH = 300
 
@@ -112,6 +116,9 @@ export default function AnnotationWorkspace() {
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
   const [timelineExpanded, setTimelineExpanded] = useState(false)
   const [timelineMounted, setTimelineMounted] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Delayed mount/unmount for smooth animation
   useEffect(() => {
@@ -275,6 +282,22 @@ export default function AnnotationWorkspace() {
     if (videoId) {
       dispatch(setLastAnnotation({ videoId, timestamp: Date.now() }))
     }
+  }, [videoId, dispatch])
+
+  // Load annotations from backend when component mounts
+  useEffect(() => {
+    const loadAnnotations = async () => {
+      if (!videoId) return
+
+      try {
+        const savedAnnotations = await api.getAnnotations(videoId)
+        dispatch(setAnnotations({ videoId, annotations: savedAnnotations }))
+      } catch (error) {
+        console.error('Failed to load annotations:', error)
+      }
+    }
+
+    loadAnnotations()
   }, [videoId, dispatch])
 
   // Set command context for when clauses
@@ -592,6 +615,47 @@ export default function AnnotationWorkspace() {
       dispatch(setLastAnnotation({ videoId, timestamp: currentTime }))
     }
     navigate('/ontology')
+  }
+
+  /**
+   * Saves all annotations to the backend database.
+   * Creates new annotations or updates existing ones based on presence of ID.
+   * Shows success/error feedback to user.
+   */
+  const handleSave = async () => {
+    if (!videoId || annotations.length === 0) return
+
+    setSaving(true)
+    setSaveSuccess(false)
+    setSaveError(null)
+
+    try {
+      // Save each annotation to backend
+      for (const annotation of annotations) {
+        if (annotation.id && annotation.id.startsWith('temp-')) {
+          // New annotation without database ID - create it
+          const savedAnnotation = await api.saveAnnotation(annotation)
+          // Update Redux state with saved annotation (has real ID now)
+          dispatch(updateAnnotation(savedAnnotation))
+        } else if (annotation.id) {
+          // Existing annotation - update it
+          await api.updateAnnotation(annotation)
+        } else {
+          // Annotation without any ID - create it
+          const savedAnnotation = await api.saveAnnotation(annotation)
+          dispatch(updateAnnotation(savedAnnotation))
+        }
+      }
+
+      setSaveSuccess(true)
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (error) {
+      console.error('Failed to save annotations:', error)
+      setSaveError(error instanceof Error ? error.message : 'Failed to save annotations')
+    } finally {
+      setSaving(false)
+    }
   }
 
   /**
@@ -974,9 +1038,30 @@ export default function AnnotationWorkspace() {
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto', p: 2 }}>
-          <Typography variant="h3" sx={{ fontSize: '1.25rem' }} gutterBottom>
-            All Annotations ({sortedAnnotations.length})
-          </Typography>
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Typography variant="h3" sx={{ fontSize: '1.25rem' }}>
+              All Annotations ({sortedAnnotations.length})
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={saving || annotations.length === 0}
+            >
+              Save
+            </Button>
+          </Stack>
+          {saveSuccess && (
+            <Typography variant="caption" color="success.main" sx={{ display: 'block', mb: 1 }}>
+              Annotations saved successfully!
+            </Typography>
+          )}
+          {saveError && (
+            <Typography variant="caption" color="error.main" sx={{ display: 'block', mb: 1 }}>
+              Error: {saveError}
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mb: 2 }}>
             Click to seek • Double-click to edit
           </Typography>
