@@ -2,51 +2,43 @@ import { useState, useEffect } from 'react'
 import { Box, Typography, Paper, IconButton, Collapse } from '@mui/material'
 import { Close as CloseIcon, Keyboard as KeyboardIcon } from '@mui/icons-material'
 import { useLocation } from 'react-router-dom'
-import { formatShortcut, globalShortcuts, videoBrowserShortcuts, ontologyWorkspaceShortcuts, objectWorkspaceShortcuts } from '../../utils/shortcuts'
+import { commandRegistry } from '../../lib/commands/command-registry.js'
+import { formatKeybinding } from '../../lib/commands/commands.js'
 
 export default function KeyboardShortcutHint() {
   const location = useLocation()
   const [isExpanded, setIsExpanded] = useState(true)
   const [isDismissed, setIsDismissed] = useState(false)
   
-  // Get the most relevant shortcuts for the current context
-  const getRelevantShortcuts = () => {
-    const shortcuts = []
+  // Get the most relevant commands for the current context
+  const getRelevantCommands = () => {
+    const allCommands = commandRegistry.getCommands()
+    const commands = []
 
-    // Always show help shortcut
-    if (globalShortcuts) {
-      shortcuts.push(globalShortcuts.find(s => s.action === 'help.show'))
-    }
+    // Always show command palette and help
+    commands.push(allCommands.find(c => c.id === 'commandPalette.toggle'))
+    commands.push(allCommands.find(c => c.id === 'help.show'))
 
-    // Add context-specific shortcuts
+    // Add context-specific commands based on route
     if (location.pathname === '/') {
-      if (videoBrowserShortcuts) {
-        shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'search.focus'))
-        shortcuts.push(videoBrowserShortcuts.find(s => s.action === 'video.open'))
-      }
+      commands.push(allCommands.find(c => c.id === 'search.focus'))
+      commands.push(allCommands.find(c => c.id === 'video.open'))
     } else if (location.pathname === '/ontology') {
-      if (ontologyWorkspaceShortcuts) {
-        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'type.new'))
-        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'search.focus'))
-        shortcuts.push(ontologyWorkspaceShortcuts.find(s => s.action === 'navigate.personaBrowser'))
-      }
+      commands.push(allCommands.find(c => c.id === 'ontology.newType'))
+      commands.push(allCommands.find(c => c.id === 'ontology.nextTab'))
     } else if (location.pathname === '/objects') {
-      if (objectWorkspaceShortcuts) {
-        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'object.new'))
-        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'search.focus'))
-        shortcuts.push(objectWorkspaceShortcuts.find(s => s.action === 'tab.next'))
-      }
+      commands.push(allCommands.find(c => c.id === 'object.new'))
+      commands.push(allCommands.find(c => c.id === 'object.nextTab'))
+    } else if (location.pathname.startsWith('/annotate')) {
+      commands.push(allCommands.find(c => c.id === 'video.playPause'))
+      commands.push(allCommands.find(c => c.id === 'annotation.addKeyframe'))
+      commands.push(allCommands.find(c => c.id === 'timeline.toggle'))
     }
 
-    // Add navigation shortcuts
-    if (globalShortcuts) {
-      shortcuts.push(globalShortcuts.find(s => s.action === 'navigate.toggle'))
-    }
-
-    return shortcuts.filter(Boolean).slice(0, 4) // Show max 4 shortcuts
+    return commands.filter(Boolean).slice(0, 4) // Show max 4 commands
   }
 
-  const shortcuts = getRelevantShortcuts() || []
+  const commands = getRelevantCommands() || []
   
   // Auto-collapse after 10 seconds
   useEffect(() => {
@@ -57,7 +49,7 @@ export default function KeyboardShortcutHint() {
     return () => clearTimeout(timer)
   }, [location.pathname]) // Reset timer on route change
   
-  if (isDismissed || shortcuts.length === 0) {
+  if (isDismissed || commands.length === 0) {
     return null
   }
   
@@ -107,8 +99,9 @@ export default function KeyboardShortcutHint() {
           </Box>
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {shortcuts.map((shortcut, index) => {
-              if (!shortcut) return null
+            {commands.map((command, index) => {
+              if (!command || !command.keybinding) return null
+              const keybinding = Array.isArray(command.keybinding) ? command.keybinding[0] : command.keybinding
               return (
                 <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography
@@ -122,10 +115,10 @@ export default function KeyboardShortcutHint() {
                       fontSize: '0.7rem',
                     }}
                   >
-                    {formatShortcut(shortcut)}
+                    {formatKeybinding(keybinding)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                    {shortcut.description}
+                    {command.description || command.title}
                   </Typography>
                 </Box>
               )

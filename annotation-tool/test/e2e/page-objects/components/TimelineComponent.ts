@@ -29,6 +29,13 @@ export class TimelineComponent {
   }
 
   /**
+   * Get the timeline container element (alias for canvas).
+   */
+  get container(): Locator {
+    return this.canvas
+  }
+
+  /**
    * Toggle timeline visibility using the 'T' keyboard shortcut or button.
    */
   async toggle(): Promise<void> {

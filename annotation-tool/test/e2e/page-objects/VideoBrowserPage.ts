@@ -46,7 +46,15 @@ export class VideoBrowserPage extends BasePage {
   }
 
   /**
-   * Get the default user display name element.
+   * Get the user avatar button (always visible when logged in).
+   */
+  get userAvatar(): Locator {
+    return this.page.locator('button').filter({ has: this.page.locator('[class*="MuiAvatar-root"]') })
+  }
+
+  /**
+   * Get the user display name element (visible on sm+ screens).
+   * Note: This is hidden on xs screens due to responsive design.
    */
   get userDisplayName(): Locator {
     return this.page.getByText('Default User')
@@ -121,9 +129,12 @@ export class VideoBrowserPage extends BasePage {
 
   /**
    * Assert that the user is logged in (single-user mode).
+   * Checks for the user avatar which is always visible when authenticated.
    */
   async expectUserLoggedIn(): Promise<void> {
-    await expect(this.userDisplayName).toBeVisible()
+    // Wait for user avatar to be visible (more reliable than responsive text)
+    // The avatar button appears in the UserMenu component when user is authenticated
+    await expect(this.userAvatar).toBeVisible({ timeout: 10000 })
   }
 
   /**

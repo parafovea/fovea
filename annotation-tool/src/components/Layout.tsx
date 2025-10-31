@@ -38,6 +38,7 @@ import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
 import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 import ImportDataDialog from './ImportDataDialog'
+import ExportDialog from './ExportDialog'
 import UserMenu from './auth/UserMenu.js'
 import UserSettingsDialog from './settings/UserSettingsDialog.js'
 import ModelSettingsDialog from './settings/ModelSettingsDialog.js'
@@ -52,7 +53,7 @@ export default function Layout() {
   const dispatch = useDispatch<AppDispatch>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
   const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false)
@@ -118,25 +119,8 @@ export default function Layout() {
     }
   }, [personas, personaOntologies, world, dispatch])
 
-  const handleExport = useCallback(async () => {
-    setExporting(true)
-    try {
-      await api.downloadExport()
-      setNotification({
-        open: true,
-        message: 'Export completed successfully',
-        severity: 'success',
-      })
-    } catch (error) {
-      console.error('Failed to export:', error)
-      setNotification({
-        open: true,
-        message: 'Failed to export data',
-        severity: 'error',
-      })
-    } finally {
-      setExporting(false)
-    }
+  const handleExport = useCallback(() => {
+    setExportDialogOpen(true)
   }, [])
 
   const handleCloseNotification = () => {
@@ -157,7 +141,7 @@ export default function Layout() {
     ontologyWorkspaceActive: location.pathname === '/ontology',
     objectWorkspaceActive: location.pathname === '/objects',
     annotationWorkspaceActive: location.pathname.startsWith('/annotate'),
-    dialogOpen: shortcutsDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
+    dialogOpen: shortcutsDialogOpen || exportDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
     inputFocused: false, // Updated dynamically by App.tsx
   })
 
@@ -184,11 +168,7 @@ export default function Layout() {
         handleSave()
       }
     },
-    'file.export': () => {
-      if (!exporting) {
-        handleExport()
-      }
-    },
+    'file.export': () => handleExport(),
     'help.show': () => setShortcutsDialogOpen(true),
   })
 
@@ -260,9 +240,8 @@ export default function Layout() {
             <span>
               <Button
                 color="inherit"
-                startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                startIcon={<ExportIcon />}
                 onClick={handleExport}
-                disabled={exporting}
               >
                 Export
               </Button>
@@ -384,6 +363,11 @@ export default function Layout() {
             severity: 'success',
           })
         }}
+      />
+
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
       />
 
       <UserSettingsDialog

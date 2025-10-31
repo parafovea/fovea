@@ -75,7 +75,7 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
     id: 'help.show',
     title: 'Show Keyboard Shortcuts',
     category: 'global',
-    keybinding: 'shift+/',
+    keybinding: '?',
     description: 'Open keyboard shortcuts help dialog'
   },
   {

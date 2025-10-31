@@ -61,7 +61,7 @@ import {
 import { setActivePersona } from '../store/personaSlice'
 import { formatTimestamp, formatDuration } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
-import { useWorkspaceKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import { useGenerateSummary, useVideoSummary } from '../hooks/useSummaries'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from './JobStatusIndicator'
@@ -308,9 +308,19 @@ export default function VideoBrowser() {
     }
     return ''
   }
-  
-  // Setup keyboard shortcuts
-  useWorkspaceKeyboardShortcuts('videoBrowser', {
+
+  // Set command context for when clauses
+  useCommandContext({
+    videoBrowserActive: true,
+    annotationWorkspaceActive: false,
+    ontologyWorkspaceActive: false,
+    objectWorkspaceActive: false,
+    dialogOpen: false,
+    inputFocused: false, // Updated dynamically by focus events in App.tsx
+  })
+
+  // Register command handlers
+  useCommands({
     'search.focus': () => {
       searchInputRef.current?.focus()
     },
@@ -318,10 +328,6 @@ export default function VideoBrowser() {
       if (filteredVideos[selectedVideoIndex]) {
         navigate(`/annotate/${filteredVideos[selectedVideoIndex].id}`)
       }
-    },
-    'video.preview': () => {
-      // TODO: Implement video preview
-      console.log('Video preview not yet implemented')
     },
     'navigate.left': () => {
       setSelectedVideoIndex(prev => Math.max(0, prev - 1))
@@ -337,6 +343,10 @@ export default function VideoBrowser() {
       const cols = getGridColumns()
       setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + cols))
     },
+  }, {
+    context: 'videoBrowser',
+    enabled: true,
+    enableOnFormTags: false
   })
   
   // Reset selection when search changes

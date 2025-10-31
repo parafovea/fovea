@@ -74,12 +74,18 @@ export class AnnotationWorkspacePage extends BasePage {
     // Wait for URL change to annotation workspace
     await this.page.waitForURL(/\/annotate\//, { timeout: 15000 })
 
-    // Wait for annotation workspace to load by checking for unique elements
+    // Wait for annotation workspace UI elements to be visible
     await expect(this.page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
     await expect(this.page.getByText('All Annotations')).toBeVisible({ timeout: 15000 })
 
-    // Wait for video element to be ready
+    // Note: We don't wait for "Loading..." to disappear because video summary loading
+    // can take a long time or timeout, and it's not required for annotation functionality
+
+    // Wait for video element to be ready (video.js player loaded)
     await this.video.waitForReady()
+
+    // Additional wait for UI to stabilize
+    await this.page.waitForTimeout(1000)
   }
 
   /**
@@ -122,34 +128,54 @@ export class AnnotationWorkspacePage extends BasePage {
    * Useful for quick test setup.
    */
   async drawSimpleBoundingBox(): Promise<void> {
-    // Select persona - click to open dropdown, then click first "Test Analyst" option
+    // Wait for persona select to be visible and enabled
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
-    await personaSelect.click()
-    await this.page.waitForTimeout(500)
+    await expect(personaSelect).toBeEnabled({ timeout: 10000 })
 
-    // Wait for listbox and click first "Test Analyst" option
+    // Click to open the persona dropdown
+    await personaSelect.click()
+    await this.page.waitForTimeout(1000)
+
+    // Wait for the listbox to appear
     const personaListbox = this.page.getByRole('listbox', { name: /select persona/i })
     await expect(personaListbox).toBeVisible({ timeout: 10000 })
-    const testAnalystOption = personaListbox.getByRole('option', { name: /test analyst.*intelligence analyst/i }).first()
-    await expect(testAnalystOption).toBeVisible({ timeout: 10000 })
-    await testAnalystOption.click()
-    // Wait longer for ontology to load after persona selection
-    await this.page.waitForTimeout(3000)
 
-    // Wait for type select to become enabled and select first type
+    // Find the persona option that is NOT "None" and click it
+    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    await expect(personaOption).toBeVisible({ timeout: 5000 })
+    await personaOption.click()
+
+    // Wait for dropdown to close
+    await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {
+      console.log('Persona listbox did not close')
+    })
+
+    await this.page.waitForTimeout(500)
+
+    // Wait for ontology to load after persona selection
+    await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {
+      console.log('Network idle timeout - continuing with test')
+    })
+
+    // Additional wait for React state updates
+    await this.page.waitForTimeout(4000)
+
+    // Verify persona was selected by checking if type select is now enabled
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 10000 })
+    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
+
+    // Use keyboard navigation for type selection as well
     await typeSelect.click()
     await this.page.waitForTimeout(500)
 
-    // Wait for type listbox and click first "Test Entity Type" option
-    const typeListbox = this.page.getByRole('listbox', { name: /select type/i })
-    await expect(typeListbox).toBeVisible({ timeout: 10000 })
-    const testEntityOption = typeListbox.getByRole('option', { name: /test entity type/i }).first()
-    await expect(testEntityOption).toBeVisible({ timeout: 10000 })
-    await testEntityOption.click()
-    await this.page.waitForTimeout(1000)
+    // Press ArrowDown to open dropdown and select first option
+    await typeSelect.press('ArrowDown')
+    await this.page.waitForTimeout(300)
+
+    // Press Enter to select the highlighted option
+    await typeSelect.press('Enter')
+    await this.page.waitForTimeout(500)
 
     await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })
   }

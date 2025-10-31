@@ -18,6 +18,8 @@
     "test:e2e:a11y": "playwright test --project=accessibility",
     "test:e2e:a11y:ui": "playwright test --project=accessibility --ui",
     "test:e2e:a11y:debug": "playwright test --project=accessibility --debug",
+    "test:e2e:visual": "playwright test --project=visual",
+    "test:e2e:visual:update": "playwright test --project=visual --update-snapshots",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",

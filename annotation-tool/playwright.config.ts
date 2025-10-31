@@ -87,6 +87,22 @@ export default defineConfig({
           args: ['--force-renderer-accessibility']
         }
       }
+    },
+
+    // Visual regression tests - component and layout screenshot comparison
+    // Uses Playwright's built-in toHaveScreenshot() for visual diffing
+    // Baseline screenshots stored in test/e2e/regression/visual/*.spec.ts-snapshots/
+    {
+      name: 'visual',
+      testDir: './test/e2e/regression/visual',
+      timeout: 60000,
+      retries: 0,  // Don't retry visual tests
+      workers: process.env.CI ? 3 : undefined,  // Less parallelization for stability
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+        screenshot: 'on'  // Always take screenshots for visual tests
+      }
     }
   ]
 
