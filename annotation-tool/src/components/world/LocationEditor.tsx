@@ -44,7 +44,7 @@ import { addEntity, updateEntity } from '../../store/worldSlice'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
-import WikidataSearch from '../WikidataSearch'
+import WikidataImportFlow from '../shared/WikidataImportFlow'
 import MapLocationPicker from './MapLocationPicker'
 
 interface LocationEditorProps {
@@ -376,34 +376,12 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
           {/* Wikidata import */}
           {importMode === 'wikidata' && !location && (
-            <WikidataSearch
+            <WikidataImportFlow
+              type="location"
               entityType="object"
               objectSubtype="location"
-              onImport={(data: any) => {
-                setName(data.name)
-                setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])
-                setAlternateNames(data.aliases || [])
-                setWikidataId(data.wikidataId)
-                setWikidataUrl(data.wikidataUrl)
-                
-                // Auto-populate coordinates if available
-                if (data.coordinates) {
-                  setLocationType('point')
-                  setCoordinateSystem('GPS')
-                  setPointCoordinates({
-                    latitude: data.coordinates.latitude,
-                    longitude: data.coordinates.longitude,
-                    altitude: data.coordinates.altitude,
-                  })
-                }
-                
-                // Handle bounding box if available
-                if (data.boundingBox && data.boundingBox.minLatitude) {
-                  setLocationType('extent')
-                  setUseBoundingBox(true)
-                  setBoundingBox(data.boundingBox)
-                }
-              }}
+              onSuccess={() => onClose()}
+              onCancel={onClose}
             />
           )}
 

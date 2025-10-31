@@ -17,10 +17,11 @@ import {
 import { Category as TypeIcon } from '@mui/icons-material'
 import { GlossItem } from '../../models/types'
 import GlossEditor from '../GlossEditor'
-import WikidataSearch from '../WikidataSearch'
+import WikidataImportFlow from './WikidataImportFlow'
 import ModeSelector from './ModeSelector'
 import { WikidataChip } from './WikidataChip'
 import { TypeObjectBadge } from './TypeObjectToggle'
+import { ImportType } from '../../hooks/useWikidataImport'
 
 export interface BaseTypeEditorProps {
   // Required props
@@ -28,7 +29,7 @@ export interface BaseTypeEditorProps {
   onClose: () => void
   typeCategory: 'entity' | 'role' | 'event' | 'relation'
   personaId: string | null
-  
+
   // Form state
   name: string
   setName: (name: string) => void
@@ -36,19 +37,20 @@ export interface BaseTypeEditorProps {
   setGloss: (gloss: GlossItem[]) => void
   mode: 'manual' | 'copy' | 'wikidata'
   setMode: (mode: 'manual' | 'copy' | 'wikidata') => void
-  
+
   // Import state
   sourcePersonaId: string
   setSourcePersonaId?: (id: string) => void
   targetPersonaIds: string[]
   setTargetPersonaIds: (ids: string[]) => void
-  
+
   // Wikidata state
   wikidataId?: string
   wikidataUrl?: string
   importedAt?: string
-  onWikidataSelect?: (item: any) => void
-  
+  /** @deprecated No longer used - WikidataImportFlow handles import directly */
+  _onWikidataSelect?: (item: any) => void
+
   // Actions
   onSave: () => void
   onDelete?: () => void
@@ -80,7 +82,6 @@ export default function BaseTypeEditor({
   wikidataId,
   wikidataUrl,
   importedAt,
-  onWikidataSelect,
   onSave,
   onDelete,
   title,
@@ -174,10 +175,12 @@ export default function BaseTypeEditor({
             {/* Wikidata Import Mode */}
             {mode === 'wikidata' && (
               <Box>
-                <Typography variant="subtitle2" component="div" gutterBottom>Search Wikidata</Typography>
-                <WikidataSearch
-                  onImport={onWikidataSelect || (() => {})}
+                <WikidataImportFlow
+                  type={`${typeCategory}-type` as ImportType}
+                  personaId={personaId || undefined}
                   entityType="type"
+                  onSuccess={() => onClose()}
+                  onCancel={onClose}
                 />
               </Box>
             )}

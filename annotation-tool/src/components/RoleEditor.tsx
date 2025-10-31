@@ -134,14 +134,6 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     }
   }
 
-  const handleWikidataSelect = (data: any) => {
-    setName(data.name)
-    setGloss([{ type: 'text', content: data.description }])
-    setWikidataId(data.wikidataId)
-    setWikidataUrl(data.wikidataUrl)
-    setImportedAt(new Date().toISOString())
-  }
-
   const handleAddExample = () => {
     if (exampleInput.trim()) {
       setExamples([...examples, exampleInput.trim()])
@@ -271,7 +263,6 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
       wikidataId={wikidataId}
       wikidataUrl={wikidataUrl}
       importedAt={importedAt}
-      onWikidataSelect={handleWikidataSelect}
       onSave={handleSave}
       onDelete={role ? handleDelete : undefined}
       title={role ? 'Edit Role Type' : 'Create Role Type'}

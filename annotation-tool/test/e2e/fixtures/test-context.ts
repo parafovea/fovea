@@ -151,6 +151,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Test video fixture.
    * Fetches the first available video from the backend.
    */
+  // eslint-disable-next-line no-empty-pattern
   testVideo: async ({}, use) => {
     // Fetch actual videos from backend
     const response = await fetch('http://localhost:3001/api/videos')

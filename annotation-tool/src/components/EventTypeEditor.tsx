@@ -154,14 +154,6 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     ))
   }
 
-  const handleWikidataSelect = (data: any) => {
-    setName(data.name)
-    setGloss([{ type: 'text', content: data.description }])
-    setWikidataId(data.wikidataId)
-    setWikidataUrl(data.wikidataUrl)
-    setImportedAt(new Date().toISOString())
-  }
-
   const handleAddExample = () => {
     if (exampleInput.trim()) {
       setExamples([...examples, exampleInput.trim()])
@@ -331,7 +323,6 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       wikidataId={wikidataId}
       wikidataUrl={wikidataUrl}
       importedAt={importedAt}
-      onWikidataSelect={handleWikidataSelect}
       onSave={handleSave}
       onDelete={event ? handleDelete : undefined}
       title={event ? 'Edit Event Type' : 'Create Event Type'}
