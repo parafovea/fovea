@@ -9,6 +9,7 @@ audio transcription and multimodal fusion strategies.
 import io
 import logging
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -865,18 +866,11 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
     str | None
         Full path to video file, or None if not found.
     """
-    # Validate video_id before any path operations to prevent path traversal
-    import re
-
-    if (
-        "/" in video_id
-        or "\\" in video_id
-        or ".." in video_id
-        or video_id.startswith(("/", "\\"))
-        or not re.match(r"^[\w\-]+$", video_id)
-    ):
+    # Validate video_id format to prevent path traversal
+    # Only allow alphanumeric characters, underscores, and hyphens
+    if not re.match(r"^[\w\-]+$", video_id):
         sanitized_video_id = video_id.replace("\r", "").replace("\n", "")
-        logger.warning(f"Rejected suspicious video_id: {sanitized_video_id!r}")
+        logger.warning(f"Invalid video_id format: {sanitized_video_id!r}")
         return None
 
     data_path = Path(data_dir)
@@ -886,24 +880,30 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
         return None
 
     video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm"]
-
     data_path_resolved = data_path.resolve()
 
+    # Path construction is safe because video_id is validated to contain only [\w\-]+
+    # and we verify the resolved path is within the allowed directory
     for ext in video_extensions:
+        # lgtm[py/path-injection]
         video_path = data_path / f"{video_id}{ext}"
+        # lgtm[py/path-injection]
         video_path_resolved = video_path.resolve()
         # Validate path is within allowed directory BEFORE checking existence
         if (
             os.path.commonpath([str(video_path_resolved), str(data_path_resolved)])
             == str(data_path_resolved)
+            # lgtm[py/path-injection]
             and video_path_resolved.exists()
         ):
             return str(video_path_resolved)
 
+    # Fallback: scan for files with any extension
+    # lgtm[py/path-injection]
     potential_matches = list(data_path.glob(f"{video_id}.*"))
     for match in potential_matches:
         resolved_match = match.resolve()
-        # Validate path is within allowed directory BEFORE checking existence
+        # Validate path is within allowed directory
         if (
             os.path.commonpath([str(resolved_match), str(data_path_resolved)])
             == str(data_path_resolved)
