@@ -460,9 +460,15 @@ async def extract_audio_track(
             raise AudioProcessingError(f"Video {video_path} has no audio streams")
 
         if output_path is None:
-            temp_dir = Path(tempfile.gettempdir())
+            temp_dir = Path(tempfile.gettempdir()).resolve()
             output_filename = f"{Path(video_path).stem}_track{track_index}.wav"
             output_path = str(temp_dir / output_filename)
+        else:
+            # Validate output_path is within temp directory to prevent path traversal
+            output_path_resolved = Path(output_path).resolve()
+            temp_dir_resolved = Path(tempfile.gettempdir()).resolve()
+            if not str(output_path_resolved).startswith(str(temp_dir_resolved)):
+                raise AudioProcessingError(f"Output path must be within temp directory: {output_path}")
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -494,7 +500,8 @@ async def extract_audio_track(
                 raise AudioProcessingError(f"Output file not created: {output_path}")
 
             span.set_attribute("audio.output_path", output_path)
-            logger.info(f"Extracted audio track {track_index} from {video_path}")
+            safe_video_path = str(video_path).replace('\r', '').replace('\n', '')
+            logger.info(f"Extracted audio track {track_index} from {safe_video_path}")
 
             return output_path
 

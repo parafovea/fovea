@@ -605,7 +605,7 @@ The model service does not implement request queuing. Clients must handle rate l
 
 ## See Also
 
-- [Audio Transcription API](/docs/api-reference/audio-transcription) - External audio API integration
-- [External API Configuration](/docs/user-guides/external-apis) - User guide for API keys
-- [Model Service Configuration](/docs/model-service/configuration) - Model selection and settings
-- [Audio Processing Architecture](/docs/concepts/audio-processing) - Audio API provider abstraction
+- [Audio Transcription API](../api-reference/audio-transcription) - External audio API integration
+- [External API Configuration](../user-guides/external-apis) - User guide for API keys
+- [Model Service Configuration](../model-service/configuration) - Model selection and settings
+- [Audio Processing Architecture](./audio-processing) - Audio API provider abstraction

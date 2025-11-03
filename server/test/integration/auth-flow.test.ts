@@ -145,8 +145,7 @@ describe('Authentication Flow Integration', () => {
     it('admin creates user → user logs in → user creates persona', async () => {
       // 1. Create admin user
       const adminPasswordHash = await hashPassword('adminpass')
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const adminUser = await prisma.user.create({
+      await prisma.user.create({
         data: {
           username: 'admin',
           email: 'admin@example.com',
@@ -347,8 +346,7 @@ describe('Authentication Flow Integration', () => {
     it('all sessions invalidated when user is deleted', async () => {
       // 1. Create admin and regular user
       const adminPasswordHash = await hashPassword('adminpass')
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const adminUser = await prisma.user.create({
+      await prisma.user.create({
         data: {
           username: 'admin',
           email: 'admin@example.com',

@@ -9,7 +9,8 @@
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "**/vite-env.d.ts",
-    "**/setupTests.ts"
+    "**/setupTests.ts",
+    "test/e2e/**"
   ],
   "excludePrivate": true,
   "excludeProtected": false,

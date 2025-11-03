@@ -379,8 +379,7 @@ describe('World State API', () => {
     it('preserves world state isolation between users', async () => {
       // Create second user
       const passwordHash = await hashPassword('testpass456')
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const user2 = await prisma.user.create({
+      await prisma.user.create({
         data: {
           username: 'testuser2',
           email: 'test2@example.com',

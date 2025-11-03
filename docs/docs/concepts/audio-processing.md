@@ -753,8 +753,8 @@ WER = Word Error Rate (lower is better)
 
 ## See Also
 
-- [Audio Transcription API](/docs/api-reference/audio-transcription) - API reference for audio features
-- [Audio Transcription User Guide](/docs/user-guides/audio/transcription-overview) - How to use audio features
-- [Audio-Visual Fusion Strategies](/docs/user-guides/audio/fusion-strategies) - Fusion strategy details
-- [External API Integration](/docs/concepts/external-api-integration) - VLM/LLM provider architecture
-- [External API Configuration](/docs/user-guides/external-apis) - API key setup guide
+- [Audio Transcription API](../api-reference/audio-transcription) - API reference for audio features
+- [Audio Transcription User Guide](../user-guides/audio/transcription-overview) - How to use audio features
+- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies) - Fusion strategy details
+- [External API Integration](./external-api-integration) - VLM/LLM provider architecture
+- [External API Configuration](../user-guides/external-apis) - API key setup guide
