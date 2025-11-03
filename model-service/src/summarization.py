@@ -885,21 +885,17 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
     # Path construction is safe because video_id is validated to contain only [\w\-]+
     # and we verify the resolved path is within the allowed directory
     for ext in video_extensions:
-        # lgtm[py/path-injection]
         video_path = data_path / f"{video_id}{ext}"
-        # lgtm[py/path-injection]
         video_path_resolved = video_path.resolve()
         # Validate path is within allowed directory BEFORE checking existence
         if (
             os.path.commonpath([str(video_path_resolved), str(data_path_resolved)])
             == str(data_path_resolved)
-            # lgtm[py/path-injection]
             and video_path_resolved.exists()
         ):
             return str(video_path_resolved)
 
     # Fallback: scan for files with any extension
-    # lgtm[py/path-injection]
     potential_matches = list(data_path.glob(f"{video_id}.*"))
     for match in potential_matches:
         resolved_match = match.resolve()

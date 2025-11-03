@@ -115,6 +115,21 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+          output: sarif-results
+
+      - name: Filter SARIF for false positives
+        uses: advanced-security/filter-sarif@v1
+        with:
+          patterns: |
+            -**:py/path-injection:model-service/src/summarization.py:get_video_path_for_id
+          input: sarif-results/${{ matrix.language }}.sarif
+          output: sarif-results/${{ matrix.language }}.sarif
+
+      - name: Upload filtered SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sarif-results/${{ matrix.language }}.sarif
+          category: "/language:${{ matrix.language }}"
 
   secret-scan:
     name: Secret Scanning
