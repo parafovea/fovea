@@ -20,7 +20,7 @@ import { injectAxe, checkA11y } from 'axe-playwright'
  */
 
 test.describe('Keyboard Navigation - Basic Tab Order', () => {
-  test('annotation workspace passes axe keyboard accessibility audit', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('annotation workspace passes axe keyboard accessibility audit', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await injectAxe(page)
 
@@ -45,7 +45,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     })
   })
 
-  test('focus indicators are visible and meet WCAG standards', async ({ _page, annotationWorkspace, _testVideo }) => {
+  test('focus indicators are visible and meet WCAG standards', async ({ _page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Tab to first interactive element
@@ -64,7 +64,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     }
   })
 
-  test('tab order follows logical reading sequence', async ({ _page, annotationWorkspace, _testVideo }) => {
+  test('tab order follows logical reading sequence', async ({ _page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const focusOrder: string[] = []
@@ -85,7 +85,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     expect(hasInteractiveElements).toBe(true)
   })
 
-  test('shift+tab navigates backward through elements', async ({ _page, annotationWorkspace, _testVideo }) => {
+  test('shift+tab navigates backward through elements', async ({ _page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Tab forward 5 times
@@ -108,7 +108,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     expect(returnTag).toBe(forwardTag)
   })
 
-  test('keyboard navigation does not create focus trap on main page', async ({ _page, annotationWorkspace, _testVideo }) => {
+  test('keyboard navigation does not create focus trap on main page', async ({ _page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const focusHistory: string[] = []
@@ -145,7 +145,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
 })
 
 test.describe('Keyboard Navigation - Dialogs and Modals', () => {
-  test('dialog traps focus and closes with escape', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('dialog traps focus and closes with escape', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -183,7 +183,7 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
     await expect(dialog).not.toBeVisible()
   })
 
-  test('dialog can be navigated entirely with keyboard', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('dialog can be navigated entirely with keyboard', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -269,7 +269,7 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
     await expect(dialog).not.toBeVisible({ timeout: 5000 })
   })
 
-  test('modal backdrop does not receive focus', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('modal backdrop does not receive focus', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -296,7 +296,7 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
 })
 
 test.describe('Keyboard Navigation - Video Player Controls', () => {
-  test('space key toggles video play/pause', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('space key toggles video play/pause', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Give video player focus - click and explicitly focus
@@ -334,7 +334,7 @@ test.describe('Keyboard Navigation - Video Player Controls', () => {
     }
   })
 
-  test('arrow keys seek through video frames', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('arrow keys seek through video frames', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Use force: true because SVG overlay intercepts pointer events
@@ -369,7 +369,7 @@ test.describe('Keyboard Navigation - Video Player Controls', () => {
     }
   })
 
-  test('video controls are keyboard accessible', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('video controls are keyboard accessible', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Find video controls container
@@ -400,7 +400,7 @@ test.describe('Keyboard Navigation - Video Player Controls', () => {
 })
 
 test.describe('Keyboard Navigation - Annotation Workflow', () => {
-  test('timeline keyboard shortcut (T) toggles timeline', async ({ page, annotationWorkspace, _testVideo, _testPersona, _testEntityType }) => {
+  test('timeline keyboard shortcut (T) toggles timeline', async ({ page, annotationWorkspace, testVideo, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await annotationWorkspace.drawSimpleBoundingBox()
     await page.waitForTimeout(1000)
@@ -423,7 +423,7 @@ test.describe('Keyboard Navigation - Annotation Workflow', () => {
     await annotationWorkspace.timeline.expectHidden()
   })
 
-  test('keyboard shortcuts do not interfere with text input', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('keyboard shortcuts do not interfere with text input', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -444,7 +444,7 @@ test.describe('Keyboard Navigation - Annotation Workflow', () => {
 })
 
 test.describe('Keyboard Navigation - Forms and Buttons', () => {
-  test('buttons can be activated with both Enter and Space', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('buttons can be activated with both Enter and Space', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -505,7 +505,7 @@ test.describe('Keyboard Navigation - Forms and Buttons', () => {
     await expect(dialog).not.toBeVisible({ timeout: 5000 })
   })
 
-  test('form inputs receive focus in logical order', async ({ ontologyWorkspace, _testPersona, page }) => {
+  test('form inputs receive focus in logical order', async ({ ontologyWorkspace, testPersona, page }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -549,7 +549,7 @@ test.describe('Keyboard Navigation - Forms and Buttons', () => {
     expect(nonEmptyLabels.length).toBeGreaterThan(0)
   })
 
-  test('disabled buttons are skipped in tab order', async ({ page, ontologyWorkspace, _testPersona }) => {
+  test('disabled buttons are skipped in tab order', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -639,7 +639,7 @@ test.describe('Keyboard Navigation - Forms and Buttons', () => {
 })
 
 test.describe('Keyboard Navigation - Menus and Dropdowns', () => {
-  test('dropdowns can be opened and navigated with keyboard', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('dropdowns can be opened and navigated with keyboard', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Find persona select dropdown
@@ -668,7 +668,7 @@ test.describe('Keyboard Navigation - Menus and Dropdowns', () => {
     expect(isClosed).toBe(true)
   })
 
-  test('tab navigation in combobox follows expected pattern', async ({ page, annotationWorkspace, _testVideo }) => {
+  test('tab navigation in combobox follows expected pattern', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Tab to persona select

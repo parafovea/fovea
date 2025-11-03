@@ -5,7 +5,7 @@ test.describe('Collection Management', () => {
 
   test('creates entity collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -28,7 +28,7 @@ test.describe('Collection Management', () => {
 
   test('adds entities to collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -86,7 +86,7 @@ test.describe('Collection Management', () => {
 
   test('removes entities from collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -113,7 +113,7 @@ test.describe('Collection Management', () => {
 
   test('creates event collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -135,7 +135,7 @@ test.describe('Collection Management', () => {
 
   test('adds events to collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -183,7 +183,7 @@ test.describe('Collection Management', () => {
 
   test('edits collection metadata', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -211,7 +211,7 @@ test.describe('Collection Management', () => {
 
   test('deletes collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -238,7 +238,7 @@ test.describe('Collection Management', () => {
 
   test('searches collections', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -269,7 +269,7 @@ test.describe('Collection Management', () => {
 
   test('collections persist across reload', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -310,7 +310,7 @@ test.describe('Collection Management', () => {
 
   test('displays collection count in tab', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()

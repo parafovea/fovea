@@ -92,7 +92,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('object workspace renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('object workspace renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
 
     // Wait for tabs to be visible
@@ -107,7 +107,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('entity editor renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('entity editor renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('entities')
 
@@ -124,7 +124,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('event editor renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('event editor renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
 
@@ -141,7 +141,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('location editor renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('location editor renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('locations')
 
@@ -161,7 +161,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('time editor renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('time editor renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('times')
 
@@ -178,7 +178,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('collection builder renders correctly', async ({ page, objectWorkspace, _testPersona }) => {
+  test('collection builder renders correctly', async ({ page, objectWorkspace, testPersona }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('collections')
 
@@ -195,7 +195,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('annotation workspace sidebar renders correctly', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('annotation workspace sidebar renders correctly', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
     // The sidebar is a Material-UI Drawer on the right side containing "All Annotations"
@@ -213,7 +213,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('video player controls render correctly', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('video player controls render correctly', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
     // Wait for video.js player to be fully initialized
@@ -323,7 +323,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('ontology workspace with entity types renders correctly', async ({ page, ontologyWorkspace, testPersona, _testEntityType }) => {
+  test('ontology workspace with entity types renders correctly', async ({ page, ontologyWorkspace, testPersona, testEntityType }) => {
     // Navigate to ontology workspace which should have test entity types
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
@@ -349,7 +349,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('timeline component renders correctly', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('timeline component renders correctly', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -368,7 +368,7 @@ test.describe('Component Visual Regression', () => {
     })
   })
 
-  test('bounding box renderer renders correctly', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('bounding box renderer renders correctly', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 

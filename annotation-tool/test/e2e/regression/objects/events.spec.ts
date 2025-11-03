@@ -5,8 +5,8 @@ test.describe('Event Management', () => {
 
   test('creates event with name and description', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -23,8 +23,8 @@ test.describe('Event Management', () => {
 
   test('validates event name is required', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -56,8 +56,8 @@ test.describe('Event Management', () => {
 
   test('edits event details', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -70,8 +70,8 @@ test.describe('Event Management', () => {
 
   test('deletes event', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -87,8 +87,8 @@ test.describe('Event Management', () => {
 
   test('searches events by name', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -103,8 +103,8 @@ test.describe('Event Management', () => {
 
   test('searches events by description', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -119,7 +119,7 @@ test.describe('Event Management', () => {
 
   test('links event to event type', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     testEventType,
     _page
   }) => {
@@ -131,9 +131,9 @@ test.describe('Event Management', () => {
 
   test('adds participants to event', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
-    _testRoleType,
+    testPersona,
+    testEntityType,
+    testRoleType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -154,7 +154,7 @@ test.describe('Event Management', () => {
 
   test('adds event location', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -174,7 +174,7 @@ test.describe('Event Management', () => {
 
   test('adds event time', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -194,7 +194,7 @@ test.describe('Event Management', () => {
 
   test('adds Wikidata reference', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     // Basic test - verifies event creation (Wikidata search requires UI implementation)
@@ -206,7 +206,7 @@ test.describe('Event Management', () => {
 
   test('adds event to collection', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -229,8 +229,8 @@ test.describe('Event Management', () => {
 
   test('displays event count in tab', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -249,8 +249,8 @@ test.describe('Event Management', () => {
 
   test('events persist across reload', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -276,8 +276,8 @@ test.describe('Event Management', () => {
 
   test('creates multiple events', async ({
     objectWorkspace,
-    _testPersona,
-    _testEventType,
+    testPersona,
+    testEventType,
     _page
   }) => {
     await objectWorkspace.navigateTo()

@@ -5,8 +5,8 @@ test.describe('Entity Management', () => {
 
   test('creates entity with name and description', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     // Navigate to object workspace
@@ -27,8 +27,8 @@ test.describe('Entity Management', () => {
 
   test('validates entity name is required', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -58,8 +58,8 @@ test.describe('Entity Management', () => {
 
   test('edits entity details', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -77,8 +77,8 @@ test.describe('Entity Management', () => {
 
   test('deletes entity', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -99,8 +99,8 @@ test.describe('Entity Management', () => {
 
   test('searches entities by name', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -121,8 +121,8 @@ test.describe('Entity Management', () => {
 
   test('searches entities by description', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -136,7 +136,7 @@ test.describe('Entity Management', () => {
 
   test('links entity to entity type', async ({
     objectWorkspace,
-    _testPersona,
+    testPersona,
     testEntityType,
     _page
   }) => {
@@ -148,8 +148,8 @@ test.describe('Entity Management', () => {
 
   test('displays entity count in tab', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -167,8 +167,8 @@ test.describe('Entity Management', () => {
 
   test('entities persist across reload', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -192,8 +192,8 @@ test.describe('Entity Management', () => {
 
   test('creates multiple entities', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -212,8 +212,8 @@ test.describe('Entity Management', () => {
 
   test('clears search filter', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -235,8 +235,8 @@ test.describe('Entity Management', () => {
 
   test('entity name is case-sensitive in exact match', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -254,8 +254,8 @@ test.describe('Entity Management', () => {
 
   test('handles entity with empty description', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()
@@ -269,8 +269,8 @@ test.describe('Entity Management', () => {
 
   test('switches between entity tab and other tabs', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -290,8 +290,8 @@ test.describe('Entity Management', () => {
 
   test('entity list updates immediately after creation', async ({
     objectWorkspace,
-    _testPersona,
-    _testEntityType,
+    testPersona,
+    testEntityType,
     _page
   }) => {
     await objectWorkspace.navigateTo()

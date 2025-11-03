@@ -6,11 +6,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Annotation Interpolation', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('interpolates bounding boxes between keyframes', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('interpolates bounding boxes between keyframes', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -60,7 +60,7 @@ test.describe('Annotation Interpolation', () => {
     expect(midBox?.height).toBeGreaterThan(0)
   })
 
-  test('toggles visibility with V key', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('toggles visibility with V key', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()

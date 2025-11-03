@@ -6,11 +6,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Annotation Timeline - Visibility', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('timeline is visible and renders correctly', async ({ annotationWorkspace, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline is visible and renders correctly', async ({ annotationWorkspace, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -22,7 +22,7 @@ test.describe('Annotation Timeline - Visibility', () => {
     expect(info.canvasHeight).toBeGreaterThan(0)
   })
 
-  test('timeline toggles visibility with T key', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline toggles visibility with T key', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -41,7 +41,7 @@ test.describe('Annotation Timeline - Visibility', () => {
     expect(isVisible1).not.toBe(isVisible2)
   })
 
-  test('timeline ruler shows frame numbers', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline ruler shows frame numbers', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -60,11 +60,11 @@ test.describe('Annotation Timeline - Visibility', () => {
 })
 
 test.describe('Annotation Timeline - Playhead', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('playhead moves as video plays', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('playhead moves as video plays', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -85,7 +85,7 @@ test.describe('Annotation Timeline - Playhead', () => {
     await annotationWorkspace.video.pause()
   })
 
-  test('playhead updates when seeking with keyboard', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('playhead updates when seeking with keyboard', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -111,11 +111,11 @@ test.describe('Annotation Timeline - Playhead', () => {
 })
 
 test.describe('Annotation Timeline - Keyframe Markers', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('timeline shows keyframe markers at correct positions', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline shows keyframe markers at correct positions', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -140,7 +140,7 @@ test.describe('Annotation Timeline - Keyframe Markers', () => {
     await annotationWorkspace.timeline.expectVisible()
   })
 
-  test('timeline updates when keyframes are added', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline updates when keyframes are added', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -162,7 +162,7 @@ test.describe('Annotation Timeline - Keyframe Markers', () => {
     annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
   })
 
-  test('timeline updates when keyframes are removed', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline updates when keyframes are removed', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -197,11 +197,11 @@ test.describe('Annotation Timeline - Keyframe Markers', () => {
 })
 
 test.describe('Annotation Timeline - Zoom Controls', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('timeline zoom controls work', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline zoom controls work', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -225,7 +225,7 @@ test.describe('Annotation Timeline - Zoom Controls', () => {
     await annotationWorkspace.timeline.expectVisible()
   })
 
-  test('timeline zoom in increases detail', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline zoom in increases detail', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -246,7 +246,7 @@ test.describe('Annotation Timeline - Zoom Controls', () => {
     expect(info2.canvasHeight).toBeGreaterThan(0)
   })
 
-  test('timeline zoom out reduces detail', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('timeline zoom out reduces detail', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 

@@ -6,11 +6,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Annotation Keyframes', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('adds keyframe with K shortcut', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('adds keyframe with K shortcut', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -26,7 +26,7 @@ test.describe('Annotation Keyframes', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('deletes keyframe with Delete key', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('deletes keyframe with Delete key', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -54,7 +54,7 @@ test.describe('Annotation Keyframes', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('copies previous keyframe with C key', async ({ annotationWorkspace, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('copies previous keyframe with C key', async ({ annotationWorkspace, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -69,7 +69,7 @@ test.describe('Annotation Keyframes', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('saves annotation with keyframes', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('saves annotation with keyframes', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 

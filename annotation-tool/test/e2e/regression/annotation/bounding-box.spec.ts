@@ -6,11 +6,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Annotation Bounding Box', () => {
-  test.beforeEach(async ({ videoBrowser, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test.beforeEach(async ({ videoBrowser, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.navigateToHome()
   })
 
-  test('loads video and navigates to annotation workspace', async ({ videoBrowser, annotationWorkspace, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('loads video and navigates to annotation workspace', async ({ videoBrowser, annotationWorkspace, testUser, testPersona, testEntityType, testVideo }) => {
     await videoBrowser.expectPageLoaded()
 
     const firstVideo = videoBrowser.firstVideoCard
@@ -27,13 +27,13 @@ test.describe('Annotation Bounding Box', () => {
     await annotationWorkspace.expectWorkspaceReady()
   })
 
-  test('creates initial bounding box annotation', async ({ annotationWorkspace, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('creates initial bounding box annotation', async ({ annotationWorkspace, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('navigates frames with arrow keys', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('navigates frames with arrow keys', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -65,7 +65,7 @@ test.describe('Annotation Bounding Box', () => {
     expect(frame0).toBe(0)
   })
 
-  test('keyboard shortcuts work in annotation workspace', async ({ annotationWorkspace, page, _testUser, _testPersona, _testEntityType, _testVideo }) => {
+  test('keyboard shortcuts work in annotation workspace', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 

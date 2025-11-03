@@ -30,7 +30,7 @@ test.describe('Responsive Layout Visual Regression', () => {
     })
   }
 
-  test('annotation workspace renders correctly on desktop', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('annotation workspace renders correctly on desktop', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await annotationWorkspace.navigateFromVideoBrowser()
 
@@ -44,7 +44,7 @@ test.describe('Responsive Layout Visual Regression', () => {
     })
   })
 
-  test('annotation workspace renders correctly on wide screen', async ({ page, annotationWorkspace, _testPersona, _testEntityType }) => {
+  test('annotation workspace renders correctly on wide screen', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await page.setViewportSize({ width: 1920, height: 1080 })
     await annotationWorkspace.navigateFromVideoBrowser()
 
@@ -92,7 +92,7 @@ test.describe('Responsive Layout Visual Regression', () => {
     })
   })
 
-  test('object workspace renders correctly on desktop', async ({ page, objectWorkspace, _testPersona }) => {
+  test('object workspace renders correctly on desktop', async ({ page, objectWorkspace, testPersona }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await objectWorkspace.navigateTo()
 

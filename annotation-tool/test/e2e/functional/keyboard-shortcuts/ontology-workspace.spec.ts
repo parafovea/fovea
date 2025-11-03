@@ -12,11 +12,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
-  test.beforeEach(async ({ _page, _testUser, ontologyWorkspace, testPersona }) => {
+  test.beforeEach(async ({ _page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
   })
 
-  test('n creates new entity type', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('n creates new entity type', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     // Ensure on entities tab
     await ontologyWorkspace.selectTab('entities')
 
@@ -32,7 +32,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(dialog.getByText(/entity type/i)).toBeVisible()
   })
 
-  test('n creates different types based on active tab', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('n creates different types based on active tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     // Test on roles tab
     await ontologyWorkspace.selectTab('roles')
 
@@ -58,7 +58,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(dialog.getByText(/event type/i)).toBeVisible()
   })
 
-  test('/ focuses search field', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('/ focuses search field', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.selectTab('entities')
 
     // Wait for search input to be visible (ensures persona is selected and commands are enabled)
@@ -73,7 +73,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(searchInput).toBeFocused()
   })
 
-  test('Tab navigates to next type tab', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('Tab navigates to next type tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.selectTab('entities')
 
     // Press Tab (should go to next tab)
@@ -85,7 +85,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(rolesTab).toHaveAttribute('aria-selected', 'true')
   })
 
-  test('Shift+Tab navigates to previous type tab', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('Shift+Tab navigates to previous type tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.selectTab('roles')
 
     // Press Shift+Tab (should go to previous tab)
@@ -97,7 +97,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(entitiesTab).toHaveAttribute('aria-selected', 'true')
   })
 
-  test('Delete removes selected type', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('Delete removes selected type', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.selectTab('entities')
 
     // Create a test entity type first
@@ -143,7 +143,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(typeItem).not.toBeVisible()
   })
 
-  test('shortcuts disabled when typing in search', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('shortcuts disabled when typing in search', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.selectTab('entities')
 
     // Click search field to focus it
@@ -163,7 +163,7 @@ test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
     await expect(dialog).not.toBeVisible()
   })
 
-  test('keyboard shortcuts work across all ontology tabs', async ({ page, _testUser, ontologyWorkspace, _testPersona }) => {
+  test('keyboard shortcuts work across all ontology tabs', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     // Test that n works on each tab
     const tabs = ['entities', 'roles', 'events', 'relations'] as const
 
