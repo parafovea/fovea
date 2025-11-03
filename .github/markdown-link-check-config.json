@@ -11,6 +11,9 @@
     },
     {
       "pattern": "^https://console\\.anthropic\\.com"
+    },
+    {
+      "pattern": "^https://ai\\.google\\.dev/gemini-api/"
     }
   ],
   "aliveStatusCodes": [200, 206],
