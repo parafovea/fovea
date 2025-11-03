@@ -76,7 +76,7 @@ def test_client_with_mocks(mock_model_manager: Mock) -> TestClient:
     import src.routes
 
     src.routes._model_manager = mock_model_manager
-    return TestClient(app)
+    return TestClient(app, base_url="http://testserver")
 
 
 class TestSummarizeEndpoint:

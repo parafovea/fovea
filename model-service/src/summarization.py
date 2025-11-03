@@ -875,7 +875,8 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
         or video_id.startswith(("/", "\\"))
         or not re.match(r"^[\w\-]+$", video_id)
     ):
-        logger.warning(f"Rejected suspicious video_id: {video_id!r}")
+        sanitized_video_id = video_id.replace("\r", "").replace("\n", "")
+        logger.warning(f"Rejected suspicious video_id: {sanitized_video_id!r}")
         return None
 
     data_path = Path(data_dir)
