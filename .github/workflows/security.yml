@@ -116,6 +116,7 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
           output: sarif-results
+          upload: false
 
       - name: Filter SARIF for false positives
         if: matrix.language == 'python'
