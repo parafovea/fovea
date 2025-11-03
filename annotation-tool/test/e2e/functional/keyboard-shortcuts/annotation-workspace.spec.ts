@@ -178,7 +178,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     }
   })
 
-  test('Space shortcut specific to annotation workspace', async ({ page, _annotationWorkspace, testUser }) => {
+  test('Space shortcut specific to annotation workspace', async ({ page, annotationWorkspace, testUser }) => {
     const video = page.locator('video')
 
     // Ensure video paused

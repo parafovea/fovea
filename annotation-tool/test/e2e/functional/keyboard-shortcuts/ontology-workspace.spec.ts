@@ -12,7 +12,7 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
-  test.beforeEach(async ({ _page, testUser, ontologyWorkspace, testPersona }) => {
+  test.beforeEach(async ({ page, testUser, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
   })
 

@@ -6,7 +6,7 @@ test.describe('Collection Management', () => {
   test('creates entity collection', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('collections')
@@ -87,7 +87,7 @@ test.describe('Collection Management', () => {
   test('removes entities from collection', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -114,7 +114,7 @@ test.describe('Collection Management', () => {
   test('creates event collection', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -184,7 +184,7 @@ test.describe('Collection Management', () => {
   test('edits collection metadata', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -212,7 +212,7 @@ test.describe('Collection Management', () => {
   test('deletes collection', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -239,7 +239,7 @@ test.describe('Collection Management', () => {
   test('searches collections', async ({
     objectWorkspace,
     testPersona,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 

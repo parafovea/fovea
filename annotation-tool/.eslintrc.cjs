@@ -21,7 +21,7 @@ module.exports = {
     {
       files: ['**/*.spec.ts', '**/*.test.ts', '**/*.spec.tsx', '**/*.test.tsx'],
       rules: {
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_|^test' }],
+        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_|^test|^page$|^db$|^annotationWorkspace$|^ontologyWorkspace$|^objectWorkspace$|^videoBrowser$' }],
       },
     },
   ],

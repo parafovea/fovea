@@ -45,7 +45,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     })
   })
 
-  test('focus indicators are visible and meet WCAG standards', async ({ _page, annotationWorkspace, testVideo }) => {
+  test('focus indicators are visible and meet WCAG standards', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Tab to first interactive element
@@ -64,7 +64,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     }
   })
 
-  test('tab order follows logical reading sequence', async ({ _page, annotationWorkspace, testVideo }) => {
+  test('tab order follows logical reading sequence', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const focusOrder: string[] = []
@@ -85,7 +85,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     expect(hasInteractiveElements).toBe(true)
   })
 
-  test('shift+tab navigates backward through elements', async ({ _page, annotationWorkspace, testVideo }) => {
+  test('shift+tab navigates backward through elements', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Tab forward 5 times
@@ -108,7 +108,7 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     expect(returnTag).toBe(forwardTag)
   })
 
-  test('keyboard navigation does not create focus trap on main page', async ({ _page, annotationWorkspace, testVideo }) => {
+  test('keyboard navigation does not create focus trap on main page', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const focusHistory: string[] = []

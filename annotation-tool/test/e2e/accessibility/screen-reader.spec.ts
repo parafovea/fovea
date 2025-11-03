@@ -19,7 +19,7 @@ import { test, expect } from '../fixtures/test-context.js'
  */
 
 test.describe('Screen Reader - ARIA Roles and Structure', () => {
-  test('main landmarks have proper roles', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('main landmarks have proper roles', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Check for main content landmark
@@ -146,7 +146,7 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
 })
 
 test.describe('Screen Reader - ARIA Live Regions', () => {
-  test('page has aria-live region for status announcements', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('page has aria-live region for status announcements', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Look for aria-live regions
@@ -212,7 +212,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     }
   })
 
-  test('loading states have appropriate ARIA attributes', async ({ page, _annotationWorkspace }) => {
+  test('loading states have appropriate ARIA attributes', async ({ page, annotationWorkspace }) => {
     await annotationWorkspace.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -286,7 +286,7 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     }
   })
 
-  test('comboboxes have correct ARIA attributes', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('comboboxes have correct ARIA attributes', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
@@ -499,7 +499,7 @@ test.describe('Screen Reader - Form Accessibility', () => {
     }
   })
 
-  test('search inputs have appropriate roles and labels', async ({ _page, ontologyWorkspace, testPersona }) => {
+  test('search inputs have appropriate roles and labels', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     const searchInput = ontologyWorkspace.searchInput

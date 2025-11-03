@@ -7,7 +7,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     // Navigate to object workspace
     await objectWorkspace.navigateTo()
@@ -60,7 +60,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -79,7 +79,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -123,7 +123,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -138,7 +138,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.createEntity('Test Building', 'A test building')
@@ -194,7 +194,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -214,7 +214,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -256,7 +256,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -292,7 +292,7 @@ test.describe('Entity Management', () => {
     objectWorkspace,
     testPersona,
     testEntityType,
-    _page
+    page
   }) => {
     await objectWorkspace.navigateTo()
 

@@ -88,7 +88,7 @@ test.describe('ARIA Labels - Buttons and Interactive Elements', () => {
     }
   })
 
-  test('floating action button has accessible name', async ({ _page, ontologyWorkspace, testPersona }) => {
+  test('floating action button has accessible name', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -107,7 +107,7 @@ test.describe('ARIA Labels - Buttons and Interactive Elements', () => {
     expect(accessibleName?.toLowerCase()).toMatch(/add|create|new/)
   })
 
-  test('link elements have descriptive text', async ({ page, _annotationWorkspace }) => {
+  test('link elements have descriptive text', async ({ page, annotationWorkspace }) => {
     await annotationWorkspace.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -195,7 +195,7 @@ test.describe('ARIA Labels - Form Inputs', () => {
     expect(hasLabel).toBe(true)
   })
 
-  test('select elements have accessible names', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('select elements have accessible names', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Persona select
@@ -265,7 +265,7 @@ test.describe('ARIA Labels - Form Inputs', () => {
 })
 
 test.describe('ARIA Labels - Images and Icons', () => {
-  test('all images have alt text', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('all images have alt text', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await injectAxe(page)
 
@@ -289,7 +289,7 @@ test.describe('ARIA Labels - Images and Icons', () => {
     })
   })
 
-  test('logo image has descriptive alt text', async ({ page, _annotationWorkspace }) => {
+  test('logo image has descriptive alt text', async ({ page, annotationWorkspace }) => {
     await annotationWorkspace.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -303,7 +303,7 @@ test.describe('ARIA Labels - Images and Icons', () => {
     }
   })
 
-  test('decorative images have empty alt text', async ({ page, _annotationWorkspace }) => {
+  test('decorative images have empty alt text', async ({ page, annotationWorkspace }) => {
     await annotationWorkspace.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -327,7 +327,7 @@ test.describe('ARIA Labels - Images and Icons', () => {
 })
 
 test.describe('ARIA Labels - Complex Widgets', () => {
-  test('video player has appropriate ARIA labels', async ({ page, _annotationWorkspace, testVideo }) => {
+  test('video player has appropriate ARIA labels', async ({ page, annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const videoElement = page.locator('video').first()
@@ -350,7 +350,7 @@ test.describe('ARIA Labels - Complex Widgets', () => {
     expect(hasLabel).toBe(true)
   })
 
-  test('data tables have captions or aria-label', async ({ page, _ontologyWorkspace, testPersona }) => {
+  test('data tables have captions or aria-label', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     // Look for any tables
@@ -373,7 +373,7 @@ test.describe('ARIA Labels - Complex Widgets', () => {
     }
   })
 
-  test('list elements have semantic markup', async ({ page, _ontologyWorkspace, testPersona }) => {
+  test('list elements have semantic markup', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     // Look for lists
@@ -403,7 +403,7 @@ test.describe('ARIA Labels - Complex Widgets', () => {
     }
   })
 
-  test('tooltips have proper aria-describedby relationships', async ({ page, _ontologyWorkspace, testPersona }) => {
+  test('tooltips have proper aria-describedby relationships', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -426,7 +426,7 @@ test.describe('ARIA Labels - Complex Widgets', () => {
     }
   })
 
-  test('breadcrumb navigation has proper ARIA markup', async ({ page, _ontologyWorkspace, testPersona }) => {
+  test('breadcrumb navigation has proper ARIA markup', async ({ page, ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     // Look for breadcrumb navigation
