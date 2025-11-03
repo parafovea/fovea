@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.110.0",
+    "fastapi>=0.110.1",
     "uvicorn[standard]==0.27.1",
     "pydantic==2.6.1",
     "python-multipart==0.0.9",
