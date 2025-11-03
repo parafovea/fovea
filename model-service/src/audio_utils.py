@@ -8,6 +8,7 @@ audio format conversions for model input preparation.
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -467,8 +468,18 @@ async def extract_audio_track(
             # Validate output_path is within temp directory to prevent path traversal
             output_path_resolved = Path(output_path).resolve()
             temp_dir_resolved = Path(tempfile.gettempdir()).resolve()
-            if not str(output_path_resolved).startswith(str(temp_dir_resolved)):
-                raise AudioProcessingError(f"Output path must be within temp directory: {output_path}")
+            try:
+                if os.path.commonpath([str(output_path_resolved), str(temp_dir_resolved)]) != str(
+                    temp_dir_resolved
+                ):
+                    raise AudioProcessingError(
+                        f"Output path must be within temp directory: {output_path}"
+                    )
+            except ValueError:
+                # commonpath raises ValueError if paths are on different drives
+                raise AudioProcessingError(
+                    f"Output path must be within temp directory: {output_path}"
+                ) from None
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -500,7 +511,7 @@ async def extract_audio_track(
                 raise AudioProcessingError(f"Output file not created: {output_path}")
 
             span.set_attribute("audio.output_path", output_path)
-            safe_video_path = str(video_path).replace('\r', '').replace('\n', '')
+            safe_video_path = str(video_path).replace("\r", "").replace("\n", "")
             logger.info(f"Extracted audio track {track_index} from {safe_video_path}")
 
             return output_path

@@ -400,7 +400,7 @@ class TestModelManager:
             patch("torch.cuda.memory_allocated", side_effect=[0, 5 * 1024**3]),
             patch("torch.cuda.empty_cache"),
         ):
-            _model = await model_manager.load_model("video_summarization")
+            await model_manager.load_model("video_summarization")
 
         assert "video_summarization" in model_manager.loaded_models
         assert "other_task" not in model_manager.loaded_models

@@ -8,6 +8,7 @@ audio transcription and multimodal fusion strategies.
 
 import io
 import logging
+import os
 import time
 import uuid
 from pathlib import Path
@@ -322,7 +323,7 @@ async def transcribe_audio(
 
     try:
         if not await has_audio_stream(video_path):
-            safe_video_path = str(video_path).replace('\r', '').replace('\n', '')
+            safe_video_path = str(video_path).replace("\r", "").replace("\n", "")
             logger.info(f"Video has no audio track: {safe_video_path}")
             return "", [], None, None, 0.0
 
@@ -453,8 +454,8 @@ async def summarize_video_with_external_api(
 
         try:
             video_info = get_video_info(video_path)
-            safe_provider = str(provider).replace('\r', '').replace('\n', '')
-            safe_video_path = str(video_path).replace('\r', '').replace('\n', '')
+            safe_provider = str(provider).replace("\r", "").replace("\n", "")
+            safe_video_path = str(video_path).replace("\r", "").replace("\n", "")
             logger.info(
                 f"Processing video with external API ({safe_provider}): {safe_video_path} "
                 f"({video_info.frame_count} frames, {video_info.duration:.2f}s)"
@@ -681,7 +682,7 @@ async def summarize_video_with_vlm(
 
         try:
             video_info = get_video_info(video_path)
-            safe_video_path = str(video_path).replace('\r', '').replace('\n', '')
+            safe_video_path = str(video_path).replace("\r", "").replace("\n", "")
             logger.info(
                 f"Processing video: {safe_video_path} "
                 f"({video_info.frame_count} frames, {video_info.duration:.2f}s)"
@@ -864,7 +865,7 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
     str | None
         Full path to video file, or None if not found.
     """
-    data_path = Path(data_dir).resolve()
+    data_path = Path(data_dir)
 
     if not data_path.exists():
         logger.warning(f"Video directory does not exist: {data_dir}")
@@ -872,15 +873,23 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
 
     video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm"]
 
+    data_path_resolved = data_path.resolve()
+
     for ext in video_extensions:
-        video_path = (data_path / f"{video_id}{ext}").resolve()
-        if video_path.exists() and str(video_path).startswith(str(data_path)):
-            return str(video_path)
+        video_path = data_path / f"{video_id}{ext}"
+        if video_path.exists():
+            video_path_resolved = video_path.resolve()
+            if os.path.commonpath([str(video_path_resolved), str(data_path_resolved)]) == str(
+                data_path_resolved
+            ):
+                return str(video_path)
 
     potential_matches = list(data_path.glob(f"{video_id}.*"))
     for match in potential_matches:
         resolved_match = match.resolve()
-        if str(resolved_match).startswith(str(data_path)):
-            return str(resolved_match)
+        if os.path.commonpath([str(resolved_match), str(data_path_resolved)]) == str(
+            data_path_resolved
+        ):
+            return str(match)
 
     return None

@@ -9,7 +9,7 @@ beforeAll(() => {
   // Set test environment variables
   process.env.NODE_ENV = 'test'
   process.env.MODEL_SERVICE_URL = 'http://localhost:8000'
-  process.env.API_KEY_ENCRYPTION_KEY = 'test-encryption-key-32-bytes-long!!'
+  process.env.API_KEY_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
   process.env.COOKIE_SECRET = 'test-cookie-secret-min-32-chars!!'
 })
 

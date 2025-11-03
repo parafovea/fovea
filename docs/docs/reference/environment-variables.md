@@ -82,7 +82,7 @@ frontend:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Optional | Anthropic Claude API key (get from [console.anthropic.com](https://console.anthropic.com/settings/keys)) |
+| `ANTHROPIC_API_KEY` | Optional | Anthropic Claude API key (get from console.anthropic.com/settings/keys) |
 | `OPENAI_API_KEY` | Optional | OpenAI API key (get from [platform.openai.com](https://platform.openai.com/api-keys)) |
 | `GOOGLE_API_KEY` | Optional | Google AI API key (get from [aistudio.google.com](https://aistudio.google.com/app/apikey)) |
 
