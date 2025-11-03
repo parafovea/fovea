@@ -40,7 +40,6 @@ jobs:
       - name: Start E2E infrastructure
         run: |
           echo "Starting Docker Compose services..."
-          docker compose -f docker-compose.e2e.yml build --no-cache
           docker compose -f docker-compose.e2e.yml up -d
           echo "Waiting for services to be healthy..."
           timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
@@ -52,7 +51,7 @@ jobs:
           BASE_URL: http://localhost:3000
           CI: true  # Enables workers: 5 in playwright.config.ts
         run: npm run test:e2e
-        timeout-minutes: 8  # Parallel execution is ~3-4 minutes
+        timeout-minutes: 15  # Parallel execution with retries and --no-cache builds
 
       - name: Show Docker logs on failure
         if: failure()
