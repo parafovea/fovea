@@ -877,18 +877,23 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
 
     for ext in video_extensions:
         video_path = data_path / f"{video_id}{ext}"
-        if video_path.exists():
-            video_path_resolved = video_path.resolve()
-            if os.path.commonpath([str(video_path_resolved), str(data_path_resolved)]) == str(
-                data_path_resolved
-            ):
-                return str(video_path)
+        video_path_resolved = video_path.resolve()
+        # Validate path is within allowed directory BEFORE checking existence
+        if (
+            os.path.commonpath([str(video_path_resolved), str(data_path_resolved)])
+            == str(data_path_resolved)
+            and video_path_resolved.exists()
+        ):
+            return str(video_path)
 
     potential_matches = list(data_path.glob(f"{video_id}.*"))
     for match in potential_matches:
         resolved_match = match.resolve()
-        if os.path.commonpath([str(resolved_match), str(data_path_resolved)]) == str(
-            data_path_resolved
+        # Validate path is within allowed directory BEFORE checking existence
+        if (
+            os.path.commonpath([str(resolved_match), str(data_path_resolved)])
+            == str(data_path_resolved)
+            and resolved_match.exists()
         ):
             return str(match)
 

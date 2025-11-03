@@ -504,4 +504,4 @@ When migrating from single-user mode to multi-user mode:
 4. Users must log in to access system
 5. Default user can be deleted once personas reassigned
 
-See [Deployment Guide](/docs/deployment/configuration) for detailed migration steps.
+See [Deployment Guide](../deployment/configuration) for detailed migration steps.
