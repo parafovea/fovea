@@ -32,7 +32,8 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   // Helper to refresh video cache
   async function refreshVideoCache() {
     const files = await fs.readdir(DATA_DIR)
-    const videoFiles = files.filter(f => f.endsWith('.mp4'))
+    // Prefer WebM files for better browser compatibility, fallback to MP4
+    const videoFiles = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'))
     videoCache.clear()
     videoFiles.forEach(filename => {
       const id = createVideoId(filename)
@@ -42,7 +43,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   // Helper to load video metadata from .info.json file
   async function loadVideoMetadata(filename: string) {
-    const infoPath = path.join(DATA_DIR, filename.replace('.mp4', '.info.json'))
+    const infoPath = path.join(DATA_DIR, filename.replace('.webm', '.info.json').replace('.mp4', '.info.json'))
     try {
       const infoContent = await fs.readFile(infoPath, 'utf-8')
       return JSON.parse(infoContent)
@@ -182,11 +183,11 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * Stream video file.
+   * Stream video file with support for HTTP range requests.
    *
    * @route GET /api/videos/:videoId/stream
    * @param videoId - MD5 hash of filename
-   * @returns Video file stream
+   * @returns Video file stream (supports partial content)
    */
   fastify.get('/api/videos/:videoId/stream', {
     schema: {
@@ -194,15 +195,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       tags: ['videos'],
       params: Type.Object({
         videoId: Type.String()
-      }),
-      response: {
-        404: Type.Object({
-          error: Type.String()
-        }),
-        500: Type.Object({
-          error: Type.String()
-        })
-      }
+      })
     }
   }, async (request, reply) => {
     try {
@@ -221,11 +214,33 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
       try {
         const stats = await fs.stat(filePath)
-        const stream = createReadStream(filePath)
+        const fileSize = stats.size
+        const range = request.headers.range
 
+        // Handle range requests for video streaming
+        if (range) {
+          const parts = range.replace(/bytes=/, '').split('-')
+          const start = parseInt(parts[0], 10)
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+          const chunkSize = (end - start) + 1
+          const stream = createReadStream(filePath, { start, end })
+          const contentType = filename.endsWith('.webm') ? 'video/webm' : 'video/mp4'
+
+          return reply
+            .code(206)
+            .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+            .header('Accept-Ranges', 'bytes')
+            .header('Content-Length', chunkSize)
+            .header('Content-Type', contentType)
+            .send(stream)
+        }
+
+        // Full file request
+        const stream = createReadStream(filePath)
+        const contentType = filename.endsWith('.webm') ? 'video/webm' : 'video/mp4'
         return reply
-          .type('video/mp4')
-          .header('Content-Length', stats.size)
+          .type(contentType)
+          .header('Content-Length', fileSize)
           .header('Accept-Ranges', 'bytes')
           .send(stream)
       } catch (error) {

@@ -134,14 +134,6 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     }
   }
 
-  const handleWikidataSelect = (data: any) => {
-    setName(data.name)
-    setGloss([{ type: 'text', content: data.description }])
-    setWikidataId(data.wikidataId)
-    setWikidataUrl(data.wikidataUrl)
-    setImportedAt(new Date().toISOString())
-  }
-
   const handleAddExample = () => {
     if (exampleInput.trim()) {
       setExamples([...examples, exampleInput.trim()])
@@ -156,7 +148,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
   // Additional fields for role types
   const additionalFields = (
     <Box>
-      <Typography variant="subtitle2" gutterBottom>Allowed Filler Types</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom>Allowed Filler Types</Typography>
       <FormGroup row>
         <FormControlLabel
           control={
@@ -178,7 +170,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
         />
       </FormGroup>
 
-      <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
         <TextField
           size="small"
@@ -271,7 +263,6 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
       wikidataId={wikidataId}
       wikidataUrl={wikidataUrl}
       importedAt={importedAt}
-      onWikidataSelect={handleWikidataSelect}
       onSave={handleSave}
       onDelete={role ? handleDelete : undefined}
       title={role ? 'Edit Role Type' : 'Create Role Type'}

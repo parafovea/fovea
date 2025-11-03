@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
 import {
   Box,
   Typography,
@@ -29,16 +30,18 @@ import {
   Place as LocationIcon,
   Schedule as TimeIcon,
   Language as WikidataIcon,
+  Collections as CollectionIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { deleteEntity, deleteEvent, deleteTime } from '../../store/worldSlice'
-import { Entity, LocationPoint, LocationExtent } from '../../models/types'
+import { deleteEntity, deleteEvent, deleteTime, deleteEntityCollection, deleteEventCollection, loadWorldState, saveWorldState } from '../../store/worldSlice'
+import { fetchPersonas, fetchPersonaOntology } from '../../store/personaSlice'
+import { Entity, LocationPoint, LocationExtent, EntityCollection, EventCollection } from '../../models/types'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
+import CollectionEditor from '../world/CollectionEditor'
 import { WikidataChip } from '../shared/WikidataChip'
-import { useWorkspaceKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -68,7 +71,7 @@ function isLocation(entity: Entity): entity is LocationPoint | LocationExtent {
 
 export default function ObjectWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
-  const { entities, events, times } = useSelector((state: RootState) => state.world)
+  const { entities, events, times, entityCollections, eventCollections, timeCollections, relations } = useSelector((state: RootState) => state.world)
   const { personaOntologies } = useSelector((state: RootState) => state.persona)
   const locations = entities.filter(isLocation) // Locations are specialized entities
   
@@ -81,11 +84,14 @@ export default function ObjectWorkspace() {
   const [eventEditorOpen, setEventEditorOpen] = useState(false)
   const [locationEditorOpen, setLocationEditorOpen] = useState(false)
   const [timeEditorOpen, setTimeEditorOpen] = useState(false)
-  
+  const [collectionEditorOpen, setCollectionEditorOpen] = useState(false)
+
   const [selectedEntity, setSelectedEntity] = useState<typeof entities[0] | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<LocationPoint | LocationExtent | null>(null)
   const [selectedTime, setSelectedTime] = useState<typeof times[0] | null>(null)
+  const [selectedCollection, setSelectedCollection] = useState<EntityCollection | EventCollection | null>(null)
+  const [selectedCollectionType, setSelectedCollectionType] = useState<'entity' | 'event'>('entity')
   
   // Refs for managing focus
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -134,6 +140,11 @@ export default function ObjectWorkspace() {
         setSelectedTime(null)
         setTimeEditorOpen(true)
         break
+      case 4:
+        setSelectedCollection(null)
+        setSelectedCollectionType('entity') // Default to entity collection
+        setCollectionEditorOpen(true)
+        break
     }
   }
 
@@ -146,27 +157,44 @@ export default function ObjectWorkspace() {
   
   const searchMatches = (item: any, term: string) => {
     const lowerTerm = term.toLowerCase()
+
+    // Extract description text from GlossItem array or plain string
+    let descriptionText = ''
+    if (Array.isArray(item.description)) {
+      descriptionText = item.description.map((d: any) => d.content || '').join(' ')
+    } else if (typeof item.description === 'string') {
+      descriptionText = item.description
+    }
+
     return (
       item.name?.toLowerCase().includes(lowerTerm) ||
       item.id?.toLowerCase().includes(lowerTerm) ||
-      item.wikidataId?.toLowerCase().includes(lowerTerm)
+      item.wikidataId?.toLowerCase().includes(lowerTerm) ||
+      descriptionText.toLowerCase().includes(lowerTerm)
     )
   }
   
   // Note: filteredEntities now includes ALL entities (including locations)
-  const filteredEntities = entities.filter(e => 
+  const filteredEntities = entities.filter(e =>
     searchMatches(e, searchTerm) && filterByWikidata(e)
   )
-  const filteredEvents = events.filter(e => 
+  const filteredEvents = events.filter(e =>
     searchMatches(e, searchTerm) && filterByWikidata(e)
   )
   // Locations shown separately for location-specific view
-  const filteredLocations = locations.filter((l: any) => 
+  const filteredLocations = locations.filter((l: any) =>
     searchMatches(l, searchTerm) && filterByWikidata(l)
   )
-  const filteredTimes = times.filter(t => 
+  const filteredTimes = times.filter(t =>
     searchMatches(t, searchTerm) && filterByWikidata(t)
   )
+  const filteredEntityCollections = entityCollections.filter(c =>
+    searchMatches(c, searchTerm)
+  )
+  const filteredEventCollections = eventCollections.filter(c =>
+    searchMatches(c, searchTerm)
+  )
+  const filteredAllCollections = [...filteredEntityCollections, ...filteredEventCollections]
 
   const getEntityTypeNames = (entity: typeof entities[0]) => {
     return entity.typeAssignments.map(assignment => {
@@ -185,6 +213,12 @@ export default function ObjectWorkspace() {
   }
   
   const formatTimeDisplay = (time: typeof times[0]): string => {
+    // Primary: Show label if available
+    if (time.label) {
+      return time.label
+    }
+
+    // Fallback: Format timestamp/interval
     if (time.type === 'instant') {
       const instant = time as any
       if (instant.timestamp) {
@@ -197,9 +231,9 @@ export default function ObjectWorkspace() {
           } else if (instant.vagueness?.granularity === 'month') {
             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
           } else {
-            return date.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
+            return date.toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
               day: 'numeric',
               hour: date.getHours() !== 0 || date.getMinutes() !== 0 ? 'numeric' : undefined,
               minute: date.getMinutes() !== 0 ? 'numeric' : undefined
@@ -214,20 +248,20 @@ export default function ObjectWorkspace() {
         const start = new Date(interval.startTime)
         const end = new Date(interval.endTime)
         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-          const formatDate = (d: Date) => d.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+          const formatDate = (d: Date) => d.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
           })
           return `${formatDate(start)} – ${formatDate(end)}`
         }
       } else if (interval.startTime) {
         const start = new Date(interval.startTime)
         if (!isNaN(start.getTime())) {
-          return `From ${start.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+          return `From ${start.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
           })}`
         }
       } else if (interval.endTime) {
@@ -275,16 +309,28 @@ export default function ObjectWorkspace() {
       case 1: return filteredEvents
       case 2: return filteredLocations
       case 3: return filteredTimes
+      case 4: return filteredAllCollections
       default: return []
     }
   }
   
-  // Setup keyboard shortcuts
-  useWorkspaceKeyboardShortcuts('objectWorkspace', {
+  // Set command context for when clauses
+  useCommandContext({
+    objectWorkspaceActive: true,
+    annotationWorkspaceActive: false,
+    ontologyWorkspaceActive: false,
+    videoBrowserActive: false,
+    dialogOpen: entityEditorOpen || eventEditorOpen || locationEditorOpen || timeEditorOpen || collectionEditorOpen,
+    inputFocused: false, // Updated dynamically by focus events in App.tsx
+    objectSelected: selectedItemIndex >= 0,
+  })
+
+  // Register command handlers
+  useCommands({
     'object.new': () => handleAddNew(),
-    'tab.next': () => setTabValue((prev) => (prev + 1) % 4),
-    'tab.previous': () => setTabValue((prev) => (prev - 1 + 4) % 4),
-    'item.edit': () => {
+    'object.nextTab': () => setTabValue((prev) => (prev + 1) % 5),
+    'object.previousTab': () => setTabValue((prev) => (prev - 1 + 5) % 5),
+    'object.edit': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex] as any
@@ -293,10 +339,15 @@ export default function ObjectWorkspace() {
           case 1: handleEditEvent(item); break
           case 2: handleEditLocation(item); break
           case 3: handleEditTime(item); break
+          case 4:
+            setSelectedCollection(item)
+            setSelectedCollectionType('entityIds' in item ? 'entity' : 'event')
+            setCollectionEditorOpen(true)
+            break
         }
       }
     },
-    'item.delete': () => {
+    'object.delete': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex] as any
@@ -305,6 +356,13 @@ export default function ObjectWorkspace() {
           case 1: dispatch(deleteEvent(item.id)); break
           case 2: dispatch(deleteEntity(item.id)); break // Locations are entities
           case 3: dispatch(deleteTime(item.id)); break
+          case 4:
+            if ('entityIds' in item) {
+              dispatch(deleteEntityCollection(item.id))
+            } else {
+              dispatch(deleteEventCollection(item.id))
+            }
+            break
         }
       }
     },
@@ -312,17 +370,12 @@ export default function ObjectWorkspace() {
       // TODO: Implement duplication logic
       console.log('Duplicate object not yet implemented')
     },
-    'search.focus': () => {
+    'object.search': () => {
       searchInputRef.current?.focus()
     },
-    'collection.open': () => {
-      // TODO: Implement collection builder opening
-      console.log('Collection builder not yet implemented')
-    },
-    'time.open': () => {
-      setSelectedTime(null)
-      setTimeEditorOpen(true)
-    },
+  }, {
+    context: 'objectWorkspace',
+    enabled: true
   })
   
   // Handle item selection with mouse
@@ -330,6 +383,27 @@ export default function ObjectWorkspace() {
     setSelectedItemIndex(index)
   }
   
+  // Load personas and world state on mount
+  useEffect(() => {
+    dispatch(fetchPersonas() as any).then((action: any) => {
+      // After personas are loaded, fetch ontologies for each persona
+      if (action.payload && Array.isArray(action.payload)) {
+        action.payload.forEach((persona: any) => {
+          dispatch(fetchPersonaOntology(persona.id) as any)
+        })
+      }
+    })
+    dispatch(loadWorldState())
+  }, [dispatch])
+
+  // Auto-save world state on changes (debounced 1 second)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      dispatch(saveWorldState())
+    }, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [entities, events, times, entityCollections, eventCollections, timeCollections, relations, dispatch])
+
   // Reset selection when tab or search changes
   useEffect(() => {
     setSelectedItemIndex(-1)
@@ -385,6 +459,7 @@ export default function ObjectWorkspace() {
           <Tab icon={<EventIcon />} label={`Events (${events.length})`} />
           <Tab icon={<LocationIcon />} label={`Locations (${locations.length})`} />
           <Tab icon={<TimeIcon />} label={`Times (${times.length})`} />
+          <Tab icon={<CollectionIcon />} label={`Collections (${entityCollections.length + eventCollections.length})`} />
         </Tabs>
       </Paper>
 
@@ -444,10 +519,11 @@ export default function ObjectWorkspace() {
                     <IconButton
                       edge="end"
                       onClick={() => entityIsLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
+                      aria-label={`Edit ${entity.name}`}
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))}>
+                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))} aria-label={`Delete ${entity.name}`}>
                       <DeleteIcon />
                     </IconButton>
                   </ListItemSecondaryAction>
@@ -487,10 +563,10 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEvent(event)}>
+                  <IconButton edge="end" onClick={() => handleEditEvent(event)} aria-label={`Edit ${event.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEvent(event.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteEvent(event.id))} aria-label={`Delete ${event.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -529,10 +605,10 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditLocation(location)}>
+                  <IconButton edge="end" onClick={() => handleEditLocation(location)} aria-label={`Edit ${location.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(location.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(location.id))} aria-label={`Delete ${location.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -544,8 +620,8 @@ export default function ObjectWorkspace() {
         <TabPanel value={tabValue} index={3}>
           <List>
             {filteredTimes.map((time, index) => (
-              <ListItem 
-                key={time.id} 
+              <ListItem
+                key={time.id}
                 divider
                 selected={selectedItemIndex === index}
                 onClick={() => handleItemClick(index)}
@@ -557,7 +633,7 @@ export default function ObjectWorkspace() {
                       <Typography variant="body1">
                         {formatTimeDisplay(time)}
                       </Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={time.wikidataId}
                         wikidataUrl={time.wikidataUrl}
                         importedAt={time.importedAt}
@@ -573,16 +649,145 @@ export default function ObjectWorkspace() {
                   }
                 />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditTime(time)}>
+                  <IconButton edge="end" onClick={() => handleEditTime(time)} aria-label={`Edit time ${formatTimeDisplay(time)}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteTime(time.id))}>
+                  <IconButton edge="end" onClick={() => dispatch(deleteTime(time.id))} aria-label={`Delete time ${formatTimeDisplay(time)}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
               </ListItem>
             ))}
           </List>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
+          {/* Entity Collections */}
+          {filteredEntityCollections.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <EntityIcon fontSize="small" />
+                Entity Collections ({filteredEntityCollections.length})
+              </Typography>
+              <List>
+                {filteredEntityCollections.map((collection) => (
+                  <ListItem
+                    key={collection.id}
+                    divider
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1">{collection.name}</Typography>
+                          <Chip
+                            label={collection.collectionType}
+                            size="small"
+                            variant="outlined"
+                          />
+                          <Chip
+                            label={`${collection.entityIds.length} entities`}
+                            size="small"
+                            color="primary"
+                          />
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          setSelectedCollection(collection)
+                          setSelectedCollectionType('entity')
+                          setCollectionEditorOpen(true)
+                        }}
+                        aria-label={`Edit ${collection.name}`}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => dispatch(deleteEntityCollection(collection.id))}
+                        aria-label={`Delete ${collection.name}`}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+
+          {/* Event Collections */}
+          {filteredEventCollections.length > 0 && (
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <EventIcon fontSize="small" />
+                Event Collections ({filteredEventCollections.length})
+              </Typography>
+              <List>
+                {filteredEventCollections.map((collection) => (
+                  <ListItem
+                    key={collection.id}
+                    divider
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1">{collection.name}</Typography>
+                          <Chip
+                            label={collection.collectionType}
+                            size="small"
+                            variant="outlined"
+                          />
+                          <Chip
+                            label={`${collection.eventIds.length} events`}
+                            size="small"
+                            color="primary"
+                          />
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          setSelectedCollection(collection)
+                          setSelectedCollectionType('event')
+                          setCollectionEditorOpen(true)
+                        }}
+                        aria-label={`Edit ${collection.name}`}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => dispatch(deleteEventCollection(collection.id))}
+                        aria-label={`Delete ${collection.name}`}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+
+          {/* Empty state */}
+          {filteredEntityCollections.length === 0 && filteredEventCollections.length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CollectionIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                No collections yet
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Create a collection to group entities or events together
+              </Typography>
+            </Box>
+          )}
         </TabPanel>
       </Box>
 
@@ -633,6 +838,15 @@ export default function ObjectWorkspace() {
           setSelectedTime(null)
         }}
         time={selectedTime}
+      />
+      <CollectionEditor
+        open={collectionEditorOpen}
+        onClose={() => {
+          setCollectionEditorOpen(false)
+          setSelectedCollection(null)
+        }}
+        collection={selectedCollection}
+        collectionType={selectedCollectionType}
       />
     </Box>
   )

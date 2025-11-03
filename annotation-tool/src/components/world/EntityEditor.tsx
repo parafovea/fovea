@@ -36,7 +36,7 @@ import { addEntity, updateEntity } from '../../store/worldSlice'
 import { Entity, EntityTypeAssignment, GlossItem } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
-import WikidataSearch from '../WikidataSearch'
+import WikidataImportFlow from '../shared/WikidataImportFlow'
 
 interface EntityEditorProps {
   open: boolean
@@ -185,16 +185,12 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
           )}
 
           {importMode === 'wikidata' && !entity && (
-            <WikidataSearch
+            <WikidataImportFlow
+              type="entity"
               entityType="object"
               objectSubtype="entity"
-              onImport={(data) => {
-                setName(data.name)
-                setDescription([{ type: 'text', content: data.description || `${data.name} from Wikidata.` }])
-                setAlternateNames(data.aliases || [])
-                setWikidataId(data.wikidataId)
-                setWikidataUrl(data.wikidataUrl)
-              }}
+              onSuccess={() => onClose()}
+              onCancel={onClose}
             />
           )}
 

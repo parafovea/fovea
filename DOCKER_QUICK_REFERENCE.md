@@ -196,12 +196,42 @@ docker compose up -d --scale frontend=3
 
 Key variables to configure in `.env`:
 
+### Core Configuration
+
 - `MODEL_BUILD_MODE`: Feature set - `minimal` (default), `recommended`, or `full`
   - **Note**: CPU/GPU is controlled by profiles (`--profile gpu`), not env vars
 - `CUDA_VISIBLE_DEVICES`: GPU indices when using `--profile gpu` (e.g., "0,1,2,3")
 - `POSTGRES_PASSWORD`: Database password (change for production!)
 - `GF_SECURITY_ADMIN_PASSWORD`: Grafana password (change for production!)
 - `MODEL_CONFIG_PATH`: Path to models.yaml configuration
+
+### Authentication & User Management (server)
+
+- `FOVEA_MODE`: Authentication mode - `single-user` (default) or `multi-user`
+- `ALLOW_REGISTRATION`: Allow user self-registration - `true` or `false`
+- `COOKIE_SECRET`: Secret for session cookie signing (min 32 characters, required in multi-user mode)
+- `SESSION_TIMEOUT_DAYS`: Session expiration in days (default: 7)
+- `API_KEY_ENCRYPTION_KEY`: 32-byte hex key for API key encryption at rest
+
+### External VLM/LLM API Keys (model-service)
+
+- `ANTHROPIC_API_KEY`: Anthropic Claude API key (get from https://console.anthropic.com/)
+- `OPENAI_API_KEY`: OpenAI API key (get from https://platform.openai.com/api-keys)
+- `GOOGLE_API_KEY`: Google AI API key (get from https://aistudio.google.com/app/apikey)
+
+### External Audio API Keys (model-service)
+
+- `ASSEMBLYAI_API_KEY`: AssemblyAI API key
+- `DEEPGRAM_API_KEY`: Deepgram API key
+- `AZURE_SPEECH_KEY`: Azure Speech Services key
+- `AZURE_SPEECH_REGION`: Azure Speech Services region (e.g., "eastus")
+- `AWS_ACCESS_KEY_ID`: AWS access key for Transcribe
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key for Transcribe
+- `AWS_REGION`: AWS region (e.g., "us-east-1")
+- `REV_AI_API_KEY`: Rev.ai API key
+- `GLADIA_API_KEY`: Gladia API key
+
+**Note:** API keys can also be configured via the frontend UI (user-level) or admin panel (system-level). Environment variables serve as fallback.
 
 ## Service Ports
 

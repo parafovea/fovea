@@ -4,7 +4,7 @@
  * Provides canvas-based rendering with 60fps performance for smooth playhead updates.
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useDispatch } from 'react-redux'
 import { Box, Slider, IconButton, Typography, useTheme, Tooltip, Button } from '@mui/material'
 import {
@@ -15,7 +15,6 @@ import {
 } from '@mui/icons-material'
 import { Annotation, InterpolationType } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
-import { useTimelineKeyboardShortcuts } from '../../hooks/useTimelineKeyboardShortcuts.js'
 import { AppDispatch } from '../../store/store.js'
 import { moveKeyframe } from '../../store/annotationSlice.js'
 import { InterpolationModeSelector } from './InterpolationModeSelector.js'
@@ -86,9 +85,12 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   const [interpolationDialogOpen, setInterpolationDialogOpen] = useState(false)
 
   // Extract keyframes from annotation
-  const keyframes = annotation?.boundingBoxSequence?.boxes.filter(
-    b => b.isKeyframe || b.isKeyframe === undefined
-  ) || []
+  const keyframes = useMemo(() =>
+    annotation?.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || [],
+    [annotation]
+  )
 
   // Check if current frame is a keyframe
   const isKeyframe = keyframes.some(kf => kf.frameNumber === currentFrame)
@@ -102,14 +104,6 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
   // Interpolation requires at least 2 keyframes
   const canInterpolate = keyframes.length >= 2
-
-  // Setup keyboard shortcuts
-  useTimelineKeyboardShortcuts(
-    currentFrame,
-    totalFrames,
-    keyframes,
-    onSeek
-  )
 
   // Initialize renderer
   useEffect(() => {
@@ -183,6 +177,8 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         },
       }
 
+      // Invalidate renderer to ensure it renders on every frame
+      renderer.invalidate()
       renderer.render(renderOptions, selectedKeyframes)
       rafId = requestAnimationFrame(render)
     }
@@ -313,7 +309,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       setDraggingKeyframe(null)
       setDragStartFrame(null)
     },
-    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch]
+    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch, videoFps]
   )
 
   // Handle mouse leave
@@ -407,6 +403,9 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
             width: '100%',
             height: '100%',
           }}
+          aria-label="Video annotation timeline showing keyframes and interpolated positions"
+          role="img"
+          data-testid="timeline-canvas"
         />
 
         {/* Tooltip for hovered frame */}
@@ -443,22 +442,23 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           variant="outlined"
           size="small"
           onClick={onClose}
+          aria-label="Hide timeline and show standard controls"
         >
           Hide Timeline
         </Button>
 
         {/* Transport controls */}
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)">
+          <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)" aria-label="Jump 10 frames back">
             <SkipPrevious />
           </IconButton>
-          <IconButton size="small" onClick={handleStepBackward} title="Step 1 frame back (←)">
+          <IconButton size="small" onClick={handleStepBackward} title="Step 1 frame back (←)" aria-label="Step 1 frame back">
             <FastRewind />
           </IconButton>
-          <IconButton size="small" onClick={handleStepForward} title="Step 1 frame forward (→)">
+          <IconButton size="small" onClick={handleStepForward} title="Step 1 frame forward (→)" aria-label="Step 1 frame forward">
             <FastForward />
           </IconButton>
-          <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)">
+          <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)" aria-label="Jump 10 frames forward">
             <SkipNext />
           </IconButton>
         </Box>
@@ -471,6 +471,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onAddKeyframe}
                 disabled={!annotation || isKeyframe}
+                aria-label="Add Keyframe"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -505,6 +506,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onDeleteKeyframe}
                 disabled={!annotation || !isKeyframe || isFirstOrLastKeyframe}
+                aria-label="Delete Keyframe"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -527,6 +529,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={onCopyPreviousFrame}
                 disabled={!annotation || currentFrame === 0}
+                aria-label="Copy Previous Frame"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -549,6 +552,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 size="small"
                 onClick={() => setInterpolationDialogOpen(true)}
                 disabled={!annotation || !canInterpolate}
+                aria-label="Interpolation Mode"
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',

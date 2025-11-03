@@ -134,14 +134,6 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
     }
   }
 
-  const handleWikidataSelect = (data: any) => {
-    setName(data.name)
-    setGloss([{ type: 'text', content: data.description }])
-    setWikidataId(data.wikidataId)
-    setWikidataUrl(data.wikidataUrl)
-    setImportedAt(new Date().toISOString())
-  }
-
   const handleAddExample = () => {
     if (exampleInput.trim()) {
       setExamples([...examples, exampleInput.trim()])
@@ -156,7 +148,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
   // Additional fields for entity types
   const additionalFields = (
     <Box>
-      <Typography variant="subtitle2" gutterBottom>Examples</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom>Examples</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
         <TextField
           size="small"
@@ -170,8 +162,9 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             }
           }}
           fullWidth
+          aria-label="Add example"
         />
-        <IconButton onClick={handleAddExample} size="small">
+        <IconButton onClick={handleAddExample} size="small" aria-label="Add example">
           <AddIcon />
         </IconButton>
       </Box>
@@ -249,7 +242,6 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       wikidataId={wikidataId}
       wikidataUrl={wikidataUrl}
       importedAt={importedAt}
-      onWikidataSelect={handleWikidataSelect}
       onSave={handleSave}
       onDelete={entity ? handleDelete : undefined}
       title={entity ? 'Edit Entity Type' : 'Create Entity Type'}

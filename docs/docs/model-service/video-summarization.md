@@ -40,10 +40,10 @@ The video summarization pipeline:
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/game.mp4",
-    "model": "llama-4-maverick",
-    "frame_count": 16,
-    "persona_context": "Baseball analyst tracking pitcher performance"
+    "video_id": "game-video-123",
+    "persona_id": "baseball-analyst-456",
+    "frame_sample_rate": 2,
+    "max_frames": 16
   }'
 ```
 
@@ -70,10 +70,10 @@ curl -X POST http://localhost:8000/api/summarize \
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/presentation.mp4",
-    "model": "gemma-3-27b",
-    "frame_count": 8,
-    "sampling_strategy": "uniform"
+    "video_id": "presentation-123",
+    "persona_id": "document-analyst-789",
+    "frame_sample_rate": 1,
+    "max_frames": 8
   }'
 ```
 
@@ -100,10 +100,10 @@ curl -X POST http://localhost:8000/api/summarize \
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/medical.mp4",
-    "model": "internvl3-78b",
-    "frame_count": 12,
-    "persona_context": "Medical researcher analyzing procedure"
+    "video_id": "medical-procedure-123",
+    "persona_id": "medical-researcher-456",
+    "frame_sample_rate": 1,
+    "max_frames": 12
   }'
 ```
 
@@ -130,10 +130,10 @@ curl -X POST http://localhost:8000/api/summarize \
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/conference.mp4",
-    "model": "pixtral-large",
-    "frame_count": 32,
-    "sampling_strategy": "keyframe"
+    "video_id": "conference-video-123",
+    "persona_id": "business-analyst-456",
+    "frame_sample_rate": 2,
+    "max_frames": 32
   }'
 ```
 
@@ -160,10 +160,10 @@ curl -X POST http://localhost:8000/api/summarize \
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/surveillance.mp4",
-    "model": "qwen2-5-vl-72b",
-    "frame_count": 10,
-    "persona_context": "Security analyst reviewing footage"
+    "video_id": "surveillance-footage-123",
+    "persona_id": "security-analyst-456",
+    "frame_sample_rate": 1,
+    "max_frames": 10
   }'
 ```
 
@@ -259,59 +259,141 @@ POST /api/summarize
 
 ```json
 {
-  "video_path": "/data/example.mp4",
-  "model": "qwen2-5-vl-72b",
-  "frame_count": 8,
-  "sampling_strategy": "uniform",
-  "persona_context": "Baseball analyst",
-  "max_tokens": 512,
-  "temperature": 0.7
+  "video_id": "abc-123",
+  "persona_id": "persona-456",
+  "frame_sample_rate": 1,
+  "max_frames": 30,
+  "enable_audio": false,
+  "audio_language": null,
+  "enable_speaker_diarization": false,
+  "fusion_strategy": "sequential"
 }
 ```
 
-**Parameters**:
+**Core Parameters**:
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| video_path | string | Yes | - | Path to video file |
-| model | string | No | (from config) | Model to use for inference |
-| frame_count | integer | No | 8 | Number of frames to sample |
-| sampling_strategy | string | No | "uniform" | Sampling method: uniform, keyframe, adaptive |
-| persona_context | string | No | null | Persona information for context |
-| max_tokens | integer | No | 512 | Maximum response tokens |
-| temperature | float | No | 0.7 | Sampling temperature (0.0-2.0) |
-| scene_threshold | float | No | 30.0 | Scene change threshold (keyframe mode) |
-| complexity_metric | string | No | "gradient" | Complexity metric (adaptive mode) |
+| video_id | string | Yes | - | Unique identifier for the video |
+| persona_id | string | Yes | - | Unique identifier for the persona |
+| frame_sample_rate | integer | No | 1 | Frames to sample per second (1-10) |
+| max_frames | integer | No | 30 | Maximum frames to process (1-100) |
+
+**Audio Parameters** (Optional):
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| enable_audio | boolean | No | false | Enable audio transcription |
+| audio_language | string \| null | No | null | Language code (e.g., "en", "es"). Auto-detects if null |
+| enable_speaker_diarization | boolean | No | false | Enable speaker identification |
+| fusion_strategy | string \| null | No | "sequential" | Audio-visual fusion strategy: "sequential", "timestamp_aligned", "native_multimodal", "hybrid" |
+
+See the [Audio Transcription API](../api-reference/audio-transcription.md) for detailed audio parameter documentation.
 
 ### Response
 
 **Status**: 200 OK
 
+**Without Audio**:
+
 ```json
 {
-  "summary": "The video shows a baseball game with a pitcher throwing from the mound. The batter prepares to hit. The pitch is thrown, and the batter swings, making contact. The ball travels into the outfield where a fielder catches it for an out.",
-  "frame_indices": [0, 30, 60, 90, 120, 150, 180, 210],
-  "frame_count": 8,
-  "model_used": "qwen2-5-vl-72b",
-  "inference_time_ms": 1847,
-  "tokens_generated": 48,
+  "id": "summary-123",
+  "video_id": "abc-123",
+  "persona_id": "persona-456",
+  "summary": "The video shows a baseball game with a pitcher throwing from the mound. The batter prepares to hit. The pitch is thrown, and the batter swings, making contact.",
+  "visual_analysis": "Frame 0: Pitcher on mound. Frame 150: Batter at plate...",
+  "audio_transcript": null,
+  "key_frames": [
+    {
+      "frame_number": 0,
+      "timestamp": 0.0,
+      "description": "Pitcher on mound",
+      "confidence": 0.95
+    }
+  ],
   "confidence": 0.92,
-  "persona_applied": true
+  "transcript_json": null,
+  "audio_language": null,
+  "speaker_count": null,
+  "audio_model_used": null,
+  "visual_model_used": "llama-4-maverick",
+  "fusion_strategy": null,
+  "processing_time_audio": null,
+  "processing_time_visual": 8.3,
+  "processing_time_fusion": null
 }
 ```
 
-**Response Fields**:
+**With Audio Enabled**:
+
+```json
+{
+  "id": "summary-124",
+  "video_id": "abc-123",
+  "persona_id": "persona-456",
+  "summary": "The video shows a baseball game. The announcer describes the pitcher throwing a fastball as the batter prepares to swing.",
+  "visual_analysis": "Frame 0: Pitcher on mound. Frame 150: Batter at plate...",
+  "audio_transcript": "And here comes the pitch. It's a fastball, right down the middle.",
+  "key_frames": [
+    {
+      "frame_number": 0,
+      "timestamp": 0.0,
+      "description": "Pitcher on mound",
+      "confidence": 0.95
+    }
+  ],
+  "confidence": 0.94,
+  "transcript_json": {
+    "segments": [
+      {
+        "start": 2.5,
+        "end": 6.8,
+        "text": "And here comes the pitch. It's a fastball, right down the middle.",
+        "speaker": "Speaker 1",
+        "confidence": 0.92
+      }
+    ],
+    "language": "en",
+    "speaker_count": 1
+  },
+  "audio_language": "en",
+  "speaker_count": 1,
+  "audio_model_used": "whisper-large-v3",
+  "visual_model_used": "llama-4-maverick",
+  "fusion_strategy": "sequential",
+  "processing_time_audio": 12.5,
+  "processing_time_visual": 8.3,
+  "processing_time_fusion": 1.2
+}
+```
+
+**Core Response Fields**:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| id | string | Unique identifier for this summary |
+| video_id | string | Video identifier |
+| persona_id | string | Persona identifier |
 | summary | string | Generated text summary |
-| frame_indices | array | Frame numbers analyzed |
-| frame_count | integer | Number of frames processed |
-| model_used | string | Model that performed inference |
-| inference_time_ms | integer | Inference duration in milliseconds |
-| tokens_generated | integer | Number of tokens in summary |
-| confidence | float | Model confidence score (0.0-1.0) |
-| persona_applied | boolean | Whether persona context was used |
+| visual_analysis | string \| null | Detailed visual content analysis |
+| audio_transcript | string \| null | Transcribed audio content (if audio enabled) |
+| key_frames | array | Key frames with descriptions and timestamps |
+| confidence | float | Overall confidence score (0.0-1.0) |
+
+**Audio Response Fields** (when audio is enabled):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| transcript_json | object \| null | Structured transcript with segments and speakers |
+| audio_language | string \| null | Detected or specified language code |
+| speaker_count | number \| null | Number of distinct speakers identified |
+| audio_model_used | string \| null | Audio transcription model name |
+| visual_model_used | string \| null | Visual analysis model name |
+| fusion_strategy | string \| null | Fusion strategy applied |
+| processing_time_audio | number \| null | Audio processing time in seconds |
+| processing_time_visual | number \| null | Visual processing time in seconds |
+| processing_time_fusion | number \| null | Fusion processing time in seconds |
 
 ### Error Responses
 
@@ -358,12 +440,13 @@ Persona context provides domain-specific knowledge to the model, improving summa
 Request:
 ```json
 {
-  "video_path": "/data/game.mp4",
-  "frame_count": 8
+  "video_id": "game-video-123",
+  "persona_id": "generic-analyst-456",
+  "max_frames": 8
 }
 ```
 
-Response:
+Response summary:
 ```
 "The video shows people on a field. One person throws an object. Another person holds a stick."
 ```
@@ -373,13 +456,15 @@ Response:
 Request:
 ```json
 {
-  "video_path": "/data/game.mp4",
-  "frame_count": 8,
-  "persona_context": "Baseball analyst tracking pitcher mechanics and pitch outcomes"
+  "video_id": "game-video-123",
+  "persona_id": "baseball-analyst-456",
+  "max_frames": 8
 }
 ```
 
-Response:
+(Persona has role="Baseball analyst" and information_need="tracking pitcher mechanics and pitch outcomes")
+
+Response summary:
 ```
 "The pitcher delivers a fastball from the stretch position with a three-quarters arm slot. The pitch crosses the plate at approximately 92 mph. The batter takes a full swing, making contact on the outer third of the plate. The result is a fly ball to center field."
 ```
@@ -596,26 +681,28 @@ Generate a quick summary for initial review:
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/new-video.mp4",
-    "frame_count": 4,
-    "sampling_strategy": "uniform"
+    "video_id": "new-video-123",
+    "persona_id": "general-analyst-456",
+    "frame_sample_rate": 1,
+    "max_frames": 4
   }'
 ```
 
-### Workflow 2: Detailed Analysis with Persona
+### Workflow 2: Detailed Analysis with Audio
 
-Get domain-specific summary with persona context:
+Get comprehensive summary with audio transcription:
 
 ```bash
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/game-footage.mp4",
-    "model": "qwen2-5-vl-72b",
-    "frame_count": 16,
-    "sampling_strategy": "keyframe",
-    "persona_context": "Basketball coach analyzing defensive strategies",
-    "max_tokens": 1024
+    "video_id": "game-footage-123",
+    "persona_id": "basketball-coach-456",
+    "frame_sample_rate": 2,
+    "max_frames": 16,
+    "enable_audio": true,
+    "enable_speaker_diarization": true,
+    "fusion_strategy": "timestamp_aligned"
   }'
 ```
 
@@ -627,17 +714,17 @@ Extract text from presentation or document video:
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
-    "video_path": "/data/presentation.mp4",
-    "model": "gemma-3-27b",
-    "frame_count": 12,
-    "sampling_strategy": "keyframe",
-    "scene_threshold": 25.0,
-    "persona_context": "Document analyst extracting text and slide content"
+    "video_id": "presentation-123",
+    "persona_id": "document-analyst-456",
+    "frame_sample_rate": 1,
+    "max_frames": 12
   }'
 ```
 
 ## Next Steps
 
+- [Audio Transcription API](../api-reference/audio-transcription.md) - Add audio transcription to summaries
+- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies.md) - Learn about fusion approaches
 - [Configure models](./configuration.md) for your hardware
 - [Set up object detection](./object-detection.md)
 - [Enable video tracking](./video-tracking.md)

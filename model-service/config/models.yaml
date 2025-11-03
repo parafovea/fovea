@@ -40,6 +40,30 @@ models:
         vram_gb: 36
         speed: "fast"
         description: "Proven stable, good baseline"
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, vision capable, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
     selected: "llama-4-scout"
@@ -72,6 +96,30 @@ models:
         vram_gb: 14
         speed: "very_fast"
         description: "Lightweight, fast iteration"
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, text-only, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, text-only, API-based"
 
   object_detection:
     selected: "yolo-world-v2"
@@ -132,6 +180,104 @@ models:
         vram_gb: 1
         speed: "very_fast"
         description: "Lightweight, speed-critical tasks"
+
+  audio_transcription:
+    selected: "whisper-v3-turbo"
+    options:
+      whisper-v3-turbo:
+        model_id: "openai/whisper-large-v3-turbo"
+        framework: "whisper"
+        vram_gb: 5
+        speed: "very_fast"
+        description: "OpenAI Whisper v3 Turbo, 8x faster, multilingual"
+      faster-whisper-large-v3:
+        model_id: "Systran/faster-whisper-large-v3"
+        framework: "faster_whisper"
+        vram_gb: 3
+        speed: "fast"
+        description: "CTranslate2 optimized, 4x faster than default Whisper"
+      whisper-large-v3:
+        model_id: "openai/whisper-large-v3"
+        framework: "whisper"
+        vram_gb: 10
+        speed: "medium"
+        description: "Full Whisper large v3, highest accuracy"
+      assemblyai-universal:
+        model_id: "best"
+        framework: "external_api"
+        provider: "assemblyai"
+        api_endpoint: "https://api.assemblyai.com/v2"
+        requires_api_key: true
+        speed: "fast"
+        description: "AssemblyAI Universal-2, speaker diarization, sentiment"
+      deepgram-nova-3:
+        model_id: "nova-3"
+        framework: "external_api"
+        provider: "deepgram"
+        api_endpoint: "https://api.deepgram.com/v1"
+        requires_api_key: true
+        speed: "very_fast"
+        description: "Deepgram Nova-3, streaming capable, highest accuracy"
+      revai:
+        model_id: "default"
+        framework: "external_api"
+        provider: "revai"
+        api_endpoint: "https://api.rev.ai/speechtotext/v1"
+        requires_api_key: true
+        speed: "fast"
+        description: "Rev AI Speech-to-Text, human-level accuracy"
+      gladia:
+        model_id: "default"
+        framework: "external_api"
+        provider: "gladia"
+        api_endpoint: "https://api.gladia.io/v2"
+        requires_api_key: true
+        speed: "fast"
+        description: "Gladia Audio API, multilingual, code-switching"
+      aws-transcribe:
+        model_id: "default"
+        framework: "external_api"
+        provider: "aws"
+        api_endpoint: "https://transcribe.us-east-1.amazonaws.com"
+        requires_api_key: true
+        speed: "medium"
+        description: "AWS Transcribe, speaker diarization, medical/legal vocab"
+      google-speech:
+        model_id: "chirp_2"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://speech.googleapis.com/v2"
+        requires_api_key: true
+        speed: "fast"
+        description: "Google Speech-to-Text v2 with Chirp 2, multilingual"
+      azure-speech:
+        model_id: "default"
+        framework: "external_api"
+        provider: "azure"
+        api_endpoint: "https://YOUR_REGION.api.cognitive.microsoft.com"
+        requires_api_key: true
+        speed: "fast"
+        description: "Azure Speech Services, real-time streaming"
+
+  speaker_diarization:
+    selected: "pyannote-3-1"
+    options:
+      pyannote-3-1:
+        model_id: "pyannote/speaker-diarization-3.1"
+        framework: "pyannote"
+        vram_gb: 2
+        speed: "medium"
+        description: "Pyannote Audio 3.1, speaker segmentation and clustering"
+
+  voice_activity_detection:
+    selected: "silero-vad"
+    options:
+      silero-vad:
+        model_id: "silero_vad"
+        framework: "pytorch"
+        vram_gb: 0.1
+        speed: "real_time"
+        description: "Silero VAD v5, lightweight speech detection"
 
 inference:
   max_memory_per_model: "auto"

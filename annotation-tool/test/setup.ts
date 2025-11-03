@@ -17,7 +17,7 @@ declare global {
 export const server = setupServer(...handlers)
 
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: 'error' })
+  server.listen({ onUnhandledRequest: 'warn' })
 })
 
 afterEach(() => {

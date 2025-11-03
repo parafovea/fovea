@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import fs from 'fs/promises'
 import { buildApp } from './app.js'
+import { ensureDefaultUser, isSingleUserMode } from './services/user-service.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -25,8 +26,22 @@ async function initializeDataDirectory() {
 }
 
 /**
+ * Initializes single-user mode if enabled.
+ * Ensures the default user exists in the database.
+ */
+async function initializeSingleUserMode() {
+  if (isSingleUserMode()) {
+    console.log('Running in single-user mode')
+    const defaultUser = await ensureDefaultUser()
+    console.log(`Default user initialized: ${defaultUser.username} (${defaultUser.id})`)
+  } else {
+    console.log('Running in multi-user mode')
+  }
+}
+
+/**
  * Starts the Fastify server.
- * Initializes the data directory and starts listening on the configured port.
+ * Initializes the data directory, user mode, and starts listening on the configured port.
  */
 async function start() {
   const app = await buildApp()
@@ -34,6 +49,7 @@ async function start() {
 
   try {
     await initializeDataDirectory()
+    await initializeSingleUserMode()
     await app.listen({ port: PORT, host: '0.0.0.0' })
   } catch (err) {
     app.log.error(err)

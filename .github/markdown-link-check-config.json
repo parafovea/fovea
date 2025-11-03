@@ -8,6 +8,18 @@
     },
     {
       "pattern": "^/api-reference/model-service/"
+    },
+    {
+      "pattern": "^https://console\\.anthropic\\.com"
+    },
+    {
+      "pattern": "^https://ai\\.google\\.dev/gemini-api/"
+    },
+    {
+      "pattern": "^https://platform\\.openai\\.com"
+    },
+    {
+      "pattern": "^https://openai\\.com"
     }
   ],
   "aliveStatusCodes": [200, 206],

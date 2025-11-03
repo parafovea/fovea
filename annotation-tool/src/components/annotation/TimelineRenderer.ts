@@ -63,10 +63,20 @@ export class TimelineRenderer {
     }
     this.ctx = ctx
 
+    // Scale canvas for high-DPI displays to avoid grainy appearance
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    ctx.scale(dpr, dpr)
+
     // Initialize offscreen canvas for double buffering
     if (typeof OffscreenCanvas !== 'undefined') {
       this.offscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height)
       this.offscreenCtx = this.offscreenCanvas.getContext('2d')
+      if (this.offscreenCtx) {
+        this.offscreenCtx.scale(dpr, dpr)
+      }
     }
 
     this.viewportEndFrame = Math.min(totalFrames - 1, this.viewportEndFrame)
@@ -97,16 +107,19 @@ export class TimelineRenderer {
   /**
    * Resize canvas and offscreen canvas.
    *
-   * @param width - New width
-   * @param height - New height
+   * @param width - New width (CSS pixels)
+   * @param height - New height (CSS pixels)
    */
   resize(width: number, height: number): void {
-    this.canvas.width = width
-    this.canvas.height = height
+    const dpr = window.devicePixelRatio || 1
+    this.canvas.width = width * dpr
+    this.canvas.height = height * dpr
+    this.ctx.scale(dpr, dpr)
 
-    if (this.offscreenCanvas) {
-      this.offscreenCanvas.width = width
-      this.offscreenCanvas.height = height
+    if (this.offscreenCanvas && this.offscreenCtx) {
+      this.offscreenCanvas.width = width * dpr
+      this.offscreenCanvas.height = height * dpr
+      this.offscreenCtx.scale(dpr, dpr)
     }
 
     this.needsRedraw = true

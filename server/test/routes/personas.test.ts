@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
+import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -10,6 +11,8 @@ import { PrismaClient } from '@prisma/client'
 describe('Personas API', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
+  let testUserId: string
+  let testSessionToken: string
 
   beforeAll(async () => {
     app = await buildApp()
@@ -21,17 +24,43 @@ describe('Personas API', () => {
   })
 
   beforeEach(async () => {
+    // Clean database in dependency order
+    await prisma.apiKey.deleteMany()
+    await prisma.session.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
+    await prisma.user.deleteMany()
+
+    // Create test user
+    const passwordHash = await hashPassword('testpass123')
+    const user = await prisma.user.create({
+      data: {
+        username: 'testuser',
+        email: 'test@example.com',
+        passwordHash,
+        displayName: 'Test User',
+        isAdmin: false
+      }
+    })
+    testUserId = user.id
+
+    // Login to get session token
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'testuser', password: 'testpass123' }
+    })
+    testSessionToken = loginResponse.cookies.find(c => c.name === 'session_token')!.value
   })
 
   describe('GET /api/personas', () => {
     it('returns an empty array when no personas exist', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/personas'
+        url: '/api/personas',
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(200)
@@ -43,7 +72,8 @@ describe('Personas API', () => {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
-          informationNeed: 'Tracking pitcher mechanics and ball movement'
+          informationNeed: 'Tracking pitcher mechanics and ball movement',
+          userId: testUserId
         }
       })
 
@@ -53,13 +83,15 @@ describe('Personas API', () => {
         data: {
           name: 'Wildlife Researcher',
           role: 'Marine Biologist',
-          informationNeed: 'Documenting whale pod interactions'
+          informationNeed: 'Documenting whale pod interactions',
+          userId: testUserId
         }
       })
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/personas'
+        url: '/api/personas',
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(200)
@@ -77,13 +109,15 @@ describe('Personas API', () => {
           informationNeed: 'Tracking prop positions across takes',
           details: 'Focuses on visual consistency',
           isSystemGenerated: false,
-          hidden: false
+          hidden: false,
+          userId: testUserId
         }
       })
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/personas'
+        url: '/api/personas',
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(200)
@@ -113,6 +147,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/personas',
+        cookies: { session_token: testSessionToken },
         payload: newPersona
       })
 
@@ -137,6 +172,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/personas',
+        cookies: { session_token: testSessionToken },
         payload: newPersona
       })
 
@@ -155,6 +191,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/personas',
+        cookies: { session_token: testSessionToken },
         payload: newPersona
       })
 
@@ -182,6 +219,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/personas',
+        cookies: { session_token: testSessionToken },
         payload: invalidPersona
       })
 
@@ -196,6 +234,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/personas',
+        cookies: { session_token: testSessionToken },
         payload: incompletePersona
       })
 
@@ -209,13 +248,15 @@ describe('Personas API', () => {
         data: {
           name: 'Esports Coach',
           role: 'Team Strategist',
-          informationNeed: 'Annotating player positioning in match replays'
+          informationNeed: 'Annotating player positioning in match replays',
+          userId: testUserId
         }
       })
 
       const response = await app.inject({
         method: 'GET',
-        url: `/api/personas/${created.id}`
+        url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(200)
@@ -232,7 +273,8 @@ describe('Personas API', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: `/api/personas/${fakeId}`
+        url: `/api/personas/${fakeId}`,
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(404)
@@ -242,7 +284,8 @@ describe('Personas API', () => {
     it('returns 400 for invalid UUID format', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/personas/not-a-uuid'
+        url: '/api/personas/not-a-uuid',
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(400)
@@ -255,7 +298,8 @@ describe('Personas API', () => {
         data: {
           name: 'Fact Checker',
           role: 'Journalist',
-          informationNeed: 'Annotating protest footage for timeline verification'
+          informationNeed: 'Annotating protest footage for timeline verification',
+          userId: testUserId
         }
       })
 
@@ -267,6 +311,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'PUT',
         url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken },
         payload: update
       })
 
@@ -285,7 +330,8 @@ describe('Personas API', () => {
           informationNeed: 'Tracking construction progress',
           details: 'Original details',
           isSystemGenerated: false,
-          hidden: false
+          hidden: false,
+          userId: testUserId
         }
       })
 
@@ -298,6 +344,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'PUT',
         url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken },
         payload: update
       })
 
@@ -314,6 +361,7 @@ describe('Personas API', () => {
       const response = await app.inject({
         method: 'PUT',
         url: `/api/personas/${fakeId}`,
+        cookies: { session_token: testSessionToken },
         payload: { name: 'Updated Name' }
       })
 
@@ -325,13 +373,15 @@ describe('Personas API', () => {
         data: {
           name: 'Test Persona',
           role: 'Test Role',
-          informationNeed: 'Test Need'
+          informationNeed: 'Test Need',
+          userId: testUserId
         }
       })
 
       const response = await app.inject({
         method: 'PUT',
         url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken },
         payload: { name: '' }
       })
 
@@ -345,13 +395,15 @@ describe('Personas API', () => {
         data: {
           name: 'Commodity Trader',
           role: 'Financial Analyst',
-          informationNeed: 'Annotating warehouse activity'
+          informationNeed: 'Annotating warehouse activity',
+          userId: testUserId
         }
       })
 
       const response = await app.inject({
         method: 'DELETE',
-        url: `/api/personas/${created.id}`
+        url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(200)
@@ -369,6 +421,7 @@ describe('Personas API', () => {
           name: 'Test Persona',
           role: 'Test Role',
           informationNeed: 'Test Need',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -382,7 +435,8 @@ describe('Personas API', () => {
 
       await app.inject({
         method: 'DELETE',
-        url: `/api/personas/${created.id}`
+        url: `/api/personas/${created.id}`,
+        cookies: { session_token: testSessionToken }
       })
 
       const ontology = await prisma.ontology.findUnique({
@@ -396,7 +450,8 @@ describe('Personas API', () => {
 
       const response = await app.inject({
         method: 'DELETE',
-        url: `/api/personas/${fakeId}`
+        url: `/api/personas/${fakeId}`,
+        cookies: { session_token: testSessionToken }
       })
 
       expect(response.statusCode).toBe(404)

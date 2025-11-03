@@ -461,4 +461,161 @@ describe('VideoSummaryCard', () => {
       expect(screen.getByText(/continuity check reveals/i)).toBeInTheDocument()
     })
   })
+
+  describe('Transcript Tab Functionality', () => {
+    const mockTranscriptSummary: VideoSummary = {
+      ...mockSummary,
+      transcriptJson: {
+        segments: [
+          {
+            start: 0,
+            end: 5,
+            text: 'Hello and welcome to this video.',
+            speaker: 'Speaker 1',
+            confidence: 0.95,
+          },
+          {
+            start: 5,
+            end: 12,
+            text: 'Today we will discuss advanced techniques.',
+            speaker: 'Speaker 2',
+            confidence: 0.92,
+          },
+        ],
+      },
+      audioLanguage: 'en',
+      speakerCount: 2,
+      audioModelUsed: 'whisper-v3-turbo',
+      visualModelUsed: 'gemini-2-5-flash',
+      fusionStrategy: 'timestamp_aligned',
+      processingTimeAudio: 3.5,
+      processingTimeVisual: 12.3,
+      processingTimeFusion: 0.8,
+    }
+
+    it('displays transcript tab when transcriptJson exists', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockTranscriptSummary} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /summary/i })).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: /transcript/i })).toBeInTheDocument()
+      })
+    })
+
+    it('does not display transcript tab when transcriptJson is missing', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockSummary} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tab', { name: /transcript/i })).not.toBeInTheDocument()
+      })
+    })
+
+    it('displays audio metadata in summary tab', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockTranscriptSummary} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Processing Details')).toBeInTheDocument()
+        expect(screen.getByText(/Language:/)).toBeInTheDocument()
+        expect(screen.getByText(/Speakers:/)).toBeInTheDocument()
+        expect(screen.getByText(/Audio Model:/)).toBeInTheDocument()
+        expect(screen.getByText('whisper-v3-turbo')).toBeInTheDocument()
+      })
+    })
+
+    it('displays processing times in summary tab', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockTranscriptSummary} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Processing Times')).toBeInTheDocument()
+        // Check for the processing time values (these should be unique)
+        expect(screen.getByText('3.50s')).toBeInTheDocument()
+        expect(screen.getByText('12.30s')).toBeInTheDocument()
+        expect(screen.getByText('0.80s')).toBeInTheDocument()
+      })
+    })
+
+    it('switches to transcript tab when clicked', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockTranscriptSummary} currentTime={3} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /transcript/i })).toBeInTheDocument()
+      })
+
+      const transcriptTab = screen.getByRole('tab', { name: /transcript/i })
+      await user.click(transcriptTab)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Hello and welcome to this video/i)).toBeInTheDocument()
+        expect(screen.getByText(/Today we will discuss advanced techniques/i)).toBeInTheDocument()
+      })
+    })
+
+    it('displays transcript viewer with correct props in transcript tab', async () => {
+      const onSeek = vi.fn()
+      const user = userEvent.setup()
+
+      render(
+        <VideoSummaryCard
+          summary={mockTranscriptSummary}
+          currentTime={7}
+          onSeek={onSeek}
+        />
+      )
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /transcript/i })).toBeInTheDocument()
+      })
+
+      const transcriptTab = screen.getByRole('tab', { name: /transcript/i })
+      await user.click(transcriptTab)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Hello and welcome to this video/i)).toBeInTheDocument()
+      })
+
+      // Click on a transcript segment to test onSeek
+      const segment = screen.getByText(/Hello and welcome to this video/i)
+      await user.click(segment)
+
+      expect(onSeek).toHaveBeenCalledWith(0)
+    })
+
+    it('defaults to summary tab when expanded', async () => {
+      const user = userEvent.setup()
+      render(<VideoSummaryCard summary={mockTranscriptSummary} />)
+
+      const showMoreButton = screen.getByText(/show more/i)
+      await user.click(showMoreButton)
+
+      await waitFor(() => {
+        // Should show summary content by default (check for Processing Details which is unique to summary tab)
+        expect(screen.getByText('Processing Details')).toBeInTheDocument()
+        // Should not show transcript content yet
+        expect(screen.queryByText(/Hello and welcome to this video/i)).not.toBeInTheDocument()
+      })
+    })
+  })
 })

@@ -3,7 +3,7 @@
  * Tests annotation creation flow with boundingBoxSequence structure.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -168,9 +168,10 @@ describe('AnnotationOverlay', () => {
       expect(annotation.boundingBoxSequence.visibilityRanges[0].visible).toBe(true)
 
       // Verify metadata
-      expect(annotation.boundingBoxSequence.totalFrames).toBe(1)
+      // Annotations have a 1-second default timespan at 30fps = 31 frames (0-30 inclusive)
+      expect(annotation.boundingBoxSequence.totalFrames).toBe(31)
       expect(annotation.boundingBoxSequence.keyframeCount).toBe(1)
-      expect(annotation.boundingBoxSequence.interpolatedFrameCount).toBe(0)
+      expect(annotation.boundingBoxSequence.interpolatedFrameCount).toBe(30)
     })
 
     it('creates type annotation with persona and type IDs', async () => {

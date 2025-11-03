@@ -59,9 +59,10 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
+  const [label, setLabel] = useState('')
   const [wikidataId, setWikidataId] = useState('')
   const [wikidataUrl, setWikidataUrl] = useState('')
-  
+
   // Instant fields
   const [timestamp, setTimestamp] = useState('')
   
@@ -93,9 +94,10 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     if (time) {
       setImportMode('manual')
       setTimeType(time.type)
+      setLabel(time.label || '')
       setWikidataId(time.wikidataId || '')
       setWikidataUrl(time.wikidataUrl || '')
-      
+
       if (time.type === 'instant') {
         const instant = time as TimeInstant
         setTimestamp(instant.timestamp || '')
@@ -104,7 +106,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         setStartTime(interval.startTime || '')
         setEndTime(interval.endTime || '')
       }
-      
+
       if (time.vagueness) {
         setHasVagueness(true)
         setVaguenessType(time.vagueness.type)
@@ -114,19 +116,20 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         setTypicalTime(time.vagueness.bounds?.typical || '')
         setGranularity(time.vagueness.granularity || 'minute')
       }
-      
+
       if (time.deictic) {
         setHasDeictic(true)
         setDeicticAnchorType(time.deictic.anchorType)
         setDeicticExpression(time.deictic.expression || '')
       }
-      
+
       setVideoReferences(time.videoReferences || [])
       setCertainty(time.certainty || 1.0)
     } else {
       // Reset to defaults for new time
       setImportMode('manual')
       setTimeType('instant')
+      setLabel('')
       setTimestamp('')
       setStartTime('')
       setEndTime('')
@@ -158,6 +161,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const handleSave = () => {
     const baseTime: Omit<Time, 'id'> = {
       type: timeType,
+      label: label || undefined,
       videoReferences: videoReferences.filter(ref => ref.videoId),
       certainty,
       wikidataId: wikidataId || undefined,
@@ -301,7 +305,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           {/* Show Wikidata chip if imported */}
           {wikidataId && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip 
+              <Chip
                 label={`Wikidata: ${wikidataId}`}
                 size="small"
                 color="secondary"
@@ -316,6 +320,16 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
               </Typography>
             </Box>
           )}
+
+          {/* Label Field */}
+          <TextField
+            label="Label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            fullWidth
+            placeholder="e.g., Apollo 11 Launch, Summer 2024"
+            helperText="Human-readable name for this time (optional but recommended)"
+          />
 
           {/* Time Type Selection */}
           <Box>

@@ -583,7 +583,6 @@ describe('LazyBoundingBoxSequence', () => {
       const frames = [0, 10, 20, 30, 20, 10, 0, 10, 20, 30, 40, 30, 20, 10]
 
       let cacheHits = 0
-      let initialCacheSize = 0
 
       frames.forEach((frame, index) => {
         const sizeBefore = lazy.getCacheSize()
@@ -592,10 +591,6 @@ describe('LazyBoundingBoxSequence', () => {
 
         if (index > 0 && sizeAfter === sizeBefore) {
           cacheHits++
-        }
-
-        if (index === 5) {
-          initialCacheSize = sizeAfter
         }
       })
 

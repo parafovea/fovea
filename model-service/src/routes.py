@@ -109,6 +109,7 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
         from .summarization import (
             SummarizationError,
             get_video_path_for_id,
+            summarize_video_with_external_api,
             summarize_video_with_vlm,
         )
         from .vlm_loader import InferenceFramework, QuantizationType, VLMConfig
@@ -129,42 +130,69 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
                     detail="Video summarization task not configured",
                 )
 
-            selected_model_config = task_config.get_selected_config()
+            # Check if using external API
+            if manager.is_external_api("video_summarization"):
+                selected_model_config = task_config.get_selected_config()
+                provider = selected_model_config.provider
 
-            quantization_map = {
-                "4bit": QuantizationType.FOUR_BIT,
-                "8bit": QuantizationType.EIGHT_BIT,
-                "awq": QuantizationType.AWQ,
-            }
-            quantization = quantization_map.get(
-                selected_model_config.quantization or "4bit",
-                QuantizationType.FOUR_BIT,
-            )
+                if not provider:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="External API model missing provider configuration",
+                    )
 
-            framework_map = {
-                "sglang": InferenceFramework.SGLANG,
-                "vllm": InferenceFramework.VLLM,
-                "transformers": InferenceFramework.TRANSFORMERS,
-            }
-            framework = framework_map.get(
-                selected_model_config.framework,
-                InferenceFramework.TRANSFORMERS,
-            )
+                try:
+                    api_config = manager.get_external_api_config("video_summarization")
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=str(e),
+                    ) from e
 
-            model_config = VLMConfig(
-                model_id=selected_model_config.model_id,
-                quantization=quantization,
-                framework=framework,
-            )
+                response = await summarize_video_with_external_api(
+                    request=request,
+                    video_path=video_path,
+                    api_config=api_config,
+                    provider=provider,
+                )
+            else:
+                # Use self-hosted model
+                selected_model_config = task_config.get_selected_config()
 
-            response = await summarize_video_with_vlm(
-                request=request,
-                video_path=video_path,
-                model_config=model_config,
-                model_name=task_config.selected,
-                persona_role=None,
-                information_need=None,
-            )
+                quantization_map = {
+                    "4bit": QuantizationType.FOUR_BIT,
+                    "8bit": QuantizationType.EIGHT_BIT,
+                    "awq": QuantizationType.AWQ,
+                }
+                quantization = quantization_map.get(
+                    selected_model_config.quantization or "4bit",
+                    QuantizationType.FOUR_BIT,
+                )
+
+                framework_map = {
+                    "sglang": InferenceFramework.SGLANG,
+                    "vllm": InferenceFramework.VLLM,
+                    "transformers": InferenceFramework.TRANSFORMERS,
+                }
+                framework = framework_map.get(
+                    selected_model_config.framework,
+                    InferenceFramework.TRANSFORMERS,
+                )
+
+                model_config = VLMConfig(
+                    model_id=selected_model_config.model_id,
+                    quantization=quantization,
+                    framework=framework,
+                )
+
+                response = await summarize_video_with_vlm(
+                    request=request,
+                    video_path=video_path,
+                    model_config=model_config,
+                    model_name=task_config.selected,
+                    persona_role=None,
+                    information_need=None,
+                )
 
             span.set_attribute("summary_generated", True)
             return response
@@ -222,6 +250,7 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
         from .llm_loader import LLMConfig, LLMFramework
         from .ontology_augmentation import (
             AugmentationContext,
+            augment_ontology_with_external_api,
             augment_ontology_with_llm,
             generate_augmentation_reasoning,
         )
@@ -235,17 +264,6 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
                     detail="Ontology augmentation task not configured",
                 )
 
-            selected_model_config = task_config.get_selected_config()
-
-            llm_config = LLMConfig(
-                model_id=selected_model_config.model_id,
-                quantization=selected_model_config.quantization or "4bit",
-                framework=LLMFramework(selected_model_config.framework),
-                max_tokens=2048,
-                temperature=0.7,
-                top_p=0.9,
-            )
-
             context = AugmentationContext(
                 domain=request.domain,
                 existing_types=request.existing_types,
@@ -254,12 +272,50 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
                 information_need=None,
             )
 
-            suggestions = await augment_ontology_with_llm(
-                context=context,
-                llm_config=llm_config,
-                max_suggestions=request.max_suggestions,
-                cache_dir=None,
-            )
+            # Check if using external API
+            if manager.is_external_api("ontology_augmentation"):
+                selected_model_config = task_config.get_selected_config()
+                provider = selected_model_config.provider
+
+                if not provider:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="External API model missing provider configuration",
+                    )
+
+                try:
+                    api_config = manager.get_external_api_config("ontology_augmentation")
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=str(e),
+                    ) from e
+
+                suggestions = await augment_ontology_with_external_api(
+                    context=context,
+                    api_config=api_config,
+                    provider=provider,
+                    max_suggestions=request.max_suggestions,
+                )
+            else:
+                # Use self-hosted LLM
+                selected_model_config = task_config.get_selected_config()
+
+                llm_config = LLMConfig(
+                    model_id=selected_model_config.model_id,
+                    quantization=selected_model_config.quantization or "4bit",
+                    framework=LLMFramework(selected_model_config.framework),
+                    max_tokens=2048,
+                    temperature=0.7,
+                    top_p=0.9,
+                )
+
+                suggestions = await augment_ontology_with_llm(
+                    context=context,
+                    llm_config=llm_config,
+                    max_suggestions=request.max_suggestions,
+                    cache_dir=None,
+                )
 
             reasoning = generate_augmentation_reasoning(suggestions, context)
 
@@ -307,7 +363,7 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
     description="Detects objects in video frames based on text prompts using open-vocabulary detection models. "
     "Supports YOLO-World v2.1, Grounding DINO 1.5, OWLv2, and Florence-2.",
 )
-async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noqa: PLR0915
+async def detect_objects(request: DetectionRequest) -> DetectionResponse:
     """Detect objects in video frames using open-vocabulary detection models.
 
     Parameters
@@ -480,7 +536,7 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noq
     description="Tracks objects across video frames using initial segmentation masks. "
     "Supports SAMURAI, SAM2Long, SAM2.1, and YOLO11n-seg models.",
 )
-async def track_objects(request: TrackingRequest) -> TrackingResponse:  # noqa: PLR0915
+async def track_objects(request: TrackingRequest) -> TrackingResponse:
     """Track objects across video frames with mask-based segmentation.
 
     Parameters

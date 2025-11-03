@@ -12,6 +12,8 @@ Complete reference for environment variables used across FOVEA services.
 
 ### Backend Service
 
+#### Core Configuration
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NODE_ENV` | `development` | Node environment (development, production) |
@@ -21,6 +23,17 @@ Complete reference for environment variables used across FOVEA services.
 | `CORS_ORIGIN` | `http://localhost:5173` | Allowed CORS origins |
 | `MODEL_SERVICE_URL` | `http://model-service:8000` | Model service endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OpenTelemetry endpoint |
+| `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
+
+#### Authentication & User Management
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FOVEA_MODE` | `single-user` | Authentication mode: `single-user` (no login) or `multi-user` (session-based auth) |
+| `ALLOW_REGISTRATION` | `false` | Allow user self-registration (multi-user mode only) |
+| `COOKIE_SECRET` | (required) | Secret for session cookie signing (min 32 characters, required in multi-user mode) |
+| `SESSION_TIMEOUT_DAYS` | `7` | Session expiration in days |
+| `API_KEY_ENCRYPTION_KEY` | (required) | 32-byte hex key for API key encryption at rest |
 
 **Example** (in docker-compose.yml):
 ```yaml
@@ -28,7 +41,12 @@ backend:
   environment:
     NODE_ENV: production
     PORT: 3001
-    DATABASE_URL: postgresql://fovea:fovea@postgres:5432/fovea
+    DATABASE_URL: postgresql://fovea:${DB_PASSWORD}@postgres:5432/fovea
+    FOVEA_MODE: multi-user
+    ALLOW_REGISTRATION: false
+    COOKIE_SECRET: ${COOKIE_SECRET}
+    SESSION_TIMEOUT_DAYS: 7
+    API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
 ```
 
 ### Frontend Service
@@ -48,21 +66,53 @@ frontend:
 
 ### Model Service
 
+#### Core Configuration
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEVICE` | `cpu` | Inference device (cpu, cuda) |
-| `BUILD_MODE` | `minimal` | Build mode (minimal, full) |
+| `DEVICE` | `cpu` | Inference device (cpu, cuda). Use `--profile gpu` instead. |
+| `MODEL_BUILD_MODE` | `minimal` | Feature set: `minimal`, `recommended`, or `full` |
 | `MODEL_CONFIG_PATH` | `/app/config/models.yaml` | Model configuration file |
 | `PYTORCH_CUDA_ALLOC_CONF` | `max_split_size_mb:512` | PyTorch CUDA memory config |
+| `CUDA_VISIBLE_DEVICES` | (all) | GPU indices when using `--profile gpu` (e.g., "0,1,2,3") |
 | `REDIS_URL` | `redis://redis:6379` | Redis connection string |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OpenTelemetry endpoint |
+
+#### External VLM/LLM API Keys
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Optional | Anthropic Claude API key (get from console.anthropic.com/settings/keys) |
+| `OPENAI_API_KEY` | Optional | OpenAI API key (get from [platform.openai.com](https://platform.openai.com/api-keys)) |
+| `GOOGLE_API_KEY` | Optional | Google AI API key (get from [aistudio.google.com](https://aistudio.google.com/app/apikey)) |
+
+**Note**: API keys can also be configured via the frontend UI (user-level) or admin panel (system-level). Environment variables serve as fallback.
+
+#### External Audio API Keys
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ASSEMBLYAI_API_KEY` | Optional | AssemblyAI API key (Universal-2 model) |
+| `DEEPGRAM_API_KEY` | Optional | Deepgram API key (Nova-3 model) |
+| `AZURE_SPEECH_KEY` | Optional | Azure Speech Services key |
+| `AZURE_SPEECH_REGION` | Optional | Azure Speech Services region (e.g., "eastus") |
+| `AWS_ACCESS_KEY_ID` | Optional | AWS access key for Transcribe |
+| `AWS_SECRET_ACCESS_KEY` | Optional | AWS secret key for Transcribe |
+| `AWS_REGION` | Optional | AWS region (e.g., "us-east-1") |
+| `REVAI_API_KEY` | Optional | Rev.ai API key |
+| `GLADIA_API_KEY` | Optional | Gladia API key |
 
 **Example** (in docker-compose.yml):
 ```yaml
 model-service:
   environment:
-    DEVICE: cuda
-    BUILD_MODE: full
+    MODEL_BUILD_MODE: recommended
     PYTORCH_CUDA_ALLOC_CONF: max_split_size_mb:512
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+    ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+    DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
 ```
 
 ### PostgreSQL
@@ -105,12 +155,21 @@ grafana:
 Environment variables can be set in `server/.env`:
 
 ```env
+# Core Configuration
 NODE_ENV=development
 PORT=3001
 DATABASE_URL=postgresql://fovea:fovea@localhost:5432/fovea
 REDIS_URL=redis://localhost:6379
 CORS_ORIGIN=http://localhost:5173
 MODEL_SERVICE_URL=http://localhost:8000
+LOG_LEVEL=info
+
+# Authentication & User Management
+FOVEA_MODE=single-user
+ALLOW_REGISTRATION=false
+COOKIE_SECRET=your-secret-key-here-min-32-chars
+SESSION_TIMEOUT_DAYS=7
+API_KEY_ENCRYPTION_KEY=your-32-byte-hex-key-here
 ```
 
 ### Frontend Configuration
@@ -127,10 +186,27 @@ VITE_VIDEO_BASE_URL=http://localhost:3001/videos
 Environment variables can be set in `model-service/.env`:
 
 ```env
-DEVICE=cpu
-BUILD_MODE=minimal
+# Core Configuration
+MODEL_BUILD_MODE=minimal
 MODEL_CONFIG_PATH=/app/config/models.yaml
+PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 REDIS_URL=redis://localhost:6379
+
+# External VLM/LLM API Keys (Optional)
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+OPENAI_API_KEY=sk-your-key-here
+GOOGLE_API_KEY=your-key-here
+
+# External Audio API Keys (Optional)
+ASSEMBLYAI_API_KEY=your-key-here
+DEEPGRAM_API_KEY=your-key-here
+AZURE_SPEECH_KEY=your-key-here
+AZURE_SPEECH_REGION=eastus
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+REVAI_API_KEY=your-key-here
+GLADIA_API_KEY=your-key-here
 ```
 
 ## Common Configuration Scenarios
@@ -145,6 +221,17 @@ DATABASE_URL=postgresql://fovea:fovea@localhost:5432/fovea
 REDIS_URL=redis://localhost:6379
 CORS_ORIGIN=http://localhost:5173
 MODEL_SERVICE_URL=http://localhost:8000
+FOVEA_MODE=single-user
+COOKIE_SECRET=dev-secret-key-min-32-chars-here
+API_KEY_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+**Model Service** (`model-service/.env`):
+```env
+MODEL_BUILD_MODE=minimal
+MODEL_CONFIG_PATH=/app/config/models.yaml
+REDIS_URL=redis://localhost:6379
+# Optional: Add external API keys here
 ```
 
 **Frontend** (`annotation-tool/.env`):
@@ -176,14 +263,45 @@ frontend:
 
 ### GPU Mode
 
-**Model Service**:
+Use the `--profile gpu` flag instead of environment variables:
+
+```bash
+docker compose --profile gpu up
+```
+
+**Model Service** (optional GPU configuration):
 ```yaml
 model-service:
   environment:
-    DEVICE: cuda
-    BUILD_MODE: full
+    MODEL_BUILD_MODE: recommended
     PYTORCH_CUDA_ALLOC_CONF: max_split_size_mb:512
+    CUDA_VISIBLE_DEVICES: "0,1"  # Use first 2 GPUs
 ```
+
+### Multi-User Mode with External APIs
+
+**Backend**:
+```yaml
+backend:
+  environment:
+    FOVEA_MODE: multi-user
+    ALLOW_REGISTRATION: false
+    COOKIE_SECRET: ${COOKIE_SECRET}
+    SESSION_TIMEOUT_DAYS: 7
+    API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
+```
+
+**Model Service** (fallback keys):
+```yaml
+model-service:
+  environment:
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+    DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+```
+
+Users can override these with their own keys via Settings > API Keys.
 
 ## Security Considerations
 
@@ -205,6 +323,34 @@ Set in `.env` file (not committed to git):
 DB_USER=fovea_prod
 DB_PASSWORD=strong_random_password_here
 ```
+
+### Authentication Secrets
+
+**Cookie Secret**: Generate a random 32+ character string:
+```bash
+openssl rand -base64 32
+```
+
+**API Key Encryption Key**: Generate a 32-byte hex key:
+```bash
+openssl rand -hex 32
+```
+
+Set in `.env` file:
+```env
+COOKIE_SECRET=your-generated-secret-here
+API_KEY_ENCRYPTION_KEY=your-generated-hex-key-here
+```
+
+### External API Keys
+
+External API keys can be configured in three ways (priority order):
+
+1. **User-level keys**: Settings > API Keys (user-scoped)
+2. **System-level keys**: Admin Panel > API Keys (admin-only, fallback for all users)
+3. **Environment variables**: model-service/.env (ultimate fallback)
+
+For production, use environment variables as fallback and allow users to configure their own keys via UI.
 
 ### Grafana Credentials
 

@@ -1,6 +1,38 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { Persona, PersonaOntology, EntityType, RoleType, EventType, RelationType, OntologyRelation, ImportRequest } from '../models/types'
 import { generateId } from '../utils/uuid'
+
+/**
+ * Fetches all personas from the API.
+ * Used to load personas from the backend database.
+ */
+export const fetchPersonas = createAsyncThunk(
+  'persona/fetchPersonas',
+  async () => {
+    const response = await fetch('/api/personas')
+    if (!response.ok) {
+      throw new Error('Failed to fetch personas')
+    }
+    const data = await response.json()
+    // API returns array directly, not wrapped in object
+    return Array.isArray(data) ? data as Persona[] : []
+  }
+)
+
+/**
+ * Fetches ontology for a specific persona from the API.
+ */
+export const fetchPersonaOntology = createAsyncThunk(
+  'persona/fetchPersonaOntology',
+  async (personaId: string) => {
+    const response = await fetch(`/api/personas/${personaId}/ontology`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch persona ontology')
+    }
+    const ontology = await response.json()
+    return { personaId, ontology }
+  }
+)
 
 /**
  * State shape for persona management.
@@ -347,6 +379,33 @@ const personaSlice = createSlice({
     markSaved: (state) => {
       state.unsavedChanges = false
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchPersonas.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(fetchPersonas.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.personas = action.payload
+        if (action.payload.length > 0 && !state.activePersonaId) {
+          state.activePersonaId = action.payload[0].id
+        }
+      })
+      .addCase(fetchPersonas.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.error.message || 'Failed to fetch personas'
+      })
+      .addCase(fetchPersonaOntology.fulfilled, (state, action) => {
+        const { personaId, ontology } = action.payload
+        const existingIndex = state.personaOntologies.findIndex(o => o.personaId === personaId)
+        if (existingIndex !== -1) {
+          state.personaOntologies[existingIndex] = { personaId, ...ontology }
+        } else {
+          state.personaOntologies.push({ personaId, ...ontology })
+        }
+      })
   },
 })
 

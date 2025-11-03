@@ -25,11 +25,11 @@ class ModelConfig:
     Attributes
     ----------
     model_id : str
-        Hugging Face model identifier.
+        Hugging Face model identifier or external API model name.
     framework : str
-        Inference framework (sglang, vllm, pytorch).
+        Inference framework (sglang, vllm, pytorch, external_api).
     vram_gb : float
-        VRAM requirement in GB.
+        VRAM requirement in GB (0 for external APIs).
     quantization : str | None
         Quantization method (4bit, 8bit, awq, etc).
     speed : str
@@ -38,6 +38,12 @@ class ModelConfig:
         Human-readable description.
     fps : int | None
         Processing speed in frames per second (for vision models).
+    provider : str | None
+        External API provider (anthropic, openai, google).
+    api_endpoint : str | None
+        API endpoint URL for external APIs.
+    requires_api_key : bool
+        Whether model requires API key authentication.
     """
 
     def __init__(self, config_dict: dict[str, Any]) -> None:
@@ -55,6 +61,9 @@ class ModelConfig:
         self.speed: str = config_dict.get("speed", "medium")
         self.description: str = config_dict.get("description", "")
         self.fps: int | None = config_dict.get("fps")
+        self.provider: str | None = config_dict.get("provider")
+        self.api_endpoint: str | None = config_dict.get("api_endpoint")
+        self.requires_api_key: bool = config_dict.get("requires_api_key", False)
 
     @property
     def vram_bytes(self) -> int:
@@ -377,20 +386,89 @@ class ModelManager:
         return model
 
     async def _load_model_implementation(self, task_type: str, model_config: ModelConfig) -> Any:
-        """
-        Load model implementation based on framework.
+        """Load model implementation based on framework and task type.
 
-        This is a placeholder that will be replaced with actual model loading
-        logic when model loaders are implemented in Phase 3.
+        Parameters
+        ----------
+        task_type : str
+            Task type being loaded (audio_transcription, speaker_diarization, vad, etc.).
+        model_config : ModelConfig
+            Model configuration.
 
-        Args:
-            task_type: Task type being loaded
-            model_config: Model configuration
+        Returns
+        -------
+        Any
+            Loaded model object (loader instance for audio models, placeholder dict for others).
 
-        Returns:
-            Loaded model object
+        Raises
+        ------
+        ImportError
+            If required audio dependencies are not installed.
+        ValueError
+            If framework or model configuration is invalid.
         """
         logger.info(f"Loading {model_config.framework} model: {model_config.model_id}")
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if task_type == "audio_transcription":
+            from src.audio_loader import (
+                AudioFramework,
+                FasterWhisperLoader,
+                TranscriptionConfig,
+                WhisperLoader,
+            )
+
+            framework_map = {
+                "whisper": AudioFramework.WHISPER,
+                "faster_whisper": AudioFramework.FASTER_WHISPER,
+                "transformers": AudioFramework.TRANSFORMERS,
+            }
+            framework = framework_map.get(model_config.framework, AudioFramework.WHISPER)
+
+            config = TranscriptionConfig(
+                model_id=model_config.model_id,
+                framework=framework,
+                device=device,
+                compute_type="float16" if device == "cuda" else "int8",
+            )
+
+            if framework == AudioFramework.WHISPER:
+                loader = WhisperLoader(config)
+            elif framework == AudioFramework.FASTER_WHISPER:
+                loader = FasterWhisperLoader(config)  # type: ignore[assignment]
+            else:
+                loader = WhisperLoader(config)
+
+            loader.load()
+            logger.info(f"Audio transcription model loaded: {model_config.model_id}")
+            return loader
+
+        if task_type == "speaker_diarization":
+            from src.audio_loader import DiarizationConfig, PyannoteLoader
+
+            diar_config = DiarizationConfig(  # type: ignore[assignment]
+                model_id=model_config.model_id,
+                device=device,
+            )
+
+            diar_loader = PyannoteLoader(diar_config)  # type: ignore[assignment]
+            diar_loader.load()
+            logger.info(f"Speaker diarization model loaded: {model_config.model_id}")
+            return diar_loader  # type: ignore[return-value]
+
+        if task_type == "voice_activity_detection":
+            from src.audio_loader import SileroVADLoader, VADConfig
+
+            vad_config = VADConfig(  # type: ignore[assignment]
+                model_id=model_config.model_id,
+                device=device,
+            )
+
+            vad_loader = SileroVADLoader(vad_config)  # type: ignore[assignment]
+            vad_loader.load()
+            logger.info(f"VAD model loaded: {model_config.model_id}")
+            return vad_loader  # type: ignore[return-value]
 
         return {
             "task_type": task_type,
@@ -518,6 +596,74 @@ class ModelManager:
                 await self.load_model(task_type)
             except Exception as e:
                 logger.error(f"Failed to warmup {task_type}: {e}")
+
+    def is_external_api(self, task_type: str) -> bool:
+        """Check if a task uses an external API model.
+
+        Parameters
+        ----------
+        task_type : str
+            Task type to check.
+
+        Returns
+        -------
+        bool
+            True if task uses external API, False otherwise.
+
+        Raises
+        ------
+        ValueError
+            If task type is invalid.
+        """
+        if task_type not in self.tasks:
+            raise ValueError(f"Invalid task type: {task_type}")
+
+        model_config = self.tasks[task_type].get_selected_config()
+        return model_config.framework == "external_api"
+
+    def get_external_api_config(self, task_type: str) -> Any:
+        """Get external API configuration for a task.
+
+        Parameters
+        ----------
+        task_type : str
+            Task type to get configuration for.
+
+        Returns
+        -------
+        ExternalAPIConfig
+            Configuration object for external API client.
+
+        Raises
+        ------
+        ValueError
+            If task type is invalid or doesn't use external API.
+        """
+        from src.external_apis.base import ExternalAPIConfig
+
+        if not self.is_external_api(task_type):
+            raise ValueError(f"Task {task_type} does not use external API")
+
+        model_config = self.tasks[task_type].get_selected_config()
+
+        if not model_config.provider or not model_config.api_endpoint:
+            raise ValueError(f"External API model {task_type} missing provider or endpoint")
+
+        import os
+
+        api_key_var = f"{model_config.provider.upper()}_API_KEY"
+        api_key = os.getenv(api_key_var)
+
+        if model_config.requires_api_key and not api_key:
+            raise ValueError(f"Missing API key: {api_key_var} environment variable not set")
+
+        return ExternalAPIConfig(
+            api_key=api_key or "",
+            api_endpoint=model_config.api_endpoint,
+            model_id=model_config.model_id,
+            timeout=30,
+            max_retries=3,
+        )
 
     async def shutdown(self) -> None:
         """Unload all models and clean up resources."""

@@ -1,8 +1,13 @@
-import { Queue, Worker, QueueEvents } from 'bullmq';
-import { Redis } from 'ioredis';
-import { PrismaClient } from '@prisma/client';
-import { queueJobCounter, queueJobDuration, modelServiceCounter, modelServiceDuration } from '../metrics.js';
-import { buildPersonaPrompts } from '../utils/queryBuilder.js';
+import { Queue, Worker, QueueEvents } from "bullmq";
+import { Redis } from "ioredis";
+import { PrismaClient } from "@prisma/client";
+import {
+  queueJobCounter,
+  queueJobDuration,
+  modelServiceCounter,
+  modelServiceDuration,
+} from "../metrics.js";
+import { buildPersonaPrompts } from "../utils/queryBuilder.js";
 
 /**
  * Response type from model service /api/summarize endpoint.
@@ -13,6 +18,28 @@ interface ModelSummarizeResponse {
   audio_transcript: string;
   key_frames: number[];
   confidence: number;
+  transcript_json?: Record<string, unknown>;
+  audio_language?: string;
+  speaker_count?: number;
+  audio_model_used?: string;
+  visual_model_used?: string;
+  fusion_strategy?: string;
+  processing_time_audio?: number;
+  processing_time_visual?: number;
+  processing_time_fusion?: number;
+}
+
+interface ModelSummarizeRequest {
+  video_id: string;
+  persona_id: string;
+  frame_sample_rate: number;
+  max_frames: number;
+  persona_role: string | null;
+  information_need: string | null;
+  enable_audio?: boolean;
+  enable_speaker_diarization?: boolean;
+  fusion_strategy?: string;
+  audio_language?: string;
 }
 
 /**
@@ -20,8 +47,8 @@ interface ModelSummarizeResponse {
  * Uses environment variables with localhost defaults for development.
  */
 const connection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  host: process.env.REDIS_HOST || "localhost",
+  port: parseInt(process.env.REDIS_PORT || "6379"),
   maxRetriesPerRequest: null,
 });
 
@@ -29,12 +56,12 @@ const connection = new Redis({
  * Queue for processing video summarization jobs.
  * Jobs include video analysis using vision language models to generate summaries.
  */
-export const videoSummarizationQueue = new Queue('video-summarization', {
+export const videoSummarizationQueue = new Queue("video-summarization", {
   connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
-      type: 'exponential',
+      type: "exponential",
       delay: 2000,
     },
     removeOnComplete: 100,
@@ -46,29 +73,42 @@ export const videoSummarizationQueue = new Queue('video-summarization', {
  * Queue events for monitoring video summarization job lifecycle.
  * Provides logging for completed and failed jobs.
  */
-const queueEvents = new QueueEvents('video-summarization', { connection });
+const queueEvents = new QueueEvents("video-summarization", { connection });
 
-queueEvents.on('completed', async ({ jobId, returnvalue }) => {
+queueEvents.on("completed", async ({ jobId, returnvalue }) => {
   console.log(`Job ${jobId} completed with result:`, returnvalue);
 
   // Get job details to calculate duration
   const job = await videoSummarizationQueue.getJob(jobId);
   if (job) {
-    const duration = job.finishedOn ? job.finishedOn - (job.processedOn || job.timestamp) : 0;
-    queueJobCounter.add(1, { queue: 'video-summarization', status: 'completed' });
-    queueJobDuration.record(duration, { queue: 'video-summarization', status: 'completed' });
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, {
+      queue: "video-summarization",
+      status: "completed",
+    });
+    queueJobDuration.record(duration, {
+      queue: "video-summarization",
+      status: "completed",
+    });
   }
 });
 
-queueEvents.on('failed', async ({ jobId, failedReason }) => {
+queueEvents.on("failed", async ({ jobId, failedReason }) => {
   console.error(`Job ${jobId} failed:`, failedReason);
 
   // Get job details to calculate duration
   const job = await videoSummarizationQueue.getJob(jobId);
   if (job) {
-    const duration = job.finishedOn ? job.finishedOn - (job.processedOn || job.timestamp) : 0;
-    queueJobCounter.add(1, { queue: 'video-summarization', status: 'failed' });
-    queueJobDuration.record(duration, { queue: 'video-summarization', status: 'failed' });
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, { queue: "video-summarization", status: "failed" });
+    queueJobDuration.record(duration, {
+      queue: "video-summarization",
+      status: "failed",
+    });
   }
 });
 
@@ -85,6 +125,10 @@ export interface VideoSummarizationJobData {
   personaId: string;
   frameSampleRate?: number;
   maxFrames?: number;
+  enableAudio?: boolean;
+  enableSpeakerDiarization?: boolean;
+  fusionStrategy?: string;
+  audioLanguage?: string;
 }
 
 /**
@@ -109,10 +153,22 @@ export interface VideoSummarizationResult {
  * Calls the model service API to generate video summaries using vision language models,
  * then saves the results to Prisma database.
  */
-export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizationResult>(
-  'video-summarization',
+export const videoWorker = new Worker<
+  VideoSummarizationJobData,
+  VideoSummarizationResult
+>(
+  "video-summarization",
   async (job): Promise<VideoSummarizationResult> => {
-    const { videoId, personaId, frameSampleRate = 1, maxFrames = 30 } = job.data;
+    const {
+      videoId,
+      personaId,
+      frameSampleRate = 1,
+      maxFrames = 30,
+      enableAudio,
+      enableSpeakerDiarization,
+      fusionStrategy,
+      audioLanguage,
+    } = job.data;
 
     await job.updateProgress(10);
 
@@ -129,45 +185,73 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
     let personaRole: string | null = null;
     let informationNeed: string | null = null;
 
-    if (persona.name !== 'Automated') {
+    if (persona.name !== "Automated") {
       const prompts = await buildPersonaPrompts(personaId, prisma);
       personaRole = prompts.persona_role;
       informationNeed = prompts.information_need;
     }
 
     // Call model service with metrics tracking
-    const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
+    const modelServiceUrl =
+      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
     const modelStartTime = Date.now();
 
+    const requestBody: ModelSummarizeRequest = {
+      video_id: videoId,
+      persona_id: personaId,
+      frame_sample_rate: frameSampleRate,
+      max_frames: maxFrames,
+      persona_role: personaRole,
+      information_need: informationNeed,
+    };
+
+    if (enableAudio !== undefined) {
+      requestBody.enable_audio = enableAudio;
+    }
+    if (enableSpeakerDiarization !== undefined) {
+      requestBody.enable_speaker_diarization = enableSpeakerDiarization;
+    }
+    if (fusionStrategy !== undefined) {
+      requestBody.fusion_strategy = fusionStrategy;
+    }
+    if (audioLanguage !== undefined) {
+      requestBody.audio_language = audioLanguage;
+    }
+
     const response = await fetch(`${modelServiceUrl}/api/summarize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        video_id: videoId,
-        persona_id: personaId,
-        frame_sample_rate: frameSampleRate,
-        max_frames: maxFrames,
-        persona_role: personaRole,
-        information_need: informationNeed,
-      }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
     });
 
     const modelDuration = Date.now() - modelStartTime;
 
     if (!response.ok) {
-      modelServiceCounter.add(1, { endpoint: '/api/summarize', status: response.status });
-      modelServiceDuration.record(modelDuration, { endpoint: '/api/summarize', status: response.status });
+      modelServiceCounter.add(1, {
+        endpoint: "/api/summarize",
+        status: response.status,
+      });
+      modelServiceDuration.record(modelDuration, {
+        endpoint: "/api/summarize",
+        status: response.status,
+      });
 
       const errorText = await response.text();
       throw new Error(`Model service error (${response.status}): ${errorText}`);
     }
 
-    modelServiceCounter.add(1, { endpoint: '/api/summarize', status: response.status });
-    modelServiceDuration.record(modelDuration, { endpoint: '/api/summarize', status: response.status });
+    modelServiceCounter.add(1, {
+      endpoint: "/api/summarize",
+      status: response.status,
+    });
+    modelServiceDuration.record(modelDuration, {
+      endpoint: "/api/summarize",
+      status: response.status,
+    });
 
     await job.updateProgress(50);
 
-    const modelResponse = await response.json() as ModelSummarizeResponse;
+    const modelResponse = (await response.json()) as ModelSummarizeResponse;
 
     await job.updateProgress(70);
 
@@ -184,6 +268,16 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any for complex objects
+        transcriptJson: (modelResponse.transcript_json as any) || undefined,
+        audioLanguage: modelResponse.audio_language || undefined,
+        speakerCount: modelResponse.speaker_count || undefined,
+        audioModelUsed: modelResponse.audio_model_used || undefined,
+        visualModelUsed: modelResponse.visual_model_used || undefined,
+        fusionStrategy: modelResponse.fusion_strategy || undefined,
+        processingTimeAudio: modelResponse.processing_time_audio || undefined,
+        processingTimeVisual: modelResponse.processing_time_visual || undefined,
+        processingTimeFusion: modelResponse.processing_time_fusion || undefined,
         updatedAt: new Date(),
       },
       create: {
@@ -194,6 +288,16 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any for complex objects
+        transcriptJson: (modelResponse.transcript_json as any) || undefined,
+        audioLanguage: modelResponse.audio_language || undefined,
+        speakerCount: modelResponse.speaker_count || undefined,
+        audioModelUsed: modelResponse.audio_model_used || undefined,
+        visualModelUsed: modelResponse.visual_model_used || undefined,
+        fusionStrategy: modelResponse.fusion_strategy || undefined,
+        processingTimeAudio: modelResponse.processing_time_audio || undefined,
+        processingTimeVisual: modelResponse.processing_time_visual || undefined,
+        processingTimeFusion: modelResponse.processing_time_fusion || undefined,
       },
     });
 
@@ -206,7 +310,9 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
       summary: savedSummary.summary,
       visualAnalysis: savedSummary.visualAnalysis || undefined,
       audioTranscript: savedSummary.audioTranscript || undefined,
-      keyFrames: savedSummary.keyFrames as Array<{ timestamp: number; description: string }> | undefined,
+      keyFrames: savedSummary.keyFrames as
+        | Array<{ timestamp: number; description: string }>
+        | undefined,
       confidence: savedSummary.confidence || undefined,
     };
   },
@@ -217,7 +323,7 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
       max: 10,
       duration: 60000,
     },
-  }
+  },
 );
 
 /**
@@ -228,9 +334,23 @@ export async function closeQueues(): Promise<void> {
   await videoWorker.close();
   await queueEvents.close();
   await videoSummarizationQueue.close();
-  // Only quit connection if it's still open
-  if (connection.status === 'ready' || connection.status === 'connecting') {
-    await connection.quit();
+  // Only quit connection if it's still open, ignore if already closed
+  try {
+    if (
+      connection.status === "ready" ||
+      connection.status === "connecting" ||
+      connection.status === "connect"
+    ) {
+      await connection.quit();
+    }
+  } catch (error) {
+    // Ignore errors if connection is already closed
+    if (
+      error instanceof Error &&
+      !error.message.includes("Connection is closed")
+    ) {
+      throw error;
+    }
   }
   await prisma.$disconnect();
 }

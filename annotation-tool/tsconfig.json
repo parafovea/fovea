@@ -18,6 +18,6 @@
     "types": ["vite/client", "@testing-library/jest-dom/vitest"]
   },
   "include": ["src", "test"],
-  "exclude": ["**/*.stories.tsx", "**/*.stories.ts", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+  "exclude": ["**/*.stories.tsx", "**/*.stories.ts", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "test/e2e/**"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

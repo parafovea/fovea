@@ -8,25 +8,42 @@
  * - Graceful shutdown disconnects properly
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/app.js'
+import { hashPassword } from '../src/lib/password.js'
 import type { FastifyInstance } from 'fastify'
 
 describe('Database Connection', () => {
   let app: FastifyInstance
+  let testUserId: string
 
   beforeAll(async () => {
     app = await buildApp()
     await app.ready()
   })
 
-  afterEach(async () => {
-    // Clean up database between tests to avoid unique constraint violations
+  beforeEach(async () => {
+    // Clean up database before each test to avoid unique constraint violations
+    await app.prisma.apiKey.deleteMany()
+    await app.prisma.session.deleteMany()
     await app.prisma.annotation.deleteMany()
     await app.prisma.videoSummary.deleteMany()
     await app.prisma.ontology.deleteMany()
     await app.prisma.video.deleteMany()
     await app.prisma.persona.deleteMany()
+    await app.prisma.user.deleteMany()
+
+    // Create test user for persona ownership
+    const user = await app.prisma.user.create({
+      data: {
+        username: 'test-user',
+        email: 'test@example.com',
+        passwordHash: await hashPassword('testpass123'),
+        displayName: 'Test User',
+        isAdmin: false
+      }
+    })
+    testUserId = user.id
   })
 
   afterAll(async () => {
@@ -74,7 +91,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Test Analyst',
           role: 'Intelligence Officer',
-          informationNeed: 'Track suspicious activities'
+          informationNeed: 'Track suspicious activities',
+          userId: testUserId
         }
       })
 
@@ -91,7 +109,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Retrieve Test',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -105,7 +124,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Original Name',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -126,7 +146,8 @@ describe('Database Connection', () => {
         data: {
           name: 'To Delete',
           role: 'Test',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -184,7 +205,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Ontology Test',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -213,6 +235,7 @@ describe('Database Connection', () => {
           name: 'Cascade Test',
           role: 'Test',
           informationNeed: 'Test',
+          userId: testUserId,
           ontology: {
             create: {
               entityTypes: [],
@@ -245,7 +268,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Summary Test',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -275,7 +299,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Unique Summary Test',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 
@@ -312,7 +337,8 @@ describe('Database Connection', () => {
         data: {
           name: 'Annotation Test',
           role: 'Analyst',
-          informationNeed: 'Test'
+          informationNeed: 'Test',
+          userId: testUserId
         }
       })
 

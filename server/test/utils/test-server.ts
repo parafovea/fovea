@@ -23,9 +23,7 @@ import { buildApp } from '../../src/app.js'
  * ```
  */
 export async function createTestServer(): Promise<FastifyInstance> {
-  const server = await buildApp({
-    logger: false,
-  })
+  const server = await buildApp()
 
   return server
 }

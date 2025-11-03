@@ -154,14 +154,6 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     ))
   }
 
-  const handleWikidataSelect = (data: any) => {
-    setName(data.name)
-    setGloss([{ type: 'text', content: data.description }])
-    setWikidataId(data.wikidataId)
-    setWikidataUrl(data.wikidataUrl)
-    setImportedAt(new Date().toISOString())
-  }
-
   const handleAddExample = () => {
     if (exampleInput.trim()) {
       setExamples([...examples, exampleInput.trim()])
@@ -177,7 +169,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   const additionalFields = (
     <Box>
       {/* Roles Management */}
-      <Typography variant="subtitle2" gutterBottom>Roles</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom>Roles</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
         <FormControl fullWidth size="small">
           <InputLabel>Add Role</InputLabel>
@@ -195,7 +187,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
               ))}
           </Select>
         </FormControl>
-        <IconButton onClick={handleAddRole} disabled={!selectedRoleId}>
+        <IconButton onClick={handleAddRole} disabled={!selectedRoleId} aria-label="Add role">
           <AddIcon />
         </IconButton>
       </Box>
@@ -227,6 +219,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
                   edge="end"
                   size="small"
                   onClick={() => handleRemoveRole(eventRole.roleTypeId)}
+                  aria-label={`Remove role ${role.name}`}
                 >
                   <DeleteIcon />
                 </IconButton>
@@ -237,7 +230,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       </List>
 
       {/* Examples */}
-      <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
+      <Typography variant="subtitle2" component="div" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
       <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
         <TextField
           size="small"
@@ -252,7 +245,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
           }}
           fullWidth
         />
-        <IconButton onClick={handleAddExample} size="small">
+        <IconButton onClick={handleAddExample} size="small" aria-label="Add example">
           <AddIcon />
         </IconButton>
       </Box>
@@ -330,7 +323,6 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       wikidataId={wikidataId}
       wikidataUrl={wikidataUrl}
       importedAt={importedAt}
-      onWikidataSelect={handleWikidataSelect}
       onSave={handleSave}
       onDelete={event ? handleDelete : undefined}
       title={event ? 'Edit Event Type' : 'Create Event Type'}

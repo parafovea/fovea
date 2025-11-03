@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.110.0",
+    "fastapi>=0.110.1",
     "uvicorn[standard]==0.27.1",
     "pydantic==2.6.1",
     "python-multipart==0.0.9",
@@ -31,6 +31,8 @@ dependencies = [
     "ultralytics>=8.3.0",
     "supervision>=0.22.0",
     "pycocotools>=2.0.10",
+    "httpx>=0.27.0",
+    "tenacity>=8.5.0",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +48,18 @@ vllm = [
 sam2 = [
     "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
 ]
+audio = [
+    "openai-whisper>=20240930",
+    "faster-whisper>=1.1.0",
+    "pyannote.audio>=3.3.0",
+    "torch-audiomentations>=0.11.0",
+    "pydub>=0.25.1",
+    "assemblyai>=0.40.0",
+    "deepgram-sdk>=3.8.0",
+    "boto3>=1.35.0",
+    "google-cloud-speech>=2.30.0",
+    "azure-cognitiveservices-speech>=1.42.0",
+]
 recommended = [
     "bitsandbytes>=0.42.0",
 ]
@@ -59,7 +73,6 @@ dev = [
     "pytest==8.0.0",
     "pytest-asyncio==0.23.5",
     "pytest-cov==4.1.0",
-    "httpx==0.26.0",
     "ruff==0.2.1",
     "mypy==1.8.0",
     "types-PyYAML>=6.0.0",
@@ -99,13 +112,23 @@ ignore = [
     "S101",    # use of assert (allowed in tests)
     "ANN101",  # missing type annotation for self in method
     "ANN102",  # missing type annotation for cls in classmethod
+    "ANN003",  # missing type annotation for **kwargs (standard idiom)
     "ANN401",  # typing.Any is disallowed (too strict, needed for model objects)
     "T201",    # print found (logging is not set up yet, using print)
     "PLW0603", # global statement (needed for FastAPI lifespan)
     "S603",    # subprocess without shell (ffmpeg is system tool, safe)
     "S607",    # partial executable path (ffmpeg is in PATH)
     "ARG001",  # unused function argument (FastAPI requires signature)
+    "ARG002",  # unused method argument (kwargs is standard idiom)
     "PLR0913", # too many arguments (VideoInfo dataclass needs 7 params)
+    "PLR0912", # too many branches (video processing has complex logic)
+    "PLR0915", # too many statements (video processing needs many steps)
+    "PTH123",  # use Path.open (external APIs provide string paths)
+    "PTH110",  # use Path.exists (temp file handling uses os.path)
+    "PTH107",  # use Path.unlink (temp file handling uses os.remove)
+    "S306",    # mktemp usage (needed for temporary audio extraction)
+    "PLR2004", # magic numbers (thresholds like 0.5 are domain-specific)
+    "SIM117",  # nested with statements (clearer error handling)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -146,5 +169,13 @@ follow_imports = "skip"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*"]
+module = ["external_apis", "external_apis.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
 ignore_missing_imports = true

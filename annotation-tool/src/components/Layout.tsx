@@ -27,7 +27,6 @@ import {
   Upload as ImportIcon,
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
-  Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useState, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
@@ -35,11 +34,16 @@ import { RootState, AppDispatch } from '../store/store'
 import { markSaved as markPersonaSaved } from '../store/personaSlice'
 import { api } from '../services/api'
 import { Ontology } from '../models/types'
-import { useGlobalKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import KeyboardShortcutsDialog from './shared/KeyboardShortcutsDialog'
-import KeyboardShortcutHint from './shared/KeyboardShortcutHint'
 import BreadcrumbNavigation from './shared/BreadcrumbNavigation'
 import ImportDataDialog from './ImportDataDialog'
+import ExportDialog from './ExportDialog'
+import UserMenu from './auth/UserMenu.js'
+import UserSettingsDialog from './settings/UserSettingsDialog.js'
+import ModelSettingsDialog from './settings/ModelSettingsDialog.js'
+import AboutDialog from './settings/AboutDialog.js'
+import AdminPanelDialog from './settings/AdminPanelDialog.js'
 
 const DRAWER_WIDTH = 240
 
@@ -49,9 +53,13 @@ export default function Layout() {
   const dispatch = useDispatch<AppDispatch>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
+  const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false)
+  const [modelSettingsDialogOpen, setModelSettingsDialogOpen] = useState(false)
+  const [aboutDialogOpen, setAboutDialogOpen] = useState(false)
+  const [adminPanelDialogOpen, setAdminPanelDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
@@ -61,7 +69,7 @@ export default function Layout() {
   const unsavedChanges = useSelector((state: RootState) =>
     state.persona.unsavedChanges
   )
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
+  const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
   const world = useSelector((state: RootState) => state.world)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
 
@@ -69,7 +77,6 @@ export default function Layout() {
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
     { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
-    { text: 'Settings', icon: <SettingsIcon />, path: '/settings', shortcut: 'Cmd/Ctrl+,' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -81,13 +88,13 @@ export default function Layout() {
         personas,
         personaOntologies,
         world: {
-          entities: world.entities,
-          events: world.events,
-          times: world.times,
-          entityCollections: world.entityCollections,
-          eventCollections: world.eventCollections,
-          timeCollections: world.timeCollections,
-          relations: world.relations,
+          entities: world.entities || [],
+          events: world.events || [],
+          times: world.times || [],
+          entityCollections: world.entityCollections || [],
+          eventCollections: world.eventCollections || [],
+          timeCollections: world.timeCollections || [],
+          relations: world.relations || [],
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -112,25 +119,8 @@ export default function Layout() {
     }
   }, [personas, personaOntologies, world, dispatch])
 
-  const handleExport = useCallback(async () => {
-    setExporting(true)
-    try {
-      await api.downloadExport()
-      setNotification({
-        open: true,
-        message: 'Export completed successfully',
-        severity: 'success',
-      })
-    } catch (error) {
-      console.error('Failed to export:', error)
-      setNotification({
-        open: true,
-        message: 'Failed to export data',
-        severity: 'error',
-      })
-    } finally {
-      setExporting(false)
-    }
+  const handleExport = useCallback(() => {
+    setExportDialogOpen(true)
   }, [])
 
   const handleCloseNotification = () => {
@@ -142,15 +132,23 @@ export default function Layout() {
     if (location.pathname === '/') return 'videoBrowser'
     if (location.pathname === '/ontology') return 'ontologyWorkspace'
     if (location.pathname === '/objects') return 'objectWorkspace'
-    if (location.pathname === '/settings') return 'settings'
     return undefined
   }
-  
-  useGlobalKeyboardShortcuts({
+
+  // Set command context for global shortcuts
+  useCommandContext({
+    videoBrowserActive: location.pathname === '/',
+    ontologyWorkspaceActive: location.pathname === '/ontology',
+    objectWorkspaceActive: location.pathname === '/objects',
+    annotationWorkspaceActive: location.pathname.startsWith('/annotate'),
+    dialogOpen: shortcutsDialogOpen || exportDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
+    inputFocused: false, // Updated dynamically by App.tsx
+  })
+
+  useCommands({
     'navigate.videoBrowser': () => navigate('/'),
     'navigate.ontologyBuilder': () => navigate('/ontology'),
     'navigate.objectBuilder': () => navigate('/objects'),
-    'navigate.settings': () => navigate('/settings'),
     'navigate.toggle': () => {
       // If we're in the ontology builder and there's a last annotation, go back to it
       if (location.pathname === '/ontology' && lastAnnotation.videoId) {
@@ -170,11 +168,7 @@ export default function Layout() {
         handleSave()
       }
     },
-    'file.export': () => {
-      if (!exporting) {
-        handleExport()
-      }
-    },
+    'file.export': () => handleExport(),
     'help.show': () => setShortcutsDialogOpen(true),
   })
 
@@ -187,6 +181,7 @@ export default function Layout() {
             edge="start"
             onClick={() => setDrawerOpen(!drawerOpen)}
             sx={{ mr: 2 }}
+            aria-label="Toggle navigation menu"
           >
             <MenuIcon />
           </IconButton>
@@ -200,11 +195,32 @@ export default function Layout() {
               mr: 2,
             }}
           />
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            FOVEA: Flexible Ontology Visual Event Analyzer
-          </Typography>
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography
+              variant="h1"
+              component="div"
+              sx={{
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                fontSize: '1.25rem'
+              }}
+            >
+              FOVEA
+            </Typography>
+            <Typography
+              variant="body2"
+              component="div"
+              sx={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontWeight: 300,
+                display: { xs: 'none', md: 'block' }
+              }}
+            >
+              Flexible Ontology Visual Event Analyzer
+            </Typography>
+          </Box>
           {unsavedChanges && (
-            <Typography variant="body2" sx={{ mr: 2, color: 'yellow' }}>
+            <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes
             </Typography>
           )}
@@ -224,32 +240,36 @@ export default function Layout() {
             <span>
               <Button
                 color="inherit"
-                startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <ExportIcon />}
+                startIcon={<ExportIcon />}
                 onClick={handleExport}
-                disabled={exporting}
               >
                 Export
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Import Data">
-            <IconButton
-              color="inherit"
-              onClick={() => setImportDialogOpen(true)}
-              sx={{ ml: 1 }}
-            >
-              <ImportIcon />
-            </IconButton>
-          </Tooltip>
+          <Button
+            color="inherit"
+            startIcon={<ImportIcon />}
+            onClick={() => setImportDialogOpen(true)}
+          >
+            Import
+          </Button>
           <Tooltip title="Keyboard Shortcuts (?)">
             <IconButton
               color="inherit"
               onClick={() => setShortcutsDialogOpen(true)}
               sx={{ ml: 1 }}
+              aria-label="Keyboard Shortcuts (?)"
             >
               <KeyboardIcon />
             </IconButton>
           </Tooltip>
+          <UserMenu
+            onSettingsClick={() => setUserSettingsDialogOpen(true)}
+            onModelSettingsClick={() => setModelSettingsDialogOpen(true)}
+            onAboutClick={() => setAboutDialogOpen(true)}
+            onAdminPanelClick={() => setAdminPanelDialogOpen(true)}
+          />
         </Toolbar>
       </AppBar>
 
@@ -345,7 +365,30 @@ export default function Layout() {
         }}
       />
 
-      <KeyboardShortcutHint />
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+      />
+
+      <UserSettingsDialog
+        open={userSettingsDialogOpen}
+        onClose={() => setUserSettingsDialogOpen(false)}
+      />
+
+      <ModelSettingsDialog
+        open={modelSettingsDialogOpen}
+        onClose={() => setModelSettingsDialogOpen(false)}
+      />
+
+      <AboutDialog
+        open={aboutDialogOpen}
+        onClose={() => setAboutDialogOpen(false)}
+      />
+
+      <AdminPanelDialog
+        open={adminPanelDialogOpen}
+        onClose={() => setAdminPanelDialogOpen(false)}
+      />
     </Box>
   )
 }

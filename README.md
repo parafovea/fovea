@@ -19,7 +19,7 @@ FOVEA provides tools for browsing video collections, building custom ontologies,
 
 Rich text definitions can include references to Wikidata entities and type relationships. All exports use JSON Lines format with schema validation to ensure data integrity.
 
-AI capabilities include video summarization using Vision Language Models, with background job processing and real-time progress monitoring for long-running tasks.
+AI capabilities include video summarization using Vision Language Models (local or external APIs), audio transcription with speaker diarization, audio-visual fusion strategies for multimodal analysis, and background job processing with real-time progress monitoring. External API support includes Claude Sonnet 4.5, GPT-4o, and Gemini 2.5 Flash for vision and language tasks, plus seven audio transcription providers (AssemblyAI, Deepgram, Azure, AWS, Google, Rev.ai, Gladia).
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ Start by defining a persona that describes your analytical role and information 
 
 ### AI-Assisted Analysis
 
-Generate video summaries by clicking "Generate Summary" in the video browser. The system uses Vision Language Models to analyze video content and runs the job in the background so you can continue working. Progress indicators show real-time status updates.
+Generate video summaries by clicking "Generate Summary" in the video browser. The system uses Vision Language Models to analyze video content, with optional audio transcription and speaker diarization for multimodal understanding. Choose between local models (GPU-based) or external APIs (Claude Sonnet 4.5, GPT-4o, Gemini 2.5 Flash). Select from four audio-visual fusion strategies to control how audio and visual information are combined. All processing runs in the background so you can continue working, with real-time progress updates.
 
 ### Exporting Data
 
@@ -103,7 +103,10 @@ Each service has its own development workflow. The frontend and backend support 
 cd annotation-tool
 npm run dev          # Development server
 npm run test         # Unit tests (Vitest)
-npm run test:e2e     # E2E tests (Playwright)
+npm run test:e2e     # All E2E tests (Playwright)
+npm run test:e2e -- --project=functional     # Keyboard shortcuts (35 tests)
+npm run test:e2e -- --project=smoke          # Critical paths (17 tests)
+npm run test:e2e -- --project=accessibility  # WCAG 2.1 AA compliance (50 tests)
 npm run lint         # ESLint
 npx tsc --noEmit     # Type checking
 ```

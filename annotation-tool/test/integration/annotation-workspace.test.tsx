@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { configureStore } from '@reduxjs/toolkit'
@@ -486,11 +486,11 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       fireEvent.click(showButton)
 
       await waitFor(() => {
-        expect(screen.getByText('Hide Timeline')).toBeInTheDocument()
+        expect(screen.getByLabelText('Hide timeline and show standard controls')).toBeInTheDocument()
       })
 
-      // Collapse timeline
-      const hideButton = screen.getByText('Hide Timeline')
+      // Collapse timeline using unique aria-label
+      const hideButton = screen.getByLabelText('Hide timeline and show standard controls')
       fireEvent.click(hideButton)
 
       await waitFor(() => {
@@ -633,12 +633,6 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
         const buttons = screen.getAllByRole('button')
         expect(buttons.length).toBeGreaterThan(0)
       })
-
-      // Find play button
-      const playButtons = screen.getAllByRole('button')
-      const playButton = playButtons.find(btn =>
-        btn.querySelector('svg')?.getAttribute('data-testid')?.includes('PlayArrow')
-      )
 
       // Expand timeline
       const toggleButton = await screen.findByText('Show Timeline')
@@ -828,8 +822,6 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
 
   describe('Performance', () => {
     it('renders efficiently without unnecessary re-renders', async () => {
-      const renderSpy = vi.fn()
-      
       renderWorkspace()
 
       await waitFor(() => {

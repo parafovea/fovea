@@ -21,7 +21,7 @@ def client():
     Returns:
         TestClient instance for making test requests
     """
-    return TestClient(app)
+    return TestClient(app, base_url="http://testserver")
 
 
 def test_health_check(client):

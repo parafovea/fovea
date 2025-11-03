@@ -1,17 +1,98 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { 
-  Entity, 
-  Event, 
-  Time, 
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
+import {
+  Entity,
+  Event,
+  Time,
   Location,
-  EntityCollection, 
-  EventCollection, 
+  EntityCollection,
+  EventCollection,
   TimeCollection,
   OntologyRelation,
   EventInterpretation,
   EntityTypeAssignment
 } from '../models/types'
 import { generateId } from '../utils/uuid'
+
+/**
+ * API client for world state operations.
+ * Provides functions to load and save world state to the backend.
+ */
+const worldApi = {
+  /**
+   * Fetches the world state for the current authenticated user.
+   * Creates an empty world state if one doesn't exist.
+   */
+  async getWorldState() {
+    const response = await fetch('/api/world', {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch world state: ${response.statusText}`)
+    }
+    return response.json()
+  },
+
+  /**
+   * Updates the world state for the current authenticated user.
+   * Saves all entities, events, times, collections, and relations.
+   */
+  async updateWorldState(worldState: Partial<{
+    entities: Entity[]
+    events: Event[]
+    times: Time[]
+    entityCollections: EntityCollection[]
+    eventCollections: EventCollection[]
+    timeCollections: TimeCollection[]
+    relations: OntologyRelation[]
+  }>) {
+    const response = await fetch('/api/world', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(worldState)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update world state: ${response.statusText}`)
+    }
+    return response.json()
+  }
+}
+
+/**
+ * Async thunk to load world state from the backend.
+ * Fetches all entities, events, times, collections, and relations for the current user.
+ */
+export const loadWorldState = createAsyncThunk(
+  'world/load',
+  async () => {
+    const data = await worldApi.getWorldState()
+    return data
+  }
+)
+
+/**
+ * Async thunk to save world state to the backend.
+ * Sends all entities, events, times, collections, and relations to persist.
+ */
+export const saveWorldState = createAsyncThunk(
+  'world/save',
+  async (_, { getState }) => {
+    const state = (getState() as any).world
+    const worldState = {
+      entities: state.entities,
+      events: state.events,
+      times: state.times,
+      entityCollections: state.entityCollections,
+      eventCollections: state.eventCollections,
+      timeCollections: state.timeCollections,
+      relations: state.relations
+    }
+    const data = await worldApi.updateWorldState(worldState)
+    return data
+  }
+)
 
 interface WorldState {
   // Core objects
@@ -340,6 +421,40 @@ const worldSlice = createSlice({
     clearWorld: () => {
       return initialState
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Load world state
+      .addCase(loadWorldState.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(loadWorldState.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.entities = action.payload.entities || []
+        state.events = action.payload.events || []
+        state.times = action.payload.times || []
+        state.entityCollections = action.payload.entityCollections || []
+        state.eventCollections = action.payload.eventCollections || []
+        state.timeCollections = action.payload.timeCollections || []
+        state.relations = action.payload.relations || []
+      })
+      .addCase(loadWorldState.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.error.message || 'Failed to load world state'
+      })
+      // Save world state
+      .addCase(saveWorldState.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(saveWorldState.fulfilled, (state) => {
+        state.isLoading = false
+      })
+      .addCase(saveWorldState.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.error.message || 'Failed to save world state'
+      })
   },
 })
 

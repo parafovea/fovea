@@ -24,7 +24,7 @@ def client() -> TestClient:
             assert response.status_code == 200
         ```
     """
-    return TestClient(app)
+    return TestClient(app, base_url="http://testserver")
 
 
 @pytest.fixture

@@ -100,6 +100,10 @@ export default function RelationTypeEditor({
   const handleSave = () => {
     if (!personaId) return
 
+    // Validate required fields
+    if (!name.trim() || !gloss.some(g => g.content.trim())) return
+    if (sourceTypes.length === 0 || targetTypes.length === 0) return
+
     const relationTypeData: RelationType = {
       id: relationType?.id || generateId(),
       name,
@@ -252,7 +256,7 @@ export default function RelationTypeEditor({
             />
 
             <Box>
-              <Typography variant="subtitle2" gutterBottom>
+              <Typography variant="subtitle2" component="div" gutterBottom>
                 Source Types (can be)
               </Typography>
               <Stack direction="row" spacing={1}>
@@ -275,7 +279,7 @@ export default function RelationTypeEditor({
             </Box>
 
             <Box>
-              <Typography variant="subtitle2" gutterBottom>
+              <Typography variant="subtitle2" component="div" gutterBottom>
                 Target Types (can be)
               </Typography>
               <Stack direction="row" spacing={1}>
@@ -319,7 +323,7 @@ export default function RelationTypeEditor({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Gloss (Definition)
             </Typography>
             <GlossEditor
@@ -331,7 +335,7 @@ export default function RelationTypeEditor({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Examples
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
@@ -450,8 +454,8 @@ export default function RelationTypeEditor({
             </Box>
             
             <Divider sx={{ my: 2 }} />
-            
-            <Typography variant="subtitle2" gutterBottom>
+
+            <Typography variant="subtitle2" component="div" gutterBottom>
               Existing Instances
             </Typography>
             
@@ -506,7 +510,7 @@ export default function RelationTypeEditor({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={!name || sourceTypes.length === 0 || targetTypes.length === 0}
+          disabled={!name.trim() || !gloss.some(g => g.content.trim()) || sourceTypes.length === 0 || targetTypes.length === 0}
         >
           {relationType ? 'Save Changes' : 'Create'}
         </Button>

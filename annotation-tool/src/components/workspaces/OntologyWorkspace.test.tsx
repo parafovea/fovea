@@ -650,11 +650,8 @@ describe('OntologyWorkspace', () => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
       })
 
-      const editButtons = screen.getAllByRole('button', { name: '' })
-      const editButton = editButtons.find(btn => btn.querySelector('svg')?.getAttribute('data-testid') === 'EditIcon')
-      if (editButton) {
-        await user.click(editButton)
-      }
+      const editButton = screen.getByRole('button', { name: 'Edit Vehicle' })
+      await user.click(editButton)
 
       await waitFor(() => {
         expect(screen.getByTestId('entity-type-editor')).toBeInTheDocument()

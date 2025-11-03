@@ -12,9 +12,80 @@ datasource db {
   extensions = [pgvector(map: "vector")]
 }
 
+/// User represents an authenticated user of the system
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String?   // Nullable for single-user mode default user
+  displayName  String
+  isAdmin      Boolean   @default(false)
+
+  // Relationships
+  personas     Persona[]
+  apiKeys      ApiKey[]
+  sessions     Session[]
+  worldState   WorldState?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
+}
+
+/// Session stores user authentication sessions
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+/// ApiKey stores encrypted API keys for external services (user-level or admin-level)
+model ApiKey {
+  id           String    @id @default(uuid())
+  userId       String?   // NULL for admin-level keys
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Provider: anthropic, openai, google, cohere, mistral, aws, azure, roboflow, cloudsight, edenai
+  provider     String
+  /// User-friendly label for this key
+  keyName      String
+  /// AES-256-GCM encrypted API key
+  encryptedKey String
+  /// Last 4 characters for display (e.g., "...Xy9Z")
+  keyMask      String
+  /// Whether this key is active
+  isActive     Boolean   @default(true)
+  /// Last time this key was used
+  lastUsed     DateTime?
+  /// Number of times this key has been used
+  usageCount   Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([provider])
+  @@map("api_keys")
+}
+
 /// Persona represents an analyst or user with their own ontology and interpretations
 model Persona {
   id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   name            String
   role            String
   informationNeed String
@@ -54,8 +125,11 @@ model Ontology {
 
 /// WorldState stores the actual instances of entities, events, locations, times, and collections
 /// This is shared across all personas (personas assign types to these instances)
+/// Each user has their own world state
 model WorldState {
   id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// JSON structure: Entity[]
   entities          Json     @default("[]")
@@ -111,6 +185,32 @@ model VideoSummary {
   /// JSON structure for key frame data
   keyFrames       Json?
   confidence      Float?
+
+  /// Audio metadata fields
+  /// JSON structure: {segments: [{start, end, text, speaker, confidence, sentiment}], speakers, language}
+  transcriptJson  Json?
+  /// ISO language code detected from audio (e.g., "en", "es")
+  audioLanguage   String?
+  /// Number of distinct speakers detected
+  speakerCount    Int?
+
+  /// Model metadata
+  /// Name of audio transcription model used (e.g., "whisper-v3-turbo", "assemblyai-universal")
+  audioModelUsed  String?
+  /// Name of visual analysis model used (e.g., "gemini-2-5-flash", "gpt-4o")
+  visualModelUsed String?
+  /// Audio-visual fusion strategy used (e.g., "sequential", "timestamp_aligned", "native_multimodal", "hybrid")
+  fusionStrategy  String?
+
+  /// Processing time metadata (in seconds)
+  processingTimeAudio  Float?
+  processingTimeVisual Float?
+  processingTimeFusion Float?
+
+  /// Processing completion timestamps
+  processedAtAudio  DateTime?
+  processedAtVisual DateTime?
+  processedAtFusion DateTime?
 
   /// Vector embedding for semantic search (1536 dimensions for OpenAI embeddings)
   embedding       Unsupported("vector(1536)")?

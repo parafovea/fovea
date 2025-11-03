@@ -40,11 +40,53 @@ npm run test test/integration/
 ### E2E Tests
 E2E tests are in `test/e2e/` and use Playwright to test complete user workflows.
 
+**Current E2E Coverage:**
+- **Keyboard Shortcuts:** 35 functional tests covering all shortcuts (100% pass rate)
+- **Authentication:** Multi-user mode with worker-specific test users
+- **Object Management:** 60 tests covering entities, events, locations, times, collections
+- **Annotation Workflow:** Timeline-based video annotation with keyframes
+- **Persistence:** Cross-reload data persistence tests
+- **Worker Isolation:** Parallel execution with isolated test users
+
+**Test Projects:**
+- **smoke** - Fast smoke tests for critical paths (17 tests)
+- **regression** - Comprehensive regression tests (60+ tests)
+- **functional** - Keyboard shortcuts and UI interactions (35 tests)
+- **accessibility** - WCAG 2.1 AA accessibility compliance (50 tests, 100% pass rate)
+
 **Running E2E tests:**
 ```bash
-npm run test:e2e            # Run E2E tests
-npm run test:e2e:ui         # Run with Playwright UI
+# Start E2E infrastructure (Docker Compose)
+docker compose -f docker-compose.e2e.yml up -d
+
+# Run all E2E tests (parallel execution with 5 workers)
+npm run test:e2e
+
+# Run specific test project
+npm run test:e2e -- --project=functional  # Keyboard shortcuts
+npm run test:e2e -- --project=smoke       # Smoke tests
+npm run test:e2e -- --project=regression  # Regression tests
+
+# Run specific test category
+npm run test:e2e -- test/e2e/functional/keyboard-shortcuts/
+
+# Run with Playwright UI
+npm run test:e2e:ui
+
+# Clean up
+docker compose -f docker-compose.e2e.yml down -v
 ```
+
+**E2E Infrastructure:**
+E2E tests run against a Docker Compose stack (`docker-compose.e2e.yml`) that includes:
+- Frontend (production build)
+- Backend (with FOVEA_MODE=multi-user)
+- PostgreSQL (with tmpfs for speed)
+- Redis (with tmpfs for speed)
+
+Database migrations run automatically via `npx prisma migrate deploy` before tests.
+
+**Worker Isolation:** E2E tests use parallel execution with 5 workers. Each worker creates its own isolated test user with a separate WorldState database record. This enables 4x faster test execution compared to serial execution. See `test/e2e/README.md` for implementation details.
 
 ## Shared Resources
 

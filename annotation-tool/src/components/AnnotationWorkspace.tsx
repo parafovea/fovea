@@ -44,6 +44,7 @@ import {
   OpenInNew as ExternalLinkIcon,
   Build as BuildIcon,
   Search as DetectIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
@@ -64,6 +65,8 @@ import {
   removeKeyframe,
   updateKeyframe,
   updateInterpolationSegment,
+  updateAnnotation,
+  setAnnotations,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -78,6 +81,8 @@ import { VideoMetadata } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
+import { useCommands, useCommandContext } from '../hooks/useCommands.js'
+import { api } from '../services/api'
 
 const DRAWER_WIDTH = 300
 
@@ -111,6 +116,9 @@ export default function AnnotationWorkspace() {
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
   const [timelineExpanded, setTimelineExpanded] = useState(false)
   const [timelineMounted, setTimelineMounted] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Delayed mount/unmount for smooth animation
   useEffect(() => {
@@ -276,25 +284,96 @@ export default function AnnotationWorkspace() {
     }
   }, [videoId, dispatch])
 
-  // Keyboard shortcuts
+  // Load annotations from backend when component mounts
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input field
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
+    const loadAnnotations = async () => {
+      if (!videoId) return
 
-      // Toggle timeline with 'T' key
-      if (e.key === 't' || e.key === 'T') {
-        e.preventDefault()
-        setTimelineExpanded(prev => !prev)
+      try {
+        const savedAnnotations = await api.getAnnotations(videoId)
+        dispatch(setAnnotations({ videoId, annotations: savedAnnotations }))
+      } catch (error) {
+        console.error('Failed to load annotations:', error)
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+    loadAnnotations()
+  }, [videoId, dispatch])
+
+  // Set command context for when clauses
+  useCommandContext({
+    annotationWorkspaceActive: true,
+    ontologyWorkspaceActive: false,
+    objectWorkspaceActive: false,
+    videoBrowserActive: false,
+    dialogOpen: editorOpen || summaryDialogOpen || detectionDialogOpen,
+    inputFocused: false, // Updated dynamically by focus events
+    annotationSelected: !!selectedAnnotation,
+    keyframeSelected: !!selectedAnnotation && (selectedAnnotation.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || []).some(kf => kf.frameNumber === currentFrame),
+    hasKeyframes: !!selectedAnnotation && (selectedAnnotation.boundingBoxSequence?.boxes.filter(
+      b => b.isKeyframe || b.isKeyframe === undefined
+    ) || []).length > 0,
+    timelineVisible: timelineExpanded,
+    drawingMode: false, // TODO: track drawing mode state
+  })
+
+  // Register command handlers
+  useCommands({
+    'timeline.toggle': () => {
+      setTimelineExpanded(prev => !prev)
+    },
+    'video.playPause': () => {
+      if (!playerRef.current) return
+      if (isPlaying) {
+        playerRef.current.pause()
+      } else {
+        playerRef.current.play()
+      }
+    },
+    'video.nextFrame': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+    },
+    'video.previousFrame': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+    },
+    'video.nextFrame10': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(playerRef.current.currentTime() + 10/fps)
+    },
+    'video.previousFrame10': () => {
+      if (!playerRef.current) return
+      const fps = currentVideo?.fps || 30
+      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 10/fps))
+    },
+    'video.jumpToStart': () => {
+      if (!playerRef.current) return
+      playerRef.current.currentTime(0)
+    },
+    'video.jumpToEnd': () => {
+      if (!playerRef.current) return
+      playerRef.current.currentTime(duration)
+    },
+    'annotation.addKeyframe': () => {
+      handleAddKeyframe()
+    },
+    'annotation.copyPreviousKeyframe': () => {
+      handleCopyPreviousFrame()
+    },
+    'annotation.deleteKeyframe': () => {
+      handleDeleteKeyframe()
+    },
+  }, {
+    context: 'annotationWorkspace',
+    enabled: true,
+    enableOnFormTags: false
+  })
 
   useEffect(() => {
     if (!videoRef.current || !videoId) return
@@ -539,6 +618,47 @@ export default function AnnotationWorkspace() {
   }
 
   /**
+   * Saves all annotations to the backend database.
+   * Creates new annotations or updates existing ones based on presence of ID.
+   * Shows success/error feedback to user.
+   */
+  const handleSave = async () => {
+    if (!videoId || annotations.length === 0) return
+
+    setSaving(true)
+    setSaveSuccess(false)
+    setSaveError(null)
+
+    try {
+      // Save each annotation to backend
+      for (const annotation of annotations) {
+        if (annotation.id && annotation.id.startsWith('temp-')) {
+          // New annotation without database ID - create it
+          const savedAnnotation = await api.saveAnnotation(annotation)
+          // Update Redux state with saved annotation (has real ID now)
+          dispatch(updateAnnotation(savedAnnotation))
+        } else if (annotation.id) {
+          // Existing annotation - update it
+          await api.updateAnnotation(annotation)
+        } else {
+          // Annotation without any ID - create it
+          const savedAnnotation = await api.saveAnnotation(annotation)
+          dispatch(updateAnnotation(savedAnnotation))
+        }
+      }
+
+      setSaveSuccess(true)
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (error) {
+      console.error('Failed to save annotations:', error)
+      setSaveError(error instanceof Error ? error.message : 'Failed to save annotations')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
    * Initiates object detection request using AI model.
    * Triggers detection mutation and opens results dialog on success.
    *
@@ -588,7 +708,7 @@ export default function AnnotationWorkspace() {
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack spacing={1}>
             {/* Uploader as main title with clickable link */}
-            <Typography variant="h6">
+            <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
               {currentVideo?.uploader || currentVideo?.uploader_id || 'Loading...'}
               {currentVideo?.uploader_id && currentVideo?.uploader_url && (
                 <>
@@ -674,6 +794,7 @@ export default function AnnotationWorkspace() {
               playsInline
               muted={false}
               preload="auto"
+              aria-label="Video being annotated"
             >
               <p className="vjs-no-js">
                 To view this video please enable JavaScript, and consider upgrading to a web browser that supports HTML5 video
@@ -737,13 +858,13 @@ export default function AnnotationWorkspace() {
 
                 {/* Play/pause controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton onClick={handlePlayPause}>
+                  <IconButton onClick={handlePlayPause} aria-label={isPlaying ? "Pause video" : "Play video"}>
                     {isPlaying ? <PauseIcon /> : <PlayIcon />}
                   </IconButton>
-                  <IconButton onClick={handlePrevFrame}>
+                  <IconButton onClick={handlePrevFrame} aria-label="Previous frame">
                     <PrevFrameIcon />
                   </IconButton>
-                  <IconButton onClick={handleNextFrame}>
+                  <IconButton onClick={handleNextFrame} aria-label="Next frame">
                     <NextFrameIcon />
                   </IconButton>
                 </Box>
@@ -917,17 +1038,40 @@ export default function AnnotationWorkspace() {
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto', p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            All Annotations ({sortedAnnotations.length})
-          </Typography>
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Typography variant="h3" sx={{ fontSize: '1.25rem' }}>
+              All Annotations ({sortedAnnotations.length})
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={saving || annotations.length === 0}
+            >
+              Save
+            </Button>
+          </Stack>
+          {saveSuccess && (
+            <Typography variant="caption" color="success.main" sx={{ display: 'block', mb: 1 }}>
+              Annotations saved successfully!
+            </Typography>
+          )}
+          {saveError && (
+            <Typography variant="caption" color="error.main" sx={{ display: 'block', mb: 1 }}>
+              Error: {saveError}
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mb: 2 }}>
             Click to seek • Double-click to edit
           </Typography>
           <List dense>
             {sortedAnnotations.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                No annotations yet. Select a mode above and draw on the video.
-              </Typography>
+              <ListItem>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', width: '100%' }}>
+                  No annotations yet. Select a mode above and draw on the video.
+                </Typography>
+              </ListItem>
             )}
             {sortedAnnotations.map((annotation) => {
               const isActive = isAnnotationActive(annotation)
@@ -1003,6 +1147,7 @@ export default function AnnotationWorkspace() {
                           e.stopPropagation()
                           dispatch(deleteAnnotation({ videoId: videoId || '', annotationId: annotation.id }))
                         }}
+                        aria-label="Delete annotation"
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -1087,21 +1232,23 @@ export default function AnnotationWorkspace() {
       )}
 
       {/* Floating Action Button to go to Ontology */}
-      <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
-        <Fab
-          color="primary"
-          aria-label="go to ontology"
-          onClick={handleGoToOntology}
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 1000,
-          }}
-        >
-          <BuildIcon />
-        </Fab>
-      </Tooltip>
+      <Box role="complementary" aria-label="Quick actions">
+        <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
+          <Fab
+            color="primary"
+            aria-label="go to ontology"
+            onClick={handleGoToOntology}
+            sx={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1000,
+            }}
+          >
+            <BuildIcon />
+          </Fab>
+        </Tooltip>
+      </Box>
     </Box>
   )
 }

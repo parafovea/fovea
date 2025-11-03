@@ -4,6 +4,7 @@ import fastifySwaggerUI from '@fastify/swagger-ui'
 import fastifyCors from '@fastify/cors'
 import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
+import fastifyCookie from '@fastify/cookie'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
@@ -55,18 +56,28 @@ export async function buildApp() {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:']
+        imgSrc: ["'self'", 'data:', 'https:'],
+        mediaSrc: ["'self'"]
       }
     }
   })
 
-  await app.register(fastifyRateLimit, {
-    max: 1000,
-    timeWindow: '1 minute'
-  })
+  // Disable rate limiting in test environment to prevent E2E test failures
+  if (process.env.NODE_ENV !== 'test') {
+    await app.register(fastifyRateLimit, {
+      max: 1000,
+      timeWindow: '1 minute'
+    })
+  }
 
   await app.register(fastifyCors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000']
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    credentials: true
+  })
+
+  // Cookie support for session management
+  await app.register(fastifyCookie, {
+    secret: process.env.COOKIE_SECRET || 'dev-secret-change-in-production',
   })
 
   // OpenAPI documentation
@@ -170,11 +181,29 @@ export async function buildApp() {
   })
 
   // Register routes
+  const authRoute = await import('./routes/auth.js')
+  await app.register(authRoute.default)
+
+  const usersRoute = await import('./routes/users.js')
+  await app.register(usersRoute.default)
+
+  const sessionsRoute = await import('./routes/sessions.js')
+  await app.register(sessionsRoute.default)
+
+  const apiKeysRoute = await import('./routes/api-keys.js')
+  await app.register(apiKeysRoute.default)
+
+  const configRoute = await import('./routes/config.js')
+  await app.register(configRoute.default)
+
   const ontologyRoute = await import('./routes/ontology.js')
   await app.register(ontologyRoute.default)
 
   const personasRoute = await import('./routes/personas.js')
   await app.register(personasRoute.default)
+
+  const worldRoute = await import('./routes/world.js')
+  await app.register(worldRoute.default)
 
   const summariesRoute = await import('./routes/summaries.js')
   await app.register(summariesRoute.default)

@@ -1,4 +1,9 @@
-import { useState } from 'react'
+/**
+ * Keyboard shortcuts help dialog.
+ * Displays all available keyboard shortcuts organized by context.
+ */
+
+import { useState, useMemo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -23,16 +28,8 @@ import {
   Close as CloseIcon,
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material'
-import {
-  globalShortcuts,
-  videoBrowserShortcuts,
-  ontologyWorkspaceShortcuts,
-  objectWorkspaceShortcuts,
-  annotationWorkspaceShortcuts,
-  formatShortcut,
-  ShortcutDefinition,
-} from '../../utils/shortcuts'
-import { useDialogKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { commandRegistry, Command } from '../../lib/commands/command-registry.js'
+import { formatKeybinding } from '../../lib/commands/commands.js'
 
 interface KeyboardShortcutsDialogProps {
   open: boolean
@@ -60,7 +57,17 @@ function TabPanel(props: TabPanelProps) {
   )
 }
 
-function ShortcutTable({ shortcuts }: { shortcuts: ShortcutDefinition[] }) {
+function ShortcutTable({ commands }: { commands: Command[] }) {
+  if (commands.length === 0) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          No shortcuts available
+        </Typography>
+      </Box>
+    )
+  }
+
   return (
     <TableContainer component={Paper} variant="outlined">
       <Table size="small">
@@ -71,22 +78,28 @@ function ShortcutTable({ shortcuts }: { shortcuts: ShortcutDefinition[] }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {shortcuts.map((shortcut, index) => (
-            <TableRow key={index}>
-              <TableCell>
-                <Chip
-                  label={formatShortcut(shortcut)}
-                  size="small"
-                  sx={{
-                    fontFamily: 'monospace',
-                    backgroundColor: 'grey.200',
-                    color: 'grey.800',
-                  }}
-                />
-              </TableCell>
-              <TableCell>{shortcut.description}</TableCell>
-            </TableRow>
-          ))}
+          {commands
+            .filter(cmd => cmd.keybinding) // Only show commands with keybindings
+            .map((command) => (
+              <TableRow key={command.id}>
+                <TableCell>
+                  <Chip
+                    label={
+                      Array.isArray(command.keybinding)
+                        ? formatKeybinding(command.keybinding[0])
+                        : formatKeybinding(command.keybinding!)
+                    }
+                    size="small"
+                    sx={{
+                      fontFamily: 'monospace',
+                      backgroundColor: 'grey.200',
+                      color: 'grey.800',
+                    }}
+                  />
+                </TableCell>
+                <TableCell>{command.description || command.title}</TableCell>
+              </TableRow>
+            ))}
         </TableBody>
       </Table>
     </TableContainer>
@@ -98,29 +111,30 @@ export default function KeyboardShortcutsDialog({
   onClose,
   currentContext,
 }: KeyboardShortcutsDialogProps) {
-  const [tabValue, setTabValue] = useState(0)
-  
-  // Setup dialog keyboard shortcuts
-  useDialogKeyboardShortcuts(
-    {
-      'dialog.close': onClose,
-    },
-    open
-  )
-  
+  const [tabValue, setTabValue] = useState(() => {
+    if (currentContext === 'videoBrowser') return 1
+    if (currentContext === 'ontologyWorkspace') return 2
+    if (currentContext === 'objectWorkspace') return 3
+    if (currentContext === 'annotationWorkspace') return 4
+    return 0
+  })
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
   }
-  
-  // Set initial tab based on current context
-  useState(() => {
-    if (currentContext === 'videoBrowser') setTabValue(1)
-    else if (currentContext === 'ontologyWorkspace') setTabValue(2)
-    else if (currentContext === 'objectWorkspace') setTabValue(3)
-    else if (currentContext === 'annotationWorkspace') setTabValue(4)
-    else setTabValue(0)
-  })
-  
+
+  const commandsByCategory = useMemo(() => {
+    const allCommands = commandRegistry.getCommands() || []
+
+    return {
+      global: allCommands.filter(cmd => cmd.category === 'global' || cmd.category === 'navigation' || cmd.category === 'file'),
+      video: allCommands.filter(cmd => cmd.category === 'video'),
+      annotation: allCommands.filter(cmd => cmd.category === 'annotation'),
+      ontology: allCommands.filter(cmd => cmd.category === 'ontology'),
+      object: allCommands.filter(cmd => cmd.category === 'object'),
+    }
+  }, [])
+
   return (
     <Dialog
       open={open}
@@ -148,7 +162,7 @@ export default function KeyboardShortcutsDialog({
           </IconButton>
         </Box>
       </DialogTitle>
-      
+
       <DialogContent>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
@@ -164,38 +178,49 @@ export default function KeyboardShortcutsDialog({
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             These shortcuts work everywhere in the application
           </Typography>
-          <ShortcutTable shortcuts={globalShortcuts} />
+          <ShortcutTable commands={commandsByCategory.global} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available when browsing videos
           </Typography>
-          <ShortcutTable shortcuts={videoBrowserShortcuts} />
+          <ShortcutTable commands={[]} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Ontology Builder workspace
           </Typography>
-          <ShortcutTable shortcuts={ontologyWorkspaceShortcuts} />
+          <ShortcutTable commands={commandsByCategory.ontology} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Object Builder workspace
           </Typography>
-          <ShortcutTable shortcuts={objectWorkspaceShortcuts} />
+          <ShortcutTable commands={commandsByCategory.object} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={4}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Annotation Workspace (video annotation)
           </Typography>
-          <ShortcutTable shortcuts={annotationWorkspaceShortcuts} />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" fontWeight="bold" gutterBottom>
+              Video Playback
+            </Typography>
+            <ShortcutTable commands={commandsByCategory.video} />
+          </Box>
+          <Box>
+            <Typography variant="body2" fontWeight="bold" gutterBottom>
+              Annotation Controls
+            </Typography>
+            <ShortcutTable commands={commandsByCategory.annotation} />
+          </Box>
         </TabPanel>
       </DialogContent>
-      
+
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
