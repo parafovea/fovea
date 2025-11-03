@@ -170,7 +170,7 @@ def test_get_video_path_for_id_exact_match():
 
         result = get_video_path_for_id(video_id, data_dir=tmpdir)
 
-        assert result == str(video_file)
+        assert result == str(video_file.resolve())
 
 
 def test_get_video_path_for_id_different_extension():
@@ -182,7 +182,7 @@ def test_get_video_path_for_id_different_extension():
 
         result = get_video_path_for_id(video_id, data_dir=tmpdir)
 
-        assert result == str(video_file)
+        assert result == str(video_file.resolve())
 
 
 def test_get_video_path_for_id_directory_not_exists():

@@ -7,7 +7,7 @@ for accurate audio transcription with speaker diarization support.
 import asyncio
 import logging
 
-from google.cloud import speech_v2
+from google.cloud import speech_v2  # type: ignore[import-untyped]
 
 from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
 

@@ -70,14 +70,13 @@ def mock_model_manager() -> Mock:
 
 
 @pytest.fixture
-def client(mock_model_manager: Mock) -> TestClient:
-    """Test client fixture for API requests."""
-    test_client = TestClient(app)
+def test_client_with_mocks(mock_model_manager: Mock) -> TestClient:
+    """Test client fixture for API requests with mocked model manager."""
     # Replace the model manager that was set during app startup with our mock
     import src.routes
 
     src.routes._model_manager = mock_model_manager
-    yield test_client
+    return TestClient(app)
 
 
 class TestSummarizeEndpoint:
@@ -86,7 +85,7 @@ class TestSummarizeEndpoint:
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_video_success(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, client: TestClient
+        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test successful video summarization request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
@@ -99,7 +98,7 @@ class TestSummarizeEndpoint:
             confidence=0.95,
         )
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/summarize",
             json={
                 "video_id": "test-video-123",
@@ -124,7 +123,7 @@ class TestSummarizeEndpoint:
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_video_default_params(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, client: TestClient
+        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test summarization with default parameters."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
@@ -137,7 +136,7 @@ class TestSummarizeEndpoint:
             confidence=0.90,
         )
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/summarize",
             json={
                 "video_id": "test-video-789",
@@ -149,9 +148,9 @@ class TestSummarizeEndpoint:
         data = response.json()
         assert data["video_id"] == "test-video-789"
 
-    def test_summarize_video_missing_fields(self, client: TestClient) -> None:
+    def test_summarize_video_missing_fields(self, test_client_with_mocks: TestClient) -> None:
         """Test summarization with missing required fields."""
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/summarize",
             json={
                 "video_id": "test-video-123",
@@ -160,9 +159,9 @@ class TestSummarizeEndpoint:
 
         assert response.status_code == 422
 
-    def test_summarize_video_invalid_frame_rate(self, client: TestClient) -> None:
+    def test_summarize_video_invalid_frame_rate(self, test_client_with_mocks: TestClient) -> None:
         """Test summarization with invalid frame sample rate."""
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/summarize",
             json={
                 "video_id": "test-video-123",
@@ -176,7 +175,7 @@ class TestSummarizeEndpoint:
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_response_structure(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, client: TestClient
+        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
@@ -189,7 +188,7 @@ class TestSummarizeEndpoint:
             confidence=0.88,
         )
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/summarize",
             json={
                 "video_id": "test-video-123",
@@ -223,7 +222,9 @@ class TestAugmentEndpoint:
     """Tests for /api/ontology/augment endpoint."""
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
-    def test_augment_ontology_success(self, mock_augment: AsyncMock, client: TestClient) -> None:
+    def test_augment_ontology_success(
+        self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
+    ) -> None:
         """Test successful ontology augmentation request."""
         mock_augment.return_value = [
             OntologyType(
@@ -240,7 +241,7 @@ class TestAugmentEndpoint:
             ),
         ]
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/ontology/augment",
             json={
                 "persona_id": "test-persona-123",
@@ -264,7 +265,7 @@ class TestAugmentEndpoint:
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
     def test_augment_ontology_event_category(
-        self, mock_augment: AsyncMock, client: TestClient
+        self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test augmentation for event category."""
         mock_augment.return_value = [
@@ -276,7 +277,7 @@ class TestAugmentEndpoint:
             ),
         ]
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/ontology/augment",
             json={
                 "persona_id": "test-persona-456",
@@ -289,9 +290,9 @@ class TestAugmentEndpoint:
         data = response.json()
         assert data["target_category"] == "event"
 
-    def test_augment_ontology_invalid_category(self, client: TestClient) -> None:
+    def test_augment_ontology_invalid_category(self, test_client_with_mocks: TestClient) -> None:
         """Test augmentation with invalid category."""
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/ontology/augment",
             json={
                 "persona_id": "test-persona-789",
@@ -304,7 +305,7 @@ class TestAugmentEndpoint:
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
     def test_augment_ontology_default_max_suggestions(
-        self, mock_augment: AsyncMock, client: TestClient
+        self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test augmentation with default max_suggestions."""
         mock_augment.return_value = [
@@ -317,7 +318,7 @@ class TestAugmentEndpoint:
             for i in range(8)
         ]
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/ontology/augment",
             json={
                 "persona_id": "test-persona-012",
@@ -332,7 +333,7 @@ class TestAugmentEndpoint:
 
     @patch("src.ontology_augmentation.augment_ontology_with_llm")
     def test_augment_response_suggestion_structure(
-        self, mock_augment: AsyncMock, client: TestClient
+        self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test that suggestions have correct structure."""
         mock_augment.return_value = [
@@ -344,7 +345,7 @@ class TestAugmentEndpoint:
             ),
         ]
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/ontology/augment",
             json={
                 "persona_id": "test-persona-345",
@@ -375,7 +376,7 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test successful object detection request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
@@ -398,7 +399,7 @@ class TestDetectionEndpoint:
         )
         mock_create_loader.return_value = mock_loader
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-123",
@@ -427,7 +428,7 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test detection on specific frames."""
         mock_get_video.return_value = Path("/videos/test-video-456.mp4")
@@ -445,7 +446,7 @@ class TestDetectionEndpoint:
         )
         mock_create_loader.return_value = mock_loader
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-456",
@@ -466,7 +467,7 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test detection without tracking enabled."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
@@ -484,7 +485,7 @@ class TestDetectionEndpoint:
         )
         mock_create_loader.return_value = mock_loader
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-789",
@@ -497,9 +498,9 @@ class TestDetectionEndpoint:
         data = response.json()
         assert data["video_id"] == "test-video-789"
 
-    def test_process_detection_missing_query(self, client: TestClient) -> None:
+    def test_process_detection_missing_query(self, test_client_with_mocks: TestClient) -> None:
         """Test detection with missing query field."""
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-012",
@@ -508,9 +509,9 @@ class TestDetectionEndpoint:
 
         assert response.status_code == 422
 
-    def test_process_detection_invalid_confidence(self, client: TestClient) -> None:
+    def test_process_detection_invalid_confidence(self, test_client_with_mocks: TestClient) -> None:
         """Test detection with invalid confidence threshold."""
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-345",
@@ -529,7 +530,7 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-678.mp4")
@@ -547,7 +548,7 @@ class TestDetectionEndpoint:
         )
         mock_create_loader.return_value = mock_loader
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/detection/detect",
             json={
                 "video_id": "test-video-678",
@@ -588,7 +589,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test successful object tracking request with SAMURAI model."""
         import base64
@@ -643,7 +644,7 @@ class TestTrackingEndpoint:
         initial_mask = np.ones((480, 640), dtype=np.uint8)
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "test-tracking-123",
@@ -674,7 +675,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with all supported models (SAMURAI, SAM2Long, SAM2, YOLO11n-seg)."""
         import base64
@@ -730,7 +731,7 @@ class TestTrackingEndpoint:
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
         # Test with each model by verifying the endpoint works
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "wildlife-video",
@@ -749,7 +750,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking multiple objects simultaneously."""
         import base64
@@ -808,7 +809,7 @@ class TestTrackingEndpoint:
         mask1_b64 = base64.b64encode(initial_mask1.tobytes()).decode("utf-8")
         mask2_b64 = base64.b64encode(initial_mask2.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "sports-video",
@@ -828,7 +829,9 @@ class TestTrackingEndpoint:
             assert "is_occluded" in mask
 
     @patch("src.summarization.get_video_path_for_id")
-    def test_track_objects_missing_masks(self, mock_get_video: Mock, client: TestClient) -> None:
+    def test_track_objects_missing_masks(
+        self, mock_get_video: Mock, test_client_with_mocks: TestClient
+    ) -> None:
         """Test tracking with mismatched masks and object_ids."""
         import base64
 
@@ -839,7 +842,7 @@ class TestTrackingEndpoint:
         initial_mask = np.ones((480, 640), dtype=np.uint8)
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "test-video",
@@ -858,7 +861,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with invalid base64 mask encoding."""
         mock_get_video.return_value = Path("/videos/test-video.mp4")
@@ -880,7 +883,7 @@ class TestTrackingEndpoint:
         mock_loader = Mock()
         mock_create_loader.return_value = mock_loader
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "test-video",
@@ -891,7 +894,7 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 400
 
-    def test_track_objects_missing_video_id(self, client: TestClient) -> None:
+    def test_track_objects_missing_video_id(self, test_client_with_mocks: TestClient) -> None:
         """Test tracking with missing video_id field."""
         import base64
 
@@ -900,7 +903,7 @@ class TestTrackingEndpoint:
         initial_mask = np.ones((480, 640), dtype=np.uint8)
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "initial_masks": [mask_b64],
@@ -918,7 +921,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with object occlusion handling."""
         import base64
@@ -974,7 +977,7 @@ class TestTrackingEndpoint:
         initial_mask = np.ones((1080, 1920), dtype=np.uint8)
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "vehicle-tracking",
@@ -997,7 +1000,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
-        client: TestClient,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test that tracking response contains all expected fields."""
         import base64
@@ -1049,7 +1052,7 @@ class TestTrackingEndpoint:
         initial_mask = np.ones((480, 640), dtype=np.uint8)
         mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/tracking/track",
             json={
                 "video_id": "test-structure",
@@ -1096,18 +1099,18 @@ class TestTrackingEndpoint:
 class TestOpenAPIDocumentation:
     """Tests for OpenAPI documentation."""
 
-    def test_openapi_schema_available(self, client: TestClient) -> None:
+    def test_openapi_schema_available(self, test_client_with_mocks: TestClient) -> None:
         """Test that OpenAPI schema is available."""
-        response = client.get("/openapi.json")
+        response = test_client_with_mocks.get("/openapi.json")
         assert response.status_code == 200
         schema = response.json()
         assert "openapi" in schema
         assert "info" in schema
         assert "paths" in schema
 
-    def test_api_endpoints_documented(self, client: TestClient) -> None:
+    def test_api_endpoints_documented(self, test_client_with_mocks: TestClient) -> None:
         """Test that all API endpoints are documented."""
-        response = client.get("/openapi.json")
+        response = test_client_with_mocks.get("/openapi.json")
         schema = response.json()
         paths = schema["paths"]
 
@@ -1116,16 +1119,18 @@ class TestOpenAPIDocumentation:
         assert "/api/detection/detect" in paths
         assert "/api/tracking/track" in paths
 
-    def test_docs_ui_available(self, client: TestClient) -> None:
+    def test_docs_ui_available(self, test_client_with_mocks: TestClient) -> None:
         """Test that Swagger UI is available."""
-        response = client.get("/docs")
+        response = test_client_with_mocks.get("/docs")
         assert response.status_code == 200
 
 
 class TestModelConfigEndpoints:
     """Tests for model configuration endpoints."""
 
-    def test_get_model_config(self, client: TestClient, mock_model_manager: Mock) -> None:
+    def test_get_model_config(
+        self, test_client_with_mocks: TestClient, mock_model_manager: Mock
+    ) -> None:
         """Test getting model configuration."""
         # Setup mock
         mock_option = Mock()
@@ -1150,7 +1155,7 @@ class TestModelConfigEndpoints:
         mock_model_manager.tasks = {"video_summarization": mock_task}
         mock_model_manager.inference_config = mock_inference
 
-        response = client.get("/api/models/config")
+        response = test_client_with_mocks.get("/api/models/config")
 
         assert response.status_code == 200
         data = response.json()
@@ -1159,7 +1164,9 @@ class TestModelConfigEndpoints:
         assert "cuda_available" in data
         assert "video_summarization" in data["models"]
 
-    def test_get_model_status(self, client: TestClient, mock_model_manager: Mock) -> None:
+    def test_get_model_status(
+        self, test_client_with_mocks: TestClient, mock_model_manager: Mock
+    ) -> None:
         """Test getting model status."""
         # Setup mock
         mock_model_manager.get_loaded_models.return_value = {
@@ -1171,7 +1178,7 @@ class TestModelConfigEndpoints:
         }
         mock_model_manager.get_total_vram.return_value = 24 * 1024**3  # 24 GB in bytes
 
-        response = client.get("/api/models/status")
+        response = test_client_with_mocks.get("/api/models/status")
 
         assert response.status_code == 200
         data = response.json()
@@ -1182,11 +1189,13 @@ class TestModelConfigEndpoints:
         assert len(data["loaded_models"]) == 1
 
     @pytest.mark.asyncio
-    async def test_select_model(self, client: TestClient, mock_model_manager: Mock) -> None:
+    async def test_select_model(
+        self, test_client_with_mocks: TestClient, mock_model_manager: Mock
+    ) -> None:
         """Test selecting a model for a task."""
         mock_model_manager.set_selected_model = AsyncMock()
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/models/select",
             params={"task_type": "video_summarization", "model_name": "llama-4-scout"},
         )
@@ -1199,21 +1208,23 @@ class TestModelConfigEndpoints:
 
     @pytest.mark.asyncio
     async def test_select_model_invalid_task(
-        self, client: TestClient, mock_model_manager: Mock
+        self, test_client_with_mocks: TestClient, mock_model_manager: Mock
     ) -> None:
         """Test selecting model with invalid task type."""
         mock_model_manager.set_selected_model = AsyncMock(
             side_effect=ValueError("Invalid task type")
         )
 
-        response = client.post(
+        response = test_client_with_mocks.post(
             "/api/models/select",
             params={"task_type": "invalid_task", "model_name": "test-model"},
         )
 
         assert response.status_code == 400
 
-    def test_validate_memory_budget(self, client: TestClient, mock_model_manager: Mock) -> None:
+    def test_validate_memory_budget(
+        self, test_client_with_mocks: TestClient, mock_model_manager: Mock
+    ) -> None:
         """Test memory budget validation."""
         mock_model_manager.validate_memory_budget.return_value = {
             "valid": True,
@@ -1229,7 +1240,7 @@ class TestModelConfigEndpoints:
             },
         }
 
-        response = client.post("/api/models/validate")
+        response = test_client_with_mocks.post("/api/models/validate")
 
         assert response.status_code == 200
         data = response.json()

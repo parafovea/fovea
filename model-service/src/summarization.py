@@ -884,7 +884,7 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
             == str(data_path_resolved)
             and video_path_resolved.exists()
         ):
-            return str(video_path)
+            return str(video_path_resolved)
 
     potential_matches = list(data_path.glob(f"{video_id}.*"))
     for match in potential_matches:
@@ -895,6 +895,6 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
             == str(data_path_resolved)
             and resolved_match.exists()
         ):
-            return str(match)
+            return str(resolved_match)
 
     return None

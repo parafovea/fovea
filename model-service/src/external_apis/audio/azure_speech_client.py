@@ -7,7 +7,7 @@ API for accurate audio transcription with speaker diarization support.
 import asyncio
 import logging
 
-import azure.cognitiveservices.speech as speechsdk  # type: ignore[import-untyped]
+import azure.cognitiveservices.speech as speechsdk  # type: ignore[import-not-found, import-untyped]
 
 from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
 
