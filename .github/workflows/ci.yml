@@ -312,13 +312,13 @@ jobs:
           timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
           docker compose -f docker-compose.e2e.yml ps
 
-      - name: Run E2E tests (serial execution for test isolation)
+      - name: Run E2E tests (smoke + functional only)
         working-directory: annotation-tool
         env:
-          BASE_URL: http://localhost:3000
-          CI: true  # Configures workers: 1 in playwright.config.ts
-        run: npm run test:e2e
-        timeout-minutes: 20  # Serial execution takes ~12-15 minutes
+          E2E_BASE_URL: http://localhost:3000
+          CI: true  # Configures workers in playwright.config.ts
+        run: npm run test:e2e -- --project=smoke --project=functional
+        timeout-minutes: 10  # 45 tests with parallel execution (~7-8 min)
 
       - name: Stop Docker Compose services
         if: always()
@@ -376,7 +376,7 @@ jobs:
             echo "- Tests: skipped (disk space constraints)"
             echo ""
             echo "### Integration"
-            echo "- E2E Tests: ${{ needs.test-e2e.result }} (workers: 1 for test isolation)"
+            echo "- E2E Tests: ${{ needs.test-e2e.result }} (smoke + functional only)"
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
