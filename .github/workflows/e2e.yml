@@ -40,7 +40,8 @@ jobs:
       - name: Start E2E infrastructure
         run: |
           echo "Starting Docker Compose services..."
-          docker compose -f docker-compose.e2e.yml up -d --build
+          docker compose -f docker-compose.e2e.yml build --no-cache
+          docker compose -f docker-compose.e2e.yml up -d
           echo "Waiting for services to be healthy..."
           timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
           echo "Services are ready!"
@@ -52,6 +53,16 @@ jobs:
           CI: true  # Enables workers: 5 in playwright.config.ts
         run: npm run test:e2e
         timeout-minutes: 8  # Parallel execution is ~3-4 minutes
+
+      - name: Show Docker logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend Logs ==="
+          docker compose -f docker-compose.e2e.yml logs backend
+          echo "=== Frontend Logs ==="
+          docker compose -f docker-compose.e2e.yml logs frontend
+          echo "=== PostgreSQL Logs ==="
+          docker compose -f docker-compose.e2e.yml logs postgres
 
       - name: Upload Playwright report
         if: failure()
@@ -72,13 +83,3 @@ jobs:
       - name: Stop Docker Compose services
         if: always()
         run: docker compose -f docker-compose.e2e.yml down -v
-
-      - name: Show Docker logs on failure
-        if: failure()
-        run: |
-          echo "=== Backend Logs ==="
-          docker compose -f docker-compose.e2e.yml logs backend
-          echo "=== Frontend Logs ==="
-          docker compose -f docker-compose.e2e.yml logs frontend
-          echo "=== PostgreSQL Logs ==="
-          docker compose -f docker-compose.e2e.yml logs postgres
