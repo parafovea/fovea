@@ -145,7 +145,7 @@ Environment variables are useful for:
 
 ### Anthropic Claude
 
-1. Visit [https://console.anthropic.com/](https://console.anthropic.com/)
+1. Visit [Anthropic Console](https://console.anthropic.com)
 2. Create an account or log in
 3. Navigate to **API Keys** section
 4. Click **Create Key**
@@ -169,7 +169,7 @@ Environment variables are useful for:
 3. Click **Create API Key**
 4. Copy the key
 
-**Pricing**: Free tier available, pay-per-use beyond quota (see [Google AI Pricing](https://ai.google.dev/pricing))
+**Pricing**: Free tier available, pay-per-use beyond quota (see [Google AI Pricing](https://ai.google.dev/gemini-api/docs/pricing))
 
 ### AssemblyAI
 
@@ -300,7 +300,7 @@ The system generates ontology type suggestions based on your persona context.
 ### Monitoring API Usage
 
 Most providers offer usage dashboards:
-- Anthropic: [https://console.anthropic.com/](https://console.anthropic.com/)
+- Anthropic: [console.anthropic.com](https://console.anthropic.com)
 - OpenAI: [https://platform.openai.com/usage](https://platform.openai.com/usage)
 - Google AI: [https://console.cloud.google.com/billing](https://console.cloud.google.com/billing)
 

@@ -8,6 +8,9 @@
     },
     {
       "pattern": "^/api-reference/model-service/"
+    },
+    {
+      "pattern": "^https://console\\.anthropic\\.com"
     }
   ],
   "aliveStatusCodes": [200, 206],

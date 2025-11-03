@@ -656,4 +656,3 @@ Validate object structure before sending:
 - [Annotation Model](../concepts/annotation-model.md) - Types vs instances
 - [Personas](../concepts/personas.md) - Persona-specific interpretations
 - [Export/Import API](./export-import.md) - Backup and restore
-- [Frontend Store](./frontend/store/worldSlice) - Redux integration
