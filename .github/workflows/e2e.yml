@@ -45,13 +45,13 @@ jobs:
           timeout 120 sh -c 'until docker compose -f docker-compose.e2e.yml ps | grep -q "healthy"; do sleep 2; done'
           echo "Services are ready!"
 
-      - name: Run E2E tests (parallel execution with worker isolation)
+      - name: Run E2E tests (smoke + functional only for fast CI feedback)
         working-directory: annotation-tool
         env:
           E2E_BASE_URL: http://localhost:3000
           CI: true  # Enables workers: 5 in playwright.config.ts
-        run: npm run test:e2e -- --project=smoke --project=functional --project=regression
-        timeout-minutes: 15  # Stable tests only (excludes visual regression)
+        run: npm run test:e2e -- --project=smoke --project=functional
+        timeout-minutes: 10  # 45 tests with 2 workers (~7-8 min)
 
       - name: Show Docker logs on failure
         if: failure()

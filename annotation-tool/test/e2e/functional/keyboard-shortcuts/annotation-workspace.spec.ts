@@ -139,7 +139,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     // Draw and save annotation
     await annotationWorkspace.drawSimpleBoundingBox()
 
-    const saveButton = page.getByRole('button', { name: /save/i })
+    const saveButton = page.getByRole('button', { name: /save/i }).first()
     await expect(saveButton).toBeVisible()
     await saveButton.click()
     await page.waitForTimeout(1000)
