@@ -1,5 +1,4 @@
 import { test, expect } from '../fixtures/test-context.js'
-import { injectAxe, checkA11y } from 'axe-playwright'
 
 /**
  * Screen Reader Compatibility Tests (15 tests)
@@ -20,7 +19,7 @@ import { injectAxe, checkA11y } from 'axe-playwright'
  */
 
 test.describe('Screen Reader - ARIA Roles and Structure', () => {
-  test('main landmarks have proper roles', async ({ page, annotationWorkspace, testVideo }) => {
+  test('main landmarks have proper roles', async ({ page, _annotationWorkspace, _testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Check for main content landmark
@@ -40,7 +39,7 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
     }
   })
 
-  test('dialogs have proper ARIA attributes', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('dialogs have proper ARIA attributes', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -91,7 +90,7 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
     expect(isAccessibleModal).toBe(true)
   })
 
-  test('tabpanels have proper ARIA relationships', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('tabpanels have proper ARIA relationships', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await page.waitForTimeout(700)
 
@@ -147,7 +146,7 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
 })
 
 test.describe('Screen Reader - ARIA Live Regions', () => {
-  test('page has aria-live region for status announcements', async ({ page, annotationWorkspace, testVideo }) => {
+  test('page has aria-live region for status announcements', async ({ page, _annotationWorkspace, _testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     // Look for aria-live regions
@@ -159,7 +158,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     expect(count).toBeGreaterThanOrEqual(0) // May be 0 if no alerts currently showing
   })
 
-  test('successful save operation triggers announcement', async ({ page, annotationWorkspace, testVideo, testPersona, testEntityType }) => {
+  test('successful save operation triggers announcement', async ({ page, annotationWorkspace, testVideo, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await annotationWorkspace.drawSimpleBoundingBox()
     await page.waitForTimeout(500)
@@ -183,7 +182,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     }
   })
 
-  test('form validation errors are announced', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('form validation errors are announced', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -213,7 +212,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     }
   })
 
-  test('loading states have appropriate ARIA attributes', async ({ page, annotationWorkspace }) => {
+  test('loading states have appropriate ARIA attributes', async ({ page, _annotationWorkspace }) => {
     await annotationWorkspace.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -234,7 +233,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
 })
 
 test.describe('Screen Reader - ARIA States and Properties', () => {
-  test('tabs have correct aria-selected state', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('tabs have correct aria-selected state', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     const entityTab = ontologyWorkspace.entityTypesTab
@@ -257,7 +256,7 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     expect(entityStillSelected).toBe('false')
   })
 
-  test('expandable elements have aria-expanded', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('expandable elements have aria-expanded', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -287,7 +286,7 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     }
   })
 
-  test('comboboxes have correct ARIA attributes', async ({ page, annotationWorkspace, testVideo }) => {
+  test('comboboxes have correct ARIA attributes', async ({ page, _annotationWorkspace, _testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
 
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
@@ -308,7 +307,7 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     expect(hasPopup).toBeTruthy()
   })
 
-  test('disabled elements have aria-disabled', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('disabled elements have aria-disabled', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -334,7 +333,7 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
 })
 
 test.describe('Screen Reader - Form Accessibility', () => {
-  test('form inputs have associated labels', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('form inputs have associated labels', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -404,7 +403,7 @@ test.describe('Screen Reader - Form Accessibility', () => {
     }
   })
 
-  test('required fields are marked with aria-required', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('required fields are marked with aria-required', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -465,7 +464,7 @@ test.describe('Screen Reader - Form Accessibility', () => {
     }
   })
 
-  test('error messages are linked to inputs via aria-describedby', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('error messages are linked to inputs via aria-describedby', async ({ page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
     await ontologyWorkspace.selectTab('entities')
 
@@ -500,7 +499,7 @@ test.describe('Screen Reader - Form Accessibility', () => {
     }
   })
 
-  test('search inputs have appropriate roles and labels', async ({ page, ontologyWorkspace, testPersona }) => {
+  test('search inputs have appropriate roles and labels', async ({ _page, ontologyWorkspace, _testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
 
     const searchInput = ontologyWorkspace.searchInput

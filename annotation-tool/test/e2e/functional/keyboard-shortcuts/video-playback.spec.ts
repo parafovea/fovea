@@ -19,7 +19,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
   })
 
-  test('Space plays/pauses video without scrolling page', async ({ page, annotationWorkspace }) => {
+  test('Space plays/pauses video without scrolling page', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
     await expect(video).toBeVisible()
 
@@ -43,7 +43,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(finalPaused).toBe(true)
   })
 
-  test('Arrow Right advances one frame', async ({ page, annotationWorkspace }) => {
+  test('Arrow Right advances one frame', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
     const initialTime = await video.evaluate((v: HTMLVideoElement) => v.currentTime)
 
@@ -56,7 +56,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(newTime).toBeGreaterThan(initialTime)
   })
 
-  test('Arrow Left goes back one frame', async ({ page, annotationWorkspace }) => {
+  test('Arrow Left goes back one frame', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
 
     // Advance first
@@ -76,7 +76,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(newTime).toBeLessThan(initialTime)
   })
 
-  test('Shift+Arrow Right jumps 10 frames forward', async ({ page, annotationWorkspace }) => {
+  test('Shift+Arrow Right jumps 10 frames forward', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
     const initialTime = await video.evaluate((v: HTMLVideoElement) => v.currentTime)
 
@@ -90,7 +90,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(timeDiff).toBeGreaterThan(0.2)
   })
 
-  test('Shift+Arrow Left jumps 10 frames backward', async ({ page, annotationWorkspace }) => {
+  test('Shift+Arrow Left jumps 10 frames backward', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
 
     // Advance to middle first
@@ -111,7 +111,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(timeDiff).toBeGreaterThan(0.2)
   })
 
-  test('Home jumps to start', async ({ page, annotationWorkspace }) => {
+  test('Home jumps to start', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
 
     // Advance video first
@@ -131,7 +131,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(currentTime).toBe(0)
   })
 
-  test('End jumps to end', async ({ page, annotationWorkspace }) => {
+  test('End jumps to end', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
 
     // Get video duration
@@ -146,7 +146,7 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     expect(currentTime).toBeGreaterThan(duration - 0.5)
   })
 
-  test('shortcuts disabled when typing in search field', async ({ page, annotationWorkspace }) => {
+  test('shortcuts disabled when typing in search field', async ({ page, _annotationWorkspace }) => {
     const video = page.locator('video')
 
     // Click on a search/input field in the sidebar (if exists)

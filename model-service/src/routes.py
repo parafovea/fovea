@@ -363,7 +363,7 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
     description="Detects objects in video frames based on text prompts using open-vocabulary detection models. "
     "Supports YOLO-World v2.1, Grounding DINO 1.5, OWLv2, and Florence-2.",
 )
-async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noqa: PLR0915
+async def detect_objects(request: DetectionRequest) -> DetectionResponse:
     """Detect objects in video frames using open-vocabulary detection models.
 
     Parameters
@@ -536,7 +536,7 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:  # noq
     description="Tracks objects across video frames using initial segmentation masks. "
     "Supports SAMURAI, SAM2Long, SAM2.1, and YOLO11n-seg models.",
 )
-async def track_objects(request: TrackingRequest) -> TrackingResponse:  # noqa: PLR0915
+async def track_objects(request: TrackingRequest) -> TrackingResponse:
     """Track objects across video frames with mask-based segmentation.
 
     Parameters

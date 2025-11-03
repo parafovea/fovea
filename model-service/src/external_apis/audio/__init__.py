@@ -6,23 +6,23 @@ and Azure Speech Services.
 """
 
 from .assemblyai_client import AssemblyAIClient
-from .azure_speech_client import AzureSpeechClient
 from .aws_transcribe_client import AWSTranscribeClient
-from .base import AudioAPIClient, TranscriptSegment, TranscriptResult
+from .azure_speech_client import AzureSpeechClient
+from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
 from .deepgram_client import DeepgramClient
 from .gladia_client import GladiaClient
 from .google_speech_client import GoogleSpeechClient
 from .revai_client import RevAIClient
 
 __all__ = [
-    "AudioAPIClient",
-    "TranscriptSegment",
-    "TranscriptResult",
-    "AssemblyAIClient",
-    "DeepgramClient",
-    "RevAIClient",
-    "GladiaClient",
     "AWSTranscribeClient",
-    "GoogleSpeechClient",
+    "AssemblyAIClient",
+    "AudioAPIClient",
     "AzureSpeechClient",
+    "DeepgramClient",
+    "GladiaClient",
+    "GoogleSpeechClient",
+    "RevAIClient",
+    "TranscriptResult",
+    "TranscriptSegment",
 ]

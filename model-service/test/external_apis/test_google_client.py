@@ -1,11 +1,12 @@
 """Tests for Google Gemini API client."""
 
-import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.external_apis.google_client import GoogleClient
+import httpx
+import pytest
+
 from src.external_apis.base import ExternalAPIConfig
+from src.external_apis.google_client import GoogleClient
 
 
 @pytest.fixture
@@ -54,7 +55,11 @@ async def test_generate_from_images_success(google_client: GoogleClient) -> None
 
     mock_response_data = {
         "candidates": [{"content": {"parts": [{"text": "Image analysis result"}]}}],
-        "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 20, "totalTokenCount": 120},
+        "usageMetadata": {
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 20,
+            "totalTokenCount": 120,
+        },
     }
 
     with patch.object(google_client.client, "post", new_callable=AsyncMock) as mock_post:
@@ -127,7 +132,11 @@ async def test_generate_from_images_webp(google_client: GoogleClient) -> None:
 
     mock_response_data = {
         "candidates": [{"content": {"parts": [{"text": "WebP analysis"}]}}],
-        "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 20, "totalTokenCount": 120},
+        "usageMetadata": {
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 20,
+            "totalTokenCount": 120,
+        },
     }
 
     with patch.object(google_client.client, "post", new_callable=AsyncMock) as mock_post:
@@ -146,7 +155,11 @@ async def test_generate_text_with_temperature(google_client: GoogleClient) -> No
     """Test text generation with custom temperature."""
     mock_response_data = {
         "candidates": [{"content": {"parts": [{"text": "Creative response"}]}}],
-        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 15, "totalTokenCount": 25},
+        "usageMetadata": {
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 15,
+            "totalTokenCount": 25,
+        },
     }
 
     with patch.object(google_client.client, "post", new_callable=AsyncMock) as mock_post:

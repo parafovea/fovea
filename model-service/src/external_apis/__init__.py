@@ -6,10 +6,10 @@ from .openai_client import OpenAIClient
 from .router import ExternalModelRouter
 
 __all__ = [
+    "AnthropicClient",
     "ExternalAPIClient",
     "ExternalAPIConfig",
-    "AnthropicClient",
-    "OpenAIClient",
-    "GoogleClient",
     "ExternalModelRouter",
+    "GoogleClient",
+    "OpenAIClient",
 ]

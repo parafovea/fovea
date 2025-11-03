@@ -5,10 +5,12 @@ transcription with speaker diarization support.
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 import boto3
 
@@ -89,13 +91,11 @@ class AWSTranscribeClient(AudioAPIClient):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._create_s3_bucket)
 
-            await loop.run_in_executor(
-                None, self._upload_to_s3, audio_path, audio_filename
-            )
+            await loop.run_in_executor(None, self._upload_to_s3, audio_path, audio_filename)
 
             audio_uri = f"s3://{self.bucket_name}/{audio_filename}"
 
-            settings = {}
+            settings: dict[str, bool | int] = {}
             if enable_diarization:
                 settings["ShowSpeakerLabels"] = True
                 settings["MaxSpeakerLabels"] = 10
@@ -141,18 +141,14 @@ class AWSTranscribeClient(AudioAPIClient):
 
     def _create_s3_bucket(self) -> None:
         """Create temporary S3 bucket for audio upload."""
-        try:
+        with contextlib.suppress(self.s3_client.exceptions.BucketAlreadyExists):
             self.s3_client.create_bucket(Bucket=self.bucket_name)
-        except self.s3_client.exceptions.BucketAlreadyExists:
-            pass
 
     def _upload_to_s3(self, audio_path: str, filename: str) -> None:
         """Upload audio file to S3 bucket."""
         self.s3_client.upload_file(audio_path, self.bucket_name, filename)
 
-    async def _poll_transcription_job(
-        self, job_name: str, max_wait: int = 300
-    ) -> dict[str, any]:
+    async def _poll_transcription_job(self, job_name: str, max_wait: int = 300) -> dict[str, Any]:  # type: ignore[misc]
         """Poll AWS Transcribe job status until completion."""
         start_time = time.time()
         loop = asyncio.get_event_loop()
@@ -167,12 +163,10 @@ class AWSTranscribeClient(AudioAPIClient):
             if status == "COMPLETED":
                 import httpx
 
-                transcript_uri = response["TranscriptionJob"]["Transcript"][
-                    "TranscriptFileUri"
-                ]
+                transcript_uri = response["TranscriptionJob"]["Transcript"]["TranscriptFileUri"]
                 async with httpx.AsyncClient() as client:
                     transcript_response = await client.get(transcript_uri)
-                    return transcript_response.json()
+                    return transcript_response.json()  # type: ignore[no-any-return]
 
             if status == "FAILED":
                 failure_reason = response["TranscriptionJob"].get("FailureReason", "Unknown")
@@ -183,7 +177,9 @@ class AWSTranscribeClient(AudioAPIClient):
         raise RuntimeError(f"AWS Transcribe job timed out after {max_wait} seconds")
 
     def _parse_transcript(
-        self, transcript_data: dict[str, any], enable_diarization: bool
+        self,
+        transcript_data: dict[str, Any],
+        enable_diarization: bool,  # type: ignore[misc]
     ) -> list[TranscriptSegment]:
         """Parse AWS Transcribe transcript data into segments."""
         segments = []

@@ -42,6 +42,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Automatically created for each test.
    * Depends on testUser to ensure authentication is set up.
    */
+  // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   annotationWorkspace: async ({ page, testUser }, use) => {
     const workspace = new AnnotationWorkspacePage(page)
     await use(workspace)
@@ -52,12 +54,16 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Automatically created for each test.
    * Depends on testUser to ensure authentication is set up.
    */
+  // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   videoBrowser: async ({ page, testUser }, use) => {
     const browser = new VideoBrowserPage(page)
     await use(browser)
   },
 
   // Worker-scoped fixtures (shared across all tests in worker)
+  // @ts-expect-error - browser parameter establishes fixture dependency but is not used in function body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   workerDb: [async ({ browser }, use) => {
     const db = new DatabaseHelper('http://localhost:3000')
     await db.connect()
@@ -176,6 +182,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Automatically created for each test.
    * Depends on testUser to ensure authentication is set up.
    */
+  // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ontologyWorkspace: async ({ page, testUser }, use) => {
     const workspace = new OntologyWorkspacePage(page)
     await use(workspace)
@@ -186,6 +194,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Automatically created for each test.
    * Depends on testUser to ensure authentication is set up.
    */
+  // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   objectWorkspace: async ({ page, testUser }, use) => {
     const workspace = new ObjectWorkspacePage(page)
     await use(workspace)

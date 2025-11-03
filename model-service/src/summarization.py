@@ -17,7 +17,13 @@ from opentelemetry import trace
 from PIL import Image
 
 from .audio_utils import extract_audio_track, has_audio_stream
-from .av_fusion import AudioSegment, FusionConfig, FusionStrategy, VisualFrame, create_fusion_strategy
+from .av_fusion import (
+    AudioSegment,
+    FusionConfig,
+    FusionStrategy,
+    VisualFrame,
+    create_fusion_strategy,
+)
 from .external_apis.base import ExternalAPIConfig
 from .external_apis.router import ExternalModelRouter
 from .models import KeyFrame, SummarizeRequest, SummarizeResponse
@@ -320,6 +326,7 @@ async def transcribe_audio(
             return "", [], None, None, 0.0
 
         import tempfile
+
         audio_path = tempfile.mktemp(suffix=".wav")
 
         try:
@@ -363,14 +370,14 @@ async def transcribe_audio(
 
                     try:
                         diar_result = diar_loader.diarize(audio_path)
-                        speaker_count = len(set(seg.speaker for seg in diar_result.segments))
+                        speaker_count = len({seg.speaker for seg in diar_result.segments})
 
                         speaker_map = {}
                         for diar_seg in diar_result.segments:
                             speaker_map[(diar_seg.start, diar_seg.end)] = diar_seg.speaker
 
                         for seg in segments:
-                            for (diar_start, diar_end), speaker in speaker_map.items():
+                            for (diar_start, _diar_end), speaker in speaker_map.items():
                                 if abs(seg.start - diar_start) < 0.5:
                                     seg.speaker = speaker
                                     break
@@ -398,6 +405,7 @@ async def transcribe_audio(
 
         finally:
             import os
+
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 

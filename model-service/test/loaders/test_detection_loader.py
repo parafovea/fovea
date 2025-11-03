@@ -241,7 +241,7 @@ class TestOWLv2Loader:
         self,
         mock_model_class: Mock,
         mock_processor_class: Mock,
-        detection_config: DetectionConfig,  # noqa: ARG002
+        detection_config: DetectionConfig,
     ) -> None:
         """Test successful OWLv2 model loading."""
         mock_model = MagicMock()
@@ -313,7 +313,7 @@ class TestFlorence2Loader:
         self,
         mock_model_class: Mock,
         mock_processor_class: Mock,
-        detection_config: DetectionConfig,  # noqa: ARG002
+        detection_config: DetectionConfig,
     ) -> None:
         """Test successful Florence-2 model loading."""
         mock_model = MagicMock()

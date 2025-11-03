@@ -16,7 +16,7 @@ test.describe('Timeline Rendering Quality', () => {
     await videoBrowser.navigateToHome()
   })
 
-  test('timeline canvas renders without graininess', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('timeline canvas renders without graininess', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -26,7 +26,7 @@ test.describe('Timeline Rendering Quality', () => {
     await annotationWorkspace.timeline.expectHighDPIRendering()
   })
 
-  test('playhead renders at correct position', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('playhead renders at correct position', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -49,7 +49,7 @@ test.describe('Timeline Rendering Quality', () => {
     annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot2)
   })
 
-  test('keyframes render as visible circles on timeline', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('keyframes render as visible circles on timeline', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -74,7 +74,7 @@ test.describe('Timeline Rendering Quality', () => {
     annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot2, screenshot3)
   })
 
-  test('interpolation segments render between keyframes', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('interpolation segments render between keyframes', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -90,7 +90,7 @@ test.describe('Timeline Rendering Quality', () => {
     expect(screenshot.byteLength).toBeGreaterThan(0)
   })
 
-  test('frame ruler renders with tick marks and numbers', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('frame ruler renders with tick marks and numbers', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -101,7 +101,7 @@ test.describe('Timeline Rendering Quality', () => {
     await annotationWorkspace.timeline.expectVisible()
   })
 
-  test('timeline renders correctly at different zoom levels', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('timeline renders correctly at different zoom levels', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -127,7 +127,7 @@ test.describe('Timeline Rendering Quality', () => {
     }
   })
 
-  test('playhead continues to update during video playback', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('playhead continues to update during video playback', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -152,7 +152,7 @@ test.describe('Timeline Rendering Quality', () => {
     annotationWorkspace.timeline.expectScreenshotsDifferent(screenshot1, screenshot3)
   })
 
-  test('selected keyframe highlights correctly', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('selected keyframe highlights correctly', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -187,7 +187,7 @@ test.describe('Timeline Rendering Quality', () => {
     annotationWorkspace.timeline.expectScreenshotsDifferent(screenshotSelected30Again, screenshotSelected60)
   })
 
-  test('timeline renders correctly after window resize', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('timeline renders correctly after window resize', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()
@@ -207,7 +207,7 @@ test.describe('Timeline Rendering Quality', () => {
     expect(screenshot.byteLength).toBeGreaterThan(0)
   })
 
-  test('ghost box renders when annotation is beyond timespan', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('ghost box renders when annotation is beyond timespan', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.timeline.show()

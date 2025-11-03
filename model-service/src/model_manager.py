@@ -412,7 +412,12 @@ class ModelManager:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if task_type == "audio_transcription":
-            from src.audio_loader import AudioFramework, TranscriptionConfig, WhisperLoader, FasterWhisperLoader
+            from src.audio_loader import (
+                AudioFramework,
+                FasterWhisperLoader,
+                TranscriptionConfig,
+                WhisperLoader,
+            )
 
             framework_map = {
                 "whisper": AudioFramework.WHISPER,
@@ -431,7 +436,7 @@ class ModelManager:
             if framework == AudioFramework.WHISPER:
                 loader = WhisperLoader(config)
             elif framework == AudioFramework.FASTER_WHISPER:
-                loader = FasterWhisperLoader(config)
+                loader = FasterWhisperLoader(config)  # type: ignore[assignment]
             else:
                 loader = WhisperLoader(config)
 
@@ -439,31 +444,31 @@ class ModelManager:
             logger.info(f"Audio transcription model loaded: {model_config.model_id}")
             return loader
 
-        elif task_type == "speaker_diarization":
+        if task_type == "speaker_diarization":
             from src.audio_loader import DiarizationConfig, PyannoteLoader
 
-            config = DiarizationConfig(
+            diar_config = DiarizationConfig(  # type: ignore[assignment]
                 model_id=model_config.model_id,
                 device=device,
             )
 
-            loader = PyannoteLoader(config)
-            loader.load()
+            diar_loader = PyannoteLoader(diar_config)  # type: ignore[assignment]
+            diar_loader.load()
             logger.info(f"Speaker diarization model loaded: {model_config.model_id}")
-            return loader
+            return diar_loader  # type: ignore[return-value]
 
-        elif task_type == "voice_activity_detection":
-            from src.audio_loader import VADConfig, SileroVADLoader
+        if task_type == "voice_activity_detection":
+            from src.audio_loader import SileroVADLoader, VADConfig
 
-            config = VADConfig(
+            vad_config = VADConfig(  # type: ignore[assignment]
                 model_id=model_config.model_id,
                 device=device,
             )
 
-            loader = SileroVADLoader(config)
-            loader.load()
+            vad_loader = SileroVADLoader(vad_config)  # type: ignore[assignment]
+            vad_loader.load()
             logger.info(f"VAD model loaded: {model_config.model_id}")
-            return loader
+            return vad_loader  # type: ignore[return-value]
 
         return {
             "task_type": task_type,

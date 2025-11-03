@@ -9,6 +9,20 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { videoSummarizationQueue } from '../queues/setup.js'
 
+/**
+ * Job data for video summarization queue.
+ */
+interface SummarizeJobData {
+  videoId: string;
+  personaId: string;
+  frameSampleRate: number;
+  maxFrames: number;
+  enableAudio?: boolean;
+  enableSpeakerDiarization?: boolean;
+  fusionStrategy?: string;
+  audioLanguage?: string;
+}
+
 const VideoSummarySchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   videoId: Type.String(),
@@ -150,7 +164,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: 'Persona not found' })
       }
 
-      const jobData: any = {
+      const jobData: SummarizeJobData = {
         videoId,
         personaId,
         frameSampleRate,

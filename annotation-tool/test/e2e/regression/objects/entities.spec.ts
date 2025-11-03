@@ -5,9 +5,9 @@ test.describe('Entity Management', () => {
 
   test('creates entity with name and description', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     // Navigate to object workspace
     await objectWorkspace.navigateTo()
@@ -27,8 +27,8 @@ test.describe('Entity Management', () => {
 
   test('validates entity name is required', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -58,9 +58,9 @@ test.describe('Entity Management', () => {
 
   test('edits entity details', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -77,9 +77,9 @@ test.describe('Entity Management', () => {
 
   test('deletes entity', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -99,8 +99,8 @@ test.describe('Entity Management', () => {
 
   test('searches entities by name', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -121,9 +121,9 @@ test.describe('Entity Management', () => {
 
   test('searches entities by description', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -136,9 +136,9 @@ test.describe('Entity Management', () => {
 
   test('links entity to entity type', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     testEntityType,
-    page
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.createEntity('Test Building', 'A test building')
@@ -148,8 +148,8 @@ test.describe('Entity Management', () => {
 
   test('displays entity count in tab', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -167,8 +167,8 @@ test.describe('Entity Management', () => {
 
   test('entities persist across reload', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -192,9 +192,9 @@ test.describe('Entity Management', () => {
 
   test('creates multiple entities', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -212,9 +212,9 @@ test.describe('Entity Management', () => {
 
   test('clears search filter', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -235,8 +235,8 @@ test.describe('Entity Management', () => {
 
   test('entity name is case-sensitive in exact match', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -254,9 +254,9 @@ test.describe('Entity Management', () => {
 
   test('handles entity with empty description', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -269,8 +269,8 @@ test.describe('Entity Management', () => {
 
   test('switches between entity tab and other tabs', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
+    _testPersona,
+    _testEntityType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -290,9 +290,9 @@ test.describe('Entity Management', () => {
 
   test('entity list updates immediately after creation', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    page
+    _testPersona,
+    _testEntityType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 

@@ -1,5 +1,4 @@
 import { test, expect } from '../../fixtures/test-context.js'
-import { verifyNoBrowserCapture } from '../helpers/keyboard-test-utils.js'
 
 /**
  * Object Workspace Keyboard Shortcuts Tests
@@ -14,7 +13,7 @@ import { verifyNoBrowserCapture } from '../helpers/keyboard-test-utils.js'
  */
 
 test.describe('Keyboard Shortcuts - Object Workspace', () => {
-  test.beforeEach(async ({ page, testUser }) => {
+  test.beforeEach(async ({ page, _testUser }) => {
     await page.goto('/objects')
     await expect(page).toHaveURL('/objects')
     await page.waitForLoadState('networkidle')
@@ -22,7 +21,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await page.waitForTimeout(1000)
   })
 
-  test('n creates new entity', async ({ page, testUser }) => {
+  test('n creates new entity', async ({ page, _testUser }) => {
     // Ensure on entities tab
     const entitiesTab = page.getByRole('tab', { name: /entities/i })
     await entitiesTab.click()
@@ -47,7 +46,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(dialog.getByRole('button', { name: /create entity/i })).toBeVisible()
   })
 
-  test('n creates different objects based on active tab', async ({ page, testUser }) => {
+  test('n creates different objects based on active tab', async ({ page, _testUser }) => {
     // Blur search input first
     const searchInput = page.getByRole('textbox', { name: /search/i })
     if (await searchInput.isVisible()) {
@@ -84,7 +83,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(dialog.getByRole('button', { name: /create location/i })).toBeVisible()
   })
 
-  test('/ focuses search field', async ({ page, testUser }) => {
+  test('/ focuses search field', async ({ page, _testUser }) => {
     const entitiesTab = page.getByRole('tab', { name: /entities/i })
     await entitiesTab.click()
     await page.waitForTimeout(300)
@@ -98,7 +97,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(searchInput).toBeFocused()
   })
 
-  test('Tab navigates to next object tab', async ({ page, testUser }) => {
+  test('Tab navigates to next object tab', async ({ page, _testUser }) => {
     const entitiesTab = page.getByRole('tab', { name: /entities/i })
     await entitiesTab.click()
     await page.waitForTimeout(300)
@@ -112,7 +111,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(eventsTab).toHaveAttribute('aria-selected', 'true')
   })
 
-  test('Shift+Tab navigates to previous object tab', async ({ page, testUser }) => {
+  test('Shift+Tab navigates to previous object tab', async ({ page, _testUser }) => {
     const eventsTab = page.getByRole('tab', { name: /events/i })
     await eventsTab.click()
     await page.waitForTimeout(300)
@@ -126,7 +125,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(entitiesTab).toHaveAttribute('aria-selected', 'true')
   })
 
-  test('shortcuts disabled when typing in search', async ({ page, testUser }) => {
+  test('shortcuts disabled when typing in search', async ({ page, _testUser }) => {
     const entitiesTab = page.getByRole('tab', { name: /entities/i })
     await entitiesTab.click()
     await page.waitForTimeout(300)
@@ -148,7 +147,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     await expect(dialog).not.toBeVisible()
   })
 
-  test('keyboard shortcuts work across all object tabs', async ({ page, testUser }) => {
+  test('keyboard shortcuts work across all object tabs', async ({ page, _testUser }) => {
     // Blur search input first
     const searchInput = page.getByRole('textbox', { name: /search/i })
     if (await searchInput.isVisible()) {

@@ -378,7 +378,7 @@ class TestSAM2LongLoader:
     def test_load_sam2long_success(
         self,
         mock_build_predictor: Mock,
-        tracking_config: TrackingConfig,  # noqa: ARG002
+        tracking_config: TrackingConfig,
     ) -> None:
         """Test successful SAM2Long model loading."""
         mock_predictor = MagicMock()
@@ -483,7 +483,7 @@ class TestSAM2Loader:
     def test_load_sam2_success(
         self,
         mock_build_predictor: Mock,
-        tracking_config: TrackingConfig,  # noqa: ARG002
+        tracking_config: TrackingConfig,
     ) -> None:
         """Test successful SAM2.1 model loading."""
         mock_predictor = MagicMock()
@@ -570,7 +570,7 @@ class TestYOLO11SegLoader:
     def test_load_yolo11seg_success(
         self,
         mock_yolo_class: Mock,
-        tracking_config: TrackingConfig,  # noqa: ARG002
+        tracking_config: TrackingConfig,
     ) -> None:
         """Test successful YOLO11n-seg model loading."""
         mock_model = MagicMock()
@@ -713,7 +713,7 @@ class TestYOLO11SegLoader:
         iou = loader._compute_iou(mask1, mask2)
         assert iou == 0.0
 
-    def _create_mock_yolo_model(self, num_frames: int, num_objects: int) -> MagicMock:  # noqa: ARG002
+    def _create_mock_yolo_model(self, num_frames: int, num_objects: int) -> MagicMock:
         """Create a mock YOLO model with segmentation results."""
         mock_model = MagicMock()
 
@@ -738,7 +738,7 @@ class TestYOLO11SegLoader:
 
         return mock_model
 
-    def _create_mock_yolo_model_with_low_iou(self, num_frames: int) -> MagicMock:  # noqa: ARG002
+    def _create_mock_yolo_model_with_low_iou(self, num_frames: int) -> MagicMock:
         """Create a mock YOLO model with low IoU masks (simulating object loss)."""
         mock_model = MagicMock()
 

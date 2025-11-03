@@ -1,5 +1,4 @@
 import { test, expect } from '../../fixtures/test-context.js'
-import { testShortcut } from '../helpers/keyboard-test-utils.js'
 
 /**
  * Global Navigation Keyboard Shortcuts Tests
@@ -14,7 +13,7 @@ import { testShortcut } from '../helpers/keyboard-test-utils.js'
  */
 
 test.describe('Keyboard Shortcuts - Global Navigation', () => {
-  test('Ctrl+1 navigates to video browser', async ({ page, testUser }) => {
+  test('Ctrl+1 navigates to video browser', async ({ page, _testUser }) => {
     // Start from ontology workspace
     await page.goto('/ontology')
     await expect(page).toHaveURL('/ontology')
@@ -29,7 +28,7 @@ test.describe('Keyboard Shortcuts - Global Navigation', () => {
     await expect(page.getByPlaceholder(/search videos/i)).toBeVisible()
   })
 
-  test('Ctrl+2 navigates to ontology workspace', async ({ page, testUser }) => {
+  test('Ctrl+2 navigates to ontology workspace', async ({ page, _testUser }) => {
     // Start from video browser
     await page.goto('/')
     await expect(page).toHaveURL('/')
@@ -44,7 +43,7 @@ test.describe('Keyboard Shortcuts - Global Navigation', () => {
     await expect(page.getByText('Ontology Builder')).toBeVisible()
   })
 
-  test('Ctrl+3 navigates to object workspace', async ({ page, testUser }) => {
+  test('Ctrl+3 navigates to object workspace', async ({ page, _testUser }) => {
     // Start from video browser
     await page.goto('/')
     await expect(page).toHaveURL('/')
@@ -59,7 +58,7 @@ test.describe('Keyboard Shortcuts - Global Navigation', () => {
     await expect(page.getByRole('tab', { name: /entities/i })).toBeVisible()
   })
 
-  test('global navigation works from annotation workspace', async ({ page, testUser, testVideo }) => {
+  test('global navigation works from annotation workspace', async ({ page, _testUser, testVideo }) => {
     // Start from annotation workspace
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')

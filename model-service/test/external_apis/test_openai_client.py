@@ -1,11 +1,12 @@
 """Tests for OpenAI API client."""
 
-import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.external_apis.openai_client import OpenAIClient
+import httpx
+import pytest
+
 from src.external_apis.base import ExternalAPIConfig
+from src.external_apis.openai_client import OpenAIClient
 
 
 @pytest.fixture

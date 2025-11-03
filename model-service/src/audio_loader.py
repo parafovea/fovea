@@ -9,7 +9,6 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import torch
@@ -236,9 +235,7 @@ class WhisperLoader(AudioTranscriptionLoader):
         try:
             import whisper
 
-            logger.info(
-                f"Loading Whisper model {self.config.model_id} on {self.config.device}"
-            )
+            logger.info(f"Loading Whisper model {self.config.model_id} on {self.config.device}")
 
             model_name = self.config.model_id.split("/")[-1]
             self.model = whisper.load_model(
@@ -450,7 +447,7 @@ class SileroVADLoader:
         try:
             logger.info("Loading Silero VAD model")
 
-            self.model, self.utils = torch.hub.load(
+            self.model, self.utils = torch.hub.load(  # type: ignore[no-untyped-call]
                 repo_or_dir="snakers4/silero-vad",
                 model="silero_vad",
                 force_reload=False,
@@ -489,8 +486,6 @@ class SileroVADLoader:
             raise RuntimeError("Model not loaded. Call load() first.")
 
         try:
-            import numpy as np
-
             if isinstance(audio, str):
                 audio_array, sample_rate = self.utils[0](audio)
                 audio_tensor = torch.from_numpy(audio_array)
@@ -518,9 +513,7 @@ class SileroVADLoader:
                 duration = end_sec - start_sec
                 total_speech_duration += duration
 
-                segments.append(
-                    VADSegment(start=start_sec, end=end_sec, confidence=1.0)
-                )
+                segments.append(VADSegment(start=start_sec, end=end_sec, confidence=1.0))
 
             total_duration = len(audio_tensor) / sample_rate
 
@@ -578,9 +571,7 @@ class PyannoteLoader:
 
             logger.info(f"Loading Pyannote pipeline {self.config.model_id}")
 
-            self.pipeline = Pipeline.from_pretrained(
-                self.config.model_id, use_auth_token=None
-            )
+            self.pipeline = Pipeline.from_pretrained(self.config.model_id, use_auth_token=None)
 
             if torch.cuda.is_available() and self.config.device == "cuda":
                 self.pipeline = self.pipeline.to(torch.device("cuda"))
@@ -630,7 +621,7 @@ class PyannoteLoader:
                 )
                 speakers_set.add(str(speaker))
 
-            speakers_list = sorted(list(speakers_set))
+            speakers_list = sorted(speakers_set)
 
             return DiarizationResult(
                 segments=segments, num_speakers=len(speakers_list), speakers=speakers_list
@@ -681,6 +672,5 @@ def create_transcription_loader(
     if "whisper" in model_name_lower:
         return WhisperLoader(config)
     raise ValueError(
-        f"Unknown model name: {model_name}. "
-        f"Supported models: whisper-*, faster-whisper-*"
+        f"Unknown model name: {model_name}. " f"Supported models: whisper-*, faster-whisper-*"
     )

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -104,7 +105,9 @@ class GladiaClient(AudioAPIClient):
                             end=word_data["end"],
                             text=word_data["word"],
                             confidence=word_data.get("confidence", 1.0),
-                            speaker=f"SPEAKER_{speaker_label}" if speaker_label is not None else None,
+                            speaker=f"SPEAKER_{speaker_label}"
+                            if speaker_label is not None
+                            else None,
                         )
                     )
                     full_text_parts.append(word_data["word"])
@@ -132,7 +135,7 @@ class GladiaClient(AudioAPIClient):
 
     async def _poll_transcription(
         self, client: httpx.AsyncClient, job_id: str, max_wait: int = 300
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:  # type: ignore[misc]
         """Poll Gladia transcription status until completion.
 
         Parameters
@@ -146,7 +149,7 @@ class GladiaClient(AudioAPIClient):
 
         Returns
         -------
-        dict[str, any]
+        GladiaTranscriptionResult
             Transcription result.
 
         Raises
@@ -162,7 +165,7 @@ class GladiaClient(AudioAPIClient):
                 headers={"X-Gladia-Key": self.api_key},
             )
             response.raise_for_status()
-            result = response.json()
+            result: dict[str, Any] = response.json()  # type: ignore[assignment]
 
             status = result.get("status")
 

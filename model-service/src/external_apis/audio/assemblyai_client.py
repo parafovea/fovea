@@ -7,7 +7,6 @@ and sentiment analysis support.
 
 import asyncio
 import logging
-from pathlib import Path
 
 import assemblyai as aai
 
@@ -76,9 +75,7 @@ class AssemblyAIClient(AudioAPIClient):
             transcriber = aai.Transcriber(config=config)
 
             loop = asyncio.get_event_loop()
-            transcript = await loop.run_in_executor(
-                None, transcriber.transcribe, audio_path
-            )
+            transcript = await loop.run_in_executor(None, transcriber.transcribe, audio_path)
 
             if transcript.status == aai.TranscriptStatus.error:
                 raise RuntimeError(f"AssemblyAI transcription failed: {transcript.error}")

@@ -4,11 +4,10 @@ This module provides integration with Deepgram's Nova-3 transcription API
 for fast and accurate audio transcription with speaker diarization support.
 """
 
-import asyncio
 import logging
-from pathlib import Path
 
-from deepgram import DeepgramClient as DGClient, PrerecordedOptions
+from deepgram import DeepgramClient as DGClient
+from deepgram import PrerecordedOptions
 
 from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
 
@@ -98,7 +97,9 @@ class DeepgramClient(AudioAPIClient):
             segments = []
             if results.utterances:
                 for utterance in results.utterances:
-                    speaker_label = f"SPEAKER_{utterance.speaker}" if utterance.speaker is not None else None
+                    speaker_label = (
+                        f"SPEAKER_{utterance.speaker}" if utterance.speaker is not None else None
+                    )
                     segments.append(
                         TranscriptSegment(
                             start=utterance.start,
@@ -116,7 +117,9 @@ class DeepgramClient(AudioAPIClient):
                             end=word_group.end,
                             text=word_group.word,
                             confidence=word_group.confidence,
-                            speaker=f"SPEAKER_{word_group.speaker}" if hasattr(word_group, "speaker") else None,
+                            speaker=f"SPEAKER_{word_group.speaker}"
+                            if hasattr(word_group, "speaker")
+                            else None,
                         )
                     )
 
@@ -132,7 +135,9 @@ class DeepgramClient(AudioAPIClient):
                     for word in alternative.words
                 ]
 
-            duration = results.channels[0].alternatives[0].words[-1].end if alternative.words else 0.0
+            duration = (
+                results.channels[0].alternatives[0].words[-1].end if alternative.words else 0.0
+            )
 
             logger.info("Deepgram transcription completed successfully")
 

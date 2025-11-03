@@ -51,7 +51,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     await annotationWorkspace.expectWorkspaceReady()
   })
 
-  test('creates simple bounding box annotation', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('creates simple bounding box annotation', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
     // Draw bounding box
@@ -61,7 +61,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('adds keyframe with K shortcut', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('adds keyframe with K shortcut', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -82,7 +82,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('saves annotation successfully', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('saves annotation successfully', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -104,7 +104,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     await expect(successMessage.first()).toBeVisible({ timeout: 5000 })
   })
 
-  test('toggles timeline with T shortcut', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('toggles timeline with T shortcut', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -126,7 +126,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     expect(isVisible1).not.toBe(isVisible2)
   })
 
-  test('plays and pauses video with Space', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('plays and pauses video with Space', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -145,7 +145,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     expect(paused).toBe(true)
   })
 
-  test('seeks frames with arrow keys', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('seeks frames with arrow keys', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -175,7 +175,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     expect(frame10).toBe(10)
   })
 
-  test('timeline renders correctly', async ({ annotationWorkspace, testPersona, testEntityType }) => {
+  test('timeline renders correctly', async ({ annotationWorkspace, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -189,7 +189,7 @@ test.describe('Smoke Tests - Critical Path', () => {
     expect(info.canvasHeight).toBeGreaterThan(0)
   })
 
-  test('playhead moves as video plays', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
+  test('playhead moves as video plays', async ({ annotationWorkspace, page, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
     await annotationWorkspace.drawSimpleBoundingBox()
 

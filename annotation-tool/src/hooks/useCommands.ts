@@ -146,7 +146,8 @@ export function useCommands(
     return () => {
       disposables.forEach(d => d.dispose())
     }
-  }, [enabled]) // handlers intentionally excluded to prevent re-registration
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handlers intentionally excluded to prevent re-registration
+  }, [enabled])
 
   // Register keyboard shortcuts once
   useEffect(() => {

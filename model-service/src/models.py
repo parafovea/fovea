@@ -25,10 +25,12 @@ class SummarizeRequest(BaseModel):
     # Audio configuration
     enable_audio: bool = Field(default=False, description="Enable audio transcription")
     audio_language: str | None = Field(default=None, description="Audio language code (e.g., 'en')")
-    enable_speaker_diarization: bool = Field(default=False, description="Enable speaker identification")
-    fusion_strategy: Literal["sequential", "timestamp_aligned", "native_multimodal", "hybrid"] | None = Field(
-        default="sequential", description="Audio-visual fusion strategy"
+    enable_speaker_diarization: bool = Field(
+        default=False, description="Enable speaker identification"
     )
+    fusion_strategy: Literal[
+        "sequential", "timestamp_aligned", "native_multimodal", "hybrid"
+    ] | None = Field(default="sequential", description="Audio-visual fusion strategy")
 
 
 class KeyFrame(BaseModel):
@@ -63,15 +65,23 @@ class SummarizeResponse(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Overall confidence score")
 
     # Audio metadata fields
-    transcript_json: dict[str, Any] | None = Field(default=None, description="Structured transcript with segments")
+    transcript_json: dict[str, Any] | None = Field(
+        default=None, description="Structured transcript with segments"
+    )
     audio_language: str | None = Field(default=None, description="Detected audio language code")
     speaker_count: int | None = Field(default=None, description="Number of distinct speakers")
     audio_model_used: str | None = Field(default=None, description="Audio transcription model name")
     visual_model_used: str | None = Field(default=None, description="Visual analysis model name")
     fusion_strategy: str | None = Field(default=None, description="Fusion strategy used")
-    processing_time_audio: float | None = Field(default=None, description="Audio processing time in seconds")
-    processing_time_visual: float | None = Field(default=None, description="Visual processing time in seconds")
-    processing_time_fusion: float | None = Field(default=None, description="Fusion processing time in seconds")
+    processing_time_audio: float | None = Field(
+        default=None, description="Audio processing time in seconds"
+    )
+    processing_time_visual: float | None = Field(
+        default=None, description="Visual processing time in seconds"
+    )
+    processing_time_fusion: float | None = Field(
+        default=None, description="Fusion processing time in seconds"
+    )
 
 
 class OntologyType(BaseModel):

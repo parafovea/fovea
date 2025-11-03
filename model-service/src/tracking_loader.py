@@ -641,7 +641,7 @@ class YOLO11SegLoader(TrackingModelLoader):
             logger.error(f"Failed to load YOLO11n-seg: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
-    def track(  # noqa: PLR0912
+    def track(
         self,
         frames: list[Image.Image],
         initial_masks: list[np.ndarray[Any, np.dtype[np.uint8]]],

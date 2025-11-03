@@ -5,9 +5,9 @@ test.describe('Event Management', () => {
 
   test('creates event with name and description', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -23,8 +23,8 @@ test.describe('Event Management', () => {
 
   test('validates event name is required', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
+    _testPersona,
+    _testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -56,9 +56,9 @@ test.describe('Event Management', () => {
 
   test('edits event details', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -70,9 +70,9 @@ test.describe('Event Management', () => {
 
   test('deletes event', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -87,9 +87,9 @@ test.describe('Event Management', () => {
 
   test('searches events by name', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -103,9 +103,9 @@ test.describe('Event Management', () => {
 
   test('searches events by description', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -119,9 +119,9 @@ test.describe('Event Management', () => {
 
   test('links event to event type', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     testEventType,
-    page
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.createEvent('Test Event', 'A test event')
@@ -131,10 +131,10 @@ test.describe('Event Management', () => {
 
   test('adds participants to event', async ({
     objectWorkspace,
-    testPersona,
-    testEntityType,
-    testRoleType,
-    page
+    _testPersona,
+    _testEntityType,
+    _testRoleType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -154,8 +154,8 @@ test.describe('Event Management', () => {
 
   test('adds event location', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -174,8 +174,8 @@ test.describe('Event Management', () => {
 
   test('adds event time', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
 
@@ -194,8 +194,8 @@ test.describe('Event Management', () => {
 
   test('adds Wikidata reference', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies event creation (Wikidata search requires UI implementation)
     await objectWorkspace.navigateTo()
@@ -206,8 +206,8 @@ test.describe('Event Management', () => {
 
   test('adds event to collection', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')
@@ -229,8 +229,8 @@ test.describe('Event Management', () => {
 
   test('displays event count in tab', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
+    _testPersona,
+    _testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -249,8 +249,8 @@ test.describe('Event Management', () => {
 
   test('events persist across reload', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
+    _testPersona,
+    _testEventType,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -276,9 +276,9 @@ test.describe('Event Management', () => {
 
   test('creates multiple events', async ({
     objectWorkspace,
-    testPersona,
-    testEventType,
-    page
+    _testPersona,
+    _testEventType,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('events')

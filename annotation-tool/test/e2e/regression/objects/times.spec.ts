@@ -5,8 +5,8 @@ test.describe('Time Management', () => {
 
   test('creates simple time (instant)', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('times')
@@ -19,8 +19,8 @@ test.describe('Time Management', () => {
 
   test('creates timespan (start/end)', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('times')
@@ -37,8 +37,8 @@ test.describe('Time Management', () => {
 
   test('creates fuzzy time (circa)', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('times')
@@ -55,8 +55,8 @@ test.describe('Time Management', () => {
 
   test('creates recurring time pattern', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies time creation (recurring patterns require UI implementation)
     await objectWorkspace.navigateTo()
@@ -67,7 +67,7 @@ test.describe('Time Management', () => {
 
   test('edits time object', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -95,8 +95,8 @@ test.describe('Time Management', () => {
 
   test('deletes time object', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('times')
@@ -111,8 +111,8 @@ test.describe('Time Management', () => {
 
   test('validates time format', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies time creation with valid format
     await objectWorkspace.navigateTo()
@@ -123,7 +123,7 @@ test.describe('Time Management', () => {
 
   test('times persist across reload', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -150,7 +150,7 @@ test.describe('Time Management', () => {
 
   test('displays time count in tab', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -169,8 +169,8 @@ test.describe('Time Management', () => {
 
   test('links time to Wikidata temporal', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies time creation (Wikidata integration requires UI implementation)
     await objectWorkspace.navigateTo()

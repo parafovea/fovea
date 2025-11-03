@@ -1,13 +1,14 @@
 """Tests for ExternalModelRouter."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from src.external_apis.router import ExternalModelRouter
-from src.external_apis.base import ExternalAPIConfig
+import pytest
+
 from src.external_apis.anthropic_client import AnthropicClient
-from src.external_apis.openai_client import OpenAIClient
+from src.external_apis.base import ExternalAPIConfig
 from src.external_apis.google_client import GoogleClient
+from src.external_apis.openai_client import OpenAIClient
+from src.external_apis.router import ExternalModelRouter
 
 
 @pytest.fixture
@@ -29,7 +30,9 @@ def test_config() -> ExternalAPIConfig:
 
 
 @pytest.mark.asyncio
-async def test_get_client_anthropic(router: ExternalModelRouter, test_config: ExternalAPIConfig) -> None:
+async def test_get_client_anthropic(
+    router: ExternalModelRouter, test_config: ExternalAPIConfig
+) -> None:
     """Test getting Anthropic client."""
     client = router.get_client(test_config, "anthropic")
     assert isinstance(client, AnthropicClient)
@@ -37,7 +40,9 @@ async def test_get_client_anthropic(router: ExternalModelRouter, test_config: Ex
 
 
 @pytest.mark.asyncio
-async def test_get_client_openai(router: ExternalModelRouter, test_config: ExternalAPIConfig) -> None:
+async def test_get_client_openai(
+    router: ExternalModelRouter, test_config: ExternalAPIConfig
+) -> None:
     """Test getting OpenAI client."""
     client = router.get_client(test_config, "openai")
     assert isinstance(client, OpenAIClient)
@@ -45,7 +50,9 @@ async def test_get_client_openai(router: ExternalModelRouter, test_config: Exter
 
 
 @pytest.mark.asyncio
-async def test_get_client_google(router: ExternalModelRouter, test_config: ExternalAPIConfig) -> None:
+async def test_get_client_google(
+    router: ExternalModelRouter, test_config: ExternalAPIConfig
+) -> None:
     """Test getting Google client."""
     client = router.get_client(test_config, "google")
     assert isinstance(client, GoogleClient)
@@ -84,12 +91,16 @@ async def test_generate_text(router: ExternalModelRouter, test_config: ExternalA
 
 
 @pytest.mark.asyncio
-async def test_generate_from_images(router: ExternalModelRouter, test_config: ExternalAPIConfig) -> None:
+async def test_generate_from_images(
+    router: ExternalModelRouter, test_config: ExternalAPIConfig
+) -> None:
     """Test image generation routing."""
     mock_image = b"\x89PNG\r\n\x1a\n"
     mock_response = {"text": "Image analysis", "usage": {}, "model": "test-model"}
 
-    with patch.object(OpenAIClient, "generate_from_images", new_callable=AsyncMock) as mock_generate:
+    with patch.object(
+        OpenAIClient, "generate_from_images", new_callable=AsyncMock
+    ) as mock_generate:
         mock_generate.return_value = mock_response
 
         result = await router.generate_from_images(
@@ -118,9 +129,9 @@ async def test_close_all(router: ExternalModelRouter, test_config: ExternalAPICo
     router.get_client(test_config, "anthropic")
     router.get_client(test_config, "openai")
 
-    with patch.object(AnthropicClient, "close", new_callable=AsyncMock) as mock_close1, patch.object(
+    with patch.object(AnthropicClient, "close", new_callable=AsyncMock), patch.object(
         OpenAIClient, "close", new_callable=AsyncMock
-    ) as mock_close2:
+    ):
         await router.close_all()
 
         assert len(router._clients) == 0

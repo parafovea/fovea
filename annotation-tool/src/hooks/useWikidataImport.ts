@@ -50,7 +50,7 @@ interface UndoEntry {
   type: ImportType
   personaId?: string
   timestamp: number
-  timeout: NodeJS.Timeout
+  timeout: ReturnType<typeof setTimeout>
 }
 
 const UNDO_TIMEOUT_MS = 10000 // 10 seconds

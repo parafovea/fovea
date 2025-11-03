@@ -6,9 +6,8 @@ API for accurate audio transcription with speaker diarization support.
 
 import asyncio
 import logging
-from pathlib import Path
 
-import azure.cognitiveservices.speech as speechsdk
+import azure.cognitiveservices.speech as speechsdk  # type: ignore[import-untyped]
 
 from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
 
@@ -68,9 +67,7 @@ class AzureSpeechClient(AudioAPIClient):
         try:
             logger.info(f"Transcribing audio with Azure Speech: {audio_path}")
 
-            speech_config = speechsdk.SpeechConfig(
-                subscription=self.api_key, region=self.region
-            )
+            speech_config = speechsdk.SpeechConfig(subscription=self.api_key, region=self.region)
             speech_config.speech_recognition_language = language or "en-US"
             speech_config.output_format = speechsdk.OutputFormat.Detailed
 
@@ -89,21 +86,21 @@ class AzureSpeechClient(AudioAPIClient):
             results = []
             done = asyncio.Event()
 
-            def recognized_cb(evt: speechsdk.SpeechRecognitionEventArgs) -> None:
+            def recognized_cb(evt: speechsdk.SpeechRecognitionEventArgs) -> None:  # type: ignore[no-any-unimported]
                 if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
                     results.append(evt.result)
 
-            def canceled_cb(evt: speechsdk.SpeechRecognitionCanceledEventArgs) -> None:
+            def canceled_cb(evt: speechsdk.SpeechRecognitionCanceledEventArgs) -> None:  # type: ignore[no-any-unimported]
                 if evt.reason == speechsdk.CancellationReason.Error:
                     logger.error(f"Azure Speech recognition error: {evt.error_details}")
                 done.set()
 
-            def stopped_cb(evt: speechsdk.SessionEventArgs) -> None:
+            def stopped_cb(evt: speechsdk.SessionEventArgs) -> None:  # type: ignore[no-any-unimported]
                 done.set()
 
-            speech_recognizer.recognized.connect(recognized_cb)
-            speech_recognizer.canceled.connect(canceled_cb)
-            speech_recognizer.session_stopped.connect(stopped_cb)
+            speech_recognizer.recognized.connect(recognized_cb)  # type: ignore[no-any-unimported]
+            speech_recognizer.canceled.connect(canceled_cb)  # type: ignore[no-any-unimported]
+            speech_recognizer.session_stopped.connect(stopped_cb)  # type: ignore[no-any-unimported]
 
             speech_recognizer.start_continuous_recognition()
 

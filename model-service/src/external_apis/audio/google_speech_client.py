@@ -6,7 +6,6 @@ for accurate audio transcription with speaker diarization support.
 
 import asyncio
 import logging
-from pathlib import Path
 
 from google.cloud import speech_v2
 
@@ -100,7 +99,7 @@ class GoogleSpeechClient(AudioAPIClient):
             segments = []
             full_text_parts = []
 
-            for result in response.results:
+            for result in response.results:  # type: ignore[attr-defined]
                 if not result.alternatives:
                     continue
 
@@ -109,11 +108,13 @@ class GoogleSpeechClient(AudioAPIClient):
 
                 if enable_diarization and alternative.words:
                     current_speaker = None
-                    current_segment_words = []
+                    current_segment_words: list[str] = []
                     segment_start = 0.0
 
                     for word_info in alternative.words:
-                        word_speaker = word_info.speaker_label if hasattr(word_info, "speaker_label") else None
+                        word_speaker = (
+                            word_info.speaker_label if hasattr(word_info, "speaker_label") else None
+                        )
 
                         if word_speaker != current_speaker and current_segment_words:
                             segments.append(
@@ -122,7 +123,9 @@ class GoogleSpeechClient(AudioAPIClient):
                                     end=word_info.start_offset.total_seconds(),
                                     text=" ".join(current_segment_words),
                                     confidence=alternative.confidence,
-                                    speaker=f"SPEAKER_{current_speaker}" if current_speaker else None,
+                                    speaker=f"SPEAKER_{current_speaker}"
+                                    if current_speaker
+                                    else None,
                                 )
                             )
                             current_segment_words = []

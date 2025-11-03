@@ -228,7 +228,7 @@ async def extract_audio_segment(
 
             return output_path
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise AudioProcessingError("Segment extraction timed out after 60s") from e
         except Exception as e:
             raise AudioProcessingError(f"Segment extraction failed: {e}") from e
@@ -357,8 +357,8 @@ async def load_audio_array(
                 error_msg = stderr.decode() if stderr else "Unknown error"
                 raise AudioProcessingError(f"FFmpeg failed: {error_msg}")
 
-            audio_array = np.frombuffer(stdout, dtype=np.int16)
-            audio_array = audio_array.astype(np.float32) / 32768.0
+            audio_int16 = np.frombuffer(stdout, dtype=np.int16)
+            audio_array: NDArray[np.float32] = audio_int16.astype(np.float32) / 32768.0
 
             span.set_attribute("audio.array_length", len(audio_array))
 
@@ -498,7 +498,7 @@ async def extract_audio_track(
 
             return output_path
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise AudioProcessingError("Audio extraction timed out after 300s") from e
         except Exception as e:
             raise AudioProcessingError(f"Audio extraction failed: {e}") from e

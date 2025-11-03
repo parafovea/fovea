@@ -1,4 +1,4 @@
-import { Page, expect, Locator } from '@playwright/test'
+import { Page, expect } from '@playwright/test'
 import { BasePage } from './base/BasePage.js'
 
 /**
@@ -162,7 +162,7 @@ export class ObjectWorkspacePage extends BasePage {
     await this.saveForm()
   }
 
-  async addEntityToCollection(entityName: string, collectionName: string) {
+  async addEntityToCollection(entityName: string, _collectionName: string) {
     // Placeholder for collection functionality
     await this.selectTab('entities')
     await this.expectEntityExists(entityName)
@@ -792,10 +792,6 @@ export class ObjectWorkspacePage extends BasePage {
     const memberChipsInAutocomplete = autocompleteContainer.locator('.MuiChip-root').filter({
       has: this.page.locator('.MuiChip-deleteIcon')
     })
-    const chipTexts = await memberChipsInAutocomplete.allTextContents()
-
-    // Identify members to keep (all except the one to remove)
-    const membersToKeep = chipTexts.filter(text => !text.includes(memberNameToRemove))
 
     // Find and click the delete icon for the chip to remove
     const chipToRemove = memberChipsInAutocomplete.filter({ hasText: memberNameToRemove }).first()
@@ -870,7 +866,7 @@ export class ObjectWorkspacePage extends BasePage {
   }
 
   // Helper Methods
-  private async fillEntityForm(name: string, description: string, entityTypeName?: string) {
+  private async fillEntityForm(name: string, description: string, _entityTypeName?: string) {
     await this.wait(500)
 
     const dialog = this.page.locator('[role="dialog"]')
@@ -890,7 +886,7 @@ export class ObjectWorkspacePage extends BasePage {
     }
   }
 
-  private async fillEventForm(name: string, description: string, eventTypeName?: string) {
+  private async fillEventForm(name: string, description: string, _eventTypeName?: string) {
     await this.wait(500)
 
     const dialog = this.page.locator('[role="dialog"]')

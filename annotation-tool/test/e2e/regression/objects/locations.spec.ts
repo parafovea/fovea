@@ -5,8 +5,8 @@ test.describe('Location Management', () => {
 
   test('creates location with name and coordinates', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('locations')
@@ -19,7 +19,7 @@ test.describe('Location Management', () => {
 
   test('edits location on map', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     // Basic test - verifies location creation and that edit dialog opens
@@ -66,7 +66,7 @@ test.describe('Location Management', () => {
 
   test('validates location name is required', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -98,8 +98,8 @@ test.describe('Location Management', () => {
 
   test('deletes location', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('locations')
@@ -114,8 +114,8 @@ test.describe('Location Management', () => {
 
   test('searches locations by name', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('locations')
@@ -129,8 +129,8 @@ test.describe('Location Management', () => {
 
   test('links location to Wikidata place', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies location creation (Wikidata search requires UI implementation)
     await objectWorkspace.navigateTo()
@@ -141,8 +141,8 @@ test.describe('Location Management', () => {
 
   test('displays location on map', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     // Basic test - verifies location creation (map rendering verification requires UI implementation)
     await objectWorkspace.navigateTo()
@@ -153,8 +153,8 @@ test.describe('Location Management', () => {
 
   test('adds location description', async ({
     objectWorkspace,
-    testPersona,
-    page
+    _testPersona,
+    _page
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.selectTab('locations')
@@ -165,7 +165,7 @@ test.describe('Location Management', () => {
 
   test('locations persist across reload', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()
@@ -191,7 +191,7 @@ test.describe('Location Management', () => {
 
   test('displays location count in tab', async ({
     objectWorkspace,
-    testPersona,
+    _testPersona,
     page
   }) => {
     await objectWorkspace.navigateTo()

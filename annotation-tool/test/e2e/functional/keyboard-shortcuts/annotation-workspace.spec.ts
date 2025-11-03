@@ -13,11 +13,11 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
-  test.beforeEach(async ({ annotationWorkspace, testVideo, testUser, testPersona, testEntityType }) => {
+  test.beforeEach(async ({ annotationWorkspace, testVideo, _testUser, _testPersona, _testEntityType }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
   })
 
-  test('K adds keyframe at current frame', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('K adds keyframe at current frame', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -38,7 +38,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('T toggles timeline visibility', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('T toggles timeline visibility', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -64,7 +64,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     expect(isVisible).toBe(!newVisible)
   })
 
-  test('V toggles annotation visibility', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('V toggles annotation visibility', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -79,7 +79,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     // This test verifies the command executes without error
   })
 
-  test('C copies previous keyframe', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('C copies previous keyframe', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -99,7 +99,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('Delete removes keyframe', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('Delete removes keyframe', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -135,7 +135,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
-  test('shortcuts work after selecting annotation', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('shortcuts work after selecting annotation', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw and save annotation
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -155,7 +155,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     await expect(timeline).toBeVisible()
   })
 
-  test('shortcuts disabled when typing in annotation label', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
+  test('shortcuts disabled when typing in annotation label', async ({ page, annotationWorkspace, _testUser, _testPersona, _testEntityType }) => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
@@ -178,7 +178,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     }
   })
 
-  test('Space shortcut specific to annotation workspace', async ({ page, annotationWorkspace, testUser }) => {
+  test('Space shortcut specific to annotation workspace', async ({ page, _annotationWorkspace, _testUser }) => {
     const video = page.locator('video')
 
     // Ensure video paused

@@ -13,7 +13,7 @@ interface ModelSummarizeResponse {
   audio_transcript: string;
   key_frames: number[];
   confidence: number;
-  transcript_json?: any;
+  transcript_json?: Record<string, unknown>;
   audio_language?: string;
   speaker_count?: number;
   audio_model_used?: string;
@@ -22,6 +22,19 @@ interface ModelSummarizeResponse {
   processing_time_audio?: number;
   processing_time_visual?: number;
   processing_time_fusion?: number;
+}
+
+interface ModelSummarizeRequest {
+  video_id: string;
+  persona_id: string;
+  frame_sample_rate: number;
+  max_frames: number;
+  persona_role: string | null;
+  information_need: string | null;
+  enable_audio?: boolean;
+  enable_speaker_diarization?: boolean;
+  fusion_strategy?: string;
+  audio_language?: string;
 }
 
 /**
@@ -161,7 +174,7 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
     const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
     const modelStartTime = Date.now();
 
-    const requestBody: any = {
+    const requestBody: ModelSummarizeRequest = {
       video_id: videoId,
       persona_id: personaId,
       frame_sample_rate: frameSampleRate,
@@ -221,7 +234,8 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
-        transcriptJson: modelResponse.transcript_json || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any for complex objects
+        transcriptJson: modelResponse.transcript_json as any || undefined,
         audioLanguage: modelResponse.audio_language || undefined,
         speakerCount: modelResponse.speaker_count || undefined,
         audioModelUsed: modelResponse.audio_model_used || undefined,
@@ -240,7 +254,8 @@ export const videoWorker = new Worker<VideoSummarizationJobData, VideoSummarizat
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
         confidence: modelResponse.confidence,
-        transcriptJson: modelResponse.transcript_json || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any for complex objects
+        transcriptJson: modelResponse.transcript_json as any || undefined,
         audioLanguage: modelResponse.audio_language || undefined,
         speakerCount: modelResponse.speaker_count || undefined,
         audioModelUsed: modelResponse.audio_model_used || undefined,

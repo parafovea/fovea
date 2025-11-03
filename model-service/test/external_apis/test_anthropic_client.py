@@ -1,8 +1,9 @@
 """Tests for Anthropic API client."""
 
-import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
 
 from src.external_apis.anthropic_client import AnthropicClient
 from src.external_apis.base import ExternalAPIConfig
@@ -173,6 +174,8 @@ async def test_generate_from_images_jpeg(anthropic_client: AnthropicClient) -> N
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
-        result = await anthropic_client.generate_from_images([mock_image], "Describe", max_tokens=100)
+        result = await anthropic_client.generate_from_images(
+            [mock_image], "Describe", max_tokens=100
+        )
 
         assert result["text"] == "JPEG analysis"

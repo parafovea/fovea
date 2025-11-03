@@ -3,6 +3,19 @@ import { FastifyPluginAsync } from 'fastify'
 import { optionalAuth, requireAdmin } from '../middleware/auth.js'
 
 /**
+ * Request body for world state update endpoint.
+ */
+interface WorldStateUpdateBody {
+  entities?: unknown[];
+  events?: unknown[];
+  times?: unknown[];
+  entityCollections?: unknown[];
+  eventCollections?: unknown[];
+  timeCollections?: unknown[];
+  relations?: unknown[];
+}
+
+/**
  * Fastify plugin for world state routes.
  * Provides GET and PUT operations for user's world state (entities, events, times, collections, relations).
  * World state is user-scoped and shared across all personas.
@@ -162,29 +175,43 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(401).send({ error: 'Authentication required' })
     }
 
-    const updateData = request.body as any
+    const updateData = request.body as WorldStateUpdateBody
 
     // Upsert world state (create if doesn't exist, update if it does)
     const worldState = await fastify.prisma.worldState.upsert({
       where: { userId },
       create: {
         userId,
-        entities: updateData.entities || [],
-        events: updateData.events || [],
-        times: updateData.times || [],
-        entityCollections: updateData.entityCollections || [],
-        eventCollections: updateData.eventCollections || [],
-        timeCollections: updateData.timeCollections || [],
-        relations: updateData.relations || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        entities: (updateData.entities || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        events: (updateData.events || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        times: (updateData.times || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        entityCollections: (updateData.entityCollections || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        eventCollections: (updateData.eventCollections || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        timeCollections: (updateData.timeCollections || []) as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        relations: (updateData.relations || []) as any
       },
       update: {
-        entities: updateData.entities !== undefined ? updateData.entities : undefined,
-        events: updateData.events !== undefined ? updateData.events : undefined,
-        times: updateData.times !== undefined ? updateData.times : undefined,
-        entityCollections: updateData.entityCollections !== undefined ? updateData.entityCollections : undefined,
-        eventCollections: updateData.eventCollections !== undefined ? updateData.eventCollections : undefined,
-        timeCollections: updateData.timeCollections !== undefined ? updateData.timeCollections : undefined,
-        relations: updateData.relations !== undefined ? updateData.relations : undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        entities: updateData.entities !== undefined ? (updateData.entities as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        events: updateData.events !== undefined ? (updateData.events as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        times: updateData.times !== undefined ? (updateData.times as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as any) : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        relations: updateData.relations !== undefined ? (updateData.relations as any) : undefined
       }
     })
 

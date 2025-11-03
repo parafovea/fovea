@@ -4,6 +4,17 @@ import { z } from 'zod'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 
 /**
+ * Request body for ontology update endpoint.
+ */
+interface OntologyUpdateBody {
+  entities?: unknown[];
+  roles?: unknown[];
+  events?: unknown[];
+  relationTypes?: unknown[];
+  relations?: unknown[];
+}
+
+/**
  * TypeBox schema for Persona response.
  * Defines the structure of persona data returned by the API.
  */
@@ -403,7 +414,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Update ontology for a specific persona.
    */
-  fastify.put<{ Params: { id: string }; Body: any }>('/api/personas/:id/ontology', {
+  fastify.put<{ Params: { id: string }; Body: OntologyUpdateBody }>('/api/personas/:id/ontology', {
     onRequest: [optionalAuth],
     schema: {
       description: 'Update ontology for a specific persona',
@@ -435,7 +446,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
-    const updateData = request.body as any
+    const updateData = request.body
 
     const persona = await fastify.prisma.persona.findUnique({
       where: { id },
@@ -450,10 +461,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     const updatedOntology = await fastify.prisma.ontology.update({
       where: { personaId: id },
       data: {
-        entityTypes: updateData.entities !== undefined ? updateData.entities : persona.ontology.entityTypes,
-        roleTypes: updateData.roles !== undefined ? updateData.roles : persona.ontology.roleTypes,
-        eventTypes: updateData.events !== undefined ? updateData.events : persona.ontology.eventTypes,
-        relationTypes: updateData.relationTypes !== undefined ? updateData.relationTypes : persona.ontology.relationTypes
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        entityTypes: updateData.entities !== undefined ? (updateData.entities as any) : persona.ontology.entityTypes,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        roleTypes: updateData.roles !== undefined ? (updateData.roles as any) : persona.ontology.roleTypes,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        eventTypes: updateData.events !== undefined ? (updateData.events as any) : persona.ontology.eventTypes,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        relationTypes: updateData.relationTypes !== undefined ? (updateData.relationTypes as any) : persona.ontology.relationTypes
       }
     })
 

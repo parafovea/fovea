@@ -122,6 +122,14 @@ ignore = [
     "ARG001",  # unused function argument (FastAPI requires signature)
     "ARG002",  # unused method argument (kwargs is standard idiom)
     "PLR0913", # too many arguments (VideoInfo dataclass needs 7 params)
+    "PLR0912", # too many branches (video processing has complex logic)
+    "PLR0915", # too many statements (video processing needs many steps)
+    "PTH123",  # use Path.open (external APIs provide string paths)
+    "PTH110",  # use Path.exists (temp file handling uses os.path)
+    "PTH107",  # use Path.unlink (temp file handling uses os.remove)
+    "S306",    # mktemp usage (needed for temporary audio extraction)
+    "PLR2004", # magic numbers (thresholds like 0.5 are domain-specific)
+    "SIM117",  # nested with statements (clearer error handling)
 ]
 
 [tool.ruff.lint.per-file-ignores]

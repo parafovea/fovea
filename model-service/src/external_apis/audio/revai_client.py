@@ -87,7 +87,7 @@ class RevAIClient(AudioAPIClient):
                     job = response.json()
                     job_id = job["id"]
 
-                job_status = await self._poll_job_status(client, job_id)
+                await self._poll_job_status(client, job_id)
 
                 transcript_response = await client.get(
                     f"{self.BASE_URL}/jobs/{job_id}/transcript",
@@ -170,7 +170,7 @@ class RevAIClient(AudioAPIClient):
                 headers={"Authorization": f"Bearer {self.api_key}"},
             )
             response.raise_for_status()
-            job = response.json()
+            job: dict[str, str] = response.json()  # type: ignore[assignment]
 
             status = job["status"]
 
