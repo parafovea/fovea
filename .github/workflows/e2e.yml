@@ -48,10 +48,10 @@ jobs:
       - name: Run E2E tests (parallel execution with worker isolation)
         working-directory: annotation-tool
         env:
-          BASE_URL: http://localhost:3000
+          E2E_BASE_URL: http://localhost:3000
           CI: true  # Enables workers: 5 in playwright.config.ts
         run: npm run test:e2e
-        timeout-minutes: 15  # Parallel execution with retries and --no-cache builds
+        timeout-minutes: 15  # Parallel execution with retries
 
       - name: Show Docker logs on failure
         if: failure()
