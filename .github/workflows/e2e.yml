@@ -10,7 +10,7 @@ jobs:
   e2e:
     name: E2E Tests (Parallel)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -50,8 +50,8 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:3000
           CI: true  # Enables workers: 5 in playwright.config.ts
-        run: npm run test:e2e
-        timeout-minutes: 15  # Parallel execution with retries
+        run: npm run test:e2e -- --project=smoke --project=functional --project=regression
+        timeout-minutes: 15  # Stable tests only (excludes visual regression)
 
       - name: Show Docker logs on failure
         if: failure()

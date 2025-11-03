@@ -93,8 +93,8 @@ test.describe('Smoke Tests - Critical Path', () => {
     }
     await annotationWorkspace.timeline.addKeyframe()
 
-    // Click save button
-    const saveButton = page.getByRole('button', { name: /save/i })
+    // Click save button (use first() to avoid strict mode violation with multiple Save buttons)
+    const saveButton = page.getByRole('button', { name: /save/i }).first()
     await expect(saveButton).toBeVisible()
     await saveButton.click()
     await page.waitForTimeout(1000)
