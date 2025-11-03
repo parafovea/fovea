@@ -442,6 +442,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           variant="outlined"
           size="small"
           onClick={onClose}
+          aria-label="Hide timeline and show standard controls"
         >
           Hide Timeline
         </Button>

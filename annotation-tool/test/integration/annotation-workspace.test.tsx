@@ -486,11 +486,11 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       fireEvent.click(showButton)
 
       await waitFor(() => {
-        expect(screen.getByText('Hide Timeline')).toBeInTheDocument()
+        expect(screen.getByLabelText('Hide timeline and show standard controls')).toBeInTheDocument()
       })
 
-      // Collapse timeline
-      const hideButton = screen.getByText('Hide Timeline')
+      // Collapse timeline using unique aria-label
+      const hideButton = screen.getByLabelText('Hide timeline and show standard controls')
       fireEvent.click(hideButton)
 
       await waitFor(() => {
