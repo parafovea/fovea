@@ -407,7 +407,7 @@ For sensitive content, use local models instead of external APIs.
 
 ## Next Steps
 
-- **[Audio Transcription](/docs/user-guides/audio/transcription-overview)**: Use external audio transcription services
-- **[Audio-Visual Fusion](/docs/user-guides/audio/fusion-strategies)**: Combine audio and visual analysis
-- **[Video Summarization](/docs/model-service/video-summarization)**: Generate summaries with external VLMs
-- **[API Reference](/docs/api-reference/authentication)**: API key management endpoints
+- **[Audio Transcription](./audio/transcription-overview.md)**: Use external audio transcription services
+- **[Audio-Visual Fusion](./audio/fusion-strategies.md)**: Combine audio and visual analysis
+- **[Video Summarization](../model-service/video-summarization.md)**: Generate summaries with external VLMs
+- **[API Reference](../api-reference/authentication.md)**: API key management endpoints

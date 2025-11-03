@@ -402,7 +402,7 @@ Local transcription models require GPU memory:
 
 ## See Also
 
-- [Audio Transcription User Guide](../user-guides/audio/transcription-overview)
-- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies)
-- [External API Configuration](../user-guides/external-apis)
-- [Video Summarization API](./video-summarization)
+- [Audio Transcription User Guide](../user-guides/audio/transcription-overview.md)
+- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies.md)
+- [External API Configuration](../user-guides/external-apis.md)
+- [Video Summarization API](./video-summarization.md)

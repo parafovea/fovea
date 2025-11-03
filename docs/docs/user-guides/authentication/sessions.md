@@ -260,7 +260,7 @@ Sessions can be used for API access:
 3. Include cookie in subsequent requests
 4. API respects session authentication
 
-See [Authentication API](/docs/api-reference/authentication) for details.
+See [Authentication API](../../api-reference/authentication.md) for details.
 
 ## Administrative Actions
 
@@ -304,6 +304,6 @@ If compromised credentials suspected:
 
 ## Next Steps
 
-- [Managing Users](/docs/user-guides/authentication/managing-users) (Admins)
-- [API Keys](/docs/user-guides/authentication/api-keys)
-- [Authentication API Reference](/docs/api-reference/authentication)
+- [Managing Users](./managing-users.md) (Admins)
+- [API Keys](./api-key-management.md)
+- [Authentication API Reference](../../api-reference/authentication.md)

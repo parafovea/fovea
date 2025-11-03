@@ -288,7 +288,7 @@ POST /api/summarize
 | enable_speaker_diarization | boolean | No | false | Enable speaker identification |
 | fusion_strategy | string \| null | No | "sequential" | Audio-visual fusion strategy: "sequential", "timestamp_aligned", "native_multimodal", "hybrid" |
 
-See the [Audio Transcription API](/docs/api-reference/audio-transcription) for detailed audio parameter documentation.
+See the [Audio Transcription API](../api-reference/audio-transcription.md) for detailed audio parameter documentation.
 
 ### Response
 
@@ -723,8 +723,8 @@ curl -X POST http://localhost:8000/api/summarize \
 
 ## Next Steps
 
-- [Audio Transcription API](/docs/api-reference/audio-transcription) - Add audio transcription to summaries
-- [Audio-Visual Fusion Strategies](/docs/user-guides/audio/fusion-strategies) - Learn about fusion approaches
+- [Audio Transcription API](../api-reference/audio-transcription.md) - Add audio transcription to summaries
+- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies.md) - Learn about fusion approaches
 - [Configure models](./configuration.md) for your hardware
 - [Set up object detection](./object-detection.md)
 - [Enable video tracking](./video-tracking.md)

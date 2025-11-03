@@ -136,7 +136,7 @@ API keys are user-scoped in multi-user mode:
 - Keys encrypted at rest
 - Only last 4 characters displayed
 
-See [API Key Management](/docs/user-guides/authentication/api-keys) for details.
+See [API Key Management](./api-key-management.md) for details.
 
 ## Getting Started
 
@@ -195,7 +195,7 @@ If registration returns 403:
 
 ## Next Steps
 
-- [Managing Users](/docs/user-guides/authentication/managing-users) (Admins)
-- [API Key Management](/docs/user-guides/authentication/api-keys)
-- [Session Management](/docs/user-guides/authentication/sessions)
-- [Deployment Configuration](/docs/deployment/configuration)
+- [Managing Users](./managing-users.md) (Admins)
+- [API Key Management](./api-key-management.md)
+- [Session Management](./sessions.md)
+- [Deployment Configuration](../../deployment/configuration.md)

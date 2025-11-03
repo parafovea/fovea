@@ -915,9 +915,9 @@ If summaries lack detail or miss key information:
 
 ## See Also
 
-- [Audio Transcription API](./audio-transcription) - Audio processing details
-- [Personas API](./personas) - Creating and managing personas
-- [Videos API](./videos) - Video upload and metadata
-- [Model Management API](./model-management) - Configuring VLM models
-- [External API Integration](../concepts/external-api-integration) - Using cloud-based models
-- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies) - Fusion strategy details
+- [Audio Transcription API](./audio-transcription.md) - Audio processing details
+- [Personas API](./personas.md) - Creating and managing personas
+- [Videos API](./videos.md) - Video upload and metadata
+- [Model Management API](./model-management.md) - Configuring VLM models
+- [External API Integration](../concepts/external-api-integration.md) - Using cloud-based models
+- [Audio-Visual Fusion Strategies](../user-guides/audio/fusion-strategies.md) - Fusion strategy details

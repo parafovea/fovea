@@ -153,7 +153,7 @@ Number of configured API keys. User keys override system keys for model service 
 
 ## Managing Sessions
 
-See [Session Management](/docs/user-guides/authentication/sessions) for detailed session administration.
+See [Session Management](./sessions.md) for detailed session administration.
 
 Quick actions:
 - View all active sessions
@@ -237,5 +237,5 @@ When a team member leaves:
 ## API Reference
 
 For programmatic user management, see:
-- [Authentication API Reference](/docs/api-reference/authentication)
+- [Authentication API Reference](../../api-reference/authentication.md)
 - User Management endpoints (`/api/admin/users/*`)

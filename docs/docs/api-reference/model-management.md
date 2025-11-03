@@ -627,8 +627,8 @@ Configuration changes are stored in the model service but may be reset on restar
 
 ## See Also
 
-- [Model Service Configuration](../model-service/configuration) - Configuration file format
-- [Video Summarization](../model-service/video-summarization) - VLM models and parameters
-- [Object Detection](../model-service/object-detection) - Detection models and usage
-- [Video Tracking](../model-service/video-tracking) - Tracking models and configuration
-- [External API Integration](../concepts/external-api-integration) - Cloud-based models
+- [Model Service Configuration](../model-service/configuration.md) - Configuration file format
+- [Video Summarization](../model-service/video-summarization.md) - VLM models and parameters
+- [Object Detection](../model-service/object-detection.md) - Detection models and usage
+- [Video Tracking](../model-service/video-tracking.md) - Tracking models and configuration
+- [External API Integration](../concepts/external-api-integration.md) - Cloud-based models

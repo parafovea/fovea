@@ -69,7 +69,7 @@ External APIs provide high-quality transcription without local infrastructure:
 - Require specialized features (sentiment, entities)
 - Occasional transcription needs (pay-per-use)
 
-See [Configuring External APIs](/docs/user-guides/external-apis) for setup instructions.
+See [Configuring External APIs](../external-apis.md) for setup instructions.
 
 ## Enabling Audio Transcription
 
@@ -86,7 +86,7 @@ If using external transcription services, configure your API key first:
 5. Enter your API key
 6. Click **Save**
 
-See [External API Configuration](/docs/user-guides/external-apis) for provider-specific setup.
+See [External API Configuration](../external-apis.md) for provider-specific setup.
 
 ### Step 2: Generate Summary with Audio
 
@@ -97,7 +97,7 @@ See [External API Configuration](/docs/user-guides/external-apis) for provider-s
 5. Configure audio options:
    - **Language**: Specify language code (e.g., "en", "es") or leave blank for auto-detection
    - **Speaker Diarization**: Enable to identify different speakers
-   - **Fusion Strategy**: Choose how audio and visual analysis are combined (see [Fusion Strategies](/docs/user-guides/audio/fusion-strategies))
+   - **Fusion Strategy**: Choose how audio and visual analysis are combined (see [Fusion Strategies](./fusion-strategies.md))
 6. Click **Generate** to start processing
 
 The system processes audio in the background. Progress updates appear in the UI.
@@ -286,7 +286,7 @@ Transcripts are saved as part of the video summary in JSON format. Export the su
 
 ## Next Steps
 
-- **[Audio-Visual Fusion Strategies](/docs/user-guides/audio/fusion-strategies)**: Learn how audio and visual analysis are combined
-- **[External API Configuration](/docs/user-guides/external-apis)**: Set up external transcription providers
-- **[Video Summarization](/docs/model-service/video-summarization)**: Understand the full summarization workflow
-- **[API Reference: Audio Transcription](/docs/api-reference/audio-transcription)**: Technical API documentation
+- **[Audio-Visual Fusion Strategies](./fusion-strategies.md)**: Learn how audio and visual analysis are combined
+- **[External API Configuration](../external-apis.md)**: Set up external transcription providers
+- **[Video Summarization](../../model-service/video-summarization.md)**: Understand the full summarization workflow
+- **[API Reference: Audio Transcription](../../api-reference/audio-transcription.md)**: Technical API documentation

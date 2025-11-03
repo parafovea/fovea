@@ -188,7 +188,7 @@ Frontend                Backend               Model Service         External API
 
 ## API Endpoints
 
-For programmatic access, see the [Authentication API Reference](../../api-reference/authentication#api-key-endpoints).
+For programmatic access, see the [Authentication API Reference](../../api-reference/authentication.md#api-key-endpoints).
 
 **User Endpoints:**
 - `GET /api/api-keys` - List your API keys
@@ -242,8 +242,8 @@ Usage is only tracked when the key is actually used for an API call.
 
 ## See Also
 
-- [Authentication Overview](./overview) - Authentication system architecture
-- [User Management](./managing-users) - Creating and managing user accounts
-- [External API Configuration](../external-apis) - Configuring external providers
-- [External API Integration](../../concepts/external-api-integration) - Technical architecture
-- [Environment Variables](../../reference/environment-variables) - Environment-based key configuration
+- [Authentication Overview](./overview.md) - Authentication system architecture
+- [User Management](./managing-users.md) - Creating and managing user accounts
+- [External API Configuration](../external-apis.md) - Configuring external providers
+- [External API Integration](../../concepts/external-api-integration.md) - Technical architecture
+- [Environment Variables](../../reference/environment-variables.md) - Environment-based key configuration

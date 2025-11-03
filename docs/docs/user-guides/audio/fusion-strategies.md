@@ -335,7 +335,7 @@ When speaker diarization is enabled:
 
 ## Next Steps
 
-- **[Audio Transcription Overview](/docs/user-guides/audio/transcription-overview)**: Learn about audio transcription capabilities
-- **[External API Configuration](/docs/user-guides/external-apis)**: Set up GPT-4o or Gemini 2.5 Flash for native multimodal
-- **[Video Summarization](/docs/model-service/video-summarization)**: Complete summarization workflow
-- **[API Reference: Audio-Visual Fusion](/docs/api-reference/audio-transcription)**: Technical fusion API documentation
+- **[Audio Transcription Overview](./transcription-overview.md)**: Learn about audio transcription capabilities
+- **[External API Configuration](../external-apis.md)**: Set up GPT-4o or Gemini 2.5 Flash for native multimodal
+- **[Video Summarization](../../model-service/video-summarization.md)**: Complete summarization workflow
+- **[API Reference: Audio-Visual Fusion](../../api-reference/audio-transcription.md)**: Technical fusion API documentation
