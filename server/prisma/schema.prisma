@@ -179,7 +179,8 @@ model VideoSummary {
   personaId       String
   persona         Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
 
-  summary         String
+  /// JSON structure: GlossItem[] - array of {type, content, refType?, refPersonaId?, refClaimId?}
+  summary         Json     @default("[]")
   visualAnalysis  String?
   audioTranscript String?
   /// JSON structure for key frame data
@@ -226,6 +227,9 @@ model VideoSummary {
 
   /// Relation to Claim model
   claims          Claim[]
+
+  /// User who created this summary (or service ID for automated summaries)
+  createdBy       String?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

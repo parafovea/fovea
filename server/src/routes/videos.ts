@@ -83,6 +83,28 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
           fastify.log.info({ filename, hasMetadata: !!metadata }, 'Loading video')
 
+          // Persist video to database
+          await fastify.prisma.video.upsert({
+            where: { id },
+            update: {
+              filename,
+              path: filePath,
+              duration: metadata?.duration || null,
+              frameRate: metadata?.fps || null,
+              resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
+              metadata: metadata || null,
+            },
+            create: {
+              id,
+              filename,
+              path: filePath,
+              duration: metadata?.duration || null,
+              frameRate: metadata?.fps || null,
+              resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
+              metadata: metadata || null,
+            },
+          })
+
           // Merge file stats with info.json metadata if available
           const baseData = {
             id,
@@ -154,6 +176,28 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       try {
         const stats = await fs.stat(filePath)
         const metadata = await loadVideoMetadata(filename)
+
+        // Persist video to database
+        await fastify.prisma.video.upsert({
+          where: { id: videoId },
+          update: {
+            filename,
+            path: filePath,
+            duration: metadata?.duration || null,
+            frameRate: metadata?.fps || null,
+            resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
+            metadata: metadata || null,
+          },
+          create: {
+            id: videoId,
+            filename,
+            path: filePath,
+            duration: metadata?.duration || null,
+            frameRate: metadata?.fps || null,
+            resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
+            metadata: metadata || null,
+          },
+        })
 
         const baseData = {
           id: videoId,
@@ -460,6 +504,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   )
+
 }
 
 export default videosRoute

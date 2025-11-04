@@ -36,9 +36,9 @@ const ClaimTextSpanSchema = Type.Object({
 })
 
 /**
- * Claim schema
+ * Claim schema (recursive for subclaims)
  */
-const ClaimSchema = Type.Object({
+const ClaimSchema: any = Type.Recursive(This => Type.Object({
   id: Type.String({ format: 'uuid' }),
   summaryId: Type.String(),
   summaryType: Type.String(),
@@ -57,8 +57,9 @@ const ClaimSchema = Type.Object({
   extractionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdBy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdAt: Type.String({ format: 'date-time' }),
-  updatedAt: Type.String({ format: 'date-time' })
-})
+  updatedAt: Type.String({ format: 'date-time' }),
+  subclaims: Type.Optional(Type.Array(This))
+}))
 
 /**
  * Create claim request schema
@@ -367,7 +368,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         body: CreateClaimSchema,
         response: {
-          201: ClaimSchema,
+          201: Type.Object({
+            claims: Type.Array(ClaimSchema)
+          }),
           400: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
@@ -398,7 +401,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Create claim
-      const claim = await fastify.prisma.claim.create({
+      await fastify.prisma.claim.create({
         data: {
           summaryId,
           summaryType,
@@ -413,7 +416,28 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       // Update denormalized claimsJson
       await updateSummaryClaimsJson(fastify.prisma, summaryId, summaryType)
 
-      return reply.status(201).send(claim)
+      // Fetch and return complete claims tree
+      const claims = await fastify.prisma.claim.findMany({
+        where: {
+          summaryId,
+          summaryType,
+          parentClaimId: null
+        },
+        include: {
+          subclaims: {
+            include: {
+              subclaims: {
+                include: {
+                  subclaims: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: [{ createdAt: 'asc' }]
+      })
+
+      return reply.status(201).send({ claims })
     }
   )
 
@@ -441,7 +465,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         body: UpdateClaimSchema,
         response: {
-          200: ClaimSchema,
+          200: Type.Object({
+            claims: Type.Array(ClaimSchema)
+          }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -460,7 +486,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Update claim
-      const claim = await fastify.prisma.claim.update({
+      await fastify.prisma.claim.update({
         where: { id: claimId },
         data: updateData
       })
@@ -468,7 +494,28 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       // Update denormalized claimsJson
       await updateSummaryClaimsJson(fastify.prisma, summaryId, existingClaim.summaryType)
 
-      return reply.send(claim)
+      // Fetch and return complete claims tree
+      const claims = await fastify.prisma.claim.findMany({
+        where: {
+          summaryId,
+          summaryType: existingClaim.summaryType,
+          parentClaimId: null
+        },
+        include: {
+          subclaims: {
+            include: {
+              subclaims: {
+                include: {
+                  subclaims: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: [{ createdAt: 'asc' }]
+      })
+
+      return reply.send({ claims })
     }
   )
 
@@ -814,6 +861,118 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       return reply.send({ success: true })
+    }
+  )
+
+  /**
+   * Create claim with videoId + personaId (auto-creates VideoSummary if needed)
+   *
+   * @route POST /api/videos/:videoId/personas/:personaId/claims
+   * @param videoId - ID of the video
+   * @param personaId - UUID of the persona
+   * @body CreateClaimSchema (without summaryType, assumed 'video')
+   * @returns Created claim with summaryId
+   */
+  fastify.post<{
+    Params: { videoId: string; personaId: string }
+    Body: Omit<Static<typeof CreateClaimSchema>, 'summaryType'>
+  }>(
+    '/api/videos/:videoId/personas/:personaId/claims',
+    {
+      schema: {
+        description: 'Create claim for video + persona (auto-creates summary if needed)',
+        tags: ['claims'],
+        params: Type.Object({
+          videoId: Type.String(),
+          personaId: Type.String({ format: 'uuid' })
+        }),
+        body: Type.Object({
+          text: Type.String({ minLength: 1 }),
+          gloss: Type.Optional(Type.Array(GlossItemSchema)),
+          parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),
+          textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
+          claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+          claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
+          claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
+          claimEventId: Type.Optional(Type.String({ format: 'uuid' })),
+          claimTimeId: Type.Optional(Type.String({ format: 'uuid' })),
+          claimLocationId: Type.Optional(Type.String({ format: 'uuid' })),
+          confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 }))
+        }),
+        response: {
+          201: Type.Object({
+            claim: ClaimSchema,
+            summaryId: Type.String({ format: 'uuid' })
+          }),
+          400: Type.Object({ error: Type.String() }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { videoId, personaId } = request.params
+      const { text, gloss, parentClaimId, ...rest } = request.body
+
+      // Verify video exists
+      const video = await fastify.prisma.video.findUnique({
+        where: { id: videoId }
+      })
+      if (!video) {
+        return reply.status(404).send({ error: 'Video not found' })
+      }
+
+      // Verify persona exists
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId }
+      })
+      if (!persona) {
+        return reply.status(404).send({ error: 'Persona not found' })
+      }
+
+      // Find or create VideoSummary
+      const summary = await fastify.prisma.videoSummary.upsert({
+        where: {
+          videoId_personaId: {
+            videoId,
+            personaId
+          }
+        },
+        create: {
+          videoId,
+          personaId,
+          summary: [] // Empty summary initially
+        },
+        update: {} // No updates if exists
+      })
+
+      // If parentClaimId provided, verify it exists and belongs to same summary
+      if (parentClaimId) {
+        const parentClaim = await fastify.prisma.claim.findUnique({
+          where: { id: parentClaimId }
+        })
+
+        if (!parentClaim || parentClaim.summaryId !== summary.id) {
+          return reply.status(400).send({ error: 'Invalid parent claim' })
+        }
+      }
+
+      // Create claim
+      const claim = await fastify.prisma.claim.create({
+        data: {
+          summaryId: summary.id,
+          summaryType: 'video',
+          text,
+          gloss: gloss || [],
+          parentClaimId,
+          extractionStrategy: 'manual',
+          ...rest
+        }
+      })
+
+      return reply.status(201).send({
+        claim,
+        summaryId: summary.id
+      })
     }
   )
 }

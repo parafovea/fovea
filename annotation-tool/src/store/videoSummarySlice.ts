@@ -47,16 +47,16 @@ export const fetchVideoSummaryForPersona = createAsyncThunk(
 export const saveVideoSummary = createAsyncThunk(
   'videoSummaries/save',
   async (summary: VideoSummary) => {
-    const url = summary.id 
+    const url = summary.id
       ? `/api/videos/${summary.videoId}/summaries/${summary.id}`
-      : `/api/videos/${summary.videoId}/summaries`
-    
+      : `/api/summaries`
+
     const response = await fetch(url, {
       method: summary.id ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(summary),
     })
-    
+
     if (!response.ok) {
       throw new Error('Failed to save video summary')
     }

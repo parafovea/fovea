@@ -23,24 +23,62 @@ interface SummarizeJobData {
   audioLanguage?: string;
 }
 
+/**
+ * TypeBox schema for GlossItem (rich text format with references).
+ */
+const GlossItemSchema = Type.Object({
+  type: Type.Union([
+    Type.Literal('text'),
+    Type.Literal('typeRef'),
+    Type.Literal('objectRef'),
+    Type.Literal('annotationRef'),
+    Type.Literal('claimRef'),
+  ]),
+  content: Type.String(),
+  refType: Type.Optional(Type.String()),
+  refPersonaId: Type.Optional(Type.String()),
+  refClaimId: Type.Optional(Type.String()),
+})
+
+const KeyFrameSchema = Type.Object({
+  timestamp: Type.Number(),
+  description: Type.String(),
+})
+
+const TranscriptSegmentSchema = Type.Object({
+  start: Type.Number(),
+  end: Type.Number(),
+  text: Type.String(),
+  speaker: Type.Optional(Type.String()),
+  confidence: Type.Optional(Type.Number()),
+  sentiment: Type.Optional(Type.String()),
+})
+
+const TranscriptJsonSchema = Type.Object({
+  segments: Type.Array(TranscriptSegmentSchema),
+  speakers: Type.Optional(Type.Array(Type.String())),
+  language: Type.Optional(Type.String()),
+})
+
 const VideoSummarySchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   videoId: Type.String(),
   personaId: Type.String({ format: 'uuid' }),
-  summary: Type.String(),
-  visualAnalysis: Type.Union([Type.String(), Type.Null()]),
-  audioTranscript: Type.Union([Type.String(), Type.Null()]),
-  keyFrames: Type.Union([Type.Any(), Type.Null()]),
-  confidence: Type.Union([Type.Number({ minimum: 0, maximum: 1 }), Type.Null()]),
-  transcriptJson: Type.Optional(Type.Union([Type.Any(), Type.Null()])),
-  audioLanguage: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  speakerCount: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  audioModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  visualModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  fusionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  processingTimeAudio: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  processingTimeVisual: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  processingTimeFusion: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+  summary: Type.Array(GlossItemSchema),
+  visualAnalysis: Type.Optional(Type.String()),
+  audioTranscript: Type.Optional(Type.String()),
+  keyFrames: Type.Optional(Type.Array(KeyFrameSchema)),
+  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+  transcriptJson: Type.Optional(TranscriptJsonSchema),
+  audioLanguage: Type.Optional(Type.String()),
+  speakerCount: Type.Optional(Type.Number()),
+  audioModelUsed: Type.Optional(Type.String()),
+  visualModelUsed: Type.Optional(Type.String()),
+  fusionStrategy: Type.Optional(Type.String()),
+  processingTimeAudio: Type.Optional(Type.Number()),
+  processingTimeVisual: Type.Optional(Type.Number()),
+  processingTimeFusion: Type.Optional(Type.Number()),
+  createdBy: Type.Optional(Type.String()),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
 })
@@ -262,20 +300,21 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         body: Type.Object({
           videoId: Type.String(),
           personaId: Type.String({ format: 'uuid' }),
-          summary: Type.String(),
-          visualAnalysis: Type.Union([Type.String(), Type.Null()]),
-          audioTranscript: Type.Union([Type.String(), Type.Null()]),
-          keyFrames: Type.Union([Type.Any(), Type.Null()]),
-          confidence: Type.Union([Type.Number(), Type.Null()]),
-          transcriptJson: Type.Optional(Type.Union([Type.Any(), Type.Null()])),
-          audioLanguage: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          speakerCount: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-          audioModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          visualModelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          fusionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-          processingTimeAudio: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-          processingTimeVisual: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-          processingTimeFusion: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+          summary: Type.Array(GlossItemSchema),
+          visualAnalysis: Type.Optional(Type.String()),
+          audioTranscript: Type.Optional(Type.String()),
+          keyFrames: Type.Optional(Type.Array(KeyFrameSchema)),
+          confidence: Type.Optional(Type.Number()),
+          transcriptJson: Type.Optional(TranscriptJsonSchema),
+          audioLanguage: Type.Optional(Type.String()),
+          speakerCount: Type.Optional(Type.Number()),
+          audioModelUsed: Type.Optional(Type.String()),
+          visualModelUsed: Type.Optional(Type.String()),
+          fusionStrategy: Type.Optional(Type.String()),
+          processingTimeAudio: Type.Optional(Type.Number()),
+          processingTimeVisual: Type.Optional(Type.Number()),
+          processingTimeFusion: Type.Optional(Type.Number()),
+          createdBy: Type.Optional(Type.String()),
         }),
         response: {
           201: VideoSummarySchema,
@@ -301,6 +340,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         processingTimeAudio,
         processingTimeVisual,
         processingTimeFusion,
+        createdBy,
       } = request.body
 
       const savedSummary = await fastify.prisma.videoSummary.upsert({
@@ -344,10 +384,55 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           processingTimeAudio: processingTimeAudio || undefined,
           processingTimeVisual: processingTimeVisual || undefined,
           processingTimeFusion: processingTimeFusion || undefined,
+          createdBy: createdBy || undefined,
         },
       })
 
       return reply.status(201).send(savedSummary)
+    }
+  )
+
+  /**
+   * Update a video summary by ID.
+   */
+  fastify.put<{
+    Params: { videoId: string; summaryId: string }
+    Body: { summary: Static<typeof GlossItemSchema>[] }
+  }>(
+    '/api/videos/:videoId/summaries/:summaryId',
+    {
+      schema: {
+        params: Type.Object({
+          videoId: Type.String(),
+          summaryId: Type.String({ format: 'uuid' }),
+        }),
+        body: Type.Object({
+          summary: Type.Array(GlossItemSchema),
+        }),
+        response: {
+          200: VideoSummarySchema,
+          404: Type.Object({ error: Type.String() }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { summaryId } = request.params
+      const { summary } = request.body
+
+      const existing = await fastify.prisma.videoSummary.findUnique({
+        where: { id: summaryId },
+      })
+
+      if (!existing) {
+        return reply.status(404).send({ error: 'Summary not found' })
+      }
+
+      const updated = await fastify.prisma.videoSummary.update({
+        where: { id: summaryId },
+        data: { summary: summary || [] },
+      })
+
+      return reply.send(updated)
     }
   )
 

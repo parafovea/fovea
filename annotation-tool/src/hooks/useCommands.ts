@@ -177,17 +177,16 @@ export function useCommands(
             return
           }
 
-          // Prevent browser default BEFORE checking when clause to avoid browser capture
-          // This ensures shortcuts like Ctrl+N don't open new windows even if when clause fails
-          event.preventDefault()
-          event.stopPropagation()
-
-          // Check if focus is on form element (unless explicitly enabled)
+          // Check if focus is on form element FIRST (unless explicitly enabled)
           const target = event.target as HTMLElement
           const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
           if (isFormElement && !enableOnFormTags) {
             return
           }
+
+          // Prevent browser default to avoid browser capture (e.g., Ctrl+N opening new windows)
+          event.preventDefault()
+          event.stopPropagation()
 
           // Check when clause
           if (command.when && !commandRegistry.evaluateWhenClause(command.when)) {

@@ -1,6 +1,6 @@
 import { Queue, Worker, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import {
   queueJobCounter,
   queueJobDuration,
@@ -138,7 +138,7 @@ export interface VideoSummarizationResult {
   summaryId: string;
   videoId: string;
   personaId: string;
-  summary: string;
+  summary: Prisma.JsonValue;
   visualAnalysis?: string;
   audioTranscript?: string;
   keyFrames?: Array<{
@@ -263,7 +263,8 @@ export const videoWorker = new Worker<
         },
       },
       update: {
-        summary: modelResponse.summary,
+        // Convert text summary to GlossItem[] format
+        summary: [{ type: 'text', content: modelResponse.summary }],
         visualAnalysis: modelResponse.visual_analysis,
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,
@@ -283,7 +284,8 @@ export const videoWorker = new Worker<
       create: {
         videoId,
         personaId,
-        summary: modelResponse.summary,
+        // Convert text summary to GlossItem[] format
+        summary: [{ type: 'text', content: modelResponse.summary }],
         visualAnalysis: modelResponse.visual_analysis,
         audioTranscript: modelResponse.audio_transcript,
         keyFrames: modelResponse.key_frames,

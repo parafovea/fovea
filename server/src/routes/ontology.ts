@@ -238,9 +238,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Use a transaction to ensure atomicity - either all saves succeed or all fail
-    const result = await fastify.prisma.$transaction(async (tx) => {
-      const savedPersonas = []
-      const savedOntologies = []
+    try {
+      const result = await fastify.prisma.$transaction(async (tx) => {
+        const savedPersonas = []
+        const savedOntologies = []
 
       // Save all personas for this user
       for (const persona of personas) {
@@ -322,32 +323,50 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      return { savedPersonas, savedOntologies, savedWorldState }
-    })
+        return { savedPersonas, savedOntologies, savedWorldState }
+      })
 
-    const worldData = result.savedWorldState ? {
-      entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
-      events: (result.savedWorldState.events as Prisma.JsonArray) || [],
-      times: (result.savedWorldState.times as Prisma.JsonArray) || [],
-      entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
-      eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
-      timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
-      relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
-    } : undefined
+      const worldData = result.savedWorldState ? {
+        entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
+        events: (result.savedWorldState.events as Prisma.JsonArray) || [],
+        times: (result.savedWorldState.times as Prisma.JsonArray) || [],
+        entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
+        eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
+        timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
+        relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
+      } : undefined
 
-    return reply.send({
-      personas: result.savedPersonas.map(p => ({
-        id: p.id,
-        name: p.name,
-        role: p.role,
-        informationNeed: p.informationNeed,
-        details: p.details,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString()
-      })),
-      personaOntologies: result.savedOntologies,
-      world: worldData
-    })
+      return reply.send({
+        personas: result.savedPersonas.map(p => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          informationNeed: p.informationNeed,
+          details: p.details,
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString()
+        })),
+        personaOntologies: result.savedOntologies,
+        world: worldData
+      })
+    } catch (error: unknown) {
+      fastify.log.error({ error }, 'Error saving ontology data')
+      if (error instanceof Error) {
+        fastify.log.error(`Error name: ${error.name}`)
+        fastify.log.error(`Error message: ${error.message}`)
+        // Log Prisma-specific error details if available
+        if ('code' in error) {
+          fastify.log.error(`Prisma error code: ${(error as any).code}`)
+        }
+        if ('meta' in error) {
+          fastify.log.error(`Prisma error meta: ${JSON.stringify((error as any).meta)}`)
+        }
+      }
+      return reply.code(500).send({
+        error: 'Failed to save ontology data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   })
 }
 
