@@ -20,10 +20,11 @@ export interface Persona {
 }
 
 export interface GlossItem {
-  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef'
+  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef' | 'claimRef'
   content: string
-  refType?: 'entity' | 'role' | 'event' | 'relation' | 'entity-object' | 'event-object' | 'time-object' | 'location-object' | 'annotation'
+  refType?: 'entity' | 'role' | 'event' | 'relation' | 'entity-object' | 'event-object' | 'time-object' | 'location-object' | 'annotation' | 'claim'
   refPersonaId?: string | null
+  refClaimId?: string  // UUID reference to another claim
 }
 
 export interface TypeConstraint {
@@ -920,4 +921,223 @@ export interface TrackingResponse {
   success: boolean
   tracks: TrackingResult[]
   processingTimeMs: number
+}
+
+// Claims and Subclaims
+
+/**
+ * Types of claim sources
+ * null = standalone claim for reference only (not asserted)
+ * 'author' = video creator explicitly asserts this claim
+ */
+export type ClaimerType =
+  | 'entity'       // Single entity from world state
+  | 'entity_type'  // Entity type from ontology
+  | 'author'       // Video creator explicitly asserts
+  | 'mixed'        // Mix of text, types, and objects
+
+/**
+ * Strategies for extracting claims from summaries
+ */
+export type ExtractionStrategy =
+  | 'sentence-based'        // One claim per sentence, decompose into subclaims
+  | 'semantic-units'        // Extract claims from semantic chunks
+  | 'hierarchical'          // Top-down hierarchical decomposition
+  | 'manual'                // User-created claim
+
+/**
+ * Span within claim text (for discontiguous selections)
+ */
+export interface ClaimSpan {
+  charStart: number
+  charEnd: number
+}
+
+/**
+ * Text span with optional sentence index
+ */
+export interface ClaimTextSpan extends ClaimSpan {
+  sentenceIndex?: number
+}
+
+/**
+ * Claim represents an atomic factual statement from a summary.
+ * Can be hierarchically decomposed into subclaims.
+ */
+export interface Claim {
+  id: string
+  summaryId: string
+  summaryType: 'video' | 'collection'
+
+  // Content (supports #/@/^/$ references)
+  text: string
+  gloss: GlossItem[]
+
+  // Hierarchy (parent/child decomposition)
+  parentClaimId?: string
+  subclaims?: Claim[]
+
+  // Text span mapping (discontiguous)
+  textSpans?: ClaimTextSpan[]
+
+  // Source/claimer
+  claimerType?: ClaimerType | null
+  claimerGloss?: GlossItem[]     // Mixed text/references
+  claimRelation?: GlossItem[]    // How claimer relates to claim
+
+  // Claiming event context
+  claimEventId?: string
+  claimTimeId?: string
+  claimLocationId?: string
+
+  // Metadata
+  confidence?: number
+  modelUsed?: string
+  extractionStrategy?: ExtractionStrategy
+
+  // Relations
+  sourceClaimRelations?: ClaimRelation[]
+  targetClaimRelations?: ClaimRelation[]
+
+  // Audit
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Relation between claims or claim spans
+ */
+export interface ClaimRelation {
+  id: string
+  sourceClaimId: string
+  targetClaimId: string
+  relationTypeId: string  // From ontology (any relation type)
+
+  // Optional span specification (discontiguous)
+  sourceSpans?: ClaimSpan[]
+  targetSpans?: ClaimSpan[]
+
+  confidence?: number
+  notes?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Configuration for claim extraction
+ */
+export interface ClaimExtractionConfig {
+  // Input sources
+  inputSources: {
+    includeSummaryText: boolean
+    includeAnnotations: boolean
+    includeOntology: boolean
+    ontologyDepth: 'names-only' | 'names-and-glosses' | 'full-definitions'
+  }
+
+  // Extraction parameters
+  extractionStrategy: ExtractionStrategy
+  maxClaimsPerSummary?: number  // Limit total claims (default: 50)
+  maxSubclaimDepth?: number     // Max nesting level (default: 3)
+  minConfidence?: number        // Filter low-confidence claims (default: 0.5)
+
+  // Model selection
+  modelId?: string  // Specific LLM to use (default: task config)
+
+  // Post-processing
+  deduplicateClaims?: boolean   // Remove duplicate claims (default: true)
+  mergeSimilarClaims?: boolean  // Merge highly similar claims (default: false)
+}
+
+/**
+ * Denormalized claim structure stored in JSON field
+ */
+export interface ClaimStructure {
+  version: string  // Schema version (e.g., "1.0")
+  claims: Claim[]  // Root claims with nested subclaims
+  metadata: {
+    extractedAt: string
+    modelUsed: string
+    config: ClaimExtractionConfig
+    totalClaims: number
+    totalSubclaims: number
+    maxDepth: number
+  }
+}
+
+/**
+ * VideoSummary extended with claims
+ */
+export interface VideoSummaryWithClaims extends VideoSummary {
+  claims?: Claim[]
+  claimsJson?: ClaimStructure
+  claimsVersion?: string
+  claimsExtractedAt?: string
+}
+
+/**
+ * Request to extract claims from a summary
+ */
+export interface ExtractClaimsRequest {
+  summaryId: string
+  summaryType: 'video' | 'collection'
+  config: ClaimExtractionConfig
+}
+
+/**
+ * Response from claim extraction
+ */
+export interface ExtractClaimsResponse {
+  jobId: string
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  summaryId: string
+  summaryType: string
+}
+
+/**
+ * Claim extraction job status
+ */
+export interface ClaimExtractionJobStatus {
+  jobId: string
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  progress?: number  // 0-100
+  result?: ClaimStructure
+  error?: string
+}
+
+/**
+ * Request to create/update a claim manually
+ */
+export interface CreateClaimRequest {
+  summaryId: string
+  summaryType: 'video' | 'collection'
+  text: string
+  gloss?: GlossItem[]
+  parentClaimId?: string
+  textSpans?: ClaimTextSpan[]
+  claimerType?: ClaimerType | null
+  claimerGloss?: GlossItem[]
+  claimRelation?: GlossItem[]
+  claimEventId?: string
+  claimTimeId?: string
+  claimLocationId?: string
+  confidence?: number
+}
+
+/**
+ * Request to update an existing claim
+ */
+export interface UpdateClaimRequest {
+  text?: string
+  gloss?: GlossItem[]
+  textSpans?: ClaimTextSpan[]
+  claimerType?: ClaimerType | null
+  claimerGloss?: GlossItem[]
+  claimRelation?: GlossItem[]
+  claimEventId?: string
+  claimTimeId?: string
+  claimLocationId?: string
+  confidence?: number
 }

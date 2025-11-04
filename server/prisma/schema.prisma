@@ -215,6 +215,18 @@ model VideoSummary {
   /// Vector embedding for semantic search (1536 dimensions for OpenAI embeddings)
   embedding       Unsupported("vector(1536)")?
 
+  /// Claims extraction metadata
+  /// Denormalized claims structure for fast access (JSON)
+  /// Structure: { version: string, claims: Claim[], metadata: {...} }
+  claimsJson      Json?
+  /// Version of claim extraction algorithm used
+  claimsVersion   String?
+  /// Timestamp when claims were last extracted
+  claimsExtractedAt DateTime?
+
+  /// Relation to Claim model
+  claims          Claim[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -257,4 +269,106 @@ model ImportHistory {
   createdAt     DateTime @default(now())
 
   @@map("import_history")
+}
+
+/// Claim represents an atomic factual statement from a summary
+/// Supports hierarchical decomposition and claim sourcing
+model Claim {
+  id              String   @id @default(uuid())
+
+  // Association with summary
+  summaryId       String
+  summaryType     String   // "video" or "collection"
+
+  // Relation to VideoSummary (currently only video summaries supported)
+  videoSummary    VideoSummary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  // Claim content
+  text            String   @db.Text
+  /// JSON structure: GlossItem[] with #/@/^/$ references (types/objects/annotations/claims)
+  gloss           Json     @default("[]")
+
+  // Hierarchical structure (parent/child decomposition)
+  parentClaimId   String?
+  parentClaim     Claim?   @relation("ClaimHierarchy", fields: [parentClaimId], references: [id], onDelete: Cascade)
+  subclaims       Claim[]  @relation("ClaimHierarchy")
+
+  // Text span mapping - support discontiguous spans
+  /// JSON structure: Array of {sentenceIndex?: number, charStart: number, charEnd: number}
+  textSpans       Json?
+
+  // Claim source/claimer (who makes this claim)
+  /// null = standalone claim for reference only (not asserted by anyone)
+  /// "author" = video creator explicitly asserts this claim
+  /// other = specified entity/type asserts this claim
+  claimerType     String?  // null, "entity", "entity_type", "author", "mixed"
+  /// JSON structure: GlossItem[] - mixed text and #/@/^/$ references for claimer
+  claimerGloss    Json?
+
+  // Relation between claimer and claim (how claimer relates to claim)
+  /// JSON structure: GlossItem[] - mixed text and references (e.g., "says", "#claims", "denied that")
+  claimRelation   Json?
+
+  // Context of the claiming event itself (when/where claim was made)
+  /// Reference to world state event object
+  claimEventId    String?
+  /// Reference to world state time object
+  claimTimeId     String?
+  /// Reference to world state location object
+  claimLocationId String?
+
+  // Metadata
+  confidence      Float?   // Model confidence in claim extraction (0.0-1.0)
+  modelUsed       String?  // Model that generated this claim (e.g., "llama-4-scout")
+  extractionStrategy String? // "sentence-based", "semantic-units", "hierarchical", "manual"
+
+  // Audit fields
+  createdBy       String?  // User ID who created/approved this claim
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations to other claims (this claim as source or target)
+  sourceClaimRelations ClaimRelation[] @relation("SourceClaim")
+  targetClaimRelations ClaimRelation[] @relation("TargetClaim")
+
+  @@index([summaryId, summaryType])
+  @@index([parentClaimId])
+  @@map("claims")
+}
+
+/// ClaimRelation represents a typed relation between claims or claim spans
+/// Supports any relation type from the ontology (conflicts, supports, elaborates, etc.)
+/// Can relate entire claims or specific (discontiguous) spans within claims
+model ClaimRelation {
+  id              String   @id @default(uuid())
+
+  sourceClaimId   String
+  sourceClaim     Claim    @relation("SourceClaim", fields: [sourceClaimId], references: [id], onDelete: Cascade)
+
+  targetClaimId   String
+  targetClaim     Claim    @relation("TargetClaim", fields: [targetClaimId], references: [id], onDelete: Cascade)
+
+  /// Reference to ontology relation type (e.g., "conflicts", "supports", "denies")
+  relationTypeId  String
+
+  // Optional span specification (if null, relation applies to entire claim)
+  /// JSON structure: Array of {charStart: number, charEnd: number}
+  /// Specifies discontiguous spans within source claim
+  sourceSpans     Json?
+  /// JSON structure: Array of {charStart: number, charEnd: number}
+  /// Specifies discontiguous spans within target claim
+  targetSpans     Json?
+
+  // Optional metadata
+  confidence      Float?
+  notes           String?  @db.Text
+
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sourceClaimId])
+  @@index([targetClaimId])
+  @@index([relationTypeId])
+  @@map("claim_relations")
 }
