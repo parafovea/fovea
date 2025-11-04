@@ -327,13 +327,360 @@ export const videoWorker = new Worker<
 );
 
 /**
+ * Queue for processing claim extraction jobs.
+ * Jobs include extracting atomic claims from video summaries using LLMs.
+ */
+export const claimExtractionQueue = new Queue("claim-extraction", {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: 100,
+    removeOnFail: 100,
+  },
+});
+
+/**
+ * Queue events for monitoring claim extraction job lifecycle.
+ */
+const claimQueueEvents = new QueueEvents("claim-extraction", { connection });
+
+claimQueueEvents.on("completed", async ({ jobId, returnvalue }) => {
+  console.log(`Claim extraction job ${jobId} completed:`, returnvalue);
+
+  const job = await claimExtractionQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, {
+      queue: "claim-extraction",
+      status: "completed",
+    });
+    queueJobDuration.record(duration, {
+      queue: "claim-extraction",
+      status: "completed",
+    });
+  }
+});
+
+claimQueueEvents.on("failed", async ({ jobId, failedReason }) => {
+  console.error(`Claim extraction job ${jobId} failed:`, failedReason);
+
+  const job = await claimExtractionQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, { queue: "claim-extraction", status: "failed" });
+    queueJobDuration.record(duration, {
+      queue: "claim-extraction",
+      status: "failed",
+    });
+  }
+});
+
+/**
+ * Job data structure for claim extraction tasks.
+ */
+export interface ClaimExtractionJobData {
+  summaryId: string;
+  summaryType: "video" | "collection";
+  config: {
+    inputSources: {
+      includeSummaryText: boolean;
+      includeAnnotations: boolean;
+      includeOntology: boolean;
+      ontologyDepth: "names-only" | "names-and-glosses" | "full-definitions";
+    };
+    extractionStrategy:
+      | "sentence-based"
+      | "semantic-units"
+      | "hierarchical"
+      | "manual";
+    maxClaimsPerSummary?: number;
+    maxSubclaimDepth?: number;
+    minConfidence?: number;
+    modelId?: string;
+    deduplicateClaims?: boolean;
+    mergeSimilarClaims?: boolean;
+  };
+}
+
+/**
+ * Result structure returned by claim extraction jobs.
+ */
+export interface ClaimExtractionResult {
+  summaryId: string;
+  summaryType: string;
+  totalClaims: number;
+  totalSubclaims: number;
+  modelUsed: string;
+  processingTime: number;
+}
+
+/**
+ * Response type from model service /api/extract-claims endpoint.
+ */
+interface ModelClaimExtractionResponse {
+  summary_id: string;
+  claims: Array<{
+    text: string;
+    sentence_index?: number;
+    char_start?: number;
+    char_end?: number;
+    subclaims?: unknown[];
+    confidence: number;
+    claim_type?: string;
+  }>;
+  model_used: string;
+  processing_time: number;
+}
+
+/**
+ * Worker for processing claim extraction jobs.
+ * Calls the model service API to extract atomic claims from summaries,
+ * then saves the results to Prisma database.
+ */
+export const claimWorker = new Worker<
+  ClaimExtractionJobData,
+  ClaimExtractionResult
+>(
+  "claim-extraction",
+  async (job): Promise<ClaimExtractionResult> => {
+    const { summaryId, summaryType, config } = job.data;
+
+    await job.updateProgress(10);
+
+    // Fetch summary
+    const summary =
+      summaryType === "video"
+        ? await prisma.videoSummary.findUnique({ where: { id: summaryId } })
+        : null; // Future: Add collection summary support
+
+    if (!summary) {
+      throw new Error(`Summary not found: ${summaryId}`);
+    }
+
+    await job.updateProgress(20);
+
+    // Build extraction request
+    const requestBody: Record<string, unknown> = {
+      summary_id: summaryId,
+      summary_text: summary.summary,
+      extraction_strategy: config.extractionStrategy,
+      max_claims: config.maxClaimsPerSummary || 50,
+      min_confidence: config.minConfidence || 0.5,
+    };
+
+    // Add ontology context if requested
+    if (config.inputSources.includeOntology && summary.personaId) {
+      const ontology = await prisma.ontology.findUnique({
+        where: { personaId: summary.personaId },
+      });
+
+      if (ontology) {
+        const entityTypes = ontology.entityTypes as unknown[];
+        const eventTypes = ontology.eventTypes as unknown[];
+        requestBody.ontology_types = [...entityTypes, ...eventTypes];
+      }
+    }
+
+    // Add annotation context if requested
+    if (config.inputSources.includeAnnotations && summary.videoId) {
+      const annotations = await prisma.annotation.findMany({
+        where: {
+          videoId: summary.videoId,
+          personaId: summary.personaId,
+        },
+        take: 15,
+      });
+
+      requestBody.annotations = annotations.map((ann) => ({
+        name: ann.label,
+        type: ann.type,
+      }));
+    }
+
+    // Call model service
+    const modelServiceUrl =
+      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelStartTime = Date.now();
+
+    await job.updateProgress(30);
+
+    const response = await fetch(`${modelServiceUrl}/api/extract-claims`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const modelDuration = Date.now() - modelStartTime;
+
+    if (!response.ok) {
+      modelServiceCounter.add(1, {
+        endpoint: "/api/extract-claims",
+        status: response.status,
+      });
+      modelServiceDuration.record(modelDuration, {
+        endpoint: "/api/extract-claims",
+        status: response.status,
+      });
+
+      const errorText = await response.text();
+      throw new Error(`Model service error (${response.status}): ${errorText}`);
+    }
+
+    modelServiceCounter.add(1, {
+      endpoint: "/api/extract-claims",
+      status: response.status,
+    });
+    modelServiceDuration.record(modelDuration, {
+      endpoint: "/api/extract-claims",
+      status: response.status,
+    });
+
+    await job.updateProgress(50);
+
+    const modelResponse =
+      (await response.json()) as ModelClaimExtractionResponse;
+
+    await job.updateProgress(60);
+
+    // Save claims to database
+    async function saveClaim(
+      claimData: (typeof modelResponse.claims)[0],
+      parentClaimId?: string,
+    ): Promise<string> {
+      const claim = await prisma.claim.create({
+        data: {
+          summaryId,
+          summaryType,
+          text: claimData.text,
+          gloss: [],
+          parentClaimId,
+          textSpans: claimData.char_start
+            ? [
+                {
+                  sentenceIndex: claimData.sentence_index,
+                  charStart: claimData.char_start,
+                  charEnd: claimData.char_end,
+                },
+              ]
+            : undefined,
+          confidence: claimData.confidence,
+          modelUsed: modelResponse.model_used,
+          extractionStrategy: config.extractionStrategy,
+        },
+      });
+
+      // Recursively save subclaims
+      if (claimData.subclaims && claimData.subclaims.length > 0) {
+        for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
+          await saveClaim(subclaimData, claim.id);
+        }
+      }
+
+      return claim.id;
+    }
+
+    // Save all root claims
+    for (const claimData of modelResponse.claims) {
+      await saveClaim(claimData);
+    }
+
+    await job.updateProgress(80);
+
+    // Update denormalized JSON
+    const allClaims = await prisma.claim.findMany({
+      where: {
+        summaryId,
+        summaryType,
+        parentClaimId: null,
+      },
+      include: {
+        subclaims: {
+          include: {
+            subclaims: {
+              include: {
+                subclaims: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    const countClaims = (claims: unknown[]): number => {
+      let count = claims.length;
+      for (const claim of claims as { subclaims?: unknown[] }[]) {
+        if (claim.subclaims && claim.subclaims.length > 0) {
+          count += countClaims(claim.subclaims);
+        }
+      }
+      return count;
+    };
+
+    const totalClaims = countClaims(allClaims);
+
+    const claimsJson = {
+      version: "1.0",
+      claims: allClaims,
+      metadata: {
+        extractedAt: new Date().toISOString(),
+        totalClaims,
+        totalSubclaims: totalClaims - allClaims.length,
+        maxDepth: config.maxSubclaimDepth || 3,
+      },
+    };
+
+    if (summaryType === "video") {
+      await prisma.videoSummary.update({
+        where: { id: summaryId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        data: {
+          claimsJson: claimsJson as any,
+          claimsExtractedAt: new Date(),
+        },
+      });
+    }
+
+    await job.updateProgress(100);
+
+    return {
+      summaryId,
+      summaryType,
+      totalClaims,
+      totalSubclaims: totalClaims - allClaims.length,
+      modelUsed: modelResponse.model_used,
+      processingTime: modelResponse.processing_time,
+    };
+  },
+  {
+    connection,
+    concurrency: 3,
+    limiter: {
+      max: 5,
+      duration: 60000,
+    },
+  },
+);
+
+/**
  * Graceful shutdown handler for queue connections.
  * Closes workers, queue events, and Prisma client cleanly.
  */
 export async function closeQueues(): Promise<void> {
   await videoWorker.close();
+  await claimWorker.close();
   await queueEvents.close();
+  await claimQueueEvents.close();
   await videoSummarizationQueue.close();
+  await claimExtractionQueue.close();
   // Only quit connection if it's still open, ignore if already closed
   try {
     if (

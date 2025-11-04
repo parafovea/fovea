@@ -259,6 +259,31 @@ models:
         speed: "fast"
         description: "Azure Speech Services, real-time streaming"
 
+  claim_extraction:
+    selected: "llama-4-scout"
+    options:
+      llama-4-scout:
+        model_id: "meta-llama/Llama-4-Scout"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 55
+        speed: "very_fast"
+        description: "MoE model with 17B active, 10M context, excellent for claim decomposition"
+      deepseek-v3:
+        model_id: "deepseek-ai/DeepSeek-V3"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 85
+        speed: "fast"
+        description: "MoE with 37B active, best reasoning for complex claims"
+      gemma-3-27b:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Lightweight, fast claim extraction for quick iteration"
+
   speaker_diarization:
     selected: "pyannote-3-1"
     options:

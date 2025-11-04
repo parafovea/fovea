@@ -258,3 +258,94 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Human-readable error message")
     details: dict[str, Any] | None = Field(default=None, description="Additional error details")
+
+
+class ClaimExtractionRequest(BaseModel):
+    """Request model for claim extraction endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Unique identifier for the summary")
+    summary_text: str = Field(..., description="Full summary text to extract claims from")
+    sentences: list[str] | None = Field(
+        default=None,
+        description="Pre-split sentences (optional, will split if not provided)",
+    )
+
+    # Optional context sources
+    annotations: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Annotation data for context (object names, times, etc.)",
+    )
+    ontology_types: list[dict[str, Any]] | None = Field(
+        default=None, description="Ontology type definitions for context"
+    )
+    ontology_glosses: dict[str, str] | None = Field(
+        default=None, description="Map of type ID to gloss text"
+    )
+
+    # Extraction configuration
+    extraction_strategy: Literal["sentence-based", "semantic-units", "hierarchical"] = Field(
+        default="sentence-based",
+        description="Strategy for extracting claims",
+    )
+    max_claims: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum number of claims to extract",
+    )
+    min_confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for claims",
+    )
+
+
+class ExtractedClaim(BaseModel):
+    """Single extracted claim with metadata.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    text: str = Field(..., description="Claim text")
+    sentence_index: int | None = Field(
+        default=None,
+        description="Index of source sentence (if sentence-based)",
+    )
+    char_start: int | None = Field(
+        default=None,
+        description="Character offset in summary text",
+    )
+    char_end: int | None = Field(
+        default=None,
+        description="Character offset end in summary text",
+    )
+    subclaims: list["ExtractedClaim"] = Field(
+        default_factory=list,
+        description="Nested subclaims",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model confidence in claim extraction",
+    )
+    claim_type: str | None = Field(
+        default=None,
+        description="Semantic type of claim",
+    )
+
+
+class ClaimExtractionResponse(BaseModel):
+    """Response model for claim extraction endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Summary identifier")
+    claims: list[ExtractedClaim] = Field(..., description="Extracted claims")
+    model_used: str = Field(..., description="LLM model used for extraction")
+    processing_time: float = Field(..., description="Processing time in seconds")

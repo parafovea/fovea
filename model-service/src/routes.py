@@ -17,6 +17,8 @@ from opentelemetry import trace
 from .models import (
     AugmentRequest,
     AugmentResponse,
+    ClaimExtractionRequest,
+    ClaimExtractionResponse,
     DetectionRequest,
     DetectionResponse,
     ErrorResponse,
@@ -947,6 +949,109 @@ async def unload_model(task_type: str) -> dict[str, str]:
         "task_type": task_type,
         "message": "Model unloaded successfully",
     }
+
+
+@router.post(
+    "/extract-claims",
+    response_model=ClaimExtractionResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    summary="Extract atomic claims from summary text",
+    description="Decomposes summary text into atomic factual claims using LLM. "
+    "Supports hierarchical subclaim extraction and configurable context sources.",
+)
+async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResponse:
+    """Extract atomic claims from video summary.
+
+    Parameters
+    ----------
+    request : ClaimExtractionRequest
+        Extraction request with summary text, context, and configuration.
+
+    Returns
+    -------
+    ClaimExtractionResponse
+        Extracted claims with hierarchical structure.
+
+    Raises
+    ------
+    HTTPException
+        If extraction fails or configuration is invalid.
+    """
+    with tracer.start_as_current_span("extract_claims") as span:
+        span.set_attribute("summary_id", request.summary_id)
+        span.set_attribute("strategy", request.extraction_strategy)
+
+        from .claim_extraction import extract_claims_from_summary
+        from .llm_loader import LLMConfig, LLMFramework, LLMLoader
+
+        try:
+            manager = get_model_manager()
+            task_config = manager.tasks.get("claim_extraction")
+            if task_config is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Claim extraction task not configured",
+                )
+
+            # Get LLM configuration
+            selected_config = task_config.get_selected_config()
+            llm_config = LLMConfig(
+                model_id=selected_config.model_id,
+                quantization=selected_config.quantization,
+                framework=LLMFramework.TRANSFORMERS,
+                max_tokens=4096,
+                temperature=0.7,
+            )
+
+            # Load LLM
+            loader = LLMLoader(llm_config)
+            loader.load()
+
+            try:
+                # Build context from request
+                ontology_context = None
+                if request.ontology_types:
+                    ontology_context = {
+                        "types": request.ontology_types,
+                        "glosses": request.ontology_glosses or {},
+                    }
+
+                # Extract claims
+                start_time = time.time()
+                claims = await extract_claims_from_summary(
+                    summary_text=request.summary_text,
+                    sentences=request.sentences,
+                    strategy=request.extraction_strategy,
+                    max_claims=request.max_claims,
+                    min_confidence=request.min_confidence,
+                    llm_loader=loader,
+                    ontology_context=ontology_context,
+                    annotation_context=request.annotations,
+                )
+                processing_time = time.time() - start_time
+
+                span.set_attribute("claims_extracted", len(claims))
+                span.set_attribute("processing_time", processing_time)
+
+                return ClaimExtractionResponse(
+                    summary_id=request.summary_id,
+                    claims=claims,
+                    model_used=llm_config.model_id,
+                    processing_time=processing_time,
+                )
+
+            finally:
+                loader.unload()
+
+        except Exception as e:
+            logger.error(f"Claim extraction failed: {e}")
+            span.set_attribute("error", str(e))
+            raise HTTPException(
+                status_code=500, detail=f"Claim extraction failed: {e}"
+            ) from e
 
 
 @router.post(
