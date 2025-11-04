@@ -25,6 +25,8 @@ from .models import (
     FrameDetections,
     SummarizeRequest,
     SummarizeResponse,
+    SummarySynthesisRequest,
+    SummarySynthesisResponse,
     TrackingRequest,
     TrackingResponse,
 )
@@ -1052,6 +1054,148 @@ async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResp
             raise HTTPException(
                 status_code=500, detail=f"Claim extraction failed: {e}"
             ) from e
+
+
+@router.post(
+    "/synthesize-summary",
+    response_model=SummarySynthesisResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    summary="Synthesize narrative summary from claim hierarchies",
+    description="Generates coherent summary text from structured claims. "
+    "Supports hierarchical claims, claim relations, and multi-source synthesis.",
+)
+async def synthesize_summary(
+    request: SummarySynthesisRequest,
+) -> SummarySynthesisResponse:
+    """Synthesize summary from claim hierarchies.
+
+    Parameters
+    ----------
+    request : SummarySynthesisRequest
+        Synthesis request with claim hierarchies, relations, and configuration.
+
+    Returns
+    -------
+    SummarySynthesisResponse
+        Generated summary with metadata.
+
+    Raises
+    ------
+    HTTPException
+        If synthesis fails or configuration is invalid.
+    """
+    with tracer.start_as_current_span("synthesize_summary") as span:
+        span.set_attribute("summary_id", request.summary_id)
+        span.set_attribute("num_sources", len(request.claim_sources))
+        span.set_attribute("synthesis_strategy", request.synthesis_strategy)
+
+        from .claim_synthesis import synthesize_summary_from_claims
+        from .llm_loader import LLMConfig, LLMFramework, LLMLoader
+
+        try:
+            manager = get_model_manager()
+            task_config = manager.tasks.get("claim_synthesis")
+            if task_config is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Claim synthesis task not configured",
+                )
+
+            # Get LLM configuration (needs larger context for multi-source)
+            selected_config = task_config.get_selected_config()
+            llm_config = LLMConfig(
+                model_id=selected_config.model_id,
+                quantization=selected_config.quantization,
+                framework=LLMFramework.TRANSFORMERS,
+                max_tokens=8192,  # Larger for complex syntheses
+                temperature=0.8,
+            )
+
+            # Load LLM
+            loader = LLMLoader(llm_config)
+            loader.load()
+
+            try:
+                # Synthesize summary
+                start_time = time.time()
+                summary_gloss = await synthesize_summary_from_claims(
+                    claim_sources=request.claim_sources,
+                    claim_relations=request.claim_relations,
+                    synthesis_strategy=request.synthesis_strategy,
+                    ontology_context=request.ontology_context,
+                    persona_context=request.persona_context,
+                    llm_loader=loader,
+                    max_length=request.max_length,
+                    include_conflicts=request.include_conflicts,
+                    include_citations=request.include_citations,
+                )
+                processing_time = time.time() - start_time
+
+                span.set_attribute("summary_length", len(summary_gloss))
+                span.set_attribute("processing_time", processing_time)
+
+                # Calculate claims used
+                claims_used = sum(
+                    _count_claims_recursive(src.claims) for src in request.claim_sources
+                )
+
+                # Build metadata
+                conflicts_detected = 0
+                if request.claim_relations:
+                    conflicts_detected = len(
+                        [
+                            r
+                            for r in request.claim_relations
+                            if r.relation_type in ["conflicts_with", "contradicts"]
+                        ]
+                    )
+
+                return SummarySynthesisResponse(
+                    summary_id=request.summary_id,
+                    summary_gloss=summary_gloss,
+                    model_used=llm_config.model_id,
+                    processing_time=processing_time,
+                    claims_used=claims_used,
+                    synthesis_metadata={
+                        "strategy": request.synthesis_strategy,
+                        "num_sources": len(request.claim_sources),
+                        "conflicts_detected": conflicts_detected,
+                    },
+                )
+
+            finally:
+                loader.unload()
+
+        except Exception as e:
+            logger.error(f"Summary synthesis failed: {e}")
+            span.set_attribute("error", str(e))
+            raise HTTPException(
+                status_code=500, detail=f"Summary synthesis failed: {e}"
+            ) from e
+
+
+def _count_claims_recursive(claims: list[dict]) -> int:
+    """Count claims recursively including subclaims.
+
+    Parameters
+    ----------
+    claims : list[dict]
+        List of claim dictionaries.
+
+    Returns
+    -------
+    int
+        Total count of claims and subclaims.
+    """
+    count = len(claims)
+    for claim in claims:
+        subclaims = claim.get("subclaims", [])
+        if subclaims:
+            count += _count_claims_recursive(subclaims)
+    return count
 
 
 @router.post(

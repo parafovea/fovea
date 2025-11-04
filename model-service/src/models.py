@@ -349,3 +349,103 @@ class ClaimExtractionResponse(BaseModel):
     claims: list[ExtractedClaim] = Field(..., description="Extracted claims")
     model_used: str = Field(..., description="LLM model used for extraction")
     processing_time: float = Field(..., description="Processing time in seconds")
+
+
+class ClaimSource(BaseModel):
+    """Source of claims for synthesis (single video or collection).
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    source_id: str = Field(..., description="Video ID or collection ID")
+    source_type: Literal["video", "collection"] = Field(..., description="Type of source")
+    claims: list[dict[str, Any]] = Field(..., description="Hierarchical claim structure")
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Source metadata (video title, date, etc.)"
+    )
+
+
+class ClaimRelationship(BaseModel):
+    """Relationship between claims across sources.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    source_claim_id: str = Field(..., description="Source claim ID")
+    target_claim_id: str = Field(..., description="Target claim ID")
+    relation_type: Literal[
+        "supports",
+        "conflicts_with",
+        "contradicts",
+        "refines",
+        "generalizes",
+        "duplicates",
+    ] = Field(..., description="Type of relationship")
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Confidence score")
+    notes: str | None = Field(default=None, description="Optional notes")
+
+
+class SummarySynthesisRequest(BaseModel):
+    """Request model for summary synthesis endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Target summary identifier")
+
+    # Input sources (single or multiple)
+    claim_sources: list[ClaimSource] = Field(
+        ..., min_length=1, description="Claim hierarchies from one or more sources"
+    )
+
+    # Inter-claim relationships
+    claim_relations: list[ClaimRelationship] | None = Field(
+        default=None,
+        description="Relationships between claims (conflicts, support, etc.)",
+    )
+
+    # Context for synthesis
+    ontology_context: dict[str, Any] | None = Field(
+        default=None, description="Ontology types and glosses for # references"
+    )
+    persona_context: dict[str, Any] | None = Field(
+        default=None, description="Persona information for perspective"
+    )
+
+    # Synthesis configuration
+    synthesis_strategy: Literal[
+        "hierarchical",  # Follow claim hierarchy structure
+        "chronological",  # Order by temporal claims
+        "narrative",  # Create story-like flow
+        "analytical",  # Emphasize conflicts and evidence
+    ] = Field(default="hierarchical", description="Strategy for organizing summary")
+
+    max_length: int = Field(
+        default=500, ge=100, le=2000, description="Maximum summary length in words"
+    )
+
+    include_conflicts: bool = Field(
+        default=True, description="Explicitly mention informational conflicts"
+    )
+
+    include_citations: bool = Field(
+        default=False, description="Include inline citations to source claims"
+    )
+
+
+class SummarySynthesisResponse(BaseModel):
+    """Response model for summary synthesis endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Summary identifier")
+    summary_gloss: list[dict[str, Any]] = Field(
+        ..., description="Generated summary as GlossItem array with # and @ references"
+    )
+    model_used: str = Field(..., description="LLM model used for synthesis")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    claims_used: int = Field(..., description="Total claims synthesized")
+    synthesis_metadata: dict[str, Any] = Field(
+        ..., description="Metadata about synthesis (strategy, conflicts, etc.)"
+    )

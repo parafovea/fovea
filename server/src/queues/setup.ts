@@ -673,16 +673,285 @@ export const claimWorker = new Worker<
 );
 
 /**
+ * Queue for processing claim synthesis jobs.
+ * Jobs include synthesizing narrative summaries from claim hierarchies using LLMs.
+ */
+export const claimSynthesisQueue = new Queue("claim-synthesis", {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: 100,
+    removeOnFail: 100,
+  },
+});
+
+/**
+ * Queue events for monitoring claim synthesis job lifecycle.
+ */
+const synthesisQueueEvents = new QueueEvents("claim-synthesis", { connection });
+
+synthesisQueueEvents.on("completed", async ({ jobId, returnvalue }) => {
+  console.log(`Claim synthesis job ${jobId} completed:`, returnvalue);
+
+  const job = await claimSynthesisQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, {
+      queue: "claim-synthesis",
+      status: "completed",
+    });
+    queueJobDuration.record(duration, {
+      queue: "claim-synthesis",
+      status: "completed",
+    });
+  }
+});
+
+synthesisQueueEvents.on("failed", async ({ jobId, failedReason }) => {
+  console.error(`Claim synthesis job ${jobId} failed:`, failedReason);
+
+  const job = await claimSynthesisQueue.getJob(jobId);
+  if (job) {
+    const duration = job.finishedOn
+      ? job.finishedOn - (job.processedOn || job.timestamp)
+      : 0;
+    queueJobCounter.add(1, { queue: "claim-synthesis", status: "failed" });
+    queueJobDuration.record(duration, {
+      queue: "claim-synthesis",
+      status: "failed",
+    });
+  }
+});
+
+/**
+ * Job data structure for claim synthesis tasks.
+ */
+export interface ClaimSynthesisJobData {
+  summaryId: string;
+  summaryType: "video" | "collection";
+  config: {
+    synthesis_strategy:
+      | "hierarchical"
+      | "chronological"
+      | "narrative"
+      | "analytical";
+    max_length?: number;
+    include_conflicts?: boolean;
+    include_citations?: boolean;
+  };
+}
+
+/**
+ * Result structure returned by claim synthesis jobs.
+ */
+export interface ClaimSynthesisResult {
+  summaryId: string;
+  summaryType: string;
+  summaryGloss: Prisma.JsonValue;
+  modelUsed: string;
+  processingTime: number;
+  claimsUsed: number;
+}
+
+/**
+ * Response type from model service /api/synthesize-summary endpoint.
+ */
+interface ModelSynthesisResponse {
+  summary_id: string;
+  summary_gloss: unknown[];
+  model_used: string;
+  processing_time: number;
+  claims_used: number;
+  synthesis_metadata: Record<string, unknown>;
+}
+
+/**
+ * Worker for processing claim synthesis jobs.
+ * Calls the model service API to synthesize summaries from claim hierarchies,
+ * then updates the VideoSummary in the database.
+ */
+export const synthesisWorker = new Worker<
+  ClaimSynthesisJobData,
+  ClaimSynthesisResult
+>(
+  "claim-synthesis",
+  async (job): Promise<ClaimSynthesisResult> => {
+    const { summaryId, summaryType, config } = job.data;
+
+    await job.updateProgress(10);
+
+    // Fetch summary with claims
+    const summary =
+      summaryType === "video"
+        ? await prisma.videoSummary.findUnique({
+            where: { id: summaryId },
+            include: {
+              claims: {
+                where: { parentClaimId: null },
+                include: {
+                  subclaims: {
+                    include: {
+                      subclaims: {
+                        include: {
+                          subclaims: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              persona: true,
+            },
+          })
+        : null; // Future: Add collection summary support
+
+    if (!summary) {
+      throw new Error(`Summary not found: ${summaryId}`);
+    }
+
+    if (!summary.claims || summary.claims.length === 0) {
+      throw new Error(`No claims found for summary: ${summaryId}`);
+    }
+
+    await job.updateProgress(20);
+
+    // Build synthesis request
+    const requestBody: Record<string, unknown> = {
+      summary_id: summaryId,
+      claim_sources: [
+        {
+          source_id: summary.videoId,
+          source_type: "video",
+          claims: summary.claims,
+          metadata: {
+            persona: summary.persona.name,
+          },
+        },
+      ],
+      synthesis_strategy: config.synthesis_strategy || "hierarchical",
+      max_length: config.max_length || 500,
+      include_conflicts: config.include_conflicts ?? true,
+      include_citations: config.include_citations ?? false,
+    };
+
+    // Add persona context
+    if (summary.persona) {
+      requestBody.persona_context = {
+        role: summary.persona.role,
+        information_need: summary.persona.informationNeed,
+      };
+    }
+
+    // Add ontology context if available
+    const ontology = await prisma.ontology.findUnique({
+      where: { personaId: summary.personaId },
+    });
+
+    if (ontology) {
+      const entityTypes = ontology.entityTypes as unknown[];
+      const eventTypes = ontology.eventTypes as unknown[];
+      requestBody.ontology_context = {
+        types: [...entityTypes, ...eventTypes],
+      };
+    }
+
+    // Call model service
+    const modelServiceUrl =
+      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelStartTime = Date.now();
+
+    await job.updateProgress(30);
+
+    const response = await fetch(`${modelServiceUrl}/api/synthesize-summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const modelDuration = Date.now() - modelStartTime;
+
+    if (!response.ok) {
+      modelServiceCounter.add(1, {
+        endpoint: "/api/synthesize-summary",
+        status: response.status,
+      });
+      modelServiceDuration.record(modelDuration, {
+        endpoint: "/api/synthesize-summary",
+        status: response.status,
+      });
+
+      const errorText = await response.text();
+      throw new Error(`Model service error (${response.status}): ${errorText}`);
+    }
+
+    modelServiceCounter.add(1, {
+      endpoint: "/api/synthesize-summary",
+      status: response.status,
+    });
+    modelServiceDuration.record(modelDuration, {
+      endpoint: "/api/synthesize-summary",
+      status: response.status,
+    });
+
+    await job.updateProgress(70);
+
+    const modelResponse = (await response.json()) as ModelSynthesisResponse;
+
+    await job.updateProgress(80);
+
+    // Update summary with synthesized text
+    if (summaryType === "video") {
+      await prisma.videoSummary.update({
+        where: { id: summaryId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+        data: {
+          summary: modelResponse.summary_gloss as any,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    await job.updateProgress(100);
+
+    return {
+      summaryId,
+      summaryType,
+      summaryGloss: modelResponse.summary_gloss as Prisma.JsonValue,
+      modelUsed: modelResponse.model_used,
+      processingTime: modelResponse.processing_time,
+      claimsUsed: modelResponse.claims_used,
+    };
+  },
+  {
+    connection,
+    concurrency: 3,
+    limiter: {
+      max: 5,
+      duration: 60000,
+    },
+  },
+);
+
+/**
  * Graceful shutdown handler for queue connections.
  * Closes workers, queue events, and Prisma client cleanly.
  */
 export async function closeQueues(): Promise<void> {
   await videoWorker.close();
   await claimWorker.close();
+  await synthesisWorker.close();
   await queueEvents.close();
   await claimQueueEvents.close();
+  await synthesisQueueEvents.close();
   await videoSummarizationQueue.close();
   await claimExtractionQueue.close();
+  await claimSynthesisQueue.close();
   // Only quit connection if it's still open, ignore if already closed
   try {
     if (

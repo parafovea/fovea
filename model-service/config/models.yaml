@@ -284,6 +284,31 @@ models:
         speed: "very_fast"
         description: "Lightweight, fast claim extraction for quick iteration"
 
+  claim_synthesis:
+    selected: "llama-4-scout"
+    options:
+      llama-4-scout:
+        model_id: "meta-llama/Llama-4-Scout"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 55
+        speed: "very_fast"
+        description: "MoE model with 17B active, 10M context, excellent for narrative synthesis"
+      deepseek-v3:
+        model_id: "deepseek-ai/DeepSeek-V3"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 85
+        speed: "fast"
+        description: "MoE with 37B active, best reasoning for complex multi-source synthesis"
+      gemma-3-27b:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Lightweight, fast synthesis for quick iteration"
+
   speaker_diarization:
     selected: "pyannote-3-1"
     options:

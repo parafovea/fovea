@@ -8,6 +8,12 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import {
+  claimExtractionQueue,
+  ClaimExtractionJobData,
+  claimSynthesisQueue,
+  ClaimSynthesisJobData
+} from '../queues/setup.js'
 
 /**
  * Gloss item schema
@@ -614,12 +620,32 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: 'Summary not found' })
       }
 
-      // TODO: Queue extraction job using BullMQ
-      // For now, return placeholder response
-      const jobId = `claims-${summaryId}-${Date.now()}`
+      // Queue extraction job using BullMQ
+      const jobData: ClaimExtractionJobData = {
+        summaryId,
+        summaryType,
+        config: {
+          inputSources: config.inputSources,
+          extractionStrategy: config.extractionStrategy,
+          maxClaimsPerSummary: config.maxClaimsPerSummary,
+          maxSubclaimDepth: config.maxSubclaimDepth,
+          minConfidence: config.minConfidence,
+          modelId: config.modelId,
+          deduplicateClaims: config.deduplicateClaims,
+          mergeSimilarClaims: config.mergeSimilarClaims
+        }
+      }
+
+      const job = await claimExtractionQueue.add(
+        'extract-claims',
+        jobData,
+        {
+          jobId: `claims-${summaryId}-${Date.now()}`
+        }
+      )
 
       return reply.status(202).send({
-        jobId,
+        jobId: job.id as string,
         status: 'queued',
         summaryId
       })
@@ -654,10 +680,222 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
     },
-    async (_request, reply) => {
-      // TODO: Implement job status checking with BullMQ
-      // For now, return placeholder
-      return reply.status(404).send({ error: 'Job not found' })
+    async (request, reply) => {
+      const { jobId } = request.params
+
+      // Get job from queue
+      const job = await claimExtractionQueue.getJob(jobId)
+
+      if (!job) {
+        return reply.status(404).send({ error: 'Job not found' })
+      }
+
+      // Get job state
+      const state = await job.getState()
+      const progress = typeof job.progress === 'number' ? job.progress : null
+
+      // Map BullMQ states to API states
+      let status: string
+      if (state === 'completed') {
+        status = 'completed'
+      } else if (state === 'failed') {
+        status = 'failed'
+      } else if (state === 'active') {
+        status = 'processing'
+      } else {
+        status = 'queued'
+      }
+
+      // Get result or error
+      let result = null
+      let error = null
+
+      if (state === 'completed') {
+        result = job.returnvalue
+      } else if (state === 'failed') {
+        error = job.failedReason || 'Job failed'
+      }
+
+      return reply.send({
+        jobId: job.id as string,
+        status,
+        progress,
+        result,
+        error
+      })
+    }
+  )
+
+  /**
+   * Queue claim synthesis job
+   *
+   * @route POST /api/summaries/:summaryId/synthesize
+   * @param summaryId - Summary identifier
+   * @body Synthesis configuration
+   * @returns Job status with job ID
+   */
+  fastify.post<{
+    Params: { summaryId: string }
+    Body: {
+      synthesis_strategy?: 'hierarchical' | 'chronological' | 'narrative' | 'analytical'
+      max_length?: number
+      include_conflicts?: boolean
+      include_citations?: boolean
+    }
+  }>(
+    '/api/summaries/:summaryId/synthesize',
+    {
+      schema: {
+        description: 'Queue claim synthesis job to generate summary from claims',
+        tags: ['claims', 'synthesis'],
+        params: Type.Object({
+          summaryId: Type.String({ format: 'uuid' })
+        }),
+        body: Type.Object({
+          synthesis_strategy: Type.Optional(
+            Type.Union([
+              Type.Literal('hierarchical'),
+              Type.Literal('chronological'),
+              Type.Literal('narrative'),
+              Type.Literal('analytical')
+            ])
+          ),
+          max_length: Type.Optional(Type.Number({ minimum: 100, maximum: 2000 })),
+          include_conflicts: Type.Optional(Type.Boolean()),
+          include_citations: Type.Optional(Type.Boolean())
+        }),
+        response: {
+          202: Type.Object({
+            jobId: Type.String(),
+            status: Type.String(),
+            summaryId: Type.String()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { summaryId } = request.params
+      const config = request.body
+
+      // Verify summary exists and has claims
+      const summary = await fastify.prisma.videoSummary.findUnique({
+        where: { id: summaryId },
+        include: {
+          claims: {
+            where: { parentClaimId: null },
+            take: 1
+          }
+        }
+      })
+
+      if (!summary) {
+        return reply.status(404).send({ error: 'Summary not found' })
+      }
+
+      if (!summary.claims || summary.claims.length === 0) {
+        return reply.status(400).send({ error: 'Summary has no claims to synthesize' })
+      }
+
+      // Queue synthesis job using BullMQ
+      const jobData: ClaimSynthesisJobData = {
+        summaryId,
+        summaryType: 'video',
+        config: {
+          synthesis_strategy: config.synthesis_strategy || 'hierarchical',
+          max_length: config.max_length,
+          include_conflicts: config.include_conflicts,
+          include_citations: config.include_citations
+        }
+      }
+
+      const job = await claimSynthesisQueue.add(
+        'synthesize-summary',
+        jobData,
+        {
+          jobId: `synthesis-${summaryId}-${Date.now()}`
+        }
+      )
+
+      return reply.status(202).send({
+        jobId: job.id as string,
+        status: 'queued',
+        summaryId
+      })
+    }
+  )
+
+  /**
+   * Check claim synthesis job status
+   *
+   * @route GET /api/jobs/synthesis/:jobId
+   * @param jobId - Job identifier
+   * @returns Job status and result
+   */
+  fastify.get<{ Params: { jobId: string } }>(
+    '/api/jobs/synthesis/:jobId',
+    {
+      schema: {
+        description: 'Check claim synthesis job status',
+        tags: ['claims', 'synthesis'],
+        params: Type.Object({
+          jobId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            jobId: Type.String(),
+            status: Type.String(),
+            progress: Type.Union([Type.Number(), Type.Null()]),
+            result: Type.Union([Type.Any(), Type.Null()]),
+            error: Type.Union([Type.String(), Type.Null()])
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { jobId } = request.params
+
+      // Get job from queue
+      const job = await claimSynthesisQueue.getJob(jobId)
+
+      if (!job) {
+        return reply.status(404).send({ error: 'Job not found' })
+      }
+
+      // Get job state
+      const state = await job.getState()
+      const progress = typeof job.progress === 'number' ? job.progress : null
+
+      // Map BullMQ states to API states
+      let status: string
+      if (state === 'completed') {
+        status = 'completed'
+      } else if (state === 'failed') {
+        status = 'failed'
+      } else if (state === 'active') {
+        status = 'processing'
+      } else {
+        status = 'queued'
+      }
+
+      // Get result or error
+      let result = null
+      let error = null
+
+      if (state === 'completed') {
+        result = job.returnvalue
+      } else if (state === 'failed') {
+        error = job.failedReason || 'Job failed'
+      }
+
+      return reply.send({
+        jobId: job.id as string,
+        status,
+        progress,
+        result,
+        error
+      })
     }
   )
 
