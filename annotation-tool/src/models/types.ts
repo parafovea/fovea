@@ -92,8 +92,8 @@ export interface RelationType {
   wikidataUrl?: string // Full URL to Wikidata entry
   importedFrom?: 'wikidata' | 'persona' // Track import source
   importedAt?: string  // ISO timestamp of import
-  sourceTypes: ('entity' | 'role' | 'event' | 'time')[]
-  targetTypes: ('entity' | 'role' | 'event' | 'time')[]
+  sourceTypes: ('entity' | 'role' | 'event' | 'time' | 'claim')[]
+  targetTypes: ('entity' | 'role' | 'event' | 'time' | 'claim')[]
   constraints?: TypeConstraint[]
   symmetric?: boolean
   transitive?: boolean
@@ -105,9 +105,9 @@ export interface RelationType {
 export interface OntologyRelation {
   id: string
   relationTypeId: string
-  sourceType: 'entity' | 'role' | 'event' | 'time'
+  sourceType: 'entity' | 'role' | 'event' | 'time' | 'claim'
   sourceId: string
-  targetType: 'entity' | 'role' | 'event' | 'time'
+  targetType: 'entity' | 'role' | 'event' | 'time' | 'claim'
   targetId: string
   metadata?: Record<string, any>
   createdAt: string

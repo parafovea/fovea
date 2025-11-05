@@ -913,7 +913,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     id: Type.String({ format: 'uuid' }),
     sourceClaimId: Type.String({ format: 'uuid' }),
     targetClaimId: Type.String({ format: 'uuid' }),
-    relationTypeId: Type.String({ format: 'uuid' }),
+    relationTypeId: Type.String(),
     sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
     targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
     confidence: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
@@ -925,7 +925,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
   const CreateClaimRelationSchema = Type.Object({
     targetClaimId: Type.String({ format: 'uuid' }),
-    relationTypeId: Type.String({ format: 'uuid' }),
+    relationTypeId: Type.String(),
     sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
     targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
     confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
@@ -982,6 +982,44 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!targetClaim) {
         return reply.status(404).send({ error: 'Target claim not found' })
+      }
+
+      // Get summary to find persona and ontology
+      const summary = await fastify.prisma.videoSummary.findUnique({
+        where: { id: summaryId },
+        include: {
+          persona: {
+            include: {
+              ontology: true
+            }
+          }
+        }
+      })
+
+      if (!summary) {
+        return reply.status(404).send({ error: 'Summary not found' })
+      }
+
+      // Validate relationTypeId against ontology
+      if (summary.persona.ontology) {
+        const relationTypes = summary.persona.ontology.relationTypes as any[]
+        const relationType = relationTypes.find((rt: any) => rt.id === relationTypeId)
+
+        if (!relationType) {
+          return reply.status(400).send({
+            error: `Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`
+          })
+        }
+
+        // Check that this relation type allows claim→claim relations
+        const sourceTypes = relationType.sourceTypes as string[]
+        const targetTypes = relationType.targetTypes as string[]
+
+        if (!sourceTypes.includes('claim') || !targetTypes.includes('claim')) {
+          return reply.status(400).send({
+            error: `Relation type '${relationType.name}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`
+          })
+        }
       }
 
       // Create relation

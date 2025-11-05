@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   Paper,
@@ -9,6 +10,15 @@ import {
   Collapse,
   Button,
   Tooltip,
+  Divider,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Skeleton,
+  Alert,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -16,9 +26,15 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  AccountTree as RelationIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material'
 import { Claim } from '../../models/types'
 import { GlossRenderer } from '../GlossRenderer'
+import { ClaimRelationsViewer } from './ClaimRelationsViewer'
+import { ClaimRelationEditor } from './ClaimRelationEditor'
+import { createClaimRelation } from '../../store/claimsSlice'
+import { RootState, AppDispatch } from '../../store/store'
 
 interface ClaimsViewerProps {
   claims: Claim[]
@@ -29,13 +45,17 @@ interface ClaimsViewerProps {
   onDeleteClaim?: (claim: Claim) => void
   selectedClaimId?: string | null
   highlightSpans?: boolean
+  loading?: boolean
+  error?: string | null
 }
 
 interface ClaimTreeNodeProps {
   claim: Claim
   depth: number
+  summaryId: string
   personaId?: string
   selectedClaimId?: string | null
+  allClaims: Claim[]
   onEdit?: (claim: Claim) => void
   onDelete?: (claim: Claim) => void
   onAdd?: (parentClaimId: string) => void
@@ -48,16 +68,25 @@ interface ClaimTreeNodeProps {
 function ClaimTreeNode({
   claim,
   depth,
+  summaryId,
   personaId,
   selectedClaimId,
+  allClaims,
   onEdit,
   onDelete,
   onAdd,
   onSelect,
 }: ClaimTreeNodeProps) {
+  const dispatch = useDispatch<AppDispatch>()
   const [expanded, setExpanded] = useState(true)
+  const [showRelations, setShowRelations] = useState(false)
+  const [relationEditorOpen, setRelationEditorOpen] = useState(false)
   const hasSubclaims = claim.subclaims && claim.subclaims.length > 0
   const isSelected = selectedClaimId === claim.id
+
+  const ontology = useSelector((state: RootState) =>
+    state.persona.personaOntologies.find((o) => o.personaId === personaId)
+  )
 
   const handleToggle = () => {
     if (hasSubclaims) {
@@ -69,6 +98,21 @@ function ClaimTreeNode({
     if (onSelect) {
       onSelect(claim.id)
     }
+  }
+
+  const handleCreateRelation = async (relation: {
+    targetClaimId: string
+    relationTypeId: string
+    confidence?: number
+    notes?: string
+  }) => {
+    await dispatch(
+      createClaimRelation({
+        summaryId,
+        sourceClaimId: claim.id,
+        relation,
+      })
+    )
   }
 
   return (
@@ -162,6 +206,18 @@ function ClaimTreeNode({
 
           {/* Action Buttons */}
           <Stack direction="row" spacing={0.5}>
+            <Tooltip title={showRelations ? 'Hide relations' : 'Show relations'}>
+              <IconButton
+                size="small"
+                color={showRelations ? 'primary' : 'default'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowRelations(!showRelations)
+                }}
+              >
+                <RelationIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             {onAdd && (
               <Tooltip title="Add subclaim">
                 <IconButton
@@ -204,7 +260,32 @@ function ClaimTreeNode({
             )}
           </Stack>
         </Stack>
+
+        {/* Relations Section */}
+        {showRelations && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <ClaimRelationsViewer
+              claimId={claim.id}
+              summaryId={summaryId}
+              personaId={personaId || ''}
+              onAddRelation={() => setRelationEditorOpen(true)}
+            />
+          </>
+        )}
       </Paper>
+
+      {/* Relation Editor Dialog */}
+      {personaId && ontology && (
+        <ClaimRelationEditor
+          open={relationEditorOpen}
+          onClose={() => setRelationEditorOpen(false)}
+          onSave={handleCreateRelation}
+          sourceClaim={claim}
+          availableClaims={allClaims}
+          relationTypes={ontology.relationTypes}
+        />
+      )}
 
       {/* Subclaims */}
       {hasSubclaims && (
@@ -215,8 +296,10 @@ function ClaimTreeNode({
                 key={subclaim.id}
                 claim={subclaim}
                 depth={depth + 1}
+                summaryId={summaryId}
                 personaId={personaId}
                 selectedClaimId={selectedClaimId}
+                allClaims={allClaims}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onAdd={onAdd}
@@ -235,15 +318,111 @@ function ClaimTreeNode({
  */
 export default function ClaimsViewer({
   claims,
+  summaryId,
   personaId,
   onEditClaim,
   onAddClaim,
   onDeleteClaim,
   selectedClaimId,
+  loading = false,
+  error = null,
 }: ClaimsViewerProps) {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [minConfidence, setMinConfidence] = useState<number | ''>('')
+  const [filterStrategy, setFilterStrategy] = useState<string>('all')
+  const [filterModel, setFilterModel] = useState<string>('all')
+
   const handleSelect = (_claimId: string) => {
     // Selection is handled by parent component via Redux
   }
+
+  // Loading state
+  if (loading) {
+    return (
+      <Box>
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Stack spacing={2}>
+            <Skeleton variant="rectangular" height={40} />
+            <Stack direction="row" spacing={2}>
+              <Skeleton variant="rectangular" height={40} width={150} />
+              <Skeleton variant="rectangular" height={40} width={150} />
+              <Skeleton variant="rectangular" height={40} width={150} />
+            </Stack>
+          </Stack>
+        </Paper>
+        <Stack spacing={2}>
+          <Skeleton variant="rectangular" height={100} />
+          <Skeleton variant="rectangular" height={80} />
+          <Skeleton variant="rectangular" height={120} />
+        </Stack>
+      </Box>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mb: 2 }}>
+        <Typography variant="body2" gutterBottom>
+          Failed to load claims
+        </Typography>
+        <Typography variant="caption">{error}</Typography>
+      </Alert>
+    )
+  }
+
+  // Filter claims based on search and filters
+  const filteredClaims = useMemo(() => {
+    if (!claims) return []
+
+    const filterClaim = (claim: Claim): Claim | null => {
+      let matches = true
+
+      // Search term filter (check claim text/gloss)
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase()
+        const claimText = claim.gloss
+          .map((g) => g.content)
+          .join(' ')
+          .toLowerCase()
+        matches = matches && (claimText.includes(searchLower) || claim.text?.toLowerCase().includes(searchLower))
+      }
+
+      // Confidence filter
+      if (minConfidence !== '' && claim.confidence !== null && claim.confidence !== undefined) {
+        matches = matches && claim.confidence >= minConfidence
+      }
+
+      // Strategy filter
+      if (filterStrategy !== 'all' && claim.extractionStrategy) {
+        matches = matches && claim.extractionStrategy === filterStrategy
+      }
+
+      // Model filter
+      if (filterModel !== 'all' && claim.modelUsed) {
+        matches = matches && claim.modelUsed === filterModel
+      }
+
+      // Filter subclaims recursively
+      if (claim.subclaims && claim.subclaims.length > 0) {
+        const filteredSubclaims = claim.subclaims
+          .map(filterClaim)
+          .filter((c): c is Claim => c !== null)
+
+        // If this claim matches OR has matching subclaims, include it
+        if (matches || filteredSubclaims.length > 0) {
+          return {
+            ...claim,
+            subclaims: filteredSubclaims,
+          }
+        }
+      }
+
+      return matches ? claim : null
+    }
+
+    return claims.map(filterClaim).filter((c): c is Claim => c !== null)
+  }, [claims, searchTerm, minConfidence, filterStrategy, filterModel])
 
   // Empty state
   if (!claims || claims.length === 0) {
@@ -277,19 +456,104 @@ export default function ClaimsViewer({
 
   return (
     <Box>
-      {claims.map((claim) => (
-        <ClaimTreeNode
-          key={claim.id}
-          claim={claim}
-          depth={0}
-          personaId={personaId}
-          selectedClaimId={selectedClaimId}
-          onEdit={onEditClaim}
-          onDelete={onDeleteClaim}
-          onAdd={onAddClaim}
-          onSelect={handleSelect}
-        />
-      ))}
+      {/* Filter Bar */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Stack spacing={2}>
+          {/* Search */}
+          <TextField
+            placeholder="Search claims..."
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          {/* Filters */}
+          <Stack direction="row" spacing={2}>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Min Confidence</InputLabel>
+              <Select
+                value={minConfidence}
+                onChange={(e) => setMinConfidence(e.target.value === '' ? '' : Number(e.target.value))}
+                label="Min Confidence"
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value={0.5}>50%+</MenuItem>
+                <MenuItem value={0.7}>70%+</MenuItem>
+                <MenuItem value={0.8}>80%+</MenuItem>
+                <MenuItem value={0.9}>90%+</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Strategy</InputLabel>
+              <Select
+                value={filterStrategy}
+                onChange={(e) => setFilterStrategy(e.target.value)}
+                label="Strategy"
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="sentence-based">Sentence-based</MenuItem>
+                <MenuItem value="semantic-units">Semantic Units</MenuItem>
+                <MenuItem value="hierarchical">Hierarchical</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Model</InputLabel>
+              <Select
+                value={filterModel}
+                onChange={(e) => setFilterModel(e.target.value)}
+                label="Model"
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="gpt-4">GPT-4</MenuItem>
+                <MenuItem value="gpt-3.5-turbo">GPT-3.5</MenuItem>
+                <MenuItem value="llama-3-70b">Llama 3 70B</MenuItem>
+                <MenuItem value="qwen-2.5">Qwen 2.5</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+
+          {/* Results count */}
+          <Typography variant="caption" color="text.secondary">
+            Showing {filteredClaims.length} of {claims.length} claim{claims.length !== 1 ? 's' : ''}
+          </Typography>
+        </Stack>
+      </Paper>
+
+      {/* Claims Tree */}
+      {filteredClaims.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            No claims match your filters
+          </Typography>
+        </Paper>
+      ) : (
+        <Box>
+          {filteredClaims.map((claim) => (
+            <ClaimTreeNode
+              key={claim.id}
+              claim={claim}
+              depth={0}
+              summaryId={summaryId}
+              personaId={personaId}
+              selectedClaimId={selectedClaimId}
+              allClaims={claims}
+              onEdit={onEditClaim}
+              onDelete={onDeleteClaim}
+              onAdd={onAddClaim}
+              onSelect={handleSelect}
+            />
+          ))}
+        </Box>
+      )}
     </Box>
   )
 }

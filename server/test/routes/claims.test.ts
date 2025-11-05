@@ -493,19 +493,21 @@ describe('Claims API', () => {
 
     beforeEach(async () => {
       // Create ontology with relation type
-      const ontology = await prisma.ontology.create({
+      await prisma.ontology.create({
         data: {
           personaId: testPersonaId,
           relationTypes: [
             {
               id: 'conflicts',
               name: 'Conflicts With',
-              gloss: [{ type: 'text', content: 'Contradicts another claim' }]
+              gloss: [{ type: 'text', content: 'Contradicts another claim' }],
+              sourceTypes: ['claim'],
+              targetTypes: ['claim']
             }
           ]
         }
       })
-      relationTypeId = ontology.id
+      relationTypeId = 'conflicts'
 
       // Create two claims
       const c1 = await prisma.claim.create({
@@ -590,6 +592,117 @@ describe('Claims API', () => {
 
       expect(response.statusCode).toBe(200)
       expect(response.json().success).toBe(true)
+    })
+
+    it('should reject relation with invalid relation type', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims/${claim1Id}/relations`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          targetClaimId: claim2Id,
+          relationTypeId: 'nonexistent-type',
+          confidence: 0.9
+        }
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json().error).toContain('Invalid relation type')
+    })
+
+    it('should reject relation type that does not support claims', async () => {
+      // Add relation type that only supports entities
+      await prisma.ontology.update({
+        where: { personaId: testPersonaId },
+        data: {
+          relationTypes: [
+            {
+              id: 'conflicts',
+              name: 'Conflicts With',
+              gloss: [{ type: 'text', content: 'Contradicts another claim' }],
+              sourceTypes: ['claim'],
+              targetTypes: ['claim']
+            },
+            {
+              id: 'is-a',
+              name: 'Is A',
+              gloss: [{ type: 'text', content: 'Entity classification' }],
+              sourceTypes: ['entity'],
+              targetTypes: ['entity']
+            }
+          ]
+        }
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims/${claim1Id}/relations`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          targetClaimId: claim2Id,
+          relationTypeId: 'is-a',
+          confidence: 0.9
+        }
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json().error).toContain('does not support claim-to-claim')
+    })
+
+    it('should handle incoming and outgoing relations correctly', async () => {
+      // Create relation from claim1 to claim2
+      await prisma.claimRelation.create({
+        data: {
+          sourceClaimId: claim1Id,
+          targetClaimId: claim2Id,
+          relationTypeId,
+          confidence: 0.9
+        }
+      })
+
+      // Check claim1's relations (should have 1 outgoing, 0 incoming)
+      const response1 = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims/${claim1Id}/relations`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response1.statusCode).toBe(200)
+      const relations1 = response1.json()
+      expect(relations1.asSource).toHaveLength(1)
+      expect(relations1.asTarget).toHaveLength(0)
+
+      // Check claim2's relations (should have 0 outgoing, 1 incoming)
+      const response2 = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims/${claim2Id}/relations`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response2.statusCode).toBe(200)
+      const relations2 = response2.json()
+      expect(relations2.asSource).toHaveLength(0)
+      expect(relations2.asTarget).toHaveLength(1)
+      expect(relations2.asTarget[0].sourceClaimId).toBe(claim1Id)
+    })
+
+    it('should include confidence and notes in created relation', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims/${claim1Id}/relations`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          targetClaimId: claim2Id,
+          relationTypeId,
+          confidence: 0.75,
+          notes: 'Test notes for relation'
+        }
+      })
+
+      expect(response.statusCode).toBe(201)
+      const relation = response.json()
+      expect(relation.confidence).toBe(0.75)
+      expect(relation.notes).toBe('Test notes for relation')
     })
   })
 })
