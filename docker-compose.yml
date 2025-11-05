@@ -26,12 +26,14 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://fovea:fovea_password@postgres:5432/fovea
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MODEL_SERVICE_URL=http://model-service:8000
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-http://model-service:8000}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
     volumes:
       - ./data:/data
     depends_on:
@@ -101,15 +103,15 @@ services:
       - TRANSFORMERS_CACHE=/models
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - MODEL_CONFIG_PATH=/config/models.yaml
-      - CUDA_VISIBLE_DEVICES=0,1,2,3
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      - PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:512}
     profiles: ["gpu"]
 
   postgres:
     image: pgvector/pgvector:pg16
     environment:
       - POSTGRES_USER=fovea
-      - POSTGRES_PASSWORD=fovea_password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fovea_password}
       - POSTGRES_DB=fovea
     ports:
       - "5432:5432"
@@ -170,7 +172,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana

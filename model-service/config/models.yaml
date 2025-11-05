@@ -3,7 +3,7 @@
 
 models:
   video_summarization:
-    selected: "llama-4-maverick"
+    selected: "gemma-3-27b"
     options:
       llama-4-maverick:
         model_id: "meta-llama/Llama-4-Maverick"
@@ -66,7 +66,7 @@ models:
         description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
-    selected: "llama-4-scout"
+    selected: "gemma-3-27b-text"
     options:
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
@@ -260,7 +260,7 @@ models:
         description: "Azure Speech Services, real-time streaming"
 
   claim_extraction:
-    selected: "llama-4-scout"
+    selected: "gemma-3-27b"
     options:
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
@@ -285,7 +285,7 @@ models:
         description: "Lightweight, fast claim extraction for quick iteration"
 
   claim_synthesis:
-    selected: "llama-4-scout"
+    selected: "gemma-3-27b"
     options:
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
