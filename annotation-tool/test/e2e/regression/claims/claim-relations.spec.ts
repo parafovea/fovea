@@ -1,5 +1,24 @@
 import { test, expect } from '../../fixtures/test-context.js'
 
+// Helper to open VideoSummaryDialog and navigate to Claims tab
+async function openClaimsTab(page: any) {
+  await page.getByRole('button', { name: /edit summary/i }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await page.waitForTimeout(500)
+  const personaSelect = dialog.getByLabel(/select persona/i)
+  if (await personaSelect.isVisible()) {
+    await personaSelect.click()
+    // Select second option (first is disabled placeholder)
+    await page.getByRole('option').nth(1).click()
+  }
+  const claimsTab = dialog.getByRole('tab', { name: /claims/i })
+  await expect(claimsTab).toBeVisible()
+  await claimsTab.click()
+  // Wait for empty summary to be created - "Add Manual Claim" action button will be enabled
+  await expect(dialog.getByRole('button', { name: /add manual claim/i }).first()).toBeEnabled({ timeout: 10000 })
+}
+
 test.describe('Claim Relations', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -7,243 +26,305 @@ test.describe('Claim Relations', () => {
     page,
     testPersona,
     testVideo,
+    testClaimRelationType,
     annotationWorkspace
   }) => {
     // Navigate to annotation workspace
-    await annotationWorkspace.navigateTo()
+    await annotationWorkspace.navigateTo(testVideo.id)
 
     // First, ensure we have a summary with claims
-    // This assumes there's a way to create or have test claims
-    // For now, we'll check if claims tab exists
-    const claimsTab = page.getByRole('tab', { name: /claims/i })
+    await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
+    await openClaimsTab(page)
+
+    const summaryDialog = page.getByRole('dialog').first()
+
+    // Create at least 2 claims for relation testing
+    const claimsToCreate = [
+      'The economy is growing',
+      'Unemployment is decreasing'
+    ]
+
+    for (const claimText of claimsToCreate) {
+      const addButton = summaryDialog.getByRole('button', { name: /add manual claim/i }).first()
+      await expect(addButton).toBeVisible()
+      await addButton.click()
+
+      const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+      await expect(claimDialog).toBeVisible()
+
+      const claimInput = claimDialog.getByLabel(/claim text with references/i)
+      await claimInput.fill(claimText)
+
+      const saveButton = claimDialog.getByRole('button', { name: /create/i })
+      await saveButton.click()
+
+      await expect(claimDialog).not.toBeVisible()
+      await page.waitForTimeout(500)
+    }
+
+    // Re-navigate to Claims tab (creating claims may have switched tabs)
+    const claimsTab = summaryDialog.getByRole('tab', { name: /claims/i })
     await expect(claimsTab).toBeVisible()
     await claimsTab.click()
 
-    // Wait for claims to load
+    // Verify we're actually on Claims tab by checking it's selected
+    await expect(claimsTab).toHaveAttribute('aria-selected', 'true', { timeout: 5000 })
+
+    // Wait for claims to render
     await page.waitForTimeout(1000)
 
-    // Check if we have claims (this test requires pre-existing claims)
-    const claimItems = page.locator('[data-testid*="claim"]').or(page.locator('text=/Claim/i')).first()
+    // Verify claims are visible before trying to interact with them
+    await expect(summaryDialog.getByText(/the economy is growing/i)).toBeVisible({ timeout: 5000 })
 
-    // If no claims exist, skip this test or create them
-    const claimsExist = await claimItems.isVisible().catch(() => false)
+    // Click "Show relations" button on first claim
+    const showRelationsButton = summaryDialog.getByRole('button', { name: /show relations/i }).first()
+    await expect(showRelationsButton).toBeVisible({ timeout: 5000 })
+    await showRelationsButton.click()
 
-    if (!claimsExist) {
-      test.skip()
-      return
-    }
+    // Wait for relations panel to load
+    await page.waitForTimeout(1000)
 
-    // Find first claim and click to expand/select
-    const firstClaim = page.locator('[role="button"]').filter({ hasText: /Claim/ }).first()
-    await firstClaim.click()
-    await page.waitForTimeout(500)
+    // Click "Add Relation" button
+    const addRelationButton = page.getByRole('button', { name: /add relation/i })
+    await expect(addRelationButton).toBeVisible({ timeout: 5000 })
+    await addRelationButton.click()
 
-    // Look for relations button/icon
-    const relationsButton = page.getByLabel(/relations/i).or(
-      page.getByRole('button').filter({ has: page.locator('svg') }).filter({ hasText: /relation/i })
-    ).first()
+    // Dialog should open with relation types
+    const relationDialog = page.getByRole('dialog', { name: /create.*relation/i })
+    await expect(relationDialog).toBeVisible({ timeout: 5000 })
 
-    if (await relationsButton.isVisible().catch(() => false)) {
-      await relationsButton.click()
-      await page.waitForTimeout(500)
+    // Select relation type (should have "Supports" from testClaimRelationType)
+    const relationTypeSelect = relationDialog.getByLabel(/relation type/i)
+    await expect(relationTypeSelect).toBeVisible()
+    await relationTypeSelect.click()
+    await page.waitForTimeout(300)
 
-      // Look for "Add Relation" button
-      const addRelationButton = page.getByRole('button', { name: /add relation/i })
+    const supportsOption = page.getByRole('option', { name: /supports/i })
+    await expect(supportsOption).toBeVisible()
+    await supportsOption.click()
 
-      if (await addRelationButton.isVisible().catch(() => false)) {
-        await addRelationButton.click()
-        await page.waitForTimeout(500)
+    // Select target claim using autocomplete
+    const targetClaimInput = relationDialog.getByLabel(/target claim/i)
+    await expect(targetClaimInput).toBeVisible()
+    await targetClaimInput.click()
+    await page.waitForTimeout(300)
 
-        // Dialog should open
-        const dialog = page.locator('[role="dialog"]').filter({ hasText: /create.*relation/i })
-        await expect(dialog).toBeVisible({ timeout: 5000 })
+    const firstClaimOption = page.getByRole('option').first()
+    await expect(firstClaimOption).toBeVisible()
+    await firstClaimOption.click()
 
-        // Select relation type (if available)
-        const relationTypeSelect = dialog.locator('label:has-text("Relation Type")').locator('..').locator('input, select').first()
+    // Save the relation
+    const saveButton = relationDialog.getByRole('button', { name: /save relation/i })
+    await expect(saveButton).toBeEnabled({ timeout: 5000 })
+    await saveButton.click()
+    await page.waitForTimeout(1000)
 
-        if (await relationTypeSelect.isVisible().catch(() => false)) {
-          await relationTypeSelect.click()
-          await page.waitForTimeout(300)
-
-          // Select first available relation type
-          const firstOption = page.locator('[role="option"]').first()
-          if (await firstOption.isVisible().catch(() => false)) {
-            await firstOption.click()
-          }
-        }
-
-        // Select target claim
-        const targetClaimInput = dialog.locator('label:has-text("Target Claim")').locator('..').locator('input').first()
-
-        if (await targetClaimInput.isVisible().catch(() => false)) {
-          await targetClaimInput.click()
-          await page.waitForTimeout(300)
-
-          // Select first available claim
-          const firstClaimOption = page.locator('[role="option"]').first()
-          if (await firstClaimOption.isVisible().catch(() => false)) {
-            await firstClaimOption.click()
-          }
-        }
-
-        // Try to save
-        const saveButton = dialog.getByRole('button', { name: /save/i })
-        const isDisabled = await saveButton.isDisabled().catch(() => true)
-
-        if (!isDisabled) {
-          await saveButton.click()
-          await page.waitForTimeout(1000)
-
-          // Verify relation was created (dialog should close)
-          await expect(dialog).not.toBeVisible({ timeout: 5000 })
-        }
-      }
-    }
+    // Verify relation was created (dialog should close)
+    await expect(relationDialog).not.toBeVisible({ timeout: 5000 })
   })
 
   test('displays outgoing and incoming relations separately', async ({
     page,
     testPersona,
     testVideo,
+    testClaimRelationType,
     annotationWorkspace
   }) => {
-    await annotationWorkspace.navigateTo()
+    // Navigate to annotation workspace
+    await annotationWorkspace.navigateTo(testVideo.id)
+    await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    // Navigate to claims
-    const claimsTab = page.getByRole('tab', { name: /claims/i })
-    if (await claimsTab.isVisible().catch(() => false)) {
-      await claimsTab.click()
-      await page.waitForTimeout(1000)
+    await openClaimsTab(page)
 
-      // Find claim and show relations
-      const firstClaim = page.locator('[role="button"]').filter({ hasText: /Claim/ }).first()
-      if (await firstClaim.isVisible().catch(() => false)) {
-        await firstClaim.click()
-        await page.waitForTimeout(500)
+    const summaryDialog = page.getByRole('dialog').first()
 
-        // Look for relations section
-        const relationsButton = page.getByLabel(/relations/i).first()
-        if (await relationsButton.isVisible().catch(() => false)) {
-          await relationsButton.click()
-          await page.waitForTimeout(500)
+    // Create a single test claim
+    const addButton = summaryDialog.getByRole('button', { name: /add manual claim/i }).first()
+    await expect(addButton).toBeVisible()
+    await addButton.click()
 
-          // Check for outgoing/incoming sections
-          const outgoingSection = page.locator('text=/outgoing.*relations/i')
-          const incomingSection = page.locator('text=/incoming.*relations/i')
+    const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+    await expect(claimDialog).toBeVisible()
 
-          // At least one should be visible if relations feature is working
-          const hasRelationsSections =
-            await outgoingSection.isVisible().catch(() => false) ||
-            await incomingSection.isVisible().catch(() => false)
+    const claimInput = claimDialog.getByLabel(/claim text with references/i)
+    await claimInput.fill('Test claim for relations')
 
-          expect(hasRelationsSections).toBe(true)
-        }
-      }
-    }
+    const saveButton = claimDialog.getByRole('button', { name: /create/i })
+    await saveButton.click()
+
+    await expect(claimDialog).not.toBeVisible()
+    await page.waitForTimeout(500)
+
+    // Click "Show relations" button
+    const showRelationsButton = summaryDialog.getByRole('button', { name: /show relations/i }).first()
+    await expect(showRelationsButton).toBeVisible()
+    await showRelationsButton.click()
+    await page.waitForTimeout(2000) // Wait for relations to load
+
+    // Check for outgoing/incoming sections or empty state
+    const outgoingSection = page.locator('text=/outgoing/i')
+    const incomingSection = page.locator('text=/incoming/i')
+
+    // At least one section should be visible (even if empty)
+    const hasOutgoing = await outgoingSection.isVisible({ timeout: 5000 }).catch(() => false)
+    const hasIncoming = await incomingSection.isVisible({ timeout: 5000 }).catch(() => false)
+
+    expect(hasOutgoing || hasIncoming).toBeTruthy()
   })
 
   test('deletes a claim relation', async ({
     page,
     testPersona,
     testVideo,
+    testClaimRelationType,
     annotationWorkspace
   }) => {
-    await annotationWorkspace.navigateTo()
+    // Navigate to annotation workspace
+    await annotationWorkspace.navigateTo(testVideo.id)
+    await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    const claimsTab = page.getByRole('tab', { name: /claims/i })
-    if (await claimsTab.isVisible().catch(() => false)) {
-      await claimsTab.click()
-      await page.waitForTimeout(1000)
+    await openClaimsTab(page)
 
-      // Find claim with relations
-      const firstClaim = page.locator('[role="button"]').filter({ hasText: /Claim/ }).first()
-      if (await firstClaim.isVisible().catch(() => false)) {
-        await firstClaim.click()
-        await page.waitForTimeout(500)
+    const summaryDialog = page.getByRole('dialog').first()
 
-        const relationsButton = page.getByLabel(/relations/i).first()
-        if (await relationsButton.isVisible().catch(() => false)) {
-          await relationsButton.click()
-          await page.waitForTimeout(500)
+    // Create two claims for relation testing
+    const claimsToCreate = ['Source claim', 'Target claim']
+    for (const claimText of claimsToCreate) {
+      const addButton = summaryDialog.getByRole('button', { name: /add manual claim/i }).first()
+      await expect(addButton).toBeVisible()
+      await addButton.click()
 
-          // Look for delete button on a relation
-          const deleteButton = page.getByLabel(/delete.*relation/i).or(
-            page.getByRole('button').filter({ has: page.locator('svg[data-testid*="Delete"]') })
-          ).first()
+      const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+      await expect(claimDialog).toBeVisible()
 
-          if (await deleteButton.isVisible().catch(() => false)) {
-            // Click delete
-            await deleteButton.click()
-            await page.waitForTimeout(300)
+      const claimInput = claimDialog.getByLabel(/claim text with references/i)
+      await claimInput.fill(claimText)
 
-            // Confirm deletion if dialog appears
-            const confirmButton = page.getByRole('button', { name: /ok|yes|confirm|delete/i })
-            if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-              await confirmButton.click()
-            }
+      const saveButton = claimDialog.getByRole('button', { name: /create/i })
+      await saveButton.click()
 
-            await page.waitForTimeout(500)
-
-            // Relation should be removed (this is basic check - actual verification would need more context)
-            // We just verify no error occurred
-            await expect(page.locator('text=/error/i')).not.toBeVisible()
-          }
-        }
-      }
+      await expect(claimDialog).not.toBeVisible()
+      await page.waitForTimeout(500)
     }
+
+    // Re-navigate to Claims tab (creating claims may have switched tabs)
+    const claimsTab = summaryDialog.getByRole('tab', { name: /claims/i })
+    await expect(claimsTab).toBeVisible()
+    await claimsTab.click()
+    await page.waitForTimeout(1000)
+
+    // Verify claims are visible
+    await expect(summaryDialog.getByText(/source claim/i)).toBeVisible({ timeout: 5000 })
+    await expect(summaryDialog.getByText(/target claim/i)).toBeVisible({ timeout: 5000 })
+
+    // Click "Show relations" button on first claim
+    const showRelationsButton = summaryDialog.getByRole('button', { name: /show relations/i }).first()
+    await expect(showRelationsButton).toBeVisible({ timeout: 5000 })
+    await showRelationsButton.click()
+    await page.waitForTimeout(2000)
+
+    // Create a relation
+    const addRelationButton = page.getByRole('button', { name: /add relation/i })
+    await expect(addRelationButton).toBeVisible()
+    await addRelationButton.click()
+
+    const relationDialog = page.getByRole('dialog', { name: /create claim relation/i })
+    await expect(relationDialog).toBeVisible()
+
+    // Select relation type
+    const relationTypeSelect = relationDialog.getByLabel(/relation type/i)
+    await relationTypeSelect.click()
+    const supportsOption = page.getByRole('option', { name: /supports/i })
+    await supportsOption.click()
+
+    // Select target claim
+    const targetClaimInput = relationDialog.getByLabel(/target claim/i)
+    await targetClaimInput.click()
+    const targetOption = page.getByRole('option').first()
+    await targetOption.click()
+
+    // Save relation
+    const saveButton = relationDialog.getByRole('button', { name: /save relation/i })
+    await expect(saveButton).toBeEnabled()
+    await saveButton.click()
+    await expect(relationDialog).not.toBeVisible()
+    await page.waitForTimeout(1000)
+
+    // Now delete the relation
+    const deleteRelationButton = page.getByRole('button', { name: /delete.*relation/i }).first()
+    await expect(deleteRelationButton).toBeVisible({ timeout: 5000 })
+
+    // Set up dialog handler for confirmation
+    page.on('dialog', dialog => dialog.accept())
+
+    await deleteRelationButton.click()
+    await page.waitForTimeout(1000)
+
+    // Verify relation was deleted - delete button should not be visible anymore
+    const relationStillExists = await deleteRelationButton.isVisible().catch(() => false)
+    expect(relationStillExists).toBeFalsy()
   })
 
   test('validates relation type supports claim-to-claim', async ({
     page,
     testPersona,
     testVideo,
+    testClaimRelationType,
     annotationWorkspace
   }) => {
-    await annotationWorkspace.navigateTo()
+    // Navigate to annotation workspace
+    await annotationWorkspace.navigateTo(testVideo.id)
+    await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    const claimsTab = page.getByRole('tab', { name: /claims/i })
-    if (await claimsTab.isVisible().catch(() => false)) {
-      await claimsTab.click()
-      await page.waitForTimeout(1000)
+    await openClaimsTab(page)
 
-      const firstClaim = page.locator('[role="button"]').filter({ hasText: /Claim/ }).first()
-      if (await firstClaim.isVisible().catch(() => false)) {
-        await firstClaim.click()
-        await page.waitForTimeout(500)
+    const summaryDialog = page.getByRole('dialog').first()
 
-        const relationsButton = page.getByLabel(/relations/i).first()
-        if (await relationsButton.isVisible().catch(() => false)) {
-          await relationsButton.click()
-          await page.waitForTimeout(500)
+    // Create a test claim
+    const addButton = summaryDialog.getByRole('button', { name: /add manual claim/i }).first()
+    await expect(addButton).toBeVisible()
+    await addButton.click()
 
-          const addRelationButton = page.getByRole('button', { name: /add relation/i })
+    const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+    await expect(claimDialog).toBeVisible()
 
-          if (await addRelationButton.isVisible().catch(() => false)) {
-            await addRelationButton.click()
-            await page.waitForTimeout(500)
+    const claimInput = claimDialog.getByLabel(/claim text with references/i)
+    await claimInput.fill('Test claim')
 
-            const dialog = page.locator('[role="dialog"]')
-            await expect(dialog).toBeVisible({ timeout: 5000 })
+    const saveButton = claimDialog.getByRole('button', { name: /create/i })
+    await saveButton.click()
 
-            // Check if there's a warning about no compatible relation types
-            const noTypesWarning = dialog.locator('text=/no relation types.*claim/i')
-            const hasWarning = await noTypesWarning.isVisible().catch(() => false)
+    await expect(claimDialog).not.toBeVisible()
+    await page.waitForTimeout(500)
 
-            // If warning exists, that's a valid state - test passes
-            // If no warning, relation types dropdown should exist
-            if (!hasWarning) {
-              const relationTypeSelect = dialog.locator('label:has-text("Relation Type")')
-              await expect(relationTypeSelect).toBeVisible()
-            }
+    // Click "Show relations" button
+    const showRelationsButton = summaryDialog.getByRole('button', { name: /show relations/i }).first()
+    await expect(showRelationsButton).toBeVisible()
+    await showRelationsButton.click()
+    await page.waitForTimeout(500)
 
-            // Close dialog
-            const cancelButton = dialog.getByRole('button', { name: /cancel/i })
-            if (await cancelButton.isVisible().catch(() => false)) {
-              await cancelButton.click()
-            }
-          }
-        }
-      }
-    }
+    // Click "Add Relation" button
+    const addRelationButton = page.getByRole('button', { name: /add relation/i })
+    await expect(addRelationButton).toBeVisible({ timeout: 5000 })
+    await addRelationButton.click()
+    await page.waitForTimeout(1000)
+
+    // Dialog should open
+    const relationDialog = page.getByRole('dialog', { name: /create.*relation/i })
+    await expect(relationDialog).toBeVisible({ timeout: 5000 })
+
+    // Verify that claim-to-claim relation type "Supports" is available
+    const relationTypeSelect = relationDialog.getByLabel(/relation type/i)
+    await expect(relationTypeSelect).toBeVisible()
+    await relationTypeSelect.click()
+    await page.waitForTimeout(300)
+
+    const supportsOption = page.getByRole('option', { name: /supports/i })
+    await expect(supportsOption).toBeVisible()
+
+    // Close dialog
+    const cancelButton = relationDialog.getByRole('button', { name: /cancel/i })
+    await cancelButton.click()
+    await expect(relationDialog).not.toBeVisible()
   })
 })

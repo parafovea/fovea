@@ -18,7 +18,6 @@ import {
   fetchVideoSummaryForPersona,
   saveVideoSummary,
   updateCurrentSummary,
-  setCurrentSummary,
 } from '../store/videoSummarySlice'
 import {
   fetchClaims,
@@ -29,11 +28,13 @@ import {
   checkExtractionJob,
   clearExtractionState,
 } from '../store/claimsSlice'
+import { fetchPersonaOntology } from '../store/personaSlice'
 import GlossEditor from './GlossEditor'
 import ClaimsViewer from './claims/ClaimsViewer'
 import ClaimEditor from './claims/ClaimEditor'
 import ClaimsExtractionDialog from './claims/ClaimsExtractionDialog'
-import { GlossItem, VideoSummary, Claim, ClaimExtractionConfig } from '../models/types'
+import { ClaimSpanHighlighter } from './claims/ClaimSpanHighlighter'
+import { GlossItem, VideoSummary, Claim, ClaimExtractionConfig, ClaimTextSpan } from '../models/types'
 import { debounce } from 'lodash'
 
 interface VideoSummaryEditorProps {
@@ -67,6 +68,8 @@ export default function VideoSummaryEditor({
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
   const [editingClaim, setEditingClaim] = useState<Claim | undefined>(undefined)
   const [parentClaimId, setParentClaimId] = useState<string | undefined>(undefined)
+  const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
+  const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
 
   // Get current claims
   const claims = currentSummary ? claimsBySummary[currentSummary.id] || [] : []
@@ -79,13 +82,29 @@ export default function VideoSummaryEditor({
           if (result.payload) {
             setLocalSummary((result.payload as VideoSummary).summary || [])
           } else {
-            // No existing summary - will be created on first save
-            dispatch(setCurrentSummary(null))
-            setLocalSummary([])
+            // No existing summary - create empty one immediately so claims can be added
+            const emptySummary: Partial<VideoSummary> & { videoId: string; personaId: string } = {
+              videoId,
+              personaId,
+              summary: [],
+            }
+            dispatch(saveVideoSummary(emptySummary as VideoSummary))
+              .then((saveResult) => {
+                if (saveResult.payload) {
+                  setLocalSummary([])
+                }
+              })
           }
         })
     }
   }, [videoId, personaId, dispatch])
+
+  // Fetch persona ontology when personaId changes
+  useEffect(() => {
+    if (personaId) {
+      dispatch(fetchPersonaOntology(personaId))
+    }
+  }, [personaId, dispatch])
 
   // Fetch claims when switching to Claims tab
   useEffect(() => {
@@ -207,7 +226,22 @@ export default function VideoSummaryEditor({
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue)
+    // Clear highlighting when switching tabs
+    if (newValue === 0) {
+      setHighlightedSpans([])
+      setHighlightedClaimId(null)
+    }
   }
+
+  const handleClaimSelect = (claimId: string, sourceSpans: ClaimTextSpan[]) => {
+    // Switch to Summary tab to show highlighted text
+    setActiveTab(0)
+    setHighlightedSpans(sourceSpans)
+    setHighlightedClaimId(claimId)
+  }
+
+  // Convert GlossItem[] to plain text for highlighting
+  const summaryText = localSummary.map(item => item.content).join(' ')
 
   if (loading) {
     return (
@@ -257,7 +291,7 @@ export default function VideoSummaryEditor({
             <Button
               variant="contained"
               onClick={() => setExtractDialogOpen(true)}
-              disabled={extracting || !currentSummary}
+              disabled={extracting || !currentSummary || localSummary.length === 0}
               size="small"
             >
               Extract Claims
@@ -291,15 +325,33 @@ export default function VideoSummaryEditor({
         <Box sx={{ p: 2 }}>
           {/* Summary Tab */}
           {activeTab === 0 && (
-            <GlossEditor
-              gloss={localSummary}
-              onChange={handleSummaryChange}
-              personaId={personaId}
-              videoId={videoId}
-              includeAnnotations={true}
-              disabled={disabled}
-              label="Video Summary"
-            />
+            <>
+              {highlightedSpans.length > 0 ? (
+                <Box>
+                  <Alert severity="info" sx={{ mb: 2 }} onClose={() => {
+                    setHighlightedSpans([])
+                    setHighlightedClaimId(null)
+                  }}>
+                    Showing highlighted text for selected claim. Click to dismiss.
+                  </Alert>
+                  <ClaimSpanHighlighter
+                    text={summaryText}
+                    highlightedSpans={highlightedSpans}
+                    selectedClaimId={highlightedClaimId}
+                  />
+                </Box>
+              ) : (
+                <GlossEditor
+                  gloss={localSummary}
+                  onChange={handleSummaryChange}
+                  personaId={personaId}
+                  videoId={videoId}
+                  includeAnnotations={true}
+                  disabled={disabled}
+                  label="Video Summary"
+                />
+              )}
+            </>
           )}
 
           {/* Claims Tab */}
@@ -318,6 +370,7 @@ export default function VideoSummaryEditor({
                 onAddClaim={handleAddClaim}
                 onDeleteClaim={handleDeleteClaim}
                 selectedClaimId={selectedClaimId}
+                onClaimSelect={handleClaimSelect}
               />
             </>
           )}

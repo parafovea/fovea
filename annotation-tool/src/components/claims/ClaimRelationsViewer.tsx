@@ -91,7 +91,7 @@ export function ClaimRelationsViewer({
   const { asSource, asTarget } = relationData
 
   return (
-    <Box>
+    <Box data-testid="claim-relations-viewer">
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="subtitle1" fontWeight="medium">
           Claim Relations
@@ -99,7 +99,10 @@ export function ClaimRelationsViewer({
         <Button
           size="small"
           startIcon={<AddIcon />}
-          onClick={onAddRelation}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddRelation()
+          }}
           variant="outlined"
         >
           Add Relation

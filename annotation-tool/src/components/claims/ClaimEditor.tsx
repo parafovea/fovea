@@ -173,8 +173,10 @@ export default function ClaimEditor({
             <AccordionDetails>
               <Stack spacing={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Claimer Type</InputLabel>
+                  <InputLabel id="claimer-type-label">Claimer Type</InputLabel>
                   <Select
+                    labelId="claimer-type-label"
+                    id="claimer-type-select"
                     value={claimerType || ''}
                     onChange={(e) => setClaimerType(e.target.value as ClaimerType | null || null)}
                     label="Claimer Type"
@@ -244,8 +246,10 @@ export default function ClaimEditor({
                 </Typography>
 
                 <FormControl fullWidth size="small">
-                  <InputLabel>Claiming Event</InputLabel>
+                  <InputLabel id="claim-event-label">Claiming Event</InputLabel>
                   <Select
+                    labelId="claim-event-label"
+                    id="claim-event-select"
                     value={claimEventId}
                     onChange={(e) => setClaimEventId(e.target.value)}
                     label="Claiming Event"
@@ -258,8 +262,10 @@ export default function ClaimEditor({
                 </FormControl>
 
                 <FormControl fullWidth size="small">
-                  <InputLabel>Claiming Time</InputLabel>
+                  <InputLabel id="claim-time-label">Claiming Time</InputLabel>
                   <Select
+                    labelId="claim-time-label"
+                    id="claim-time-select"
                     value={claimTimeId}
                     onChange={(e) => setClaimTimeId(e.target.value)}
                     label="Claiming Time"
@@ -272,8 +278,10 @@ export default function ClaimEditor({
                 </FormControl>
 
                 <FormControl fullWidth size="small">
-                  <InputLabel>Claiming Location</InputLabel>
+                  <InputLabel id="claim-location-label">Claiming Location</InputLabel>
                   <Select
+                    labelId="claim-location-label"
+                    id="claim-location-select"
                     value={claimLocationId}
                     onChange={(e) => setClaimLocationId(e.target.value)}
                     label="Claiming Location"

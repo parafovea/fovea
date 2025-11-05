@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
@@ -29,7 +29,7 @@ import {
   AccountTree as RelationIcon,
   Search as SearchIcon,
 } from '@mui/icons-material'
-import { Claim } from '../../models/types'
+import { Claim, ClaimTextSpan } from '../../models/types'
 import { GlossRenderer } from '../GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
@@ -47,6 +47,7 @@ interface ClaimsViewerProps {
   highlightSpans?: boolean
   loading?: boolean
   error?: string | null
+  onClaimSelect?: (claimId: string, sourceSpans: ClaimTextSpan[]) => void
 }
 
 interface ClaimTreeNodeProps {
@@ -59,13 +60,13 @@ interface ClaimTreeNodeProps {
   onEdit?: (claim: Claim) => void
   onDelete?: (claim: Claim) => void
   onAdd?: (parentClaimId: string) => void
-  onSelect?: (claimId: string) => void
+  onSelect?: (claimId: string, sourceSpans: ClaimTextSpan[]) => void
 }
 
 /**
  * Recursive component for rendering claim hierarchy
  */
-function ClaimTreeNode({
+const ClaimTreeNode = memo(function ClaimTreeNode({
   claim,
   depth,
   summaryId,
@@ -96,7 +97,7 @@ function ClaimTreeNode({
 
   const handleClick = () => {
     if (onSelect) {
-      onSelect(claim.id)
+      onSelect(claim.id, claim.textSpans || [])
     }
   }
 
@@ -263,7 +264,7 @@ function ClaimTreeNode({
 
         {/* Relations Section */}
         {showRelations && (
-          <>
+          <Box onClick={(e) => e.stopPropagation()}>
             <Divider sx={{ my: 2 }} />
             <ClaimRelationsViewer
               claimId={claim.id}
@@ -271,19 +272,19 @@ function ClaimTreeNode({
               personaId={personaId || ''}
               onAddRelation={() => setRelationEditorOpen(true)}
             />
-          </>
+          </Box>
         )}
       </Paper>
 
       {/* Relation Editor Dialog */}
-      {personaId && ontology && (
+      {personaId && (
         <ClaimRelationEditor
           open={relationEditorOpen}
           onClose={() => setRelationEditorOpen(false)}
           onSave={handleCreateRelation}
           sourceClaim={claim}
           availableClaims={allClaims}
-          relationTypes={ontology.relationTypes}
+          relationTypes={ontology?.relationTypes || []}
         />
       )}
 
@@ -311,7 +312,14 @@ function ClaimTreeNode({
       )}
     </Box>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison for optimization
+  return (
+    prevProps.claim.id === nextProps.claim.id &&
+    prevProps.selectedClaimId === nextProps.selectedClaimId &&
+    prevProps.claim.updatedAt === nextProps.claim.updatedAt
+  )
+})
 
 /**
  * ClaimsViewer - Hierarchical tree view for displaying claims and subclaims
@@ -326,15 +334,38 @@ export default function ClaimsViewer({
   selectedClaimId,
   loading = false,
   error = null,
+  onClaimSelect,
 }: ClaimsViewerProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [minConfidence, setMinConfidence] = useState<number | ''>('')
   const [filterStrategy, setFilterStrategy] = useState<string>('all')
   const [filterModel, setFilterModel] = useState<string>('all')
 
-  const handleSelect = (_claimId: string) => {
-    // Selection is handled by parent component via Redux
-  }
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleSelect = useCallback((claimId: string, sourceSpans: ClaimTextSpan[]) => {
+    // Notify parent component when claim is selected with its source spans
+    if (onClaimSelect) {
+      onClaimSelect(claimId, sourceSpans)
+    }
+  }, [onClaimSelect])
+
+  const handleEdit = useCallback((claim: Claim) => {
+    if (onEditClaim) {
+      onEditClaim(claim)
+    }
+  }, [onEditClaim])
+
+  const handleDelete = useCallback((claim: Claim) => {
+    if (onDeleteClaim) {
+      onDeleteClaim(claim)
+    }
+  }, [onDeleteClaim])
+
+  const handleAdd = useCallback((parentClaimId?: string) => {
+    if (onAddClaim) {
+      onAddClaim(parentClaimId)
+    }
+  }, [onAddClaim])
 
   // Loading state
   if (loading) {
@@ -363,10 +394,7 @@ export default function ClaimsViewer({
   if (error) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
-        <Typography variant="body2" gutterBottom>
-          Failed to load claims
-        </Typography>
-        <Typography variant="caption">{error}</Typography>
+        {error}
       </Alert>
     )
   }
@@ -477,8 +505,10 @@ export default function ClaimsViewer({
           {/* Filters */}
           <Stack direction="row" spacing={2}>
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Min Confidence</InputLabel>
+              <InputLabel id="min-confidence-label">Min Confidence</InputLabel>
               <Select
+                labelId="min-confidence-label"
+                id="min-confidence-select"
                 value={minConfidence}
                 onChange={(e) => setMinConfidence(e.target.value === '' ? '' : Number(e.target.value))}
                 label="Min Confidence"
@@ -492,8 +522,10 @@ export default function ClaimsViewer({
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Strategy</InputLabel>
+              <InputLabel id="strategy-label">Strategy</InputLabel>
               <Select
+                labelId="strategy-label"
+                id="strategy-select"
                 value={filterStrategy}
                 onChange={(e) => setFilterStrategy(e.target.value)}
                 label="Strategy"
@@ -506,8 +538,10 @@ export default function ClaimsViewer({
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Model</InputLabel>
+              <InputLabel id="model-label">Model</InputLabel>
               <Select
+                labelId="model-label"
+                id="model-select"
                 value={filterModel}
                 onChange={(e) => setFilterModel(e.target.value)}
                 label="Model"
@@ -546,9 +580,9 @@ export default function ClaimsViewer({
               personaId={personaId}
               selectedClaimId={selectedClaimId}
               allClaims={claims}
-              onEdit={onEditClaim}
-              onDelete={onDeleteClaim}
-              onAdd={onAddClaim}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onAdd={handleAdd}
               onSelect={handleSelect}
             />
           ))}

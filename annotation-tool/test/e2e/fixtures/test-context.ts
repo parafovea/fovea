@@ -30,6 +30,7 @@ type TestFixtures = {
   testEventType: EventType
   testRoleType: RoleType
   testRelationType: RelationType
+  testClaimRelationType: RelationType
 }
 
 /**
@@ -255,6 +256,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       definition: 'A test relation type for E2E testing',
       sourceTypes: ['Person'],
       targetTypes: ['Organization']
+    })
+    await use(relationType)
+    // Cleanup is handled by persona deletion
+  },
+
+  /**
+   * Test claim relation type fixture.
+   * Creates a claim-to-claim relation type for testing claim relations.
+   * Depends on testPersona fixture.
+   */
+  testClaimRelationType: async ({ db, testPersona }, use) => {
+    const relationType = await db.createRelationType(testPersona.id, {
+      name: 'Supports',
+      definition: 'One claim supports another claim',
+      sourceTypes: ['claim'],
+      targetTypes: ['claim']
     })
     await use(relationType)
     // Cleanup is handled by persona deletion

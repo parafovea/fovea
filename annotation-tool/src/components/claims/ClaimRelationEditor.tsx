@@ -149,8 +149,10 @@ export function ClaimRelationEditor({
 
           {/* Relation Type */}
           <FormControl fullWidth disabled={claimRelationTypes.length === 0}>
-            <InputLabel>Relation Type</InputLabel>
+            <InputLabel id="relation-type-label">Relation Type</InputLabel>
             <Select
+              labelId="relation-type-label"
+              id="relation-type-select"
               value={relationTypeId}
               onChange={(e) => setRelationTypeId(e.target.value)}
               label="Relation Type"
