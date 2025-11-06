@@ -159,6 +159,7 @@ class DetectionRequest(BaseModel):
 
     video_id: str = Field(..., description="Unique identifier for the video")
     query: str = Field(..., description="Text query describing objects to detect")
+    video_path: str | None = Field(default=None, description="Optional full path to video file")
     frame_numbers: list[int] = Field(default_factory=list, description="Specific frames to process")
     confidence_threshold: float = Field(
         default=0.3, ge=0.0, le=1.0, description="Minimum confidence for detections"

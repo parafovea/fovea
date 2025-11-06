@@ -399,12 +399,16 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
         from .summarization import get_video_path_for_id
 
         try:
-            video_path = get_video_path_for_id(request.video_id)
-            if video_path is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Video not found: {request.video_id}",
-                )
+            # Use provided video_path if available, otherwise resolve from video_id
+            if request.video_path:
+                video_path = request.video_path
+            else:
+                video_path = get_video_path_for_id(request.video_id)
+                if video_path is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Video not found: {request.video_id}",
+                    )
 
             manager = get_model_manager()
             task_config = manager.tasks.get("object_detection")

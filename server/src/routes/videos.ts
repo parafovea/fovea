@@ -438,6 +438,22 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           })
         }
 
+        // Fetch video to get path
+        const video = await fastify.prisma.video.findUnique({
+          where: { id: videoId },
+          select: { path: true },
+        })
+
+        if (!video) {
+          return reply.code(404).send({
+            error: 'Video not found',
+          })
+        }
+
+        // Convert backend path to model service path
+        // Backend uses /data, model service uses /videos
+        const modelVideoPath = video.path.replace('/data/', '/videos/')
+
         // Call model service
         const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
         const response = await fetch(`${modelServiceUrl}/api/detection/detect`, {
@@ -445,6 +461,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             video_id: videoId,
+            video_path: modelVideoPath,
             query,
             confidence_threshold: confidenceThreshold,
             frame_numbers: frameNumbers,
