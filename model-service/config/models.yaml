@@ -3,8 +3,15 @@
 
 models:
   video_summarization:
-    selected: "gemma-3-27b"
+    selected: "qwen-2-5-vl-7b"
     options:
+      qwen-2-5-vl-7b:
+        model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 8
+        speed: "fast"
+        description: "Compact VLM, ungated, fits well on A10G with room for inference"
       llama-4-maverick:
         model_id: "meta-llama/Llama-4-Maverick"
         quantization: "4bit"
@@ -18,7 +25,7 @@ models:
         framework: "sglang"
         vram_gb: 14
         speed: "very_fast"
-        description: "Document analysis, OCR, multilingual support"
+        description: "Document analysis, OCR, multilingual support (gated)"
       internvl3-78b:
         model_id: "OpenGVLab/InternVL3-78B"
         quantization: "4bit"
@@ -66,8 +73,15 @@ models:
         description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
-    selected: "qwen-2-5-32b"
+    selected: "qwen-2-5-7b"
     options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for ontology tasks"
       qwen-2-5-32b:
         model_id: "Qwen/Qwen2.5-32B-Instruct"
         quantization: "4bit"
@@ -267,8 +281,15 @@ models:
         description: "Azure Speech Services, real-time streaming"
 
   claim_extraction:
-    selected: "gemma-3-27b"
+    selected: "qwen-2-5-7b"
     options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for claim extraction"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
         quantization: "4bit"
@@ -289,11 +310,18 @@ models:
         framework: "transformers"
         vram_gb: 14
         speed: "very_fast"
-        description: "Lightweight, fast claim extraction for quick iteration"
+        description: "Lightweight, fast claim extraction (gated)"
 
   claim_synthesis:
-    selected: "gemma-3-27b"
+    selected: "qwen-2-5-7b"
     options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for claim synthesis"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
         quantization: "4bit"
@@ -314,7 +342,7 @@ models:
         framework: "transformers"
         vram_gb: 14
         speed: "very_fast"
-        description: "Lightweight, fast synthesis for quick iteration"
+        description: "Lightweight, fast synthesis (gated)"
 
   speaker_diarization:
     selected: "pyannote-3-1"
