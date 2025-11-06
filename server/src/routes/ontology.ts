@@ -448,7 +448,8 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       if (!response.ok) {
         const errorText = await response.text()
         fastify.log.error({ status: response.status, error: errorText }, 'Model service error')
-        return reply.code(response.status).send({
+        const statusCode = response.status === 400 ? 400 : 500
+        return reply.code(statusCode).send({
           error: `Model service error: ${errorText}`
         })
       }
