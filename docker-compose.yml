@@ -72,7 +72,7 @@ services:
       - MODEL_CONFIG_PATH=/config/models.yaml
     volumes:
       - model-cache:/models
-      - video-data:/videos
+      - ./data:/videos
       - ./model-service/config:/config
     networks:
       - fovea-network
