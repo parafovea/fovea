@@ -132,7 +132,7 @@ models:
     selected: "yolo-world-v2"
     options:
       yolo-world-v2:
-        model_id: "ultralytics/yolo-world-v2-l"
+        model_id: "yolov8l-worldv2.pt"
         framework: "pytorch"
         vram_gb: 2
         speed: "real_time"
