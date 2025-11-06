@@ -483,11 +483,11 @@ export class ApiClient {
       const response = await this.client.post<AugmentationResponse>(
         '/api/ontology/augment',
         {
-          persona_id: request.personaId,
+          personaId: request.personaId,
           domain: request.domain,
-          existing_types: request.existingTypes,
-          target_category: request.targetCategory,
-          max_suggestions: request.maxSuggestions,
+          existingTypes: request.existingTypes,
+          targetCategory: request.targetCategory,
+          maxSuggestions: request.maxSuggestions,
         }
       )
       return response.data
