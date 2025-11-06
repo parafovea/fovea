@@ -509,12 +509,12 @@ export class ApiClient {
       const response = await this.client.post<DetectionResponse>(
         `/api/videos/${request.videoId}/detect`,
         {
-          persona_id: request.personaId,
-          manual_query: request.manualQuery,
-          query_options: request.queryOptions,
-          frame_numbers: request.frameNumbers,
-          confidence_threshold: request.confidenceThreshold,
-          enable_tracking: request.enableTracking,
+          personaId: request.personaId,
+          manualQuery: request.manualQuery,
+          queryOptions: request.queryOptions,
+          frameNumbers: request.frameNumbers,
+          confidenceThreshold: request.confidenceThreshold,
+          enableTracking: request.enableTracking,
         }
       )
       return response.data
