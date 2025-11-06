@@ -294,7 +294,7 @@ export default function AnnotationOverlay({
    * @returns Array of detection boxes with pixel coordinates, labels, and confidence scores
    */
   const detectionBoxes = useMemo(() => {
-    if (!detectionResults) return []
+    if (!detectionResults || !detectionResults.frames) return []
 
     return detectionResults.frames
       .filter(frame => Math.abs(frame.timestamp - currentTime) < 0.1)

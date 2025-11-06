@@ -478,40 +478,36 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         const detectionResult = await response.json() as {
-          frame_results?: Array<{
+          id: string
+          video_id: string
+          query: string
+          frames: Array<{
             frame_number: number
+            timestamp: number
             detections: Array<{
-              x: number
-              y: number
-              width: number
-              height: number
+              bounding_box: {
+                x: number
+                y: number
+                width: number
+                height: number
+              }
               confidence: number
               label: string
+              track_id?: string | null
             }>
           }>
-          frameResults?: Array<{
-            frameNumber: number
-            detections: Array<{
-              x: number
-              y: number
-              width: number
-              height: number
-              confidence: number
-              label: string
-            }>
-          }>
+          total_detections: number
+          processing_time: number
         }
 
-        // Transform snake_case to camelCase for response schema
-        const frameResults = (detectionResult.frame_results || detectionResult.frameResults || []).map(frame => ({
-          frameNumber: 'frame_number' in frame ? frame.frame_number : frame.frameNumber,
-          detections: frame.detections,
-        }))
-
+        // Return full response matching DetectionResponse interface
         return reply.send({
-          videoId,
-          query,
-          frameResults,
+          id: detectionResult.id,
+          video_id: detectionResult.video_id,
+          query: detectionResult.query,
+          frames: detectionResult.frames,
+          total_detections: detectionResult.total_detections,
+          processing_time: detectionResult.processing_time,
         })
       } catch (error) {
         fastify.log.error(error)
