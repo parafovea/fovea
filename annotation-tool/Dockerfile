@@ -6,6 +6,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Accept build arguments for Vite environment variables
+ARG VITE_API_URL
+ARG VITE_MODEL_SERVICE_URL
+
 # Copy package files
 COPY package*.json ./
 
@@ -16,7 +20,7 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy source code
 COPY . .
 
-# Build application
+# Build application with environment variables
 RUN npm run build
 
 # Production stage
