@@ -30,10 +30,9 @@ import {
 import { RootState, AppDispatch } from '../store/store'
 import {
   setActivePersona,
-  addPersona,
-  updatePersona,
-  deletePersona,
-  copyPersona,
+  createPersona,
+  savePersona,
+  removePersona,
 } from '../store/personaSlice'
 import { Persona, PersonaOntology } from '../models/types'
 
@@ -83,38 +82,37 @@ export default function PersonaManager() {
     setEditDialogOpen(true)
   }
 
-  const handleCopyPersona = (sourcePersonaId: string) => {
+  const handleCopyPersona = async (sourcePersonaId: string) => {
     const sourcePersona = personas.find(p => p.id === sourcePersonaId)
-    if (sourcePersona) {
-      const newPersona: Persona = {
-        id: generateId(),
-        name: `${sourcePersona.name} (Copy)`,
-        role: sourcePersona.role,
-        informationNeed: sourcePersona.informationNeed,
-        details: sourcePersona.details,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-      dispatch(copyPersona({ sourcePersonaId, newPersona }))
-      dispatch(setActivePersona(newPersona.id))
+    const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
+    if (sourcePersona && sourceOntology) {
+      await dispatch(createPersona({
+        persona: {
+          name: `${sourcePersona.name} (Copy)`,
+          role: sourcePersona.role,
+          informationNeed: sourcePersona.informationNeed,
+          details: sourcePersona.details,
+        },
+        ontology: {
+          id: generateId(),
+          personaId: '', // Will be set by backend
+          entities: sourceOntology.entities,
+          roles: sourceOntology.roles,
+          events: sourceOntology.events,
+          relationTypes: sourceOntology.relationTypes,
+          relations: sourceOntology.relations,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }))
     }
     handleMenuClose()
   }
 
-  const handleSaveNew = () => {
-    const newPersona: Persona = {
-      id: generateId(),
-      name: formData.name,
-      role: formData.role,
-      informationNeed: formData.informationNeed,
-      details: formData.details,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
+  const handleSaveNew = async () => {
     const newOntology: PersonaOntology = {
       id: generateId(),
-      personaId: newPersona.id,
+      personaId: '', // Will be set by backend
       entities: [],
       roles: [],
       events: [],
@@ -124,12 +122,20 @@ export default function PersonaManager() {
       updatedAt: new Date().toISOString(),
     }
 
-    dispatch(addPersona({ persona: newPersona, ontology: newOntology }))
-    dispatch(setActivePersona(newPersona.id))
+    await dispatch(createPersona({
+      persona: {
+        name: formData.name,
+        role: formData.role,
+        informationNeed: formData.informationNeed,
+        details: formData.details,
+      },
+      ontology: newOntology,
+    }))
+
     setCreateDialogOpen(false)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editingPersona) {
       const updatedPersona: Persona = {
         ...editingPersona,
@@ -139,15 +145,15 @@ export default function PersonaManager() {
         details: formData.details,
         updatedAt: new Date().toISOString(),
       }
-      dispatch(updatePersona(updatedPersona))
+      await dispatch(savePersona(updatedPersona))
       setEditDialogOpen(false)
       setEditingPersona(null)
     }
   }
 
-  const handleDeletePersona = (personaId: string) => {
+  const handleDeletePersona = async (personaId: string) => {
     if (personas.length > 1 && window.confirm('Are you sure you want to delete this persona and all its ontology data?')) {
-      dispatch(deletePersona(personaId))
+      await dispatch(removePersona(personaId))
     }
   }
 
