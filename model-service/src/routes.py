@@ -119,12 +119,16 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
         from .vlm_loader import InferenceFramework, QuantizationType, VLMConfig
 
         try:
-            video_path = get_video_path_for_id(request.video_id)
-            if video_path is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Video not found: {request.video_id}",
-                )
+            # Use provided video_path if available, otherwise resolve from video_id
+            if request.video_path:
+                video_path = request.video_path
+            else:
+                video_path = get_video_path_for_id(request.video_id)
+                if video_path is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Video not found: {request.video_id}",
+                    )
 
             manager = get_model_manager()
             task_config = manager.tasks.get("video_summarization")
@@ -194,8 +198,8 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
                     video_path=video_path,
                     model_config=model_config,
                     model_name=task_config.selected,
-                    persona_role=None,
-                    information_need=None,
+                    persona_role=request.persona_role,
+                    information_need=request.information_need,
                 )
 
             span.set_attribute("summary_generated", True)

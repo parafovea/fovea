@@ -31,6 +31,7 @@ interface ModelSummarizeResponse {
 
 interface ModelSummarizeRequest {
   video_id: string;
+  video_path?: string;
   persona_id: string;
   frame_sample_rate: number;
   max_frames: number;
@@ -172,6 +173,16 @@ export const videoWorker = new Worker<
 
     await job.updateProgress(10);
 
+    // Fetch video to get path
+    const video = await prisma.video.findUnique({
+      where: { id: videoId },
+      select: { path: true },
+    });
+
+    if (!video) {
+      throw new Error(`Video not found: ${videoId}`);
+    }
+
     // Fetch persona prompts for context-specific summarization
     const persona = await prisma.persona.findUnique({
       where: { id: personaId },
@@ -191,6 +202,10 @@ export const videoWorker = new Worker<
       informationNeed = prompts.information_need;
     }
 
+    // Convert backend path to model service path
+    // Backend uses /data, model service uses /videos
+    const modelVideoPath = video.path.replace('/data/', '/videos/');
+
     // Call model service with metrics tracking
     const modelServiceUrl =
       process.env.MODEL_SERVICE_URL || "http://localhost:8000";
@@ -198,6 +213,7 @@ export const videoWorker = new Worker<
 
     const requestBody: ModelSummarizeRequest = {
       video_id: videoId,
+      video_path: modelVideoPath,
       persona_id: personaId,
       frame_sample_rate: frameSampleRate,
       max_frames: maxFrames,
