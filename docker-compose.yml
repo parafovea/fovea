@@ -27,6 +27,8 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - FOVEA_MODE=${FOVEA_MODE:-single-user}
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
