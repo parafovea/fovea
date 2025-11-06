@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.110.1",
+    "fastapi>=0.115.0",
     "uvicorn[standard]==0.27.1",
-    "pydantic==2.6.1",
+    "pydantic>=2.9",
     "python-multipart==0.0.9",
     "opentelemetry-api==1.25.0",
     "opentelemetry-sdk==1.25.0",
