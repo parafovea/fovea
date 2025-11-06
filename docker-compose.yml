@@ -107,6 +107,10 @@ services:
       - MODEL_CONFIG_PATH=/config/models.yaml
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
       - PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:512}
+    networks:
+      fovea-network:
+        aliases:
+          - model-service
     profiles: ["gpu"]
 
   postgres:
