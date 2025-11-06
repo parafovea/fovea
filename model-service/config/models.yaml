@@ -66,8 +66,15 @@ models:
         description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
-    selected: "gemma-3-27b-text"
+    selected: "qwen-2-5-32b"
     options:
+      qwen-2-5-32b:
+        model_id: "Qwen/Qwen2.5-32B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 16
+        speed: "fast"
+        description: "Qwen 2.5 32B, ungated, excellent reasoning"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
         quantization: "4bit"
