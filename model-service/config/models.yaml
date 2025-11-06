@@ -339,6 +339,6 @@ models:
 inference:
   max_memory_per_model: "auto"
   offload_threshold: 0.85
-  warmup_on_startup: false
+  warmup_on_startup: true
   default_batch_size: 1
   max_batch_size: 8
