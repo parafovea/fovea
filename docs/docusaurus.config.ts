@@ -83,6 +83,11 @@ const config: Config = {
       },
       items: [
         {
+          href: 'https://demo.fovea.video',
+          position: 'left',
+          label: 'Demo',
+        },
+        {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
