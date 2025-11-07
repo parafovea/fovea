@@ -376,7 +376,7 @@ export default function AnnotationWorkspace() {
   })
 
   useEffect(() => {
-    if (!videoRef.current || !videoId) return
+    if (!videoRef.current || !videoId || !currentVideo?.path) return
 
     // Clean up any existing player
     if (playerRef.current) {
@@ -386,9 +386,9 @@ export default function AnnotationWorkspace() {
 
     // Small delay to ensure DOM is ready
     const timer = setTimeout(() => {
-      if (!videoRef.current) return
+      if (!videoRef.current || !currentVideo?.path) return
 
-      // Initialize video.js player with minimal options
+      // Initialize video.js player with S3 URL from video metadata
       const player = videojs(videoRef.current, {
         controls: false,
         autoplay: false,
@@ -396,7 +396,7 @@ export default function AnnotationWorkspace() {
         fluid: false,
         fill: true,
         sources: [{
-          src: `/api/videos/${videoId}/stream`,
+          src: currentVideo.path,
           type: 'video/mp4'
         }]
       })
@@ -422,7 +422,7 @@ export default function AnnotationWorkspace() {
 
       player.on('play', () => setIsPlaying(true))
       player.on('pause', () => setIsPlaying(false))
-      
+
       player.on('error', () => {
         console.error('Video player error:', player.error())
       })
@@ -435,7 +435,7 @@ export default function AnnotationWorkspace() {
         playerRef.current = null
       }
     }
-  }, [videoId])
+  }, [videoId, currentVideo])
 
   /**
    * Loads video metadata from the API and stores it in Redux state.
