@@ -2,7 +2,7 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import bcrypt from 'bcrypt'
-import { requireAdmin } from '../middleware/auth.js'
+import { requireAuth, requireAdmin } from '../middleware/auth.js'
 
 /**
  * TypeBox schema for User response.
@@ -80,6 +80,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Current user object without passwordHash
    */
   fastify.get('/api/user/profile', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Get current user profile',
       tags: ['user', 'profile'],
@@ -127,6 +128,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Updated user without passwordHash
    */
   fastify.put('/api/user/profile', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Update current user profile',
       tags: ['user', 'profile'],
