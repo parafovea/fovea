@@ -19,7 +19,9 @@ class SummarizeRequest(BaseModel):
     video_path: str | None = Field(default=None, description="Optional full path to video file")
     persona_id: str = Field(..., description="Unique identifier for the persona")
     persona_role: str | None = Field(default=None, description="Optional persona role for context")
-    information_need: str | None = Field(default=None, description="Optional information need for context")
+    information_need: str | None = Field(
+        default=None, description="Optional information need for context"
+    )
     frame_sample_rate: int = Field(
         default=1, ge=1, le=10, description="Frames to sample per second"
     )

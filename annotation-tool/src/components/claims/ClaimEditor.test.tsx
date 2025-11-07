@@ -253,7 +253,6 @@ describe('ClaimEditor', () => {
     })
 
     it('validates confidence range (0-1)', async () => {
-      const user = userEvent.setup()
       const store = createTestStore()
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper(store) })
 
@@ -348,7 +347,6 @@ describe('ClaimEditor', () => {
 
   describe('Confidence Slider', () => {
     it('updates confidence value when slider moved', async () => {
-      const user = userEvent.setup()
       const store = createTestStore()
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper(store) })
 

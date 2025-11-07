@@ -581,14 +581,21 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           processing_time: number
         }
 
-        // Return full response matching DetectionResponse interface
+        // Transform to camelCase to match API schema
         return reply.send({
-          id: detectionResult.id,
-          video_id: detectionResult.video_id,
+          videoId: detectionResult.video_id,
           query: detectionResult.query,
-          frames: detectionResult.frames,
-          total_detections: detectionResult.total_detections,
-          processing_time: detectionResult.processing_time,
+          frameResults: detectionResult.frames.map(frame => ({
+            frameNumber: frame.frame_number,
+            detections: frame.detections.map(det => ({
+              x: det.bounding_box.x,
+              y: det.bounding_box.y,
+              width: det.bounding_box.width,
+              height: det.bounding_box.height,
+              confidence: det.confidence,
+              label: det.label,
+            })),
+          })),
         })
       } catch (error) {
         fastify.log.error(error)

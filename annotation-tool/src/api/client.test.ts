@@ -213,8 +213,8 @@ describe('ApiClient', () => {
 
       expect(response).toMatchObject({
         id: 'augment-1',
-        persona_id: 'persona-1',
-        target_category: 'event',
+        personaId: 'persona-1',
+        targetCategory: 'event',
       })
       expect(response.suggestions).toHaveLength(2)
       expect(response.suggestions[0]).toMatchObject({
@@ -233,7 +233,7 @@ describe('ApiClient', () => {
         targetCategory: 'entity',
       })
 
-      expect(response.persona_id).toBe('persona-1')
+      expect(response.personaId).toBe('persona-1')
     })
 
     it('throws ApiError on failure', async () => {

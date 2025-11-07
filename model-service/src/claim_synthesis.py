@@ -81,7 +81,7 @@ async def synthesize_summary_from_claims(
         f"Synthesizing summary using strategy: {synthesis_strategy} "
         f"from {len(claim_sources)} source(s)"
     )
-    result = await llm_loader.generate_async(prompt=prompt, config=generation_config)
+    result = await llm_loader.generate(prompt=prompt, generation_config=generation_config)
 
     # For now, return summary as simple text GlossItem
     # TODO: Parse #/@/^ references and convert to proper GlossItem structure
@@ -148,9 +148,7 @@ def build_synthesis_prompt(
         prompt_parts.append("ONTOLOGY TYPES (for reference):")
         for type_def in ontology_context["types"][:20]:  # Limit to 20 types
             type_name = type_def.get("name")
-            type_gloss = ontology_context.get("glosses", {}).get(
-                type_def.get("id"), ""
-            )
+            type_gloss = ontology_context.get("glosses", {}).get(type_def.get("id"), "")
             if type_gloss:
                 prompt_parts.append(f"  - #{type_name}: {type_gloss}")
             else:
@@ -161,7 +159,9 @@ def build_synthesis_prompt(
     prompt_parts.append("CLAIMS TO SYNTHESIZE:")
     prompt_parts.append("")
     for i, source in enumerate(claim_sources, 1):
-        source_label = source.metadata.get("title", source.source_id) if source.metadata else source.source_id
+        source_label = (
+            source.metadata.get("title", source.source_id) if source.metadata else source.source_id
+        )
         prompt_parts.append(f"Source {i}: {source_label} ({source.source_type})")
         prompt_parts.extend(_format_claims_hierarchy(source.claims, indent=1))
         prompt_parts.append("")
@@ -231,7 +231,7 @@ def build_synthesis_prompt(
                 "INSTRUCTIONS:",
                 "1. Present claims with supporting and conflicting evidence",
                 "2. Explicitly mention contradictions and uncertainties",
-                "3. Use analytical language (\"suggests\", \"contradicts\", \"supports\")",
+                '3. Use analytical language ("suggests", "contradicts", "supports")',
                 "4. Use # syntax for types and @ for objects",
                 f"5. Keep summary under {max_length} words",
             ]
@@ -241,9 +241,7 @@ def build_synthesis_prompt(
         prompt_parts.append("7. Explicitly mention detected conflicts in the narrative")
 
     if include_citations:
-        prompt_parts.append(
-            "8. Include claim IDs as inline citations (e.g., [claim-123])"
-        )
+        prompt_parts.append("8. Include claim IDs as inline citations (e.g., [claim-123])")
 
     prompt_parts.extend(
         [
@@ -259,9 +257,7 @@ def build_synthesis_prompt(
     return "\n".join(prompt_parts)
 
 
-def _format_claims_hierarchy(
-    claims: list[dict[str, Any]], indent: int = 0
-) -> list[str]:
+def _format_claims_hierarchy(claims: list[dict[str, Any]], indent: int = 0) -> list[str]:
     """Format claim hierarchy for prompt.
 
     Parameters

@@ -309,7 +309,6 @@ describe('ClaimsExtractionDialog', () => {
     })
 
     it('does not close when cancel clicked during extraction', async () => {
-      const user = userEvent.setup()
       const onClose = vi.fn()
       render(<ClaimsExtractionDialog {...defaultProps} extracting={true} onClose={onClose} />)
 

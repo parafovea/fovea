@@ -237,7 +237,7 @@ test.describe('Manual Claim Management', () => {
     const addButton = summaryDialog.getByRole('button', { name: /add manual claim/i }).first()
     await addButton.click()
 
-    let claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+    const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
     let claimInput = claimDialog.getByLabel(/claim text with references/i)
@@ -331,7 +331,7 @@ test.describe('Manual Claim Management', () => {
     await expect(addButton).toBeVisible()
     await addButton.click()
 
-    let claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
+    const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
     let claimInput = claimDialog.getByLabel(/claim text with references/i)

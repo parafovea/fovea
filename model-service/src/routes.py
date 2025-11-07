@@ -120,15 +120,17 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
 
         try:
             # Use provided video_path if available, otherwise resolve from video_id
+            video_path: str
             if request.video_path:
                 video_path = request.video_path
             else:
-                video_path = get_video_path_for_id(request.video_id)
-                if video_path is None:
+                resolved_path = get_video_path_for_id(request.video_id)
+                if resolved_path is None:
                     raise HTTPException(
                         status_code=404,
                         detail=f"Video not found: {request.video_id}",
                     )
+                video_path = resolved_path
 
             manager = get_model_manager()
             task_config = manager.tasks.get("video_summarization")
@@ -404,15 +406,17 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
 
         try:
             # Use provided video_path if available, otherwise resolve from video_id
+            video_path: str
             if request.video_path:
                 video_path = request.video_path
             else:
-                video_path = get_video_path_for_id(request.video_id)
-                if video_path is None:
+                resolved_path = get_video_path_for_id(request.video_id)
+                if resolved_path is None:
                     raise HTTPException(
                         status_code=404,
                         detail=f"Video not found: {request.video_id}",
                     )
+                video_path = resolved_path
 
             manager = get_model_manager()
             task_config = manager.tasks.get("object_detection")
@@ -1010,7 +1014,7 @@ async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResp
             selected_config = task_config.get_selected_config()
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
-                quantization=selected_config.quantization,
+                quantization=selected_config.quantization or "none",
                 framework=LLMFramework.TRANSFORMERS,
                 max_tokens=4096,
                 temperature=0.7,
@@ -1018,7 +1022,7 @@ async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResp
 
             # Load LLM
             loader = LLMLoader(llm_config)
-            loader.load()
+            await loader.load()
 
             try:
                 # Build context from request
@@ -1054,14 +1058,12 @@ async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResp
                 )
 
             finally:
-                loader.unload()
+                await loader.unload()
 
         except Exception as e:
             logger.error(f"Claim extraction failed: {e}")
             span.set_attribute("error", str(e))
-            raise HTTPException(
-                status_code=500, detail=f"Claim extraction failed: {e}"
-            ) from e
+            raise HTTPException(status_code=500, detail=f"Claim extraction failed: {e}") from e
 
 
 @router.post(
@@ -1116,7 +1118,7 @@ async def synthesize_summary(
             selected_config = task_config.get_selected_config()
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
-                quantization=selected_config.quantization,
+                quantization=selected_config.quantization or "none",
                 framework=LLMFramework.TRANSFORMERS,
                 max_tokens=8192,  # Larger for complex syntheses
                 temperature=0.8,
@@ -1124,7 +1126,7 @@ async def synthesize_summary(
 
             # Load LLM
             loader = LLMLoader(llm_config)
-            loader.load()
+            await loader.load()
 
             try:
                 # Synthesize summary
@@ -1147,7 +1149,8 @@ async def synthesize_summary(
 
                 # Calculate claims used
                 claims_used = sum(
-                    _count_claims_recursive(src.claims) for src in request.claim_sources
+                    _count_claims_recursive(cast(list[ClaimDict], src.claims))
+                    for src in request.claim_sources
                 )
 
                 # Build metadata
@@ -1175,17 +1178,23 @@ async def synthesize_summary(
                 )
 
             finally:
-                loader.unload()
+                await loader.unload()
 
         except Exception as e:
             logger.error(f"Summary synthesis failed: {e}")
             span.set_attribute("error", str(e))
-            raise HTTPException(
-                status_code=500, detail=f"Summary synthesis failed: {e}"
-            ) from e
+            raise HTTPException(status_code=500, detail=f"Summary synthesis failed: {e}") from e
 
 
-def _count_claims_recursive(claims: list[dict]) -> int:
+from typing import TypedDict, NotRequired, cast
+
+
+class ClaimDict(TypedDict):
+    """Recursive claim structure with optional subclaims."""
+    subclaims: NotRequired[list["ClaimDict"]]
+
+
+def _count_claims_recursive(claims: list[ClaimDict]) -> int:
     """Count claims recursively including subclaims.
 
     Parameters

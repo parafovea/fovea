@@ -3,13 +3,14 @@ Tests for claim synthesis module.
 Tests the synthesis of narrative summaries from claim hierarchies.
 """
 
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
 
 from src.claim_synthesis import (
+    _format_claims_hierarchy,
     build_synthesis_prompt,
     synthesize_summary_from_claims,
-    _format_claims_hierarchy,
 )
 from src.models import ClaimRelationship, ClaimSource
 
@@ -151,9 +152,7 @@ class TestBuildSynthesisPrompt:
         assert "video-123" in prompt or "Rocket Launch Video" in prompt
         assert "hierarchical claim structure" in prompt.lower()
 
-    def test_prompt_with_persona_context(
-        self, sample_claim_source, sample_persona_context
-    ):
+    def test_prompt_with_persona_context(self, sample_claim_source, sample_persona_context):
         """Test prompt includes persona context."""
         prompt = build_synthesis_prompt(
             claim_sources=[sample_claim_source],
@@ -169,9 +168,7 @@ class TestBuildSynthesisPrompt:
         assert "PERSONA ROLE: Aerospace Analyst" in prompt
         assert "INFORMATION NEED: Analyzing rocket launch" in prompt
 
-    def test_prompt_with_ontology_context(
-        self, sample_claim_source, sample_ontology_context
-    ):
+    def test_prompt_with_ontology_context(self, sample_claim_source, sample_ontology_context):
         """Test prompt includes ontology types."""
         prompt = build_synthesis_prompt(
             claim_sources=[sample_claim_source],
@@ -188,9 +185,7 @@ class TestBuildSynthesisPrompt:
         assert "#Rocket:" in prompt
         assert "vehicle designed for space travel" in prompt
 
-    def test_prompt_with_conflicts(
-        self, sample_claim_source, sample_claim_relations
-    ):
+    def test_prompt_with_conflicts(self, sample_claim_source, sample_claim_relations):
         """Test prompt includes conflict information."""
         prompt = build_synthesis_prompt(
             claim_sources=[sample_claim_source],
@@ -308,9 +303,7 @@ class TestBuildSynthesisPrompt:
         source2 = ClaimSource(
             source_id="video-456",
             source_type="video",
-            claims=[
-                {"id": "claim-10", "text": "Another claim", "confidence": 0.88}
-            ],
+            claims=[{"id": "claim-10", "text": "Another claim", "confidence": 0.88}],
             metadata={"title": "Second Video"},
         )
 

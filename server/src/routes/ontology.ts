@@ -357,9 +357,11 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         fastify.log.error(`Error message: ${error.message}`)
         // Log Prisma-specific error details if available
         if ('code' in error) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
           fastify.log.error(`Prisma error code: ${(error as any).code}`)
         }
         if ('meta' in error) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
           fastify.log.error(`Prisma error meta: ${JSON.stringify((error as any).meta)}`)
         }
       }

@@ -76,7 +76,7 @@ async def extract_claims_from_summary(
     )
 
     logger.info(f"Extracting claims using strategy: {strategy}")
-    result = await llm_loader.generate_async(prompt=prompt, config=generation_config)
+    result = await llm_loader.generate(prompt=prompt, generation_config=generation_config)
 
     # Parse response
     claims = parse_claims_response(
@@ -299,9 +299,7 @@ def parse_claims_response(
     return claims
 
 
-def parse_single_claim(
-    claim_data: dict[str, Any], min_confidence: float
-) -> ExtractedClaim | None:
+def parse_single_claim(claim_data: dict[str, Any], min_confidence: float) -> ExtractedClaim | None:
     """Parse single claim recursively.
 
     Parameters

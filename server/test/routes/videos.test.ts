@@ -28,6 +28,7 @@ describe('Videos API - Detection', () => {
     await prisma.session.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
+    await prisma.video.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
@@ -46,6 +47,17 @@ describe('Videos API - Detection', () => {
   })
 
   describe('POST /api/videos/:videoId/detect', () => {
+    // Helper to create test video
+    const createTestVideo = async (videoId: string = 'test-video-id') => {
+      await prisma.video.create({
+        data: {
+          id: videoId,
+          filename: 'test.mp4',
+          path: '/data/test.mp4',
+        },
+      })
+    }
+
     it('requires either personaId or manualQuery', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -60,6 +72,8 @@ describe('Videos API - Detection', () => {
     })
 
     it('builds structured query from persona ontology', async () => {
+      await createTestVideo()
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Test Persona',
@@ -84,21 +98,30 @@ describe('Videos API - Detection', () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          frame_results: [
+          id: 'detect-1',
+          video_id: 'test-video-id',
+          query: 'Analyst: Test Persona. Focus: Testing. Entity Types: person, car',
+          frames: [
             {
               frame_number: 0,
+              timestamp: 0,
               detections: [
                 {
-                  x: 10,
-                  y: 20,
-                  width: 100,
-                  height: 200,
+                  bounding_box: {
+                    x: 10,
+                    y: 20,
+                    width: 100,
+                    height: 200,
+                  },
                   confidence: 0.9,
                   label: 'person',
+                  track_id: null,
                 },
               ],
             },
           ],
+          total_detections: 1,
+          processing_time: 0.5,
         }),
       })
 
@@ -120,6 +143,8 @@ describe('Videos API - Detection', () => {
     })
 
     it('includes query options in persona-based query', async () => {
+      await createTestVideo()
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Baseball Scout',
@@ -141,10 +166,18 @@ describe('Videos API - Detection', () => {
         },
       })
 
-      global.fetch = vi.fn().mockResolvedValue({
+      const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ frame_results: [] }),
+        json: async () => ({
+          id: 'detect-1',
+          video_id: 'test-video-id',
+          query: 'query from backend',
+          frames: [],
+          total_detections: 0,
+          processing_time: 0.5,
+        }),
       })
+      global.fetch = mockFetch
 
       const response = await app.inject({
         method: 'POST',
@@ -161,17 +194,36 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      const result = response.json()
-      expect(result.query).toContain('Entity Types: pitcher (Throws the ball)')
-      expect(result.query).toContain('Event Types: pitch (Throwing action)')
+
+      // Check that the query sent to model service includes expected content
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/detection/detect'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('pitcher (Throws the ball)'),
+        })
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('pitch (Throwing action)'),
+        })
+      )
     })
 
     it('uses manual query when provided', async () => {
+      await createTestVideo()
+
       // Mock fetch to model service
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          frame_results: [],
+          id: 'detect-1',
+          video_id: 'test-video-id',
+          query: 'person wearing red shirt',
+          frames: [],
+          total_detections: 0,
+          processing_time: 0.5,
         }),
       })
 
@@ -224,6 +276,8 @@ describe('Videos API - Detection', () => {
     })
 
     it('generates query with persona context even when no types included', async () => {
+      await createTestVideo()
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Empty Ontology',
@@ -241,10 +295,18 @@ describe('Videos API - Detection', () => {
         },
       })
 
-      global.fetch = vi.fn().mockResolvedValue({
+      const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ frame_results: [] }),
+        json: async () => ({
+          id: 'detect-1',
+          video_id: 'test-video-id',
+          query: 'query from backend',
+          frames: [],
+          total_detections: 0,
+          processing_time: 0.5,
+        }),
       })
+      global.fetch = mockFetch
 
       const response = await app.inject({
         method: 'POST',
@@ -255,12 +317,33 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      const result = response.json()
-      expect(result.query).toContain('Analyst: Empty Ontology')
-      expect(result.query).toContain('Focus: Testing')
+
+      // Check that the query sent to model service includes expected content
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/detection/detect'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('Analyst: Empty Ontology'),
+        })
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('Focus: Testing'),
+        })
+      )
     })
 
     it('passes frame numbers and tracking options to model service', async () => {
+      // Create video in database
+      await prisma.video.create({
+        data: {
+          id: 'test-video-id',
+          filename: 'test.mp4',
+          path: '/data/test.mp4',
+        },
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Test Persona',
@@ -280,11 +363,18 @@ describe('Videos API - Detection', () => {
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ frame_results: [] }),
+        json: async () => ({
+          id: 'detect-1',
+          video_id: 'test-video-id',
+          query: 'test query',
+          frames: [],
+          total_detections: 0,
+          processing_time: 0.5,
+        }),
       })
       global.fetch = mockFetch
 
-      await app.inject({
+      const response = await app.inject({
         method: 'POST',
         url: '/api/videos/test-video-id/detect',
         payload: {
@@ -294,6 +384,7 @@ describe('Videos API - Detection', () => {
         },
       })
 
+      expect(response.statusCode).toBe(200)
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/detection/detect'),
         expect.objectContaining({
@@ -305,6 +396,15 @@ describe('Videos API - Detection', () => {
     })
 
     it('handles model service error', async () => {
+      // Create video in database
+      await prisma.video.create({
+        data: {
+          id: 'test-video-id',
+          filename: 'test.mp4',
+          path: '/data/test.mp4',
+        },
+      })
+
       const persona = await prisma.persona.create({
         data: {
           name: 'Test Persona',

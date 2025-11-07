@@ -158,14 +158,14 @@ export const handlers = [
   // Ontology augmentation endpoint
   http.post('http://localhost:3001/api/ontology/augment', async ({ request }) => {
     const body = await request.json() as {
-      persona_id: string
+      personaId: string
       domain: string
-      target_category: string
+      targetCategory: string
     }
     return HttpResponse.json({
       id: 'augment-1',
-      persona_id: body.persona_id,
-      target_category: body.target_category,
+      personaId: body.personaId,
+      targetCategory: body.targetCategory,
       suggestions: [
         {
           name: 'Home Run',

@@ -367,38 +367,6 @@ export default function ClaimsViewer({
     }
   }, [onAddClaim])
 
-  // Loading state
-  if (loading) {
-    return (
-      <Box>
-        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Stack spacing={2}>
-            <Skeleton variant="rectangular" height={40} />
-            <Stack direction="row" spacing={2}>
-              <Skeleton variant="rectangular" height={40} width={150} />
-              <Skeleton variant="rectangular" height={40} width={150} />
-              <Skeleton variant="rectangular" height={40} width={150} />
-            </Stack>
-          </Stack>
-        </Paper>
-        <Stack spacing={2}>
-          <Skeleton variant="rectangular" height={100} />
-          <Skeleton variant="rectangular" height={80} />
-          <Skeleton variant="rectangular" height={120} />
-        </Stack>
-      </Box>
-    )
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-      </Alert>
-    )
-  }
-
   // Filter claims based on search and filters
   const filteredClaims = useMemo(() => {
     if (!claims) return []
@@ -452,6 +420,29 @@ export default function ClaimsViewer({
     return claims.map(filterClaim).filter((c): c is Claim => c !== null)
   }, [claims, searchTerm, minConfidence, filterStrategy, filterModel])
 
+  // Loading state
+  if (loading) {
+    return (
+      <Box>
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Stack spacing={2}>
+            <Skeleton variant="rectangular" height={40} />
+            <Stack direction="row" spacing={2}>
+              <Skeleton variant="rectangular" height={40} width={150} />
+              <Skeleton variant="rectangular" height={40} width={150} />
+              <Skeleton variant="rectangular" height={40} width={150} />
+            </Stack>
+          </Stack>
+        </Paper>
+        <Stack spacing={2}>
+          <Skeleton variant="rectangular" height={100} />
+          <Skeleton variant="rectangular" height={80} />
+          <Skeleton variant="rectangular" height={120} />
+        </Stack>
+      </Box>
+    )
+  }
+
   // Empty state
   if (!claims || claims.length === 0) {
     return (
@@ -484,6 +475,13 @@ export default function ClaimsViewer({
 
   return (
     <Box>
+      {/* Error state */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       {/* Filter Bar */}
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack spacing={2}>

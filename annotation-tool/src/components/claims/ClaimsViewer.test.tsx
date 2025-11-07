@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Provider } from 'react-redux'
@@ -112,7 +112,7 @@ describe('ClaimsViewer', () => {
   describe('Rendering', () => {
     it('renders empty state when no claims', () => {
       const store = createTestStore()
-      const { container } = render(
+      render(
         <ClaimsViewer {...defaultProps} claims={[]} />,
         { wrapper: createWrapper(store) }
       )
@@ -373,7 +373,6 @@ describe('ClaimsViewer', () => {
 
   describe('Tree Interactions', () => {
     it('expands claim to show subclaims', async () => {
-      const user = userEvent.setup()
       const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
 

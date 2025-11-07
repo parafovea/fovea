@@ -44,6 +44,7 @@ const ClaimTextSpanSchema = Type.Object({
 /**
  * Claim schema (recursive for subclaims)
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TypeBox recursive types require any
 const ClaimSchema: any = Type.Recursive(This => Type.Object({
   id: Type.String({ format: 'uuid' }),
   summaryId: Type.String(),
@@ -192,6 +193,7 @@ async function updateSummaryClaimsJson(
 /**
  * Helper: Count all claims recursively
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recursive claim structure requires any
 function countAllClaims(claims: any[]): number {
   let count = claims.length
   for (const claim of claims) {
@@ -205,6 +207,7 @@ function countAllClaims(claims: any[]): number {
 /**
  * Helper: Calculate maximum depth recursively
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recursive claim structure requires any
 function calculateMaxDepth(claims: any[], currentDepth: number = 0): number {
   let maxDepth = currentDepth
   for (const claim of claims) {
@@ -1002,7 +1005,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       // Validate relationTypeId against ontology
       if (summary.persona.ontology) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
         const relationTypes = summary.persona.ontology.relationTypes as any[]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
         const relationType = relationTypes.find((rt: any) => rt.id === relationTypeId)
 
         if (!relationType) {

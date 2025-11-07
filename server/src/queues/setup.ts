@@ -659,8 +659,8 @@ export const claimWorker = new Worker<
     if (summaryType === "video") {
       await prisma.videoSummary.update({
         where: { id: summaryId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
         data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
           claimsJson: claimsJson as any,
           claimsExtractedAt: new Date(),
         },
@@ -925,8 +925,8 @@ export const synthesisWorker = new Worker<
     if (summaryType === "video") {
       await prisma.videoSummary.update({
         where: { id: summaryId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
         data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
           summary: modelResponse.summary_gloss as any,
           updatedAt: new Date(),
         },

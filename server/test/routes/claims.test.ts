@@ -384,6 +384,7 @@ describe('Claims API', () => {
     it('should queue extraction job', async () => {
       // Mock queue.add
       const mockJob = { id: 'test-job-123' }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BullMQ Job type requires any for mocking
       const addSpy = vi.spyOn(claimExtractionQueue, 'add').mockResolvedValue(mockJob as any)
 
       const response = await app.inject({
@@ -448,6 +449,7 @@ describe('Claims API', () => {
 
       // Mock queue.add
       const mockJob = { id: 'synthesis-job-456' }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BullMQ Job type requires any for mocking
       const addSpy = vi.spyOn(claimSynthesisQueue, 'add').mockResolvedValue(mockJob as any)
 
       const response = await app.inject({
