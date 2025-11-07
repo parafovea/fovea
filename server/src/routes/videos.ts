@@ -32,25 +32,61 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   // Helper to refresh video cache
   async function refreshVideoCache() {
-    const files = await fs.readdir(DATA_DIR)
-    // Prefer WebM files for better browser compatibility, fallback to MP4
-    const videoFiles = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'))
     videoCache.clear()
-    videoFiles.forEach(filename => {
-      const id = createVideoId(filename)
-      videoCache.set(id, filename)
-    })
+
+    if (DATA_URL) {
+      // Fetch video list from S3
+      try {
+        const response = await fetch(`${DATA_URL}/`)
+        const text = await response.text()
+
+        // Parse S3 XML listing to extract filenames
+        const fileMatches = text.matchAll(/<Key>([^<]+\.(?:webm|mp4))<\/Key>/g)
+        for (const match of fileMatches) {
+          const filename = match[1]
+          const id = createVideoId(filename)
+          videoCache.set(id, filename)
+        }
+      } catch (error) {
+        fastify.log.error({ error }, 'Failed to fetch video list from S3')
+      }
+    } else {
+      // Use local filesystem
+      const files = await fs.readdir(DATA_DIR)
+      // Prefer WebM files for better browser compatibility, fallback to MP4
+      const videoFiles = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'))
+      videoFiles.forEach(filename => {
+        const id = createVideoId(filename)
+        videoCache.set(id, filename)
+      })
+    }
   }
 
   // Helper to load video metadata from .info.json file
   async function loadVideoMetadata(filename: string) {
-    const infoPath = path.join(DATA_DIR, filename.replace('.webm', '.info.json').replace('.mp4', '.info.json'))
+    const infoFilename = filename.replace('.webm', '.info.json').replace('.mp4', '.info.json')
+
     try {
-      const infoContent = await fs.readFile(infoPath, 'utf-8')
+      let infoContent: string
+
+      if (DATA_URL) {
+        // Fetch from S3
+        const infoUrl = `${DATA_URL}/${encodeURIComponent(infoFilename)}`
+        const response = await fetch(infoUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch metadata: ${response.statusText}`)
+        }
+        infoContent = await response.text()
+      } else {
+        // Read from local filesystem
+        const infoPath = path.join(DATA_DIR, infoFilename)
+        infoContent = await fs.readFile(infoPath, 'utf-8')
+      }
+
       return JSON.parse(infoContent)
     } catch (error) {
       // Log error for debugging
-      fastify.log.warn({ filename, infoPath, error }, 'Failed to load video metadata')
+      fastify.log.warn({ filename, error }, 'Failed to load video metadata')
       return null
     }
   }
@@ -78,18 +114,39 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
       const videos = await Promise.all(
         Array.from(videoCache.entries()).map(async ([id, filename]) => {
-          const filePath = path.join(DATA_DIR, filename)
-          const stats = await fs.stat(filePath)
           const metadata = await loadVideoMetadata(filename)
 
           fastify.log.info({ filename, hasMetadata: !!metadata }, 'Loading video')
+
+          // Use S3 URL if DATA_URL is configured, otherwise use local path
+          const videoPath = DATA_URL
+            ? `${DATA_URL}/${encodeURIComponent(filename)}`
+            : path.join(DATA_DIR, filename)
+
+          // Get file size and creation date
+          let size = 0
+          let createdAt = new Date()
+
+          if (!DATA_URL) {
+            // Only stat file if using local filesystem
+            const stats = await fs.stat(videoPath)
+            size = stats.size
+            createdAt = stats.birthtime
+          } else if (metadata?.filesize) {
+            // Use filesize from metadata if available
+            size = metadata.filesize
+          }
+
+          if (metadata?.timestamp) {
+            createdAt = new Date(metadata.timestamp * 1000)
+          }
 
           // Persist video to database
           await fastify.prisma.video.upsert({
             where: { id },
             update: {
               filename,
-              path: filePath,
+              path: videoPath,
               duration: metadata?.duration || null,
               frameRate: metadata?.fps || null,
               resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
@@ -98,7 +155,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
             create: {
               id,
               filename,
-              path: filePath,
+              path: videoPath,
               duration: metadata?.duration || null,
               frameRate: metadata?.fps || null,
               resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
@@ -107,17 +164,12 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           })
 
           // Merge file stats with info.json metadata if available
-          // Use S3 URL if DATA_URL is configured, otherwise use streaming endpoint
-          const videoPath = DATA_URL
-            ? `${DATA_URL}/${encodeURIComponent(filename)}`
-            : `/api/videos/${id}/stream`
-
           const baseData = {
             id,
             filename,
             path: videoPath,
-            size: stats.size,
-            createdAt: stats.birthtime.toISOString()
+            size,
+            createdAt: createdAt.toISOString()
           }
 
           if (metadata) {
@@ -177,18 +229,38 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Video not found' })
       }
 
-      const filePath = path.join(DATA_DIR, filename)
-
       try {
-        const stats = await fs.stat(filePath)
         const metadata = await loadVideoMetadata(filename)
+
+        // Use S3 URL if DATA_URL is configured, otherwise use local path
+        const videoPath = DATA_URL
+          ? `${DATA_URL}/${encodeURIComponent(filename)}`
+          : path.join(DATA_DIR, filename)
+
+        // Get file size and creation date
+        let size = 0
+        let createdAt = new Date()
+
+        if (!DATA_URL) {
+          // Only stat file if using local filesystem
+          const stats = await fs.stat(videoPath)
+          size = stats.size
+          createdAt = stats.birthtime
+        } else if (metadata?.filesize) {
+          // Use filesize from metadata if available
+          size = metadata.filesize
+        }
+
+        if (metadata?.timestamp) {
+          createdAt = new Date(metadata.timestamp * 1000)
+        }
 
         // Persist video to database
         await fastify.prisma.video.upsert({
           where: { id: videoId },
           update: {
             filename,
-            path: filePath,
+            path: videoPath,
             duration: metadata?.duration || null,
             frameRate: metadata?.fps || null,
             resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
@@ -197,7 +269,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           create: {
             id: videoId,
             filename,
-            path: filePath,
+            path: videoPath,
             duration: metadata?.duration || null,
             frameRate: metadata?.fps || null,
             resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
@@ -205,17 +277,12 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           },
         })
 
-        // Use S3 URL if DATA_URL is configured, otherwise use streaming endpoint
-        const videoPath = DATA_URL
-          ? `${DATA_URL}/${encodeURIComponent(filename)}`
-          : `/api/videos/${videoId}/stream`
-
         const baseData = {
           id: videoId,
           filename,
           path: videoPath,
-          size: stats.size,
-          createdAt: stats.birthtime.toISOString()
+          size,
+          createdAt: createdAt.toISOString()
         }
 
         if (metadata) {
