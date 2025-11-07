@@ -1,0 +1,172 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            annotation-tool/package-lock.json
+            server/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./annotation-tool
+        run: npm ci
+
+      - name: Type check frontend
+        working-directory: ./annotation-tool
+        run: npm run type-check
+
+      - name: Lint frontend
+        working-directory: ./annotation-tool
+        run: npm run lint
+
+      - name: Install backend dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Type check backend
+        working-directory: ./server
+        run: npm run build
+
+      - name: Lint backend
+        working-directory: ./server
+        run: npm run lint
+
+  deploy:
+    name: Deploy Application
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "📥 Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "🔧 Updating environment..."
+            # Environment file is managed on server, not overwritten
+            # Ensure DATA_URL is set for backend S3 video access
+            if ! grep -q "^DATA_URL=" .env; then
+              echo "DATA_URL=https://fovea-demo-data.s3.amazonaws.com" >> .env
+            fi
+
+            echo "🐳 Building and restarting containers..."
+            docker compose build --parallel
+            docker compose up -d
+
+            echo "🔄 Running database migrations..."
+            docker compose exec -T backend npx prisma migrate deploy
+
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+
+            echo "✅ Deployment complete!"
+          EOF
+
+      - name: Verify deployment
+        run: |
+          echo "⏳ Waiting for services to be healthy..."
+          sleep 30
+
+          # Check backend health
+          curl --fail https://demo.fovea.video/api/health || exit 1
+
+          # Check frontend
+          curl --fail -I https://demo.fovea.video || exit 1
+
+          echo "✅ All services healthy"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check logs above."
+
+  deploy-docs:
+    name: Deploy Documentation
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy documentation
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd /home/ubuntu/fovea
+
+            echo "📥 Pulling latest code (already done in deploy job)..."
+
+            echo "📦 Installing docs dependencies..."
+            cd docs
+            npm ci
+
+            echo "🏗️ Building documentation..."
+            npm run build
+
+            echo "🔐 Setting permissions..."
+            sudo chmod -R o+rX /home/ubuntu/fovea/docs/build
+            sudo chmod o+x /home/ubuntu /home/ubuntu/fovea /home/ubuntu/fovea/docs
+
+            echo "🔄 Reloading Nginx..."
+            sudo systemctl reload nginx
+
+            echo "✅ Documentation deployed!"
+          EOF
+
+      - name: Verify docs deployment
+        run: |
+          sleep 10
+          curl --fail -I https://fovea.video || exit 1
+          echo "✅ Documentation site healthy"

@@ -10,6 +10,7 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL:-http://backend:3001}
         - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-http://localhost:8000}
+        - VITE_DATA_URL=${VITE_DATA_URL:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -36,6 +37,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SESSION_SECRET=${SESSION_SECRET}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
+      - DATA_URL=${DATA_URL:-}
     volumes:
       - ./data:/data
     depends_on:

@@ -9,10 +9,12 @@ WORKDIR /app
 # Accept build arguments for Vite environment variables
 ARG VITE_API_URL
 ARG VITE_MODEL_SERVICE_URL
+ARG VITE_DATA_URL
 
 # Export as environment variables for Vite build
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_MODEL_SERVICE_URL=$VITE_MODEL_SERVICE_URL
+ENV VITE_DATA_URL=$VITE_DATA_URL
 
 # Copy package files
 COPY package*.json ./

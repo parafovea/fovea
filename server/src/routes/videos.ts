@@ -25,6 +25,7 @@ function createVideoId(filename: string): string {
  */
 const videosRoute: FastifyPluginAsync = async (fastify) => {
   const DATA_DIR = process.env.DATA_DIR || '/data'
+  const DATA_URL = process.env.DATA_URL // S3 URL for video files (optional)
 
   // Cache mapping of video IDs to filenames
   const videoCache = new Map<string, string>()
@@ -106,10 +107,15 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           })
 
           // Merge file stats with info.json metadata if available
+          // Use S3 URL if DATA_URL is configured, otherwise use streaming endpoint
+          const videoPath = DATA_URL
+            ? `${DATA_URL}/${encodeURIComponent(filename)}`
+            : `/api/videos/${id}/stream`
+
           const baseData = {
             id,
             filename,
-            path: `/api/videos/${id}/stream`,
+            path: videoPath,
             size: stats.size,
             createdAt: stats.birthtime.toISOString()
           }
@@ -199,10 +205,15 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           },
         })
 
+        // Use S3 URL if DATA_URL is configured, otherwise use streaming endpoint
+        const videoPath = DATA_URL
+          ? `${DATA_URL}/${encodeURIComponent(filename)}`
+          : `/api/videos/${videoId}/stream`
+
         const baseData = {
           id: videoId,
           filename,
-          path: `/api/videos/${videoId}/stream`,
+          path: videoPath,
           size: stats.size,
           createdAt: stats.birthtime.toISOString()
         }
