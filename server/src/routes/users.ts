@@ -62,9 +62,11 @@ const updateUserSchema = z.object({
 
 /**
  * Fastify plugin for user management routes.
- * Provides admin-only CRUD operations for users.
+ * Provides admin-only CRUD operations for users and profile management for authenticated users.
  *
  * Routes:
+ * - GET /api/user/profile - Get current user's profile
+ * - PUT /api/user/profile - Update current user's profile
  * - GET /api/admin/users - List all users
  * - POST /api/admin/users - Create a new user
  * - GET /api/admin/users/:userId - Get a specific user
@@ -72,6 +74,112 @@ const updateUserSchema = z.object({
  * - DELETE /api/admin/users/:userId - Delete a user
  */
 const usersRoute: FastifyPluginAsync = async (fastify) => {
+  /**
+   * Get current user's profile.
+   *
+   * @returns Current user object without passwordHash
+   */
+  fastify.get('/api/user/profile', {
+    schema: {
+      description: 'Get current user profile',
+      tags: ['user', 'profile'],
+      response: {
+        200: UserSchema,
+        401: Type.Object({
+          error: Type.String()
+        })
+      }
+    }
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: 'Not authenticated' })
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: request.user.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        displayName: true,
+        isAdmin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
+
+    if (!user) {
+      return reply.code(404).send({ error: 'User not found' })
+    }
+
+    return reply.send(user)
+  })
+
+  /**
+   * Update current user's profile.
+   * Users can update their own email, displayName, and password.
+   * Users cannot change their own admin status.
+   *
+   * @param request.body - Fields to update (email, displayName, password)
+   * @returns Updated user without passwordHash
+   */
+  fastify.put('/api/user/profile', {
+    schema: {
+      description: 'Update current user profile',
+      tags: ['user', 'profile'],
+      body: Type.Object({
+        email: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+        displayName: Type.Optional(Type.String({ minLength: 1 })),
+        password: Type.Optional(Type.String({ minLength: 6 }))
+      }),
+      response: {
+        200: UserSchema,
+        401: Type.Object({
+          error: Type.String()
+        })
+      }
+    }
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: 'Not authenticated' })
+    }
+
+    const validatedData = updateUserSchema.omit({ isAdmin: true }).parse(request.body)
+
+    // Build update data (excluding isAdmin for self-updates)
+    const updateData: {
+      email?: string | null
+      displayName?: string
+      passwordHash?: string
+    } = {}
+
+    if (validatedData.email !== undefined) {
+      updateData.email = validatedData.email
+    }
+    if (validatedData.displayName !== undefined) {
+      updateData.displayName = validatedData.displayName
+    }
+    if (validatedData.password) {
+      updateData.passwordHash = await bcrypt.hash(validatedData.password, 12)
+    }
+
+    const user = await fastify.prisma.user.update({
+      where: { id: request.user.id },
+      data: updateData,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        displayName: true,
+        isAdmin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
+
+    return reply.send(user)
+  })
+
   /**
    * List all users with related record counts.
    *
