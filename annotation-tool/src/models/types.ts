@@ -645,6 +645,7 @@ export interface VideoMetadata {
   thumbnail?: string
   thumbnails?: { url: string; width: number; height: number }[]
   filePath: string
+  path: string  // S3 URL or file path for video playback
   formats?: VideoFormat[]
   webpage_url?: string
   channel_id?: string
