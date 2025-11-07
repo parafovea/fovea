@@ -35,18 +35,21 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     videoCache.clear()
 
     if (DATA_URL) {
-      // Fetch video list from S3
+      // Fetch video list from S3 manifest
       try {
-        const response = await fetch(`${DATA_URL}/`)
-        const text = await response.text()
+        const manifestUrl = `${DATA_URL}/videos-manifest.json`
+        const response = await fetch(manifestUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch manifest: ${response.statusText}`)
+        }
+        const filenames = await response.json() as string[]
 
-        // Parse S3 XML listing to extract filenames
-        const fileMatches = text.matchAll(/<Key>([^<]+\.(?:webm|mp4))<\/Key>/g)
-        for (const match of fileMatches) {
-          const filename = match[1]
+        filenames.forEach(filename => {
           const id = createVideoId(filename)
           videoCache.set(id, filename)
-        }
+        })
+
+        fastify.log.info({ count: filenames.length }, 'Loaded video list from S3 manifest')
       } catch (error) {
         fastify.log.error({ error }, 'Failed to fetch video list from S3')
       }
