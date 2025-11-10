@@ -89,7 +89,7 @@ jobs:
             docker compose up -d
 
             echo "🔄 Running database migrations..."
-            docker compose exec -T backend npx prisma migrate deploy
+            docker compose exec -T backend npx prisma migrate deploy || exit 1
 
             echo "🧹 Cleaning up old images..."
             docker image prune -f
@@ -100,7 +100,7 @@ jobs:
       - name: Verify deployment
         run: |
           echo "⏳ Waiting for services to be healthy..."
-          sleep 30
+          sleep 60
 
           # Check backend health
           curl --fail https://demo.fovea.video/api/health || exit 1
@@ -109,6 +109,24 @@ jobs:
           curl --fail -I https://demo.fovea.video || exit 1
 
           echo "✅ All services healthy"
+
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running post-deployment smoke tests..."
+
+          # Test backend API
+          echo "Testing backend API..."
+          curl --fail -s https://demo.fovea.video/api/health | grep -q "ok" || exit 1
+
+          # Test frontend loads
+          echo "Testing frontend loads..."
+          curl --fail -s https://demo.fovea.video | grep -q "<!doctype html>" || exit 1
+
+          # Test video listing endpoint
+          echo "Testing video listing..."
+          curl --fail -s https://demo.fovea.video/api/videos | grep -q "\[" || exit 1
+
+          echo "✅ Smoke tests passed"
 
       - name: Notify on failure
         if: failure()
@@ -144,7 +162,7 @@ jobs:
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -e
-            cd /home/ubuntu/fovea
+            cd ${{ secrets.DEPLOY_PATH }}
 
             echo "📥 Pulling latest code (already done in deploy job)..."
 
@@ -156,8 +174,8 @@ jobs:
             npm run build
 
             echo "🔐 Setting permissions..."
-            sudo chmod -R o+rX /home/ubuntu/fovea/docs/build
-            sudo chmod o+x /home/ubuntu /home/ubuntu/fovea /home/ubuntu/fovea/docs
+            sudo chmod -R o+rX ${{ secrets.DEPLOY_PATH }}/docs/build
+            sudo chmod o+x /home/ubuntu ${{ secrets.DEPLOY_PATH }} ${{ secrets.DEPLOY_PATH }}/docs
 
             echo "🔄 Reloading Nginx..."
             sudo systemctl reload nginx
