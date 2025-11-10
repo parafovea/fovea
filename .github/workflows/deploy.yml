@@ -67,20 +67,23 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Sync code to server
+        run: |
+          rsync -avz --delete \
+            --exclude node_modules \
+            --exclude .git \
+            --exclude .env \
+            --exclude data \
+            --exclude dist \
+            --exclude build \
+            -e "ssh" \
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
+
       - name: Deploy to server
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
-
-            echo "📥 Pulling latest code..."
-            git config --global --add safe.directory ${{ secrets.DEPLOY_PATH }}
-
-            # Clean any stale lock files
-            rm -f .git/index.lock .git/FETCH_HEAD.lock
-
-            git fetch origin
-            git reset --hard origin/main
 
             echo "🔧 Updating environment..."
             # Environment file is managed on server, not overwritten
