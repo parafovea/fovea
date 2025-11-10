@@ -74,6 +74,7 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo "📥 Pulling latest code..."
+            git config --global --add safe.directory ${{ secrets.DEPLOY_PATH }}
             git fetch origin
             git reset --hard origin/main
 
@@ -165,6 +166,10 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo "📥 Pulling latest code (already done in deploy job)..."
+
+            # Source nvm to make npm available
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
             echo "📦 Installing docs dependencies..."
             cd docs
