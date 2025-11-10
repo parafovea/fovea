@@ -67,6 +67,17 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Test SSH permissions
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+            whoami
+            id
+            cd ${{ secrets.DEPLOY_PATH }}
+            touch .test-write-permissions
+            rm .test-write-permissions
+            echo 'Write permissions verified'
+          "
+
       - name: Sync code to server
         run: |
           rsync -avz --delete --no-g --no-perms \
