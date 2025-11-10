@@ -146,7 +146,7 @@ Relations help you:
 - [Claim Extraction Guide](./extraction.md): Learn how to extract claims
 - [Editing Claims Guide](./editing.md): Learn how to manually create and edit claims
 - [Claim Relations Guide](./relations.md): Learn how to create relationships between claims
-- [Claims API Reference](../api-reference/claims.md): Developer documentation for claims API
+- [Claims API Reference](../../api-reference/claims.md): Developer documentation for claims API
 
 ## Terminology
 

@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
         'concepts/docker-profiles',
         'concepts/annotation-model',
         'concepts/temporal-model',
+        'concepts/job-queues',
         'concepts/observability',
         'concepts/data-flow',
         'concepts/external-api-integration',
@@ -39,6 +40,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'user-guides/authentication/overview',
             'user-guides/authentication/managing-users',
+            'user-guides/authentication/user-profile',
             'user-guides/authentication/sessions',
           ],
         },
@@ -58,6 +60,30 @@ const sidebars: SidebarsConfig = {
             'user-guides/annotation/creating-annotations',
             'user-guides/annotation/bounding-box-sequences',
             'user-guides/annotation/automated-tracking',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Video Management',
+          items: [
+            'user-guides/video-management/s3-storage',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Ontology',
+          items: [
+            'user-guides/ontology/type-suggestions',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Claims',
+          items: [
+            'user-guides/claims/overview',
+            'user-guides/claims/extraction',
+            'user-guides/claims/editing',
+            'user-guides/claims/relations',
           ],
         },
         {
@@ -93,6 +119,7 @@ const sidebars: SidebarsConfig = {
         'deployment/gpu-mode',
         'deployment/build-modes',
         'deployment/configuration',
+        'deployment/s3-configuration',
         'deployment/service-architecture',
       ],
     },
@@ -144,6 +171,7 @@ const sidebars: SidebarsConfig = {
     'api-reference/ontology',
     'api-reference/annotations',
     'api-reference/videos',
+    'api-reference/claims',
     'api-reference/export-import',
     'api-reference/audio-transcription',
     {

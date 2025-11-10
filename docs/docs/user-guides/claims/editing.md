@@ -254,4 +254,4 @@ When you delete a claim with subclaims:
 - [Claims Overview](./overview.md)
 - [Claim Extraction](./extraction.md)
 - [Claim Relations](./relations.md)
-- [Gloss Syntax Reference](/docs/user-guides/gloss-syntax.md)
+- [API Reference](../../api-reference/claims.md)

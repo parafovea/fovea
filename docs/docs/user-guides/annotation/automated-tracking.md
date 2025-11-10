@@ -262,13 +262,13 @@ The most efficient workflow combines both approaches:
 
 ### Efficiency Metrics
 
-Research on professional annotation workflows shows:
+Professional annotation workflows typically show:
 
-- **Automated only**: 70% accuracy, 100% speed
-- **Manual only**: 100% accuracy, 10% speed
-- **Hybrid (recommended)**: 95% accuracy, 40% speed
+- **Automated only**: 70% accuracy, 100% speed (baseline)
+- **Manual only**: 100% accuracy, 10% speed (baseline)
+- **Hybrid (recommended)**: 95% accuracy, 40% speed (baseline)
 
-The hybrid approach gives you production-quality results at 4x the speed of pure manual annotation.
+The hybrid approach provides high-quality results while significantly reducing annotation time compared to pure manual annotation.
 
 ## Decimation Deep Dive
 
