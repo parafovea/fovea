@@ -80,13 +80,16 @@ jobs:
 
       - name: Sync code to server
         run: |
-          rsync -avz --delete --no-g --no-perms \
+          rsync -avz --no-g --no-perms \
             --exclude node_modules \
             --exclude .git \
             --exclude .env \
             --exclude data \
             --exclude dist \
             --exclude build \
+            --exclude .docusaurus \
+            --exclude playwright-report \
+            --exclude test-results \
             -e "ssh" \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
