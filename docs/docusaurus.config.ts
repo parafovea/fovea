@@ -112,7 +112,7 @@ const config: Config = {
             },
             {
               label: 'Model Service API',
-              href: '/api-reference/model-service/index.html',
+              to: '/docs/api-reference/model-service/routes',
             },
           ],
         },

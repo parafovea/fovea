@@ -81,6 +81,7 @@ docs = [
     "sphinx>=7.0.0",
     "sphinx-rtd-theme>=2.0.0",
     "sphinx-autodoc-typehints>=1.25.0",
+    "pydoc-markdown>=4.8.0",
 ]
 
 [tool.ruff]

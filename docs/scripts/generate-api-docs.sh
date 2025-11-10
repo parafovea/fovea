@@ -67,45 +67,38 @@ echo "✓ Backend API documentation generated"
 echo ""
 
 # ==============================================
-# Model Service API Documentation (Sphinx)
+# Model Service API Documentation (pydoc-markdown)
 # ==============================================
 echo "==> Generating Model Service API documentation..."
 cd "$PROJECT_ROOT/model-service"
-
-if [ ! -d "docs" ]; then
-  echo "ERROR: model-service/docs directory not found"
-  echo "Run: cd model-service/docs && sphinx-quickstart"
-  exit 1
-fi
 
 # Activate virtual environment if it exists
 if [ -d "venv" ]; then
   echo "Activating Python virtual environment..."
   source venv/bin/activate
 else
-  echo "WARNING: venv not found. Sphinx may fail if not installed globally."
+  echo "WARNING: venv not found. pydoc-markdown may fail if not installed globally."
 fi
 
-# Check if Sphinx is installed
-if ! python -c "import sphinx" &>/dev/null; then
-  echo "ERROR: Sphinx not installed"
-  echo "Run: pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints"
+# Check if pydoc-markdown is installed
+if ! python -c "import pydoc_markdown" &>/dev/null; then
+  echo "Installing pydoc-markdown..."
+  pip install "pydoc-markdown>=4.8.0"
+fi
+
+# Generate Markdown docs with pydoc-markdown
+if [ -f "pydoc-markdown.yml" ]; then
+  echo "Running pydoc-markdown..."
+  pydoc-markdown pydoc-markdown.yml
+
+  if [ $? -ne 0 ]; then
+    echo "ERROR: pydoc-markdown generation failed"
+    exit 1
+  fi
+else
+  echo "ERROR: pydoc-markdown.yml not found"
   exit 1
 fi
-
-cd docs
-make clean
-make html
-
-if [ $? -ne 0 ]; then
-  echo "ERROR: Sphinx build failed"
-  exit 1
-fi
-
-# Copy Sphinx HTML output to Docusaurus static directory
-echo "Copying Sphinx output to Docusaurus static directory..."
-mkdir -p "$PROJECT_ROOT/docs/static/api-reference/model-service"
-cp -r _build/html/* "$PROJECT_ROOT/docs/static/api-reference/model-service/"
 
 # Deactivate venv if it was activated
 if [ -n "$VIRTUAL_ENV" ]; then
@@ -125,7 +118,7 @@ echo ""
 echo "Generated documentation:"
 echo "  - Frontend:      docs/docs/api-reference/frontend/"
 echo "  - Backend:       docs/docs/api-reference/backend/"
-echo "  - Model Service: docs/static/api-reference/model-service/"
+echo "  - Model Service: docs/docs/api-reference/model-service/"
 echo ""
 echo "To build the full documentation site:"
 echo "  cd docs && npm run build"
