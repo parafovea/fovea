@@ -38,6 +38,9 @@ export class VideoPlayerComponent {
       video.muted = true
     })
 
+    // Wait for command context to be ready before using keyboard shortcut
+    await this.waitForCommandContext()
+
     // Try keyboard shortcut first
     await this.page.keyboard.press('Space')
     await this.page.waitForTimeout(300)
@@ -63,6 +66,9 @@ export class VideoPlayerComponent {
    * Pause the video programmatically.
    */
   async pause(): Promise<void> {
+    // Wait for command context to be ready before using keyboard shortcut
+    await this.waitForCommandContext()
+
     // Try keyboard shortcut first
     await this.page.keyboard.press('Space')
     await this.page.waitForTimeout(200)
@@ -81,11 +87,42 @@ export class VideoPlayerComponent {
   }
 
   /**
+   * Wait for command context to be initialized.
+   * Ensures annotationWorkspaceActive context is set before keyboard shortcuts work.
+   */
+  async waitForCommandContext(timeout: number = 5000): Promise<void> {
+    const startTime = Date.now()
+    while (Date.now() - startTime < timeout) {
+      // Check if command context is initialized by testing if Space key would work
+      const contextReady = await this.page.evaluate(() => {
+        // Access global command registry (exposed as __commandRegistry)
+        const registry = (window as any).__commandRegistry
+        if (!registry) return false
+
+        // Check if annotationWorkspaceActive is set
+        return registry.getContext('annotationWorkspaceActive') === true
+      })
+
+      if (contextReady) {
+        await this.page.waitForTimeout(100) // Small buffer for React to finish rendering
+        return
+      }
+
+      await this.page.waitForTimeout(50)
+    }
+
+    // Context not ready - this is acceptable, fallback methods will handle it
+    console.warn('Command context not initialized within timeout, using fallback methods')
+  }
+
+  /**
    * Toggle play/pause state.
    */
   async togglePlayback(): Promise<void> {
+    // Wait for command context before using keyboard shortcut
+    await this.waitForCommandContext()
     await this.page.keyboard.press('Space')
-    await this.page.waitForTimeout(100)
+    await this.page.waitForTimeout(200)
   }
 
   /**

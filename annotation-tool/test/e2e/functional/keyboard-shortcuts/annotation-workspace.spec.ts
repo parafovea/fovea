@@ -15,6 +15,8 @@ import { test, expect } from '../../fixtures/test-context.js'
 test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
   test.beforeEach(async ({ annotationWorkspace, testVideo, testUser, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
+    // Wait for command context to be initialized
+    await annotationWorkspace.video.waitForCommandContext()
   })
 
   test('K adds keyframe at current frame', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
