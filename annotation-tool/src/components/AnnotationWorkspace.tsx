@@ -388,7 +388,12 @@ export default function AnnotationWorkspace() {
     const timer = setTimeout(() => {
       if (!videoRef.current || !currentVideo?.path) return
 
-      // Initialize video.js player with S3 URL from video metadata
+      // Initialize video.js player with video source
+      // Use S3 URL if available (starts with http), otherwise use streaming endpoint
+      const videoSrc = currentVideo.path?.startsWith('http')
+        ? currentVideo.path
+        : `/api/videos/${videoId}/stream`
+
       const player = videojs(videoRef.current, {
         controls: false,
         autoplay: false,
@@ -396,7 +401,7 @@ export default function AnnotationWorkspace() {
         fluid: false,
         fill: true,
         sources: [{
-          src: currentVideo.path,
+          src: videoSrc,
           type: 'video/mp4'
         }]
       })
