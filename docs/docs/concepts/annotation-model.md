@@ -260,7 +260,7 @@ Most professional annotation tools (CVAT, Labelbox, V7 Labs) use similar keyfram
 
 ## Next Steps
 
-- [Bounding Box Sequences User Guide](../user-guides/annotation/bounding-box-sequences.md) - Practical keyframe workflows
-- [Automated Tracking](../user-guides/annotation/automated-tracking.md) - Bootstrap sequences with AI
-- [Export and Import](../user-guides/data-management/exporting-data.md) - Share sequences between systems
-- [Keyboard Shortcuts](../reference/keyboard-shortcuts.md) - Efficient annotation with shortcuts
+- [Bounding Box Sequences User Guide](../user-guides/annotation/bounding-box-sequences.md): Practical keyframe workflows
+- [Automated Tracking](../user-guides/annotation/automated-tracking.md): Bootstrap sequences with AI
+- [Export and Import](../user-guides/data-management/exporting-data.md): Share sequences between systems
+- [Keyboard Shortcuts](../reference/keyboard-shortcuts.md): Efficient annotation with shortcuts

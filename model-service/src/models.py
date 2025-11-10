@@ -16,7 +16,12 @@ class SummarizeRequest(BaseModel):
     """
 
     video_id: str = Field(..., description="Unique identifier for the video")
+    video_path: str | None = Field(default=None, description="Optional full path to video file")
     persona_id: str = Field(..., description="Unique identifier for the persona")
+    persona_role: str | None = Field(default=None, description="Optional persona role for context")
+    information_need: str | None = Field(
+        default=None, description="Optional information need for context"
+    )
     frame_sample_rate: int = Field(
         default=1, ge=1, le=10, description="Frames to sample per second"
     )
@@ -159,6 +164,7 @@ class DetectionRequest(BaseModel):
 
     video_id: str = Field(..., description="Unique identifier for the video")
     query: str = Field(..., description="Text query describing objects to detect")
+    video_path: str | None = Field(default=None, description="Optional full path to video file")
     frame_numbers: list[int] = Field(default_factory=list, description="Specific frames to process")
     confidence_threshold: float = Field(
         default=0.3, ge=0.0, le=1.0, description="Minimum confidence for detections"
@@ -258,3 +264,194 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Human-readable error message")
     details: dict[str, Any] | None = Field(default=None, description="Additional error details")
+
+
+class ClaimExtractionRequest(BaseModel):
+    """Request model for claim extraction endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Unique identifier for the summary")
+    summary_text: str = Field(..., description="Full summary text to extract claims from")
+    sentences: list[str] | None = Field(
+        default=None,
+        description="Pre-split sentences (optional, will split if not provided)",
+    )
+
+    # Optional context sources
+    annotations: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Annotation data for context (object names, times, etc.)",
+    )
+    ontology_types: list[dict[str, Any]] | None = Field(
+        default=None, description="Ontology type definitions for context"
+    )
+    ontology_glosses: dict[str, str] | None = Field(
+        default=None, description="Map of type ID to gloss text"
+    )
+
+    # Extraction configuration
+    extraction_strategy: Literal["sentence-based", "semantic-units", "hierarchical"] = Field(
+        default="sentence-based",
+        description="Strategy for extracting claims",
+    )
+    max_claims: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum number of claims to extract",
+    )
+    min_confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for claims",
+    )
+
+
+class ExtractedClaim(BaseModel):
+    """Single extracted claim with metadata.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    text: str = Field(..., description="Claim text")
+    sentence_index: int | None = Field(
+        default=None,
+        description="Index of source sentence (if sentence-based)",
+    )
+    char_start: int | None = Field(
+        default=None,
+        description="Character offset in summary text",
+    )
+    char_end: int | None = Field(
+        default=None,
+        description="Character offset end in summary text",
+    )
+    subclaims: list["ExtractedClaim"] = Field(
+        default_factory=list,
+        description="Nested subclaims",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model confidence in claim extraction",
+    )
+    claim_type: str | None = Field(
+        default=None,
+        description="Semantic type of claim",
+    )
+
+
+class ClaimExtractionResponse(BaseModel):
+    """Response model for claim extraction endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Summary identifier")
+    claims: list[ExtractedClaim] = Field(..., description="Extracted claims")
+    model_used: str = Field(..., description="LLM model used for extraction")
+    processing_time: float = Field(..., description="Processing time in seconds")
+
+
+class ClaimSource(BaseModel):
+    """Source of claims for synthesis (single video or collection).
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    source_id: str = Field(..., description="Video ID or collection ID")
+    source_type: Literal["video", "collection"] = Field(..., description="Type of source")
+    claims: list[dict[str, Any]] = Field(..., description="Hierarchical claim structure")
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Source metadata (video title, date, etc.)"
+    )
+
+
+class ClaimRelationship(BaseModel):
+    """Relationship between claims across sources.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    source_claim_id: str = Field(..., description="Source claim ID")
+    target_claim_id: str = Field(..., description="Target claim ID")
+    relation_type: Literal[
+        "supports",
+        "conflicts_with",
+        "contradicts",
+        "refines",
+        "generalizes",
+        "duplicates",
+    ] = Field(..., description="Type of relationship")
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Confidence score")
+    notes: str | None = Field(default=None, description="Optional notes")
+
+
+class SummarySynthesisRequest(BaseModel):
+    """Request model for summary synthesis endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Target summary identifier")
+
+    # Input sources (single or multiple)
+    claim_sources: list[ClaimSource] = Field(
+        ..., min_length=1, description="Claim hierarchies from one or more sources"
+    )
+
+    # Inter-claim relationships
+    claim_relations: list[ClaimRelationship] | None = Field(
+        default=None,
+        description="Relationships between claims (conflicts, support, etc.)",
+    )
+
+    # Context for synthesis
+    ontology_context: dict[str, Any] | None = Field(
+        default=None, description="Ontology types and glosses for # references"
+    )
+    persona_context: dict[str, Any] | None = Field(
+        default=None, description="Persona information for perspective"
+    )
+
+    # Synthesis configuration
+    synthesis_strategy: Literal[
+        "hierarchical",  # Follow claim hierarchy structure
+        "chronological",  # Order by temporal claims
+        "narrative",  # Create story-like flow
+        "analytical",  # Emphasize conflicts and evidence
+    ] = Field(default="hierarchical", description="Strategy for organizing summary")
+
+    max_length: int = Field(
+        default=500, ge=100, le=2000, description="Maximum summary length in words"
+    )
+
+    include_conflicts: bool = Field(
+        default=True, description="Explicitly mention informational conflicts"
+    )
+
+    include_citations: bool = Field(
+        default=False, description="Include inline citations to source claims"
+    )
+
+
+class SummarySynthesisResponse(BaseModel):
+    """Response model for summary synthesis endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    summary_id: str = Field(..., description="Summary identifier")
+    summary_gloss: list[dict[str, Any]] = Field(
+        ..., description="Generated summary as GlossItem array with # and @ references"
+    )
+    model_used: str = Field(..., description="LLM model used for synthesis")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    claims_used: int = Field(..., description="Total claims synthesized")
+    synthesis_metadata: dict[str, Any] = Field(
+        ..., description="Metadata about synthesis (strategy, conflicts, etc.)"
+    )

@@ -32,12 +32,12 @@ const FUSION_STRATEGIES: { value: FusionStrategy; label: string; description: st
     description: 'Process audio and visual independently, then concatenate results',
   },
   {
-    value: 'timestamp_aligned',
+    value: 'timestampAligned',
     label: 'Timestamp Aligned',
     description: 'Synchronize audio and visual events by timestamp for temporal coherence',
   },
   {
-    value: 'native_multimodal',
+    value: 'nativeMultimodal',
     label: 'Native Multimodal',
     description: 'Use multimodal models (Gemini, GPT-4o) for single-pass processing',
   },
@@ -58,9 +58,9 @@ const FUSION_STRATEGIES: { value: FusionStrategy; label: string; description: st
  * @example
  * ```tsx
  * const [audioConfig, setAudioConfig] = useState<AudioConfig>({
- *   enable_audio: false,
- *   enable_speaker_diarization: false,
- *   fusion_strategy: 'sequential',
+ *   enableAudio: false,
+ *   enableSpeakerDiarization: false,
+ *   fusionStrategy: 'sequential',
  * })
  *
  * <AudioConfigPanel
@@ -75,23 +75,22 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
     const enableAudio = event.target.checked
     onChange({
       ...config,
-      enable_audio: enableAudio,
-      // Disable speaker diarization if audio is disabled
-      enable_speaker_diarization: enableAudio ? config.enable_speaker_diarization : false,
+      enableAudio,
+      enableSpeakerDiarization: enableAudio ? config.enableSpeakerDiarization : false,
     })
   }
 
   const handleEnableDiarizationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     onChange({
       ...config,
-      enable_speaker_diarization: event.target.checked,
+      enableSpeakerDiarization: event.target.checked,
     })
   }
 
   const handleFusionStrategyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     onChange({
       ...config,
-      fusion_strategy: event.target.value as FusionStrategy,
+      fusionStrategy: event.target.value as FusionStrategy,
     })
   }
 
@@ -99,7 +98,7 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
     const value = event.target.value.trim()
     onChange({
       ...config,
-      audio_language: value || undefined,
+      audioLanguage: value || undefined,
     })
   }
 
@@ -112,7 +111,7 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
       <FormControlLabel
         control={
           <Checkbox
-            checked={config.enable_audio}
+            checked={config.enableAudio}
             onChange={handleEnableAudioChange}
             disabled={disabled}
           />
@@ -123,9 +122,9 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
       <FormControlLabel
         control={
           <Checkbox
-            checked={config.enable_speaker_diarization}
+            checked={config.enableSpeakerDiarization}
             onChange={handleEnableDiarizationChange}
-            disabled={disabled || !config.enable_audio}
+            disabled={disabled || !config.enableAudio}
           />
         }
         label="Enable Speaker Diarization"
@@ -135,11 +134,11 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
       <TextField
         select
         label="Fusion Strategy"
-        value={config.fusion_strategy}
+        value={config.fusionStrategy}
         onChange={handleFusionStrategyChange}
-        disabled={disabled || !config.enable_audio}
+        disabled={disabled || !config.enableAudio}
         helperText={
-          FUSION_STRATEGIES.find((s) => s.value === config.fusion_strategy)?.description
+          FUSION_STRATEGIES.find((s) => s.value === config.fusionStrategy)?.description
         }
         fullWidth
       >
@@ -152,9 +151,9 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
 
       <TextField
         label="Audio Language (optional)"
-        value={config.audio_language || ''}
+        value={config.audioLanguage || ''}
         onChange={handleLanguageChange}
-        disabled={disabled || !config.enable_audio}
+        disabled={disabled || !config.enableAudio}
         helperText="ISO language code (e.g., 'en', 'es', 'fr'). Leave empty for auto-detection."
         fullWidth
         placeholder="en"

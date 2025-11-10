@@ -45,9 +45,9 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
   )
   
   const [relationTypeId, setRelationTypeId] = useState<string>('')
-  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event' | 'time'>('entity')
+  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event' | 'time' | 'claim'>('entity')
   const [sourceId, setSourceId] = useState<string>('')
-  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event' | 'time'>('entity')
+  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event' | 'time' | 'claim'>('entity')
   const [targetId, setTargetId] = useState<string>('')
 
   if (!ontology) return null
@@ -62,6 +62,10 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
         return ontology.roles
       case 'event':
         return ontology.events
+      case 'claim':
+        // Claims are not in ontology, they're in video summaries
+        // Claim relations should be created from ClaimsViewer, not here
+        return []
       default:
         return []
     }
@@ -75,6 +79,10 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
         return ontology.roles
       case 'event':
         return ontology.events
+      case 'claim':
+        // Claims are not in ontology, they're in video summaries
+        // Claim relations should be created from ClaimsViewer, not here
+        return []
       default:
         return []
     }
@@ -108,7 +116,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     }
   }
 
-  const getItemName = (type: 'entity' | 'role' | 'event' | 'time', itemId: string) => {
+  const getItemName = (type: 'entity' | 'role' | 'event' | 'time' | 'claim', itemId: string) => {
     switch (type) {
       case 'entity':
         return ontology.entities.find(e => e.id === itemId)?.name || 'Unknown'
@@ -119,6 +127,10 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
       case 'time':
         // Time relations not yet implemented in UI
         return 'Time (ID: ' + itemId + ')'
+      case 'claim':
+        // Claims are in summaries, not ontology
+        // Show truncated ID; actual claim relations created in ClaimsViewer
+        return 'Claim (ID: ' + itemId.substring(0, 8) + '...)'
       default:
         return 'Unknown'
     }

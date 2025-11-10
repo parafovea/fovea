@@ -294,18 +294,18 @@ export default function AnnotationOverlay({
    * @returns Array of detection boxes with pixel coordinates, labels, and confidence scores
    */
   const detectionBoxes = useMemo(() => {
-    if (!detectionResults) return []
+    if (!detectionResults || !detectionResults.frames) return []
 
     return detectionResults.frames
       .filter(frame => Math.abs(frame.timestamp - currentTime) < 0.1)
       .flatMap(frame =>
         frame.detections.map((detection, index) => ({
-          id: `detection-${frame.frame_number}-${index}`,
+          id: `detection-${frame.frameNumber}-${index}`,
           boundingBox: {
-            x: detection.bounding_box.x * videoWidth,
-            y: detection.bounding_box.y * videoHeight,
-            width: detection.bounding_box.width * videoWidth,
-            height: detection.bounding_box.height * videoHeight,
+            x: detection.boundingBox.x * videoWidth,
+            y: detection.boundingBox.y * videoHeight,
+            width: detection.boundingBox.width * videoWidth,
+            height: detection.boundingBox.height * videoHeight,
           },
           label: detection.label,
           confidence: detection.confidence,

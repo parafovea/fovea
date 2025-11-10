@@ -3,8 +3,15 @@
 
 models:
   video_summarization:
-    selected: "llama-4-maverick"
+    selected: "qwen-2-5-vl-7b"
     options:
+      qwen-2-5-vl-7b:
+        model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 8
+        speed: "fast"
+        description: "Compact VLM, ungated, fits well on A10G with room for inference"
       llama-4-maverick:
         model_id: "meta-llama/Llama-4-Maverick"
         quantization: "4bit"
@@ -18,7 +25,7 @@ models:
         framework: "sglang"
         vram_gb: 14
         speed: "very_fast"
-        description: "Document analysis, OCR, multilingual support"
+        description: "Document analysis, OCR, multilingual support (gated)"
       internvl3-78b:
         model_id: "OpenGVLab/InternVL3-78B"
         quantization: "4bit"
@@ -66,8 +73,22 @@ models:
         description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
-    selected: "llama-4-scout"
+    selected: "qwen-2-5-7b"
     options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for ontology tasks"
+      qwen-2-5-32b:
+        model_id: "Qwen/Qwen2.5-32B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 16
+        speed: "fast"
+        description: "Qwen 2.5 32B, ungated, excellent reasoning"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
         quantization: "4bit"
@@ -125,7 +146,7 @@ models:
     selected: "yolo-world-v2"
     options:
       yolo-world-v2:
-        model_id: "ultralytics/yolo-world-v2-l"
+        model_id: "yolov8l-worldv2.pt"
         framework: "pytorch"
         vram_gb: 2
         speed: "real_time"
@@ -259,6 +280,70 @@ models:
         speed: "fast"
         description: "Azure Speech Services, real-time streaming"
 
+  claim_extraction:
+    selected: "qwen-2-5-7b"
+    options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for claim extraction"
+      llama-4-scout:
+        model_id: "meta-llama/Llama-4-Scout"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 55
+        speed: "very_fast"
+        description: "MoE model with 17B active, 10M context, excellent for claim decomposition"
+      deepseek-v3:
+        model_id: "deepseek-ai/DeepSeek-V3"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 85
+        speed: "fast"
+        description: "MoE with 37B active, best reasoning for complex claims"
+      gemma-3-27b:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Lightweight, fast claim extraction (gated)"
+
+  claim_synthesis:
+    selected: "qwen-2-5-7b"
+    options:
+      qwen-2-5-7b:
+        model_id: "Qwen/Qwen2.5-7B-Instruct"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 4
+        speed: "very_fast"
+        description: "Compact text LLM, ungated, efficient for claim synthesis"
+      llama-4-scout:
+        model_id: "meta-llama/Llama-4-Scout"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 55
+        speed: "very_fast"
+        description: "MoE model with 17B active, 10M context, excellent for narrative synthesis"
+      deepseek-v3:
+        model_id: "deepseek-ai/DeepSeek-V3"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 85
+        speed: "fast"
+        description: "MoE with 37B active, best reasoning for complex multi-source synthesis"
+      gemma-3-27b:
+        model_id: "google/gemma-3-27b-it"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 14
+        speed: "very_fast"
+        description: "Lightweight, fast synthesis (gated)"
+
   speaker_diarization:
     selected: "pyannote-3-1"
     options:
@@ -282,6 +367,6 @@ models:
 inference:
   max_memory_per_model: "auto"
   offload_threshold: 0.85
-  warmup_on_startup: false
+  warmup_on_startup: true
   default_batch_size: 1
   max_batch_size: 8

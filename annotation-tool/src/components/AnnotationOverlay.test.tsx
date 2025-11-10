@@ -481,16 +481,16 @@ describe('AnnotationOverlay', () => {
       const Wrapper = createWrapper(store)
 
       const mockDetectionResults = {
-        video_id: 'test-video',
+        videoId: 'test-video',
         frames: [
           {
-            frame_number: 150,
+            frameNumber: 150,
             timestamp: 5.0,
             detections: [
               {
                 label: 'person',
                 confidence: 0.95,
-                bounding_box: {
+                boundingBox: {
                   x: 0.1,
                   y: 0.2,
                   width: 0.3,

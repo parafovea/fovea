@@ -9,10 +9,10 @@ FOVEA (Flexible Ontology Visual Event Analyzer) is a web-based video annotation 
 
 ## Quick Links
 
-- [Installation Guide](./getting-started/installation.md) - Get FOVEA running in 5 minutes
-- [Quick Start Tutorial](./getting-started/quick-start.md) - Annotate your first video
-- [Architecture Overview](./concepts/architecture.md) - Understand how FOVEA works
-- [API Reference](./api-reference/overview.md) - Explore the API documentation
+- [Installation Guide](./getting-started/installation.md): Get FOVEA running in 5 minutes
+- [Quick Start Tutorial](./getting-started/quick-start.md): Annotate your first video
+- [Architecture Overview](./concepts/architecture.md): Understand how FOVEA works
+- [API Reference](./api-reference/overview.md): Explore the API documentation
 
 ## Key Features
 
@@ -23,7 +23,10 @@ Different analysts can assign different types to the same real-world objects thr
 Support for temporal annotations with keyframe interpolation and automated tracking. See [Annotation System](./concepts/annotation-model.md).
 
 ### AI-Powered Analysis
-Integrated model service with video summarization, object detection, and tracking. Explore [Model Service](./model-service/overview.md).
+Integrated model service with video summarization, object detection, tracking, and claim extraction. Explore [Model Service](./model-service/overview.md).
+
+### Claims and Subclaims
+Extract and organize factual assertions from video summaries with hierarchical claims, typed relations, and automated extraction. See [Claims Overview](./user-guides/claims/overview.md).
 
 ### Flexible Deployment
 Run on CPU or GPU, locally or in production. Check [Deployment Options](./deployment/overview.md).
@@ -53,6 +56,6 @@ Learn more about the [architecture](./concepts/architecture.md).
 
 ## Need Help?
 
-- [Common Operations](./operations/common-tasks.md) - Frequently needed operations
-- [Troubleshooting](./operations/troubleshooting/common-issues.md) - Solutions to common problems
-- [GitHub Issues](https://github.com/parafovea/fovea/issues) - Report bugs or request features
+- [Common Operations](./operations/common-tasks.md): Frequently needed operations
+- [Troubleshooting](./operations/troubleshooting/common-issues.md): Solutions to common problems
+- [GitHub Issues](https://github.com/parafovea/fovea/issues): Report bugs or request features

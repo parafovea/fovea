@@ -59,17 +59,17 @@ export default function RelationTypeEditor({
   const [tabValue, setTabValue] = useState(0)
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([])
-  const [sourceTypes, setSourceTypes] = useState<('entity' | 'role' | 'event' | 'time')[]>([])
-  const [targetTypes, setTargetTypes] = useState<('entity' | 'role' | 'event' | 'time')[]>([])
+  const [sourceTypes, setSourceTypes] = useState<('entity' | 'role' | 'event' | 'time' | 'claim')[]>([])
+  const [targetTypes, setTargetTypes] = useState<('entity' | 'role' | 'event' | 'time' | 'claim')[]>([])
   const [symmetric, setSymmetric] = useState(false)
   const [transitive, setTransitive] = useState(false)
   const [examples, setExamples] = useState<string[]>([])
   const [exampleInput, setExampleInput] = useState('')
-  
+
   // For creating relation instances
-  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event'>('entity')
+  const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event' | 'claim'>('entity')
   const [sourceId, setSourceId] = useState<string>('')
-  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event'>('entity')
+  const [targetType, setTargetType] = useState<'entity' | 'role' | 'event' | 'claim'>('entity')
   const [targetId, setTargetId] = useState<string>('')
 
   useEffect(() => {
@@ -180,7 +180,7 @@ export default function RelationTypeEditor({
     dispatch(deleteRelation({ personaId, relationId }))
   }
   
-  const getItemName = (type: 'entity' | 'role' | 'event' | 'time', id: string) => {
+  const getItemName = (type: 'entity' | 'role' | 'event' | 'time' | 'claim', id: string) => {
     if (!ontology) return 'Unknown'
     switch (type) {
       case 'entity':
@@ -192,6 +192,11 @@ export default function RelationTypeEditor({
       case 'time':
         // Time relations not yet implemented in UI
         return 'Time (ID: ' + id + ')'
+      case 'claim':
+        // Claims are not in ontology, they're in summaries
+        // For now just show ID; in practice, relation instances for claims
+        // would be created in the ClaimsViewer, not here
+        return 'Claim (ID: ' + id.substring(0, 8) + '...)'
       default:
         return 'Unknown'
     }
@@ -202,7 +207,7 @@ export default function RelationTypeEditor({
     ? (ontology?.relations.filter(r => r.relationTypeId === relationType.id) || [])
     : []
 
-  const toggleSourceType = (type: 'entity' | 'role' | 'event') => {
+  const toggleSourceType = (type: 'entity' | 'role' | 'event' | 'claim') => {
     if (sourceTypes.includes(type)) {
       setSourceTypes(sourceTypes.filter(t => t !== type))
     } else {
@@ -210,7 +215,7 @@ export default function RelationTypeEditor({
     }
   }
 
-  const toggleTargetType = (type: 'entity' | 'role' | 'event') => {
+  const toggleTargetType = (type: 'entity' | 'role' | 'event' | 'claim') => {
     if (targetTypes.includes(type)) {
       setTargetTypes(targetTypes.filter(t => t !== type))
     } else {
@@ -275,6 +280,11 @@ export default function RelationTypeEditor({
                   color={sourceTypes.includes('event') ? 'primary' : 'default'}
                   onClick={() => toggleSourceType('event')}
                 />
+                <Chip
+                  label="Claim"
+                  color={sourceTypes.includes('claim') ? 'primary' : 'default'}
+                  onClick={() => toggleSourceType('claim')}
+                />
               </Stack>
             </Box>
 
@@ -297,6 +307,11 @@ export default function RelationTypeEditor({
                   label="Event"
                   color={targetTypes.includes('event') ? 'primary' : 'default'}
                   onClick={() => toggleTargetType('event')}
+                />
+                <Chip
+                  label="Claim"
+                  color={targetTypes.includes('claim') ? 'primary' : 'default'}
+                  onClick={() => toggleTargetType('claim')}
                 />
               </Stack>
             </Box>

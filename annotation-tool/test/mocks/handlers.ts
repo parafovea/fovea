@@ -5,13 +5,13 @@ import { http, HttpResponse } from 'msw'
  * Centralized mock handlers used across all tests.
  */
 export const handlers = [
-  http.get('/api/personas', () => {
+  http.get('http://localhost:3001/api/personas', () => {
     return HttpResponse.json([
       { id: '1', name: 'Test Persona', role: 'Analyst', informationNeed: 'Test need' }
     ])
   }),
 
-  http.post('/api/personas', async ({ request }) => {
+  http.post('http://localhost:3001/api/personas', async ({ request }) => {
     const body = await request.json() as Record<string, unknown>
     return HttpResponse.json({
       id: '2',
@@ -19,10 +19,31 @@ export const handlers = [
     }, { status: 201 })
   }),
 
-  http.get('/api/videos', () => {
+  http.get('http://localhost:3001/api/videos', () => {
     return HttpResponse.json([
       { id: '1', filename: 'test.mp4', path: '/data/videos/test.mp4' }
     ])
+  }),
+
+  http.get('http://localhost:3001/api/videos/:videoId', ({ params }) => {
+    const { videoId } = params
+    return HttpResponse.json({
+      id: videoId,
+      filename: 'test.mp4',
+      path: `/data/videos/${videoId}.mp4`,
+      title: 'Test Video',
+      description: 'A test video',
+      uploader: 'Test User',
+      uploaderId: 'user-1',
+      uploaderUrl: 'https://example.com/user-1',
+      fps: 30,
+      duration: 100,
+      width: 1920,
+      height: 1080,
+      uploadDate: '2025-01-01T00:00:00Z',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+    })
   }),
 
   // Video summaries endpoints
@@ -158,14 +179,14 @@ export const handlers = [
   // Ontology augmentation endpoint
   http.post('http://localhost:3001/api/ontology/augment', async ({ request }) => {
     const body = await request.json() as {
-      persona_id: string
+      personaId: string
       domain: string
-      target_category: string
+      targetCategory: string
     }
     return HttpResponse.json({
       id: 'augment-1',
-      persona_id: body.persona_id,
-      target_category: body.target_category,
+      personaId: body.personaId,
+      targetCategory: body.targetCategory,
       suggestions: [
         {
           name: 'Home Run',
@@ -188,45 +209,45 @@ export const handlers = [
 
   // Object detection endpoint
   http.post('http://localhost:3001/api/videos/:videoId/detect', async ({ request }) => {
-    const body = await request.json() as { manual_query?: string }
+    const body = await request.json() as { manualQuery?: string }
     return HttpResponse.json({
       id: 'detection-1',
-      video_id: 'video-1',
-      query: body.manual_query || 'baseball, bat, glove',
+      videoId: 'video-1',
+      query: body.manualQuery || 'baseball, bat, glove',
       frames: [
         {
-          frame_number: 0,
+          frameNumber: 0,
           timestamp: 0.0,
           detections: [
             {
               label: 'baseball',
-              bounding_box: { x: 0.45, y: 0.3, width: 0.05, height: 0.05 },
+              boundingBox: { x: 0.45, y: 0.3, width: 0.05, height: 0.05 },
               confidence: 0.94,
-              track_id: 'track-1',
+              trackId: 'track-1',
             },
             {
               label: 'bat',
-              bounding_box: { x: 0.2, y: 0.4, width: 0.3, height: 0.1 },
+              boundingBox: { x: 0.2, y: 0.4, width: 0.3, height: 0.1 },
               confidence: 0.89,
-              track_id: 'track-2',
+              trackId: 'track-2',
             },
           ],
         },
         {
-          frame_number: 30,
+          frameNumber: 30,
           timestamp: 1.0,
           detections: [
             {
               label: 'baseball',
-              bounding_box: { x: 0.6, y: 0.25, width: 0.05, height: 0.05 },
+              boundingBox: { x: 0.6, y: 0.25, width: 0.05, height: 0.05 },
               confidence: 0.91,
-              track_id: 'track-1',
+              trackId: 'track-1',
             },
           ],
         },
       ],
-      total_detections: 3,
-      processing_time: 2.34,
+      totalDetections: 3,
+      processingTime: 2.34,
     })
   }),
 
@@ -238,9 +259,9 @@ export const handlers = [
           selected: 'llava',
           options: {
             llava: {
-              model_id: 'llava-hf/llava-1.5-7b-hf',
+              modelId: 'llava-hf/llava-1.5-7b-hf',
               framework: 'transformers',
-              vram_gb: 14.0,
+              vramGb: 14.0,
               speed: 'medium',
               description: 'Vision-language model for image understanding',
               fps: 2.5,
@@ -251,9 +272,9 @@ export const handlers = [
           selected: 'owlv2',
           options: {
             owlv2: {
-              model_id: 'google/owlv2-base-patch16-ensemble',
+              modelId: 'google/owlv2-base-patch16-ensemble',
               framework: 'transformers',
-              vram_gb: 4.0,
+              vramGb: 4.0,
               speed: 'fast',
               description: 'Open-vocabulary object detection',
               fps: 15.0,
@@ -262,23 +283,23 @@ export const handlers = [
         },
       },
       inference: {
-        max_memory_per_model: 24.0,
-        offload_threshold: 0.8,
-        warmup_on_startup: true,
+        maxMemoryPerModel: 24.0,
+        offloadThreshold: 0.8,
+        warmupOnStartup: true,
       },
-      cuda_available: true,
+      cudaAvailable: true,
     })
   }),
 
   // Model selection endpoint
   http.post('http://localhost:3001/api/models/select', async ({ request }) => {
     const url = new URL(request.url)
-    const taskType = url.searchParams.get('task_type')
-    const modelName = url.searchParams.get('model_name')
+    const taskType = url.searchParams.get('taskType')
+    const modelName = url.searchParams.get('modelName')
     return HttpResponse.json({
       status: 'success',
-      task_type: taskType,
-      selected_model: modelName,
+      taskType: taskType,
+      selectedModel: modelName,
     })
   }),
 
@@ -286,18 +307,18 @@ export const handlers = [
   http.post('http://localhost:3001/api/models/validate', () => {
     return HttpResponse.json({
       valid: true,
-      total_vram_gb: 24.0,
-      total_required_gb: 18.0,
+      totalVramGb: 24.0,
+      totalRequiredGb: 18.0,
       threshold: 0.8,
-      max_allowed_gb: 19.2,
-      model_requirements: {
+      maxAllowedGb: 19.2,
+      modelRequirements: {
         vlm: {
-          model_id: 'llava-hf/llava-1.5-7b-hf',
-          vram_gb: 14.0,
+          modelId: 'llava-hf/llava-1.5-7b-hf',
+          vramGb: 14.0,
         },
         detection: {
-          model_id: 'google/owlv2-base-patch16-ensemble',
-          vram_gb: 4.0,
+          modelId: 'google/owlv2-base-patch16-ensemble',
+          vramGb: 4.0,
         },
       },
     })
@@ -306,44 +327,44 @@ export const handlers = [
   // Model status endpoint
   http.get('http://localhost:3001/api/models/status', () => {
     return HttpResponse.json({
-      loaded_models: [
+      loadedModels: [
         {
-          model_id: 'llava-hf/llava-1.5-7b-hf',
-          task_type: 'vlm',
-          model_name: 'llava',
+          modelId: 'llava-hf/llava-1.5-7b-hf',
+          taskType: 'vlm',
+          modelName: 'llava',
           framework: 'transformers',
           quantization: null,
           health: 'loaded' as const,
-          vram_allocated_gb: 14.0,
-          vram_used_gb: 13.8,
-          warm_up_complete: true,
-          last_used: '2025-10-03T10:00:00Z',
-          load_time_ms: 3456,
-          performance_metrics: {
-            total_requests: 150,
-            average_latency_ms: 234.5,
-            requests_per_second: 0.8,
-            average_fps: 2.5,
+          vramAllocatedGb: 14.0,
+          vramUsedGb: 13.8,
+          warmUpComplete: true,
+          lastUsed: '2025-10-03T10:00:00Z',
+          loadTimeMs: 3456,
+          performanceMetrics: {
+            totalRequests: 150,
+            averageLatencyMs: 234.5,
+            requestsPerSecond: 0.8,
+            averageFps: 2.5,
           },
-          error_message: null,
+          errorMessage: null,
         },
       ],
-      total_vram_allocated_gb: 14.0,
-      total_vram_available_gb: 24.0,
+      totalVramAllocatedGb: 14.0,
+      totalVramAvailableGb: 24.0,
       timestamp: '2025-10-03T10:00:00Z',
-      cuda_available: true,
+      cudaAvailable: true,
     })
   }),
 
   // Auth endpoints
-  http.get('/api/config', () => {
+  http.get('http://localhost:3001/api/config', () => {
     return HttpResponse.json({
       mode: 'multi-user',
       allowRegistration: true,
     })
   }),
 
-  http.post('/api/auth/login', async ({ request }) => {
+  http.post('http://localhost:3001/api/auth/login', async ({ request }) => {
     const body = await request.json() as { username: string; password: string }
     if (body.username === 'admin' && body.password === 'admin123') {
       return HttpResponse.json({
@@ -374,11 +395,11 @@ export const handlers = [
     return HttpResponse.json({ message: 'Invalid credentials' }, { status: 401 })
   }),
 
-  http.post('/api/auth/logout', () => {
+  http.post('http://localhost:3001/api/auth/logout', () => {
     return new HttpResponse(null, { status: 204 })
   }),
 
-  http.get('/api/auth/me', () => {
+  http.get('http://localhost:3001/api/auth/me', () => {
     return HttpResponse.json({
       user: {
         id: 'user-1',
@@ -392,7 +413,7 @@ export const handlers = [
     })
   }),
 
-  http.post('/api/auth/register', async ({ request }) => {
+  http.post('http://localhost:3001/api/auth/register', async ({ request }) => {
     const body = await request.json() as {
       username: string
       password: string
@@ -412,7 +433,34 @@ export const handlers = [
     }, { status: 201 })
   }),
 
-  // Admin user management endpoints
+  // Admin user management endpoints (with and without localhost for different call patterns)
+  http.get('http://localhost:3001/api/admin/users', () => {
+    return HttpResponse.json([
+      {
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+        personaCount: 3,
+        sessionCount: 1,
+      },
+      {
+        id: 'user-2',
+        username: 'testuser',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        isAdmin: false,
+        createdAt: '2025-01-02T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+        personaCount: 1,
+        sessionCount: 0,
+      },
+    ])
+  }),
+
   http.get('/api/admin/users', () => {
     return HttpResponse.json([
       {
@@ -438,6 +486,218 @@ export const handlers = [
         sessionCount: 0,
       },
     ])
+  }),
+
+  http.get('http://localhost:3001/api/admin/users/:userId', ({ params }) => {
+    const { userId } = params
+    if (userId === 'user-1') {
+      return HttpResponse.json({
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+        personaCount: 3,
+        sessionCount: 1,
+      })
+    }
+    return HttpResponse.json({ message: 'User not found' }, { status: 404 })
+  }),
+
+  http.post('http://localhost:3001/api/admin/users', async ({ request }) => {
+    const body = await request.json() as {
+      username: string
+      password: string
+      displayName: string
+      email?: string
+      isAdmin: boolean
+    }
+    return HttpResponse.json({
+      id: 'user-new',
+      username: body.username,
+      displayName: body.displayName,
+      email: body.email,
+      isAdmin: body.isAdmin,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('http://localhost:3001/api/admin/users/:userId', async ({ request }) => {
+    const body = await request.json() as {
+      displayName?: string
+      email?: string
+      isAdmin?: boolean
+      password?: string
+    }
+    return HttpResponse.json({
+      id: 'user-1',
+      username: 'admin',
+      displayName: body.displayName || 'Admin User',
+      email: body.email || 'admin@example.com',
+      isAdmin: body.isAdmin !== undefined ? body.isAdmin : true,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('http://localhost:3001/api/admin/users/:userId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // Session management endpoints
+  http.get('http://localhost:3001/api/admin/sessions', () => {
+    return HttpResponse.json([
+      {
+        id: 'session-1',
+        userId: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        createdAt: '2025-10-10T10:00:00Z',
+        expiresAt: '2025-10-17T10:00:00Z',
+      },
+      {
+        id: 'session-2',
+        userId: 'user-2',
+        username: 'testuser',
+        displayName: 'Test User',
+        ipAddress: '192.168.1.101',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        createdAt: '2025-10-10T12:00:00Z',
+        expiresAt: '2025-10-17T12:00:00Z',
+      },
+    ])
+  }),
+
+  http.delete('http://localhost:3001/api/admin/sessions/:sessionId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // API key management endpoints
+  http.get('http://localhost:3001/api/api-keys', () => {
+    return HttpResponse.json([
+      {
+        id: 'key-1',
+        userId: 'user-1',
+        provider: 'anthropic',
+        keyName: 'My Anthropic Key',
+        keyMask: 'sk-ant-...abc123',
+        isActive: true,
+        lastUsedAt: '2025-10-10T10:00:00Z',
+        createdAt: '2025-10-01T00:00:00Z',
+        updatedAt: '2025-10-01T00:00:00Z',
+      },
+      {
+        id: 'key-2',
+        userId: 'user-1',
+        provider: 'openai',
+        keyName: 'OpenAI Development',
+        keyMask: 'sk-...xyz789',
+        isActive: false,
+        createdAt: '2025-10-05T00:00:00Z',
+        updatedAt: '2025-10-05T00:00:00Z',
+      },
+    ])
+  }),
+
+  http.get('http://localhost:3001/api/admin/api-keys', () => {
+    return HttpResponse.json([
+      {
+        id: 'admin-key-1',
+        userId: null,
+        provider: 'google',
+        keyName: 'Shared Google Key',
+        keyMask: 'AIza...def456',
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    ])
+  }),
+
+  http.post('http://localhost:3001/api/api-keys', async ({ request }) => {
+    const body = await request.json() as {
+      provider: string
+      keyName: string
+      apiKey: string
+    }
+    return HttpResponse.json({
+      id: 'key-new',
+      userId: 'user-1',
+      provider: body.provider,
+      keyName: body.keyName,
+      keyMask: body.apiKey.substring(0, 7) + '...' + body.apiKey.slice(-6),
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('http://localhost:3001/api/api-keys/:keyId', async ({ request }) => {
+    const body = await request.json() as {
+      keyName?: string
+      apiKey?: string
+      isActive?: boolean
+    }
+    return HttpResponse.json({
+      id: 'key-1',
+      userId: 'user-1',
+      provider: 'anthropic',
+      keyName: body.keyName || 'My Anthropic Key',
+      keyMask: 'sk-ant-...abc123',
+      isActive: body.isActive !== undefined ? body.isActive : true,
+      createdAt: '2025-10-01T00:00:00Z',
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('http://localhost:3001/api/api-keys/:keyId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // User profile endpoints
+  http.put('http://localhost:3001/api/user/profile', async ({ request }) => {
+    const body = await request.json() as {
+      displayName?: string
+      email?: string
+    }
+    return HttpResponse.json({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: body.displayName || 'Test User',
+        email: body.email || 'test@example.com',
+        isAdmin: false,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: new Date().toISOString(),
+      },
+    })
+  }),
+
+  http.post('http://localhost:3001/api/user/password', async ({ request }) => {
+    const body = await request.json() as {
+      currentPassword: string
+      newPassword: string
+    }
+    // Simple validation - accept if currentPassword matches
+    if (body.currentPassword === 'test123') {
+      return new HttpResponse(null, { status: 204 })
+    }
+    return HttpResponse.json(
+      { message: 'Current password is incorrect' },
+      { status: 400 }
+    )
+  }),
+
+  // Duplicate handlers for raw fetch() calls (without baseURL)
+  // These match requests from hooks that use fetch() directly instead of API client
+
+  http.get('/api/annotations/:videoId', () => {
+    return HttpResponse.json([])
   }),
 
   http.get('/api/admin/users/:userId', ({ params }) => {
@@ -499,7 +759,6 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
-  // Session management endpoints
   http.get('/api/admin/sessions', () => {
     return HttpResponse.json([
       {
@@ -529,7 +788,6 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
-  // API key management endpoints
   http.get('/api/api-keys', () => {
     return HttpResponse.json([
       {
@@ -609,5 +867,113 @@ export const handlers = [
 
   http.delete('/api/api-keys/:keyId', () => {
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.put('/api/user/profile', async ({ request }) => {
+    const body = await request.json() as {
+      displayName?: string
+      email?: string
+    }
+    return HttpResponse.json({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: body.displayName || 'Test User',
+        email: body.email || 'test@example.com',
+        isAdmin: false,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: new Date().toISOString(),
+      },
+    })
+  }),
+
+  http.post('/api/user/password', async ({ request }) => {
+    const body = await request.json() as {
+      currentPassword: string
+      newPassword: string
+    }
+    if (body.currentPassword === 'test123') {
+      return new HttpResponse(null, { status: 204 })
+    }
+    return HttpResponse.json(
+      { message: 'Current password is incorrect' },
+      { status: 400 }
+    )
+  }),
+
+  http.get('/api/config', () => {
+    return HttpResponse.json({
+      mode: 'multi-user',
+      allowRegistration: true,
+    })
+  }),
+
+  http.post('/api/auth/login', async ({ request }) => {
+    const body = await request.json() as { username: string; password: string }
+    if (body.username === 'admin' && body.password === 'admin123') {
+      return HttpResponse.json({
+        user: {
+          id: 'user-1',
+          username: 'admin',
+          displayName: 'Admin User',
+          email: 'admin@example.com',
+          isAdmin: true,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+        },
+      })
+    }
+    if (body.username === 'testuser' && body.password === 'test123') {
+      return HttpResponse.json({
+        user: {
+          id: 'user-2',
+          username: 'testuser',
+          displayName: 'Test User',
+          email: 'test@example.com',
+          isAdmin: false,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+        },
+      })
+    }
+    return HttpResponse.json({ message: 'Invalid credentials' }, { status: 401 })
+  }),
+
+  http.post('/api/auth/logout', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('/api/auth/me', () => {
+    return HttpResponse.json({
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Admin User',
+        email: 'admin@example.com',
+        isAdmin: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    })
+  }),
+
+  http.post('/api/auth/register', async ({ request }) => {
+    const body = await request.json() as {
+      username: string
+      password: string
+      displayName: string
+      email?: string
+    }
+    return HttpResponse.json({
+      user: {
+        id: 'user-new',
+        username: body.username,
+        displayName: body.displayName,
+        email: body.email,
+        isAdmin: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    }, { status: 201 })
   }),
 ]

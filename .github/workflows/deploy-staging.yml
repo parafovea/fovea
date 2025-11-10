@@ -1,0 +1,147 @@
+name: Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            annotation-tool/package-lock.json
+            server/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./annotation-tool
+        run: npm ci
+
+      - name: Type check frontend
+        working-directory: ./annotation-tool
+        run: npm run type-check
+
+      - name: Lint frontend
+        working-directory: ./annotation-tool
+        run: npm run lint
+
+      - name: Install backend dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Type check backend
+        working-directory: ./server
+        run: npm run build
+
+      - name: Lint backend
+        working-directory: ./server
+        run: npm run lint
+
+  deploy-staging:
+    name: Deploy to Staging Environment
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.demo.fovea.video
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+
+            # Create staging directory if it doesn't exist
+            STAGING_DIR="${{ secrets.DEPLOY_PATH }}-staging"
+            if [ ! -d "$STAGING_DIR" ]; then
+              echo "📁 Creating staging directory..."
+              git clone ${{ secrets.DEPLOY_PATH }} "$STAGING_DIR"
+              cd "$STAGING_DIR"
+
+              # Copy .env from production and modify for staging
+              cp ${{ secrets.DEPLOY_PATH }}/.env .env
+              sed -i 's/fovea:/fovea_staging:/g' .env
+              sed -i 's/POSTGRES_DB=fovea/POSTGRES_DB=fovea_staging/g' .env
+            else
+              cd "$STAGING_DIR"
+            fi
+
+            echo "📥 Pulling branch: ${{ github.event.inputs.branch }}"
+            git fetch origin
+            git checkout ${{ github.event.inputs.branch }}
+            git reset --hard origin/${{ github.event.inputs.branch }}
+
+            echo "🔧 Updating environment for staging..."
+            # Ensure DATA_URL is set
+            if ! grep -q "^DATA_URL=" .env; then
+              echo "DATA_URL=https://fovea-demo-data.s3.amazonaws.com" >> .env
+            fi
+
+            echo "🐳 Building and starting staging containers..."
+            # Use different project name to avoid conflicts with production
+            docker compose -p fovea-staging build --parallel
+            docker compose -p fovea-staging up -d
+
+            echo "🔄 Running database migrations on staging..."
+            docker compose -p fovea-staging exec -T backend npx prisma migrate deploy || exit 1
+
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+
+            echo "✅ Staging deployment complete!"
+            echo "📍 Staging is running on alternate ports (configure nginx for staging subdomain)"
+          EOF
+
+      - name: Verify staging deployment
+        run: |
+          echo "⏳ Waiting for staging services to be healthy..."
+          sleep 60
+
+          # Note: Adjust URLs based on your staging configuration
+          echo "⚠️  Manual verification required for staging environment"
+          echo "Staging containers deployed with project name: fovea-staging"
+          echo "Configure nginx to proxy staging.demo.fovea.video to staging ports"
+
+      - name: Run staging smoke tests
+        run: |
+          echo "🧪 Running staging smoke tests..."
+          echo "⚠️  Configure staging domain in nginx before running automated tests"
+
+          # Once staging domain is configured, uncomment:
+          # curl --fail -s https://staging.demo.fovea.video/api/health | grep -q "ok" || exit 1
+          # curl --fail -s https://staging.demo.fovea.video | grep -q "<!doctype html>" || exit 1
+          # echo "✅ Staging smoke tests passed"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Staging deployment failed! Check logs above."

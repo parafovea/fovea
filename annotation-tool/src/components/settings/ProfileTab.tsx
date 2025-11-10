@@ -126,7 +126,7 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
     setLoading(true)
 
     try {
-      const response = await fetch(`/api/admin/users/${currentUser.id}`, {
+      const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -168,7 +168,7 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
     setLoading(true)
 
     try {
-      const response = await fetch(`/api/admin/users/${currentUser.id}`, {
+      const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

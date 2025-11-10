@@ -110,7 +110,7 @@ The most efficient approach combines both:
 4. **Manually annotate** objects tracking missed or got wrong
 5. **Refine all annotations** by adding keyframes where needed
 
-Research shows hybrid workflows achieve **95% accuracy at 4x the speed** of pure manual annotation.
+Hybrid workflows typically achieve high accuracy (90%+) while significantly reducing annotation time compared to pure manual annotation.
 
 ## Bounding Box Sequences
 

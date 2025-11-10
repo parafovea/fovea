@@ -17,6 +17,8 @@ import { verifyNoPageScroll } from '../helpers/keyboard-test-utils.js'
 test.describe('Keyboard Shortcuts - Video Playback', () => {
   test.beforeEach(async ({ annotationWorkspace, testVideo }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
+    // Wait for command context to be initialized
+    await annotationWorkspace.video.waitForCommandContext()
   })
 
   test('Space plays/pauses video without scrolling page', async ({ page, annotationWorkspace }) => {

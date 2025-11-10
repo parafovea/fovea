@@ -112,7 +112,7 @@ export default function OntologyWorkspace() {
   const { entities = [], events = [], times = [] } = useSelector((state: RootState) => state.world)
   const { data: modelConfig, error: modelConfigError } = useModelConfig()
   // Treat model service as CPU-only if unavailable (e.g., in E2E tests)
-  const isCpuOnly = !!modelConfigError || !modelConfig?.cuda_available
+  const isCpuOnly = !!modelConfigError || !modelConfig?.cudaAvailable
 
   // Use preferences for smart defaults
   const {

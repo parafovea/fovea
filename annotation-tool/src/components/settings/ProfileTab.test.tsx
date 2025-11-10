@@ -163,12 +163,14 @@ describe('ProfileTab', () => {
     let savedProfile: any = null
 
     server.use(
-      http.put('/api/admin/users/:userId', async ({ request }) => {
+      http.put('/api/user/profile', async ({ request }) => {
         savedProfile = await request.json()
         return HttpResponse.json({
-          ...mockUser,
-          displayName: savedProfile.displayName,
-          email: savedProfile.email,
+          user: {
+            ...mockUser,
+            displayName: savedProfile.displayName,
+            email: savedProfile.email,
+          },
         })
       })
     )
@@ -231,7 +233,7 @@ describe('ProfileTab', () => {
     const user = userEvent.setup()
 
     server.use(
-      http.put('/api/admin/users/:userId', () => {
+      http.put('/api/user/profile', () => {
         return HttpResponse.json(
           { message: 'Failed to update profile' },
           { status: 500 }
@@ -375,9 +377,9 @@ describe('ProfileTab', () => {
     let passwordPayload: any = null
 
     server.use(
-      http.put('/api/admin/users/:userId', async ({ request }) => {
+      http.put('/api/user/profile', async ({ request }) => {
         passwordPayload = await request.json()
-        return HttpResponse.json(mockUser)
+        return HttpResponse.json({ user: mockUser })
       })
     )
 

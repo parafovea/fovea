@@ -83,6 +83,11 @@ const config: Config = {
       },
       items: [
         {
+          href: 'https://demo.fovea.video',
+          position: 'left',
+          label: 'Demo',
+        },
+        {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
@@ -107,7 +112,7 @@ const config: Config = {
             },
             {
               label: 'Model Service API',
-              href: '/api-reference/model-service/index.html',
+              to: '/docs/api-reference/model-service/routes',
             },
           ],
         },

@@ -139,6 +139,6 @@ For more troubleshooting help, see [Common Issues](../operations/troubleshooting
 
 ## Next Steps
 
-- [Quick Start Guide](./quick-start.md) - Annotate your first video in 5 minutes
-- [Manual Setup](./manual-setup.md) - Development environment setup for contributors
-- [First Video Tutorial](./first-video.md) - Working with your own video files
+- [Quick Start Guide](./quick-start.md): Annotate your first video in 5 minutes
+- [Manual Setup](./manual-setup.md): Development environment setup for contributors
+- [First Video Tutorial](./first-video.md): Working with your own video files

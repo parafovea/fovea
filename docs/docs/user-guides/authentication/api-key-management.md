@@ -188,7 +188,7 @@ Frontend                Backend               Model Service         External API
 
 ## API Endpoints
 
-For programmatic access, see the [Authentication API Reference](../../api-reference/authentication.md#api-key-endpoints).
+For programmatic access, see the [Authentication API Reference](../../api-reference/authentication.md).
 
 **User Endpoints:**
 - `GET /api/api-keys` - List your API keys

@@ -7,8 +7,8 @@
  */
 export type FusionStrategy =
   | 'sequential'
-  | 'timestamp_aligned'
-  | 'native_multimodal'
+  | 'timestampAligned'
+  | 'nativeMultimodal'
   | 'hybrid'
 
 /**
@@ -16,13 +16,13 @@ export type FusionStrategy =
  */
 export interface AudioConfig {
   /** Enable audio transcription. */
-  enable_audio: boolean
+  enableAudio: boolean
   /** Enable speaker diarization (requires audio transcription). */
-  enable_speaker_diarization: boolean
+  enableSpeakerDiarization: boolean
   /** Strategy for combining audio and visual analysis. */
-  fusion_strategy: FusionStrategy
+  fusionStrategy: FusionStrategy
   /** Optional ISO language code (e.g., 'en', 'es', 'fr'). If not provided, language is auto-detected. */
-  audio_language?: string
+  audioLanguage?: string
 }
 
 /**

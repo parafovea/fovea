@@ -39,19 +39,19 @@ describe('Model Routes', () => {
   describe('GET /api/models/config', () => {
     it('returns full configuration from model service', async () => {
       const mockConfig = {
-        available_models: {
+        availableModels: {
           detection: [
-            { name: 'yolov8n', vram_mb: 512, speed: 'fast' },
-            { name: 'yolov8s', vram_mb: 1024, speed: 'medium' }
+            { name: 'yolov8n', vramMb: 512, speed: 'fast' },
+            { name: 'yolov8s', vramMb: 1024, speed: 'medium' }
           ],
           tracking: [
-            { name: 'botsort', vram_mb: 256, speed: 'fast' }
+            { name: 'botsort', vramMb: 256, speed: 'fast' }
           ],
           summarization: [
-            { name: 'llava-1.5-7b', vram_mb: 4096, speed: 'slow' }
+            { name: 'llava-1.5-7b', vramMb: 4096, speed: 'slow' }
           ]
         },
-        selected_models: {
+        selectedModels: {
           detection: 'yolov8n',
           tracking: null,
           summarization: null
@@ -163,17 +163,17 @@ describe('Model Routes', () => {
   describe('GET /api/models/status', () => {
     it('returns loaded models and memory usage', async () => {
       const mockStatus = {
-        loaded_models: [
+        loadedModels: [
           {
-            task_type: 'detection',
-            model_name: 'yolov8n',
-            vram_used_mb: 512,
+            taskType: 'detection',
+            modelName: 'yolov8n',
+            vramUsedMb: 512,
             health: 'healthy',
-            last_inference_ms: 45
+            lastInferenceMs: 45
           }
         ],
-        total_vram_used_mb: 512,
-        total_vram_available_mb: 8192,
+        totalVramUsedMb: 512,
+        totalVramAvailableMb: 8192,
         device: 'cuda'
       }
 
@@ -194,9 +194,9 @@ describe('Model Routes', () => {
 
     it('returns empty status when no models loaded', async () => {
       const mockStatus = {
-        loaded_models: [],
-        total_vram_used_mb: 0,
-        total_vram_available_mb: 8192,
+        loadedModels: [],
+        totalVramUsedMb: 0,
+        totalVramAvailableMb: 8192,
         device: 'cuda'
       }
 
@@ -209,23 +209,23 @@ describe('Model Routes', () => {
 
       expect(response.statusCode).toBe(200)
       const body = response.json()
-      expect(body.loaded_models).toHaveLength(0)
-      expect(body.total_vram_used_mb).toBe(0)
+      expect(body.loadedModels).toHaveLength(0)
+      expect(body.totalVramUsedMb).toBe(0)
     })
 
     it('includes health status for degraded models', async () => {
       const mockStatus = {
-        loaded_models: [
+        loadedModels: [
           {
-            task_type: 'detection',
-            model_name: 'yolov8s',
-            vram_used_mb: 1024,
+            taskType: 'detection',
+            modelName: 'yolov8s',
+            vramUsedMb: 1024,
             health: 'degraded',
-            last_inference_ms: 150
+            lastInferenceMs: 150
           }
         ],
-        total_vram_used_mb: 1024,
-        total_vram_available_mb: 8192,
+        totalVramUsedMb: 1024,
+        totalVramAvailableMb: 8192,
         device: 'cuda'
       }
 
@@ -238,7 +238,7 @@ describe('Model Routes', () => {
 
       expect(response.statusCode).toBe(200)
       const body = response.json()
-      expect(body.loaded_models[0].health).toBe('degraded')
+      expect(body.loadedModels[0].health).toBe('degraded')
     })
 
     it('handles model service error', async () => {
@@ -268,8 +268,8 @@ describe('Model Routes', () => {
   describe('POST /api/models/select', () => {
     it('selects model for detection task', async () => {
       const mockResult = {
-        task_type: 'detection',
-        model_name: 'yolov8n',
+        taskType: 'detection',
+        modelName: 'yolov8n',
         status: 'loading'
       }
 
@@ -277,7 +277,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=detection&model_name=yolov8n'
+        url: '/api/models/select?taskType=detection&modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(200)
@@ -294,8 +294,8 @@ describe('Model Routes', () => {
 
     it('selects model for tracking task', async () => {
       const mockResult = {
-        task_type: 'tracking',
-        model_name: 'botsort',
+        taskType: 'tracking',
+        modelName: 'botsort',
         status: 'loaded'
       }
 
@@ -303,7 +303,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=tracking&model_name=botsort'
+        url: '/api/models/select?taskType=tracking&modelName=botsort'
       })
 
       expect(response.statusCode).toBe(200)
@@ -312,8 +312,8 @@ describe('Model Routes', () => {
 
     it('selects model for summarization task', async () => {
       const mockResult = {
-        task_type: 'summarization',
-        model_name: 'llava-1.5-7b',
+        taskType: 'summarization',
+        modelName: 'llava-1.5-7b',
         status: 'loading'
       }
 
@@ -321,7 +321,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=summarization&model_name=llava-1.5-7b'
+        url: '/api/models/select?taskType=summarization&modelName=llava-1.5-7b'
       })
 
       expect(response.statusCode).toBe(200)
@@ -331,7 +331,7 @@ describe('Model Routes', () => {
     it('validates required task_type parameter', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?model_name=yolov8n'
+        url: '/api/models/select?modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(400)
@@ -340,7 +340,7 @@ describe('Model Routes', () => {
     it('validates required model_name parameter', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=detection'
+        url: '/api/models/select?taskType=detection'
       })
 
       expect(response.statusCode).toBe(400)
@@ -361,7 +361,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=invalid_task&model_name=yolov8n'
+        url: '/api/models/select?taskType=invalid_task&modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(400)
@@ -384,7 +384,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=detection&model_name=nonexistent_model'
+        url: '/api/models/select?taskType=detection&modelName=nonexistent_model'
       })
 
       expect(response.statusCode).toBe(404)
@@ -407,7 +407,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?task_type=detection&model_name=yolov8n'
+        url: '/api/models/select?taskType=detection&modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(503)

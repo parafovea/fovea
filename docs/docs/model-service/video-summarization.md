@@ -245,6 +245,69 @@ Dynamically allocate frames based on visual complexity.
 **Parameters**:
 - `complexity_metric`: Metric for complexity (`gradient`, `entropy`, `motion`)
 
+## Persona Context Integration
+
+Persona information is automatically included in the summarization prompt to provide domain-specific, context-aware summaries. This feature allows the same video to be summarized differently based on the analyst's perspective.
+
+### How It Works
+
+When a summarization request includes a `persona_id`, the model service:
+
+1. **Fetches persona data** from the backend (role, information need, description)
+2. **Constructs context-aware prompt** including:
+   - Analyst role (e.g., "Sports Analyst", "Security Analyst")
+   - Information need (e.g., "Track player movements", "Identify security threats")
+   - Domain-specific vocabulary from the persona's ontology
+3. **Guides VLM generation** to focus on relevant aspects of the video
+
+### Persona-Specific Summaries
+
+**Example: Same baseball video, different personas**
+
+**Sports Analyst Persona**:
+- Role: "Sports Analyst"
+- Information Need: "Track player performance and game statistics"
+
+Generated Summary:
+> "The pitcher delivers a fastball at 94 mph. The batter swings and makes contact, sending the ball to deep left field. The left fielder tracks the ball and makes a diving catch at the warning track. The runner on first base tags up but holds at second base after the catch."
+
+**Security Analyst Persona**:
+- Role: "Security Analyst"
+- Information Need: "Monitor crowd behavior and identify security concerns"
+
+Generated Summary:
+> "Large crowd visible in the stadium stands. Multiple access points to the field are secured with barriers. Security personnel positioned at regular intervals along the perimeter. Camera coverage shows clear sight lines across the venue. No unusual crowd movements or gatherings detected."
+
+### Persona Data Structure
+
+The persona context passed to the model includes:
+
+```json
+{
+  "role": "Sports Analyst",
+  "informationNeed": "Track player performance metrics",
+  "description": "Analyzing baseball games for player statistics",
+  "ontologyContext": {
+    "entityTypes": ["Player", "Ball", "Umpire"],
+    "eventTypes": ["Pitch", "Hit", "Catch"]
+  }
+}
+```
+
+### Benefits
+
+- **Domain Relevance**: Summaries focus on what matters to each analyst
+- **Terminology Alignment**: Uses vocabulary from persona's ontology
+- **Reduced Noise**: Filters out irrelevant details
+- **Multi-Perspective Analysis**: Same video analyzed from multiple viewpoints
+
+### Best Practices
+
+1. **Define clear roles**: Specific roles produce better summaries than generic ones
+2. **Articulate information needs**: Clear goals guide what the model focuses on
+3. **Build rich ontologies**: More context helps the model understand domain vocabulary
+4. **Use consistent personas**: Reuse personas across videos for comparable summaries
+
 ## API Endpoint
 
 ### Request

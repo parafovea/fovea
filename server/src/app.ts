@@ -10,7 +10,7 @@ import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
-import { videoSummarizationQueue, closeQueues } from './queues/setup.js'
+import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 
 /**
@@ -105,7 +105,10 @@ export async function buildApp() {
   // Bull Board queue monitoring
   const serverAdapter = new FastifyAdapter()
   createBullBoard({
-    queues: [new BullMQAdapter(videoSummarizationQueue)],
+    queues: [
+      new BullMQAdapter(videoSummarizationQueue),
+      new BullMQAdapter(claimExtractionQueue)
+    ],
     serverAdapter,
   })
   serverAdapter.setBasePath('/admin/queues')
@@ -207,6 +210,9 @@ export async function buildApp() {
 
   const summariesRoute = await import('./routes/summaries.js')
   await app.register(summariesRoute.default)
+
+  const claimsRoute = await import('./routes/claims.js')
+  await app.register(claimsRoute.default)
 
   const videosRoute = await import('./routes/videos.js')
   await app.register(videosRoute.default)

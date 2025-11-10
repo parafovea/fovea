@@ -1,0 +1,36 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Check Service Health
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check demo site
+        run: |
+          curl --fail https://demo.fovea.video/api/health || exit 1
+          echo "✅ Demo site healthy"
+
+      - name: Check docs site
+        run: |
+          curl --fail -I https://fovea.video || exit 1
+          echo "✅ Docs site healthy"
+
+      - name: Check SSL certificates
+        run: |
+          echo "Checking demo.fovea.video certificate..."
+          echo | openssl s_client -servername demo.fovea.video -connect demo.fovea.video:443 2>/dev/null | openssl x509 -noout -dates
+
+          echo "Checking fovea.video certificate..."
+          echo | openssl s_client -servername fovea.video -connect fovea.video:443 2>/dev/null | openssl x509 -noout -dates
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Health check failed! Services may be down."
+          # Add notification step (Slack, email, etc.)

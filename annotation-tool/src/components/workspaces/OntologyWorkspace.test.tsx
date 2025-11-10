@@ -144,7 +144,7 @@ vi.mock('../../hooks/usePreferences', () => ({
  * Mock model config hook with default GPU mode.
  */
 const mockUseModelConfig = vi.fn(() => ({
-  data: { cuda_available: true },
+  data: { cudaAvailable: true },
 }))
 
 vi.mock('../../hooks/useModelConfig', () => ({
@@ -808,7 +808,7 @@ describe('OntologyWorkspace', () => {
 
     it('hides ontology augmentation in CPU-only mode', async () => {
       mockUseModelConfig.mockReturnValueOnce({
-        data: { cuda_available: false },
+        data: { cudaAvailable: false },
       })
 
       const store = createTestStore(createDefaultState())

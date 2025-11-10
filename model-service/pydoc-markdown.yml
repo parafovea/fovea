@@ -1,0 +1,28 @@
+loaders:
+  - type: python
+    search_path: [src]
+    modules:
+      - routes
+      - models
+      - llm_loader
+      - vlm_loader
+      - detection_loader
+      - tracking_loader
+      - summarization
+      - claim_extraction
+      - claim_synthesis
+      - video_utils
+      - model_manager
+
+processors:
+  - type: filter
+    documented_only: false
+    skip_empty_modules: true
+  - type: smart
+  - type: crossref
+
+renderer:
+  type: docusaurus
+  docs_base_path: ../docs/docs
+  relative_output_path: api-reference/model-service
+  relative_sidebar_path: model-service-sidebar.js

@@ -969,7 +969,11 @@ def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
         return InternVL3Loader(config)
     if "pixtral" in model_name_lower:
         return PixtralLargeLoader(config)
-    if "qwen2.5-vl" in model_name_lower or "qwen25vl" in model_name_lower:
+    if (
+        "qwen2.5-vl" in model_name_lower
+        or "qwen25vl" in model_name_lower
+        or "qwen-2-5-vl" in model_name_lower
+    ):
         return Qwen25VLLoader(config)
     raise ValueError(
         f"Unknown model name: {model_name}. Supported models: "

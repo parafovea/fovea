@@ -45,6 +45,7 @@ const WorldSchema = Type.Object({
  * Routes:
  * - GET /api/ontology - Get all personas and their ontologies
  * - PUT /api/ontology - Save ontology data (personas and ontologies)
+ * - POST /api/ontology/augment - Generate AI-powered type suggestions
  */
 const ontologyRoute: FastifyPluginAsync = async (fastify) => {
   /**
@@ -238,9 +239,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Use a transaction to ensure atomicity - either all saves succeed or all fail
-    const result = await fastify.prisma.$transaction(async (tx) => {
-      const savedPersonas = []
-      const savedOntologies = []
+    try {
+      const result = await fastify.prisma.$transaction(async (tx) => {
+        const savedPersonas = []
+        const savedOntologies = []
 
       // Save all personas for this user
       for (const persona of personas) {
@@ -322,32 +324,147 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      return { savedPersonas, savedOntologies, savedWorldState }
-    })
+        return { savedPersonas, savedOntologies, savedWorldState }
+      })
 
-    const worldData = result.savedWorldState ? {
-      entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
-      events: (result.savedWorldState.events as Prisma.JsonArray) || [],
-      times: (result.savedWorldState.times as Prisma.JsonArray) || [],
-      entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
-      eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
-      timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
-      relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
-    } : undefined
+      const worldData = result.savedWorldState ? {
+        entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
+        events: (result.savedWorldState.events as Prisma.JsonArray) || [],
+        times: (result.savedWorldState.times as Prisma.JsonArray) || [],
+        entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
+        eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
+        timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
+        relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
+      } : undefined
 
-    return reply.send({
-      personas: result.savedPersonas.map(p => ({
-        id: p.id,
-        name: p.name,
-        role: p.role,
-        informationNeed: p.informationNeed,
-        details: p.details,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString()
-      })),
-      personaOntologies: result.savedOntologies,
-      world: worldData
-    })
+      return reply.send({
+        personas: result.savedPersonas.map(p => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          informationNeed: p.informationNeed,
+          details: p.details,
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString()
+        })),
+        personaOntologies: result.savedOntologies,
+        world: worldData
+      })
+    } catch (error: unknown) {
+      fastify.log.error({ error }, 'Error saving ontology data')
+      if (error instanceof Error) {
+        fastify.log.error(`Error name: ${error.name}`)
+        fastify.log.error(`Error message: ${error.message}`)
+        // Log Prisma-specific error details if available
+        if ('code' in error) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
+          fastify.log.error(`Prisma error code: ${(error as any).code}`)
+        }
+        if ('meta' in error) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
+          fastify.log.error(`Prisma error meta: ${JSON.stringify((error as any).meta)}`)
+        }
+      }
+      return reply.code(500).send({
+        error: 'Failed to save ontology data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  })
+
+  /**
+   * Generate AI-powered type suggestions for ontology augmentation.
+   *
+   * @route POST /api/ontology/augment
+   * @body AugmentRequest - Augmentation parameters
+   * @returns Suggested ontology types with reasoning
+   */
+  fastify.post('/api/ontology/augment', {
+    onRequest: [optionalAuth],
+    schema: {
+      description: 'Generate AI-powered ontology type suggestions',
+      tags: ['ontology'],
+      body: Type.Object({
+        personaId: Type.String({ format: 'uuid' }),
+        domain: Type.String({ minLength: 1 }),
+        existingTypes: Type.Optional(Type.Array(Type.String())),
+        targetCategory: Type.Union([
+          Type.Literal('entity'),
+          Type.Literal('event'),
+          Type.Literal('role'),
+          Type.Literal('relation')
+        ]),
+        maxSuggestions: Type.Optional(Type.Number({ minimum: 1, maximum: 50 }))
+      }),
+      response: {
+        200: Type.Object({
+          id: Type.String(),
+          personaId: Type.String(),
+          targetCategory: Type.String(),
+          suggestions: Type.Array(Type.Object({
+            name: Type.String(),
+            description: Type.String(),
+            parent: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+            confidence: Type.Number(),
+            examples: Type.Array(Type.String())
+          })),
+          reasoning: Type.String()
+        }),
+        400: Type.Object({ error: Type.String() }),
+        500: Type.Object({ error: Type.String() })
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { personaId, domain, existingTypes = [], targetCategory, maxSuggestions = 10 } = request.body as {
+        personaId: string
+        domain: string
+        existingTypes?: string[]
+        targetCategory: 'entity' | 'event' | 'role' | 'relation'
+        maxSuggestions?: number
+      }
+
+      // Verify persona exists
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId }
+      })
+
+      if (!persona) {
+        return reply.code(400).send({ error: 'Persona not found' })
+      }
+
+      // Call model service
+      const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+      const response = await fetch(`${modelServiceUrl}/api/ontology/augment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          persona_id: personaId,
+          domain,
+          existing_types: existingTypes,
+          target_category: targetCategory,
+          max_suggestions: maxSuggestions
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        fastify.log.error({ status: response.status, error: errorText }, 'Model service error')
+        const statusCode = response.status === 400 ? 400 : 500
+        return reply.code(statusCode).send({
+          error: `Model service error: ${errorText}`
+        })
+      }
+
+      const result = await response.json()
+
+      return reply.send(result)
+    } catch (error) {
+      fastify.log.error(error, 'Error generating ontology suggestions')
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'Failed to generate suggestions'
+      })
+    }
   })
 }
 

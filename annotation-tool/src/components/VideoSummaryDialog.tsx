@@ -65,8 +65,8 @@ export default function VideoSummaryDialog({
         </Button>
       </DialogTitle>
       
-      <DialogContent>
-        <Box sx={{ mb: 3 }}>
+      <DialogContent sx={{ overflow: 'visible' }}>
+        <Box sx={{ mb: 3, mt: 3 }}>
           <FormControl fullWidth size="small">
             <InputLabel id="summary-persona-select-label">Select Persona</InputLabel>
             <Select

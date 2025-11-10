@@ -337,7 +337,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: false,
+            cudaAvailable: false,
           })
         })
       )
@@ -377,7 +377,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: false,
+            cudaAvailable: false,
           })
         })
       )
@@ -417,7 +417,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: false,
+            cudaAvailable: false,
           })
         })
       )
@@ -467,7 +467,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -510,7 +510,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -558,7 +558,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -608,7 +608,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -656,7 +656,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -817,7 +817,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )
@@ -866,7 +866,7 @@ describe('VideoBrowser', () => {
               offload_threshold: 0.8,
               warmup_on_startup: true,
             },
-            cuda_available: true,
+            cudaAvailable: true,
           })
         })
       )

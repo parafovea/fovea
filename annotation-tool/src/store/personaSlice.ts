@@ -35,6 +35,94 @@ export const fetchPersonaOntology = createAsyncThunk(
 )
 
 /**
+ * Creates a new persona in the database.
+ */
+export const createPersona = createAsyncThunk(
+  'persona/createPersona',
+  async (data: { persona: Omit<Persona, 'id' | 'createdAt' | 'updatedAt'>; ontology: PersonaOntology }) => {
+    const response = await fetch('/api/personas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: data.persona.name,
+        role: data.persona.role,
+        informationNeed: data.persona.informationNeed,
+        details: data.persona.details,
+      }),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to create persona')
+    }
+    const persona = await response.json()
+
+    // Create the ontology for the persona
+    const ontologyResponse = await fetch(`/api/personas/${persona.id}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        entities: data.ontology.entities || [],
+        roles: data.ontology.roles || [],
+        events: data.ontology.events || [],
+        relationTypes: data.ontology.relationTypes || [],
+        relations: data.ontology.relations || [],
+      }),
+    })
+    if (!ontologyResponse.ok) {
+      throw new Error('Failed to create persona ontology')
+    }
+    const ontology = await ontologyResponse.json()
+
+    return { persona, ontology }
+  }
+)
+
+/**
+ * Updates an existing persona in the database.
+ */
+export const savePersona = createAsyncThunk(
+  'persona/savePersona',
+  async (persona: Persona) => {
+    const response = await fetch(`/api/personas/${persona.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: persona.name,
+        role: persona.role,
+        informationNeed: persona.informationNeed,
+        details: persona.details,
+      }),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to update persona')
+    }
+    return await response.json()
+  }
+)
+
+/**
+ * Deletes a persona from the database.
+ */
+export const removePersona = createAsyncThunk(
+  'persona/removePersona',
+  async (personaId: string) => {
+    const response = await fetch(`/api/personas/${personaId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to delete persona')
+    }
+    return personaId
+  }
+)
+
+/**
  * State shape for persona management.
  * Manages personas and their associated ontologies in the application.
  */
@@ -405,6 +493,42 @@ const personaSlice = createSlice({
         } else {
           state.personaOntologies.push({ personaId, ...ontology })
         }
+      })
+      .addCase(createPersona.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(createPersona.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.personas.push(action.payload.persona)
+        state.personaOntologies.push(action.payload.ontology)
+        state.activePersonaId = action.payload.persona.id
+        state.unsavedChanges = false
+      })
+      .addCase(createPersona.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.error.message || 'Failed to create persona'
+      })
+      .addCase(savePersona.fulfilled, (state, action) => {
+        const index = state.personas.findIndex(p => p.id === action.payload.id)
+        if (index !== -1) {
+          state.personas[index] = action.payload
+        }
+        state.unsavedChanges = false
+      })
+      .addCase(savePersona.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to save persona'
+      })
+      .addCase(removePersona.fulfilled, (state, action) => {
+        state.personas = state.personas.filter(p => p.id !== action.payload)
+        state.personaOntologies = state.personaOntologies.filter(o => o.personaId !== action.payload)
+        if (state.activePersonaId === action.payload) {
+          state.activePersonaId = state.personas.length > 0 ? state.personas[0].id : null
+        }
+        state.unsavedChanges = false
+      })
+      .addCase(removePersona.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to delete persona'
       })
   },
 })

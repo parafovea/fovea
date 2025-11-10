@@ -12,6 +12,7 @@ import personaReducer from '../../src/store/personaSlice.js'
 import worldReducer from '../../src/store/worldSlice.js'
 import videoSummaryReducer from '../../src/store/videoSummarySlice.js'
 import userReducer from '../../src/store/userSlice.js'
+import claimsReducer from '../../src/store/claimsSlice.js'
 
 /**
  * Root state type from the main store.
@@ -56,6 +57,7 @@ function createTestStore(preloadedState?: Partial<RootState>) {
       world: worldReducer,
       videoSummaries: videoSummaryReducer,
       user: userReducer,
+      claims: claimsReducer,
     },
     preloadedState: preloadedState as RootState | undefined,
   })
