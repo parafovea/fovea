@@ -76,8 +76,8 @@ jobs:
             echo "📥 Pulling latest code..."
             git config --global --add safe.directory ${{ secrets.DEPLOY_PATH }}
 
-            # Fix any permission issues from previous failed deployments
-            sudo chown -R ubuntu:ubuntu .git/
+            # Clean any stale lock files
+            rm -f .git/index.lock .git/FETCH_HEAD.lock
 
             git fetch origin
             git reset --hard origin/main
