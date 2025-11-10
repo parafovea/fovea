@@ -69,7 +69,7 @@ jobs:
 
       - name: Sync code to server
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete --no-g --no-perms \
             --exclude node_modules \
             --exclude .git \
             --exclude .env \
@@ -168,32 +168,21 @@ jobs:
 
       - name: Deploy documentation
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -l -c "
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
 
-            echo "📥 Pulling latest code (already done in deploy job)..."
+            echo \"📥 Pulling latest code (already done in deploy job)...\"
 
-            # Source nvm to make npm available
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-            echo "📦 Installing docs dependencies..."
+            echo \"📦 Installing docs dependencies...\"
             cd docs
             npm ci
 
-            echo "🏗️ Building documentation..."
+            echo \"🏗️ Building documentation...\"
             npm run build
 
-            echo "🔐 Setting permissions..."
-            sudo chmod -R o+rX ${{ secrets.DEPLOY_PATH }}/docs/build
-            sudo chmod o+x /home/ubuntu ${{ secrets.DEPLOY_PATH }} ${{ secrets.DEPLOY_PATH }}/docs
-
-            echo "🔄 Reloading Nginx..."
-            sudo systemctl reload nginx
-
-            echo "✅ Documentation deployed!"
-          EOF
+            echo \"✅ Documentation built!\"
+          "'
 
       - name: Verify docs deployment
         run: |
