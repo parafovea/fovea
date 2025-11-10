@@ -636,10 +636,9 @@ export interface VideoMetadata {
   fps?: number
   format?: string
   uploader?: string
-  uploader_id?: string
-  uploader_url?: string
+  uploaderId?: string
+  uploaderUrl?: string
   uploadDate?: string
-  upload_date?: string
   timestamp?: number
   tags?: string[]
   thumbnail?: string
@@ -647,11 +646,11 @@ export interface VideoMetadata {
   filePath: string
   path: string  // S3 URL or file path for video playback
   formats?: VideoFormat[]
-  webpage_url?: string
-  channel_id?: string
-  like_count?: number
-  repost_count?: number
-  comment_count?: number
+  webpageUrl?: string
+  channelId?: string
+  likeCount?: number
+  repostCount?: number
+  commentCount?: number
 }
 
 export interface PersonaOntology {

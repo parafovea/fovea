@@ -154,7 +154,7 @@ export function AnnotationCandidatesList({
     return frames.flatMap((frame) =>
       frame.detections.map((detection) => ({
         detection,
-        frameNumber: frame.frame_number,
+        frameNumber: frame.frameNumber,
         timestamp: frame.timestamp,
         status: 'pending' as const,
       }))
@@ -198,7 +198,7 @@ export function AnnotationCandidatesList({
 
     // Create annotation
     const annotationId = uuidv4()
-    const bbox = candidate.detection.bounding_box
+    const bbox = candidate.detection.boundingBox
 
     if (personaId && typeId && typeCategory) {
       // Type annotation
@@ -435,15 +435,15 @@ export function AnnotationCandidatesList({
 
                       {/* Bounding Box Info */}
                       <Typography variant="caption" color="text.secondary">
-                        Box: ({candidate.detection.bounding_box.x.toFixed(3)}, {candidate.detection.bounding_box.y.toFixed(3)})
-                        {' '}W: {candidate.detection.bounding_box.width.toFixed(3)},
-                        H: {candidate.detection.bounding_box.height.toFixed(3)}
+                        Box: ({candidate.detection.boundingBox.x.toFixed(3)}, {candidate.detection.boundingBox.y.toFixed(3)})
+                        {' '}W: {candidate.detection.boundingBox.width.toFixed(3)},
+                        H: {candidate.detection.boundingBox.height.toFixed(3)}
                       </Typography>
 
                       {/* Track ID if available */}
-                      {candidate.detection.track_id && (
+                      {candidate.detection.trackId && (
                         <Chip
-                          label={`Track ID: ${candidate.detection.track_id}`}
+                          label={`Track ID: ${candidate.detection.trackId}`}
                           size="small"
                           variant="outlined"
                         />

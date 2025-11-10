@@ -83,7 +83,7 @@ export default function VideoBrowser() {
 
   const { mutate: generateSummary } = useGenerateSummary()
   const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cuda_available
+  const isCpuOnly = !modelConfig?.cudaAvailable
 
   /**
    * Fetches video list from backend API.
@@ -261,7 +261,7 @@ export default function VideoBrowser() {
       video.title.toLowerCase().includes(searchLower) ||
       video.description.toLowerCase().includes(searchLower) ||
       video.uploader?.toLowerCase().includes(searchLower) ||
-      video.uploader_id?.toLowerCase().includes(searchLower) ||
+      video.uploaderId?.toLowerCase().includes(searchLower) ||
       video.tags?.some(tag => tag.toLowerCase().includes(searchLower))
     )
   })
@@ -290,9 +290,9 @@ export default function VideoBrowser() {
    * @returns Video URL or empty string
    */
   const getVideoUrl = (video: VideoMetadata) => {
-    // First try webpage_url as it's the original source
-    if (video.webpage_url) {
-      return video.webpage_url
+    // First try webpageUrl as it's the original source
+    if (video.webpageUrl) {
+      return video.webpageUrl
     }
     // Then try to get the highest quality video URL from formats
     if (video.formats && video.formats.length > 0) {
@@ -636,18 +636,18 @@ function VideoCard({
         </CardMedia>
         <CardContent sx={{ flexGrow: 1 }}>
           <Typography gutterBottom variant="h6" component="h2">
-            {video.uploader || video.uploader_id || 'Unknown User'}
-            {video.uploader_id && video.uploader_url && (
+            {video.uploader || video.uploaderId || 'Unknown User'}
+            {video.uploaderId && video.uploaderUrl && (
               <>
                 {' '}(
                 <Link
-                  href={video.uploader_url}
+                  href={video.uploaderUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   underline="hover"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  @{video.uploader_id}
+                  @{video.uploaderId}
                 </Link>
                 )
               </>
@@ -677,24 +677,24 @@ function VideoCard({
             </Box>
           )}
 
-          {(video.like_count || video.repost_count || video.comment_count) && (
+          {(video.likeCount || video.repostCount || video.commentCount) && (
             <Stack direction="row" spacing={1.5} sx={{ mb: 1 }}>
-              {video.like_count !== undefined && (
+              {video.likeCount !== undefined && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <LikeIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.like_count.toLocaleString()}</Typography>
+                  <Typography variant="caption">{video.likeCount.toLocaleString()}</Typography>
                 </Box>
               )}
-              {video.repost_count !== undefined && (
+              {video.repostCount !== undefined && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <ShareIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.repost_count.toLocaleString()}</Typography>
+                  <Typography variant="caption">{video.repostCount.toLocaleString()}</Typography>
                 </Box>
               )}
-              {video.comment_count !== undefined && (
+              {video.commentCount !== undefined && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <CommentIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.comment_count.toLocaleString()}</Typography>
+                  <Typography variant="caption">{video.commentCount.toLocaleString()}</Typography>
                 </Box>
               )}
             </Stack>

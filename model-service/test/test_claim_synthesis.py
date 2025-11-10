@@ -334,7 +334,7 @@ class TestSynthesizeSummaryFromClaims:
         mock_loader = Mock()
         mock_result = Mock()
         mock_result.text = "The rocket was launched successfully and reached orbit."
-        mock_loader.generate_async = AsyncMock(return_value=mock_result)
+        mock_loader.generate = AsyncMock(return_value=mock_result)
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source],
@@ -366,7 +366,7 @@ class TestSynthesizeSummaryFromClaims:
         mock_loader = Mock()
         mock_result = Mock()
         mock_result.text = "A comprehensive analysis of the rocket launch."
-        mock_loader.generate_async = AsyncMock(return_value=mock_result)
+        mock_loader.generate = AsyncMock(return_value=mock_result)
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source],
@@ -380,9 +380,9 @@ class TestSynthesizeSummaryFromClaims:
             include_citations=True,
         )
 
-        # Verify generate_async was called
-        assert mock_loader.generate_async.called
-        call_args = mock_loader.generate_async.call_args
+        # Verify generate was called
+        assert mock_loader.generate.called
+        call_args = mock_loader.generate.call_args
 
         # Check that prompt includes all contexts
         prompt = call_args[1]["prompt"]
@@ -391,7 +391,7 @@ class TestSynthesizeSummaryFromClaims:
         assert "CONFLICTS DETECTED" in prompt
 
         # Check generation config
-        config = call_args[1]["config"]
+        config = call_args[1]["generation_config"]
         assert config.max_tokens == 8192
         assert config.temperature == 0.8
 
@@ -411,7 +411,7 @@ class TestSynthesizeSummaryFromClaims:
         mock_loader = Mock()
         mock_result = Mock()
         mock_result.text = "Multi-source analysis."
-        mock_loader.generate_async = AsyncMock(return_value=mock_result)
+        mock_loader.generate = AsyncMock(return_value=mock_result)
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source, source2],
@@ -426,7 +426,7 @@ class TestSynthesizeSummaryFromClaims:
         )
 
         # Verify multiple sources mentioned in prompt
-        call_args = mock_loader.generate_async.call_args
+        call_args = mock_loader.generate.call_args
         prompt = call_args[1]["prompt"]
         assert "Source 1:" in prompt
         assert "Source 2:" in prompt

@@ -4,6 +4,8 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { createReadStream } from 'fs'
 import crypto from 'crypto'
+import camelcaseKeys from 'camelcase-keys'
+import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
 
 const VideoSchema = Type.Object({
@@ -289,9 +291,11 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         if (metadata) {
+          // Convert metadata from snake_case (yt-dlp format) to camelCase
+          const camelCaseMetadata = camelcaseKeys(metadata, { deep: true })
           return reply.send({
             ...baseData,
-            ...metadata,
+            ...camelCaseMetadata,
             // Override id to use our hash-based ID
             id: videoId
           })
@@ -535,19 +539,21 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         // Backend uses /data, model service uses /videos
         const modelVideoPath = video.path.replace('/data/', '/videos/')
 
-        // Call model service
         const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+
+        const requestBody = snakecaseKeys({
+          videoId,
+          videoPath: modelVideoPath,
+          query,
+          confidenceThreshold,
+          frameNumbers,
+          enableTracking,
+        })
+
         const response = await fetch(`${modelServiceUrl}/api/detection/detect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            video_id: videoId,
-            video_path: modelVideoPath,
-            query,
-            confidence_threshold: confidenceThreshold,
-            frame_numbers: frameNumbers,
-            enable_tracking: enableTracking,
-          }),
+          body: JSON.stringify(requestBody),
         })
 
         if (!response.ok) {
@@ -558,40 +564,30 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           })
         }
 
-        const detectionResult = await response.json() as {
-          id: string
-          video_id: string
+        const rawDetectionResult = await response.json()
+        const detectionResult = camelcaseKeys(rawDetectionResult as Record<string, unknown>, { deep: true }) as {
+          videoId: string
           query: string
           frames: Array<{
-            frame_number: number
-            timestamp: number
+            frameNumber: number
             detections: Array<{
-              bounding_box: {
-                x: number
-                y: number
-                width: number
-                height: number
-              }
+              boundingBox: { x: number; y: number; width: number; height: number }
               confidence: number
               label: string
-              track_id?: string | null
             }>
           }>
-          total_detections: number
-          processing_time: number
         }
 
-        // Transform to camelCase to match API schema
         return reply.send({
-          videoId: detectionResult.video_id,
+          videoId: detectionResult.videoId,
           query: detectionResult.query,
-          frameResults: detectionResult.frames.map(frame => ({
-            frameNumber: frame.frame_number,
-            detections: frame.detections.map(det => ({
-              x: det.bounding_box.x,
-              y: det.bounding_box.y,
-              width: det.bounding_box.width,
-              height: det.bounding_box.height,
+          frameResults: detectionResult.frames.map((frame) => ({
+            frameNumber: frame.frameNumber,
+            detections: frame.detections.map((det) => ({
+              x: det.boundingBox.x,
+              y: det.boundingBox.y,
+              width: det.boundingBox.width,
+              height: det.boundingBox.height,
               confidence: det.confidence,
               label: det.label,
             })),

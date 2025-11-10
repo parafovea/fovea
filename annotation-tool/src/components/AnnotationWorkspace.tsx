@@ -102,7 +102,7 @@ export default function AnnotationWorkspace() {
   const navigate = useNavigate()
   const dispatch = useDispatch<AppDispatch>()
   const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cuda_available
+  const isCpuOnly = !modelConfig?.cudaAvailable
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -709,17 +709,17 @@ export default function AnnotationWorkspace() {
           <Stack spacing={1}>
             {/* Uploader as main title with clickable link */}
             <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
-              {currentVideo?.uploader || currentVideo?.uploader_id || 'Loading...'}
-              {currentVideo?.uploader_id && currentVideo?.uploader_url && (
+              {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
+              {currentVideo?.uploaderId && currentVideo?.uploaderUrl && (
                 <>
                   {' '}(
-                  <Link 
-                    href={currentVideo.uploader_url} 
-                    target="_blank" 
+                  <Link
+                    href={currentVideo.uploaderUrl}
+                    target="_blank"
                     rel="noopener noreferrer"
                     underline="hover"
                   >
-                    @{currentVideo.uploader_id}
+                    @{currentVideo.uploaderId}
                   </Link>
                   )
                 </>
@@ -746,36 +746,36 @@ export default function AnnotationWorkspace() {
               )}
               
               {/* Engagement Metrics */}
-              {currentVideo && (currentVideo.like_count || currentVideo.repost_count || currentVideo.comment_count) && (
+              {currentVideo && (currentVideo.likeCount || currentVideo.repostCount || currentVideo.commentCount) && (
                 <>
-                  {currentVideo.like_count !== undefined && (
+                  {currentVideo.likeCount !== undefined && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <LikeIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.like_count.toLocaleString()}</Typography>
+                      <Typography variant="caption">{currentVideo.likeCount.toLocaleString()}</Typography>
                     </Box>
                   )}
-                  {currentVideo.repost_count !== undefined && (
+                  {currentVideo.repostCount !== undefined && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <ShareIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.repost_count.toLocaleString()}</Typography>
+                      <Typography variant="caption">{currentVideo.repostCount.toLocaleString()}</Typography>
                     </Box>
                   )}
-                  {currentVideo.comment_count !== undefined && (
+                  {currentVideo.commentCount !== undefined && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <CommentIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.comment_count.toLocaleString()}</Typography>
+                      <Typography variant="caption">{currentVideo.commentCount.toLocaleString()}</Typography>
                     </Box>
                   )}
                 </>
               )}
-              
+
               {/* Source Link - More prominent */}
-              {currentVideo?.webpage_url && (
+              {currentVideo?.webpageUrl && (
                 <Button
                   variant="contained"
                   size="small"
                   startIcon={<ExternalLinkIcon />}
-                  href={currentVideo.webpage_url}
+                  href={currentVideo.webpageUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -1207,7 +1207,7 @@ export default function AnnotationWorkspace() {
           <DialogTitle>
             Detection Results
             <Typography variant="body2" color="text.secondary">
-              Found {detectionResults.total_detections} objects for query: "{detectionResults.query}"
+              Found {detectionResults.totalDetections} objects for query: "{detectionResults.query}"
             </Typography>
           </DialogTitle>
           <DialogContent>

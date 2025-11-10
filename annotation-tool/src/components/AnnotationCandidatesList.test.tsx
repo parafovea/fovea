@@ -35,32 +35,32 @@ function renderWithStore(component: React.ReactElement) {
 describe('AnnotationCandidatesList', () => {
   const mockWildlifeDetections: FrameDetections[] = [
     {
-      frame_number: 0,
+      frameNumber: 0,
       timestamp: 0.0,
       detections: [
         {
           label: 'elephant',
-          bounding_box: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+          boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
           confidence: 0.92,
-          track_id: 'elephant-1',
+          trackId: 'elephant-1',
         },
         {
           label: 'lion',
-          bounding_box: { x: 0.5, y: 0.3, width: 0.2, height: 0.3 },
+          boundingBox: { x: 0.5, y: 0.3, width: 0.2, height: 0.3 },
           confidence: 0.78,
-          track_id: 'lion-1',
+          trackId: 'lion-1',
         },
       ],
     },
     {
-      frame_number: 30,
+      frameNumber: 30,
       timestamp: 1.0,
       detections: [
         {
           label: 'giraffe',
-          bounding_box: { x: 0.2, y: 0.1, width: 0.25, height: 0.6 },
+          boundingBox: { x: 0.2, y: 0.1, width: 0.25, height: 0.6 },
           confidence: 0.85,
-          track_id: 'giraffe-1',
+          trackId: 'giraffe-1',
         },
       ],
     },
@@ -68,20 +68,20 @@ describe('AnnotationCandidatesList', () => {
 
   const mockSportsDetections: FrameDetections[] = [
     {
-      frame_number: 0,
+      frameNumber: 0,
       timestamp: 0.0,
       detections: [
         {
           label: 'player wearing red jersey',
-          bounding_box: { x: 0.3, y: 0.4, width: 0.15, height: 0.4 },
+          boundingBox: { x: 0.3, y: 0.4, width: 0.15, height: 0.4 },
           confidence: 0.88,
-          track_id: 'player-1',
+          trackId: 'player-1',
         },
         {
           label: 'soccer ball',
-          bounding_box: { x: 0.45, y: 0.55, width: 0.05, height: 0.05 },
+          boundingBox: { x: 0.45, y: 0.55, width: 0.05, height: 0.05 },
           confidence: 0.95,
-          track_id: null,
+          trackId: null,
         },
       ],
     },
@@ -89,26 +89,26 @@ describe('AnnotationCandidatesList', () => {
 
   const mockTrafficDetections: FrameDetections[] = [
     {
-      frame_number: 0,
+      frameNumber: 0,
       timestamp: 0.0,
       detections: [
         {
           label: 'sedan',
-          bounding_box: { x: 0.1, y: 0.5, width: 0.3, height: 0.2 },
+          boundingBox: { x: 0.1, y: 0.5, width: 0.3, height: 0.2 },
           confidence: 0.91,
-          track_id: 'vehicle-1',
+          trackId: 'vehicle-1',
         },
         {
           label: 'truck',
-          bounding_box: { x: 0.6, y: 0.4, width: 0.35, height: 0.3 },
+          boundingBox: { x: 0.6, y: 0.4, width: 0.35, height: 0.3 },
           confidence: 0.87,
-          track_id: 'vehicle-2',
+          trackId: 'vehicle-2',
         },
         {
           label: 'bicycle',
-          bounding_box: { x: 0.05, y: 0.65, width: 0.1, height: 0.15 },
+          boundingBox: { x: 0.05, y: 0.65, width: 0.1, height: 0.15 },
           confidence: 0.45,
-          track_id: 'vehicle-3',
+          trackId: 'vehicle-3',
         },
       ],
     },
@@ -116,26 +116,26 @@ describe('AnnotationCandidatesList', () => {
 
   const mockRetailDetections: FrameDetections[] = [
     {
-      frame_number: 0,
+      frameNumber: 0,
       timestamp: 0.0,
       detections: [
         {
           label: 'milk carton',
-          bounding_box: { x: 0.2, y: 0.3, width: 0.1, height: 0.2 },
+          boundingBox: { x: 0.2, y: 0.3, width: 0.1, height: 0.2 },
           confidence: 0.82,
-          track_id: null,
+          trackId: null,
         },
         {
           label: 'bread loaf',
-          bounding_box: { x: 0.4, y: 0.35, width: 0.15, height: 0.1 },
+          boundingBox: { x: 0.4, y: 0.35, width: 0.15, height: 0.1 },
           confidence: 0.76,
-          track_id: null,
+          trackId: null,
         },
         {
           label: 'shopping cart',
-          bounding_box: { x: 0.7, y: 0.5, width: 0.25, height: 0.4 },
+          boundingBox: { x: 0.7, y: 0.5, width: 0.25, height: 0.4 },
           confidence: 0.93,
-          track_id: 'cart-1',
+          trackId: 'cart-1',
         },
       ],
     },
@@ -513,14 +513,14 @@ describe('AnnotationCandidatesList', () => {
     it('handles detections without track IDs', () => {
       const noTrackDetections: FrameDetections[] = [
         {
-          frame_number: 0,
+          frameNumber: 0,
           timestamp: 0.0,
           detections: [
             {
               label: 'person',
-              bounding_box: { x: 0.5, y: 0.5, width: 0.2, height: 0.4 },
+              boundingBox: { x: 0.5, y: 0.5, width: 0.2, height: 0.4 },
               confidence: 0.9,
-              track_id: null,
+              trackId: null,
             },
           ],
         },

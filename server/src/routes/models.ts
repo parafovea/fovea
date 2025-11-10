@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
+import camelcaseKeys from 'camelcase-keys'
+import snakecaseKeys from 'snakecase-keys'
 
 /**
  * Model service API routes.
@@ -64,7 +66,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/config`, {
         timeout: 10000
       })
-      return response.data
+      return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
@@ -125,7 +127,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/status`, {
         timeout: 10000
       })
-      return response.data
+      return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
@@ -172,8 +174,8 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post<{
     Querystring: {
-      task_type: string
-      model_name: string
+      taskType: string
+      modelName: string
     }
   }>('/api/models/select', {
     schema: {
@@ -181,25 +183,26 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       tags: ['models'],
       querystring: {
         type: 'object',
-        required: ['task_type', 'model_name'],
+        required: ['taskType', 'modelName'],
         properties: {
-          task_type: { type: 'string' },
-          model_name: { type: 'string' }
+          taskType: { type: 'string' },
+          modelName: { type: 'string' }
         }
       }
     }
   }, async (request, reply) => {
     try {
-      const { task_type, model_name } = request.query
+      const { taskType, modelName } = request.query
+      const snakeCaseParams = snakecaseKeys({ taskType, modelName })
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/select`,
         null,
         {
-          params: { task_type, model_name },
+          params: snakeCaseParams,
           timeout: 30000
         }
       )
-      return response.data
+      return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {

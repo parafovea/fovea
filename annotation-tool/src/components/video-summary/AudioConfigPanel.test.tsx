@@ -9,16 +9,16 @@ import { AudioConfigPanel } from './AudioConfigPanel'
 import { AudioConfig } from './types.js'
 
 const defaultConfig: AudioConfig = {
-  enable_audio: false,
-  enable_speaker_diarization: false,
-  fusion_strategy: 'sequential',
+  enableAudio: false,
+  enableSpeakerDiarization: false,
+  fusionStrategy: 'sequential',
 }
 
 const enabledConfig: AudioConfig = {
-  enable_audio: true,
-  enable_speaker_diarization: true,
-  fusion_strategy: 'timestamp_aligned',
-  audio_language: 'en',
+  enableAudio: true,
+  enableSpeakerDiarization: true,
+  fusionStrategy: 'timestampAligned',
+  audioLanguage: 'en',
 }
 
 describe('AudioConfigPanel', () => {
@@ -66,7 +66,7 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...defaultConfig,
-        enable_audio: true,
+        enableAudio: true,
       })
     })
 
@@ -81,8 +81,8 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...enabledConfig,
-        enable_audio: false,
-        enable_speaker_diarization: false,
+        enableAudio: false,
+        enableSpeakerDiarization: false,
       })
     })
 
@@ -91,9 +91,9 @@ describe('AudioConfigPanel', () => {
       const user = userEvent.setup()
 
       const config: AudioConfig = {
-        enable_audio: true,
-        enable_speaker_diarization: true,
-        fusion_strategy: 'sequential',
+        enableAudio: true,
+        enableSpeakerDiarization: true,
+        fusionStrategy: 'sequential',
       }
 
       render(<AudioConfigPanel config={config} onChange={onChange} />)
@@ -103,8 +103,8 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...config,
-        enable_audio: false,
-        enable_speaker_diarization: false,
+        enableAudio: false,
+        enableSpeakerDiarization: false,
       })
     })
   })
@@ -116,7 +116,7 @@ describe('AudioConfigPanel', () => {
 
       const config: AudioConfig = {
         ...defaultConfig,
-        enable_audio: true,
+        enableAudio: true,
       }
 
       render(<AudioConfigPanel config={config} onChange={onChange} />)
@@ -126,7 +126,7 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...config,
-        enable_speaker_diarization: true,
+        enableSpeakerDiarization: true,
       })
     })
 
@@ -144,7 +144,7 @@ describe('AudioConfigPanel', () => {
 
       const config: AudioConfig = {
         ...defaultConfig,
-        enable_audio: true,
+        enableAudio: true,
       }
 
       render(<AudioConfigPanel config={config} onChange={onChange} />)
@@ -182,7 +182,7 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...enabledConfig,
-        fusion_strategy: 'hybrid',
+        fusionStrategy: 'hybrid',
       })
     })
 
@@ -241,10 +241,10 @@ describe('AudioConfigPanel', () => {
       const user = userEvent.setup()
 
       const config: AudioConfig = {
-        enable_audio: true,
-        enable_speaker_diarization: false,
-        fusion_strategy: 'sequential',
-        audio_language: undefined,
+        enableAudio: true,
+        enableSpeakerDiarization: false,
+        fusionStrategy: 'sequential',
+        audioLanguage: undefined,
       }
 
       render(<AudioConfigPanel config={config} onChange={onChange} />)
@@ -255,11 +255,11 @@ describe('AudioConfigPanel', () => {
       // Check that onChange was called at least once with the expected character
       expect(onChange).toHaveBeenCalledWith({
         ...config,
-        audio_language: 'e',
+        audioLanguage: 'e',
       })
     })
 
-    it('sets audio_language to undefined when input is empty', async () => {
+    it('sets audioLanguage to undefined when input is empty', async () => {
       const onChange = vi.fn()
       const user = userEvent.setup()
 
@@ -270,7 +270,7 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenCalledWith({
         ...enabledConfig,
-        audio_language: undefined,
+        audioLanguage: undefined,
       })
     })
 
@@ -336,13 +336,13 @@ describe('AudioConfigPanel', () => {
       await user.click(audioCheckbox)
       expect(onChange).toHaveBeenLastCalledWith({
         ...defaultConfig,
-        enable_audio: true,
+        enableAudio: true,
       })
 
       // Update config to reflect audio enabled
       const audioEnabledConfig: AudioConfig = {
         ...defaultConfig,
-        enable_audio: true,
+        enableAudio: true,
       }
       rerender(<AudioConfigPanel config={audioEnabledConfig} onChange={onChange} />)
 
@@ -351,13 +351,13 @@ describe('AudioConfigPanel', () => {
       await user.click(diarizationCheckbox)
       expect(onChange).toHaveBeenLastCalledWith({
         ...audioEnabledConfig,
-        enable_speaker_diarization: true,
+        enableSpeakerDiarization: true,
       })
 
       // Change fusion strategy
       const fullConfig: AudioConfig = {
         ...audioEnabledConfig,
-        enable_speaker_diarization: true,
+        enableSpeakerDiarization: true,
       }
       rerender(<AudioConfigPanel config={fullConfig} onChange={onChange} />)
 
@@ -368,7 +368,7 @@ describe('AudioConfigPanel', () => {
 
       expect(onChange).toHaveBeenLastCalledWith({
         ...fullConfig,
-        fusion_strategy: 'hybrid',
+        fusionStrategy: 'hybrid',
       })
     })
   })

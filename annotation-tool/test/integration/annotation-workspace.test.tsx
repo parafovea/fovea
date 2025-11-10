@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
-import { Provider } from 'react-redux'
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { renderWithProviders } from '../utils/test-utils'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { configureStore } from '@reduxjs/toolkit'
 import { server } from '../setup'
@@ -17,6 +17,7 @@ import annotationReducer from '../../src/store/annotationSlice'
 import personaReducer from '../../src/store/personaSlice'
 import worldReducer from '../../src/store/worldSlice'
 import videoSummaryReducer from '../../src/store/videoSummarySlice'
+import claimsReducer from '../../src/store/claimsSlice'
 import type { Annotation, VideoMetadata } from '../../src/models/types'
 
 // Mock HTMLCanvasElement getContext for TimelineRenderer
@@ -113,7 +114,7 @@ vi.mock('../../src/hooks/useDetection', () => ({
 
 vi.mock('../../src/hooks/useModelConfig', () => ({
   useModelConfig: vi.fn(() => ({
-    data: { cuda_available: true },
+    data: { cudaAvailable: true },
     isLoading: false,
     error: null,
   })),
@@ -202,6 +203,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
         persona: personaReducer,
         world: worldReducer,
         videoSummaries: videoSummaryReducer,
+        claims: claimsReducer,
       },
       preloadedState: {
         videos: {
@@ -275,11 +277,23 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           timeCollections: [],
           relations: [],
         },
-        videoSummary: {
+        videoSummaries: {
           summaries: {},
           currentSummary: null,
-          isLoading: false,
+          loading: false,
+          saving: false,
           error: null,
+        },
+        claims: {
+          claimsBySummary: {},
+          selectedClaimId: null,
+          extracting: false,
+          extractionJobId: null,
+          extractionProgress: null,
+          extractionError: null,
+          loading: false,
+          error: null,
+          relations: {},
         },
       },
     })
@@ -290,14 +304,15 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
   })
 
   const renderWorkspace = (customStore = store) => {
-    return render(
-      <Provider store={customStore}>
-        <MemoryRouter initialEntries={['/annotate/test-video-id']}>
-          <Routes>
-            <Route path="/annotate/:videoId" element={<AnnotationWorkspace />} />
-          </Routes>
-        </MemoryRouter>
-      </Provider>
+    return renderWithProviders(
+      <MemoryRouter initialEntries={['/annotate/test-video-id']}>
+        <Routes>
+          <Route path="/annotate/:videoId" element={<AnnotationWorkspace />} />
+        </Routes>
+      </MemoryRouter>,
+      {
+        preloadedState: customStore.getState(),
+      }
     )
   }
 
@@ -362,6 +377,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           annotations: annotationReducer,
           persona: personaReducer,
           world: worldReducer,
+          videoSummaries: videoSummaryReducer,
+          claims: claimsReducer,
         },
         preloadedState: {
           ...store.getState(),
@@ -387,6 +404,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           annotations: annotationReducer,
           persona: personaReducer,
           world: worldReducer,
+          videoSummaries: videoSummaryReducer,
+          claims: claimsReducer,
         },
         preloadedState: {
           ...store.getState(),
@@ -607,11 +626,16 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
     it('action buttons are clickable when timeline is collapsed', async () => {
       renderWorkspace()
 
-      await waitFor(() => {
-        expect(screen.getByText('Edit Summary')).toBeInTheDocument()
-      })
+      // Wait for model config to load so buttons are enabled
+      await waitFor(
+        () => {
+          const detectButton = screen.getByText('Detect Objects')
+          expect(detectButton).not.toBeDisabled()
+        },
+        { timeout: 5000 }
+      )
 
-      // Action buttons should be visible and clickable when timeline is collapsed
+      // Action buttons should be visible and enabled when timeline is collapsed
       const editButton = screen.getByText('Edit Summary')
       expect(editButton).not.toBeDisabled()
       expect(editButton).toBeVisible()
@@ -681,6 +705,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           annotations: annotationReducer,
           persona: personaReducer,
           world: worldReducer,
+          videoSummaries: videoSummaryReducer,
+          claims: claimsReducer,
         },
         preloadedState: {
           ...store.getState(),
@@ -750,7 +776,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           annotations: annotationReducer,
           persona: personaReducer,
           world: worldReducer,
-          videoSummary: videoSummaryReducer,
+          videoSummaries: videoSummaryReducer,
+          claims: claimsReducer,
         },
         preloadedState: {
           ...store.getState(),
@@ -763,15 +790,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       })
 
       // Re-render with updated store (no annotations)
-      render(
-        <Provider store={updatedStore}>
-          <MemoryRouter initialEntries={['/annotate/test-video-id']}>
-            <Routes>
-              <Route path="/annotate/:videoId" element={<AnnotationWorkspace />} />
-            </Routes>
-          </MemoryRouter>
-        </Provider>
-      )
+      renderWorkspace(updatedStore)
 
       // Wait for video to load
       await waitFor(() => {
@@ -857,6 +876,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
           annotations: annotationReducer,
           persona: personaReducer,
           world: worldReducer,
+          videoSummaries: videoSummaryReducer,
+          claims: claimsReducer,
         },
         preloadedState: {
           ...store.getState(),

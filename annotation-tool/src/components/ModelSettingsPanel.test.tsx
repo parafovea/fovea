@@ -42,63 +42,63 @@ function renderWithQuery(component: React.ReactElement) {
  */
 const mockConfig: ModelConfig = {
   models: {
-    video_summarization: {
+    videoSummarization: {
       selected: 'llama-4-maverick',
       options: {
         'llama-4-maverick': {
-          model_id: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
+          modelId: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
           framework: 'transformers',
-          vram_gb: 11.2,
+          vramGb: 11.2,
           speed: 'fast',
           description: 'Fast VLM with strong reasoning capabilities',
           fps: 2.5,
         },
         'qwen-2.5-vl': {
-          model_id: 'Qwen/Qwen2.5-VL-7B-Instruct',
+          modelId: 'Qwen/Qwen2.5-VL-7B-Instruct',
           framework: 'transformers',
-          vram_gb: 7.8,
+          vramGb: 7.8,
           speed: 'fast',
           description: 'Efficient VLM with multilingual support',
           fps: 3.2,
         },
       },
     },
-    object_detection: {
+    objectDetection: {
       selected: 'yolo-world',
       options: {
         'yolo-world': {
-          model_id: 'AILab-CVC/YOLO-World',
+          modelId: 'AILab-CVC/YOLO-World',
           framework: 'transformers',
-          vram_gb: 2.1,
+          vramGb: 2.1,
           speed: 'fast',
           description: 'Real-time open-vocabulary object detection',
           fps: 25.0,
         },
         'owlv2-large': {
-          model_id: 'google/owlv2-large-patch14-ensemble',
+          modelId: 'google/owlv2-large-patch14-ensemble',
           framework: 'transformers',
-          vram_gb: 4.5,
+          vramGb: 4.5,
           speed: 'moderate',
           description: 'High-accuracy open-vocabulary detection',
           fps: 8.0,
         },
       },
     },
-    video_tracking: {
+    videoTracking: {
       selected: 'samurai',
       options: {
         samurai: {
-          model_id: 'yangchris11/samurai',
+          modelId: 'yangchris11/samurai',
           framework: 'transformers',
-          vram_gb: 6.2,
+          vramGb: 6.2,
           speed: 'moderate',
           description: 'State-of-the-art video object segmentation and tracking',
           fps: 5.0,
         },
         'yolo11n-seg': {
-          model_id: 'ultralytics/yolo11n-seg',
+          modelId: 'ultralytics/yolo11n-seg',
           framework: 'ultralytics',
-          vram_gb: 1.8,
+          vramGb: 1.8,
           speed: 'fast',
           description: 'Lightweight segmentation and tracking',
           fps: 30.0,
@@ -107,11 +107,11 @@ const mockConfig: ModelConfig = {
     },
   },
   inference: {
-    max_memory_per_model: 24.0,
-    offload_threshold: 0.9,
-    warmup_on_startup: true,
+    maxMemoryPerModel: 24.0,
+    offloadThreshold: 0.9,
+    warmupOnStartup: true,
   },
-  cuda_available: true,
+  cudaAvailable: true,
 }
 
 /**
@@ -119,22 +119,22 @@ const mockConfig: ModelConfig = {
  */
 const mockValidation: MemoryValidation = {
   valid: true,
-  total_vram_gb: 24.0,
-  total_required_gb: 19.5,
+  totalVramGb: 24.0,
+  totalRequiredGb: 19.5,
   threshold: 0.9,
-  max_allowed_gb: 21.6,
-  model_requirements: {
-    video_summarization: {
-      model_id: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
-      vram_gb: 11.2,
+  maxAllowedGb: 21.6,
+  modelRequirements: {
+    videoSummarization: {
+      modelId: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
+      vramGb: 11.2,
     },
-    object_detection: {
-      model_id: 'AILab-CVC/YOLO-World',
-      vram_gb: 2.1,
+    objectDetection: {
+      modelId: 'AILab-CVC/YOLO-World',
+      vramGb: 2.1,
     },
-    video_tracking: {
-      model_id: 'yangchris11/samurai',
-      vram_gb: 6.2,
+    videoTracking: {
+      modelId: 'yangchris11/samurai',
+      vramGb: 6.2,
     },
   },
 }
@@ -276,11 +276,11 @@ describe('ModelSettingsPanel', () => {
       // Use a configuration with more VRAM headroom
       const lowUtilizationValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 28.8,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -338,11 +338,11 @@ describe('ModelSettingsPanel', () => {
       // Use a configuration with more VRAM headroom
       const lowUtilizationValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 28.8,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -396,11 +396,11 @@ describe('ModelSettingsPanel', () => {
     it('displays warning when VRAM usage exceeds 80% (production deployment scenario)', () => {
       const warningValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 24.0,
-        total_required_gb: 20.5,
+        totalVramGb: 24.0,
+        totalRequiredGb: 20.5,
         threshold: 0.9,
-        max_allowed_gb: 21.6,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 21.6,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -430,11 +430,11 @@ describe('ModelSettingsPanel', () => {
     it('displays error when VRAM budget is exceeded (edge computing scenario)', () => {
       const errorValidation: MemoryValidation = {
         valid: false,
-        total_vram_gb: 16.0,
-        total_required_gb: 19.5,
+        totalVramGb: 16.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 14.4,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 14.4,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -468,11 +468,11 @@ describe('ModelSettingsPanel', () => {
     it('displays success indicator when VRAM usage is optimal', () => {
       const optimalValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,  // Actual models total 19.5 GB
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,  // Actual models total 19.5 GB
         threshold: 0.9,
-        max_allowed_gb: 28.8,  // 19.5 / 28.8 = 67.7% (under 80% warning threshold)
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,  // 19.5 / 28.8 = 67.7% (under 80% warning threshold)
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -507,17 +507,17 @@ describe('ModelSettingsPanel', () => {
       // Use a configuration with more VRAM headroom
       const lowUtilizationValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 28.8,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       const mockMutateAsync = vi.fn().mockResolvedValue({
         status: 'success',
-        task_type: 'object_detection',
-        selected_model: 'owlv2-large',
+        taskType: 'objectDetection',
+        selectedModel: 'owlv2-large',
       })
 
       const mockRefetch = vi.fn()
@@ -571,8 +571,8 @@ describe('ModelSettingsPanel', () => {
       // Verify mutation was called
       await waitFor(() => {
         expect(mockMutateAsync).toHaveBeenCalledWith({
-          task_type: 'object_detection',
-          model_name: 'owlv2-large',
+          taskType: 'objectDetection',
+          modelName: 'owlv2-large',
         })
       })
     })
@@ -581,11 +581,11 @@ describe('ModelSettingsPanel', () => {
       // Use a configuration with more VRAM headroom
       const lowUtilizationValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 28.8,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       const mockMutateAsync = vi.fn().mockRejectedValue(new Error('Save failed'))
@@ -648,11 +648,11 @@ describe('ModelSettingsPanel', () => {
       // Use a configuration with more VRAM headroom
       const lowUtilizationValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 32.0,
-        total_required_gb: 19.5,
+        totalVramGb: 32.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 28.8,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 28.8,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -747,17 +747,17 @@ describe('ModelSettingsPanel', () => {
         ...mockConfig,
         inference: {
           ...mockConfig.inference,
-          max_memory_per_model: 80.0,
+          maxMemoryPerModel: 80.0,
         },
       }
 
       const largeGpuValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 80.0,
-        total_required_gb: 19.5,
+        totalVramGb: 80.0,
+        totalRequiredGb: 19.5,
         threshold: 0.9,
-        max_allowed_gb: 72.0,
-        model_requirements: mockValidation.model_requirements,
+        maxAllowedGb: 72.0,
+        modelRequirements: mockValidation.modelRequirements,
       }
 
       vi.spyOn(useModelConfigHooks, 'useModelConfig').mockReturnValue({
@@ -790,27 +790,27 @@ describe('ModelSettingsPanel', () => {
         ...mockConfig,
         models: {
           ...mockConfig.models,
-          video_summarization: {
+          videoSummarization: {
             selected: 'qwen-2.5-vl',
-            options: mockConfig.models.video_summarization.options,
+            options: mockConfig.models.videoSummarization.options,
           },
-          video_tracking: {
+          videoTracking: {
             selected: 'yolo11n-seg',
-            options: mockConfig.models.video_tracking.options,
+            options: mockConfig.models.videoTracking.options,
           },
         },
       }
 
       const edgeValidation: MemoryValidation = {
         valid: true,
-        total_vram_gb: 8.0,
-        total_required_gb: 7.0,
+        totalVramGb: 8.0,
+        totalRequiredGb: 7.0,
         threshold: 0.9,
-        max_allowed_gb: 7.2,
-        model_requirements: {
-          video_summarization: { model_id: 'Qwen/Qwen2.5-VL-7B-Instruct', vram_gb: 7.8 },
-          object_detection: { model_id: 'AILab-CVC/YOLO-World', vram_gb: 2.1 },
-          video_tracking: { model_id: 'ultralytics/yolo11n-seg', vram_gb: 1.8 },
+        maxAllowedGb: 7.2,
+        modelRequirements: {
+          videoSummarization: { modelId: 'Qwen/Qwen2.5-VL-7B-Instruct', vramGb: 7.8 },
+          objectDetection: { modelId: 'AILab-CVC/YOLO-World', vramGb: 2.1 },
+          videoTracking: { modelId: 'ultralytics/yolo11n-seg', vramGb: 1.8 },
         },
       }
 

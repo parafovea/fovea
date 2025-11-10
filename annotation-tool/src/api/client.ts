@@ -102,16 +102,16 @@ export interface BoundingBox {
  */
 export interface Detection {
   label: string
-  bounding_box: BoundingBox
+  boundingBox: BoundingBox
   confidence: number
-  track_id?: string | null
+  trackId?: string | null
 }
 
 /**
  * Detections for a single video frame.
  */
 export interface FrameDetections {
-  frame_number: number
+  frameNumber: number
   timestamp: number
   detections: Detection[]
 }
@@ -156,20 +156,20 @@ export interface DetectionRequest {
  */
 export interface DetectionResponse {
   id: string
-  video_id: string
+  videoId: string
   query: string
   frames: FrameDetections[]
-  total_detections: number
-  processing_time: number
+  totalDetections: number
+  processingTime: number
 }
 
 /**
  * Model metadata for a single model option.
  */
 export interface ModelOption {
-  model_id: string
+  modelId: string
   framework: string
-  vram_gb: number
+  vramGb: number
   speed: string
   description: string
   fps: number | null
@@ -187,9 +187,9 @@ export interface TaskConfig {
  * Inference configuration settings.
  */
 export interface InferenceConfig {
-  max_memory_per_model: number
-  offload_threshold: number
-  warmup_on_startup: boolean
+  maxMemoryPerModel: number
+  offloadThreshold: number
+  warmupOnStartup: boolean
 }
 
 /**
@@ -198,15 +198,15 @@ export interface InferenceConfig {
 export interface ModelConfig {
   models: Record<string, TaskConfig>
   inference: InferenceConfig
-  cuda_available: boolean
+  cudaAvailable: boolean
 }
 
 /**
  * Memory requirement for a single task.
  */
 export interface ModelRequirement {
-  model_id: string
-  vram_gb: number
+  modelId: string
+  vramGb: number
 }
 
 /**
@@ -214,19 +214,19 @@ export interface ModelRequirement {
  */
 export interface MemoryValidation {
   valid: boolean
-  total_vram_gb: number
-  total_required_gb: number
+  totalVramGb: number
+  totalRequiredGb: number
   threshold: number
-  max_allowed_gb: number
-  model_requirements: Record<string, ModelRequirement>
+  maxAllowedGb: number
+  modelRequirements: Record<string, ModelRequirement>
 }
 
 /**
  * Request payload for selecting a model.
  */
 export interface SelectModelRequest {
-  task_type: string
-  model_name: string
+  taskType: string
+  modelName: string
 }
 
 /**
@@ -234,8 +234,8 @@ export interface SelectModelRequest {
  */
 export interface SelectModelResponse {
   status: string
-  task_type: string
-  selected_model: string
+  taskType: string
+  selectedModel: string
 }
 
 /**
@@ -247,40 +247,40 @@ export type ModelHealth = 'loaded' | 'loading' | 'failed' | 'unloaded'
  * Performance metrics for a loaded model.
  */
 export interface ModelPerformanceMetrics {
-  total_requests: number
-  average_latency_ms: number
-  requests_per_second: number
-  average_fps: number | null
+  totalRequests: number
+  averageLatencyMs: number
+  requestsPerSecond: number
+  averageFps: number | null
 }
 
 /**
  * Status information for a single loaded model.
  */
 export interface LoadedModelStatus {
-  model_id: string
-  task_type: string
-  model_name: string
+  modelId: string
+  taskType: string
+  modelName: string
   framework: string
   quantization: string | null
   health: ModelHealth
-  vram_allocated_gb: number
-  vram_used_gb: number | null
-  warm_up_complete: boolean
-  last_used: string | null
-  load_time_ms: number | null
-  performance_metrics: ModelPerformanceMetrics | null
-  error_message: string | null
+  vramAllocatedGb: number
+  vramUsedGb: number | null
+  warmUpComplete: boolean
+  lastUsed: string | null
+  loadTimeMs: number | null
+  performanceMetrics: ModelPerformanceMetrics | null
+  errorMessage: string | null
 }
 
 /**
  * Overall model service status.
  */
 export interface ModelStatusResponse {
-  loaded_models: LoadedModelStatus[]
-  total_vram_allocated_gb: number
-  total_vram_available_gb: number
+  loadedModels: LoadedModelStatus[]
+  totalVramAllocatedGb: number
+  totalVramAvailableGb: number
   timestamp: string
-  cuda_available: boolean
+  cudaAvailable: boolean
 }
 
 /**
@@ -315,8 +315,8 @@ export interface AugmentOntologyRequest {
  */
 export interface AugmentationResponse {
   id: string
-  persona_id: string
-  target_category: OntologyCategory
+  personaId: string
+  targetCategory: OntologyCategory
   suggestions: OntologySuggestion[]
   reasoning: string
 }
@@ -552,8 +552,8 @@ export class ApiClient {
         null,
         {
           params: {
-            task_type: request.task_type,
-            model_name: request.model_name,
+            taskType: request.taskType,
+            modelName: request.modelName,
           },
         }
       )

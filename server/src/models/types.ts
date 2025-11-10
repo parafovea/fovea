@@ -171,7 +171,7 @@ export interface HabitualPattern {
   
   // Contextual anchors
   anchors?: Array<{
-    type: 'event' | 'time_of_day' | 'season' | 'cultural'
+    type: 'event' | 'timeOfDay' | 'season' | 'cultural'
     reference: string
     offset?: string  // ISO 8601 duration
   }>

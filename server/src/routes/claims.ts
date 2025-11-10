@@ -740,10 +740,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { summaryId: string }
     Body: {
-      synthesis_strategy?: 'hierarchical' | 'chronological' | 'narrative' | 'analytical'
-      max_length?: number
-      include_conflicts?: boolean
-      include_citations?: boolean
+      synthesisStrategy?: 'hierarchical' | 'chronological' | 'narrative' | 'analytical'
+      maxLength?: number
+      includeConflicts?: boolean
+      includeCitations?: boolean
     }
   }>(
     '/api/summaries/:summaryId/synthesize',
@@ -755,7 +755,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           summaryId: Type.String({ format: 'uuid' })
         }),
         body: Type.Object({
-          synthesis_strategy: Type.Optional(
+          synthesisStrategy: Type.Optional(
             Type.Union([
               Type.Literal('hierarchical'),
               Type.Literal('chronological'),
@@ -763,9 +763,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
               Type.Literal('analytical')
             ])
           ),
-          max_length: Type.Optional(Type.Number({ minimum: 100, maximum: 2000 })),
-          include_conflicts: Type.Optional(Type.Boolean()),
-          include_citations: Type.Optional(Type.Boolean())
+          maxLength: Type.Optional(Type.Number({ minimum: 100, maximum: 2000 })),
+          includeConflicts: Type.Optional(Type.Boolean()),
+          includeCitations: Type.Optional(Type.Boolean())
         }),
         response: {
           202: Type.Object({
@@ -800,15 +800,14 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: 'Summary has no claims to synthesize' })
       }
 
-      // Queue synthesis job using BullMQ
       const jobData: ClaimSynthesisJobData = {
         summaryId,
         summaryType: 'video',
         config: {
-          synthesis_strategy: config.synthesis_strategy || 'hierarchical',
-          max_length: config.max_length,
-          include_conflicts: config.include_conflicts,
-          include_citations: config.include_citations
+          synthesisStrategy: config.synthesisStrategy || 'hierarchical',
+          maxLength: config.maxLength,
+          includeConflicts: config.includeConflicts,
+          includeCitations: config.includeCitations
         }
       }
 

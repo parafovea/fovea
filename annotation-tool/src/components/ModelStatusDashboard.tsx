@@ -120,14 +120,14 @@ function getHealthIcon(health: ModelHealth) {
  *
  * @example
  * ```tsx
- * const displayName = TASK_DISPLAY_NAMES['video_summarization'] // 'Video Summarization'
- * const displayName = TASK_DISPLAY_NAMES['object_detection'] // 'Object Detection'
+ * const displayName = TASK_DISPLAY_NAMES['videoSummarization'] // 'Video Summarization'
+ * const displayName = TASK_DISPLAY_NAMES['objectDetection'] // 'Object Detection'
  * ```
  */
 const TASK_DISPLAY_NAMES: Record<string, string> = {
-  video_summarization: 'Video Summarization',
-  object_detection: 'Object Detection',
-  video_tracking: 'Video Tracking',
+  videoSummarization: 'Video Summarization',
+  objectDetection: 'Object Detection',
+  videoTracking: 'Video Tracking',
 }
 
 /**
@@ -212,13 +212,13 @@ export function ModelStatusDashboard({
   }
 
   const vramUtilizationPercent =
-    status.total_vram_available_gb > 0
-      ? (status.total_vram_allocated_gb / status.total_vram_available_gb) * 100
+    status.totalVramAvailableGb > 0
+      ? (status.totalVramAllocatedGb / status.totalVramAvailableGb) * 100
       : 0
 
   const isVramWarning = vramUtilizationPercent >= 80 && vramUtilizationPercent < 100
   const isVramError = vramUtilizationPercent >= 100
-  const isCpuOnly = !status.cuda_available
+  const isCpuOnly = !status.cudaAvailable
 
   return (
     <Card>
@@ -275,7 +275,7 @@ export function ModelStatusDashboard({
             <Typography variant="subtitle1">Total VRAM Usage</Typography>
             <Box sx={{ flexGrow: 1 }} />
             <Chip
-              label={`${status.total_vram_allocated_gb.toFixed(1)} / ${status.total_vram_available_gb.toFixed(1)} GB`}
+              label={`${status.totalVramAllocatedGb.toFixed(1)} / ${status.totalVramAvailableGb.toFixed(1)} GB`}
               color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
               icon={
                 isVramError ? (
@@ -298,14 +298,14 @@ export function ModelStatusDashboard({
           />
 
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            {status.loaded_models.length} model{status.loaded_models.length !== 1 ? 's' : ''} loaded
+            {status.loadedModels.length} model{status.loadedModels.length !== 1 ? 's' : ''} loaded
             {' · '}
             Utilization: {vramUtilizationPercent.toFixed(0)}%
           </Typography>
         </Paper>
 
         {/* Loaded Models */}
-        {status.loaded_models.length === 0 ? (
+        {status.loadedModels.length === 0 ? (
           <Alert severity={isCpuOnly ? "warning" : "info"}>
             {isCpuOnly
               ? "No models loaded. GPU required to load deep learning models."
@@ -313,8 +313,8 @@ export function ModelStatusDashboard({
           </Alert>
         ) : (
           <Grid container spacing={2}>
-            {status.loaded_models.map((model) => (
-              <Grid item xs={12} md={6} lg={4} key={`${model.task_type}-${model.model_id}`}>
+            {status.loadedModels.map((model) => (
+              <Grid item xs={12} md={6} lg={4} key={`${model.taskType}-${model.modelId}`}>
                 <ModelStatusCard
                   model={model}
                   onUnload={onUnloadModel}
@@ -365,13 +365,13 @@ interface ModelStatusCardProps {
 function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
   const handleUnload = () => {
     if (onUnload) {
-      onUnload(model.model_id, model.task_type)
+      onUnload(model.modelId, model.taskType)
     }
   }
 
   const vramUsagePercent =
-    model.vram_allocated_gb > 0 && model.vram_used_gb !== null
-      ? (model.vram_used_gb / model.vram_allocated_gb) * 100
+    model.vramAllocatedGb > 0 && model.vramUsedGb !== null
+      ? (model.vramUsedGb / model.vramAllocatedGb) * 100
       : null
 
   return (
@@ -381,7 +381,7 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
           {/* Header with task type and health */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6" component="div">
-              {TASK_DISPLAY_NAMES[model.task_type] || model.task_type}
+              {TASK_DISPLAY_NAMES[model.taskType] || model.taskType}
             </Typography>
             <Chip
               label={model.health}
@@ -399,10 +399,10 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
               Model
             </Typography>
             <Typography variant="body2" fontWeight="medium">
-              {model.model_name}
+              {model.modelName}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {model.model_id}
+              {model.modelId}
             </Typography>
           </Box>
 
@@ -436,13 +436,13 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
                 VRAM Usage
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
-              {model.vram_used_gb !== null ? (
+              {model.vramUsedGb !== null ? (
                 <Typography variant="caption" fontWeight="medium">
-                  {model.vram_used_gb.toFixed(1)} / {model.vram_allocated_gb.toFixed(1)} GB
+                  {model.vramUsedGb.toFixed(1)} / {model.vramAllocatedGb.toFixed(1)} GB
                 </Typography>
               ) : (
                 <Typography variant="caption" color="text.secondary">
-                  {model.vram_allocated_gb.toFixed(1)} GB allocated
+                  {model.vramAllocatedGb.toFixed(1)} GB allocated
                 </Typography>
               )}
             </Box>
@@ -459,7 +459,7 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
           {/* Warm-up Status */}
           {model.health === 'loaded' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {model.warm_up_complete ? (
+              {model.warmUpComplete ? (
                 <Chip
                   label="Warm-up complete"
                   color="success"
@@ -478,7 +478,7 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
           )}
 
           {/* Performance Metrics */}
-          {model.performance_metrics && (
+          {model.performanceMetrics && (
             <Box>
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Performance Metrics
@@ -489,7 +489,7 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
                     Requests
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {model.performance_metrics.total_requests}
+                    {model.performanceMetrics.totalRequests}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -497,7 +497,7 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
                     Avg Latency
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {model.performance_metrics.average_latency_ms.toFixed(0)} ms
+                    {model.performanceMetrics.averageLatencyMs.toFixed(0)} ms
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -505,16 +505,16 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
                     Req/sec
                   </Typography>
                   <Typography variant="body2" fontWeight="medium">
-                    {model.performance_metrics.requests_per_second.toFixed(2)}
+                    {model.performanceMetrics.requestsPerSecond.toFixed(2)}
                   </Typography>
                 </Grid>
-                {model.performance_metrics.average_fps !== null && (
+                {model.performanceMetrics.averageFps !== null && (
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Avg FPS
                     </Typography>
                     <Typography variant="body2" fontWeight="medium">
-                      {model.performance_metrics.average_fps.toFixed(1)}
+                      {model.performanceMetrics.averageFps.toFixed(1)}
                     </Typography>
                   </Grid>
                 )}
@@ -523,28 +523,28 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
           )}
 
           {/* Last Used */}
-          {model.last_used && (
+          {model.lastUsed && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <ScheduleIcon sx={{ fontSize: 16 }} color="action" />
               <Typography variant="caption" color="text.secondary">
-                Last used: {formatDistanceToNow(new Date(model.last_used), { addSuffix: true })}
+                Last used: {formatDistanceToNow(new Date(model.lastUsed), { addSuffix: true })}
               </Typography>
             </Box>
           )}
 
           {/* Load Time */}
-          {model.load_time_ms !== null && (
+          {model.loadTimeMs !== null && (
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Load time: {(model.load_time_ms / 1000).toFixed(1)}s
+                Load time: {(model.loadTimeMs / 1000).toFixed(1)}s
               </Typography>
             </Box>
           )}
 
           {/* Error Message */}
-          {model.error_message && (
+          {model.errorMessage && (
             <Alert severity="error" sx={{ py: 0.5 }}>
-              <Typography variant="caption">{model.error_message}</Typography>
+              <Typography variant="caption">{model.errorMessage}</Typography>
             </Alert>
           )}
 

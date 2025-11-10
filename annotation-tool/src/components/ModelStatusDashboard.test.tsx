@@ -41,24 +41,24 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
  */
 function createMockModelStatus(overrides?: Partial<LoadedModelStatus>): LoadedModelStatus {
   return {
-    model_id: 'llama-4-maverick',
-    task_type: 'video_summarization',
-    model_name: 'llama-4-maverick',
+    modelId: 'llama-4-maverick',
+    taskType: 'videoSummarization',
+    modelName: 'llama-4-maverick',
     framework: 'vllm',
     quantization: 'int4',
     health: 'loaded',
-    vram_allocated_gb: 12.0,
-    vram_used_gb: 10.5,
-    warm_up_complete: true,
-    last_used: new Date().toISOString(),
-    load_time_ms: 5000,
-    performance_metrics: {
-      total_requests: 42,
-      average_latency_ms: 250,
-      requests_per_second: 2.5,
-      average_fps: null,
+    vramAllocatedGb: 12.0,
+    vramUsedGb: 10.5,
+    warmUpComplete: true,
+    lastUsed: new Date().toISOString(),
+    loadTimeMs: 5000,
+    performanceMetrics: {
+      totalRequests: 42,
+      averageLatencyMs: 250,
+      requestsPerSecond: 2.5,
+      averageFps: null,
     },
-    error_message: null,
+    errorMessage: null,
     ...overrides,
   }
 }
@@ -70,13 +70,13 @@ function createMockStatusResponse(
   models: LoadedModelStatus[] = [],
   overrides?: Partial<ModelStatusResponse>
 ): ModelStatusResponse {
-  const totalAllocated = models.reduce((sum, m) => sum + m.vram_allocated_gb, 0)
+  const totalAllocated = models.reduce((sum, m) => sum + m.vramAllocatedGb, 0)
   return {
-    loaded_models: models,
-    total_vram_allocated_gb: totalAllocated,
-    total_vram_available_gb: 24.0,
+    loadedModels: models,
+    totalVramAllocatedGb: totalAllocated,
+    totalVramAvailableGb: 24.0,
     timestamp: new Date().toISOString(),
-    cuda_available: true,
+    cudaAvailable: true,
     ...overrides,
   }
 }
@@ -148,7 +148,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('displays CPU-only mode warning when CUDA not available', () => {
-      const cpuOnlyStatus = createMockStatusResponse([], { cuda_available: false })
+      const cpuOnlyStatus = createMockStatusResponse([], { cudaAvailable: false })
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: cpuOnlyStatus,
         isLoading: false,
@@ -198,8 +198,8 @@ describe('ModelStatusDashboard', () => {
 
     it('displays VRAM usage correctly', () => {
       const model = createMockModelStatus({
-        vram_allocated_gb: 12.0,
-        vram_used_gb: 10.5,
+        vramAllocatedGb: 12.0,
+        vramUsedGb: 10.5,
       })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
@@ -240,7 +240,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('displays warm-up status', () => {
-      const model = createMockModelStatus({ warm_up_complete: true })
+      const model = createMockModelStatus({ warmUpComplete: true })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -259,7 +259,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('displays warming up status when not complete', () => {
-      const model = createMockModelStatus({ warm_up_complete: false })
+      const model = createMockModelStatus({ warmUpComplete: false })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -282,18 +282,18 @@ describe('ModelStatusDashboard', () => {
     it('displays all loaded models', () => {
       const models = [
         createMockModelStatus({
-          task_type: 'video_summarization',
-          model_name: 'llama-4-maverick',
+          taskType: 'videoSummarization',
+          modelName: 'llama-4-maverick',
         }),
         createMockModelStatus({
-          task_type: 'object_detection',
-          model_name: 'yolo-world',
-          vram_allocated_gb: 8.0,
+          taskType: 'objectDetection',
+          modelName: 'yolo-world',
+          vramAllocatedGb: 8.0,
         }),
         createMockModelStatus({
-          task_type: 'video_tracking',
-          model_name: 'samurai',
-          vram_allocated_gb: 6.0,
+          taskType: 'videoTracking',
+          modelName: 'samurai',
+          vramAllocatedGb: 6.0,
         }),
       ]
       const status = createMockStatusResponse(models)
@@ -319,24 +319,24 @@ describe('ModelStatusDashboard', () => {
     it('calculates total VRAM correctly', () => {
       const models = [
         createMockModelStatus({
-          model_id: 'llama-4-maverick',
-          task_type: 'video_summarization',
-          vram_allocated_gb: 12.0,
+          modelId: 'llama-4-maverick',
+          taskType: 'videoSummarization',
+          vramAllocatedGb: 12.0,
         }),
         createMockModelStatus({
-          model_id: 'yolo-world',
-          task_type: 'object_detection',
-          vram_allocated_gb: 8.0,
+          modelId: 'yolo-world',
+          taskType: 'objectDetection',
+          vramAllocatedGb: 8.0,
         }),
         createMockModelStatus({
-          model_id: 'samurai',
-          task_type: 'video_tracking',
-          vram_allocated_gb: 6.0,
+          modelId: 'samurai',
+          taskType: 'videoTracking',
+          vramAllocatedGb: 6.0,
         }),
       ]
       const status = createMockStatusResponse(models, {
-        total_vram_allocated_gb: 26.0,
-        total_vram_available_gb: 24.0,
+        totalVramAllocatedGb: 26.0,
+        totalVramAvailableGb: 24.0,
       })
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -378,7 +378,7 @@ describe('ModelStatusDashboard', () => {
     it('displays failed status with error message', () => {
       const model = createMockModelStatus({
         health: 'failed',
-        error_message: 'Out of memory',
+        errorMessage: 'Out of memory',
       })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
@@ -420,10 +420,10 @@ describe('ModelStatusDashboard', () => {
 
   describe('VRAM Warnings', () => {
     it('shows warning when VRAM utilization is high', () => {
-      const models = [createMockModelStatus({ vram_allocated_gb: 20.0 })]
+      const models = [createMockModelStatus({ vramAllocatedGb: 20.0 })]
       const status = createMockStatusResponse(models, {
-        total_vram_allocated_gb: 20.0,
-        total_vram_available_gb: 24.0,
+        totalVramAllocatedGb: 20.0,
+        totalVramAvailableGb: 24.0,
       })
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -444,10 +444,10 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('shows error when VRAM utilization exceeds available', () => {
-      const models = [createMockModelStatus({ vram_allocated_gb: 26.0 })]
+      const models = [createMockModelStatus({ vramAllocatedGb: 26.0 })]
       const status = createMockStatusResponse(models, {
-        total_vram_allocated_gb: 26.0,
-        total_vram_available_gb: 24.0,
+        totalVramAllocatedGb: 26.0,
+        totalVramAvailableGb: 24.0,
       })
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -657,8 +657,8 @@ describe('ModelStatusDashboard', () => {
     it('calls onUnloadModel when unload button clicked', async () => {
       const user = userEvent.setup()
       const model = createMockModelStatus({
-        model_id: 'llama-4-maverick',
-        task_type: 'video_summarization',
+        modelId: 'llama-4-maverick',
+        taskType: 'videoSummarization',
         health: 'loaded',
       })
       const status = createMockStatusResponse([model])
@@ -681,7 +681,7 @@ describe('ModelStatusDashboard', () => {
 
       expect(onUnloadModel).toHaveBeenCalledWith(
         'llama-4-maverick',
-        'video_summarization'
+        'videoSummarization'
       )
     })
 
@@ -709,11 +709,11 @@ describe('ModelStatusDashboard', () => {
   describe('Performance Metrics', () => {
     it('displays FPS when available', () => {
       const model = createMockModelStatus({
-        performance_metrics: {
-          total_requests: 100,
-          average_latency_ms: 50,
-          requests_per_second: 10,
-          average_fps: 30.5,
+        performanceMetrics: {
+          totalRequests: 100,
+          averageLatencyMs: 50,
+          requestsPerSecond: 10,
+          averageFps: 30.5,
         },
       })
       const status = createMockStatusResponse([model])
@@ -734,7 +734,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('does not display performance metrics when not available', () => {
-      const model = createMockModelStatus({ performance_metrics: null })
+      const model = createMockModelStatus({ performanceMetrics: null })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -777,7 +777,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('handles model without last_used timestamp', () => {
-      const model = createMockModelStatus({ last_used: null })
+      const model = createMockModelStatus({ lastUsed: null })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,
@@ -796,7 +796,7 @@ describe('ModelStatusDashboard', () => {
     })
 
     it('handles model without vram_used_gb', () => {
-      const model = createMockModelStatus({ vram_used_gb: null })
+      const model = createMockModelStatus({ vramUsedGb: null })
       const status = createMockStatusResponse([model])
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
         data: status,

@@ -47,9 +47,9 @@ export interface ModelSettingsPanelProps {
  * Display name mapping for task types.
  */
 const TASK_DISPLAY_NAMES: Record<string, string> = {
-  video_summarization: 'Video Summarization',
-  object_detection: 'Object Detection',
-  video_tracking: 'Video Tracking',
+  videoSummarization: 'Video Summarization',
+  objectDetection: 'Object Detection',
+  videoTracking: 'Video Tracking',
 }
 
 /**
@@ -105,23 +105,23 @@ export function ModelSettingsPanel({
     }
 
     let totalRequired = 0
-    const requirements: Record<string, { model_id: string; vram_gb: number }> = {}
+    const requirements: Record<string, { modelId: string; vramGb: number }> = {}
 
     Object.entries(pendingSelections).forEach(([taskType, modelName]) => {
       const taskConfig = config.models[taskType]
       if (taskConfig) {
         const modelOption = taskConfig.options[modelName]
         if (modelOption) {
-          totalRequired += modelOption.vram_gb
+          totalRequired += modelOption.vramGb
           requirements[taskType] = {
-            model_id: modelOption.model_id,
-            vram_gb: modelOption.vram_gb,
+            modelId: modelOption.modelId,
+            vramGb: modelOption.vramGb,
           }
         }
       }
     })
 
-    const maxAllowed = validation.total_vram_gb * validation.threshold
+    const maxAllowed = validation.totalVramGb * validation.threshold
     const valid = totalRequired <= maxAllowed
     const utilizationPercent = (totalRequired / maxAllowed) * 100
 
@@ -169,8 +169,8 @@ export function ModelSettingsPanel({
         const current = config.models[taskType]?.selected
         if (current !== modelName) {
           return selectModelMutation.mutateAsync({
-            task_type: taskType,
-            model_name: modelName,
+            taskType,
+            modelName,
           })
         }
         return Promise.resolve()
@@ -237,7 +237,7 @@ export function ModelSettingsPanel({
   }
 
   // Check for CPU-only mode
-  const isCpuOnly = !config.cuda_available
+  const isCpuOnly = !config.cudaAvailable
   const isVramWarning = vramCalculation.utilizationPercent >= 80 && vramCalculation.valid
   const isVramError = !vramCalculation.valid
 
@@ -277,8 +277,8 @@ export function ModelSettingsPanel({
           </Alert>
         )}
 
-        {/* VRAM Budget Visualization - Only show if GPU available */}
-        {!isCpuOnly && (
+        {/* VRAM Budget Visualization - Only show if GPU available and validation data loaded */}
+        {!isCpuOnly && vramCalculation && validation && (
           <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <MemoryIcon sx={{ mr: 1 }} />
@@ -310,7 +310,7 @@ export function ModelSettingsPanel({
           />
 
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Total available: {validation.total_vram_gb.toFixed(1)} GB
+            Total available: {validation.totalVramGb.toFixed(1)} GB
             {' · '}
             Utilization: {vramCalculation.utilizationPercent.toFixed(0)}%
           </Typography>
@@ -353,7 +353,7 @@ export function ModelSettingsPanel({
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography>{name}</Typography>
                           <Chip
-                            label={`${option.vram_gb.toFixed(1)} GB`}
+                            label={`${option.vramGb.toFixed(1)} GB`}
                             size="small"
                             icon={<MemoryIcon />}
                           />
@@ -467,7 +467,7 @@ function ModelOptionInfo({ option }: ModelOptionInfoProps) {
             Model ID
           </Typography>
           <Typography variant="body2" fontWeight="medium">
-            {option.model_id}
+            {option.modelId}
           </Typography>
         </Grid>
         <Grid item xs={12} sm={6}>
@@ -483,7 +483,7 @@ function ModelOptionInfo({ option }: ModelOptionInfoProps) {
             VRAM Required
           </Typography>
           <Typography variant="body2" fontWeight="medium">
-            {option.vram_gb.toFixed(1)} GB
+            {option.vramGb.toFixed(1)} GB
           </Typography>
         </Grid>
         <Grid item xs={12} sm={4}>

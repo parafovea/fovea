@@ -8,7 +8,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 import torch
 from fastapi import APIRouter, HTTPException
@@ -1186,11 +1186,9 @@ async def synthesize_summary(
             raise HTTPException(status_code=500, detail=f"Summary synthesis failed: {e}") from e
 
 
-from typing import TypedDict, NotRequired, cast
-
-
 class ClaimDict(TypedDict):
     """Recursive claim structure with optional subclaims."""
+
     subclaims: NotRequired[list["ClaimDict"]]
 
 

@@ -268,15 +268,15 @@ describe('ApiClient', () => {
 
       expect(response).toMatchObject({
         id: 'detection-1',
-        video_id: 'video-1',
+        videoId: 'video-1',
         query: 'baseball, bat, glove',
-        total_detections: 3,
+        totalDetections: 3,
       })
       expect(response.frames).toHaveLength(2)
       expect(response.frames[0].detections[0]).toMatchObject({
         label: 'baseball',
         confidence: 0.94,
-        track_id: 'track-1',
+        trackId: 'track-1',
       })
     })
 
@@ -293,7 +293,7 @@ describe('ApiClient', () => {
         enableTracking: true,
       })
 
-      expect(response.video_id).toBe('video-1')
+      expect(response.videoId).toBe('video-1')
       expect(response.frames.length).toBeGreaterThan(0)
     })
 
@@ -323,18 +323,18 @@ describe('ApiClient', () => {
       const config = await client.getModelConfig()
 
       expect(config).toMatchObject({
-        cuda_available: true,
+        cudaAvailable: true,
       })
       expect(config.models.vlm).toMatchObject({
         selected: 'llava',
       })
       expect(config.models.vlm.options.llava).toMatchObject({
-        model_id: 'llava-hf/llava-1.5-7b-hf',
-        vram_gb: 14.0,
+        modelId: 'llava-hf/llava-1.5-7b-hf',
+        vramGb: 14.0,
       })
       expect(config.inference).toMatchObject({
-        max_memory_per_model: 24.0,
-        offload_threshold: 0.8,
+        maxMemoryPerModel: 24.0,
+        offloadThreshold: 0.8,
       })
     })
 
@@ -357,14 +357,14 @@ describe('ApiClient', () => {
   describe('selectModel', () => {
     it('selects a model for a task type', async () => {
       const response = await client.selectModel({
-        task_type: 'vlm',
-        model_name: 'llava',
+        taskType: 'vlm',
+        modelName: 'llava',
       })
 
       expect(response).toMatchObject({
         status: 'success',
-        task_type: 'vlm',
-        selected_model: 'llava',
+        taskType: 'vlm',
+        selectedModel: 'llava',
       })
     })
 
@@ -380,8 +380,8 @@ describe('ApiClient', () => {
 
       await expect(
         client.selectModel({
-          task_type: 'vlm',
-          model_name: 'invalid',
+          taskType: 'vlm',
+          modelName: 'invalid',
         })
       ).rejects.toMatchObject({
         statusCode: 400,
@@ -395,13 +395,13 @@ describe('ApiClient', () => {
 
       expect(validation).toMatchObject({
         valid: true,
-        total_vram_gb: 24.0,
-        total_required_gb: 18.0,
+        totalVramGb: 24.0,
+        totalRequiredGb: 18.0,
         threshold: 0.8,
       })
-      expect(validation.model_requirements.vlm).toMatchObject({
-        model_id: 'llava-hf/llava-1.5-7b-hf',
-        vram_gb: 14.0,
+      expect(validation.modelRequirements.vlm).toMatchObject({
+        modelId: 'llava-hf/llava-1.5-7b-hf',
+        vramGb: 14.0,
       })
     })
 
@@ -426,20 +426,20 @@ describe('ApiClient', () => {
       const status = await client.getModelStatus()
 
       expect(status).toMatchObject({
-        total_vram_allocated_gb: 14.0,
-        total_vram_available_gb: 24.0,
-        cuda_available: true,
+        totalVramAllocatedGb: 14.0,
+        totalVramAvailableGb: 24.0,
+        cudaAvailable: true,
       })
-      expect(status.loaded_models).toHaveLength(1)
-      expect(status.loaded_models[0]).toMatchObject({
-        model_id: 'llava-hf/llava-1.5-7b-hf',
-        task_type: 'vlm',
+      expect(status.loadedModels).toHaveLength(1)
+      expect(status.loadedModels[0]).toMatchObject({
+        modelId: 'llava-hf/llava-1.5-7b-hf',
+        taskType: 'vlm',
         health: 'loaded',
-        warm_up_complete: true,
+        warmUpComplete: true,
       })
-      expect(status.loaded_models[0].performance_metrics).toMatchObject({
-        total_requests: 150,
-        average_latency_ms: 234.5,
+      expect(status.loadedModels[0].performanceMetrics).toMatchObject({
+        totalRequests: 150,
+        averageLatencyMs: 234.5,
       })
     })
 

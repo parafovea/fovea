@@ -1,6 +1,7 @@
 import { Queue, Worker, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
 import { PrismaClient, Prisma } from "@prisma/client";
+import snakecaseKeys from "snakecase-keys";
 import {
   queueJobCounter,
   queueJobDuration,
@@ -29,6 +30,9 @@ interface ModelSummarizeResponse {
   processing_time_fusion?: number;
 }
 
+/**
+ * Request type for model service /api/summarize endpoint.
+ */
 interface ModelSummarizeRequest {
   video_id: string;
   video_path?: string;
@@ -211,28 +215,21 @@ export const videoWorker = new Worker<
       process.env.MODEL_SERVICE_URL || "http://localhost:8000";
     const modelStartTime = Date.now();
 
-    const requestBody: ModelSummarizeRequest = {
-      video_id: videoId,
-      video_path: modelVideoPath,
-      persona_id: personaId,
-      frame_sample_rate: frameSampleRate,
-      max_frames: maxFrames,
-      persona_role: personaRole,
-      information_need: informationNeed,
+    const camelCaseRequest = {
+      videoId,
+      videoPath: modelVideoPath,
+      personaId,
+      frameSampleRate,
+      maxFrames,
+      personaRole,
+      informationNeed,
+      ...(enableAudio !== undefined && { enableAudio }),
+      ...(enableSpeakerDiarization !== undefined && { enableSpeakerDiarization }),
+      ...(fusionStrategy !== undefined && { fusionStrategy }),
+      ...(audioLanguage !== undefined && { audioLanguage }),
     };
 
-    if (enableAudio !== undefined) {
-      requestBody.enable_audio = enableAudio;
-    }
-    if (enableSpeakerDiarization !== undefined) {
-      requestBody.enable_speaker_diarization = enableSpeakerDiarization;
-    }
-    if (fusionStrategy !== undefined) {
-      requestBody.fusion_strategy = fusionStrategy;
-    }
-    if (audioLanguage !== undefined) {
-      requestBody.audio_language = audioLanguage;
-    }
+    const requestBody = snakecaseKeys(camelCaseRequest) as ModelSummarizeRequest;
 
     const response = await fetch(`${modelServiceUrl}/api/summarize`, {
       method: "POST",
@@ -752,14 +749,14 @@ export interface ClaimSynthesisJobData {
   summaryId: string;
   summaryType: "video" | "collection";
   config: {
-    synthesis_strategy:
+    synthesisStrategy:
       | "hierarchical"
       | "chronological"
       | "narrative"
       | "analytical";
-    max_length?: number;
-    include_conflicts?: boolean;
-    include_citations?: boolean;
+    maxLength?: number;
+    includeConflicts?: boolean;
+    includeCitations?: boolean;
   };
 }
 
@@ -837,34 +834,30 @@ export const synthesisWorker = new Worker<
 
     await job.updateProgress(20);
 
-    // Build synthesis request
-    const requestBody: Record<string, unknown> = {
-      summary_id: summaryId,
-      claim_sources: [
+    const camelCaseRequestBody = {
+      summaryId,
+      claimSources: [
         {
-          source_id: summary.videoId,
-          source_type: "video",
+          sourceId: summary.videoId,
+          sourceType: "video",
           claims: summary.claims,
           metadata: {
             persona: summary.persona.name,
           },
         },
       ],
-      synthesis_strategy: config.synthesis_strategy || "hierarchical",
-      max_length: config.max_length || 500,
-      include_conflicts: config.include_conflicts ?? true,
-      include_citations: config.include_citations ?? false,
+      synthesisStrategy: config.synthesisStrategy || "hierarchical",
+      maxLength: config.maxLength || 500,
+      includeConflicts: config.includeConflicts ?? true,
+      includeCitations: config.includeCitations ?? false,
+      ...(summary.persona && {
+        personaContext: {
+          role: summary.persona.role,
+          informationNeed: summary.persona.informationNeed,
+        },
+      }),
     };
 
-    // Add persona context
-    if (summary.persona) {
-      requestBody.persona_context = {
-        role: summary.persona.role,
-        information_need: summary.persona.informationNeed,
-      };
-    }
-
-    // Add ontology context if available
     const ontology = await prisma.ontology.findUnique({
       where: { personaId: summary.personaId },
     });
@@ -872,10 +865,14 @@ export const synthesisWorker = new Worker<
     if (ontology) {
       const entityTypes = ontology.entityTypes as unknown[];
       const eventTypes = ontology.eventTypes as unknown[];
-      requestBody.ontology_context = {
-        types: [...entityTypes, ...eventTypes],
-      };
+      Object.assign(camelCaseRequestBody, {
+        ontologyContext: {
+          types: [...entityTypes, ...eventTypes],
+        },
+      });
     }
+
+    const requestBody = snakecaseKeys(camelCaseRequestBody, { deep: true });
 
     // Call model service
     const modelServiceUrl =
