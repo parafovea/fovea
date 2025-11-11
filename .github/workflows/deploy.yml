@@ -184,16 +184,17 @@ jobs:
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
             set -e
+            export PATH=\$HOME/.nvm/versions/node/v20.19.5/bin:\$PATH
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo '📥 Pulling latest code (already done in deploy job)...'
 
             echo '📦 Installing docs dependencies...'
             cd docs
-            ~/.nvm/versions/node/v20.19.5/bin/npm ci
+            npm ci
 
             echo '🏗️ Building documentation...'
-            ~/.nvm/versions/node/v20.19.5/bin/npm run build
+            npm run build
 
             echo '✅ Documentation built!'
           "
