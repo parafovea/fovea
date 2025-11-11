@@ -137,7 +137,7 @@ jobs:
           echo "⚠️  Configure staging domain in nginx before running automated tests"
 
           # Once staging domain is configured, uncomment:
-          # curl --fail -s https://staging.demo.fovea.video/api/health | grep -q "ok" || exit 1
+          # curl --fail -s https://staging.demo.fovea.video/api/health | grep -q "healthy" || exit 1
           # curl --fail -s https://staging.demo.fovea.video | grep -q "<!doctype html>" || exit 1
           # echo "✅ Staging smoke tests passed"
 

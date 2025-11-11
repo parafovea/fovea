@@ -138,7 +138,7 @@ jobs:
 
           # Test backend API
           echo "Testing backend API..."
-          curl --fail -s https://demo.fovea.video/api/health | grep -q "ok" || exit 1
+          curl --fail -s https://demo.fovea.video/api/health | grep -q "healthy" || exit 1
 
           # Test frontend loads
           echo "Testing frontend loads..."
@@ -182,21 +182,21 @@ jobs:
 
       - name: Deploy documentation
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -l -c "
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
 
-            echo \"📥 Pulling latest code (already done in deploy job)...\"
+            echo '📥 Pulling latest code (already done in deploy job)...'
 
-            echo \"📦 Installing docs dependencies...\"
+            echo '📦 Installing docs dependencies...'
             cd docs
-            npm ci
+            ~/.nvm/versions/node/v20.19.5/bin/npm ci
 
-            echo \"🏗️ Building documentation...\"
-            npm run build
+            echo '🏗️ Building documentation...'
+            ~/.nvm/versions/node/v20.19.5/bin/npm run build
 
-            echo \"✅ Documentation built!\"
-          "'
+            echo '✅ Documentation built!'
+          "
 
       - name: Verify docs deployment
         run: |
