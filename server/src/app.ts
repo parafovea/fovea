@@ -162,10 +162,10 @@ export async function buildApp() {
    * Health check endpoint.
    * Returns server status and current timestamp.
    *
-   * @route GET /health
+   * @route GET /api/health
    * @returns Health status object
    */
-  app.get('/health', {
+  app.get('/api/health', {
     schema: {
       description: 'Health check endpoint',
       tags: ['health'],

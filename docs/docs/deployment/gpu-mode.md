@@ -131,7 +131,7 @@ Expected response includes `"device":"cuda"`.
 Check backend connectivity:
 
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 ```
 
 Expected response: `{"status":"ok"}`

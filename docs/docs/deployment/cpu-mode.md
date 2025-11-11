@@ -89,7 +89,7 @@ Expected output shows all services with status "Up" or "Up (healthy)":
 Check backend health:
 
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 ```
 
 Expected response: `{"status":"ok"}`

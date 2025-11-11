@@ -13,11 +13,11 @@ describe('Fastify App', () => {
     await app.close()
   })
 
-  describe('GET /health', () => {
+  describe('GET /api/health', () => {
     it('should return healthy status', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/api/health'
       })
 
       expect(response.statusCode).toBe(200)
@@ -33,7 +33,7 @@ describe('Fastify App', () => {
     it('should return valid ISO timestamp', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/api/health'
       })
 
       const body = JSON.parse(response.body)
@@ -79,7 +79,7 @@ describe('Fastify App', () => {
     it('should include security headers', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/api/health'
       })
 
       expect(response.headers).toHaveProperty('x-content-type-options')
@@ -89,7 +89,7 @@ describe('Fastify App', () => {
     it('should allow CORS from configured origins', async () => {
       const response = await app.inject({
         method: 'OPTIONS',
-        url: '/health',
+        url: '/api/health',
         headers: {
           origin: 'http://localhost:5173'
         }

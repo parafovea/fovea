@@ -211,7 +211,7 @@ Backend runs on http://localhost:3001
 
 Verify:
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 # Should return: {"status":"ok"}
 ```
 
@@ -311,7 +311,7 @@ curl http://localhost:8000/health
 
 ```bash
 # Backend
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 
 # Frontend (should load in browser)
 open http://localhost:5173
@@ -358,7 +358,7 @@ curl http://localhost:3001/api/personas
 curl http://localhost:3001/api/videos
 
 # Health check all services
-curl http://localhost:3001/health && \
+curl http://localhost:3001/api/health && \
 curl http://localhost:8000/health
 ```
 

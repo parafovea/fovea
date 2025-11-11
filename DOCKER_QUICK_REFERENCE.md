@@ -140,7 +140,7 @@ docker compose exec model-service-gpu env | grep CUDA
 docker compose exec model-service-gpu nvidia-smi
 
 # Check health
-curl http://localhost:3001/health  # Backend
+curl http://localhost:3001/api/health  # Backend
 curl http://localhost:8000/health  # Model service (CPU or GPU)
 ```
 

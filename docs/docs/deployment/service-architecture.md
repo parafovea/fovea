@@ -88,7 +88,7 @@ Docker Compose handles startup order automatically with `depends_on` and health 
 - Model service for AI inference
 - OTEL Collector for telemetry
 
-**Health Check**: GET /health returns 200
+**Health Check**: GET /api/health returns 200
 
 **Key Endpoints**:
 - `/api/videos` - Video management
@@ -342,7 +342,7 @@ All services include health checks:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+  test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
   interval: 30s
   timeout: 10s
   retries: 3

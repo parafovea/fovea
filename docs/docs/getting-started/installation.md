@@ -89,7 +89,7 @@ After starting the services, verify everything is working:
 
 2. **Access the frontend**: Open http://localhost:3000
 
-3. **Check backend health**: http://localhost:3001/health should return `{"status":"ok"}`
+3. **Check backend health**: http://localhost:3001/api/health should return `{"status":"ok"}`
 
 4. **Verify model service**: http://localhost:8000/docs should show FastAPI documentation
 

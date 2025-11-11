@@ -34,7 +34,7 @@ docker compose logs backend
 
 3. Verify frontend can reach backend:
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 ```
 
 4. Check CORS configuration in backend matches frontend URL
@@ -488,7 +488,7 @@ docker network inspect fovea_fovea-network
 
 **Check health endpoints**:
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3001/api/health
 curl http://localhost:8000/health
 ```
 
