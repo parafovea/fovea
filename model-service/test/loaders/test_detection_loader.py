@@ -484,7 +484,7 @@ class TestDetectionConfigVariations:
 
     def test_config_with_cache_dir(self) -> None:
         """Test configuration with custom cache directory."""
-        cache_path = Path("/tmp/model_cache")  # noqa: S108
+        cache_path = Path("/tmp/model_cache")
         config = DetectionConfig(
             model_id="test/model",
             cache_dir=cache_path,

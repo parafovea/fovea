@@ -270,7 +270,7 @@ class TestDownloadVideoIfNeeded:
             mock_response.headers = {"Content-Length": str(len(fake_content))}
             mock_response.raise_for_status = MagicMock()
 
-            async def mock_iter_chunked(chunk_size, content=fake_content):  # noqa: ANN202
+            async def mock_iter_chunked(chunk_size, content=fake_content):
                 yield content
 
             mock_response.content.iter_chunked = mock_iter_chunked

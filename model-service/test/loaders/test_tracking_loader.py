@@ -837,7 +837,7 @@ class TestTrackingConfigVariations:
 
     def test_config_with_cache_dir(self) -> None:
         """Test configuration with custom cache directory."""
-        cache_path = Path("/tmp/model_cache")  # noqa: S108
+        cache_path = Path("/tmp/model_cache")
         config = TrackingConfig(model_id="samurai", cache_dir=cache_path)
 
         assert config.cache_dir == cache_path

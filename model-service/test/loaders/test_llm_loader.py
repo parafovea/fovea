@@ -121,7 +121,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        cache_dir = Path("/tmp/models")  # noqa: S108
+        cache_dir = Path("/tmp/models")
 
         loader = LLMLoader(config, cache_dir)
 
