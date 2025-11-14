@@ -22,7 +22,7 @@ test.describe('Video Storage', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('should upload a video and store it correctly', async ({ page, context }) => {
+  test('should upload a video and store it correctly', async ({ page, _context }) => {
     // This test verifies that:
     // 1. Videos can be uploaded through the UI
     // 2. The storage provider correctly handles the video
@@ -93,7 +93,7 @@ test.describe('Video Storage', () => {
     }
   })
 
-  test('should support video range requests for seeking', async ({ page, context }) => {
+  test('should support video range requests for seeking', async ({ page, _context }) => {
     // This test verifies that range requests work for video seeking
 
     await page.goto('/videos')
