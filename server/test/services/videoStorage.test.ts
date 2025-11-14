@@ -192,6 +192,7 @@ describe('Video Storage Providers', () => {
 
     it('should throw error for S3 storage without required config', () => {
       process.env.VIDEO_STORAGE_TYPE = 's3'
+      process.env.NODE_ENV = 'production' // Ensure we trigger validation
 
       expect(() => loadStorageConfig()).toThrow('S3_BUCKET and S3_REGION are required')
     })
