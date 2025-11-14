@@ -33,9 +33,9 @@ class SummarizeRequest(BaseModel):
     enable_speaker_diarization: bool = Field(
         default=False, description="Enable speaker identification"
     )
-    fusion_strategy: Literal[
-        "sequential", "timestamp_aligned", "native_multimodal", "hybrid"
-    ] | None = Field(default="sequential", description="Audio-visual fusion strategy")
+    fusion_strategy: (
+        Literal["sequential", "timestamp_aligned", "native_multimodal", "hybrid"] | None
+    ) = Field(default="sequential", description="Audio-visual fusion strategy")
 
 
 class KeyFrame(BaseModel):
@@ -455,3 +455,29 @@ class SummarySynthesisResponse(BaseModel):
     synthesis_metadata: dict[str, Any] = Field(
         ..., description="Metadata about synthesis (strategy, conflicts, etc.)"
     )
+
+
+class ThumbnailGenerateRequest(BaseModel):
+    """Request model for thumbnail generation endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    video_id: str = Field(..., description="Unique identifier for the video")
+    video_path: str = Field(..., description="Path to video file")
+    timestamp: float = Field(default=1.0, ge=0.0, description="Timestamp to extract (seconds)")
+    size: Literal["small", "medium", "large"] = Field(
+        default="medium", description="Thumbnail size preset"
+    )
+
+
+class ThumbnailGenerateResponse(BaseModel):
+    """Response model for thumbnail generation endpoint.
+
+    Fields are validated using Pydantic. See Field descriptions for details.
+    """
+
+    video_id: str = Field(..., description="Video identifier")
+    thumbnail_path: str = Field(..., description="Path to generated thumbnail")
+    timestamp: float = Field(..., description="Timestamp used for extraction")
+    size: str = Field(..., description="Size preset used")

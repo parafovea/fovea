@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import camelcaseKeys from 'camelcase-keys'
 import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
+import { createVideoStorageProvider, loadStorageConfig } from '../services/videoStorage.js'
 
 const VideoSchema = Type.Object({
   id: Type.String(),
@@ -27,7 +28,11 @@ function createVideoId(filename: string): string {
  */
 const videosRoute: FastifyPluginAsync = async (fastify) => {
   const DATA_DIR = process.env.DATA_DIR || '/data'
-  const DATA_URL = process.env.DATA_URL // S3 URL for video files (optional)
+  const DATA_URL = process.env.DATA_URL // S3 URL for video files (optional, deprecated)
+
+  // Initialize storage provider
+  const storageConfig = loadStorageConfig()
+  const storageProvider = createVideoStorageProvider(storageConfig)
 
   // Cache mapping of video IDs to filenames
   const videoCache = new Map<string, string>()
@@ -313,6 +318,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   /**
    * Stream video file with support for HTTP range requests.
+   * Uses storage provider abstraction to support local, S3, and hybrid storage.
    *
    * @route GET /api/videos/:videoId/stream
    * @param videoId - MD5 hash of filename
@@ -330,49 +336,46 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     try {
       const { videoId } = request.params as { videoId: string }
 
-      if (videoCache.size === 0) {
-        await refreshVideoCache()
-      }
+      // Fetch video from database to get path
+      const video = await fastify.prisma.video.findUnique({
+        where: { id: videoId },
+        select: { path: true, filename: true }
+      })
 
-      const filename = videoCache.get(videoId)
-      if (!filename) {
+      if (!video) {
         return reply.code(404).send({ error: 'Video not found' })
       }
 
-      const filePath = path.join(DATA_DIR, filename)
+      const range = request.headers.range
 
       try {
-        const stats = await fs.stat(filePath)
-        const fileSize = stats.size
-        const range = request.headers.range
+        // Convert full path to relative path for storage provider
+        // Database stores: /data/filename.webm
+        // Storage provider expects: filename.webm (relative to basePath)
+        const relativePath = video.path.replace(DATA_DIR, '').replace(/^\//, '')
 
-        // Handle range requests for video streaming
-        if (range) {
-          const parts = range.replace(/bytes=/, '').split('-')
-          const start = parseInt(parts[0], 10)
-          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
-          const chunkSize = (end - start) + 1
-          const stream = createReadStream(filePath, { start, end })
-          const contentType = filename.endsWith('.webm') ? 'video/webm' : 'video/mp4'
+        // Use storage provider to get video stream
+        const result = await storageProvider.getVideoStream(relativePath, range)
 
+        // Handle range requests
+        if (result.range) {
           return reply
             .code(206)
-            .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+            .header('Content-Range', `bytes ${result.range.start}-${result.range.end}/${result.range.total}`)
             .header('Accept-Ranges', 'bytes')
-            .header('Content-Length', chunkSize)
-            .header('Content-Type', contentType)
-            .send(stream)
+            .header('Content-Length', result.contentLength)
+            .header('Content-Type', result.contentType)
+            .send(result.stream)
         }
 
         // Full file request
-        const stream = createReadStream(filePath)
-        const contentType = filename.endsWith('.webm') ? 'video/webm' : 'video/mp4'
         return reply
-          .type(contentType)
-          .header('Content-Length', fileSize)
+          .type(result.contentType)
+          .header('Content-Length', result.contentLength)
           .header('Accept-Ranges', 'bytes')
-          .send(stream)
+          .send(result.stream)
       } catch (error) {
+        fastify.log.error({ error, videoId }, 'Failed to stream video')
         return reply.code(404).send({ error: 'Video not found' })
       }
     } catch (error) {
@@ -601,6 +604,197 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   )
+
+  /**
+   * Get or generate video thumbnail.
+   * Uses storage provider abstraction for thumbnail storage.
+   *
+   * @route GET /api/videos/:videoId/thumbnail
+   * @param videoId - MD5 hash of filename
+   * @param size - Optional size ('small' | 'medium' | 'large')
+   * @param timestamp - Optional timestamp in seconds
+   * @returns Thumbnail image stream
+   */
+  fastify.get('/api/videos/:videoId/thumbnail', {
+    schema: {
+      description: 'Get or generate video thumbnail',
+      tags: ['videos'],
+      params: Type.Object({
+        videoId: Type.String()
+      }),
+      querystring: Type.Object({
+        size: Type.Optional(Type.Union([
+          Type.Literal('small'),
+          Type.Literal('medium'),
+          Type.Literal('large')
+        ])),
+        timestamp: Type.Optional(Type.Number())
+      })
+    }
+  }, async (request, reply) => {
+    try {
+      const { videoId } = request.params as { videoId: string }
+      const { size = 'medium', timestamp = 1.0 } = request.query as { size?: string; timestamp?: number }
+
+      // Fetch video from database
+      const video = await fastify.prisma.video.findUnique({
+        where: { id: videoId },
+        select: {
+          id: true,
+          path: true,
+          filename: true,
+          localThumbnailPath: true
+        }
+      })
+
+      if (!video) {
+        return reply.code(404).send({ error: 'Video not found' })
+      }
+
+      const thumbnailFilename = `${videoId}_${size}.jpg`
+      const thumbnailPath = path.join(DATA_DIR, 'thumbnails', thumbnailFilename)
+      const relativeThumbnailPath = `thumbnails/${thumbnailFilename}`
+
+      // Check if thumbnail already exists
+      try {
+        await fs.stat(thumbnailPath)
+        // Thumbnail exists, serve it
+        const stream = createReadStream(thumbnailPath)
+        return reply
+          .type('image/jpeg')
+          .header('Cache-Control', 'public, max-age=86400') // Cache for 24 hours
+          .send(stream)
+      } catch {
+        // Thumbnail doesn't exist, generate it
+      }
+
+      // Generate thumbnail via model service
+      const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+
+      // Get video URL that model service can access
+      // For local storage, this will be a file path
+      // For S3 storage, this will be a pre-signed URL
+      let modelVideoPath: string
+
+      if (storageConfig.type === 'local') {
+        // Model service can access local files directly
+        modelVideoPath = video.path.replace(DATA_DIR, '/videos')
+      } else {
+        // For S3/hybrid, provide a pre-signed URL or the S3 path
+        // Model service will need to handle S3 downloads
+        modelVideoPath = video.path
+      }
+
+      const requestBody = {
+        video_id: videoId,
+        video_path: modelVideoPath,
+        timestamp: timestamp,
+        size: size
+      }
+
+      const response = await fetch(`${modelServiceUrl}/api/thumbnails/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        fastify.log.error({ status: response.status, error: errorText }, 'Model service thumbnail generation failed')
+        return reply.code(response.status).send({
+          error: `Thumbnail generation failed: ${errorText}`
+        })
+      }
+
+      // Update database with thumbnail path
+      await fastify.prisma.video.update({
+        where: { id: videoId },
+        data: { localThumbnailPath: relativeThumbnailPath }
+      })
+
+      // Serve the newly generated thumbnail
+      try {
+        const stream = createReadStream(thumbnailPath)
+        return reply
+          .type('image/jpeg')
+          .header('Cache-Control', 'public, max-age=86400') // Cache for 24 hours
+          .send(stream)
+      } catch (error) {
+        fastify.log.error({ error }, 'Failed to serve generated thumbnail')
+        return reply.code(500).send({ error: 'Failed to serve thumbnail' })
+      }
+    } catch (error) {
+      fastify.log.error(error)
+      return reply.code(500).send({ error: 'Failed to get thumbnail' })
+    }
+  })
+
+  /**
+   * Get a direct URL for video access (signed if using S3).
+   * Useful when frontend needs direct access to video (e.g., for MediaSource API).
+   *
+   * @route GET /api/videos/:videoId/url
+   * @param videoId - MD5 hash of filename
+   * @returns Video URL (pre-signed if using S3)
+   */
+  fastify.get('/api/videos/:videoId/url', {
+    schema: {
+      description: 'Get video URL',
+      tags: ['videos'],
+      params: Type.Object({
+        videoId: Type.String()
+      }),
+      querystring: Type.Object({
+        expiresIn: Type.Optional(Type.Number({ default: 3600 }))
+      }),
+      response: {
+        200: Type.Object({
+          url: Type.String(),
+          expiresIn: Type.Optional(Type.Number())
+        }),
+        404: Type.Object({
+          error: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String()
+        })
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { videoId } = request.params as { videoId: string }
+      const { expiresIn = 3600 } = request.query as { expiresIn?: number }
+
+      // Fetch video from database
+      const video = await fastify.prisma.video.findUnique({
+        where: { id: videoId },
+        select: { path: true }
+      })
+
+      if (!video) {
+        return reply.code(404).send({ error: 'Video not found' })
+      }
+
+      try {
+        // Convert full path to relative path for storage provider
+        const relativePath = video.path.replace(DATA_DIR, '').replace(/^\//, '')
+
+        // Get URL from storage provider
+        const url = await storageProvider.getVideoUrl(relativePath, expiresIn)
+
+        return reply.send({
+          url,
+          expiresIn: storageConfig.type !== 'local' ? expiresIn : undefined
+        })
+      } catch (error) {
+        fastify.log.error({ error, videoId }, 'Failed to get video URL')
+        return reply.code(500).send({ error: 'Failed to get video URL' })
+      }
+    } catch (error) {
+      fastify.log.error(error)
+      return reply.code(500).send({ error: 'Failed to get video URL' })
+    }
+  })
 
 }
 

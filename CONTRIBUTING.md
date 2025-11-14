@@ -157,6 +157,34 @@ Before contributing, ensure you have:
 
 For detailed setup instructions, see the [Manual Setup Guide](docs/docs/getting-started/manual-setup.md).
 
+### Development Modes
+
+Choose the appropriate development mode based on your workflow:
+
+**Full Stack with Hot Reload** (recommended for most development):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+Provides:
+- Code hot-reload (no container rebuild needed)
+- Jaeger tracing at http://localhost:16686
+- Maildev email testing at http://localhost:1080
+- Auto-reload for all services
+
+**Production Mode** (for testing production builds):
+```bash
+docker compose up
+```
+
+**Individual Services** (for debugging specific services):
+```bash
+# Infrastructure only
+docker compose up postgres redis
+
+# Then run services individually (see step 6 above)
+```
+
 ## Development Workflow
 
 ### Creating a Branch

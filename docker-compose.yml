@@ -10,7 +10,6 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL:-http://backend:3001}
         - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-http://localhost:8000}
-        - VITE_DATA_URL=${VITE_DATA_URL:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -37,7 +36,25 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SESSION_SECRET=${SESSION_SECRET}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
-      - DATA_URL=${DATA_URL:-}
+      # Video Storage Configuration
+      - VIDEO_STORAGE_TYPE=${VIDEO_STORAGE_TYPE:-local}
+      - VIDEO_STORAGE_PATH=${VIDEO_STORAGE_PATH:-/data}
+      - VIDEO_BASE_URL=${VIDEO_BASE_URL:-/api/videos}
+      # S3 Configuration (when VIDEO_STORAGE_TYPE=s3 or hybrid)
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_PUBLIC_BUCKET=${S3_PUBLIC_BUCKET:-false}
+      # CDN Configuration (optional)
+      - CDN_ENABLED=${CDN_ENABLED:-false}
+      - CDN_BASE_URL=${CDN_BASE_URL:-}
+      - CDN_SIGNED_URLS=${CDN_SIGNED_URLS:-true}
+      # Thumbnail Storage Configuration
+      - THUMBNAIL_STORAGE_TYPE=${THUMBNAIL_STORAGE_TYPE:-local}
+      - THUMBNAIL_PATH=${THUMBNAIL_PATH:-/data/thumbnails}
+      - THUMBNAIL_S3_PREFIX=${THUMBNAIL_S3_PREFIX:-thumbnails/}
     volumes:
       - ./data:/data
     depends_on:

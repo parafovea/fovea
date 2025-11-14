@@ -283,7 +283,6 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
           onClose={() => setRelationEditorOpen(false)}
           onSave={handleCreateRelation}
           sourceClaim={claim}
-          availableClaims={allClaims}
           relationTypes={ontology?.relationTypes || []}
         />
       )}

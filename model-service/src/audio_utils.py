@@ -223,8 +223,7 @@ async def extract_audio_segment(
 
             span.set_attribute("audio.output_path", output_path)
             logger.info(
-                f"Extracted audio segment: {start_time}s-{start_time+duration}s "
-                f"from {video_path}"
+                f"Extracted audio segment: {start_time}s-{start_time + duration}s from {video_path}"
             )
 
             return output_path

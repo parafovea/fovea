@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -19,6 +20,7 @@ import {
   Paper,
 } from '@mui/material'
 import { Claim, RelationType } from '../../models/types'
+import { RootState } from '../../store/store'
 
 interface ClaimRelationEditorProps {
   open: boolean
@@ -30,7 +32,6 @@ interface ClaimRelationEditorProps {
     notes?: string
   }) => Promise<void>
   sourceClaim: Claim
-  availableClaims: Claim[]
   relationTypes: RelationType[]
 }
 
@@ -39,7 +40,6 @@ export function ClaimRelationEditor({
   onClose,
   onSave,
   sourceClaim,
-  availableClaims,
   relationTypes,
 }: ClaimRelationEditorProps) {
   const [targetClaimId, setTargetClaimId] = useState<string>('')
@@ -48,6 +48,12 @@ export function ClaimRelationEditor({
   const [notes, setNotes] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Fetch claims directly from Redux to avoid stale prop issues
+  // Claims are already in Redux from UI creation flow
+  const allClaims = useSelector((state: RootState) =>
+    state.claims.claimsBySummary[sourceClaim.summaryId] || []
+  )
 
   // Flatten claim tree for selection
   const flattenClaims = (claims: Claim[]): Claim[] => {
@@ -64,7 +70,7 @@ export function ClaimRelationEditor({
     return result
   }
 
-  const flatClaims = flattenClaims(availableClaims).filter((c) => c.id !== sourceClaim.id)
+  const flatClaims = flattenClaims(allClaims).filter((c) => c.id !== sourceClaim.id)
 
   // Filter relation types to only show those that support claim→claim
   const claimRelationTypes = relationTypes.filter(

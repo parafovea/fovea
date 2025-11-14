@@ -1,6 +1,15 @@
-# Docker Compose override for development
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-# Or set COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+# Development environment configuration
+#
+# Extends docker-compose.yml with development-specific features:
+# - Hot-reload volumes for code changes (no rebuild needed)
+# - Jaeger distributed tracing (http://localhost:16686)
+# - Maildev email testing (http://localhost:1080)
+# - Development commands with auto-reload
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# See docs/docs/reference/docker-commands.md for full documentation.
 
 services:
   frontend:

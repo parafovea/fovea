@@ -231,19 +231,19 @@ test.describe('Role Type Management', () => {
     await ontologyWorkspace.expectTypeExists('Owner')
   })
 
-  test('role types are persona-specific', async ({ ontologyWorkspace, db, page, testUser }) => {
+  test('role types are persona-specific', async ({ ontologyWorkspace, db, page, testUser, workerSessionToken }) => {
     // Create two personas
     const persona1 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst A',
       role: 'Intelligence Analyst'
-    })
+    }, workerSessionToken)
 
     const persona2 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst B',
       role: 'Strategic Analyst'
-    })
+    }, workerSessionToken)
 
     // Navigate to persona 1 and create role type
     await ontologyWorkspace.navigateTo(persona1.id)

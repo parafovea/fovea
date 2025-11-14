@@ -165,6 +165,17 @@ model Video {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  /// Local thumbnail path (relative to DATA_DIR/thumbnails)
+  localThumbnailPath String?
+  /// Last successful metadata sync timestamp
+  lastMetadataSync   DateTime?
+  /// Platform this video originated from (e.g., 'twitter', 'youtube')
+  sourcePlatform     String?
+  /// Platform-specific video ID
+  platformVideoId    String?
+  /// Metadata sync status: 'synced', 'failed', 'never'
+  metadataSyncStatus String?
+
   summaries   VideoSummary[]
   annotations Annotation[]
 

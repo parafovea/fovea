@@ -161,15 +161,13 @@ test.describe('Claim Relations', () => {
     await showRelationsButton.click()
     await page.waitForTimeout(2000) // Wait for relations to load
 
-    // Check for outgoing/incoming sections or empty state
-    const outgoingSection = page.locator('text=/outgoing/i')
-    const incomingSection = page.locator('text=/incoming/i')
+    // Check for outgoing/incoming relation headings
+    const outgoingHeading = page.getByRole('heading', { name: /outgoing relations/i })
+    const incomingHeading = page.getByRole('heading', { name: /incoming relations/i })
 
     // At least one section should be visible (even if empty)
-    const hasOutgoing = await outgoingSection.isVisible({ timeout: 5000 }).catch(() => false)
-    const hasIncoming = await incomingSection.isVisible({ timeout: 5000 }).catch(() => false)
-
-    expect(hasOutgoing || hasIncoming).toBeTruthy()
+    await expect(outgoingHeading).toBeVisible({ timeout: 5000 })
+    await expect(incomingHeading).toBeVisible({ timeout: 5000 })
   })
 
   test('deletes a claim relation', async ({
@@ -321,6 +319,10 @@ test.describe('Claim Relations', () => {
 
     const supportsOption = page.getByRole('option', { name: /supports/i })
     await expect(supportsOption).toBeVisible()
+
+    // Close the dropdown by pressing Escape
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
 
     // Close dialog
     const cancelButton = relationDialog.getByRole('button', { name: /cancel/i })

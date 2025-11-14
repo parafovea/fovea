@@ -419,3 +419,97 @@ def check_ffmpeg_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+async def extract_thumbnail(
+    video_path: str,
+    output_path: str,
+    timestamp: float = 1.0,
+    size: tuple[int, int] = (640, 360),
+) -> str:
+    """Extract a thumbnail from a video file using FFmpeg.
+
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    output_path : str
+        Path for output thumbnail file.
+    timestamp : float, default=1.0
+        Timestamp in seconds to extract thumbnail from.
+    size : tuple[int, int], default=(640, 360)
+        Output thumbnail size (width, height).
+
+    Returns
+    -------
+    str
+        Path to the extracted thumbnail file.
+
+    Raises
+    ------
+    VideoProcessingError
+        If thumbnail extraction fails.
+    """
+    with tracer.start_as_current_span("extract_thumbnail") as span:
+        span.set_attribute("video.path", video_path)
+        span.set_attribute("thumbnail.timestamp", timestamp)
+        span.set_attribute("thumbnail.size", f"{size[0]}x{size[1]}")
+
+        if not Path(video_path).exists():
+            raise VideoProcessingError(f"Video file not found: {video_path}")
+
+        # Ensure output directory exists
+        output_dir = Path(output_path).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        span.set_attribute("thumbnail.output_path", output_path)
+
+        # Build FFmpeg command
+        # -ss: seek to timestamp
+        # -i: input file
+        # -vframes 1: extract one frame
+        # -vf scale: resize to specified dimensions
+        # -q:v 2: high quality JPEG (1-31, lower is better)
+        cmd = [
+            "ffmpeg",
+            "-ss",
+            str(timestamp),
+            "-i",
+            video_path,
+            "-vframes",
+            "1",
+            "-vf",
+            f"scale={size[0]}:{size[1]}:force_original_aspect_ratio=decrease,pad={size[0]}:{size[1]}:(ow-iw)/2:(oh-ih)/2",
+            "-q:v",
+            "2",
+            "-y",  # Overwrite output file
+            output_path,
+        ]
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                raise VideoProcessingError(
+                    f"FFmpeg failed with return code {process.returncode}: {error_msg}"
+                )
+
+            if not Path(output_path).exists():
+                raise VideoProcessingError(f"Output thumbnail file not created: {output_path}")
+
+            span.set_attribute("thumbnail.success", True)
+            return output_path
+
+        except FileNotFoundError as e:
+            raise VideoProcessingError(
+                "FFmpeg not found. Please install FFmpeg and ensure it's in your PATH."
+            ) from e
+        except Exception as e:
+            raise VideoProcessingError(f"Thumbnail extraction failed: {e!s}") from e

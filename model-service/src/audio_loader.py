@@ -672,5 +672,5 @@ def create_transcription_loader(
     if "whisper" in model_name_lower:
         return WhisperLoader(config)
     raise ValueError(
-        f"Unknown model name: {model_name}. " f"Supported models: whisper-*, faster-whisper-*"
+        f"Unknown model name: {model_name}. Supported models: whisper-*, faster-whisper-*"
     )

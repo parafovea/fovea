@@ -1,4 +1,5 @@
 """External API client abstractions."""
+
 from .anthropic_client import AnthropicClient
 from .base import ExternalAPIClient, ExternalAPIConfig
 from .google_client import GoogleClient

@@ -13,6 +13,8 @@
     "docs": "typedoc --options typedoc.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.929.0",
+    "@aws-sdk/s3-request-presigner": "^3.929.0",
     "@bull-board/api": "^6.13.0",
     "@bull-board/fastify": "^6.13.0",
     "@fastify/cookie": "^11.0.2",

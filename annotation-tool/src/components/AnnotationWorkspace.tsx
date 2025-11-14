@@ -389,10 +389,8 @@ export default function AnnotationWorkspace() {
       if (!videoRef.current || !currentVideo?.path) return
 
       // Initialize video.js player with video source
-      // Use S3 URL if available (starts with http), otherwise use streaming endpoint
-      const videoSrc = currentVideo.path?.startsWith('http')
-        ? currentVideo.path
-        : `/api/videos/${videoId}/stream`
+      // Always use backend streaming endpoint (supports local, S3, and hybrid storage)
+      const videoSrc = `/api/videos/${videoId}/stream`
 
       const player = videojs(videoRef.current, {
         controls: false,

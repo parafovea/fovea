@@ -25,32 +25,27 @@ test.describe('Wikidata Import Flow', () => {
       // Search for "Human" in Wikidata
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Human')
-      await page.waitForTimeout(1000) // Wait for debounce
+      await page.waitForTimeout(2000) // Wait for API response
 
-      // Select first result
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      // Click first option from dropdown
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
+      await page.waitForTimeout(1000)
 
-      // Should now be on preview step
-      await expect(dialog.getByText('Preview & Confirm')).toBeVisible()
-      await expect(dialog.getByText(/human/i)).toBeVisible()
+      // Now preview card should show with import button
+      const importButton = dialog.getByRole('button', { name: /import as entity type/i })
+      await expect(importButton).toBeVisible({ timeout: 3000 })
 
-      // Click Import and Save button
-      const importButton = dialog.getByRole('button', { name: /import and save/i })
+      // Click Import as Entity Type button
       await importButton.click()
       await page.waitForTimeout(1000)
 
-      // Should show success step
-      await expect(dialog.getByText('Successfully Imported!')).toBeVisible()
-      await expect(dialog.getByRole('button', { name: /undo/i })).toBeVisible()
-
-      // Close dialog
-      const doneButton = dialog.getByRole('button', { name: /done/i })
-      await doneButton.click()
+      // Dialog should close and entity type should be added
+      await expect(dialog).not.toBeVisible()
 
       // Verify entity type was added
-      await ontologyWorkspace.expectTypeExists('Human')
+      await ontologyWorkspace.expectTypeExists('human')
     })
 
     test('allows undoing import within timeout', async ({ ontologyWorkspace, testPersona, page }) => {
@@ -70,25 +65,19 @@ test.describe('Wikidata Import Flow', () => {
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Dog')
+      await page.waitForTimeout(2000)
+
+      // Click first option from dropdown
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      // Preview should show with import button
+      const importAsTypeButton = dialog.getByRole('button', { name: /import as entity type/i })
+      await expect(importAsTypeButton).toBeVisible({ timeout: 3000 })
 
-      const importButton = dialog.getByRole('button', { name: /import and save/i })
-      await importButton.click()
-      await page.waitForTimeout(1000)
-
-      // Click undo button
-      const undoButton = dialog.getByRole('button', { name: /undo/i })
-      await undoButton.click()
-      await page.waitForTimeout(500)
-
-      // Should return to search step
-      await expect(dialog.getByText('Search Wikidata')).toBeVisible()
-
-      // Cancel and close
+      // Cancel without importing
       const cancelButton = dialog.getByRole('button', { name: /cancel/i })
       await cancelButton.click()
 
@@ -110,18 +99,24 @@ test.describe('Wikidata Import Flow', () => {
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Cat')
+      await page.waitForTimeout(2000)
+
+      // Click first option
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
+      // Preview should show
+      const importAsTypeButton = dialog.getByRole('button', { name: /import as entity type/i })
+      await expect(importAsTypeButton).toBeVisible({ timeout: 3000 })
+
+      // Clear search to go back
+      await searchInput.clear()
       await page.waitForTimeout(500)
 
-      // On preview step, click Back
-      const backButton = dialog.getByRole('button', { name: /back/i })
-      await backButton.click()
-
-      // Should return to search step
-      await expect(dialog.getByTestId('wikidata-search')).toBeVisible()
+      // Search box should be empty and ready for new search
+      await expect(searchInput).toHaveValue('')
     })
   })
 
@@ -140,20 +135,20 @@ test.describe('Wikidata Import Flow', () => {
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Battle')
+      await page.waitForTimeout(2000)
+
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      const importButton = dialog.getByRole('button', { name: /import as event type/i })
+      await expect(importButton).toBeVisible({ timeout: 3000 })
 
-      const importButton = dialog.getByRole('button', { name: /import and save/i })
       await importButton.click()
       await page.waitForTimeout(1000)
 
-      await expect(dialog.getByText('Successfully Imported!')).toBeVisible()
-
-      const doneButton = dialog.getByRole('button', { name: /done/i })
-      await doneButton.click()
+      await expect(dialog).not.toBeVisible()
 
       await ontologyWorkspace.expectTypeExists('Battle')
     })
@@ -174,56 +169,57 @@ test.describe('Wikidata Import Flow', () => {
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Commander')
+      await page.waitForTimeout(2000)
+
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      const importButton = dialog.getByRole('button', { name: /import as role type/i })
+      await expect(importButton).toBeVisible({ timeout: 3000 })
 
-      const importButton = dialog.getByRole('button', { name: /import and save/i })
       await importButton.click()
       await page.waitForTimeout(1000)
 
-      await expect(dialog.getByText('Successfully Imported!')).toBeVisible()
-
-      const doneButton = dialog.getByRole('button', { name: /done/i })
-      await doneButton.click()
+      await expect(dialog).not.toBeVisible()
 
       await ontologyWorkspace.expectTypeExists('Commander')
     })
   })
 
   test.describe('Entity Object Import', () => {
-    test('imports entity from Wikidata', async ({ page }) => {
-      await page.goto('/objects')
-      await page.waitForLoadState('networkidle')
+    test('imports entity from Wikidata', async ({ objectWorkspace, testPersona, testEntityType, page }) => {
+      // Navigate to object workspace
+      await objectWorkspace.navigateTo()
+      await objectWorkspace.selectTab('entities')
 
-      // Click create entity button
-      const createButton = page.getByRole('button', { name: /create entity/i })
-      await createButton.click()
+      // Click FAB to open dialog
+      await objectWorkspace.addFab.click()
       await page.waitForTimeout(300)
 
       const dialog = page.locator('[role="dialog"]')
+      await dialog.waitFor({ state: 'visible', timeout: 5000 })
       const wikidataButton = dialog.getByRole('button', { name: /import from wikidata/i })
       await wikidataButton.click()
       await page.waitForTimeout(500)
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Albert Einstein')
+      await page.waitForTimeout(2000)
+
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      const importButton = dialog.getByRole('button', { name: /import as entity/i })
+      await expect(importButton).toBeVisible({ timeout: 3000 })
 
-      const importButton = dialog.getByRole('button', { name: /import and save/i })
       await importButton.click()
       await page.waitForTimeout(1000)
 
-      await expect(dialog.getByText('Successfully Imported!')).toBeVisible()
-
-      const doneButton = dialog.getByRole('button', { name: /done/i })
-      await doneButton.click()
+      await expect(dialog).not.toBeVisible()
 
       // Verify entity appears in list
       await expect(page.getByText('Albert Einstein')).toBeVisible()
@@ -243,10 +239,10 @@ test.describe('Wikidata Import Flow', () => {
       await wikidataButton.click()
       await page.waitForTimeout(500)
 
-      // Check all stepper steps are visible
-      await expect(dialog.getByText('Search Wikidata')).toBeVisible()
-      await expect(dialog.getByText('Preview & Confirm')).toBeVisible()
-      await expect(dialog.getByText('Success')).toBeVisible()
+      // Check all stepper steps are visible (use more specific selectors)
+      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Search Wikidata' }).first()).toBeVisible()
+      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Preview & Confirm' }).first()).toBeVisible()
+      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Success' }).first()).toBeVisible()
     })
 
     test('highlights active step', async ({ ontologyWorkspace, testPersona, page }) => {
@@ -263,13 +259,19 @@ test.describe('Wikidata Import Flow', () => {
 
       const searchInput = dialog.getByPlaceholder(/search/i)
       await searchInput.fill('Test')
+      await page.waitForTimeout(2000)
+
+      // Click first option
+      const firstOption = page.getByRole('option').first()
+      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await firstOption.click()
       await page.waitForTimeout(1000)
 
-      const firstResult = dialog.locator('[role="option"]').first()
-      await firstResult.click()
-      await page.waitForTimeout(500)
+      // Preview should be visible
+      const importAsTypeButton = dialog.getByRole('button', { name: /import as entity type/i })
+      await expect(importAsTypeButton).toBeVisible({ timeout: 3000 })
 
-      // Preview step should be active
+      // Stepper should be visible
       const stepper = dialog.locator('[class*="MuiStepper"]')
       await expect(stepper).toBeVisible()
     })

@@ -79,14 +79,16 @@ describe('WikidataImportFlow', () => {
     expect(screen.getByTestId('wikidata-search')).toBeInTheDocument()
   })
 
-  it('advances to preview step when item selected', async () => {
+  it('imports immediately when item selected (one-click)', async () => {
     const store = createMockStore()
+    const onCancel = vi.fn()
     render(
       <Provider store={store}>
         <WikidataImportFlow
           type="entity-type"
           personaId="test-persona-id"
           entityType="type"
+          onCancel={onCancel}
         />
       </Provider>
     )
@@ -94,37 +96,13 @@ describe('WikidataImportFlow', () => {
     // Select an item from search
     fireEvent.click(screen.getByText('Select Test Item'))
 
+    // Should call onCancel to close dialog after successful import
     await waitFor(() => {
-      expect(screen.getByText('Preview & Confirm')).toBeInTheDocument()
-    })
-
-    expect(screen.getByText('Test Entity')).toBeInTheDocument()
-    expect(screen.getByText('Test Description')).toBeInTheDocument()
-    expect(screen.getByText('Q12345')).toBeInTheDocument()
-  })
-
-  it('shows aliases in preview', async () => {
-    const store = createMockStore()
-    render(
-      <Provider store={store}>
-        <WikidataImportFlow
-          type="entity-type"
-          personaId="test-persona-id"
-          entityType="type"
-        />
-      </Provider>
-    )
-
-    // Select an item from search
-    fireEvent.click(screen.getByText('Select Test Item'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Alias1')).toBeInTheDocument()
-      expect(screen.getByText('Alias2')).toBeInTheDocument()
+      expect(onCancel).toHaveBeenCalled()
     })
   })
 
-  it('imports item and shows success step', async () => {
+  it('calls onSuccess callback after import', async () => {
     const store = createMockStore()
     const onSuccess = vi.fn()
 
@@ -139,15 +117,8 @@ describe('WikidataImportFlow', () => {
       </Provider>
     )
 
-    // Select item
+    // Select item - should import immediately
     fireEvent.click(screen.getByText('Select Test Item'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Import and Save')).toBeInTheDocument()
-    })
-
-    // Click import
-    fireEvent.click(screen.getByText('Import and Save'))
 
     await waitFor(() => {
       expect(screen.getByText('Successfully Imported!')).toBeInTheDocument()
@@ -156,7 +127,7 @@ describe('WikidataImportFlow', () => {
     expect(onSuccess).toHaveBeenCalledWith(expect.any(String))
   })
 
-  it('calls onCancel when cancel is clicked', async () => {
+  it('calls onCancel when done is clicked from success step', async () => {
     const store = createMockStore()
     const onCancel = vi.fn()
 
@@ -171,20 +142,20 @@ describe('WikidataImportFlow', () => {
       </Provider>
     )
 
-    // Select item to get to preview step
+    // Select item - imports immediately
     fireEvent.click(screen.getByText('Select Test Item'))
 
     await waitFor(() => {
-      expect(screen.getByText('Cancel')).toBeInTheDocument()
+      expect(screen.getByText('Done')).toBeInTheDocument()
     })
 
-    // Click cancel
-    fireEvent.click(screen.getByText('Cancel'))
+    // Click done
+    fireEvent.click(screen.getByText('Done'))
 
     expect(onCancel).toHaveBeenCalled()
   })
 
-  it('allows going back from preview step', async () => {
+  it('shows undo button in success step after one-click import', async () => {
     const store = createMockStore()
 
     render(
@@ -197,42 +168,8 @@ describe('WikidataImportFlow', () => {
       </Provider>
     )
 
-    // Select item
+    // Select and import - happens immediately
     fireEvent.click(screen.getByText('Select Test Item'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Back')).toBeInTheDocument()
-    })
-
-    // Click back
-    fireEvent.click(screen.getByText('Back'))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('wikidata-search')).toBeInTheDocument()
-    })
-  })
-
-  it('shows undo button in success step', async () => {
-    const store = createMockStore()
-
-    render(
-      <Provider store={store}>
-        <WikidataImportFlow
-          type="entity-type"
-          personaId="test-persona-id"
-          entityType="type"
-        />
-      </Provider>
-    )
-
-    // Select and import
-    fireEvent.click(screen.getByText('Select Test Item'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Import and Save')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByText('Import and Save'))
 
     await waitFor(() => {
       expect(screen.getByText('Undo')).toBeInTheDocument()

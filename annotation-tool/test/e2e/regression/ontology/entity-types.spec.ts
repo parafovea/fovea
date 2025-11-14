@@ -188,19 +188,19 @@ test.describe('Entity Type Management', () => {
     await ontologyWorkspace.expectTypeExists('Building')
   })
 
-  test('entity types are persona-specific', async ({ ontologyWorkspace, db, page, testUser }) => {
+  test('entity types are persona-specific', async ({ ontologyWorkspace, db, page, testUser, workerSessionToken }) => {
     // Create two personas
     const persona1 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst A',
       role: 'Intelligence Analyst'
-    })
+    }, workerSessionToken)
 
     const persona2 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst B',
       role: 'Strategic Analyst'
-    })
+    }, workerSessionToken)
 
     // Navigate to persona 1 and create entity type
     await ontologyWorkspace.navigateTo(persona1.id)
