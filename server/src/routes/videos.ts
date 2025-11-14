@@ -37,7 +37,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
    * Helper to load video metadata from .info.json file
    * Used by sync endpoint to populate database
    */
-  async function loadVideoMetadataFromStorage(filename: string): Promise<any | null> {
+  async function loadVideoMetadataFromStorage(filename: string): Promise<Record<string, unknown> | null> {
     const infoFilename = filename.replace('.webm', '.info.json').replace('.mp4', '.info.json')
 
     try {
@@ -89,7 +89,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       // Transform for API response
       const videoList = videos.map(video => {
         // Extract size from metadata if available
-        const metadata = video.metadata as any
+        const metadata = video.metadata as Record<string, unknown> | null
         const size = metadata?.filesize || metadata?.file_size || 0
 
         const baseData = {
@@ -176,7 +176,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Extract size from metadata if available
-      const metadata = video.metadata as any
+      const metadata = video.metadata as Record<string, unknown> | null
       const size = metadata?.filesize || metadata?.file_size || 0
 
       const baseData = {
@@ -255,23 +255,6 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
           // Build video path based on storage type
           const videoPath = path.join(DATA_DIR, filename)
 
-          // Get file size and creation date from filesystem
-          let size = 0
-          let createdAt = new Date()
-
-          try {
-            const stats = await fs.stat(videoPath)
-            size = stats.size
-            createdAt = stats.birthtime
-          } catch (statError) {
-            fastify.log.warn({ filename, error: statError }, 'Failed to stat video file')
-          }
-
-          // Override with metadata if available
-          if (metadata?.timestamp) {
-            createdAt = new Date(metadata.timestamp * 1000)
-          }
-
           // Check if video exists
           const existing = await fastify.prisma.video.findUnique({
             where: { id },
@@ -284,10 +267,10 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
             update: {
               filename,
               path: videoPath,
-              duration: metadata?.duration || null,
-              frameRate: metadata?.fps || null,
-              resolution: metadata?.resolution || (metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null),
-              metadata: metadata || null,
+              duration: (metadata?.duration as number) || null,
+              frameRate: (metadata?.fps as number) || null,
+              resolution: (metadata?.resolution as string) || (metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null),
+              metadata: metadata as object || undefined,
               lastMetadataSync: new Date(),
               metadataSyncStatus: 'synced',
             },
@@ -295,10 +278,10 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
               id,
               filename,
               path: videoPath,
-              duration: metadata?.duration || null,
-              frameRate: metadata?.fps || null,
-              resolution: metadata?.resolution || (metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null),
-              metadata: metadata || null,
+              duration: (metadata?.duration as number) || null,
+              frameRate: (metadata?.fps as number) || null,
+              resolution: (metadata?.resolution as string) || (metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null),
+              metadata: metadata as object || undefined,
               lastMetadataSync: new Date(),
               metadataSyncStatus: 'synced',
             },
