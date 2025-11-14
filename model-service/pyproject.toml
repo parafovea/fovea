@@ -183,3 +183,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*"]
+ignore_missing_imports = true

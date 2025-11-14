@@ -670,13 +670,15 @@ export function loadStorageConfig(): VideoStorageConfig {
 
   // S3 configuration
   if (storageType === 's3' || storageType === 'hybrid') {
-    if (!process.env.S3_BUCKET || !process.env.S3_REGION) {
+    // In test environment, allow missing S3 credentials
+    // Tests should mock storage operations or provide test credentials
+    if (process.env.NODE_ENV !== 'test' && (!process.env.S3_BUCKET || !process.env.S3_REGION)) {
       throw new Error('S3_BUCKET and S3_REGION are required for S3 storage');
     }
 
     config.s3 = {
-      bucket: process.env.S3_BUCKET,
-      region: process.env.S3_REGION,
+      bucket: process.env.S3_BUCKET || 'test-bucket',
+      region: process.env.S3_REGION || 'us-east-1',
       accessKeyId: process.env.S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
       endpoint: process.env.S3_ENDPOINT,
