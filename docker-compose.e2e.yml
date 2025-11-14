@@ -40,8 +40,12 @@ services:
       - DEFAULT_USER_USERNAME=default-user
       - DEFAULT_USER_DISPLAY_NAME=Default User
       - ALLOW_TEST_ADMIN_BYPASS=true
+      # Video Storage Configuration - Local storage for E2E tests
+      - VIDEO_STORAGE_TYPE=local
+      - VIDEO_STORAGE_PATH=/data
+      - VIDEO_BASE_URL=/api/videos
     volumes:
-      - ./test-data:/data:ro
+      - ./test-data:/data:rw
     depends_on:
       postgres:
         condition: service_healthy

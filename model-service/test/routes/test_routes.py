@@ -82,13 +82,19 @@ def test_client_with_mocks(mock_model_manager: Mock) -> TestClient:
 class TestSummarizeEndpoint:
     """Tests for /api/summarize endpoint."""
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_video_success(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
+        self,
+        mock_get_video: Mock,
+        mock_summarize: AsyncMock,
+        mock_download: AsyncMock,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test successful video summarization request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+        mock_download.return_value = ("/videos/test-video-123.mp4", False)  # Not a temp file
         mock_summarize.return_value = SummarizeResponse(
             id="summary-123",
             video_id="test-video-123",
@@ -120,13 +126,19 @@ class TestSummarizeEndpoint:
         assert isinstance(data["key_frames"], list)
         assert "confidence" in data
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_video_default_params(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
+        self,
+        mock_get_video: Mock,
+        mock_summarize: AsyncMock,
+        mock_download: AsyncMock,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test summarization with default parameters."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
+        mock_download.return_value = ("/videos/test-video-789.mp4", False)
         mock_summarize.return_value = SummarizeResponse(
             id="summary-789",
             video_id="test-video-789",
@@ -172,13 +184,19 @@ class TestSummarizeEndpoint:
 
         assert response.status_code == 422
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("src.summarization.summarize_video_with_vlm")
     @patch("src.summarization.get_video_path_for_id")
     def test_summarize_response_structure(
-        self, mock_get_video: Mock, mock_summarize: AsyncMock, test_client_with_mocks: TestClient
+        self,
+        mock_get_video: Mock,
+        mock_summarize: AsyncMock,
+        mock_download: AsyncMock,
+        test_client_with_mocks: TestClient,
     ) -> None:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+        mock_download.return_value = ("/videos/test-video-123.mp4", False)
         mock_summarize.return_value = SummarizeResponse(
             id="summary-456",
             video_id="test-video-123",
@@ -216,6 +234,88 @@ class TestSummarizeEndpoint:
             assert "timestamp" in key_frame
             assert "description" in key_frame
             assert "confidence" in key_frame
+
+    @patch("src.video_downloader.cleanup_temp_video")
+    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.summarization.summarize_video_with_vlm")
+    def test_summarize_with_http_url(
+        self,
+        mock_summarize: AsyncMock,
+        mock_download: AsyncMock,
+        mock_cleanup: Mock,
+        test_client_with_mocks: TestClient,
+    ) -> None:
+        """Test summarization with HTTP URL video path."""
+        # Mock download to return temp file path
+        mock_download.return_value = ("/tmp/video_abc123.mp4", True)
+
+        mock_summarize.return_value = SummarizeResponse(
+            id="summary-789",
+            video_id="test-video-456",
+            persona_id="test-persona-789",
+            summary="HTTP URL test summary",
+            key_frames=[],
+            confidence=0.92,
+        )
+
+        response = test_client_with_mocks.post(
+            "/api/summarize",
+            json={
+                "video_id": "test-video-456",
+                "video_path": "https://example.com/videos/test.mp4",
+                "persona_id": "test-persona-789",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["video_id"] == "test-video-456"
+
+        # Verify download was called with the URL
+        mock_download.assert_called_once_with("https://example.com/videos/test.mp4")
+
+        # Verify cleanup was called with temp file
+        mock_cleanup.assert_called_once_with("/tmp/video_abc123.mp4")
+
+    @patch("src.video_downloader.cleanup_temp_video")
+    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.summarization.summarize_video_with_vlm")
+    def test_summarize_with_local_path_no_download(
+        self,
+        mock_summarize: AsyncMock,
+        mock_download: AsyncMock,
+        mock_cleanup: Mock,
+        test_client_with_mocks: TestClient,
+    ) -> None:
+        """Test summarization with local path (no download needed)."""
+        # Mock download to return same path (not a temp file)
+        mock_download.return_value = ("/videos/local-video.mp4", False)
+
+        mock_summarize.return_value = SummarizeResponse(
+            id="summary-012",
+            video_id="test-video-012",
+            persona_id="test-persona-012",
+            summary="Local path test summary",
+            key_frames=[],
+            confidence=0.85,
+        )
+
+        response = test_client_with_mocks.post(
+            "/api/summarize",
+            json={
+                "video_id": "test-video-012",
+                "video_path": "/videos/local-video.mp4",
+                "persona_id": "test-persona-012",
+            },
+        )
+
+        assert response.status_code == 200
+
+        # Verify download was called
+        mock_download.assert_called_once_with("/videos/local-video.mp4")
+
+        # Verify cleanup was NOT called (not a temp file)
+        mock_cleanup.assert_not_called()
 
 
 class TestAugmentEndpoint:
@@ -368,6 +468,7 @@ class TestAugmentEndpoint:
 class TestDetectionEndpoint:
     """Tests for /api/detection/detect endpoint."""
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.detection_loader.create_detection_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -376,10 +477,12 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test successful object detection request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
+        mock_download.return_value = ("/videos/test-video-123.mp4", False)
 
         # Mock video capture
         import numpy as np
@@ -420,6 +523,7 @@ class TestDetectionEndpoint:
         assert "total_detections" in data
         assert "processing_time" in data
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.detection_loader.create_detection_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -428,10 +532,12 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test detection on specific frames."""
         mock_get_video.return_value = Path("/videos/test-video-456.mp4")
+        mock_download.return_value = ("/videos/test-video-456.mp4", False)
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
         import numpy as np
@@ -459,6 +565,7 @@ class TestDetectionEndpoint:
         data = response.json()
         assert data["video_id"] == "test-video-456"
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.detection_loader.create_detection_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -467,10 +574,12 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test detection without tracking enabled."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
+        mock_download.return_value = ("/videos/test-video-789.mp4", False)
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
         import numpy as np
@@ -522,6 +631,7 @@ class TestDetectionEndpoint:
 
         assert response.status_code == 422
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.detection_loader.create_detection_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -530,10 +640,12 @@ class TestDetectionEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-678.mp4")
+        mock_download.return_value = ("/videos/test-video-678.mp4", False)
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
         import numpy as np
@@ -577,10 +689,115 @@ class TestDetectionEndpoint:
             assert "detections" in frame
             assert isinstance(frame["detections"], list)
 
+    @patch("src.video_downloader.cleanup_temp_video")
+    @patch("src.video_downloader.download_video_if_needed")
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    def test_detection_with_http_url(
+        self,
+        mock_create_loader: Mock,
+        mock_video_capture: Mock,
+        mock_download: AsyncMock,
+        mock_cleanup: Mock,
+        test_client_with_mocks: TestClient,
+    ) -> None:
+        """Test detection with HTTP URL video path."""
+        import numpy as np
+
+        # Mock download to return temp file path
+        mock_download.return_value = ("/tmp/video_def456.mp4", True)
+
+        # Mock video capture
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        # Mock detection loader
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
+        mock_create_loader.return_value = mock_loader
+
+        response = test_client_with_mocks.post(
+            "/api/detection/detect",
+            json={
+                "video_id": "test-detection-url",
+                "video_path": "https://s3.amazonaws.com/bucket/video.mp4",
+                "query": "person",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["video_id"] == "test-detection-url"
+
+        # Verify download was called with the URL
+        mock_download.assert_called_once_with("https://s3.amazonaws.com/bucket/video.mp4")
+
+        # Verify cleanup was called with temp file
+        mock_cleanup.assert_called_once_with("/tmp/video_def456.mp4")
+
+    @patch("src.video_downloader.cleanup_temp_video")
+    @patch("src.video_downloader.download_video_if_needed")
+    @patch("cv2.VideoCapture")
+    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_detection_with_s3_presigned_url_from_video_id(
+        self,
+        mock_get_video: Mock,
+        mock_create_loader: Mock,
+        mock_video_capture: Mock,
+        mock_download: AsyncMock,
+        mock_cleanup: Mock,
+        test_client_with_mocks: TestClient,
+    ) -> None:
+        """Test detection when video_id resolves to S3 pre-signed URL."""
+        import numpy as np
+
+        # Mock get_video_path_for_id to return S3 URL
+        mock_get_video.return_value = "https://bucket.s3.amazonaws.com/video.mp4?signature=xyz"
+
+        # Mock download to return temp file path
+        mock_download.return_value = ("/tmp/video_ghi789.mp4", True)
+
+        # Mock video capture
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        # Mock detection loader
+        mock_loader = Mock()
+        mock_loader.detect.return_value = Mock(
+            detections=[], image_width=1920, image_height=1080, processing_time=0.1
+        )
+        mock_create_loader.return_value = mock_loader
+
+        response = test_client_with_mocks.post(
+            "/api/detection/detect",
+            json={
+                "video_id": "test-s3-detection",
+                "query": "vehicle",
+            },
+        )
+
+        assert response.status_code == 200
+
+        # Verify download was called with the S3 URL
+        mock_download.assert_called_once()
+
+        # Verify cleanup was called
+        mock_cleanup.assert_called_once_with("/tmp/video_ghi789.mp4")
+
 
 class TestTrackingEndpoint:
     """Tests for /api/tracking/track endpoint."""
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -589,6 +806,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test successful object tracking request with SAMURAI model."""
@@ -597,6 +815,7 @@ class TestTrackingEndpoint:
         import numpy as np
 
         mock_get_video.return_value = Path("/videos/test-tracking-123.mp4")
+        mock_download.return_value = ("/videos/test-tracking-123.mp4", False)
 
         # Mock video capture
         mock_cap = Mock()
@@ -667,6 +886,7 @@ class TestTrackingEndpoint:
         assert "processing_time" in data
         assert "fps" in data
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -675,6 +895,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with all supported models (SAMURAI, SAM2Long, SAM2, YOLO11n-seg)."""
@@ -683,6 +904,7 @@ class TestTrackingEndpoint:
         import numpy as np
 
         mock_get_video.return_value = Path("/videos/wildlife-video.mp4")
+        mock_download.return_value = ("/videos/wildlife-video.mp4", False)
 
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: (
@@ -742,6 +964,7 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 200
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -750,6 +973,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking multiple objects simultaneously."""
@@ -758,6 +982,7 @@ class TestTrackingEndpoint:
         import numpy as np
 
         mock_get_video.return_value = Path("/videos/sports-video.mp4")
+        mock_download.return_value = ("/videos/sports-video.mp4", False)
 
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: (
@@ -853,6 +1078,7 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 400
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -861,10 +1087,12 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with invalid base64 mask encoding."""
         mock_get_video.return_value = Path("/videos/test-video.mp4")
+        mock_download.return_value = ("/videos/test-video.mp4", False)
 
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: (
@@ -913,6 +1141,7 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 422
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -921,6 +1150,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test tracking with object occlusion handling."""
@@ -929,6 +1159,7 @@ class TestTrackingEndpoint:
         import numpy as np
 
         mock_get_video.return_value = Path("/videos/vehicle-tracking.mp4")
+        mock_download.return_value = ("/videos/vehicle-tracking.mp4", False)
 
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: (
@@ -992,6 +1223,7 @@ class TestTrackingEndpoint:
             mask = data["frames"][0]["masks"][0]
             assert "is_occluded" in mask
 
+    @patch("src.video_downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
     @patch("src.tracking_loader.create_tracking_loader")
     @patch("src.summarization.get_video_path_for_id")
@@ -1000,6 +1232,7 @@ class TestTrackingEndpoint:
         mock_get_video: Mock,
         mock_create_loader: Mock,
         mock_video_capture: Mock,
+        mock_download: AsyncMock,
         test_client_with_mocks: TestClient,
     ) -> None:
         """Test that tracking response contains all expected fields."""
@@ -1008,6 +1241,7 @@ class TestTrackingEndpoint:
         import numpy as np
 
         mock_get_video.return_value = Path("/videos/test-structure.mp4")
+        mock_download.return_value = ("/videos/test-structure.mp4", False)
 
         mock_cap = Mock()
         mock_cap.get.side_effect = lambda prop: (
@@ -1094,6 +1328,96 @@ class TestTrackingEndpoint:
                 assert "mask_rle" in mask
                 assert "confidence" in mask
                 assert "is_occluded" in mask
+
+    @patch("src.video_downloader.cleanup_temp_video")
+    @patch("src.video_downloader.download_video_if_needed")
+    @patch("cv2.VideoCapture")
+    @patch("src.tracking_loader.create_tracking_loader")
+    @patch("src.summarization.get_video_path_for_id")
+    def test_tracking_with_s3_presigned_url(
+        self,
+        mock_get_video: Mock,
+        mock_create_loader: Mock,
+        mock_video_capture: Mock,
+        mock_download: AsyncMock,
+        mock_cleanup: Mock,
+        test_client_with_mocks: TestClient,
+    ) -> None:
+        """Test tracking when video_id resolves to S3 pre-signed URL."""
+        import base64
+
+        import numpy as np
+
+        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+
+        # Mock get_video_path_for_id to return S3 URL
+        mock_get_video.return_value = "https://bucket.s3.amazonaws.com/tracking.mp4?signature=abc"
+
+        # Mock download to return temp file path
+        mock_download.return_value = ("/tmp/video_jkl012.mp4", True)
+
+        # Mock video capture
+        mock_cap = Mock()
+        mock_cap.get.side_effect = lambda prop: (
+            30.0
+            if prop == 5
+            else 100
+            if prop == 7
+            else 640
+            if prop == 3
+            else 480
+            if prop == 4
+            else 0
+        )
+        mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
+        mock_cap.set.return_value = True
+        mock_video_capture.return_value = mock_cap
+
+        # Mock tracking loader
+        mock_loader = Mock()
+        mock_mask = TrackingMask(
+            mask=np.ones((480, 640), dtype=np.uint8),
+            confidence=0.93,
+            object_id=1,
+        )
+        mock_frame = TrackingFrame(
+            frame_idx=0,
+            masks=[mock_mask],
+            occlusions={1: False},
+            processing_time=0.1,
+        )
+        mock_result = TrackingResult(
+            frames=[mock_frame],
+            video_width=640,
+            video_height=480,
+            total_processing_time=0.1,
+            fps=10.0,
+        )
+        mock_loader.track.return_value = mock_result
+        mock_create_loader.return_value = mock_loader
+
+        # Create initial mask
+        initial_mask = np.ones((480, 640), dtype=np.uint8)
+        mask_b64 = base64.b64encode(initial_mask.tobytes()).decode("utf-8")
+
+        response = test_client_with_mocks.post(
+            "/api/tracking/track",
+            json={
+                "video_id": "test-s3-tracking",
+                "initial_masks": [mask_b64],
+                "object_ids": [1],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["video_id"] == "test-s3-tracking"
+
+        # Verify download was called with the S3 URL
+        mock_download.assert_called_once()
+
+        # Verify cleanup was called with temp file
+        mock_cleanup.assert_called_once_with("/tmp/video_jkl012.mp4")
 
 
 class TestOpenAPIDocumentation:

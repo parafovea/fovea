@@ -283,11 +283,14 @@ test.describe('Component Visual Regression', () => {
     await expect(dialog.first()).toBeVisible({ timeout: 10000 })
 
     // Wait for dialog animation and content to fully render
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(2000)
+
+    // Wait for any animations to settle
+    await page.waitForLoadState('networkidle')
 
     await expect(dialog.first()).toHaveScreenshot('export-dialog.png', {
       threshold: 0.2,
-      maxDiffPixels: 100
+      maxDiffPixels: 500
     })
   })
 

@@ -78,8 +78,9 @@ async def synthesize_summary_from_claims(
     )
 
     logger.info(
-        f"Synthesizing summary using strategy: {synthesis_strategy} "
-        f"from {len(claim_sources)} source(s)"
+        "Synthesizing summary using strategy: %s from %d source(s)",
+        synthesis_strategy,
+        len(claim_sources),
     )
     result = await llm_loader.generate(prompt=prompt, generation_config=generation_config)
 

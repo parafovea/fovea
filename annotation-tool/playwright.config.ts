@@ -61,6 +61,7 @@ export default defineConfig({
     {
       name: 'regression',
       testDir: './test/e2e/regression',
+      testIgnore: '**/visual/**',  // Visual tests run only in visual project
       timeout: 60000,
       retries: 1,
       workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally

@@ -440,10 +440,8 @@ export default function VideoBrowser() {
       <Grid container spacing={3}>
         {filteredVideos.map((video: VideoMetadata, index) => {
           const videoUrl = getVideoUrl(video)
-          const thumbnailUrl = video.thumbnail ||
-            (video.thumbnails && video.thumbnails.length > 0
-              ? video.thumbnails[video.thumbnails.length - 1].url
-              : '')
+          // Use backend thumbnail endpoint instead of external CDN URLs
+          const thumbnailUrl = `/api/videos/${video.id}/thumbnail?size=medium`
 
           return (
             <VideoCard

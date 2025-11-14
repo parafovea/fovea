@@ -37,6 +37,41 @@ Stop all services:
 docker compose down
 ```
 
+## Docker Compose Files
+
+FOVEA uses multiple compose files for different environments:
+
+| File | Purpose | Usage |
+|------|---------|-------|
+| `docker-compose.yml` | Production configuration | `docker compose up` |
+| `docker-compose.dev.yml` | Development overrides | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up` |
+| `docker-compose.e2e.yml` | E2E testing environment | `docker compose -f docker-compose.e2e.yml up` |
+
+### Development Mode
+
+Start services with hot-reload and debugging tools:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+**Features:**
+- Hot-reload volumes for source code changes
+- Jaeger distributed tracing: http://localhost:16686
+- Maildev email testing: http://localhost:1080, SMTP on port 1025
+- Auto-reload: `npm run dev`, `uvicorn --reload`
+
+**When to use:**
+- Active development on frontend, backend, or model service
+- Debugging distributed request flows with Jaeger
+- Testing email notifications with Maildev
+- Avoiding container rebuilds after code changes
+
+**When NOT to use:**
+- Testing production Docker builds
+- Performance benchmarking (dev mode has overhead)
+- CI/CD pipelines (use production mode)
+
 ## Viewing Logs
 
 | Command | Description |

@@ -283,7 +283,6 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
           onClose={() => setRelationEditorOpen(false)}
           onSave={handleCreateRelation}
           sourceClaim={claim}
-          availableClaims={allClaims}
           relationTypes={ontology?.relationTypes || []}
         />
       )}
@@ -381,7 +380,7 @@ export default function ClaimsViewer({
           .map((g) => g.content)
           .join(' ')
           .toLowerCase()
-        matches = matches && (claimText.includes(searchLower) || claim.text?.toLowerCase().includes(searchLower))
+        matches = claimText.includes(searchLower) || claim.text?.toLowerCase().includes(searchLower)
       }
 
       // Confidence filter

@@ -199,19 +199,19 @@ test.describe('Event Type Management', () => {
     await ontologyWorkspace.expectTypeExists('Incident')
   })
 
-  test('event types are persona-specific', async ({ ontologyWorkspace, db, page, testUser }) => {
+  test('event types are persona-specific', async ({ ontologyWorkspace, db, page, testUser, workerSessionToken }) => {
     // Create two personas
     const persona1 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst A',
       role: 'Intelligence Analyst'
-    })
+    }, workerSessionToken)
 
     const persona2 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst B',
       role: 'Strategic Analyst'
-    })
+    }, workerSessionToken)
 
     // Navigate to persona 1 and create event type
     await ontologyWorkspace.navigateTo(persona1.id)

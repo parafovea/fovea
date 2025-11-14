@@ -62,6 +62,20 @@ cd model-service && pip install -r requirements.txt
 uvicorn src.main:app --reload --port 8000
 ```
 
+### Development with Hot Reload and Debugging Tools
+
+For active development with live reload, distributed tracing, and email testing:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+This provides:
+- Hot-reload volumes for code changes (no rebuild needed)
+- Jaeger distributed tracing at [http://localhost:16686](http://localhost:16686)
+- Maildev email testing at [http://localhost:1080](http://localhost:1080)
+- Auto-reload for backend, frontend, and model service
+
 ## Usage
 
 Place video files (`.mp4`) and their metadata files (`.info.json`) in the `/data` directory. The video browser will display all available videos with searchable metadata.

@@ -18,6 +18,36 @@ import {
 import { searchWikidata, getWikidataEntity, extractWikidataInfo } from '../services/wikidataApi'
 import debounce from 'lodash/debounce'
 
+/**
+ * Gets the appropriate button label based on import type
+ */
+function getButtonLabel(
+  importType?: string,
+  entityType?: string,
+  objectSubtype?: string
+): string {
+  if (importType) {
+    const labels: Record<string, string> = {
+      'entity-type': 'Import as Entity Type',
+      'event-type': 'Import as Event Type',
+      'role-type': 'Import as Role Type',
+      'relation-type': 'Import as Relation Type',
+      'entity': 'Import as Entity',
+      'event': 'Import as Event',
+      'location': 'Import as Location',
+      'time': 'Import as Time Object',
+    }
+    return labels[importType] || 'Import'
+  }
+
+  // Fallback to old logic if importType not provided
+  if (entityType === 'type') return 'Import as Entity Type'
+  if (entityType === 'time') return 'Import as Time Object'
+  if (objectSubtype === 'event') return 'Import as Event'
+  if (objectSubtype === 'location') return 'Import as Location'
+  return 'Import as Entity'
+}
+
 interface WikidataSearchProps {
   onImport: (data: {
     name: string
@@ -33,9 +63,10 @@ interface WikidataSearchProps {
   }) => void
   entityType: 'type' | 'object' | 'time'
   objectSubtype?: 'entity' | 'event' | 'location'
+  importType?: 'entity-type' | 'role-type' | 'event-type' | 'relation-type' | 'entity' | 'event' | 'location' | 'time'
 }
 
-export default function WikidataSearch({ onImport, entityType, objectSubtype = 'entity' }: WikidataSearchProps) {
+export default function WikidataSearch({ onImport, entityType, objectSubtype = 'entity', importType }: WikidataSearchProps) {
   const [query, setQuery] = useState('')
   const [options, setOptions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -263,7 +294,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
               startIcon={<WikidataIcon />}
               fullWidth
             >
-              Import as {entityType === 'type' ? 'Entity Type' : entityType === 'time' ? 'Time Object' : objectSubtype === 'event' ? 'Event' : objectSubtype === 'location' ? 'Location' : 'Entity'}
+              {getButtonLabel(importType, entityType, objectSubtype)}
             </Button>
           </Box>
         </Paper>

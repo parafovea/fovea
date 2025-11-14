@@ -129,8 +129,9 @@ async def test_close_all(router: ExternalModelRouter, test_config: ExternalAPICo
     router.get_client(test_config, "anthropic")
     router.get_client(test_config, "openai")
 
-    with patch.object(AnthropicClient, "close", new_callable=AsyncMock), patch.object(
-        OpenAIClient, "close", new_callable=AsyncMock
+    with (
+        patch.object(AnthropicClient, "close", new_callable=AsyncMock),
+        patch.object(OpenAIClient, "close", new_callable=AsyncMock),
     ):
         await router.close_all()
 

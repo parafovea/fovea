@@ -91,9 +91,15 @@ export default function WikidataImportFlow({
 
   const steps = ['Search Wikidata', 'Preview & Confirm', 'Success']
 
-  const handleDataSelect = (data: WikidataImportData) => {
+  const handleDataSelect = async (data: WikidataImportData) => {
     setSelectedData(data)
-    setActiveStep(1)
+    try {
+      await importItem(data)
+      // Close dialog after successful one-click import
+      onCancel?.()
+    } catch (err) {
+      // Error handled by useWikidataImport hook
+    }
   }
 
   const handleImport = async () => {
@@ -141,6 +147,7 @@ export default function WikidataImportFlow({
               onImport={handleDataSelect}
               entityType={entityType}
               objectSubtype={objectSubtype}
+              importType={type}
             />
           </Box>
         )

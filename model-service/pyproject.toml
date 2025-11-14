@@ -33,6 +33,8 @@ dependencies = [
     "pycocotools>=2.0.10",
     "httpx>=0.27.0",
     "tenacity>=8.5.0",
+    "aiohttp>=3.9.0",
+    "aiofiles>=23.2.0",
 ]
 
 [project.optional-dependencies]
@@ -127,13 +129,16 @@ ignore = [
     "PTH123",  # use Path.open (external APIs provide string paths)
     "PTH110",  # use Path.exists (temp file handling uses os.path)
     "PTH107",  # use Path.unlink (temp file handling uses os.remove)
+    "PTH108",  # use Path.unlink (temp file handling uses os.unlink)
     "S306",    # mktemp usage (needed for temporary audio extraction)
     "PLR2004", # magic numbers (thresholds like 0.5 are domain-specific)
     "SIM117",  # nested with statements (clearer error handling)
+    "SIM105",  # use contextlib.suppress (simpler try-except-pass for cleanup)
+    "S110",    # try-except-pass without logging (cleanup errors are non-critical)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"test/**/*.py" = ["S101", "ANN201", "ANN001", "PLR2004"]
+"test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -179,4 +184,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*"]
 ignore_missing_imports = true

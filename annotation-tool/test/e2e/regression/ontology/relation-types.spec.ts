@@ -230,19 +230,19 @@ test.describe('Relation Type Management', () => {
     await ontologyWorkspace.expectTypeExists('LocatedIn')
   })
 
-  test('relation types are persona-specific', async ({ ontologyWorkspace, db, page, testUser }) => {
+  test('relation types are persona-specific', async ({ ontologyWorkspace, db, page, testUser, workerSessionToken }) => {
     // Create two personas
     const persona1 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst A',
       role: 'Intelligence Analyst'
-    })
+    }, workerSessionToken)
 
     const persona2 = await db.createPersona({
       userId: testUser.id,
       name: 'Analyst B',
       role: 'Strategic Analyst'
-    })
+    }, workerSessionToken)
 
     // Navigate to persona 1 and create relation type
     await ontologyWorkspace.navigateTo(persona1.id)

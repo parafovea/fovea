@@ -27,6 +27,8 @@ from .models import (
     SummarizeResponse,
     SummarySynthesisRequest,
     SummarySynthesisResponse,
+    ThumbnailGenerateRequest,
+    ThumbnailGenerateResponse,
     TrackingRequest,
     TrackingResponse,
 )
@@ -116,7 +118,11 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
             summarize_video_with_external_api,
             summarize_video_with_vlm,
         )
+        from .video_downloader import cleanup_temp_video, download_video_if_needed
         from .vlm_loader import InferenceFramework, QuantizationType, VLMConfig
+
+        # Track if we downloaded a temporary file for cleanup
+        temp_video_path: str | None = None
 
         try:
             # Use provided video_path if available, otherwise resolve from video_id
@@ -131,6 +137,11 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
                         detail=f"Video not found: {request.video_id}",
                     )
                 video_path = resolved_path
+
+            # Download video if it's a URL (e.g., S3 pre-signed URL)
+            video_path, is_temp = await download_video_if_needed(video_path)
+            if is_temp:
+                temp_video_path = video_path
 
             manager = get_model_manager()
             task_config = manager.tasks.get("video_summarization")
@@ -221,6 +232,10 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
             ) from e
+        finally:
+            # Clean up temporary video file if downloaded
+            if temp_video_path:
+                cleanup_temp_video(temp_video_path)
 
 
 @router.post(
@@ -403,6 +418,10 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
 
         from .detection_loader import DetectionConfig, create_detection_loader
         from .summarization import get_video_path_for_id
+        from .video_downloader import cleanup_temp_video, download_video_if_needed
+
+        # Track if we downloaded a temporary file for cleanup
+        temp_video_path: str | None = None
 
         try:
             # Use provided video_path if available, otherwise resolve from video_id
@@ -417,6 +436,11 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
                         detail=f"Video not found: {request.video_id}",
                     )
                 video_path = resolved_path
+
+            # Download video if it's a URL (e.g., S3 pre-signed URL)
+            video_path, is_temp = await download_video_if_needed(video_path)
+            if is_temp:
+                temp_video_path = video_path
 
             manager = get_model_manager()
             task_config = manager.tasks.get("object_detection")
@@ -538,6 +562,10 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
             ) from e
+        finally:
+            # Clean up temporary video file if downloaded
+            if temp_video_path:
+                cleanup_temp_video(temp_video_path)
 
 
 @router.post(
@@ -584,6 +612,10 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:
         from .models import TrackingFrameResult, TrackingMaskData
         from .summarization import get_video_path_for_id
         from .tracking_loader import TrackingConfig, create_tracking_loader
+        from .video_downloader import cleanup_temp_video, download_video_if_needed
+
+        # Track if we downloaded a temporary file for cleanup
+        temp_video_path: str | None = None
 
         try:
             # Validate request
@@ -601,6 +633,11 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:
                     status_code=404,
                     detail=f"Video not found: {request.video_id}",
                 )
+
+            # Download video if it's a URL (e.g., S3 pre-signed URL)
+            video_path, is_temp = await download_video_if_needed(video_path)
+            if is_temp:
+                temp_video_path = video_path
 
             # Get model configuration
             manager = get_model_manager()
@@ -762,6 +799,10 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
             ) from e
+        finally:
+            # Clean up temporary video file if downloaded
+            if temp_video_path:
+                cleanup_temp_video(temp_video_path)
 
 
 @router.get(
@@ -1248,3 +1289,96 @@ async def load_model(task_type: str) -> dict[str, str]:
         "task_type": task_type,
         "message": "Model loaded successfully",
     }
+
+
+@router.post(
+    "/thumbnails/generate",
+    response_model=ThumbnailGenerateResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    summary="Generate video thumbnail",
+    description="Extract a thumbnail from a video at a specified timestamp using FFmpeg.",
+)
+async def generate_thumbnail(request: ThumbnailGenerateRequest) -> ThumbnailGenerateResponse:
+    """Generate a thumbnail from a video file.
+
+    Parameters
+    ----------
+    request : ThumbnailGenerateRequest
+        Thumbnail generation request with video_id, video_path, timestamp, and size.
+
+    Returns
+    -------
+    ThumbnailGenerateResponse
+        Generated thumbnail information.
+
+    Raises
+    ------
+    HTTPException
+        If video file not found or thumbnail generation fails.
+    """
+    with tracer.start_as_current_span("generate_thumbnail") as span:
+        span.set_attribute("video_id", request.video_id)
+        span.set_attribute("timestamp", request.timestamp)
+        span.set_attribute("size", request.size)
+
+        from pathlib import Path
+
+        from .video_downloader import cleanup_temp_video, download_video_if_needed
+        from .video_utils import VideoProcessingError, extract_thumbnail
+
+        # Map size presets to dimensions
+        size_map = {
+            "small": (320, 180),
+            "medium": (640, 360),
+            "large": (1280, 720),
+        }
+        dimensions = size_map[request.size]
+
+        # Create output path for thumbnail
+        thumbnails_dir = Path("/videos/thumbnails")
+        thumbnails_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(thumbnails_dir / f"{request.video_id}_{request.size}.jpg")
+
+        # Track if we downloaded a temporary file for cleanup
+        temp_video_path: str | None = None
+
+        try:
+            # Download video if it's a URL (e.g., S3 pre-signed URL)
+            video_path, is_temp = await download_video_if_needed(request.video_path)
+            if is_temp:
+                temp_video_path = video_path
+
+            thumbnail_path = await extract_thumbnail(
+                video_path=video_path,
+                output_path=output_path,
+                timestamp=request.timestamp,
+                size=dimensions,
+            )
+
+            return ThumbnailGenerateResponse(
+                video_id=request.video_id,
+                thumbnail_path=thumbnail_path,
+                timestamp=request.timestamp,
+                size=request.size,
+            )
+
+        except VideoProcessingError as e:
+            logger.error(f"Thumbnail generation failed for video {request.video_id}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Thumbnail generation failed: {e!s}",
+            ) from e
+        except Exception as e:
+            logger.error(f"Unexpected error during thumbnail generation: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Unexpected error during thumbnail generation",
+            ) from e
+        finally:
+            # Clean up temporary video file if downloaded
+            if temp_video_path:
+                cleanup_temp_video(temp_video_path)
