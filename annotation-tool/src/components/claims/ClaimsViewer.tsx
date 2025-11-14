@@ -380,7 +380,7 @@ export default function ClaimsViewer({
           .map((g) => g.content)
           .join(' ')
           .toLowerCase()
-        matches = matches && (claimText.includes(searchLower) || claim.text?.toLowerCase().includes(searchLower))
+        matches = claimText.includes(searchLower) || claim.text?.toLowerCase().includes(searchLower)
       }
 
       // Confidence filter

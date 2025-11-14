@@ -75,23 +75,35 @@ const initialState: AnnotationState = {
 // Interpolator instance (shared across all actions)
 const interpolator = new BoundingBoxInterpolator()
 
+/**
+ * Validates that a key is safe to use as an object property.
+ * Prevents prototype pollution by rejecting dangerous property names.
+ */
+function isSafeKey(key: string): boolean {
+  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
+}
+
 const annotationSlice = createSlice({
   name: 'annotations',
   initialState,
   reducers: {
     setAnnotations: (state, action: PayloadAction<{ videoId: string; annotations: Annotation[] }>) => {
-      state.annotations[action.payload.videoId] = action.payload.annotations
+      if (isSafeKey(action.payload.videoId)) {
+        state.annotations[action.payload.videoId] = action.payload.annotations
+      }
     },
     addAnnotation: (state, action: PayloadAction<Annotation>) => {
       const videoId = action.payload.videoId
-      if (!state.annotations[videoId]) {
-        state.annotations[videoId] = []
+      if (isSafeKey(videoId)) {
+        if (!state.annotations[videoId]) {
+          state.annotations[videoId] = []
+        }
+        state.annotations[videoId].push(action.payload)
       }
-      state.annotations[videoId].push(action.payload)
     },
     updateAnnotation: (state, action: PayloadAction<Annotation>) => {
       const videoId = action.payload.videoId
-      if (state.annotations[videoId]) {
+      if (isSafeKey(videoId) && state.annotations[videoId]) {
         const index = state.annotations[videoId].findIndex(a => a.id === action.payload.id)
         if (index !== -1) {
           state.annotations[videoId][index] = action.payload
@@ -100,7 +112,7 @@ const annotationSlice = createSlice({
     },
     deleteAnnotation: (state, action: PayloadAction<{ videoId: string; annotationId: string }>) => {
       const { videoId, annotationId } = action.payload
-      if (state.annotations[videoId]) {
+      if (isSafeKey(videoId) && state.annotations[videoId]) {
         state.annotations[videoId] = state.annotations[videoId].filter(a => a.id !== annotationId)
       }
     },

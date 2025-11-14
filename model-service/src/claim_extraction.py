@@ -75,7 +75,7 @@ async def extract_claims_from_summary(
         stop_sequences=["---END---"],
     )
 
-    logger.info(f"Extracting claims using strategy: {strategy}")
+    logger.info("Extracting claims using strategy: %s", strategy)
     result = await llm_loader.generate(prompt=prompt, generation_config=generation_config)
 
     # Parse response
