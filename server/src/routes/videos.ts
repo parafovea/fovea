@@ -3,7 +3,6 @@ import { Type, Static } from '@sinclair/typebox'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createReadStream } from 'fs'
-import crypto from 'crypto'
 import camelcaseKeys from 'camelcase-keys'
 import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
@@ -18,89 +17,16 @@ const VideoSchema = Type.Object({
   createdAt: Type.String({ format: 'date-time' })
 }, { additionalProperties: true })
 
-// Create a short hash from filename for use as ID
-function createVideoId(filename: string): string {
-  return crypto.createHash('md5').update(filename).digest('hex').slice(0, 16)
-}
-
 /**
  * Videos API routes for listing and streaming video files.
  * Serves videos from the /data directory.
  */
 const videosRoute: FastifyPluginAsync = async (fastify) => {
   const DATA_DIR = process.env.DATA_DIR || '/data'
-  const DATA_URL = process.env.DATA_URL // S3 URL for video files (optional, deprecated)
 
   // Initialize storage provider
   const storageConfig = loadStorageConfig()
   const storageProvider = createVideoStorageProvider(storageConfig)
-
-  // Cache mapping of video IDs to filenames
-  const videoCache = new Map<string, string>()
-
-  // Helper to refresh video cache
-  async function refreshVideoCache() {
-    videoCache.clear()
-
-    if (DATA_URL) {
-      // Fetch video list from S3 manifest
-      try {
-        const manifestUrl = `${DATA_URL}/videos-manifest.json`
-        const response = await fetch(manifestUrl)
-        if (!response.ok) {
-          throw new Error(`Failed to fetch manifest: ${response.statusText}`)
-        }
-        const filenames = await response.json() as string[]
-
-        filenames.forEach(filename => {
-          const id = createVideoId(filename)
-          videoCache.set(id, filename)
-        })
-
-        fastify.log.info({ count: filenames.length }, 'Loaded video list from S3 manifest')
-      } catch (error) {
-        fastify.log.error({ error }, 'Failed to fetch video list from S3')
-      }
-    } else {
-      // Use local filesystem
-      const files = await fs.readdir(DATA_DIR)
-      // Prefer WebM files for better browser compatibility, fallback to MP4
-      const videoFiles = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'))
-      videoFiles.forEach(filename => {
-        const id = createVideoId(filename)
-        videoCache.set(id, filename)
-      })
-    }
-  }
-
-  // Helper to load video metadata from .info.json file
-  async function loadVideoMetadata(filename: string) {
-    const infoFilename = filename.replace('.webm', '.info.json').replace('.mp4', '.info.json')
-
-    try {
-      let infoContent: string
-
-      if (DATA_URL) {
-        // Fetch from S3
-        const infoUrl = `${DATA_URL}/${encodeURIComponent(infoFilename)}`
-        const response = await fetch(infoUrl)
-        if (!response.ok) {
-          throw new Error(`Failed to fetch metadata: ${response.statusText}`)
-        }
-        infoContent = await response.text()
-      } else {
-        // Read from local filesystem
-        const infoPath = path.join(DATA_DIR, infoFilename)
-        infoContent = await fs.readFile(infoPath, 'utf-8')
-      }
-
-      return JSON.parse(infoContent)
-    } catch (error) {
-      // Log error for debugging
-      fastify.log.warn({ filename, error }, 'Failed to load video metadata')
-      return null
-    }
-  }
 
   /**
    * List all available videos.
@@ -217,6 +143,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         {
           added: result.added,
           updated: result.updated,
+          deleted: result.deleted,
           errors: result.errors
         },
         'Manual sync completed'
@@ -225,6 +152,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         added: result.added,
         updated: result.updated,
+        deleted: result.deleted,
         errors: result.errors,
         total: result.total,
       })
@@ -264,86 +192,55 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     try {
       const { videoId } = request.params as { videoId: string }
 
-      if (videoCache.size === 0) {
-        await refreshVideoCache()
-      }
+      // Query video from database (database-first approach)
+      const video = await fastify.prisma.video.findUnique({
+        where: { id: videoId }
+      })
 
-      const filename = videoCache.get(videoId)
-      if (!filename) {
+      if (!video) {
         return reply.code(404).send({ error: 'Video not found' })
       }
 
-      try {
-        const metadata = await loadVideoMetadata(filename)
+      // Type guard to check if metadata is a non-null object
+      const isValidMetadata = (val: unknown): val is Record<string, unknown> => {
+        return val !== null && typeof val === 'object' && !Array.isArray(val)
+      }
 
-        // Use S3 URL if DATA_URL is configured, otherwise use local path
-        const videoPath = DATA_URL
-          ? `${DATA_URL}/${encodeURIComponent(filename)}`
-          : path.join(DATA_DIR, filename)
-
-        // Get file size and creation date
-        let size = 0
-        let createdAt = new Date()
-
-        if (!DATA_URL) {
-          // Only stat file if using local filesystem
-          const stats = await fs.stat(videoPath)
-          size = stats.size
-          createdAt = stats.birthtime
-        } else if (metadata?.filesize) {
-          // Use filesize from metadata if available
+      // Safely extract size from metadata
+      let size = 0
+      const metadata = video.metadata
+      if (isValidMetadata(metadata)) {
+        if (typeof metadata.filesize === 'number') {
           size = metadata.filesize
+        } else if (typeof metadata.size === 'number') {
+          size = metadata.size
         }
-
-        if (metadata?.timestamp) {
-          createdAt = new Date(metadata.timestamp * 1000)
-        }
-
-        // Persist video to database
-        await fastify.prisma.video.upsert({
-          where: { id: videoId },
-          update: {
-            filename,
-            path: videoPath,
-            duration: metadata?.duration || null,
-            frameRate: metadata?.fps || null,
-            resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
-            metadata: metadata || null,
-          },
-          create: {
-            id: videoId,
-            filename,
-            path: videoPath,
-            duration: metadata?.duration || null,
-            frameRate: metadata?.fps || null,
-            resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
-            metadata: metadata || null,
-          },
-        })
-
-        const baseData = {
-          id: videoId,
-          filename,
-          path: videoPath,
-          size,
-          createdAt: createdAt.toISOString()
-        }
-
-        if (metadata) {
-          // Convert metadata from snake_case (yt-dlp format) to camelCase
-          const camelCaseMetadata = camelcaseKeys(metadata, { deep: true })
-          return reply.send({
-            ...baseData,
-            ...camelCaseMetadata,
-            // Override id to use our hash-based ID
-            id: videoId
-          })
-        }
-
-        return reply.send(baseData)
-      } catch (error) {
-        return reply.code(404).send({ error: 'Video not found' })
       }
+
+      const baseData = {
+        id: video.id,
+        filename: video.filename,
+        path: video.path,
+        size,
+        createdAt: video.createdAt.toISOString(),
+        duration: video.duration,
+        frameRate: video.frameRate,
+        resolution: video.resolution,
+      }
+
+      // Merge with metadata JSON if it's a valid object
+      if (isValidMetadata(metadata)) {
+        return reply.send({
+          ...baseData,
+          ...metadata,
+          // Ensure core fields aren't overridden by metadata
+          id: video.id,
+          filename: video.filename,
+          path: video.path,
+        })
+      }
+
+      return reply.send(baseData)
     } catch (error) {
       fastify.log.error(error)
       return reply.code(500).send({ error: 'Failed to get video' })
@@ -711,12 +608,13 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       let modelVideoPath: string
 
       if (storageConfig.type === 'local') {
-        // Model service can access local files directly
+        // Model service can access local files directly via volume mount
         modelVideoPath = video.path.replace(DATA_DIR, '/videos')
       } else {
-        // For S3/hybrid, provide a pre-signed URL or the S3 path
-        // Model service will need to handle S3 downloads
-        modelVideoPath = video.path
+        // For S3/hybrid storage, generate a pre-signed URL for model service to download
+        // URL expires in 15 minutes (900 seconds) - enough time for thumbnail generation
+        modelVideoPath = await storageProvider.getVideoUrl(video.path, 900)
+        fastify.log.debug({ videoId, videoPath: video.path, presignedUrl: modelVideoPath }, 'Generated pre-signed URL for thumbnail generation')
       }
 
       const requestBody = {

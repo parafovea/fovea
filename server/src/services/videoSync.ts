@@ -18,6 +18,7 @@ export interface Logger {
 export interface SyncResult {
   added: number
   updated: number
+  deleted: number
   errors: number
   total: number
 }
@@ -113,8 +114,12 @@ export async function syncVideosFromStorage(
 ): Promise<SyncResult> {
   let added = 0
   let updated = 0
+  let deleted = 0
   let errors = 0
   let totalVideos = 0
+
+  // Track all video IDs that exist in storage
+  const syncedVideoIds = new Set<string>()
 
   try {
     logger.info({ storageType: storageConfig.type }, 'Starting video sync from storage')
@@ -151,6 +156,9 @@ export async function syncVideosFromStorage(
 
           // Generate video ID from filename
           const id = createVideoId(filename)
+
+          // Track this video as synced
+          syncedVideoIds.add(id)
 
           // Load metadata file (.info.json) if it exists
           const metadata = await loadMetadataFile(filename, storageProvider, logger)
@@ -234,9 +242,56 @@ export async function syncVideosFromStorage(
       'Video sync completed'
     )
 
+    // Clean up orphaned videos (videos in database but not in storage)
+    logger.info({ syncedCount: syncedVideoIds.size }, 'Cleaning up orphaned videos')
+
+    try {
+      // Find all videos in database that are NOT in the synced set
+      const allDbVideos = await prisma.video.findMany({
+        select: { id: true }
+      })
+
+      const orphanedIds = allDbVideos
+        .filter(video => !syncedVideoIds.has(video.id))
+        .map(video => video.id)
+
+      if (orphanedIds.length > 0) {
+        // Delete orphaned videos
+        const deleteResult = await prisma.video.deleteMany({
+          where: {
+            id: {
+              in: orphanedIds
+            }
+          }
+        })
+
+        deleted = deleteResult.count
+
+        logger.info(
+          {
+            deleted,
+            orphanedIds: orphanedIds.slice(0, 10) // Log first 10 IDs for debugging
+          },
+          'Deleted orphaned videos'
+        )
+      } else {
+        logger.info({}, 'No orphaned videos found')
+      }
+    } catch (cleanupError) {
+      logger.error(
+        {
+          error: cleanupError,
+          errorMessage: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        },
+        'Failed to clean up orphaned videos'
+      )
+      // Don't throw - cleanup is optional, sync succeeded
+    }
+
     return {
       added,
       updated,
+      deleted,
       errors,
       total: totalVideos,
     }
