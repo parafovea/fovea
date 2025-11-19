@@ -101,9 +101,15 @@ jobs:
 
             echo "🔧 Updating environment..."
             # Environment file is managed on server, not overwritten
-            # Ensure DATA_URL is set for backend S3 video access
-            if ! grep -q "^DATA_URL=" .env; then
-              echo "DATA_URL=https://fovea-demo-data.s3.amazonaws.com" >> .env
+            # Ensure S3 storage is configured for video access
+            if ! grep -q "^VIDEO_STORAGE_TYPE=" .env; then
+              echo "VIDEO_STORAGE_TYPE=s3" >> .env
+            fi
+            if ! grep -q "^S3_BUCKET=" .env; then
+              echo "S3_BUCKET=fovea-demo-data" >> .env
+            fi
+            if ! grep -q "^S3_REGION=" .env; then
+              echo "S3_REGION=us-east-1" >> .env
             fi
 
             echo "🐳 Building and restarting containers..."
@@ -112,6 +118,9 @@ jobs:
 
             echo "🔄 Running database migrations..."
             docker compose exec -T backend npx prisma migrate deploy || exit 1
+
+            echo "📹 Syncing videos from S3 to database..."
+            curl -X POST http://localhost:3001/api/videos/sync || echo "⚠️  Video sync failed, videos may need manual sync"
 
             echo "🧹 Cleaning up old images..."
             docker image prune -f
