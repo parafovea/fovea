@@ -416,7 +416,9 @@ class S3StorageProvider implements VideoStorageProvider {
     this.publicBucket = s3Config.publicBucket || false;
 
     // Determine credential configuration
-    let credentialsConfig: any;
+    let credentialsConfig:
+      | { accessKeyId: string; secretAccessKey: string }
+      | undefined;
 
     if (s3Config.accessKeyId && s3Config.secretAccessKey) {
       // Use provided credentials
