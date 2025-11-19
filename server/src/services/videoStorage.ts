@@ -415,33 +415,20 @@ class S3StorageProvider implements VideoStorageProvider {
     this.bucket = s3Config.bucket;
     this.publicBucket = s3Config.publicBucket || false;
 
-    // Determine credential configuration
-    let credentialsConfig:
-      | { accessKeyId: string; secretAccessKey: string }
-      | undefined;
-
-    if (s3Config.accessKeyId && s3Config.secretAccessKey) {
-      // Use provided credentials
-      credentialsConfig = {
-        accessKeyId: s3Config.accessKeyId,
-        secretAccessKey: s3Config.secretAccessKey,
-      };
-    } else if (this.publicBucket) {
-      // For public buckets without credentials, use anonymous access
-      // This prevents the SDK from attempting to load credentials from environment/IAM
-      credentialsConfig = {
-        accessKeyId: 'ANONYMOUS',
-        secretAccessKey: 'ANONYMOUS',
-      };
-    } else {
-      // Use default credential chain (environment vars, IAM role, etc.)
-      credentialsConfig = undefined;
-    }
-
-    // Initialize S3 client
+    // Initialize S3 client with credentials
+    // Credentials can come from:
+    // 1. Explicitly provided via environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    // 2. IAM role (when running on EC2/ECS)
+    // 3. AWS credentials file
     this.s3Client = new S3Client({
       region: s3Config.region,
-      credentials: credentialsConfig,
+      credentials:
+        s3Config.accessKeyId && s3Config.secretAccessKey
+          ? {
+              accessKeyId: s3Config.accessKeyId,
+              secretAccessKey: s3Config.secretAccessKey,
+            }
+          : undefined, // Use default credential provider chain
       endpoint: s3Config.endpoint, // For S3-compatible services
       forcePathStyle: s3Config.endpoint ? true : undefined, // Required for LocalStack and S3-compatible services
     });
@@ -917,8 +904,8 @@ export function loadStorageConfig(): VideoStorageConfig {
     config.s3 = {
       bucket: process.env.S3_BUCKET || 'test-bucket',
       region: process.env.S3_REGION || 'us-east-1',
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY,
       endpoint: process.env.S3_ENDPOINT,
       publicBucket: process.env.S3_PUBLIC_BUCKET === 'true',
     };

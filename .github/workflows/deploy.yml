@@ -94,52 +94,65 @@ jobs:
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
       - name: Deploy to server
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
 
-            echo "🔧 Updating environment..."
+            echo '🔧 Updating environment...'
             # Environment file is managed on server, not overwritten
             # Ensure S3 storage is configured for video access
-            if ! grep -q "^VIDEO_STORAGE_TYPE=" .env; then
-              echo "VIDEO_STORAGE_TYPE=s3" >> .env
+            if ! grep -q '^VIDEO_STORAGE_TYPE=' .env; then
+              echo 'VIDEO_STORAGE_TYPE=s3' >> .env
             fi
-            if ! grep -q "^S3_BUCKET=" .env; then
-              echo "S3_BUCKET=fovea-demo-data" >> .env
+            if ! grep -q '^S3_BUCKET=' .env; then
+              echo 'S3_BUCKET=fovea-demo-data' >> .env
             fi
-            if ! grep -q "^S3_REGION=" .env; then
-              echo "S3_REGION=us-east-1" >> .env
-            fi
-            if ! grep -q "^S3_PUBLIC_BUCKET=" .env; then
-              echo "S3_PUBLIC_BUCKET=true" >> .env
+            if ! grep -q '^S3_REGION=' .env; then
+              echo 'S3_REGION=us-east-1' >> .env
             fi
 
-            echo "🐳 Building and restarting containers..."
+            # Update AWS credentials from GitHub secrets
+            if grep -q '^AWS_ACCESS_KEY_ID=' .env; then
+              sed -i 's|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID|' .env
+            else
+              echo 'AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID' >> .env
+            fi
+
+            if grep -q '^AWS_SECRET_ACCESS_KEY=' .env; then
+              sed -i 's|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY|' .env
+            else
+              echo 'AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY' >> .env
+            fi
+
+            echo '🐳 Building and restarting containers...'
             docker compose build --parallel
             docker compose up -d
 
-            echo "🔄 Running database migrations..."
+            echo '🔄 Running database migrations...'
             docker compose exec -T backend npx prisma migrate deploy || exit 1
 
-            echo "⏳ Waiting for backend to be healthy..."
+            echo '⏳ Waiting for backend to be healthy...'
             for i in {1..30}; do
               if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
-                echo "✅ Backend is healthy"
+                echo '✅ Backend is healthy'
                 break
               fi
-              echo "Waiting for backend... ($i/30)"
+              echo \"Waiting for backend... (\$i/30)\"
               sleep 2
             done
 
-            echo "📹 Syncing videos from S3 to database..."
-            curl -X POST http://localhost:3001/api/videos/sync || echo "⚠️  Video sync failed, videos may need manual sync"
+            echo '📹 Syncing videos from S3 to database...'
+            curl -X POST http://localhost:3001/api/videos/sync || echo '⚠️  Video sync failed, videos may need manual sync'
 
-            echo "🧹 Cleaning up old images..."
+            echo '🧹 Cleaning up old images...'
             docker image prune -f
 
-            echo "✅ Deployment complete!"
-          EOF
+            echo '✅ Deployment complete!'
+          "
 
       - name: Verify deployment
         run: |
