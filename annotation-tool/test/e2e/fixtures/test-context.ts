@@ -156,8 +156,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   /**
    * Test video fixture.
-   * Fetches the first available webm video from the backend.
-   * Prefers webm format for better browser compatibility in headless tests.
+   * Fetches the first available video from the backend.
+   * Test data only contains webm files for browser compatibility.
    */
   // eslint-disable-next-line no-empty-pattern
   testVideo: async ({}, use) => {
@@ -169,13 +169,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       throw new Error('No videos found in test environment. Ensure test-data directory has videos.')
     }
 
-    // Prefer webm videos for better codec support in headless browsers
-    const webmVideo = videos.find((v: any) => v.filename.endsWith('.webm'))
-    const video = webmVideo || videos[0]
-
-    if (!webmVideo) {
-      console.warn('No webm video found, using first available video. MP4 videos may not play in headless browser.')
-    }
+    // Use first video (all test videos are webm for codec compatibility)
+    const video = videos[0]
 
     await use({
       id: video.id,
