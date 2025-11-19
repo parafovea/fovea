@@ -415,16 +415,31 @@ class S3StorageProvider implements VideoStorageProvider {
     this.bucket = s3Config.bucket;
     this.publicBucket = s3Config.publicBucket || false;
 
+    // Determine credential configuration
+    let credentialsConfig: any;
+
+    if (s3Config.accessKeyId && s3Config.secretAccessKey) {
+      // Use provided credentials
+      credentialsConfig = {
+        accessKeyId: s3Config.accessKeyId,
+        secretAccessKey: s3Config.secretAccessKey,
+      };
+    } else if (this.publicBucket) {
+      // For public buckets without credentials, use anonymous access
+      // This prevents the SDK from attempting to load credentials from environment/IAM
+      credentialsConfig = {
+        accessKeyId: 'ANONYMOUS',
+        secretAccessKey: 'ANONYMOUS',
+      };
+    } else {
+      // Use default credential chain (environment vars, IAM role, etc.)
+      credentialsConfig = undefined;
+    }
+
     // Initialize S3 client
     this.s3Client = new S3Client({
       region: s3Config.region,
-      credentials:
-        s3Config.accessKeyId && s3Config.secretAccessKey
-          ? {
-              accessKeyId: s3Config.accessKeyId,
-              secretAccessKey: s3Config.secretAccessKey,
-            }
-          : undefined, // Use IAM role if credentials not provided
+      credentials: credentialsConfig,
       endpoint: s3Config.endpoint, // For S3-compatible services
       forcePathStyle: s3Config.endpoint ? true : undefined, // Required for LocalStack and S3-compatible services
     });
