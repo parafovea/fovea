@@ -131,25 +131,17 @@ jobs:
             echo '📁 Creating required directories...'
             mkdir -p data/thumbnails
 
-            # Check directory ownership and set permissions appropriately
-            THUMB_OWNER=\\\$(stat -c '%U' data/thumbnails 2>/dev/null)
-            CURRENT_USER=\\\$(whoami)
-
-            echo \"Thumbnails directory owner: \\\$THUMB_OWNER (current user: \\\$CURRENT_USER)\"
-
-            if [ \"\\\$THUMB_OWNER\" = \"\\\$CURRENT_USER\" ]; then
-              chmod 777 data/thumbnails
+            # Try to set permissions, but don't fail if we can't
+            # (directory may be owned by Docker from previous deployment)
+            if chmod 777 data/thumbnails 2>/dev/null; then
               echo 'Set permissions for thumbnails directory'
-            elif [ \"\\\$THUMB_OWNER\" = \"root\" ] && groups | grep -q docker; then
-              # Directory owned by root, but we're in docker group - try sudo chmod
-              sudo chmod 777 data/thumbnails && echo 'Set permissions via sudo' || echo 'Could not set permissions - directory may be Docker-managed'
             else
-              echo \"Skipping chmod - directory owned by \\\$THUMB_OWNER, not \\\$CURRENT_USER\"
-              # Verify the directory is at least readable/writable
-              if [ -r data/thumbnails ] && [ -w data/thumbnails ]; then
-                echo 'Directory has sufficient permissions for current user'
+              echo 'Could not chmod thumbnails directory (likely owned by Docker)'
+              # Verify directory is still writable
+              if [ -w data/thumbnails ]; then
+                echo 'Directory is writable - OK to continue'
               else
-                echo 'WARNING: Directory may not have sufficient permissions'
+                echo 'WARNING: thumbnails directory is not writable'
               fi
             fi
 
