@@ -128,22 +128,38 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
       // Return videos from database
       const videos = dbVideos.map(video => {
+        // Type guard to check if metadata is a non-null object
+        const isValidMetadata = (val: unknown): val is Record<string, unknown> => {
+          return val !== null && typeof val === 'object' && !Array.isArray(val)
+        }
+
+        // Safely extract size from metadata
+        let size = 0
+        const metadata = video.metadata
+        if (isValidMetadata(metadata)) {
+          if (typeof metadata.filesize === 'number') {
+            size = metadata.filesize
+          } else if (typeof metadata.size === 'number') {
+            size = metadata.size
+          }
+        }
+
         const baseData = {
           id: video.id,
           filename: video.filename,
           path: video.path,
-          size: video.size || 0,
+          size,
           createdAt: video.createdAt.toISOString(),
           duration: video.duration,
           frameRate: video.frameRate,
           resolution: video.resolution,
         }
 
-        // Merge with metadata JSON if available
-        if (video.metadata && typeof video.metadata === 'object') {
+        // Merge with metadata JSON if it's a valid object
+        if (isValidMetadata(metadata)) {
           return {
             ...baseData,
-            ...video.metadata,
+            ...metadata,
             // Ensure core fields aren't overridden by metadata
             id: video.id,
             filename: video.filename,
