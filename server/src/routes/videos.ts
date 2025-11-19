@@ -121,80 +121,38 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (_request, reply) => {
     try {
-      await refreshVideoCache()
+      // Query videos from database (database-first approach)
+      const dbVideos = await fastify.prisma.video.findMany({
+        orderBy: { createdAt: 'desc' }
+      })
 
-      const videos = await Promise.all(
-        Array.from(videoCache.entries()).map(async ([id, filename]) => {
-          const metadata = await loadVideoMetadata(filename)
+      // Return videos from database
+      const videos = dbVideos.map(video => {
+        const baseData = {
+          id: video.id,
+          filename: video.filename,
+          path: video.path,
+          size: video.size || 0,
+          createdAt: video.createdAt.toISOString(),
+          duration: video.duration,
+          frameRate: video.frameRate,
+          resolution: video.resolution,
+        }
 
-          fastify.log.info({ filename, hasMetadata: !!metadata }, 'Loading video')
-
-          // Use S3 URL if DATA_URL is configured, otherwise use local path
-          const videoPath = DATA_URL
-            ? `${DATA_URL}/${encodeURIComponent(filename)}`
-            : path.join(DATA_DIR, filename)
-
-          // Get file size and creation date
-          let size = 0
-          let createdAt = new Date()
-
-          if (!DATA_URL) {
-            // Only stat file if using local filesystem
-            const stats = await fs.stat(videoPath)
-            size = stats.size
-            createdAt = stats.birthtime
-          } else if (metadata?.filesize) {
-            // Use filesize from metadata if available
-            size = metadata.filesize
+        // Merge with metadata JSON if available
+        if (video.metadata && typeof video.metadata === 'object') {
+          return {
+            ...baseData,
+            ...video.metadata,
+            // Ensure core fields aren't overridden by metadata
+            id: video.id,
+            filename: video.filename,
+            path: video.path,
           }
+        }
 
-          if (metadata?.timestamp) {
-            createdAt = new Date(metadata.timestamp * 1000)
-          }
-
-          // Persist video to database
-          await fastify.prisma.video.upsert({
-            where: { id },
-            update: {
-              filename,
-              path: videoPath,
-              duration: metadata?.duration || null,
-              frameRate: metadata?.fps || null,
-              resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
-              metadata: metadata || null,
-            },
-            create: {
-              id,
-              filename,
-              path: videoPath,
-              duration: metadata?.duration || null,
-              frameRate: metadata?.fps || null,
-              resolution: metadata?.resolution || metadata?.width && metadata?.height ? `${metadata.width}x${metadata.height}` : null,
-              metadata: metadata || null,
-            },
-          })
-
-          // Merge file stats with info.json metadata if available
-          const baseData = {
-            id,
-            filename,
-            path: videoPath,
-            size,
-            createdAt: createdAt.toISOString()
-          }
-
-          if (metadata) {
-            return {
-              ...baseData,
-              ...metadata,
-              // Override id to use our hash-based ID
-              id
-            }
-          }
-
-          return baseData
-        })
-      )
+        return baseData
+      })
 
       return reply.send(videos)
     } catch (error) {
