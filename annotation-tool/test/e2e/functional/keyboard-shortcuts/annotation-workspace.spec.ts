@@ -189,7 +189,8 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
 
     // Press Space
     await page.keyboard.press('Space')
-    await page.waitForTimeout(300)
+    // Wait for video to actually start playing
+    await annotationWorkspace.video.waitForPlaying()
 
     // Verify video playing
     const nowPaused = await video.evaluate((v: HTMLVideoElement) => v.paused)

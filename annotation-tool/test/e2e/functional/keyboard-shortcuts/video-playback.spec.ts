@@ -32,6 +32,9 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
     // Verify Space doesn't scroll page
     await verifyNoPageScroll(page, 'Space')
 
+    // Wait for video to actually start playing
+    await annotationWorkspace.video.waitForPlaying()
+
     // Verify video is now playing
     const nowPaused = await video.evaluate((v: HTMLVideoElement) => v.paused)
     expect(nowPaused).toBe(false)
@@ -136,8 +139,16 @@ test.describe('Keyboard Shortcuts - Video Playback', () => {
   test('End jumps to end', async ({ page, annotationWorkspace }) => {
     const video = page.locator('video')
 
-    // Get video duration
-    const duration = await video.evaluate((v: HTMLVideoElement) => v.duration)
+    // Wait for video metadata to load before getting duration
+    const duration = await video.evaluate((v: HTMLVideoElement) => {
+      return new Promise<number>((resolve) => {
+        if (!isNaN(v.duration)) {
+          resolve(v.duration)
+        } else {
+          v.addEventListener('loadedmetadata', () => resolve(v.duration), { once: true })
+        }
+      })
+    })
 
     // Press End
     await page.keyboard.press('End')

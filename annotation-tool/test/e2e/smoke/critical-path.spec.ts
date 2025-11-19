@@ -132,7 +132,8 @@ test.describe('Smoke Tests - Critical Path', () => {
 
     // Press Space to play
     await annotationWorkspace.video.togglePlayback()
-    await page.waitForTimeout(300)
+    // Wait for video to actually start playing
+    await annotationWorkspace.video.waitForPlaying()
 
     let paused = await annotationWorkspace.video.isPaused()
     expect(paused).toBe(false)
@@ -201,7 +202,8 @@ test.describe('Smoke Tests - Critical Path', () => {
 
     // Play video
     await annotationWorkspace.video.play()
-    await page.waitForTimeout(500)
+    // Wait for video to actually start playing
+    await annotationWorkspace.video.waitForPlaying()
 
     // Verify playing
     await annotationWorkspace.video.expectPlaying()

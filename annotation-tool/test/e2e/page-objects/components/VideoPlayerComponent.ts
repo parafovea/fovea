@@ -363,6 +363,36 @@ export class VideoPlayerComponent {
   }
 
   /**
+   * Wait for the video to start playing.
+   * Waits for the 'playing' event to fire, indicating playback has actually begun.
+   * This is more reliable than just checking the paused property in automated tests.
+   * @param timeout - Maximum time to wait in milliseconds (default: 5000)
+   */
+  async waitForPlaying(timeout: number = 5000): Promise<void> {
+    await this.videoElement.evaluate((video: HTMLVideoElement, timeoutMs: number) => {
+      return new Promise<void>((resolve, reject) => {
+        // If already playing, resolve immediately
+        if (!video.paused) {
+          resolve()
+          return
+        }
+
+        const timer = setTimeout(() => {
+          video.removeEventListener('playing', onPlaying)
+          reject(new Error(`Video did not start playing within ${timeoutMs}ms`))
+        }, timeoutMs)
+
+        const onPlaying = () => {
+          clearTimeout(timer)
+          resolve()
+        }
+
+        video.addEventListener('playing', onPlaying, { once: true })
+      })
+    }, timeout)
+  }
+
+  /**
    * Assert that the video is playing.
    */
   async expectPlaying(): Promise<void> {

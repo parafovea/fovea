@@ -197,6 +197,11 @@ jobs:
         working-directory: annotation-tool
         run: npx playwright install --with-deps chromium
 
+      - name: Create test-data directories
+        run: |
+          mkdir -p test-data/thumbnails
+          chmod 777 test-data/thumbnails
+
       - name: Start E2E infrastructure
         run: |
           echo "Starting Docker Compose services..."
