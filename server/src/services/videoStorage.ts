@@ -8,6 +8,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readFile } from 'fs/promises';
@@ -94,6 +95,36 @@ export interface VideoStorageProvider {
     contentType: string;
     lastModified?: Date;
   }>;
+
+  /**
+   * List all video files in storage
+   * Supports pagination for large buckets
+   *
+   * @param options - Optional pagination parameters
+   * @returns List of videos with metadata and optional continuation token
+   */
+  listVideos(options?: {
+    maxKeys?: number;
+    continuationToken?: string;
+  }): Promise<{
+    videos: Array<{
+      filename: string;
+      path: string;
+      size: number;
+      lastModified?: Date;
+    }>;
+    continuationToken?: string;
+    isTruncated: boolean;
+  }>;
+
+  /**
+   * Read a text file from storage (e.g., .info.json metadata files)
+   * Returns null if file doesn't exist (graceful degradation)
+   *
+   * @param filePath - Path to text file (relative or absolute depending on storage type)
+   * @returns File contents as string, or null if not found
+   */
+  readTextFile(filePath: string): Promise<string | null>;
 }
 
 export interface VideoStorageConfig {
@@ -285,6 +316,85 @@ class LocalStorageProvider implements VideoStorageProvider {
       contentType,
       lastModified: stats.mtime,
     };
+  }
+
+  async listVideos(options?: {
+    maxKeys?: number;
+    continuationToken?: string;
+  }): Promise<{
+    videos: Array<{
+      filename: string;
+      path: string;
+      size: number;
+      lastModified?: Date;
+    }>;
+    continuationToken?: string;
+    isTruncated: boolean;
+  }> {
+    try {
+      // Read directory contents
+      const files = await fs.readdir(this.basePath);
+
+      // Filter for video files only
+      const videoFiles = files.filter(f => /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(f));
+
+      // Apply pagination if requested
+      const maxKeys = options?.maxKeys || videoFiles.length;
+      const startIndex = options?.continuationToken
+        ? parseInt(options.continuationToken, 10)
+        : 0;
+      const endIndex = Math.min(startIndex + maxKeys, videoFiles.length);
+      const paginatedFiles = videoFiles.slice(startIndex, endIndex);
+
+      // Get file stats for each video
+      const videos = await Promise.all(
+        paginatedFiles.map(async (filename) => {
+          const fullPath = this.getFullPath(filename);
+          const stats = await stat(fullPath);
+
+          return {
+            filename,
+            path: fullPath,
+            size: stats.size,
+            lastModified: stats.mtime,
+          };
+        })
+      );
+
+      // Determine if there are more results
+      const isTruncated = endIndex < videoFiles.length;
+      const continuationToken = isTruncated ? endIndex.toString() : undefined;
+
+      return {
+        videos,
+        continuationToken,
+        isTruncated,
+      };
+    } catch (error) {
+      // If directory doesn't exist or is inaccessible, return empty list
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return {
+          videos: [],
+          isTruncated: false,
+        };
+      }
+      throw error;
+    }
+  }
+
+  async readTextFile(filePath: string): Promise<string | null> {
+    try {
+      const fullPath = this.getFullPath(filePath);
+      const content = await readFile(fullPath, 'utf-8');
+      return content;
+    } catch (error) {
+      // If file doesn't exist, return null (graceful degradation)
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null;
+      }
+      // Re-throw other errors (permission denied, etc.)
+      throw error;
+    }
   }
 }
 
@@ -507,6 +617,95 @@ class S3StorageProvider implements VideoStorageProvider {
       lastModified: response.LastModified,
     };
   }
+
+  async listVideos(options?: {
+    maxKeys?: number;
+    continuationToken?: string;
+  }): Promise<{
+    videos: Array<{
+      filename: string;
+      path: string;
+      size: number;
+      lastModified?: Date;
+    }>;
+    continuationToken?: string;
+    isTruncated: boolean;
+  }> {
+    try {
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        MaxKeys: options?.maxKeys || 1000,
+        ContinuationToken: options?.continuationToken,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      // Filter for video files only
+      const videos = (response.Contents || [])
+        .filter(obj => {
+          if (!obj.Key) return false;
+          return /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(obj.Key);
+        })
+        .map(obj => ({
+          filename: path.basename(obj.Key!),
+          path: obj.Key!,
+          size: obj.Size || 0,
+          lastModified: obj.LastModified,
+        }));
+
+      return {
+        videos,
+        continuationToken: response.NextContinuationToken,
+        isTruncated: response.IsTruncated || false,
+      };
+    } catch (error) {
+      // If bucket doesn't exist or is inaccessible, return empty list
+      if (error && typeof error === 'object' && 'name' in error) {
+        if (error.name === 'NoSuchBucket' || error.name === 'AccessDenied') {
+          return {
+            videos: [],
+            isTruncated: false,
+          };
+        }
+      }
+      throw error;
+    }
+  }
+
+  async readTextFile(filePath: string): Promise<string | null> {
+    try {
+      const key = this.getS3Key(filePath);
+
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      if (!response.Body) {
+        return null;
+      }
+
+      // Convert stream to string
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+
+      return Buffer.concat(chunks).toString('utf-8');
+    } catch (error) {
+      // If file doesn't exist, return null (graceful degradation)
+      if (error && typeof error === 'object' && 'name' in error) {
+        if (error.name === 'NoSuchKey') {
+          return null;
+        }
+      }
+      throw error;
+    }
+  }
 }
 
 /**
@@ -650,6 +849,28 @@ class HybridStorageProvider implements VideoStorageProvider {
     return this.tryBothProviders((provider) =>
       provider.getMetadata(videoPath)
     );
+  }
+
+  async listVideos(options?: {
+    maxKeys?: number;
+    continuationToken?: string;
+  }): Promise<{
+    videos: Array<{
+      filename: string;
+      path: string;
+      size: number;
+      lastModified?: Date;
+    }>;
+    continuationToken?: string;
+    isTruncated: boolean;
+  }> {
+    // Try primary storage first, fallback to secondary
+    return this.tryBothProviders((provider) => provider.listVideos(options));
+  }
+
+  async readTextFile(filePath: string): Promise<string | null> {
+    // Try primary storage first, fallback to secondary
+    return this.tryBothProviders((provider) => provider.readTextFile(filePath));
   }
 }
 

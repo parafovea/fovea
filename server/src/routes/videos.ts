@@ -8,6 +8,7 @@ import camelcaseKeys from 'camelcase-keys'
 import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
 import { createVideoStorageProvider, loadStorageConfig } from '../services/videoStorage.js'
+import { syncVideosFromStorage } from '../services/videoSync.js'
 
 const VideoSchema = Type.Object({
   id: Type.String(),
@@ -199,6 +200,65 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       fastify.log.error(error)
       return reply.code(500).send({ error: 'Failed to list videos' })
+    }
+  })
+
+  /**
+   * Sync videos from storage to database.
+   * Scans the storage provider, loads metadata, and upserts videos into database.
+   * Admin-only endpoint for manual sync in production.
+   *
+   * @route POST /api/videos/sync
+   * @returns Sync statistics
+   */
+  fastify.post('/api/videos/sync', {
+    schema: {
+      description: 'Sync videos from storage to database (admin only)',
+      tags: ['videos'],
+      response: {
+        200: Type.Object({
+          added: Type.Number(),
+          updated: Type.Number(),
+          errors: Type.Number(),
+          total: Type.Number(),
+        }),
+        500: Type.Object({
+          error: Type.String()
+        })
+      }
+    }
+  }, async (_request, reply) => {
+    try {
+      fastify.log.info('Manual video sync requested')
+
+      // Use the storage-aware sync function
+      const result = await syncVideosFromStorage(
+        fastify.prisma,
+        fastify.log,
+        storageProvider,
+        { type: storageConfig.type, localPath: storageConfig.localPath }
+      )
+
+      fastify.log.info(
+        {
+          added: result.added,
+          updated: result.updated,
+          errors: result.errors
+        },
+        'Manual sync completed'
+      )
+
+      return reply.send({
+        added: result.added,
+        updated: result.updated,
+        errors: result.errors,
+        total: result.total,
+      })
+    } catch (error) {
+      fastify.log.error({ error }, 'Video sync failed')
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'Failed to sync videos'
+      })
     }
   })
 
