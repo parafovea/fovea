@@ -122,6 +122,16 @@ jobs:
             echo "🔄 Running database migrations..."
             docker compose exec -T backend npx prisma migrate deploy || exit 1
 
+            echo "⏳ Waiting for backend to be healthy..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+                echo "✅ Backend is healthy"
+                break
+              fi
+              echo "Waiting for backend... ($i/30)"
+              sleep 2
+            done
+
             echo "📹 Syncing videos from S3 to database..."
             curl -X POST http://localhost:3001/api/videos/sync || echo "⚠️  Video sync failed, videos may need manual sync"
 
