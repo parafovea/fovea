@@ -127,7 +127,7 @@ jobs:
 
             echo '🐳 Building and restarting containers...'
             docker compose build --parallel
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             echo '🔄 Running database migrations...'
             docker compose exec -T backend npx prisma migrate deploy || exit 1
