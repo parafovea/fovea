@@ -10,7 +10,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
   test('annotation auto-saves and persists after page reload', async ({
     page,
     annotationWorkspace,
-    testVideo
+    testVideo,
+    testPersona,
+    testEntityType
   }) => {
     // Navigate to video annotation workspace
     await page.goto(`/annotate/${testVideo.id}`)
@@ -38,7 +40,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
   test('annotation updates auto-save and persist', async ({
     page,
     annotationWorkspace,
-    testVideo
+    testVideo,
+    testPersona,
+    testEntityType
   }) => {
     // Navigate and create initial annotation
     await page.goto(`/annotate/${testVideo.id}`)
@@ -71,7 +75,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
   test('multiple rapid annotations all auto-save correctly', async ({
     page,
     annotationWorkspace,
-    testVideo
+    testVideo,
+    testPersona,
+    testEntityType
   }) => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
