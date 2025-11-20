@@ -47,6 +47,7 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
+import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import './AnnotationWorkspace.css'
 import { RootState, AppDispatch } from '../store/store'
@@ -104,7 +105,7 @@ export default function AnnotationWorkspace() {
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cudaAvailable
   const videoRef = useRef<HTMLVideoElement>(null)
-  const playerRef = useRef<videojs.Player | null>(null)
+  const playerRef = useRef<Player | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -333,24 +334,32 @@ export default function AnnotationWorkspace() {
       }
     },
     'video.nextFrame': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+      const current = player.currentTime() ?? 0
+      player.currentTime(current + 1/fps)
     },
     'video.previousFrame': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+      const current = player.currentTime() ?? 0
+      player.currentTime(Math.max(0, current - 1/fps))
     },
     'video.nextFrame10': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(playerRef.current.currentTime() + 10/fps)
+      const current = player.currentTime() ?? 0
+      player.currentTime(current + 10/fps)
     },
     'video.previousFrame10': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 10/fps))
+      const current = player.currentTime() ?? 0
+      player.currentTime(Math.max(0, current - 10/fps))
     },
     'video.jumpToStart': () => {
       if (!playerRef.current) return
@@ -536,9 +545,11 @@ export default function AnnotationWorkspace() {
    * ```
    */
   const handleNextFrame = () => {
-    if (!playerRef.current) return
+    const player = playerRef.current
+    if (!player) return
     const fps = currentVideo?.fps || 30
-    playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+    const current = player.currentTime() ?? 0
+    player.currentTime(current + 1/fps)
   }
 
   /**
@@ -553,9 +564,11 @@ export default function AnnotationWorkspace() {
    * ```
    */
   const handlePrevFrame = () => {
-    if (!playerRef.current) return
+    const player = playerRef.current
+    if (!player) return
     const fps = currentVideo?.fps || 30
-    playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+    const current = player.currentTime() ?? 0
+    player.currentTime(Math.max(0, current - 1/fps))
   }
 
   /**
@@ -576,7 +589,7 @@ export default function AnnotationWorkspace() {
     dispatch(selectAnnotation(annotation))
 
     // Seek video to start of annotation
-    if (playerRef.current) {
+    if (playerRef.current && annotation.timeSpan) {
       playerRef.current.currentTime(annotation.timeSpan.startTime)
     }
   }
