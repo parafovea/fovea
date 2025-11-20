@@ -15,6 +15,11 @@ import {
   TypeAnnotation,
 } from '../models/types'
 
+/**
+ * Type guard functions use `any` for runtime type checking.
+ * This is intentional as these functions validate unknown values at runtime.
+ */
+
 // Time type guards
 export function isTime(obj: any): obj is Time {
   return (
