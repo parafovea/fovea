@@ -11,7 +11,7 @@
  * - Annotation deletions persist correctly
  */
 
-import { test, expect } from '../../fixtures/multivent-fixtures'
+import { test, expect } from '../../fixtures/test-context.js'
 import { AnnotationWorkspacePage } from '../../page-objects/AnnotationWorkspacePage'
 
 test.describe('Annotation Persistence', () => {

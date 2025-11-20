@@ -14,7 +14,7 @@
  * to ensure the existing functionality continues to work correctly.
  */
 
-import { test, expect } from '../../fixtures/multivent-fixtures'
+import { test, expect } from '../../fixtures/test-context.js'
 
 test.describe('World Object Persistence', () => {
   test('new entity persists after page reload', async ({ page }) => {

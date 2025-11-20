@@ -13,7 +13,7 @@
  * - Type deletions persist correctly
  */
 
-import { test, expect } from '../../fixtures/multivent-fixtures'
+import { test, expect } from '../../fixtures/test-context.js'
 
 test.describe('Ontology Type Persistence', () => {
   test('new entity type persists after page reload', async ({ page, testPersona }) => {
