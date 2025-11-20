@@ -11,6 +11,7 @@ import Settings from './pages/Settings'
 import LoginPage from './components/auth/LoginPage.js'
 import RegisterPage from './components/auth/RegisterPage.js'
 import AdminPanel from './components/admin/AdminPanel.js'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppDispatch, RootState } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { setWorldData } from './store/worldSlice'
@@ -153,7 +154,7 @@ function App() {
   }, [loadOntology])
 
   return (
-    <>
+    <ErrorBoundary context={{ component: 'App' }}>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -169,15 +170,43 @@ function App() {
           }
         >
           <Route index element={<VideoBrowser />} />
-          <Route path="annotate/:videoId" element={<AnnotationWorkspace />} />
-          <Route path="ontology" element={<OntologyWorkspace />} />
-          <Route path="objects" element={<ObjectWorkspace />} />
+          <Route
+            path="annotate/:videoId"
+            element={
+              <ErrorBoundary context={{ route: 'AnnotationWorkspace' }}>
+                <AnnotationWorkspace />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="ontology"
+            element={
+              <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
+                <OntologyWorkspace />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="objects"
+            element={
+              <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
+                <ObjectWorkspace />
+              </ErrorBoundary>
+            }
+          />
           <Route path="settings" element={<Settings />} />
-          <Route path="admin" element={<AdminPanel />} />
+          <Route
+            path="admin"
+            element={
+              <ErrorBoundary context={{ route: 'AdminPanel' }}>
+                <AdminPanel />
+              </ErrorBoundary>
+            }
+          />
         </Route>
       </Routes>
       <CommandPalette />
-    </>
+    </ErrorBoundary>
   )
 }
 
