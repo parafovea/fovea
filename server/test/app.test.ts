@@ -98,4 +98,21 @@ describe('Fastify App', () => {
       expect(response.headers['access-control-allow-origin']).toBeDefined()
     })
   })
+
+  describe('Global Error Handler', () => {
+    it('should handle NotFoundError from real route', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/videos/nonexistent-video-id'
+      })
+
+      expect(response.statusCode).toBe(404)
+
+      const body = JSON.parse(response.body)
+      expect(body.error).toBe('NOT_FOUND')
+      expect(body.message).toContain('Video')
+      expect(body.message).toContain('nonexistent-video-id')
+      expect(body).not.toHaveProperty('stack')
+    })
+  })
 })
