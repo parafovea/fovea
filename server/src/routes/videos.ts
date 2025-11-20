@@ -8,6 +8,7 @@ import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/queryBuilder.js'
 import { createVideoStorageProvider, loadStorageConfig } from '../services/videoStorage.js'
 import { syncVideosFromStorage } from '../services/videoSync.js'
+import { NotFoundError } from '../lib/errors.js'
 
 const VideoSchema = Type.Object({
   id: Type.String(),
@@ -170,6 +171,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
    * @route GET /api/videos/:videoId
    * @param videoId - MD5 hash of filename
    * @returns Video metadata object
+   * @throws NotFoundError if video does not exist
    */
   fastify.get('/api/videos/:videoId', {
     schema: {
@@ -181,70 +183,67 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       response: {
         200: VideoSchema,
         404: Type.Object({
-          error: Type.String()
+          error: Type.String(),
+          message: Type.String()
         }),
         500: Type.Object({
-          error: Type.String()
+          error: Type.String(),
+          message: Type.String()
         })
       }
     }
   }, async (request, reply) => {
-    try {
-      const { videoId } = request.params as { videoId: string }
+    const { videoId } = request.params as { videoId: string }
 
-      // Query video from database (database-first approach)
-      const video = await fastify.prisma.video.findUnique({
-        where: { id: videoId }
-      })
+    // Query video from database (database-first approach)
+    const video = await fastify.prisma.video.findUnique({
+      where: { id: videoId }
+    })
 
-      if (!video) {
-        return reply.code(404).send({ error: 'Video not found' })
+    if (!video) {
+      throw new NotFoundError('Video', videoId)
+    }
+
+    // Type guard to check if metadata is a non-null object
+    const isValidMetadata = (val: unknown): val is Record<string, unknown> => {
+      return val !== null && typeof val === 'object' && !Array.isArray(val)
+    }
+
+    // Safely extract size from metadata
+    let size = 0
+    const metadata = video.metadata
+    if (isValidMetadata(metadata)) {
+      if (typeof metadata.filesize === 'number') {
+        size = metadata.filesize
+      } else if (typeof metadata.size === 'number') {
+        size = metadata.size
       }
+    }
 
-      // Type guard to check if metadata is a non-null object
-      const isValidMetadata = (val: unknown): val is Record<string, unknown> => {
-        return val !== null && typeof val === 'object' && !Array.isArray(val)
-      }
+    const baseData = {
+      id: video.id,
+      filename: video.filename,
+      path: video.path,
+      size,
+      createdAt: video.createdAt.toISOString(),
+      duration: video.duration,
+      frameRate: video.frameRate,
+      resolution: video.resolution,
+    }
 
-      // Safely extract size from metadata
-      let size = 0
-      const metadata = video.metadata
-      if (isValidMetadata(metadata)) {
-        if (typeof metadata.filesize === 'number') {
-          size = metadata.filesize
-        } else if (typeof metadata.size === 'number') {
-          size = metadata.size
-        }
-      }
-
-      const baseData = {
+    // Merge with metadata JSON if it's a valid object
+    if (isValidMetadata(metadata)) {
+      return reply.send({
+        ...baseData,
+        ...metadata,
+        // Ensure core fields aren't overridden by metadata
         id: video.id,
         filename: video.filename,
         path: video.path,
-        size,
-        createdAt: video.createdAt.toISOString(),
-        duration: video.duration,
-        frameRate: video.frameRate,
-        resolution: video.resolution,
-      }
-
-      // Merge with metadata JSON if it's a valid object
-      if (isValidMetadata(metadata)) {
-        return reply.send({
-          ...baseData,
-          ...metadata,
-          // Ensure core fields aren't overridden by metadata
-          id: video.id,
-          filename: video.filename,
-          path: video.path,
-        })
-      }
-
-      return reply.send(baseData)
-    } catch (error) {
-      fastify.log.error(error)
-      return reply.code(500).send({ error: 'Failed to get video' })
+      })
     }
+
+    return reply.send(baseData)
   })
 
   /**
