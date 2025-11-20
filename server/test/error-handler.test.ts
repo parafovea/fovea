@@ -219,9 +219,9 @@ describe('Global Error Handler Integration', () => {
 
     it('should handle TypeError from application code', async () => {
       app.get('/test/type-error', async () => {
-        // Simulate a TypeError (accessing property on null)
-        const obj: any = null
-        obj.property.access
+        // Simulate a TypeError by calling non-function
+        const notAFunction = {} as unknown as (() => void)
+        notAFunction()
       })
 
       const response = await app.inject({
