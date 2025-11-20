@@ -47,7 +47,7 @@ export function glossToText(
             case 'event-object':
               obj = worldData.events.find((e) => e.id === item.content)
               break
-            case 'time-object':
+            case 'time-object': {
               const timeObj = worldData.times.find((t) => t.id === item.content)
               if (timeObj) {
                 obj = {
@@ -55,6 +55,7 @@ export function glossToText(
                 }
               }
               break
+            }
           }
         }
         return obj ? obj.name : item.content
