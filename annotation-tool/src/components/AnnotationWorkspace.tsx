@@ -47,6 +47,7 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material'
 import videojs from 'video.js'
+import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import './AnnotationWorkspace.css'
 import { RootState, AppDispatch } from '../store/store'
@@ -77,7 +78,7 @@ import { DetectionDialog } from './dialogs/DetectionDialog'
 import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
-import { VideoMetadata } from '../models/types'
+import { VideoMetadata, Annotation, TypeAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
@@ -104,14 +105,14 @@ export default function AnnotationWorkspace() {
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cudaAvailable
   const videoRef = useRef<HTMLVideoElement>(null)
-  const playerRef = useRef<any>(null)
+  const playerRef = useRef<Player | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [totalFrames, setTotalFrames] = useState(0)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [editingAnnotation, setEditingAnnotation] = useState<any>(null)
+  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
   const [timelineExpanded, setTimelineExpanded] = useState(false)
@@ -144,7 +145,7 @@ export default function AnnotationWorkspace() {
       return videoAnnotations.filter(a => {
         // Only TypeAnnotations have personaId
         if (a.annotationType === 'type') {
-          return (a as any).personaId === selectedPersonaId
+          return (a as TypeAnnotation).personaId === selectedPersonaId
         }
         // Object annotations are not filtered by persona
         return true
@@ -263,7 +264,7 @@ export default function AnnotationWorkspace() {
   }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
 
   const handleUpdateInterpolationSegment = useCallback(
-    (segmentIndex: number, type: any, controlPoints?: any) => {
+    (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
       dispatch(updateInterpolationSegment({
@@ -333,24 +334,32 @@ export default function AnnotationWorkspace() {
       }
     },
     'video.nextFrame': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+      const current = player.currentTime() ?? 0
+      player.currentTime(current + 1/fps)
     },
     'video.previousFrame': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+      const current = player.currentTime() ?? 0
+      player.currentTime(Math.max(0, current - 1/fps))
     },
     'video.nextFrame10': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(playerRef.current.currentTime() + 10/fps)
+      const current = player.currentTime() ?? 0
+      player.currentTime(current + 10/fps)
     },
     'video.previousFrame10': () => {
-      if (!playerRef.current) return
+      const player = playerRef.current
+      if (!player) return
       const fps = currentVideo?.fps || 30
-      playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 10/fps))
+      const current = player.currentTime() ?? 0
+      player.currentTime(Math.max(0, current - 10/fps))
     },
     'video.jumpToStart': () => {
       if (!playerRef.current) return
@@ -536,9 +545,11 @@ export default function AnnotationWorkspace() {
    * ```
    */
   const handleNextFrame = () => {
-    if (!playerRef.current) return
+    const player = playerRef.current
+    if (!player) return
     const fps = currentVideo?.fps || 30
-    playerRef.current.currentTime(playerRef.current.currentTime() + 1/fps)
+    const current = player.currentTime() ?? 0
+    player.currentTime(current + 1/fps)
   }
 
   /**
@@ -553,9 +564,11 @@ export default function AnnotationWorkspace() {
    * ```
    */
   const handlePrevFrame = () => {
-    if (!playerRef.current) return
+    const player = playerRef.current
+    if (!player) return
     const fps = currentVideo?.fps || 30
-    playerRef.current.currentTime(Math.max(0, playerRef.current.currentTime() - 1/fps))
+    const current = player.currentTime() ?? 0
+    player.currentTime(Math.max(0, current - 1/fps))
   }
 
   /**
@@ -571,12 +584,12 @@ export default function AnnotationWorkspace() {
    * </ListItem>
    * ```
    */
-  const handleAnnotationClick = (annotation: any) => {
+  const handleAnnotationClick = (annotation: Annotation) => {
     // Select the annotation
     dispatch(selectAnnotation(annotation))
 
     // Seek video to start of annotation
-    if (playerRef.current) {
+    if (playerRef.current && annotation.timeSpan) {
       playerRef.current.currentTime(annotation.timeSpan.startTime)
     }
   }
@@ -702,8 +715,8 @@ export default function AnnotationWorkspace() {
    * <ListItem sx={{ borderLeft: isAnnotationActive(annotation) ? '3px solid' : 'none' }}>
    * ```
    */
-  const isAnnotationActive = (annotation: any) =>
-    annotation.timeSpan.startTime <= currentTime && annotation.timeSpan.endTime >= currentTime
+  const isAnnotationActive = (annotation: Annotation) =>
+    annotation.timeSpan && annotation.timeSpan.startTime <= currentTime && annotation.timeSpan.endTime >= currentTime
 
   return (
     <Box sx={{ display: 'flex', height: '100%' }}>

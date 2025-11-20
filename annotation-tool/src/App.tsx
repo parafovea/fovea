@@ -2,7 +2,6 @@ import { useEffect, useCallback } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { Box, CircularProgress, Typography } from '@mui/material'
-import { generateId } from './utils/uuid'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
 import AnnotationWorkspace from './components/AnnotationWorkspace'
@@ -119,67 +118,16 @@ function App() {
     try {
       const ontology = await api.getOntology()
 
-      // Convert old format to new multi-persona format if needed
       if (ontology) {
-        if (ontology.personas && ontology.personaOntologies) {
-          // New format
-          dispatch(setPersonas(ontology.personas))
-          dispatch(setPersonaOntologies(ontology.personaOntologies))
+        dispatch(setPersonas(ontology.personas))
+        dispatch(setPersonaOntologies(ontology.personaOntologies))
 
-          // Load world state if it exists
-          if (ontology.world) {
-            dispatch(setWorldData(ontology.world))
-          }
+        if (ontology.world) {
+          dispatch(setWorldData(ontology.world))
+        }
 
-          if (ontology.personas.length > 0) {
-            dispatch(setActivePersona(ontology.personas[0].id))
-          }
-        } else if ((ontology as any).persona) {
-          // Old format - convert to new
-          const oldOntology = ontology as any
-          const persona = {
-            ...oldOntology.persona,
-            name: oldOntology.persona.role,
-          }
-          const personaOntology = {
-            id: generateId(),
-            personaId: persona.id,
-            entities: oldOntology.entities || [],
-            roles: oldOntology.roles || [],
-            events: oldOntology.events || [],
-            relationTypes: [],
-            relations: [],
-            createdAt: ontology.createdAt,
-            updatedAt: ontology.updatedAt,
-          }
-          dispatch(setPersonas([persona]))
-          dispatch(setPersonaOntologies([personaOntology]))
-          dispatch(setActivePersona(persona.id))
-        } else {
-          // Create default persona
-          const defaultPersona = {
-            id: generateId(),
-            name: 'Default Persona',
-            role: 'Analyst',
-            informationNeed: 'General information extraction',
-            details: '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }
-          const defaultOntology = {
-            id: generateId(),
-            personaId: defaultPersona.id,
-            entities: [],
-            roles: [],
-            events: [],
-            relationTypes: [],
-            relations: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }
-          dispatch(setPersonas([defaultPersona]))
-          dispatch(setPersonaOntologies([defaultOntology]))
-          dispatch(setActivePersona(defaultPersona.id))
+        if (ontology.personas.length > 0) {
+          dispatch(setActivePersona(ontology.personas[0].id))
         }
       }
     } catch (error) {
