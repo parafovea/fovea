@@ -12,6 +12,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
+import { AppError } from './lib/errors.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -156,6 +157,34 @@ export async function buildApp() {
     instance.log.info('Queue connections closed')
     await instance.prisma.$disconnect()
     instance.log.info('Prisma client disconnected')
+  })
+
+  /**
+   * Global error handler.
+   * Catches all errors thrown in route handlers and converts them to appropriate HTTP responses.
+   * - AppError instances: Returns structured error response with status code
+   * - Unknown errors: Logs full error and returns safe generic 500 response
+   */
+  app.setErrorHandler((error, request, reply) => {
+    // Handle known AppError instances
+    if (error instanceof AppError) {
+      return reply.code(error.statusCode).send(error.toJSON())
+    }
+
+    // Log unexpected errors with full context
+    request.log.error({
+      err: error,
+      url: request.url,
+      method: request.method,
+      params: request.params,
+      query: request.query
+    }, 'Unexpected error occurred')
+
+    // Return safe generic error response (don't leak implementation details)
+    return reply.code(500).send({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred'
+    })
   })
 
   /**
