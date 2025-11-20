@@ -10,7 +10,7 @@ import { GlossItem, PersonaOntology, WorldStateData, TimeInstant } from '../mode
 export function glossToText(
   gloss: GlossItem[],
   activeOntology?: PersonaOntology,
-  worldData?: WorldStateData
+  worldData?: Pick<WorldStateData, 'entities' | 'events' | 'times'>
 ): string {
   return gloss
     .map((item) => {
