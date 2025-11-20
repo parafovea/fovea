@@ -46,10 +46,8 @@ import {
   Search as DetectIcon,
   Save as SaveIcon,
 } from '@mui/icons-material'
-import videojs from 'video.js'
-import type Player from 'video.js/dist/types/player'
-import 'video.js/dist/video-js.css'
 import './AnnotationWorkspace.css'
+import { VideoPlayer, VideoPlayerHandle } from './annotation/VideoPlayer'
 import { RootState, AppDispatch } from '../store/store'
 import { setCurrentVideo, setLastAnnotation } from '../store/videoSlice'
 import {
@@ -104,13 +102,10 @@ export default function AnnotationWorkspace() {
   const dispatch = useDispatch<AppDispatch>()
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cudaAvailable
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const playerRef = useRef<Player | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const videoPlayerRef = useRef<VideoPlayerHandle>(null)
   const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
-  const [totalFrames, setTotalFrames] = useState(0)
+  const [duration, setDuration] = useState(0)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
@@ -326,48 +321,25 @@ export default function AnnotationWorkspace() {
       setTimelineExpanded(prev => !prev)
     },
     'video.playPause': () => {
-      if (!playerRef.current) return
-      if (isPlaying) {
-        playerRef.current.pause()
-      } else {
-        playerRef.current.play()
-      }
+      videoPlayerRef.current?.handlePlayPause()
     },
     'video.nextFrame': () => {
-      const player = playerRef.current
-      if (!player) return
-      const fps = currentVideo?.fps || 30
-      const current = player.currentTime() ?? 0
-      player.currentTime(current + 1/fps)
+      videoPlayerRef.current?.handleNextFrame()
     },
     'video.previousFrame': () => {
-      const player = playerRef.current
-      if (!player) return
-      const fps = currentVideo?.fps || 30
-      const current = player.currentTime() ?? 0
-      player.currentTime(Math.max(0, current - 1/fps))
+      videoPlayerRef.current?.handlePrevFrame()
     },
     'video.nextFrame10': () => {
-      const player = playerRef.current
-      if (!player) return
-      const fps = currentVideo?.fps || 30
-      const current = player.currentTime() ?? 0
-      player.currentTime(current + 10/fps)
+      videoPlayerRef.current?.handleNextFrame10()
     },
     'video.previousFrame10': () => {
-      const player = playerRef.current
-      if (!player) return
-      const fps = currentVideo?.fps || 30
-      const current = player.currentTime() ?? 0
-      player.currentTime(Math.max(0, current - 10/fps))
+      videoPlayerRef.current?.handlePrevFrame10()
     },
     'video.jumpToStart': () => {
-      if (!playerRef.current) return
-      playerRef.current.currentTime(0)
+      videoPlayerRef.current?.handleJumpToStart()
     },
     'video.jumpToEnd': () => {
-      if (!playerRef.current) return
-      playerRef.current.currentTime(duration)
+      videoPlayerRef.current?.handleJumpToEnd()
     },
     'annotation.addKeyframe': () => {
       handleAddKeyframe()
@@ -384,70 +356,6 @@ export default function AnnotationWorkspace() {
     enableOnFormTags: false
   })
 
-  useEffect(() => {
-    if (!videoRef.current || !videoId || !currentVideo?.path) return
-
-    // Clean up any existing player
-    if (playerRef.current) {
-      playerRef.current.dispose()
-      playerRef.current = null
-    }
-
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(() => {
-      if (!videoRef.current || !currentVideo?.path) return
-
-      // Initialize video.js player with video source
-      // Always use backend streaming endpoint (supports local, S3, and hybrid storage)
-      const videoSrc = `/api/videos/${videoId}/stream`
-
-      const player = videojs(videoRef.current, {
-        controls: false,
-        autoplay: false,
-        preload: 'auto',
-        fluid: false,
-        fill: true,
-        sources: [{
-          src: videoSrc,
-          type: 'video/mp4'
-        }]
-      })
-
-      playerRef.current = player
-
-      player.ready(() => {
-        // Ensure the video element is visible
-        const videoEl = player.el().querySelector('video')
-        if (videoEl) {
-          videoEl.style.display = 'block'
-          videoEl.style.visibility = 'visible'
-        }
-      })
-
-      player.on('loadedmetadata', () => {
-        setDuration(player.duration() ?? 0)
-      })
-
-      player.on('timeupdate', () => {
-        setCurrentTime(player.currentTime() ?? 0)
-      })
-
-      player.on('play', () => setIsPlaying(true))
-      player.on('pause', () => setIsPlaying(false))
-
-      player.on('error', () => {
-        console.error('Video player error:', player.error())
-      })
-    }, 100)
-
-    return () => {
-      clearTimeout(timer)
-      if (playerRef.current) {
-        playerRef.current.dispose()
-        playerRef.current = null
-      }
-    }
-  }, [videoId, currentVideo])
 
   /**
    * Loads video metadata from the API and stores it in Redux state.
@@ -477,141 +385,26 @@ export default function AnnotationWorkspace() {
     loadVideo()
   }, [loadVideo])
 
-  // Calculate total frames when duration and fps are available
-  useEffect(() => {
-    if (duration) {
-      // Default to 30 FPS if not provided in metadata
-      const fps = currentVideo?.fps || 30
-      const frames = Math.floor(duration * fps)
-      setTotalFrames(frames)
-    }
-  }, [duration, currentVideo?.fps])
-
-  // Sync currentFrame with video currentTime
-  useEffect(() => {
-    // Default to 30 FPS if not provided in metadata
-    const fps = currentVideo?.fps || 30
-    const frame = Math.floor(currentTime * fps)
-    setCurrentFrame(frame)
-  }, [currentTime, currentVideo?.fps])
-
-  /**
-   * Toggles video playback between play and pause states.
-   * Updates the isPlaying state through video.js event listeners.
-   *
-   * @example
-   * ```tsx
-   * <IconButton onClick={handlePlayPause}>
-   *   {isPlaying ? <PauseIcon /> : <PlayIcon />}
-   * </IconButton>
-   * ```
-   */
-  const handlePlayPause = () => {
-    if (!playerRef.current) return
-    if (isPlaying) {
-      playerRef.current.pause()
-    } else {
-      playerRef.current.play()
-    }
-  }
-
-  /**
-   * Seeks video to a specific time position.
-   * Called by the timeline slider component when user drags the playhead.
-   *
-   * @param _event - Material-UI slider event (unused)
-   * @param value - Target time in seconds (array or number from slider)
-   *
-   * @example
-   * ```tsx
-   * <Slider value={currentTime} max={duration} onChange={handleSeek} />
-   * ```
-   */
-  const handleSeek = (_event: Event, value: number | number[]) => {
-    if (!playerRef.current) return
-    const time = Array.isArray(value) ? value[0] : value
-    playerRef.current.currentTime(time)
-  }
-
-  /**
-   * Advances video by one frame based on video FPS.
-   * Uses video FPS metadata or defaults to 30 FPS if unavailable.
-   *
-   * @example
-   * ```tsx
-   * <IconButton onClick={handleNextFrame}>
-   *   <NextFrameIcon />
-   * </IconButton>
-   * ```
-   */
-  const handleNextFrame = () => {
-    const player = playerRef.current
-    if (!player) return
-    const fps = currentVideo?.fps || 30
-    const current = player.currentTime() ?? 0
-    player.currentTime(current + 1/fps)
-  }
-
-  /**
-   * Rewinds video by one frame based on video FPS.
-   * Clamps minimum time to 0 to prevent negative values.
-   *
-   * @example
-   * ```tsx
-   * <IconButton onClick={handlePrevFrame}>
-   *   <PrevFrameIcon />
-   * </IconButton>
-   * ```
-   */
-  const handlePrevFrame = () => {
-    const player = playerRef.current
-    if (!player) return
-    const fps = currentVideo?.fps || 30
-    const current = player.currentTime() ?? 0
-    player.currentTime(Math.max(0, current - 1/fps))
-  }
 
   /**
    * Selects an annotation and seeks video to its start time.
    * Highlights the annotation in the sidebar and moves playhead to annotation start.
-   *
-   * @param annotation - Annotation object containing timeSpan with startTime
-   *
-   * @example
-   * ```tsx
-   * <ListItem onClick={() => handleAnnotationClick(annotation)}>
-   *   {annotation.typeId}
-   * </ListItem>
-   * ```
    */
   const handleAnnotationClick = (annotation: Annotation) => {
     // Select the annotation
     dispatch(selectAnnotation(annotation))
 
     // Seek video to start of annotation
-    if (playerRef.current && annotation.timeSpan) {
-      playerRef.current.currentTime(annotation.timeSpan.startTime)
+    if (videoPlayerRef.current && annotation.timeSpan) {
+      videoPlayerRef.current.handleSeek(annotation.timeSpan.startTime)
     }
   }
 
   /**
-   * Formats video time in seconds to MM:SS.CS display format.
-   * Converts decimal seconds to minutes, seconds, and centiseconds.
-   *
-   * @param seconds - Time value in seconds (may include fractional component)
-   * @returns Formatted time string in MM:SS.CS format
-   *
-   * @example
-   * ```tsx
-   * formatTime(65.75)  // returns "1:05.75"
-   * formatTime(0.5)    // returns "0:00.50"
-   * ```
+   * Formats video time using the video player's formatTime function.
    */
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    const ms = Math.floor((seconds % 1) * 100)
-    return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+    return videoPlayerRef.current?.formatTime(seconds) || '0:00.00'
   }
 
   /**
@@ -802,31 +595,24 @@ export default function AnnotationWorkspace() {
           </Stack>
         </Paper>
 
-        <Box sx={{ position: 'relative', flexGrow: 1, bgcolor: 'black', minHeight: 0 }}>
-          <div className="annotation-video-container">
-            <video
-              ref={videoRef}
-              className="video-js vjs-big-play-centered vjs-fluid vjs-default-skin"
-              playsInline
-              muted={false}
-              preload="auto"
-              aria-label="Video being annotated"
-            >
-              <p className="vjs-no-js">
-                To view this video please enable JavaScript, and consider upgrading to a web browser that supports HTML5 video
-              </p>
-            </video>
-          </div>
-          {currentVideo && videoRef.current && (
+        <VideoPlayer
+          ref={videoPlayerRef}
+          videoId={videoId}
+          videoMetadata={currentVideo}
+          onTimeUpdate={setCurrentTime}
+          onFrameChange={setCurrentFrame}
+          onDurationChange={setDuration}
+        >
+          {currentVideo && videoPlayerRef.current?.videoRef.current && (
             <AnnotationOverlay
-              videoElement={videoRef.current}
+              videoElement={videoPlayerRef.current.videoRef.current}
               currentTime={currentTime}
               videoWidth={currentVideo.width}
               videoHeight={currentVideo.height}
               detectionResults={detectionResults}
             />
           )}
-        </Box>
+        </VideoPlayer>
 
         <Paper sx={{ p: 2, mt: 2 }}>
           {/* Container for sliding panels */}
@@ -874,13 +660,13 @@ export default function AnnotationWorkspace() {
 
                 {/* Play/pause controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton onClick={handlePlayPause} aria-label={isPlaying ? "Pause video" : "Play video"}>
-                    {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                  <IconButton onClick={() => videoPlayerRef.current?.handlePlayPause()} aria-label={videoPlayerRef.current?.isPlaying ? "Pause video" : "Play video"}>
+                    {videoPlayerRef.current?.isPlaying ? <PauseIcon /> : <PlayIcon />}
                   </IconButton>
-                  <IconButton onClick={handlePrevFrame} aria-label="Previous frame">
+                  <IconButton onClick={() => videoPlayerRef.current?.handlePrevFrame()} aria-label="Previous frame">
                     <PrevFrameIcon />
                   </IconButton>
-                  <IconButton onClick={handleNextFrame} aria-label="Next frame">
+                  <IconButton onClick={() => videoPlayerRef.current?.handleNextFrame()} aria-label="Next frame">
                     <NextFrameIcon />
                   </IconButton>
                 </Box>
@@ -890,7 +676,10 @@ export default function AnnotationWorkspace() {
                   <Slider
                     value={currentTime}
                     max={duration}
-                    onChange={handleSeek}
+                    onChange={(_event, value) => {
+                      const time = Array.isArray(value) ? value[0] : value
+                      videoPlayerRef.current?.handleSeek(time)
+                    }}
                     size="small"
                     valueLabelDisplay="auto"
                     valueLabelFormat={(value) => formatTime(value)}
@@ -1017,16 +806,16 @@ export default function AnnotationWorkspace() {
                 <TimelineComponent
                   annotation={selectedAnnotation}
                   currentFrame={currentFrame}
-                  totalFrames={totalFrames}
+                  totalFrames={videoPlayerRef.current?.totalFrames || 0}
                   videoFps={currentVideo?.fps || 30}
                   onSeek={(frameNumber) => {
-                    if (playerRef.current) {
+                    if (videoPlayerRef.current) {
                       const fps = currentVideo?.fps || 30
                       const newTime = frameNumber / fps
-                      playerRef.current.currentTime(newTime)
+                      videoPlayerRef.current.handleSeek(newTime)
                     }
                   }}
-                  videoRef={videoRef}
+                  videoRef={videoPlayerRef.current?.videoRef}
                   onAddKeyframe={handleAddKeyframe}
                   onDeleteKeyframe={handleDeleteKeyframe}
                   onCopyPreviousFrame={handleCopyPreviousFrame}
