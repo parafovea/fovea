@@ -76,7 +76,7 @@ describe('DialogStore', () => {
 
   describe('openDialog', () => {
     it('should open a dialog', () => {
-      const { openDialog, dialogs } = useDialogStore.getState()
+      const { openDialog } = useDialogStore.getState()
       openDialog('userSettings')
       expect(useDialogStore.getState().dialogs.userSettings).toBe(true)
     })
@@ -95,7 +95,7 @@ describe('DialogStore', () => {
     })
 
     it('should not affect other dialogs when opening one', () => {
-      const { openDialog, dialogs: initialDialogs } = useDialogStore.getState()
+      const { openDialog } = useDialogStore.getState()
       openDialog('import')
 
       const { dialogs } = useDialogStore.getState()
