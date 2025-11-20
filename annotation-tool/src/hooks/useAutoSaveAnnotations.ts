@@ -50,7 +50,7 @@ export function useAutoSaveAnnotations({
   debounceMs = 500,
 }: UseAutoSaveAnnotationsParams): void {
   const dispatch = useDispatch<AppDispatch>()
-  const saveTimeoutRef = useRef<NodeJS.Timeout>()
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const previousAnnotationsRef = useRef<Annotation[]>([])
 
   useEffect(() => {
