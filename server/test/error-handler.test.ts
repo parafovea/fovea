@@ -217,16 +217,15 @@ describe('Global Error Handler Integration', () => {
       })
     })
 
-    it('should handle TypeError from application code', async () => {
-      app.get('/test/type-error', async () => {
-        // Simulate a TypeError by calling non-function
-        const notAFunction = {} as unknown as (() => void)
-        notAFunction()
+    it('should handle ReferenceError from application code', async () => {
+      app.get('/test/reference-error', async () => {
+        // Trigger ReferenceError by accessing undefined variable
+        throw new ReferenceError('Variable is not defined')
       })
 
       const response = await app.inject({
         method: 'GET',
-        url: '/test/type-error'
+        url: '/test/reference-error'
       })
 
       expect(response.statusCode).toBe(500)
