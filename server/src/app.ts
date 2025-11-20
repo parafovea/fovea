@@ -163,12 +163,22 @@ export async function buildApp() {
    * Global error handler.
    * Catches all errors thrown in route handlers and converts them to appropriate HTTP responses.
    * - AppError instances: Returns structured error response with status code
+   * - Fastify validation errors: Returns 400 with validation details
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
   app.setErrorHandler((error, request, reply) => {
     // Handle known AppError instances
     if (error instanceof AppError) {
       return reply.code(error.statusCode).send(error.toJSON())
+    }
+
+    // Handle Fastify validation errors (schema validation failures)
+    if (error.validation) {
+      return reply.code(400).send({
+        error: 'VALIDATION_ERROR',
+        message: error.message,
+        details: error.validation
+      })
     }
 
     // Log unexpected errors with full context
