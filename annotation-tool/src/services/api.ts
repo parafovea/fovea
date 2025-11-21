@@ -20,6 +20,100 @@ export interface TrackingOptions {
   trackSingleObject?: boolean
 }
 
+/**
+ * Backend annotation format (what the database stores).
+ */
+export interface BackendAnnotation {
+  id: string
+  videoId: string
+  personaId: string
+  type: string
+  label: string
+  frames: any
+  confidence: number | null
+  source: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Transforms backend annotation format to frontend format.
+ * Backend stores: type, label, frames
+ * Frontend expects: annotationType, typeId/linkedEntityId, boundingBoxSequence
+ *
+ * @param backendAnnotation - Annotation from database API
+ * @returns Frontend-formatted annotation
+ */
+export function transformBackendToFrontend(backendAnnotation: BackendAnnotation): Annotation {
+  const base = {
+    id: backendAnnotation.id,
+    videoId: backendAnnotation.videoId,
+    boundingBoxSequence: backendAnnotation.frames,
+    confidence: backendAnnotation.confidence ?? undefined,
+    createdAt: backendAnnotation.createdAt,
+    updatedAt: backendAnnotation.updatedAt,
+  }
+
+  if (backendAnnotation.type === 'type') {
+    // Type annotation
+    return {
+      ...base,
+      annotationType: 'type' as const,
+      personaId: backendAnnotation.personaId,
+      typeId: backendAnnotation.label,
+      typeCategory: 'entity', // Default to entity; this could be enhanced with metadata
+    }
+  } else {
+    // Object annotation - determine which field to use based on context
+    // For now, default to linkedEntityId as it's the most common
+    return {
+      ...base,
+      annotationType: 'object' as const,
+      linkedEntityId: backendAnnotation.label,
+    }
+  }
+}
+
+/**
+ * Transforms frontend annotation format to backend format for create/update.
+ * Frontend has: annotationType, typeId/linkedEntityId, boundingBoxSequence
+ * Backend expects: type, label, frames
+ *
+ * @param annotation - Frontend annotation object
+ * @returns Backend-formatted payload
+ */
+export function transformFrontendToBackend(annotation: Annotation): {
+  videoId: string
+  personaId: string
+  type: string
+  label: string
+  frames: any
+  confidence?: number
+  source: string
+} {
+  let personaId: string
+  let label: string
+
+  if (annotation.annotationType === 'type') {
+    personaId = annotation.personaId
+    label = annotation.typeId || 'unlabeled'
+  } else {
+    // Object annotations don't have personaId, use videoId as fallback
+    personaId = annotation.videoId
+    label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
+  }
+
+  return {
+    videoId: annotation.videoId,
+    personaId,
+    type: annotation.annotationType,
+    label,
+    frames: annotation.boundingBoxSequence,
+    confidence: annotation.confidence,
+    source: 'manual'
+  }
+}
+
 export const api = {
   // Videos
   async getVideos(): Promise<VideoMetadata[]> {
@@ -45,58 +139,30 @@ export const api = {
 
   // Annotations
   async getAnnotations(videoId: string): Promise<Annotation[]> {
-    const response = await axios.get(`${API_BASE}/annotations/${videoId}`)
-    return response.data
+    const response = await axios.get<BackendAnnotation[]>(`${API_BASE}/annotations/${videoId}`)
+    return response.data.map(transformBackendToFrontend)
   },
 
   async saveAnnotation(annotation: Annotation): Promise<Annotation> {
-    // Transform frontend Annotation to backend format
-    let personaId: string
-    let label: string
-
-    if (annotation.annotationType === 'type') {
-      personaId = annotation.personaId
-      label = annotation.typeId || 'unlabeled'
-    } else {
-      // Object annotations don't have personaId, use videoId as fallback
-      personaId = annotation.videoId
-      label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
-    }
-
-    const backendPayload = {
-      videoId: annotation.videoId,
-      personaId,
-      type: annotation.annotationType,
-      label,
-      frames: annotation.boundingBoxSequence,
-      confidence: annotation.confidence,
-      source: 'manual'
-    }
-
-    const response = await axios.post(`${API_BASE}/annotations`, backendPayload)
-    return response.data
+    const backendPayload = transformFrontendToBackend(annotation)
+    const response = await axios.post<BackendAnnotation>(`${API_BASE}/annotations`, backendPayload)
+    return transformBackendToFrontend(response.data)
   },
 
   async updateAnnotation(annotation: Annotation): Promise<Annotation> {
-    // Transform frontend Annotation to backend format
-    let label: string
+    const fullPayload = transformFrontendToBackend(annotation)
 
-    if (annotation.annotationType === 'type') {
-      label = annotation.typeId || 'unlabeled'
-    } else {
-      label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
-    }
-
+    // For PUT, we only send the updatable fields (not videoId/personaId)
     const backendPayload = {
-      type: annotation.annotationType,
-      label,
-      frames: annotation.boundingBoxSequence,
-      confidence: annotation.confidence,
-      source: 'manual'
+      type: fullPayload.type,
+      label: fullPayload.label,
+      frames: fullPayload.frames,
+      confidence: fullPayload.confidence,
+      source: fullPayload.source
     }
 
-    const response = await axios.put(`${API_BASE}/annotations/${annotation.id}`, backendPayload)
-    return response.data
+    const response = await axios.put<BackendAnnotation>(`${API_BASE}/annotations/${annotation.id}`, backendPayload)
+    return transformBackendToFrontend(response.data)
   },
 
   async deleteAnnotation(videoId: string, annotationId: string): Promise<void> {
