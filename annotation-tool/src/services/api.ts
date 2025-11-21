@@ -38,8 +38,8 @@ export interface BackendAnnotation {
 
 /**
  * Transforms backend annotation format to frontend format.
- * Backend stores: {type, label, frames}
- * Frontend expects: {annotationType, typeId/linkedEntityId, boundingBoxSequence}
+ * Backend stores: type, label, frames
+ * Frontend expects: annotationType, typeId/linkedEntityId, boundingBoxSequence
  *
  * @param backendAnnotation - Annotation from database API
  * @returns Frontend-formatted annotation
@@ -76,8 +76,8 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
 
 /**
  * Transforms frontend annotation format to backend format for create/update.
- * Frontend has: {annotationType, typeId/linkedEntityId, boundingBoxSequence}
- * Backend expects: {type, label, frames}
+ * Frontend has: annotationType, typeId/linkedEntityId, boundingBoxSequence
+ * Backend expects: type, label, frames
  *
  * @param annotation - Frontend annotation object
  * @returns Backend-formatted payload
