@@ -94,6 +94,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
+    fastify.log.error('[ANNOTATION CREATE] RECEIVED BODY')
+    fastify.log.error(JSON.stringify({
+      body: request.body,
+      hasType: 'type' in (request.body as any),
+      keys: Object.keys(request.body as any)
+    }))
+
     const data = request.body as {
       videoId: string
       personaId: string
