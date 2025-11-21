@@ -33,6 +33,14 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
+    // Select the same persona again (required to see annotations after reload)
+    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect.click()
+    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    let personaOption = personaListbox.getByText(testPersona.name)
+    await personaOption.click()
+    await page.waitForTimeout(1000)
+
     // Verify annotation still exists (proving it was saved to database)
     await annotationWorkspace.expectBoundingBoxVisible()
   })
@@ -69,6 +77,15 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.waitForLoadState('networkidle')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
+
+    // Select the same persona again
+    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect.click()
+    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    let personaOption = personaListbox.getByText(testPersona.name)
+    await personaOption.click()
+    await page.waitForTimeout(1000)
+
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
@@ -81,6 +98,14 @@ test.describe('Annotation Auto-Save Persistence', () => {
   }) => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
+
+    // Select persona first (required for annotations)
+    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect.click()
+    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    let personaOption = personaListbox.getByText(testPersona.name)
+    await personaOption.click()
+    await page.waitForTimeout(1000)
 
     // Create 3 annotations rapidly
     for (let i = 0; i < 3; i++) {
@@ -101,6 +126,14 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.waitForLoadState('networkidle')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
+
+    // Select the same persona again
+    personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect.click()
+    personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    personaOption = personaListbox.getByText(testPersona.name)
+    await personaOption.click()
+    await page.waitForTimeout(1000)
 
     // At least one annotation should be visible (verifying saves worked)
     await annotationWorkspace.expectBoundingBoxVisible()
