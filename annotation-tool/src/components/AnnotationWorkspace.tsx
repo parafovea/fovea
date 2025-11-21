@@ -129,6 +129,12 @@ export default function AnnotationWorkspace() {
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
+  // Get ALL annotations for this video (unfiltered) - needed for auto-save
+  const allAnnotations = useSelector((state: RootState) => {
+    return state.annotations.annotations[videoId || ''] || []
+  })
+
+  // Get filtered annotations for display (by selected persona)
   const annotations = useSelector((state: RootState) => {
     const videoAnnotations = state.annotations.annotations[videoId || '']
     // Filter annotations by selected persona if one is selected
@@ -161,12 +167,12 @@ export default function AnnotationWorkspace() {
     },
   })
 
-  // Auto-save annotations to database
+  // Auto-save ALL annotations to database (not just filtered display subset)
   // Matches pattern used by ontology and world object auto-save (1 second debounce)
   useAutoSaveAnnotations({
     videoId,
     personaId: selectedPersonaId,
-    annotations,
+    annotations: allAnnotations, // Use unfiltered annotations for saving
     debounceMs: 1000,
   })
 
