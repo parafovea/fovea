@@ -71,26 +71,13 @@ export function useAutoSaveAnnotations({
       }
     })
     previousAnnotationsRef.current = annotations
-    console.error('[AUTO-SAVE INIT]', {
-      videoId,
-      annotationCount: annotations.length,
-      annotationIds: annotations.map(a => a.id)
-    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Empty array means this only runs once on mount
 
   // Auto-save annotations on changes (debounced)
   // This matches the pattern used by OntologyWorkspace and ObjectWorkspace
   useEffect(() => {
-    console.error('[AUTO-SAVE EFFECT RUN]', {
-      videoId,
-      hasVideoId: !!videoId,
-      annotationCount: annotations.length,
-      previousCount: previousAnnotationsRef.current.length
-    })
-
     if (!videoId) {
-      console.error('[AUTO-SAVE SKIP] No videoId')
       return
     }
 
@@ -98,27 +85,13 @@ export function useAutoSaveAnnotations({
     const currentStr = JSON.stringify(annotations)
     const previousStr = JSON.stringify(previousAnnotationsRef.current)
     if (currentStr === previousStr) {
-      console.error('[AUTO-SAVE SKIP] No changes detected')
       return
     }
 
-    console.error('[AUTO-SAVE CHANGE DETECTED]', {
-      annotationCount: annotations.length,
-      schedulingIn: `${debounceMs}ms`
-    })
-
     const timeoutId = setTimeout(() => {
       if (annotations.length === 0) {
-        console.error('[AUTO-SAVE SKIP] Empty annotations array')
         return
       }
-
-      console.error('[AUTO-SAVE DISPATCHING]', {
-        videoId,
-        personaId,
-        annotationCount: annotations.length,
-        loadedIds: Array.from(loadedAnnotationIdsRef.current)
-      })
 
       dispatch(saveAnnotations({
         videoId,
