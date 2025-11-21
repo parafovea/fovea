@@ -37,7 +37,7 @@ interface UseAutoSaveAnnotationsParams {
  * - Uses Redux async thunk instead of direct API calls
  * - Consistent with other auto-save implementations
  * - Simpler logic, easier to maintain
- * - Tracks loaded IDs only on initial fetch
+ * - Correctly distinguishes between initial load and user-created annotations
  *
  * @param params - Hook parameters
  *
@@ -58,31 +58,42 @@ export function useAutoSaveAnnotations({
   debounceMs = 1000,
 }: UseAutoSaveAnnotationsParams): void {
   const dispatch = useDispatch<AppDispatch>()
-  const isInitialLoadRef = useRef(true)
+  const previousAnnotationsRef = useRef<Annotation[]>([])
   const loadedAnnotationIdsRef = useRef<Set<string>>(new Set())
 
-  // Track loaded annotation IDs on initial load
+  // One-time initialization: capture which annotation IDs exist when hook first runs
+  // This happens immediately on mount, so we know which annotations came from database
   useEffect(() => {
-    if (isInitialLoadRef.current && annotations.length > 0) {
-      isInitialLoadRef.current = false
-      // Store IDs of initially loaded annotations
-      annotations.forEach(ann => {
-        if (ann.id) {
-          loadedAnnotationIdsRef.current.add(ann.id)
-        }
-      })
-    }
-  }, [annotations])
+    // Store IDs of any initially loaded annotations
+    annotations.forEach(ann => {
+      if (ann.id) {
+        loadedAnnotationIdsRef.current.add(ann.id)
+      }
+    })
+    previousAnnotationsRef.current = annotations
+    console.log(`[Auto-save] Initialized with ${annotations.length} existing annotations from database`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty array means this only runs once on mount
 
   // Auto-save annotations on changes (debounced)
   // This matches the pattern used by OntologyWorkspace and ObjectWorkspace
   useEffect(() => {
     if (!videoId) return
 
-    const timeoutId = setTimeout(() => {
-      // Don't save if we're still on initial load or no annotations
-      if (isInitialLoadRef.current || annotations.length === 0) return
+    // Check if annotations actually changed
+    if (JSON.stringify(annotations) === JSON.stringify(previousAnnotationsRef.current)) {
+      return
+    }
 
+    console.log(`[Auto-save] Annotation change detected, scheduling save in ${debounceMs}ms`)
+
+    const timeoutId = setTimeout(() => {
+      if (annotations.length === 0) {
+        console.log('[Auto-save] No annotations to save')
+        return
+      }
+
+      console.log(`[Auto-save] Saving ${annotations.length} annotations...`)
       dispatch(saveAnnotations({
         videoId,
         personaId,
@@ -90,6 +101,9 @@ export function useAutoSaveAnnotations({
         loadedAnnotationIds: loadedAnnotationIdsRef.current
       }))
     }, debounceMs)
+
+    // Update ref immediately so we can detect future changes
+    previousAnnotationsRef.current = annotations
 
     return () => clearTimeout(timeoutId)
   }, [videoId, personaId, annotations, debounceMs, dispatch])
