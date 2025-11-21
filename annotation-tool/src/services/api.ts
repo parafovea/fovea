@@ -72,7 +72,22 @@ export const api = {
       confidence: annotation.confidence,
       source: 'manual'
     }
+
+    console.error('[API saveAnnotation] POST /api/annotations', {
+      annotationId: annotation.id,
+      videoId: backendPayload.videoId,
+      personaId: backendPayload.personaId,
+      type: backendPayload.type,
+      label: backendPayload.label
+    })
+
     const response = await axios.post(`${API_BASE}/annotations`, backendPayload)
+
+    console.error('[API saveAnnotation] Response', {
+      status: response.status,
+      data: response.data
+    })
+
     return response.data
   },
 
@@ -93,7 +108,20 @@ export const api = {
       confidence: annotation.confidence,
       source: 'manual'
     }
+
+    console.error('[API updateAnnotation] PUT /api/annotations/:id', {
+      annotationId: annotation.id,
+      type: backendPayload.type,
+      label: backendPayload.label
+    })
+
     const response = await axios.put(`${API_BASE}/annotations/${annotation.id}`, backendPayload)
+
+    console.error('[API updateAnnotation] Response', {
+      status: response.status,
+      data: response.data
+    })
+
     return response.data
   },
 

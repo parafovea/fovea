@@ -104,6 +104,13 @@ export const saveAnnotations = createAsyncThunk(
     annotations: Annotation[]
     loadedAnnotationIds: string[] // Changed from Set to Array for Redux serializability
   }) => {
+    console.error('[THUNK START]', {
+      videoId: params.videoId,
+      personaId: params.personaId,
+      annotationCount: params.annotations.length,
+      loadedIds: params.loadedAnnotationIds
+    })
+
     const { annotations, loadedAnnotationIds } = params
     const loadedSet = new Set(loadedAnnotationIds) // Convert back to Set for efficient lookup
     const savedCount = { created: 0, updated: 0 }
@@ -113,27 +120,34 @@ export const saveAnnotations = createAsyncThunk(
     // The backend has separate endpoints for create (POST) and update (PUT)
     for (const annotation of annotations) {
       if (!annotation.id) {
-        console.warn('Skipping annotation without ID', annotation)
+        console.error('[THUNK] Skipping annotation without ID', annotation)
         continue
       }
 
       try {
         // Determine if this is a new annotation or an update
         const isNew = !loadedSet.has(annotation.id)
+        console.error('[THUNK] Processing annotation', {
+          id: annotation.id,
+          isNew,
+          annotationType: annotation.annotationType
+        })
 
         if (isNew) {
           // Create new annotation
+          console.error('[THUNK] Calling api.saveAnnotation (POST)')
           await api.saveAnnotation(annotation)
           savedCount.created++
           // Add to loaded set so future saves treat it as an update
           loadedSet.add(annotation.id)
         } else {
           // Update existing annotation
+          console.error('[THUNK] Calling api.updateAnnotation (PUT)')
           await api.updateAnnotation(annotation)
           savedCount.updated++
         }
       } catch (error) {
-        console.error(`Failed to save annotation ${annotation.id}:`, error)
+        console.error(`[THUNK] Failed to save annotation ${annotation.id}:`, error)
         errors.push({
           annotationId: annotation.id,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -141,6 +155,7 @@ export const saveAnnotations = createAsyncThunk(
       }
     }
 
+    console.error('[THUNK COMPLETE]', { savedCount, errorCount: errors.length })
     return { savedCount, errors }
   }
 )
