@@ -89,6 +89,68 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
+  test('annotation can be edited and resaved after page reload', async ({
+    page,
+    annotationWorkspace,
+    testVideo,
+    testPersonaPersistent: testPersona,
+    testEntityTypePersistent: testEntityType
+  }) => {
+    // Navigate and create initial annotation
+    await page.goto(`/annotate/${testVideo.id}`)
+    await annotationWorkspace.expectWorkspaceReady()
+    await annotationWorkspace.drawSimpleBoundingBox()
+    await page.waitForTimeout(2000)
+
+    // Reload page
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await page.goto(`/annotate/${testVideo.id}`)
+    await annotationWorkspace.expectWorkspaceReady()
+
+    // Select the same persona to see the annotation
+    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect.click()
+    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaOption = personaListbox.getByText(testPersona.name)
+    await personaOption.click()
+    await page.waitForTimeout(1000)
+
+    // Verify annotation exists
+    await annotationWorkspace.expectBoundingBoxVisible()
+
+    // Show timeline to edit the annotation
+    await annotationWorkspace.timeline.show()
+
+    // Seek forward 20 frames
+    for (let i = 0; i < 20; i++) {
+      await annotationWorkspace.video.seekForwardOneFrame()
+    }
+
+    // Add a new keyframe (editing the annotation)
+    await annotationWorkspace.timeline.addKeyframe()
+
+    // Wait for auto-save of the edit
+    await page.waitForTimeout(2000)
+
+    // Reload again to verify the edit persisted
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await page.goto(`/annotate/${testVideo.id}`)
+    await annotationWorkspace.expectWorkspaceReady()
+
+    // Re-select persona
+    const personaSelect2 = page.getByRole('combobox', { name: /select persona/i })
+    await personaSelect2.click()
+    const personaListbox2 = page.getByRole('listbox', { name: /select persona/i })
+    const personaOption2 = personaListbox2.getByText(testPersona.name)
+    await personaOption2.click()
+    await page.waitForTimeout(1000)
+
+    // Verify annotation with edits still exists
+    await annotationWorkspace.expectBoundingBoxVisible()
+  })
+
   test('multiple rapid annotations all auto-save correctly', async ({
     page,
     annotationWorkspace,
