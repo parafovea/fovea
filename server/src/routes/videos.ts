@@ -267,9 +267,9 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       const { videoId } = request.params as { videoId: string }
 
       // Fetch video from database to get path
-      const video = await fastify.prisma.video.findUnique({
-        where: { id: videoId },
-        select: { path: true, filename: true }
+      const video = await videoRepository.findByIdWithSelect(videoId, {
+        path: true,
+        filename: true
       })
 
       if (!video) {
@@ -457,9 +457,8 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         // Fetch video to get path
-        const video = await fastify.prisma.video.findUnique({
-          where: { id: videoId },
-          select: { path: true },
+        const video = await videoRepository.findByIdWithSelect(videoId, {
+          path: true
         })
 
         if (!video) {
@@ -567,14 +566,11 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       const { size = 'medium', timestamp = 1.0 } = request.query as { size?: string; timestamp?: number }
 
       // Fetch video from database
-      const video = await fastify.prisma.video.findUnique({
-        where: { id: videoId },
-        select: {
-          id: true,
-          path: true,
-          filename: true,
-          localThumbnailPath: true
-        }
+      const video = await videoRepository.findByIdWithSelect(videoId, {
+        id: true,
+        path: true,
+        filename: true,
+        localThumbnailPath: true
       })
 
       if (!video) {
@@ -638,10 +634,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Update database with thumbnail path
-      await fastify.prisma.video.update({
-        where: { id: videoId },
-        data: { localThumbnailPath: relativeThumbnailPath }
-      })
+      await videoRepository.updateThumbnailPath(videoId, relativeThumbnailPath)
 
       // Serve the newly generated thumbnail
       try {
@@ -697,9 +690,8 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
       const { expiresIn = 3600 } = request.query as { expiresIn?: number }
 
       // Fetch video from database
-      const video = await fastify.prisma.video.findUnique({
-        where: { id: videoId },
-        select: { path: true }
+      const video = await videoRepository.findByIdWithSelect(videoId, {
+        path: true
       })
 
       if (!video) {
