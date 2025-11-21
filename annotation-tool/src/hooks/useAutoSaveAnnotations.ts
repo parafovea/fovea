@@ -1,12 +1,16 @@
 /**
  * @module useAutoSaveAnnotations
  * @description Hook for automatically saving annotations to the database.
- * Provides debounced auto-save functionality to prevent excessive API calls
- * while ensuring user data is persisted immediately after creation.
+ * Follows the same pattern as ontology and world object auto-save:
+ * - Simple debounced save using Redux async thunk
+ * - Tracks which IDs were initially loaded to distinguish create vs update
+ * - Prevents saving on initial load (annotations just fetched from database)
  */
 
 import { useEffect, useRef } from 'react'
-import { api } from '../services/api'
+import { useDispatch } from 'react-redux'
+import { AppDispatch } from '../store/store'
+import { saveAnnotations } from '../store/annotationSlice'
 import { Annotation } from '../models/types'
 
 /**
@@ -16,19 +20,24 @@ import { Annotation } from '../models/types'
 interface UseAutoSaveAnnotationsParams {
   /** Video ID for annotations */
   videoId: string | undefined
+  /** Persona ID for filtering annotations */
+  personaId: string | null
   /** Annotations to auto-save */
   annotations: Annotation[]
-  /** Debounce delay in milliseconds (default: 500ms) */
+  /** Debounce delay in milliseconds (default: 1000ms to match ontology/world) */
   debounceMs?: number
 }
 
 /**
  * @hook useAutoSaveAnnotations
  * @description Automatically saves annotations to the database with debouncing.
- * - Skips saving on initial load when annotations are loaded from database
- * - Debounces all annotation saves to avoid excessive API calls
- * - Attempts update first, falls back to create if annotation doesn't exist
- * - Handles errors gracefully with console logging
+ * Simplified to match the ontology/world object auto-save pattern.
+ *
+ * Key improvements:
+ * - Uses Redux async thunk instead of direct API calls
+ * - Consistent with other auto-save implementations
+ * - Simpler logic, easier to maintain
+ * - Tracks loaded IDs only on initial fetch
  *
  * @param params - Hook parameters
  *
@@ -36,75 +45,52 @@ interface UseAutoSaveAnnotationsParams {
  * ```tsx
  * useAutoSaveAnnotations({
  *   videoId,
+ *   personaId,
  *   annotations,
- *   debounceMs: 500
+ *   debounceMs: 1000
  * })
  * ```
  */
 export function useAutoSaveAnnotations({
   videoId,
+  personaId,
   annotations,
-  debounceMs = 500,
+  debounceMs = 1000,
 }: UseAutoSaveAnnotationsParams): void {
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
-  const previousAnnotationsRef = useRef<Annotation[]>([])
+  const dispatch = useDispatch<AppDispatch>()
   const isInitialLoadRef = useRef(true)
-  const savedAnnotationIdsRef = useRef<Set<string>>(new Set())
+  const loadedAnnotationIdsRef = useRef<Set<string>>(new Set())
 
+  // Track loaded annotation IDs on initial load
   useEffect(() => {
-    if (!videoId || annotations.length === 0) return
-
-    // Skip auto-save on initial load (annotations just loaded from database)
-    if (isInitialLoadRef.current) {
+    if (isInitialLoadRef.current && annotations.length > 0) {
       isInitialLoadRef.current = false
-      previousAnnotationsRef.current = annotations
-      // Mark all initially loaded annotations as saved
+      // Store IDs of initially loaded annotations
       annotations.forEach(ann => {
-        if (ann.id) savedAnnotationIdsRef.current.add(ann.id)
-      })
-      return
-    }
-
-    // Check if annotations actually changed
-    if (JSON.stringify(annotations) === JSON.stringify(previousAnnotationsRef.current)) {
-      return
-    }
-
-    // Clear previous timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
-    }
-
-    // Debounced save for all annotations
-    saveTimeoutRef.current = setTimeout(async () => {
-      // Capture current annotations at save time
-      const annotationsToSave = annotations
-      for (const annotation of annotationsToSave) {
-        try {
-          if (annotation.id) {
-            if (savedAnnotationIdsRef.current.has(annotation.id)) {
-              // Annotation exists in database, update it
-              await api.updateAnnotation(annotation)
-            } else {
-              // New annotation, create it
-              await api.saveAnnotation(annotation)
-              savedAnnotationIdsRef.current.add(annotation.id)
-            }
-          }
-        } catch (error) {
-          console.error('Failed to auto-save annotation:', error)
+        if (ann.id) {
+          loadedAnnotationIdsRef.current.add(ann.id)
         }
-      }
+      })
+    }
+  }, [annotations])
+
+  // Auto-save annotations on changes (debounced)
+  // This matches the pattern used by OntologyWorkspace and ObjectWorkspace
+  useEffect(() => {
+    if (!videoId) return
+
+    const timeoutId = setTimeout(() => {
+      // Don't save if we're still on initial load or no annotations
+      if (isInitialLoadRef.current || annotations.length === 0) return
+
+      dispatch(saveAnnotations({
+        videoId,
+        personaId,
+        annotations,
+        loadedAnnotationIds: loadedAnnotationIdsRef.current
+      }))
     }, debounceMs)
 
-    // Update ref immediately, not in timeout
-    previousAnnotationsRef.current = annotations
-
-    // Cleanup timeout on unmount
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
-      }
-    }
-  }, [videoId, annotations, debounceMs])
+    return () => clearTimeout(timeoutId)
+  }, [videoId, personaId, annotations, debounceMs, dispatch])
 }

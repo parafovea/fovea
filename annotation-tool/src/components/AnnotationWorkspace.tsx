@@ -162,10 +162,12 @@ export default function AnnotationWorkspace() {
   })
 
   // Auto-save annotations to database
+  // Matches pattern used by ontology and world object auto-save (1 second debounce)
   useAutoSaveAnnotations({
     videoId,
+    personaId: selectedPersonaId,
     annotations,
-    debounceMs: 500,
+    debounceMs: 1000,
   })
 
   // Keyframe control callbacks
