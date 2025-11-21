@@ -248,10 +248,12 @@ export function useAnnotationDrawing({
       }
 
       if (annotationMode === 'type') {
+        annotation.annotationType = 'type'
         annotation.personaId = selectedPersonaId
         annotation.typeCategory = drawingMode
         annotation.typeId = selectedTypeId || 'temp-type'
       } else {
+        annotation.annotationType = 'object'
         if (linkTargetType === 'entity') {
           annotation.linkedEntityId = linkTargetId
         } else if (linkTargetType === 'event') {
