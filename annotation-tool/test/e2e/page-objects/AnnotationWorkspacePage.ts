@@ -233,11 +233,13 @@ export class AnnotationWorkspacePage extends BasePage {
 
   /**
    * Assert that the bounding box is visible (via annotation count).
+   * Checks for at least 1 annotation (not exactly 1, to handle test isolation).
    */
   async expectBoundingBoxVisible(): Promise<void> {
-    // Check annotation was created by verifying count increased
+    // Check annotation was created by verifying count >= 1
     const annotationHeading = this.page.getByRole('heading', { name: /All Annotations/i })
-    await expect(annotationHeading).toContainText(/\(1\)/, { timeout: 5000 })
+    // Match: (1), (2), (3), etc. but not (0)
+    await expect(annotationHeading).toContainText(/\([1-9]\d*\)/, { timeout: 5000 })
   }
 
   /**

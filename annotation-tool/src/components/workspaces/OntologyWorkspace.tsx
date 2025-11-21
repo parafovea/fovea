@@ -48,6 +48,7 @@ import {
   deleteRoleFromPersona,
   deleteEventFromPersona,
   deleteRelationType,
+  savePersonaOntology,
 } from '../../store/personaSlice'
 import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
 import { useModelConfig } from '../../hooks/useModelConfig'
@@ -170,6 +171,20 @@ export default function OntologyWorkspace() {
 
   const selectedPersona = personas.find(p => p.id === selectedPersonaId)
   const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
+
+  // Auto-save persona ontology on changes (debounced 1 second)
+  useEffect(() => {
+    if (!selectedPersonaId || !selectedOntology) return
+
+    const timeoutId = setTimeout(() => {
+      dispatch(savePersonaOntology({
+        personaId: selectedPersonaId,
+        ontology: selectedOntology
+      }))
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [selectedPersonaId, selectedOntology, dispatch])
 
   /**
    * Filters ontology type items by search term.

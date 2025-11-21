@@ -25,8 +25,10 @@ type TestFixtures = {
   db: DatabaseHelper
   testUser: User
   testPersona: Persona
+  testPersonaPersistent: Persona
   testVideo: Video
   testEntityType: EntityType
+  testEntityTypePersistent: EntityType
   testEventType: EventType
   testRoleType: RoleType
   testRelationType: RelationType
@@ -155,6 +157,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
 
   /**
+   * Persistent test persona fixture for persistence tests.
+   * Creates a persona but does NOT delete it after the test.
+   * This prevents CASCADE deletion of annotations during the test.
+   * Worker-level cleanup handles deletion when worker finishes.
+   */
+  testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use) => {
+    const persona = await db.createPersona({
+      userId: testUser.id,
+      name: 'Test Analyst (Persistent)',
+      role: 'Intelligence Analyst'
+    }, workerSessionToken)
+    await use(persona)
+    // Don't delete - let worker cleanup handle it to preserve data for reload tests
+  },
+
+  /**
    * Test video fixture.
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
@@ -216,6 +234,20 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     })
     await use(entityType)
     // Cleanup is handled by persona deletion
+  },
+
+  /**
+   * Persistent test entity type fixture for persistence tests.
+   * Creates an entity type but does NOT delete it after the test.
+   * Depends on testPersonaPersistent fixture.
+   */
+  testEntityTypePersistent: async ({ db, testPersonaPersistent }, use) => {
+    const entityType = await db.createEntityType(testPersonaPersistent.id, {
+      name: 'Test Entity Type (Persistent)',
+      definition: 'A test entity type for persistence E2E testing'
+    })
+    await use(entityType)
+    // Don't delete - let worker cleanup handle it
   },
 
   /**

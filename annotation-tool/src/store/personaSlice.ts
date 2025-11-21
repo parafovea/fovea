@@ -123,6 +123,34 @@ export const removePersona = createAsyncThunk(
 )
 
 /**
+ * Saves a persona's ontology to the database.
+ * Updates entity types, role types, event types, and relation types.
+ */
+export const savePersonaOntology = createAsyncThunk(
+  'persona/savePersonaOntology',
+  async (params: { personaId: string; ontology: PersonaOntology }) => {
+    const response = await fetch(`/api/personas/${params.personaId}/ontology`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        entities: params.ontology.entities,
+        roles: params.ontology.roles,
+        events: params.ontology.events,
+        relationTypes: params.ontology.relationTypes,
+        relations: params.ontology.relations,
+      }),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to save persona ontology')
+    }
+    const data = await response.json()
+    return { personaId: params.personaId, ontology: data }
+  }
+)
+
+/**
  * State shape for persona management.
  * Manages personas and their associated ontologies in the application.
  */
@@ -529,6 +557,24 @@ const personaSlice = createSlice({
       })
       .addCase(removePersona.rejected, (state, action) => {
         state.error = action.error.message || 'Failed to delete persona'
+      })
+      .addCase(savePersonaOntology.fulfilled, (state, action) => {
+        const index = state.personaOntologies.findIndex(o => o.personaId === action.payload.personaId)
+        if (index !== -1) {
+          state.personaOntologies[index] = {
+            ...state.personaOntologies[index],
+            entities: action.payload.ontology.entities,
+            roles: action.payload.ontology.roles,
+            events: action.payload.ontology.events,
+            relationTypes: action.payload.ontology.relationTypes,
+            relations: action.payload.ontology.relations || [],
+            updatedAt: action.payload.ontology.updatedAt,
+          }
+        }
+        state.unsavedChanges = false
+      })
+      .addCase(savePersonaOntology.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to save persona ontology'
       })
   },
 })
