@@ -102,9 +102,10 @@ export const saveAnnotations = createAsyncThunk(
     videoId: string
     personaId: string | null
     annotations: Annotation[]
-    loadedAnnotationIds: Set<string>
+    loadedAnnotationIds: string[] // Changed from Set to Array for Redux serializability
   }) => {
     const { annotations, loadedAnnotationIds } = params
+    const loadedSet = new Set(loadedAnnotationIds) // Convert back to Set for efficient lookup
     const savedCount = { created: 0, updated: 0 }
     const errors: Array<{ annotationId: string; error: string }> = []
 
@@ -118,14 +119,14 @@ export const saveAnnotations = createAsyncThunk(
 
       try {
         // Determine if this is a new annotation or an update
-        const isNew = !loadedAnnotationIds.has(annotation.id)
+        const isNew = !loadedSet.has(annotation.id)
 
         if (isNew) {
           // Create new annotation
           await api.saveAnnotation(annotation)
           savedCount.created++
           // Add to loaded set so future saves treat it as an update
-          loadedAnnotationIds.add(annotation.id)
+          loadedSet.add(annotation.id)
         } else {
           // Update existing annotation
           await api.updateAnnotation(annotation)

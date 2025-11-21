@@ -98,7 +98,7 @@ export function useAutoSaveAnnotations({
         videoId,
         personaId,
         annotations,
-        loadedAnnotationIds: loadedAnnotationIdsRef.current
+        loadedAnnotationIds: Array.from(loadedAnnotationIdsRef.current) // Convert Set to Array for Redux
       }))
     }, debounceMs)
 
