@@ -11,8 +11,8 @@ test.describe('Annotation Auto-Save Persistence', () => {
     page,
     annotationWorkspace,
     testVideo,
-    testPersona,
-    testEntityType
+    testPersonaPersistent: testPersona,
+    testEntityTypePersistent: testEntityType
   }) => {
     // Navigate to video annotation workspace
     await page.goto(`/annotate/${testVideo.id}`)
@@ -41,8 +41,8 @@ test.describe('Annotation Auto-Save Persistence', () => {
     page,
     annotationWorkspace,
     testVideo,
-    testPersona,
-    testEntityType
+    testPersonaPersistent: testPersona,
+    testEntityTypePersistent: testEntityType
   }) => {
     // Navigate and create initial annotation
     await page.goto(`/annotate/${testVideo.id}`)
@@ -76,8 +76,8 @@ test.describe('Annotation Auto-Save Persistence', () => {
     page,
     annotationWorkspace,
     testVideo,
-    testPersona,
-    testEntityType
+    testPersonaPersistent: testPersona,
+    testEntityTypePersistent: testEntityType
   }) => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()

@@ -111,30 +111,37 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       source?: string
     }
 
-    const annotation = await fastify.prisma.annotation.create({
-      data: {
-        videoId: data.videoId,
-        personaId: data.personaId,
-        type: data.type,
-        label: data.label,
-        frames: data.frames,
-        confidence: data.confidence,
-        source: data.source || 'manual'
-      }
-    })
+    try {
+      fastify.log.error('[ANNOTATION CREATE] Calling prisma.annotation.create')
+      const annotation = await fastify.prisma.annotation.create({
+        data: {
+          videoId: data.videoId,
+          personaId: data.personaId,
+          type: data.type,
+          label: data.label,
+          frames: data.frames,
+          confidence: data.confidence,
+          source: data.source || 'manual'
+        }
+      })
+      fastify.log.error('[ANNOTATION CREATE] Success! Created annotation ' + annotation.id)
 
-    return reply.code(201).send({
-      id: annotation.id,
-      videoId: annotation.videoId,
-      personaId: annotation.personaId,
-      type: annotation.type,
-      label: annotation.label,
-      frames: annotation.frames,
-      confidence: annotation.confidence,
-      source: annotation.source,
-      createdAt: annotation.createdAt.toISOString(),
-      updatedAt: annotation.updatedAt.toISOString()
-    })
+      return reply.code(201).send({
+        id: annotation.id,
+        videoId: annotation.videoId,
+        personaId: annotation.personaId,
+        type: annotation.type,
+        label: annotation.label,
+        frames: annotation.frames,
+        confidence: annotation.confidence,
+        source: annotation.source,
+        createdAt: annotation.createdAt.toISOString(),
+        updatedAt: annotation.updatedAt.toISOString()
+      })
+    } catch (error) {
+      fastify.log.error('[ANNOTATION CREATE] Prisma error: ' + JSON.stringify(error))
+      throw error
+    }
   })
 
   /**
