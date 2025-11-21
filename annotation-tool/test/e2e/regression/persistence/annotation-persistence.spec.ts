@@ -107,6 +107,19 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await personaOption.click()
     await page.waitForTimeout(1000)
 
+    // Wait for ontology to load
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+
+    // Select entity type (required for annotations)
+    const typeSelect = page.getByRole('combobox', { name: /select type/i })
+    await typeSelect.click()
+    await page.waitForTimeout(500)
+    await typeSelect.press('ArrowDown')
+    await page.waitForTimeout(300)
+    await typeSelect.press('Enter')
+    await page.waitForTimeout(500)
+
     // Create 3 annotations rapidly
     for (let i = 0; i < 3; i++) {
       await annotationWorkspace.drawBoundingBox({
