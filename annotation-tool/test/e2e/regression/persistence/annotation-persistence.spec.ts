@@ -4,7 +4,7 @@
  * and survive page reloads (not just Redux).
  */
 
-import { test, expect } from '../../fixtures/test-context.js'
+import { test } from '../../fixtures/test-context.js'
 
 test.describe('Annotation Auto-Save Persistence', () => {
   test('annotation auto-saves and persists after page reload', async ({

@@ -6,9 +6,6 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../store/store'
-import { updateAnnotation } from '../store/annotationSlice'
 import { api } from '../services/api'
 import { Annotation } from '../models/types'
 
@@ -28,9 +25,9 @@ interface UseAutoSaveAnnotationsParams {
 /**
  * @hook useAutoSaveAnnotations
  * @description Automatically saves annotations to the database with debouncing.
- * - Immediately saves new annotations (temporary IDs starting with 'temp-')
- * - Debounces updates to existing annotations to avoid excessive API calls
- * - Updates Redux state with real database IDs after successful save
+ * - Skips saving on initial load when annotations are loaded from database
+ * - Debounces all annotation saves to avoid excessive API calls
+ * - Attempts update first, falls back to create if annotation doesn't exist
  * - Handles errors gracefully with console logging
  *
  * @param params - Hook parameters
@@ -49,68 +46,47 @@ export function useAutoSaveAnnotations({
   annotations,
   debounceMs = 500,
 }: UseAutoSaveAnnotationsParams): void {
-  const dispatch = useDispatch<AppDispatch>()
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const previousAnnotationsRef = useRef<Annotation[]>([])
+  const isInitialLoadRef = useRef(true)
 
   useEffect(() => {
     if (!videoId || annotations.length === 0) return
 
-    // Find new annotations (with temporary IDs) that need immediate saving
-    const newAnnotations = annotations.filter(
-      (annotation) =>
-        annotation.id &&
-        annotation.id.startsWith('temp-') &&
-        !previousAnnotationsRef.current.some((prev) => prev.id === annotation.id)
-    )
-
-    // Find updated annotations that need debounced saving
-    const updatedAnnotations = annotations.filter((annotation) => {
-      if (!annotation.id || annotation.id.startsWith('temp-')) return false
-
-      const previous = previousAnnotationsRef.current.find((prev) => prev.id === annotation.id)
-      if (!previous) return false
-
-      // Check if annotation has been modified
-      return JSON.stringify(annotation) !== JSON.stringify(previous)
-    })
-
-    // Immediately save new annotations
-    if (newAnnotations.length > 0) {
-      (async () => {
-        for (const annotation of newAnnotations) {
-          try {
-            const savedAnnotation = await api.saveAnnotation(annotation)
-            // Update Redux state with real database ID
-            dispatch(updateAnnotation(savedAnnotation))
-          } catch (error) {
-            console.error('Failed to auto-save new annotation:', error)
-          }
-        }
-      })()
+    // Skip auto-save on initial load (annotations just loaded from database)
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false
+      previousAnnotationsRef.current = annotations
+      return
     }
 
-    // Debounced save for updated annotations
-    if (updatedAnnotations.length > 0) {
-      // Clear previous timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
+    // Check if annotations actually changed
+    if (JSON.stringify(annotations) === JSON.stringify(previousAnnotationsRef.current)) {
+      return
+    }
+
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Debounced save for all annotations
+    saveTimeoutRef.current = setTimeout(async () => {
+      for (const annotation of annotations) {
+        try {
+          if (annotation.id) {
+            // Try to update first (annotation might already exist)
+            await api.updateAnnotation(annotation).catch(async () => {
+              // If update fails (404), create it instead
+              await api.saveAnnotation(annotation)
+            })
+          }
+        } catch (error) {
+          console.error('Failed to auto-save annotation:', error)
+        }
       }
-
-      // Set new timeout for debounced save
-      saveTimeoutRef.current = setTimeout(async () => {
-        for (const annotation of updatedAnnotations) {
-          try {
-            await api.updateAnnotation(annotation)
-          } catch (error) {
-            console.error('Failed to auto-save updated annotation:', error)
-          }
-        }
-      }, debounceMs)
-    }
-
-    // Update reference for next comparison
-    previousAnnotationsRef.current = [...annotations]
+      previousAnnotationsRef.current = annotations
+    }, debounceMs)
 
     // Cleanup timeout on unmount
     return () => {
@@ -118,5 +94,5 @@ export function useAutoSaveAnnotations({
         clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [videoId, annotations, debounceMs, dispatch])
+  }, [videoId, annotations, debounceMs])
 }
