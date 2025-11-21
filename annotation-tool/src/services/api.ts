@@ -50,12 +50,50 @@ export const api = {
   },
 
   async saveAnnotation(annotation: Annotation): Promise<Annotation> {
-    const response = await axios.post(`${API_BASE}/annotations`, annotation)
+    // Transform frontend Annotation to backend format
+    let personaId: string
+    let label: string
+
+    if (annotation.annotationType === 'type') {
+      personaId = annotation.personaId
+      label = annotation.typeId || 'unlabeled'
+    } else {
+      // Object annotations don't have personaId, use videoId as fallback
+      personaId = annotation.videoId
+      label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
+    }
+
+    const backendPayload = {
+      videoId: annotation.videoId,
+      personaId,
+      type: annotation.annotationType,
+      label,
+      frames: annotation.boundingBoxSequence,
+      confidence: annotation.confidence,
+      source: 'manual'
+    }
+    const response = await axios.post(`${API_BASE}/annotations`, backendPayload)
     return response.data
   },
 
   async updateAnnotation(annotation: Annotation): Promise<Annotation> {
-    const response = await axios.put(`${API_BASE}/annotations/${annotation.id}`, annotation)
+    // Transform frontend Annotation to backend format
+    let label: string
+
+    if (annotation.annotationType === 'type') {
+      label = annotation.typeId || 'unlabeled'
+    } else {
+      label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
+    }
+
+    const backendPayload = {
+      type: annotation.annotationType,
+      label,
+      frames: annotation.boundingBoxSequence,
+      confidence: annotation.confidence,
+      source: 'manual'
+    }
+    const response = await axios.put(`${API_BASE}/annotations/${annotation.id}`, backendPayload)
     return response.data
   },
 
