@@ -74,7 +74,7 @@ import { DetectionDialog } from './dialogs/DetectionDialog'
 import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
-import { VideoMetadata, Annotation, TypeAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
+import { VideoMetadata, Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
@@ -128,6 +128,10 @@ export default function AnnotationWorkspace() {
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
+  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
+  const worldEntities = useSelector((state: RootState) => state.world.entities)
+  const worldEvents = useSelector((state: RootState) => state.world.events)
+  const worldTimes = useSelector((state: RootState) => state.world.times)
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
   // Get ALL annotations for this video (unfiltered) - needed for auto-save
   const allAnnotations = useSelector((state: RootState) => {
@@ -155,6 +159,41 @@ export default function AnnotationWorkspace() {
   const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
   const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
 
+  // Helper function to get type name from typeId
+  const getTypeName = useCallback((annotation: TypeAnnotation): string => {
+    const ontology = personaOntologies.find(o => o.personaId === annotation.personaId)
+    if (!ontology) return annotation.typeId
+
+    // Search in entities, roles, and events
+    const entity = ontology.entities.find(e => e.id === annotation.typeId)
+    if (entity) return entity.name
+
+    const role = ontology.roles.find(r => r.id === annotation.typeId)
+    if (role) return role.name
+
+    const event = ontology.events.find(e => e.id === annotation.typeId)
+    if (event) return event.name
+
+    return annotation.typeId // Fallback to ID if not found
+  }, [personaOntologies])
+
+  // Helper function to get object name from linkedEntityId/linkedEventId/linkedTimeId
+  const getObjectName = useCallback((annotation: ObjectAnnotation): string => {
+    if (annotation.linkedEntityId) {
+      const entity = worldEntities.find(e => e.id === annotation.linkedEntityId)
+      return entity?.name || annotation.linkedEntityId
+    }
+    if (annotation.linkedEventId) {
+      const event = worldEvents.find(e => e.id === annotation.linkedEventId)
+      return event?.name || annotation.linkedEventId
+    }
+    if (annotation.linkedTimeId) {
+      const time = worldTimes.find(t => t.id === annotation.linkedTimeId)
+      return time?.label || annotation.linkedTimeId
+    }
+    return 'Object Annotation'
+  }, [worldEntities, worldEvents, worldTimes])
+
   // Detection mutation
   const detectMutation = useDetectObjects({
     onSuccess: (data) => {
@@ -167,12 +206,17 @@ export default function AnnotationWorkspace() {
     },
   })
 
+  // Track when annotations were last loaded from API
+  // This is passed to useAutoSaveAnnotations to prevent saving immediately after load
+  const [lastLoadTimestamp, setLastLoadTimestamp] = React.useState(0)
+
   // Auto-save ALL annotations to database (not just filtered display subset)
   // Matches pattern used by ontology and world object auto-save (1 second debounce)
   useAutoSaveAnnotations({
     videoId,
     personaId: selectedPersonaId,
     annotations: allAnnotations, // Use unfiltered annotations for saving
+    lastLoadTimestamp, // Explicit signal of when annotations were loaded from API
     debounceMs: 1000,
   })
 
@@ -299,6 +343,8 @@ export default function AnnotationWorkspace() {
       try {
         const savedAnnotations = await api.getAnnotations(videoId)
         dispatch(setAnnotations({ videoId, annotations: savedAnnotations }))
+        // Signal that annotations were just loaded from API
+        setLastLoadTimestamp(Date.now())
       } catch (error) {
         console.error('Failed to load annotations:', error)
       }
@@ -574,15 +620,23 @@ export default function AnnotationWorkspace() {
           onFrameChange={setCurrentFrame}
           onDurationChange={setDuration}
         >
-          {currentVideo && videoPlayerRef.current?.videoRef.current && (
-            <AnnotationOverlay
-              videoElement={videoPlayerRef.current.videoRef.current}
-              currentTime={currentTime}
-              videoWidth={currentVideo.width}
-              videoHeight={currentVideo.height}
-              detectionResults={detectionResults}
-            />
-          )}
+          {currentVideo && videoPlayerRef.current?.videoRef.current && (() => {
+            const videoElement = videoPlayerRef.current.videoRef.current
+            // Use natural dimensions (actual video resolution) not display dimensions
+            // This ensures bounding boxes maintain correct size across save/load
+            const videoWidth = videoElement.videoWidth || currentVideo.width
+            const videoHeight = videoElement.videoHeight || currentVideo.height
+
+            return (
+              <AnnotationOverlay
+                videoElement={videoElement}
+                currentTime={currentTime}
+                videoWidth={videoWidth}
+                videoHeight={videoHeight}
+                detectionResults={detectionResults}
+              />
+            )
+          })()}
         </VideoPlayer>
 
         <Paper sx={{ p: 2, mt: 2 }}>
@@ -868,13 +922,13 @@ export default function AnnotationWorkspace() {
                                 sx={{ height: 20, fontSize: '0.75rem' }}
                               />
                               <Typography variant="body2" noWrap>
-                                {annotation.typeId}
+                                {getTypeName(annotation as TypeAnnotation)}
                               </Typography>
                             </>
                           )}
                           {annotation.annotationType === 'object' && (
                             <Typography variant="body2" noWrap>
-                              Object Annotation
+                              {getObjectName(annotation as ObjectAnnotation)}
                             </Typography>
                           )}
                         </Box>

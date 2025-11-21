@@ -40,7 +40,7 @@ export default function PersonaManager() {
   const dispatch = useDispatch<AppDispatch>()
   const { personas, activePersonaId, personaOntologies } = useSelector((state: RootState) => state.persona)
   const activePersona = personas.find(p => p.id === activePersonaId)
-  
+
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -51,6 +51,34 @@ export default function PersonaManager() {
     informationNeed: '',
     details: '',
   })
+
+  // Auto-save persona edits on changes (debounced 1 second, matching ontology auto-save)
+  React.useEffect(() => {
+    if (!editingPersona || !editDialogOpen) return
+
+    // Don't auto-save if form data hasn't changed from current persona
+    if (formData.name === editingPersona.name &&
+        formData.role === editingPersona.role &&
+        formData.informationNeed === editingPersona.informationNeed &&
+        formData.details === editingPersona.details) {
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      const updatedPersona: Persona = {
+        ...editingPersona,
+        name: formData.name,
+        role: formData.role,
+        informationNeed: formData.informationNeed,
+        details: formData.details,
+      }
+      dispatch(savePersona(updatedPersona))
+      // Update editingPersona to reflect saved state
+      setEditingPersona(updatedPersona)
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [formData, editingPersona, editDialogOpen, dispatch])
 
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)

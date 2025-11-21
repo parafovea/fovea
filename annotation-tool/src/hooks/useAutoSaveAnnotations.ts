@@ -24,6 +24,12 @@ interface UseAutoSaveAnnotationsParams {
   personaId: string | null
   /** Annotations to auto-save */
   annotations: Annotation[]
+  /**
+   * Timestamp of last API load. When this changes, it signals that annotations
+   * were just loaded from the database and should not trigger auto-save.
+   * This provides explicit, deterministic tracking instead of heuristics.
+   */
+  lastLoadTimestamp: number
   /** Debounce delay in milliseconds (default: 1000ms to match ontology/world) */
   debounceMs?: number
 }
@@ -31,13 +37,6 @@ interface UseAutoSaveAnnotationsParams {
 /**
  * @hook useAutoSaveAnnotations
  * @description Automatically saves annotations to the database with debouncing.
- * Simplified to match the ontology/world object auto-save pattern.
- *
- * Key improvements:
- * - Uses Redux async thunk instead of direct API calls
- * - Consistent with other auto-save implementations
- * - Simpler logic, easier to maintain
- * - Correctly distinguishes between initial load and user-created annotations
  *
  * @param params - Hook parameters
  *
@@ -47,6 +46,7 @@ interface UseAutoSaveAnnotationsParams {
  *   videoId,
  *   personaId,
  *   annotations,
+ *   lastLoadTimestamp,
  *   debounceMs: 1000
  * })
  * ```
@@ -55,24 +55,31 @@ export function useAutoSaveAnnotations({
   videoId,
   personaId,
   annotations,
+  lastLoadTimestamp,
   debounceMs = 1000,
 }: UseAutoSaveAnnotationsParams): void {
   const dispatch = useDispatch<AppDispatch>()
   const previousAnnotationsRef = useRef<Annotation[]>([])
   const loadedAnnotationIdsRef = useRef<Set<string>>(new Set())
+  const lastProcessedLoadTimestampRef = useRef<number>(0)
 
-  // One-time initialization: capture which annotation IDs exist when hook first runs
-  // This happens immediately on mount, so we know which annotations came from database
+  // When lastLoadTimestamp changes, it means annotations were just loaded from API
+  // Update our tracking of which IDs came from the database
   useEffect(() => {
-    // Store IDs of any initially loaded annotations
-    annotations.forEach(ann => {
-      if (ann.id) {
-        loadedAnnotationIdsRef.current.add(ann.id)
-      }
-    })
-    previousAnnotationsRef.current = annotations
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Empty array means this only runs once on mount
+    if (lastLoadTimestamp !== lastProcessedLoadTimestampRef.current) {
+      // Clear and rebuild the set of loaded IDs based on current annotations
+      loadedAnnotationIdsRef.current.clear()
+      annotations.forEach(ann => {
+        if (ann.id) {
+          loadedAnnotationIdsRef.current.add(ann.id)
+        }
+      })
+
+      // Update our reference so we know this is the baseline
+      previousAnnotationsRef.current = annotations
+      lastProcessedLoadTimestampRef.current = lastLoadTimestamp
+    }
+  }, [lastLoadTimestamp, annotations])
 
   // Auto-save annotations on changes (debounced)
   // This matches the pattern used by OntologyWorkspace and ObjectWorkspace
@@ -85,6 +92,13 @@ export function useAutoSaveAnnotations({
     const currentStr = JSON.stringify(annotations)
     const previousStr = JSON.stringify(previousAnnotationsRef.current)
     if (currentStr === previousStr) {
+      return
+    }
+
+    // Skip auto-save if this change happened immediately after a load
+    // We track this explicitly via lastLoadTimestamp
+    if (lastLoadTimestamp === lastProcessedLoadTimestampRef.current &&
+        previousAnnotationsRef.current === annotations) {
       return
     }
 
@@ -105,5 +119,5 @@ export function useAutoSaveAnnotations({
     previousAnnotationsRef.current = annotations
 
     return () => clearTimeout(timeoutId)
-  }, [videoId, personaId, annotations, debounceMs, dispatch])
+  }, [videoId, personaId, annotations, lastLoadTimestamp, debounceMs, dispatch])
 }
