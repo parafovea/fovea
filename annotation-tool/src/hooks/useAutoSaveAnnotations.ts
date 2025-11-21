@@ -72,7 +72,9 @@ export function useAutoSaveAnnotations({
 
     // Debounced save for all annotations
     saveTimeoutRef.current = setTimeout(async () => {
-      for (const annotation of annotations) {
+      // Capture current annotations at save time
+      const annotationsToSave = annotations
+      for (const annotation of annotationsToSave) {
         try {
           if (annotation.id) {
             // Try to update first (annotation might already exist)
@@ -85,8 +87,10 @@ export function useAutoSaveAnnotations({
           console.error('Failed to auto-save annotation:', error)
         }
       }
-      previousAnnotationsRef.current = annotations
     }, debounceMs)
+
+    // Update ref immediately, not in timeout
+    previousAnnotationsRef.current = annotations
 
     // Cleanup timeout on unmount
     return () => {
