@@ -49,6 +49,7 @@ export function useAutoSaveAnnotations({
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const previousAnnotationsRef = useRef<Annotation[]>([])
   const isInitialLoadRef = useRef(true)
+  const savedAnnotationIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!videoId || annotations.length === 0) return
@@ -57,6 +58,10 @@ export function useAutoSaveAnnotations({
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false
       previousAnnotationsRef.current = annotations
+      // Mark all initially loaded annotations as saved
+      annotations.forEach(ann => {
+        if (ann.id) savedAnnotationIdsRef.current.add(ann.id)
+      })
       return
     }
 
@@ -77,11 +82,14 @@ export function useAutoSaveAnnotations({
       for (const annotation of annotationsToSave) {
         try {
           if (annotation.id) {
-            // Try to update first (annotation might already exist)
-            await api.updateAnnotation(annotation).catch(async () => {
-              // If update fails (404), create it instead
+            if (savedAnnotationIdsRef.current.has(annotation.id)) {
+              // Annotation exists in database, update it
+              await api.updateAnnotation(annotation)
+            } else {
+              // New annotation, create it
               await api.saveAnnotation(annotation)
-            })
+              savedAnnotationIdsRef.current.add(annotation.id)
+            }
           }
         } catch (error) {
           console.error('Failed to auto-save annotation:', error)
