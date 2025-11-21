@@ -9,6 +9,7 @@ import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../utils/
 import { createVideoStorageProvider, loadStorageConfig } from '../services/videoStorage.js'
 import { syncVideosFromStorage } from '../services/videoSync.js'
 import { NotFoundError } from '../lib/errors.js'
+import { VideoRepository } from '../repositories/VideoRepository.js'
 
 const VideoSchema = Type.Object({
   id: Type.String(),
@@ -28,6 +29,9 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   // Initialize storage provider
   const storageConfig = loadStorageConfig()
   const storageProvider = createVideoStorageProvider(storageConfig)
+
+  // Initialize video repository
+  const videoRepository = new VideoRepository(fastify.prisma)
 
   /**
    * List all available videos.
@@ -49,9 +53,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   }, async (_request, reply) => {
     try {
       // Query videos from database (database-first approach)
-      const dbVideos = await fastify.prisma.video.findMany({
-        orderBy: { createdAt: 'desc' }
-      })
+      const dbVideos = await videoRepository.findAll()
 
       // Return videos from database
       const videos = dbVideos.map(video => {
@@ -196,9 +198,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     const { videoId } = request.params as { videoId: string }
 
     // Query video from database (database-first approach)
-    const video = await fastify.prisma.video.findUnique({
-      where: { id: videoId }
-    })
+    const video = await videoRepository.findById(videoId)
 
     if (!video) {
       throw new NotFoundError('Video', videoId)
