@@ -34,10 +34,10 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await annotationWorkspace.expectWorkspaceReady()
 
     // Select the same persona again (required to see annotations after reload)
-    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
-    let personaOption = personaListbox.getByText(testPersona.name)
+    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -79,10 +79,10 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await annotationWorkspace.expectWorkspaceReady()
 
     // Select the same persona again
-    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
+    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
-    let personaOption = personaListbox.getByText(testPersona.name)
+    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
 
