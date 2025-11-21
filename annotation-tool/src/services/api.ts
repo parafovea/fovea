@@ -50,6 +50,14 @@ export const api = {
   },
 
   async saveAnnotation(annotation: Annotation): Promise<Annotation> {
+    console.error('[API saveAnnotation] RECEIVED ANNOTATION', {
+      id: annotation.id,
+      videoId: annotation.videoId,
+      annotationType: annotation.annotationType,
+      hasAnnotationType: 'annotationType' in annotation,
+      allKeys: Object.keys(annotation)
+    })
+
     // Transform frontend Annotation to backend format
     let personaId: string
     let label: string
@@ -73,12 +81,9 @@ export const api = {
       source: 'manual'
     }
 
-    console.error('[API saveAnnotation] POST /api/annotations', {
+    console.error('[API saveAnnotation] SENDING TO BACKEND', {
       annotationId: annotation.id,
-      videoId: backendPayload.videoId,
-      personaId: backendPayload.personaId,
-      type: backendPayload.type,
-      label: backendPayload.label
+      payload: backendPayload
     })
 
     const response = await axios.post(`${API_BASE}/annotations`, backendPayload)
