@@ -64,6 +64,7 @@ import {
   updateKeyframe,
   updateInterpolationSegment,
   setAnnotations,
+  saveAnnotations,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -80,7 +81,6 @@ import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import { api } from '../services/api'
-import { useAutoSaveAnnotations } from '../hooks/useAutoSaveAnnotations'
 
 const DRAWER_WIDTH = 300
 
@@ -129,14 +129,15 @@ export default function AnnotationWorkspace() {
   const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
-  // Get ALL annotations for this video (unfiltered) - needed for auto-save
-  const allAnnotations = useSelector((state: RootState) => {
-    return state.annotations.annotations[videoId || ''] || []
-  })
+
+  // Get annotations directly from Redux (stable reference, not filtered/computed)
+  const annotationsRecord = useSelector((state: RootState) => state.annotations.annotations)
+
+  // Get annotations for this video (stable reference from Redux)
+  const videoAnnotations = videoId ? annotationsRecord[videoId] : undefined
 
   // Get filtered annotations for display (by selected persona)
-  const annotations = useSelector((state: RootState) => {
-    const videoAnnotations = state.annotations.annotations[videoId || '']
+  const annotations = useMemo(() => {
     // Filter annotations by selected persona if one is selected
     if (selectedPersonaId && videoAnnotations) {
       return videoAnnotations.filter(a => {
@@ -149,7 +150,7 @@ export default function AnnotationWorkspace() {
       })
     }
     return videoAnnotations || []
-  })
+  }, [videoAnnotations, selectedPersonaId])
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
   const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
   const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
@@ -171,14 +172,21 @@ export default function AnnotationWorkspace() {
     },
   })
 
-  // Auto-save ALL annotations to database (not just filtered display subset)
-  // Matches pattern used by ontology and world object auto-save (1 second debounce)
-  useAutoSaveAnnotations({
-    videoId,
-    personaId: selectedPersonaId,
-    annotations: allAnnotations, // Use unfiltered annotations for saving
-    debounceMs: 1000,
-  })
+  // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
+  // CRITICAL: saveAnnotations.fulfilled must NOT update annotations in Redux (only loadedAnnotationIds)
+  useEffect(() => {
+    if (!videoId || !videoAnnotations) return
+
+    const timeoutId = setTimeout(() => {
+      dispatch(saveAnnotations({
+        videoId,
+        personaId: selectedPersonaId,
+        annotations: videoAnnotations
+      }))
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [videoId, videoAnnotations, selectedPersonaId, dispatch])
 
   // Helper function to get type name from typeId (for displaying human-readable names)
   const getTypeName = useCallback((annotation: TypeAnnotation): string => {
