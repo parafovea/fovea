@@ -174,6 +174,7 @@ export default function AnnotationWorkspace() {
 
   // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
   // CRITICAL: saveAnnotations.fulfilled must NOT update annotations in Redux (only loadedAnnotationIds)
+  // This will trigger on initial load (saving the just-loaded annotations), but that's OK - they're UPDATEs
   useEffect(() => {
     if (!videoId || !videoAnnotations) return
 

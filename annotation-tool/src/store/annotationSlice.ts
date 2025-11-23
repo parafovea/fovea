@@ -636,20 +636,22 @@ const annotationSlice = createSlice({
       .addCase(saveAnnotations.fulfilled, (state, action) => {
         const { videoId, savedCount, errors } = action.payload
 
-        if (isSafeKey(videoId)) {
-          // Add newly created IDs to loadedIds for future saves
-          if (savedCount.created > 0) {
-            const annotations = state.annotations[videoId] || []
-            const existingIds = new Set(state.loadedAnnotationIds[videoId] || [])
+        // CRITICAL: ONLY update loadedAnnotationIds, NOT the annotations array
+        // This prevents circular dependencies that cause infinite loops
+        if (isSafeKey(videoId) && savedCount.created > 0) {
+          const currentAnnotations = state.annotations[videoId]
+          if (!currentAnnotations) return
 
-            annotations.forEach(ann => {
-              if (ann.id && !existingIds.has(ann.id)) {
-                existingIds.add(ann.id)
-              }
-            })
+          const existingIds = new Set(state.loadedAnnotationIds[videoId] || [])
 
-            state.loadedAnnotationIds[videoId] = Array.from(existingIds)
+          // Add newly created IDs to the tracking set
+          for (const ann of currentAnnotations) {
+            if (ann.id && !existingIds.has(ann.id)) {
+              existingIds.add(ann.id)
+            }
           }
+
+          state.loadedAnnotationIds[videoId] = Array.from(existingIds)
         }
 
         console.log(`Auto-save complete: ${savedCount.created} created, ${savedCount.updated} updated`)
