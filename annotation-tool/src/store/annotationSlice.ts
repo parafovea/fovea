@@ -29,6 +29,7 @@ interface AnnotationState {
   detectionQuery: string
   detectionConfidenceThreshold: number
   showDetectionCandidates: boolean
+  loadedAnnotationIds: Record<string, string[]>  // Track IDs loaded from API per video (for CREATE vs UPDATE)
 
   // Tracking-specific state
   trackingResults: TrackingResult[]
@@ -59,6 +60,7 @@ const initialState: AnnotationState = {
   detectionQuery: '',
   detectionConfidenceThreshold: 0.5,
   showDetectionCandidates: false,
+  loadedAnnotationIds: {},
 
   // Tracking-specific state
   trackingResults: [],
@@ -93,8 +95,7 @@ function isSafeKey(key: string): boolean {
  * @param params.videoId - ID of the video these annotations belong to
  * @param params.personaId - ID of the persona (for filtering)
  * @param params.annotations - Array of annotations to save
- * @param params.loadedAnnotationIds - Set of IDs that were initially loaded from database
- * @returns Object with saved annotations count and any errors encountered
+ * @returns Object with videoId, saved annotations count, and any errors encountered
  */
 export const saveAnnotations = createAsyncThunk(
   'annotations/saveAnnotations',
@@ -102,10 +103,14 @@ export const saveAnnotations = createAsyncThunk(
     videoId: string
     personaId: string | null
     annotations: Annotation[]
-    loadedAnnotationIds: string[] // Changed from Set to Array for Redux serializability
-  }) => {
-    const { annotations, loadedAnnotationIds } = params
-    const loadedSet = new Set(loadedAnnotationIds) // Convert back to Set for efficient lookup
+  }, { getState }) => {
+    const { videoId, annotations } = params
+
+    // Get loaded IDs from Redux state
+    const state = getState() as { annotations: AnnotationState }
+    const loadedIds = state.annotations.loadedAnnotationIds[videoId] || []
+    const loadedSet = new Set(loadedIds)
+
     const savedCount = { created: 0, updated: 0 }
     const errors: Array<{ annotationId: string; error: string }> = []
 
@@ -139,7 +144,7 @@ export const saveAnnotations = createAsyncThunk(
       }
     }
 
-    return { savedCount, errors }
+    return { videoId, savedCount, errors }
   }
 )
 
@@ -149,7 +154,12 @@ const annotationSlice = createSlice({
   reducers: {
     setAnnotations: (state, action: PayloadAction<{ videoId: string; annotations: Annotation[] }>) => {
       if (isSafeKey(action.payload.videoId)) {
-        state.annotations[action.payload.videoId] = action.payload.annotations
+        const videoId = action.payload.videoId
+        state.annotations[videoId] = action.payload.annotations
+        // Track which IDs were loaded from API (for distinguishing CREATE vs UPDATE in saveAnnotations)
+        state.loadedAnnotationIds[videoId] = action.payload.annotations
+          .map(a => a.id)
+          .filter((id): id is string => !!id)
       }
     },
     addAnnotation: (state, action: PayloadAction<Annotation>) => {
@@ -623,9 +633,25 @@ const annotationSlice = createSlice({
       .addCase(saveAnnotations.pending, (_state) => {
         // Could add loading state here if needed
       })
-      .addCase(saveAnnotations.fulfilled, (_state, action) => {
-        // Log success
-        const { savedCount, errors } = action.payload
+      .addCase(saveAnnotations.fulfilled, (state, action) => {
+        const { videoId, savedCount, errors } = action.payload
+
+        if (isSafeKey(videoId)) {
+          // Add newly created IDs to loadedIds for future saves
+          if (savedCount.created > 0) {
+            const annotations = state.annotations[videoId] || []
+            const existingIds = new Set(state.loadedAnnotationIds[videoId] || [])
+
+            annotations.forEach(ann => {
+              if (ann.id && !existingIds.has(ann.id)) {
+                existingIds.add(ann.id)
+              }
+            })
+
+            state.loadedAnnotationIds[videoId] = Array.from(existingIds)
+          }
+        }
+
         console.log(`Auto-save complete: ${savedCount.created} created, ${savedCount.updated} updated`)
         if (errors.length > 0) {
           console.error(`Auto-save errors:`, errors)
