@@ -74,7 +74,7 @@ import { DetectionDialog } from './dialogs/DetectionDialog'
 import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
-import { VideoMetadata, Annotation, TypeAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
+import { VideoMetadata, Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
@@ -154,6 +154,10 @@ export default function AnnotationWorkspace() {
   const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
   const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
   const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
+  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
+  const worldEntities = useSelector((state: RootState) => state.world.entities)
+  const worldEvents = useSelector((state: RootState) => state.world.events)
+  const worldTimes = useSelector((state: RootState) => state.world.times)
 
   // Detection mutation
   const detectMutation = useDetectObjects({
@@ -175,6 +179,41 @@ export default function AnnotationWorkspace() {
     annotations: allAnnotations, // Use unfiltered annotations for saving
     debounceMs: 1000,
   })
+
+  // Helper function to get type name from typeId (for displaying human-readable names)
+  const getTypeName = useCallback((annotation: TypeAnnotation): string => {
+    const ontology = personaOntologies.find(o => o.personaId === annotation.personaId)
+    if (!ontology) return annotation.typeId
+
+    // Search in entities, roles, and events
+    const entity = ontology.entities.find(e => e.id === annotation.typeId)
+    if (entity) return entity.name
+
+    const role = ontology.roles.find(r => r.id === annotation.typeId)
+    if (role) return role.name
+
+    const event = ontology.events.find(e => e.id === annotation.typeId)
+    if (event) return event.name
+
+    return annotation.typeId // Fallback to ID if not found
+  }, [personaOntologies])
+
+  // Helper function to get object name from linkedEntityId/linkedEventId/linkedTimeId
+  const getObjectName = useCallback((annotation: ObjectAnnotation): string => {
+    if (annotation.linkedEntityId) {
+      const entity = worldEntities.find(e => e.id === annotation.linkedEntityId)
+      return entity?.name || annotation.linkedEntityId
+    }
+    if (annotation.linkedEventId) {
+      const event = worldEvents.find(e => e.id === annotation.linkedEventId)
+      return event?.name || annotation.linkedEventId
+    }
+    if (annotation.linkedTimeId) {
+      const time = worldTimes.find(t => t.id === annotation.linkedTimeId)
+      return time?.label || annotation.linkedTimeId
+    }
+    return 'Object Annotation'
+  }, [worldEntities, worldEvents, worldTimes])
 
   // Keyframe control callbacks
   const handleAddKeyframe = useCallback(() => {
@@ -868,13 +907,13 @@ export default function AnnotationWorkspace() {
                                 sx={{ height: 20, fontSize: '0.75rem' }}
                               />
                               <Typography variant="body2" noWrap>
-                                {annotation.typeId}
+                                {getTypeName(annotation as TypeAnnotation)}
                               </Typography>
                             </>
                           )}
                           {annotation.annotationType === 'object' && (
                             <Typography variant="body2" noWrap>
-                              Object Annotation
+                              {getObjectName(annotation as ObjectAnnotation)}
                             </Typography>
                           )}
                         </Box>
