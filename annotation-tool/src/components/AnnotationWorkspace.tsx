@@ -617,8 +617,8 @@ export default function AnnotationWorkspace() {
             <AnnotationOverlay
               videoElement={videoPlayerRef.current.videoRef.current}
               currentTime={currentTime}
-              videoWidth={currentVideo.width}
-              videoHeight={currentVideo.height}
+              videoWidth={videoPlayerRef.current.videoRef.current.videoWidth || currentVideo.width}
+              videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
               detectionResults={detectionResults}
             />
           )}
