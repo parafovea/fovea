@@ -28,29 +28,45 @@ test.describe('Ontology Type Auto-Save Persistence', () => {
     await addButton.click()
 
     const newTypeName = `Auto-Save Test ${Date.now()}`
-    await page.getByLabel(/name/i).fill(newTypeName)
-    await page.getByLabel(/definition|gloss/i).first().fill('Test entity type')
+    const newTypeDialog = page.getByRole('dialog')
+    await newTypeDialog.getByLabel(/name/i).fill(newTypeName)
+    await newTypeDialog.getByLabel(/definition|gloss/i).first().fill('Test entity type')
 
-    const saveButton = page.getByRole('button', { name: /save|create/i })
+    const saveButton = newTypeDialog.getByRole('button', { name: /save|create/i })
     await saveButton.click()
 
-    // Wait for auto-save (1 second debounce + network time)
-    await page.waitForTimeout(2500)
+    // CRITICAL: Wait for dialog to close (proves save started)
+    await expect(newTypeDialog).not.toBeVisible({ timeout: 5000 })
 
-    // Verify it appears in list
-    await expect(page.getByText(newTypeName).first()).toBeVisible()
+    // CRITICAL: Wait for type to appear in list (proves save completed)
+    await expect(page.getByText(newTypeName).first()).toBeVisible({ timeout: 10000 })
 
-    // Reload page to clear Redux state
+    // CRITICAL: Wait for network idle (all API calls completed)
+    await page.waitForLoadState('networkidle', { timeout: 10000 })
+
+    // Additional buffer for auto-save
+    await page.waitForTimeout(500)
+
+    // Now safe to reload
     await page.reload()
-    await page.waitForLoadState('networkidle')
 
-    // Navigate back to ontology
+    // CRITICAL: Wait for page fully loaded
+    await page.waitForLoadState('networkidle', { timeout: 10000 })
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
+
+    // Wait for React to hydrate
+    await page.waitForTimeout(1000)
+
+    // Navigate back to ontology workspace
     await page.goto('/ontology')
     await page.waitForLoadState('networkidle')
     await page.getByText(testPersona.name).first().click()
     await page.waitForTimeout(1000)
 
-    // Verify entity type still exists (proving database persistence)
-    await expect(page.getByText(newTypeName).first()).toBeVisible()
+    // CRITICAL: Wait for Entity Types tab to be visible
+    await expect(entitiesTab).toBeVisible({ timeout: 10000 })
+
+    // Verify entity type persisted (proving database persistence)
+    await expect(page.getByText(newTypeName).first()).toBeVisible({ timeout: 10000 })
   })
 })
