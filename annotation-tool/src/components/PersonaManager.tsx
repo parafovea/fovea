@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
@@ -51,6 +51,37 @@ export default function PersonaManager() {
     informationNeed: '',
     details: '',
   })
+
+  // Auto-save persona edits on changes (debounced 1 second, matching ontology auto-save)
+  useEffect(() => {
+    if (!editingPersona || !editDialogOpen) return
+
+    // Don't auto-save if form data hasn't changed from current persona
+    if (
+      formData.name === editingPersona.name &&
+      formData.role === editingPersona.role &&
+      formData.informationNeed === editingPersona.informationNeed &&
+      formData.details === editingPersona.details
+    ) {
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      const updatedPersona: Persona = {
+        ...editingPersona,
+        name: formData.name,
+        role: formData.role,
+        informationNeed: formData.informationNeed,
+        details: formData.details,
+        updatedAt: new Date().toISOString(),
+      }
+      dispatch(savePersona(updatedPersona))
+      // Update editingPersona to reflect saved state
+      setEditingPersona(updatedPersona)
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [formData, editingPersona, editDialogOpen, dispatch])
 
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
