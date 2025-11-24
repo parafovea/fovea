@@ -10,6 +10,7 @@ import annotationSlice, {
   addAnnotation,
   updateAnnotation,
   deleteAnnotation,
+  selectAnnotations,
 } from '../../src/store/annotationSlice.js'
 import { Annotation } from '../../src/models/types.js'
 
@@ -52,9 +53,10 @@ describe('Redux State Management', () => {
 
       // Verify state updated
       const updatedState = store.getState()
-      expect(updatedState.annotations.annotations['test-video']).toBeDefined()
-      expect(updatedState.annotations.annotations['test-video']).toHaveLength(1)
-      expect(updatedState.annotations.annotations['test-video'][0].id).toBe('test-annotation-1')
+      const annotations = selectAnnotations(updatedState, 'test-video')
+      expect(annotations).toBeDefined()
+      expect(annotations).toHaveLength(1)
+      expect(annotations[0].id).toBe('test-annotation-1')
     })
 
     it('multiple subscribers receive same updated state', () => {
@@ -146,7 +148,8 @@ describe('Redux State Management', () => {
 
       // Verify state changed
       const state = store.getState()
-      expect(state.annotations.annotations['test-video'][0].boundingBoxSequence.keyframeCount).toBe(2)
+      const annotations = selectAnnotations(state, 'test-video')
+      expect(annotations[0].boundingBoxSequence.keyframeCount).toBe(2)
 
       unsubscribe()
     })
@@ -175,15 +178,15 @@ describe('Redux State Management', () => {
 
       // Add annotation
       store.dispatch(addAnnotation(annotation))
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(1)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(1)
 
       // Undo (delete annotation)
       store.dispatch(deleteAnnotation({ videoId: 'test-video', annotationId: 'test-annotation-1' }))
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(0)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(0)
 
       // Redo (add again)
       store.dispatch(addAnnotation(annotation))
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(1)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(1)
     })
 
     it('supports undo for updateAnnotation', () => {
@@ -223,12 +226,12 @@ describe('Redux State Management', () => {
 
       store.dispatch(updateAnnotation(updatedAnnotation))
 
-      expect(store.getState().annotations.annotations['test-video'][0].boundingBoxSequence.keyframeCount).toBe(2)
+      expect(selectAnnotations(store.getState(), 'test-video')[0].boundingBoxSequence.keyframeCount).toBe(2)
 
       // Undo (restore original)
       store.dispatch(updateAnnotation(annotation))
 
-      expect(store.getState().annotations.annotations['test-video'][0].boundingBoxSequence.keyframeCount).toBe(1)
+      expect(selectAnnotations(store.getState(), 'test-video')[0].boundingBoxSequence.keyframeCount).toBe(1)
     })
 
     it('undo/redo maintains state consistency', () => {
@@ -256,21 +259,21 @@ describe('Redux State Management', () => {
         store.dispatch(addAnnotation(annotation))
       }
 
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(10)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(10)
 
       // Undo all (delete in reverse)
       for (let i = 9; i >= 0; i--) {
         store.dispatch(deleteAnnotation({ videoId: 'test-video', annotationId: `annotation-${i}` }))
       }
 
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(0)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(0)
 
       // Redo all (add again)
       actions.forEach((annotation) => {
         store.dispatch(addAnnotation(annotation))
       })
 
-      expect(store.getState().annotations.annotations['test-video']).toHaveLength(10)
+      expect(selectAnnotations(store.getState(), 'test-video')).toHaveLength(10)
     })
   })
 
@@ -465,7 +468,8 @@ describe('Redux State Management', () => {
 
       // Final state should reflect last update
       const state = store.getState()
-      expect(state.annotations.annotations['test-video'][0].boundingBoxSequence.boxes[0].x).toBe(99)
+      const annotations = selectAnnotations(state, 'test-video')
+      expect(annotations[0].boundingBoxSequence.boxes[0].x).toBe(99)
     })
   })
 })
