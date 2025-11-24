@@ -7,7 +7,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
-import annotationReducer from '../store/annotationSlice'
+import annotationReducer, { selectAnnotations } from '../store/annotationSlice'
 import type { FrameDetections } from '../api/client'
 
 /**
@@ -382,7 +382,7 @@ describe('AnnotationCandidatesList', () => {
 
       // Check Redux store
       const state = store.getState()
-      const annotations = state.annotations.annotations['retail-video']
+      const annotations = selectAnnotations(state, 'retail-video')
       expect(annotations).toHaveLength(1)
       expect(annotations[0].annotationType).toBe('type')
       if (annotations[0].annotationType === 'type') {
@@ -408,7 +408,7 @@ describe('AnnotationCandidatesList', () => {
 
       // Check Redux store
       const state = store.getState()
-      const annotations = state.annotations.annotations['wildlife-video']
+      const annotations = selectAnnotations(state, 'wildlife-video')
       expect(annotations).toHaveLength(1)
       expect(annotations[0].annotationType).toBe('object')
     })

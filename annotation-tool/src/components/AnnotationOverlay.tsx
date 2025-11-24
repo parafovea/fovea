@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store/store'
-import { selectAnnotation } from '../store/annotationSlice'
+import { selectAnnotation, selectAnnotations } from '../store/annotationSlice'
 import { useParams } from 'react-router-dom'
 import DrawingCanvas from './annotation/DrawingCanvas'
 import type { DetectionResponse } from '../api/client'
@@ -64,12 +64,12 @@ export default function AnnotationOverlay({
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
   const annotations = useSelector((state: RootState) => {
-    const videoAnnotations = state.annotations.annotations[videoId || '']
+    const videoAnnotations = selectAnnotations(state, videoId || '')
     // Filter annotations by selected persona if one is selected and in type mode
     if (selectedPersonaId && videoAnnotations && annotationMode === 'type') {
       return videoAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
     }
-    return videoAnnotations || []
+    return videoAnnotations
   })
 
   // Get world objects for linked annotations

@@ -64,6 +64,8 @@ import {
   updateKeyframe,
   updateInterpolationSegment,
   setAnnotations,
+  saveAnnotations,
+  selectAnnotations,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -74,13 +76,12 @@ import { DetectionDialog } from './dialogs/DetectionDialog'
 import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
-import { VideoMetadata, Annotation, TypeAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
+import { VideoMetadata, Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
 import { useDetectObjects } from '../hooks/useDetection'
 import { useModelConfig } from '../hooks/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
 import { api } from '../services/api'
-import { useAutoSaveAnnotations } from '../hooks/useAutoSaveAnnotations'
 
 const DRAWER_WIDTH = 300
 
@@ -126,17 +127,21 @@ export default function AnnotationWorkspace() {
   }, [timelineExpanded])
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
+
+  // Select individual fields to avoid re-renders when unrelated state changes
+  // CRITICAL: Don't destructure entire state.annotations because updating loadedAnnotationIds
+  // would cause new references for all destructured values, triggering infinite loops
+  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
-  // Get ALL annotations for this video (unfiltered) - needed for auto-save
-  const allAnnotations = useSelector((state: RootState) => {
-    return state.annotations.annotations[videoId || ''] || []
-  })
+
+  // Get annotations for this specific video ONLY (selector only re-runs if THIS video's annotations change)
+  const videoAnnotations = useSelector((state: RootState) =>
+    videoId ? selectAnnotations(state, videoId) : []
+  )
 
   // Get filtered annotations for display (by selected persona)
-  const annotations = useSelector((state: RootState) => {
-    const videoAnnotations = state.annotations.annotations[videoId || '']
+  const annotations = useMemo(() => {
     // Filter annotations by selected persona if one is selected
     if (selectedPersonaId && videoAnnotations) {
       return videoAnnotations.filter(a => {
@@ -149,11 +154,15 @@ export default function AnnotationWorkspace() {
       })
     }
     return videoAnnotations || []
-  })
+  }, [videoAnnotations, selectedPersonaId])
   const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
   const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
   const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
   const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
+  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
+  const worldEntities = useSelector((state: RootState) => state.world.entities)
+  const worldEvents = useSelector((state: RootState) => state.world.events)
+  const worldTimes = useSelector((state: RootState) => state.world.times)
 
   // Detection mutation
   const detectMutation = useDetectObjects({
@@ -167,14 +176,55 @@ export default function AnnotationWorkspace() {
     },
   })
 
-  // Auto-save ALL annotations to database (not just filtered display subset)
-  // Matches pattern used by ontology and world object auto-save (1 second debounce)
-  useAutoSaveAnnotations({
-    videoId,
-    personaId: selectedPersonaId,
-    annotations: allAnnotations, // Use unfiltered annotations for saving
-    debounceMs: 1000,
-  })
+  // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
+  useEffect(() => {
+    if (!videoId || !videoAnnotations) return
+
+    const timeoutId = setTimeout(() => {
+      dispatch(saveAnnotations({
+        videoId,
+        personaId: selectedPersonaId,
+        annotations: videoAnnotations
+      }))
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [videoId, videoAnnotations, selectedPersonaId, dispatch])
+
+  // Helper function to get type name from typeId (for displaying human-readable names)
+  const getTypeName = useCallback((annotation: TypeAnnotation): string => {
+    const ontology = personaOntologies.find(o => o.personaId === annotation.personaId)
+    if (!ontology) return annotation.typeId
+
+    // Search in entities, roles, and events
+    const entity = ontology.entities.find(e => e.id === annotation.typeId)
+    if (entity) return entity.name
+
+    const role = ontology.roles.find(r => r.id === annotation.typeId)
+    if (role) return role.name
+
+    const event = ontology.events.find(e => e.id === annotation.typeId)
+    if (event) return event.name
+
+    return annotation.typeId // Fallback to ID if not found
+  }, [personaOntologies])
+
+  // Helper function to get object name from linkedEntityId/linkedEventId/linkedTimeId
+  const getObjectName = useCallback((annotation: ObjectAnnotation): string => {
+    if (annotation.linkedEntityId) {
+      const entity = worldEntities.find(e => e.id === annotation.linkedEntityId)
+      return entity?.name || annotation.linkedEntityId
+    }
+    if (annotation.linkedEventId) {
+      const event = worldEvents.find(e => e.id === annotation.linkedEventId)
+      return event?.name || annotation.linkedEventId
+    }
+    if (annotation.linkedTimeId) {
+      const time = worldTimes.find(t => t.id === annotation.linkedTimeId)
+      return time?.label || annotation.linkedTimeId
+    }
+    return 'Object Annotation'
+  }, [worldEntities, worldEvents, worldTimes])
 
   // Keyframe control callbacks
   const handleAddKeyframe = useCallback(() => {
@@ -578,8 +628,8 @@ export default function AnnotationWorkspace() {
             <AnnotationOverlay
               videoElement={videoPlayerRef.current.videoRef.current}
               currentTime={currentTime}
-              videoWidth={currentVideo.width}
-              videoHeight={currentVideo.height}
+              videoWidth={videoPlayerRef.current.videoRef.current.videoWidth || currentVideo.width}
+              videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
               detectionResults={detectionResults}
             />
           )}
@@ -868,13 +918,13 @@ export default function AnnotationWorkspace() {
                                 sx={{ height: 20, fontSize: '0.75rem' }}
                               />
                               <Typography variant="body2" noWrap>
-                                {annotation.typeId}
+                                {getTypeName(annotation as TypeAnnotation)}
                               </Typography>
                             </>
                           )}
                           {annotation.annotationType === 'object' && (
                             <Typography variant="body2" noWrap>
-                              Object Annotation
+                              {getObjectName(annotation as ObjectAnnotation)}
                             </Typography>
                           )}
                         </Box>

@@ -8,7 +8,7 @@ import { renderHook, act } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { useAnnotationDrawing } from './useAnnotationDrawing'
-import annotationSlice from '../../store/annotationSlice'
+import annotationSlice, { selectAnnotations } from '../../store/annotationSlice'
 import { RefObject } from 'react'
 
 /**
@@ -471,7 +471,7 @@ describe('useAnnotationDrawing', () => {
       })
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video']
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations).toHaveLength(1)
       expect(annotations[0]).toMatchObject({
@@ -521,7 +521,7 @@ describe('useAnnotationDrawing', () => {
       })
 
       const state = store.getState()
-      expect(state.annotations.annotations['test-video']).toBeUndefined()
+      expect(selectAnnotations(state, 'test-video')).toHaveLength(0)
       expect(result.current.isDrawing).toBe(false)
     })
   })
@@ -562,7 +562,7 @@ describe('useAnnotationDrawing', () => {
       })
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video']
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations).toHaveLength(1)
       expect(annotations[0]).toMatchObject({
@@ -605,7 +605,7 @@ describe('useAnnotationDrawing', () => {
       })
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video']
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations[0]).toMatchObject({
         linkedEventId: 'event-1',
@@ -645,7 +645,7 @@ describe('useAnnotationDrawing', () => {
       })
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video']
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations[0]).toMatchObject({
         linkedCollectionId: 'collection-1',

@@ -27,7 +27,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Reload page to clear Redux state
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     // Navigate back to the same video
     await page.goto(`/annotate/${testVideo.id}`)
@@ -74,7 +74,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Reload and verify both keyframes persist
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
@@ -104,7 +104,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Reload page
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
@@ -135,7 +135,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Reload again to verify the edit persisted
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
@@ -170,8 +170,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.waitForTimeout(1000)
 
     // Wait for ontology to load
-    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
-    await page.waitForTimeout(2000)
+    await page.waitForTimeout(1000)
 
     // Select entity type (required for annotations)
     const typeSelect = page.getByRole('combobox', { name: /select type/i })
@@ -198,7 +197,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Reload and verify all annotations persist
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 

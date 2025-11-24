@@ -96,8 +96,7 @@ export function useAutoSaveAnnotations({
       dispatch(saveAnnotations({
         videoId,
         personaId,
-        annotations,
-        loadedAnnotationIds: Array.from(loadedAnnotationIdsRef.current) // Convert Set to Array for Redux
+        annotations
       }))
     }, debounceMs)
 

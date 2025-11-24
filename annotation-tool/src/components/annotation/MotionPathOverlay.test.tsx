@@ -35,7 +35,7 @@ describe('MotionPathOverlay', () => {
       },
       preloadedState: {
         annotations: {
-          annotations: { 'vid-1': annotations },
+          annotations: { 'video_vid-1': annotations },
           selectedAnnotation: mockAnnotation,
           selectedPersonaId: null,
           annotationMode: 'type' as const,

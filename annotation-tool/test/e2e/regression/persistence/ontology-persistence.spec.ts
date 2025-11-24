@@ -9,48 +9,40 @@ import { test, expect } from '../../fixtures/test-context.js'
 test.describe('Ontology Type Auto-Save Persistence', () => {
   test('new entity type auto-saves and persists after page reload', async ({
     page,
+    ontologyWorkspace,
     testPersona
   }) => {
     // Navigate to ontology workspace
-    await page.goto('/ontology')
-    await page.waitForLoadState('networkidle')
-
-    // Select test persona
-    await page.getByText(testPersona.name).first().click()
-    await page.waitForTimeout(1000)
-
-    // Ensure we're on Entity Types tab
-    const entitiesTab = page.getByRole('tab', { name: /entity types/i })
-    await expect(entitiesTab).toBeVisible()
+    await ontologyWorkspace.navigateTo(testPersona.id)
 
     // Create new entity type
-    const addButton = page.getByRole('button', { name: /add/i }).first()
-    await addButton.click()
-
     const newTypeName = `Auto-Save Test ${Date.now()}`
-    await page.getByLabel(/name/i).fill(newTypeName)
-    await page.getByLabel(/definition|gloss/i).first().fill('Test entity type')
+    await ontologyWorkspace.createEntityType(newTypeName, 'Test entity type for auto-save persistence')
 
-    const saveButton = page.getByRole('button', { name: /save|create/i })
-    await saveButton.click()
+    // CRITICAL: Wait for type to appear in list (proves save completed)
+    await ontologyWorkspace.expectTypeExists(newTypeName)
 
-    // Wait for auto-save (1 second debounce + network time)
-    await page.waitForTimeout(2500)
+    // CRITICAL: Wait for network idle (all API calls completed including auto-save)
+    await page.waitForLoadState('networkidle', { timeout: 10000 })
 
-    // Verify it appears in list
-    await expect(page.getByText(newTypeName).first()).toBeVisible()
+    // Additional buffer for auto-save debounce to complete
+    await page.waitForTimeout(1500)
 
-    // Reload page to clear Redux state
+    // Now safe to reload
     await page.reload()
-    await page.waitForLoadState('networkidle')
 
-    // Navigate back to ontology
-    await page.goto('/ontology')
-    await page.waitForLoadState('networkidle')
-    await page.getByText(testPersona.name).first().click()
+    // CRITICAL: Wait for page fully loaded
+    await page.waitForLoadState('networkidle', { timeout: 10000 })
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
+
+    // Wait for React to hydrate
     await page.waitForTimeout(1000)
 
-    // Verify entity type still exists (proving database persistence)
-    await expect(page.getByText(newTypeName).first()).toBeVisible()
+    // Navigate back to ontology workspace
+    await ontologyWorkspace.navigateTo(testPersona.id)
+    await ontologyWorkspace.selectTab('entities')
+
+    // Verify entity type persisted (proving database persistence via auto-save)
+    await ontologyWorkspace.expectTypeExists(newTypeName)
   })
 })

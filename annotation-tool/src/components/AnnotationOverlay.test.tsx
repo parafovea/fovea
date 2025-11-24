@@ -9,7 +9,7 @@ import { Provider } from 'react-redux'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { configureStore } from '@reduxjs/toolkit'
 import AnnotationOverlay from './AnnotationOverlay'
-import annotationSlice from '../store/annotationSlice'
+import annotationSlice, { selectAnnotations } from '../store/annotationSlice'
 import worldSlice from '../store/worldSlice'
 
 /**
@@ -146,7 +146,7 @@ describe('AnnotationOverlay', () => {
 
       // Get created annotation from store
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video'] || []
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations).toHaveLength(1)
 
@@ -207,7 +207,7 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseUp(svg!)
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video'] || []
+      const annotations = selectAnnotations(state, 'test-video')
       const annotation = annotations[0]
 
       expect(annotation.annotationType).toBe('type')
@@ -260,7 +260,7 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseUp(svg!)
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video'] || []
+      const annotations = selectAnnotations(state, 'test-video')
       const annotation = annotations[0]
 
       expect(annotation.annotationType).toBe('object')
@@ -300,7 +300,7 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseUp(svg!)
 
       const state = store.getState()
-      const annotations = state.annotations.annotations['test-video'] || []
+      const annotations = selectAnnotations(state, 'test-video')
 
       expect(annotations).toHaveLength(0)
     })
@@ -309,7 +309,7 @@ describe('AnnotationOverlay', () => {
   describe('Annotation Rendering with boundingBoxSequence', () => {
     it('renders existing annotations with boundingBoxSequence', async () => {
       const stateWithAnnotations = createDefaultState()
-      stateWithAnnotations.annotations.annotations['test-video'] = [
+      stateWithAnnotations.annotations.annotations['video_test-video'] = [
         {
           id: 'ann-1',
           videoId: 'test-video',
@@ -367,7 +367,7 @@ describe('AnnotationOverlay', () => {
 
     it('safely handles annotations without boundingBoxSequence', async () => {
       const stateWithInvalidAnnotation = createDefaultState()
-      stateWithInvalidAnnotation.annotations.annotations['test-video'] = [
+      stateWithInvalidAnnotation.annotations.annotations['video_test-video'] = [
         {
           id: 'ann-invalid',
           videoId: 'test-video',
@@ -411,7 +411,7 @@ describe('AnnotationOverlay', () => {
     it('filters annotations by selected persona in type mode', async () => {
       const stateWithMultiplePersonas = createDefaultState()
       stateWithMultiplePersonas.annotations.selectedPersonaId = 'persona-1'
-      stateWithMultiplePersonas.annotations.annotations['test-video'] = [
+      stateWithMultiplePersonas.annotations.annotations['video_test-video'] = [
         {
           id: 'ann-1',
           videoId: 'test-video',
