@@ -90,6 +90,19 @@ function isSafeKey(key: string): boolean {
 }
 
 /**
+ * Creates a safe key for video ID property access.
+ * Prepends a marker prefix to prevent CodeQL remote property injection warnings.
+ * This follows the official CodeQL recommendation to prepend user-controlled input
+ * with a marker character before using it as a property key.
+ *
+ * @param videoId - The video ID from user input
+ * @returns Safe key with "video_" prefix
+ */
+function makeSafeVideoKey(videoId: string): string {
+  return `video_${videoId}`
+}
+
+/**
  * Saves all annotations for a video to the database.
  * Handles both creating new annotations and updating existing ones.
  * Tracks which annotations have been saved to distinguish between create and update operations.
@@ -118,9 +131,10 @@ export const saveAnnotations = createAsyncThunk(
 
     // Get loaded IDs and ID mapping from Redux state
     const state = getState() as { annotations: AnnotationState }
-    const loadedIds = state.annotations.loadedAnnotationIds[videoId] || []
+    const safeKey = makeSafeVideoKey(videoId)
+    const loadedIds = state.annotations.loadedAnnotationIds[safeKey] || []
     const loadedSet = new Set(loadedIds)
-    const idMapping = { ...(state.annotations.annotationIdMapping[videoId] || {}) } // Copy existing mapping
+    const idMapping = { ...(state.annotations.annotationIdMapping[safeKey] || {}) } // Copy existing mapping
 
     console.log(`[AUTO-SAVE] Loaded IDs from Redux:`, loadedIds)
     console.log(`[AUTO-SAVE] ID mapping from Redux:`, idMapping)
@@ -189,10 +203,11 @@ const annotationSlice = createSlice({
     setAnnotations: (state, action: PayloadAction<{ videoId: string; annotations: Annotation[] }>) => {
       const videoId = action.payload.videoId
       if (isSafeKey(videoId)) {
-        // Safe to use videoId as property key after validation
-        state.annotations[videoId] = action.payload.annotations
+        const safeKey = makeSafeVideoKey(videoId)
+        // Safe to use prefixed key - prevents CodeQL remote property injection warning
+        state.annotations[safeKey] = action.payload.annotations
         // Track which IDs were loaded from API (for distinguishing CREATE vs UPDATE in saveAnnotations)
-        state.loadedAnnotationIds[videoId] = action.payload.annotations
+        state.loadedAnnotationIds[safeKey] = action.payload.annotations
           .map(a => a.id)
           .filter((id): id is string => !!id)
       }
@@ -200,25 +215,32 @@ const annotationSlice = createSlice({
     addAnnotation: (state, action: PayloadAction<Annotation>) => {
       const videoId = action.payload.videoId
       if (isSafeKey(videoId)) {
-        if (!state.annotations[videoId]) {
-          state.annotations[videoId] = []
+        const safeKey = makeSafeVideoKey(videoId)
+        if (!state.annotations[safeKey]) {
+          state.annotations[safeKey] = []
         }
-        state.annotations[videoId].push(action.payload)
+        state.annotations[safeKey].push(action.payload)
       }
     },
     updateAnnotation: (state, action: PayloadAction<Annotation>) => {
       const videoId = action.payload.videoId
-      if (isSafeKey(videoId) && state.annotations[videoId]) {
-        const index = state.annotations[videoId].findIndex(a => a.id === action.payload.id)
-        if (index !== -1) {
-          state.annotations[videoId][index] = action.payload
+      if (isSafeKey(videoId)) {
+        const safeKey = makeSafeVideoKey(videoId)
+        if (state.annotations[safeKey]) {
+          const index = state.annotations[safeKey].findIndex(a => a.id === action.payload.id)
+          if (index !== -1) {
+            state.annotations[safeKey][index] = action.payload
+          }
         }
       }
     },
     deleteAnnotation: (state, action: PayloadAction<{ videoId: string; annotationId: string }>) => {
       const { videoId, annotationId } = action.payload
-      if (isSafeKey(videoId) && state.annotations[videoId]) {
-        state.annotations[videoId] = state.annotations[videoId].filter(a => a.id !== annotationId)
+      if (isSafeKey(videoId)) {
+        const safeKey = makeSafeVideoKey(videoId)
+        if (state.annotations[safeKey]) {
+          state.annotations[safeKey] = state.annotations[safeKey].filter(a => a.id !== annotationId)
+        }
       }
     },
     selectAnnotation: (state, action: PayloadAction<Annotation | null>) => {
@@ -351,7 +373,8 @@ const annotationSlice = createSlice({
       fps?: number
     }>) => {
       const { videoId, annotationId, frameNumber, box, fps = 30 } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -396,7 +419,8 @@ const annotationSlice = createSlice({
       fps?: number
     }>) => {
       const { videoId, annotationId, frameNumber, fps = 30 } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -429,7 +453,8 @@ const annotationSlice = createSlice({
       box: Partial<BoundingBox>
     }>) => {
       const { videoId, annotationId, frameNumber, box } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -450,7 +475,8 @@ const annotationSlice = createSlice({
       fps?: number
     }>) => {
       const { videoId, annotationId, oldFrame, newFrame, fps = 30 } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -504,7 +530,8 @@ const annotationSlice = createSlice({
       mode: InterpolationType
     }>) => {
       const { videoId, annotationId, startFrame, endFrame, mode } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -528,7 +555,8 @@ const annotationSlice = createSlice({
       visible: boolean
     }>) => {
       const { videoId, annotationId, startFrame, endFrame, visible } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -559,7 +587,8 @@ const annotationSlice = createSlice({
       controlPoints?: any
     }>) => {
       const { videoId, annotationId, segmentIndex, type, controlPoints } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -585,7 +614,8 @@ const annotationSlice = createSlice({
       frameNumber: number
     }>) => {
       const { videoId, annotationId, frameNumber } = action.payload
-      const videoAnnotations = state.annotations[videoId]
+      const safeKey = makeSafeVideoKey(videoId)
+      const videoAnnotations = state.annotations[safeKey]
       if (!videoAnnotations) return
 
       const annotation = videoAnnotations.find(a => a.id === annotationId)
@@ -673,9 +703,10 @@ const annotationSlice = createSlice({
 
         // Update loadedAnnotationIds and ID mapping
         if (isSafeKey(videoId)) {
-          // Safe to use videoId as property key after validation
-          state.loadedAnnotationIds[videoId] = loadedIds
-          state.annotationIdMapping[videoId] = idMapping
+          const safeKey = makeSafeVideoKey(videoId)
+          // Safe to use prefixed key - prevents CodeQL remote property injection warning
+          state.loadedAnnotationIds[safeKey] = loadedIds
+          state.annotationIdMapping[safeKey] = idMapping
         }
 
         if (errors.length > 0) {
@@ -730,8 +761,10 @@ export const {
 } = annotationSlice.actions
 
 // Selectors
-export const selectAnnotations = (state: { annotations: AnnotationState }, videoId: string) =>
-  state.annotations.annotations[videoId] || []
+export const selectAnnotations = (state: { annotations: AnnotationState }, videoId: string) => {
+  const safeKey = makeSafeVideoKey(videoId)
+  return state.annotations.annotations[safeKey] || []
+}
 
 export const selectSelectedAnnotation = (state: { annotations: AnnotationState }) =>
   state.annotations.selectedAnnotation
@@ -762,8 +795,10 @@ export const selectTimelineZoom = (state: { annotations: AnnotationState }) =>
  */
 export const selectAnnotationAtFrame = createSelector(
   [
-    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) =>
-      state.annotations.annotations[videoId]?.find(a => a.id === annotationId),
+    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) => {
+      const safeKey = makeSafeVideoKey(videoId)
+      return state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
+    },
     (_state: { annotations: AnnotationState }, _videoId: string, _annotationId: string, frameNumber: number) => frameNumber,
   ],
   (annotation, frameNumber) => {
@@ -791,7 +826,8 @@ export const selectKeyframes = (
   videoId: string,
   annotationId: string
 ): BoundingBox[] => {
-  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  const safeKey = makeSafeVideoKey(videoId)
+  const annotation = state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
   if (!annotation) return []
 
   return annotation.boundingBoxSequence.boxes.filter(
@@ -812,7 +848,8 @@ export const selectInterpolationSegments = (
   videoId: string,
   annotationId: string
 ) => {
-  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  const safeKey = makeSafeVideoKey(videoId)
+  const annotation = state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
   if (!annotation) return []
 
   return annotation.boundingBoxSequence.interpolationSegments
@@ -847,8 +884,10 @@ export const selectIsKeyframe = (
  */
 export const selectMotionPath = createSelector(
   [
-    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) =>
-      state.annotations.annotations[videoId]?.find(a => a.id === annotationId),
+    (state: { annotations: AnnotationState }, videoId: string, annotationId: string) => {
+      const safeKey = makeSafeVideoKey(videoId)
+      return state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
+    },
   ],
   (annotation) => {
     if (!annotation) return []
@@ -888,7 +927,8 @@ export const selectVisibilityRanges = (
   videoId: string,
   annotationId: string
 ) => {
-  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  const safeKey = makeSafeVideoKey(videoId)
+  const annotation = state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
   return annotation?.boundingBoxSequence.visibilityRanges || []
 }
 
@@ -907,7 +947,8 @@ export const selectIsVisibleAtFrame = (
   annotationId: string,
   frameNumber: number
 ): boolean => {
-  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  const safeKey = makeSafeVideoKey(videoId)
+  const annotation = state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
   if (!annotation) return false
 
   const ranges = annotation.boundingBoxSequence.visibilityRanges
@@ -932,7 +973,8 @@ export const selectInterpolationSegment = (
   annotationId: string,
   frameNumber: number
 ) => {
-  const annotation = state.annotations.annotations[videoId]?.find(a => a.id === annotationId)
+  const safeKey = makeSafeVideoKey(videoId)
+  const annotation = state.annotations.annotations[safeKey]?.find(a => a.id === annotationId)
   if (!annotation) return null
 
   return annotation.boundingBoxSequence.interpolationSegments.find(

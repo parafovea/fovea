@@ -65,6 +65,7 @@ import {
   updateInterpolationSegment,
   setAnnotations,
   saveAnnotations,
+  selectAnnotations,
 } from '../store/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
@@ -136,7 +137,7 @@ export default function AnnotationWorkspace() {
 
   // Get annotations for this specific video ONLY (selector only re-runs if THIS video's annotations change)
   const videoAnnotations = useSelector((state: RootState) =>
-    videoId ? state.annotations.annotations[videoId] : undefined
+    videoId ? selectAnnotations(state, videoId) : []
   )
 
   // Get filtered annotations for display (by selected persona)

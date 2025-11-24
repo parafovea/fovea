@@ -14,6 +14,7 @@ import {
   Chip,
 } from '@mui/material'
 import { RootState } from '../store/store'
+import { selectAnnotations } from '../store/annotationSlice'
 import { GlossItem } from '../models/types'
 
 interface GlossEditorProps {
@@ -60,7 +61,7 @@ export default function GlossEditor({
   const { entities, events, times } = useSelector((state: RootState) => state.world)
   const annotations = useSelector((state: RootState) => {
     if (!videoId) return []
-    return state.annotations.annotations[videoId] || []
+    return selectAnnotations(state, videoId)
   }, (a, b) => a === b || (a.length === 0 && b.length === 0))
   const activeOntology = personaOntologies.find(o => o.personaId === personaId)
   
