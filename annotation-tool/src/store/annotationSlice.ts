@@ -3,6 +3,7 @@ import { Annotation, Time, BoundingBox, InterpolationType, TrackingResult } from
 import { DetectionResponse } from '../api/client.js'
 import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../utils/interpolation.js'
 import { api } from '../services/api'
+import { v4 as uuidv4 } from 'uuid'
 
 type AnnotationMode =
   | 'type'    // Assign types from persona ontology (requires persona)
@@ -30,6 +31,7 @@ interface AnnotationState {
   detectionConfidenceThreshold: number
   showDetectionCandidates: boolean
   loadedAnnotationIds: Record<string, string[]>  // Track IDs loaded from API per video (for CREATE vs UPDATE)
+  annotationIdMapping: Record<string, Record<string, string>>  // Per-video mapping of client UUID → server ID
 
   // Tracking-specific state
   trackingResults: TrackingResult[]
@@ -61,6 +63,7 @@ const initialState: AnnotationState = {
   detectionConfidenceThreshold: 0.5,
   showDetectionCandidates: false,
   loadedAnnotationIds: {},
+  annotationIdMapping: {},
 
   // Tracking-specific state
   trackingResults: [],
@@ -106,10 +109,20 @@ export const saveAnnotations = createAsyncThunk(
   }, { getState }) => {
     const { videoId, annotations } = params
 
-    // Get loaded IDs from Redux state
+    console.log(`[AUTO-SAVE] Starting save for video ${videoId}:`, {
+      totalAnnotations: annotations.length,
+      annotationIds: annotations.map(a => a.id),
+      annotationsWithoutId: annotations.filter(a => !a.id).length
+    })
+
+    // Get loaded IDs and ID mapping from Redux state
     const state = getState() as { annotations: AnnotationState }
     const loadedIds = state.annotations.loadedAnnotationIds[videoId] || []
     const loadedSet = new Set(loadedIds)
+    const idMapping = { ...(state.annotations.annotationIdMapping[videoId] || {}) } // Copy existing mapping
+
+    console.log(`[AUTO-SAVE] Loaded IDs from Redux:`, loadedIds)
+    console.log(`[AUTO-SAVE] ID mapping from Redux:`, idMapping)
 
     const savedCount = { created: 0, updated: 0 }
     const errors: Array<{ annotationId: string; error: string }> = []
@@ -117,26 +130,44 @@ export const saveAnnotations = createAsyncThunk(
     // Save each annotation individually
     // The backend has separate endpoints for create (POST) and update (PUT)
     for (const annotation of annotations) {
+      // Generate client-side ID if missing (for newly created annotations)
       if (!annotation.id) {
-        continue
+        console.warn(`[AUTO-SAVE] Annotation missing ID, generating client-side UUID`)
+        annotation.id = uuidv4()
       }
 
       try {
         // Determine if this is a new annotation or an update
-        const isNew = !loadedSet.has(annotation.id)
+        // Check both loadedSet and idMapping to avoid re-creating annotations
+        // that have been saved but not yet synced with server ID
+        const isNew = !loadedSet.has(annotation.id) && !idMapping[annotation.id]
 
         if (isNew) {
-          // Create new annotation
-          await api.saveAnnotation(annotation)
+          // Create new annotation (POST returns annotation with server-generated ID)
+          console.log(`[AUTO-SAVE] Creating annotation ${annotation.id} (POST)`)
+          const savedAnnotation = await api.saveAnnotation(annotation)
+          console.log(`[AUTO-SAVE] Server returned ID: ${savedAnnotation.id}`)
           savedCount.created++
-          // Add to loaded set so future saves treat it as an update
-          loadedSet.add(annotation.id)
+
+          // Map client ID to server ID for future reference
+          if (savedAnnotation.id !== annotation.id) {
+            idMapping[annotation.id] = savedAnnotation.id
+            loadedSet.add(savedAnnotation.id)  // Track server ID
+          } else {
+            loadedSet.add(annotation.id)
+          }
         } else {
-          // Update existing annotation
-          await api.updateAnnotation(annotation)
+          // Update existing annotation  - use server ID if we have a mapping
+          const serverIdOrOriginal = idMapping[annotation.id] || annotation.id
+          console.log(`[AUTO-SAVE] Updating annotation ${annotation.id} → ${serverIdOrOriginal} (PUT)`)
+
+          // Create a copy with the correct server ID for the API call
+          const annotationForUpdate = { ...annotation, id: serverIdOrOriginal }
+          await api.updateAnnotation(annotationForUpdate)
           savedCount.updated++
         }
       } catch (error) {
+        console.error(`[AUTO-SAVE] Error saving annotation ${annotation.id}:`, error)
         errors.push({
           annotationId: annotation.id,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -144,7 +175,9 @@ export const saveAnnotations = createAsyncThunk(
       }
     }
 
-    return { videoId, savedCount, errors }
+    console.log(`[AUTO-SAVE] Complete:`, { savedCount, errorCount: errors.length, idMapping })
+    // Return the updated loaded IDs and ID mapping for the fulfilled handler
+    return { videoId, savedCount, errors, loadedIds: Array.from(loadedSet), idMapping }
   }
 )
 
@@ -634,29 +667,16 @@ const annotationSlice = createSlice({
         // Could add loading state here if needed
       })
       .addCase(saveAnnotations.fulfilled, (state, action) => {
-        const { videoId, savedCount, errors } = action.payload
+        const { videoId, errors, loadedIds, idMapping } = action.payload
 
-        // CRITICAL: ONLY update loadedAnnotationIds, NOT the annotations array
-        // This prevents circular dependencies that cause infinite loops
-        if (isSafeKey(videoId) && savedCount.created > 0) {
-          const currentAnnotations = state.annotations[videoId]
-          if (!currentAnnotations) return
-
-          const existingIds = new Set(state.loadedAnnotationIds[videoId] || [])
-
-          // Add newly created IDs to the tracking set
-          for (const ann of currentAnnotations) {
-            if (ann.id && !existingIds.has(ann.id)) {
-              existingIds.add(ann.id)
-            }
-          }
-
-          state.loadedAnnotationIds[videoId] = Array.from(existingIds)
+        // Update loadedAnnotationIds and ID mapping
+        if (isSafeKey(videoId)) {
+          state.loadedAnnotationIds[videoId] = loadedIds
+          state.annotationIdMapping[videoId] = idMapping
         }
 
-        console.log(`Auto-save complete: ${savedCount.created} created, ${savedCount.updated} updated`)
         if (errors.length > 0) {
-          console.error(`Auto-save errors:`, errors)
+          console.error(`Annotation save errors:`, errors)
         }
       })
       .addCase(saveAnnotations.rejected, (_state, action) => {

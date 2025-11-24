@@ -126,15 +126,18 @@ export default function AnnotationWorkspace() {
   }, [timelineExpanded])
 
   const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const personas = useSelector((state: RootState) => state.persona.personas)
+
+  // Select individual fields to avoid re-renders when unrelated state changes
+  // CRITICAL: Don't destructure entire state.annotations because updating loadedAnnotationIds
+  // would cause new references for all destructured values, triggering infinite loops
+  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
   const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
 
-  // Get annotations directly from Redux (stable reference, not filtered/computed)
-  const annotationsRecord = useSelector((state: RootState) => state.annotations.annotations)
-
-  // Get annotations for this video (stable reference from Redux)
-  const videoAnnotations = videoId ? annotationsRecord[videoId] : undefined
+  // Get annotations for this specific video ONLY (selector only re-runs if THIS video's annotations change)
+  const videoAnnotations = useSelector((state: RootState) =>
+    videoId ? state.annotations.annotations[videoId] : undefined
+  )
 
   // Get filtered annotations for display (by selected persona)
   const annotations = useMemo(() => {
@@ -173,8 +176,6 @@ export default function AnnotationWorkspace() {
   })
 
   // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
-  // CRITICAL: saveAnnotations.fulfilled must NOT update annotations in Redux (only loadedAnnotationIds)
-  // This will trigger on initial load (saving the just-loaded annotations), but that's OK - they're UPDATEs
   useEffect(() => {
     if (!videoId || !videoAnnotations) return
 
