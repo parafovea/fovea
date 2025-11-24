@@ -114,7 +114,7 @@ Choose your deployment path:
 After deployment:
 
 1. Verify all services are running: `docker compose ps`
-2. Access the frontend at http://localhost:3000
+2. Access the frontend at http://localhost:3000 (port 5173 for manual dev setup)
 3. Check service health endpoints
 4. Review [Common Tasks](../operations/common-tasks.md) for daily operations
 5. Configure [Monitoring](../operations/monitoring/overview.md) dashboards

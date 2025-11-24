@@ -51,7 +51,7 @@ With a box selected, the arrow keys nudge it 1 pixel in any direction. Hold **Sh
 
 **Ctrl+E** opens the export dialog. **Ctrl+I** opens the import dialog. These work from anywhere in the application.
 
-**Ctrl+S** saves the current annotation. While annotations auto-save as you work, this provides an explicit save action when needed.
+**Ctrl+S** forces an immediate save of annotations. Annotations auto-save automatically after 1 second of inactivity, but this shortcut ensures changes are committed immediately. Use before switching videos, closing the browser, or when you need confirmation that changes persisted.
 
 **Ctrl+Z** and **Ctrl+Shift+Z** provide undo and redo functionality across most operations.
 

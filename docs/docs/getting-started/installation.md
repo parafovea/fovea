@@ -58,6 +58,8 @@ Once all services are running, open your browser and navigate to:
 http://localhost:3000
 ```
 
+**Note**: Docker deployment uses port 3000. If running manual development setup, the frontend uses port 5173 (Vite dev server).
+
 The default login credentials will be displayed in the terminal output on first run.
 
 ## GPU Mode Installation

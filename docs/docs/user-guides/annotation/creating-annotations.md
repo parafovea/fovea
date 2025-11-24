@@ -179,6 +179,34 @@ Press **V** to toggle visibility at the current frame.
 6. **Press Y** to accept good tracks, **N** to reject bad ones
 7. **Refine accepted tracks** by adding keyframes where tracking drifted
 
+## Auto-Save Behavior
+
+Annotations automatically save as you work, eliminating the need to manually save after every change.
+
+### How Auto-Save Works
+
+- **Automatic**: Changes save 1 second after you stop editing
+- **Debounced**: Multiple rapid changes trigger one save (not one per change)
+- **Silent**: No visual feedback or "saved" indicator (background operation)
+- **Smart**: System distinguishes new annotations from database updates
+
+### What Triggers Auto-Save
+
+- Adding or moving keyframes
+- Adjusting bounding box position or size
+- Changing annotation properties (type, visibility, etc.)
+- Modifying interpolation settings
+
+### Manual Save (Ctrl+S)
+
+While annotations auto-save, you can force immediate save with **Ctrl+S**. Use this before:
+
+- Switching to a different video
+- Closing the browser
+- Testing that changes persisted correctly
+
+**Tip**: You don't need to save manually in most workflows. Auto-save handles persistence automatically.
+
 ## Keyboard Shortcuts
 
 Master these shortcuts to annotate efficiently:
@@ -254,7 +282,7 @@ See [Exporting Data](../data-management/exporting-data.md) for details.
 
 ### Annotating Multiple Objects
 
-1. Run automated tracking with **ByteTrack** model
+1. Run automated tracking with **SAMURAI** model
 2. Accept all high-confidence tracks
 3. Manually annotate objects tracking missed
 4. Refine by adding keyframes where tracking drifted

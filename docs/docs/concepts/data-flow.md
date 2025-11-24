@@ -145,64 +145,45 @@ sequenceDiagram
 - Invalid interpolation configurations
 - Missing persona or video references
 
-## Tracking Job Flow (BullMQ)
+## Object Detection and Tracking Flow
 
-Automated tracking uses BullMQ job queue for long-running operations.
+Object detection and tracking requests are forwarded directly to the model service.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Frontend
     participant Backend
-    participant BullMQ
-    participant Redis
-    participant Worker
     participant ModelService
 
-    User->>Frontend: Click "Run Tracking"
-    Frontend->>Backend: POST /api/tracking
-    Backend->>BullMQ: Add job to queue
-    BullMQ->>Redis: LPUSH tracking_jobs
-    Redis-->>BullMQ: Job ID
-    BullMQ-->>Backend: Job ID
-    Backend-->>Frontend: 202 Accepted (job_id)
-
-    Frontend->>Frontend: Poll status every 2s
-
-    Worker->>Redis: BRPOP tracking_jobs
-    Redis-->>Worker: Job data
-    Worker->>ModelService: POST /track
-    ModelService->>ModelService: Run ByteTrack
-    ModelService-->>Worker: Tracking results
-    Worker->>Redis: Update job progress
-    Worker->>BullMQ: Job complete
-
-    Frontend->>Backend: GET /api/jobs/:id
-    Backend->>BullMQ: getJob(id)
-    BullMQ->>Redis: GET job:id
-    Redis-->>BullMQ: Job data
-    BullMQ-->>Backend: Job complete
-    Backend-->>Frontend: Tracking results
-    Frontend->>User: Show tracking candidates
+    User->>Frontend: Click "Run Detection" (with tracking enabled)
+    Frontend->>Backend: POST /api/videos/:videoId/detect
+    Note over Frontend,Backend: enableTracking: true
+    Backend->>ModelService: POST /api/detect or /api/track
+    Note over Backend,ModelService: Forward video path, query, options
+    ModelService->>ModelService: Run detection/tracking model (SAMURAI, etc.)
+    ModelService-->>Backend: Detection/tracking results
+    Backend-->>Frontend: Results with bounding boxes
+    Frontend->>User: Show detection results
+    User->>Frontend: Review and accept/reject detections
 ```
 
 **Flow Steps**:
 
-1. User clicks "Run Tracking" button in detection dialog
-2. Frontend sends POST request to backend with tracking options
-3. Backend creates BullMQ job with video ID and model config
-4. BullMQ adds job to Redis queue
-5. Backend returns job ID to frontend (202 Accepted)
-6. Frontend polls job status every 2 seconds
-7. BullMQ worker picks job from Redis queue
-8. Worker calls model service `/track` endpoint
-9. Model service runs tracking algorithm (e.g., ByteTrack, SAMURAI)
-10. Model service returns tracking results to worker
-11. Worker stores results and marks job complete
-12. Frontend receives results and displays tracking candidates
-13. User reviews and accepts/rejects tracks
+1. User clicks "Run Detection" button in detection dialog
+2. User optionally enables tracking in dialog options
+3. Frontend sends POST request to backend `/api/videos/:videoId/detect`
+4. Backend validates request and forwards to model service
+5. Model service runs detection (YOLO-World-v2, GroundingDINO, etc.)
+6. If tracking enabled, model service runs tracking (SAMURAI, SAM2.1, etc.)
+7. Model service returns bounding boxes with confidence scores
+8. Backend forwards results to frontend
+9. Frontend displays bounding boxes on video
+10. User reviews results and accepts as annotations or rejects
 
-**Job Status Flow**: pending → active → completed (or failed)
+**Available Models**:
+- **Detection**: YOLO-World-v2 (default), GroundingDINO 1.5, OWLv2, Florence-2
+- **Tracking**: SAMURAI (default), SAM2Long, SAM2.1, YOLO11n-seg
 
 ## Next Steps
 

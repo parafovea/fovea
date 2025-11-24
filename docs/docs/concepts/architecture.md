@@ -87,7 +87,7 @@ The backend is a Node.js 22 LTS server using the Fastify 5 framework. Key techno
 - **TypeBox**: Schema validation with Fastify type provider
 - **OpenTelemetry**: Distributed tracing and metrics
 
-The backend serves the REST API on port 3001, persists data to PostgreSQL, and queues long-running jobs (video summarization, object tracking) to Redis for the model service to process.
+The backend serves the REST API on port 3001, persists data to PostgreSQL, and queues long-running jobs (video summarization) to Redis for the model service to process. The codebase uses a repository pattern (e.g., VideoRepository) to abstract database queries from route handlers.
 
 ### Model Service
 
@@ -125,18 +125,26 @@ The observability stack provides monitoring and debugging capabilities:
 
 The frontend calls the backend REST API for CRUD operations on personas, ontologies, world objects, and annotations. API calls use Axios with automatic retry and error handling.
 
-### Backend to Model Service (via BullMQ)
+### Backend to Model Service
 
-For long-running AI tasks, the backend submits jobs to BullMQ:
+For object detection and tracking, the backend forwards requests to the model service:
 
-1. User clicks "Run Tracking" in the frontend
-2. Frontend sends POST request to backend `/api/tracking` endpoint
-3. Backend creates a BullMQ job and returns job ID to frontend
-4. BullMQ worker picks up the job from Redis
-5. Worker calls model service `/track` endpoint
-6. Model service processes the video and returns results
-7. Worker stores results in database
-8. Frontend polls for job completion via `/api/jobs/:id`
+1. User clicks "Run Detection" (with optional tracking) in the frontend
+2. Frontend sends POST request to backend `/api/videos/:videoId/detect` with `enableTracking: true`
+3. Backend forwards request to model service `/api/detect` or `/api/track` endpoint
+4. Model service processes the video and returns detection/tracking results
+5. Backend returns results to frontend
+6. Frontend displays bounding boxes and tracking data
+
+For long-running AI tasks like video summarization, the backend uses BullMQ:
+
+1. Frontend sends summarization request to backend
+2. Backend creates a BullMQ job and returns job ID
+3. BullMQ worker picks up the job from Redis
+4. Worker calls model service `/api/summarize` endpoint
+5. Model service generates summary
+6. Worker stores results in database
+7. Frontend polls for job completion via `/api/jobs/:id`
 
 ### Telemetry Flow
 

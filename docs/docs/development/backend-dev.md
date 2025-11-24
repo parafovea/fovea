@@ -51,12 +51,22 @@ server/
 │   ├── app.ts             # Fastify app configuration
 │   ├── tracing.ts         # OpenTelemetry setup (must be first import)
 │   ├── routes/            # API route handlers
-│   │   ├── videos.ts
+│   │   ├── videos/        # Modular video routes (NEW)
+│   │   │   ├── index.ts   # Route registration
+│   │   │   ├── list.ts    # List and get video metadata
+│   │   │   ├── stream.ts  # Video streaming
+│   │   │   ├── thumbnail.ts
+│   │   │   ├── detect.ts  # Object detection
+│   │   │   ├── sync.ts    # Storage sync
+│   │   │   ├── url.ts     # Get video URLs
+│   │   │   └── schemas.ts # Shared schemas
 │   │   ├── personas.ts
 │   │   ├── ontology.ts
 │   │   ├── world.ts
 │   │   ├── annotations.ts
 │   │   └── export.ts
+│   ├── repositories/      # Data access layer (NEW)
+│   │   └── VideoRepository.ts
 │   ├── services/          # Business logic
 │   │   ├── videoService.ts
 │   │   ├── ontologyService.ts
@@ -77,6 +87,63 @@ server/
     ├── routes/
     └── services/
 ```
+
+## Architecture Patterns
+
+### Repository Pattern
+
+The backend uses repository classes to encapsulate database queries and abstract data access from route handlers.
+
+**Location**: `server/src/repositories/`
+
+**Example**: `VideoRepository.ts`
+
+```typescript
+// Repository handles all video database queries
+class VideoRepository {
+  constructor(private prisma: PrismaClient) {}
+
+  async findById(id: string): Promise<Video | null> {
+    return this.prisma.video.findUnique({ where: { id } })
+  }
+
+  async findAll(filters?: VideoFilters): Promise<Video[]> {
+    return this.prisma.video.findMany({ where: filters })
+  }
+}
+
+// Route handler uses repository
+fastify.get('/api/videos/:id', async (request, reply) => {
+  const video = await videoRepository.findById(request.params.id)
+  return video
+})
+```
+
+**Benefits**:
+- Testable database logic (mock repositories in tests)
+- Reusable query methods across routes
+- Clear separation between routes and data access
+- Easier to refactor database schema
+
+### Modular Route Organization
+
+Complex route modules are split into separate files for maintainability. The videos API exemplifies this pattern:
+
+```
+routes/videos/
+├── index.ts      # Registers all sub-routes
+├── list.ts       # GET /api/videos, GET /api/videos/:id
+├── stream.ts     # GET /api/videos/:id/stream
+├── thumbnail.ts  # GET /api/videos/:id/thumbnail
+├── detect.ts     # POST /api/videos/:id/detect
+├── sync.ts       # POST /api/videos/sync
+├── url.ts        # GET /api/videos/:id/url
+└── schemas.ts    # Shared TypeBox schemas
+```
+
+Each file contains related endpoint logic, keeping route handlers focused and easy to test.
+
+**When to modularize**: When a route file exceeds 300-400 lines or handles 5+ distinct operations.
 
 ## Running the Backend
 

@@ -77,7 +77,7 @@ Tracking confidence is a score between 0 and 1 indicating how certain the tracki
 
 ## Tracking Metadata
 
-When you accept a track as an annotation, the system preserves metadata about where it came from. This includes the tracking model used (SAMURAI, ByteTrack, etc.), the track ID assigned by the model, and confidence scores. This metadata helps you audit which annotations came from automation versus manual work.
+When you accept a track as an annotation, the system preserves metadata about where it came from. This includes the tracking model used (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg), the track ID assigned by the model, and confidence scores. This metadata helps you audit which annotations came from automation versus manual work.
 
 ## Type Assignment
 

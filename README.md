@@ -100,9 +100,9 @@ Click "Export" to generate JSON Lines format output. Exports include ontology de
 
 FOVEA uses a three-tier architecture with a React frontend, Node.js backend, and Python model service. All services communicate via REST APIs and use PostgreSQL for persistence with Redis for job queuing.
 
-The frontend uses React 18 with TypeScript, Material-UI v6, and Redux Toolkit for state management. TanStack Query v5 handles server state synchronization. The video player is built on video.js with custom annotation overlays. Testing uses Vitest, Playwright, and MSW 2.0.
+The frontend uses React 18 with TypeScript, Material-UI v5, and Redux Toolkit for state management. TanStack Query v5 handles server state synchronization. The video player is built on video.js with custom annotation overlays. Testing uses Vitest, Playwright, and MSW 2.0.
 
-The backend runs on Node.js 22 LTS with Fastify 5 and TypeScript. PostgreSQL 16 with Prisma 6 ORM provides data persistence. BullMQ 5 and Redis 7 handle background job processing. Schema validation uses Zod for type safety.
+The backend runs on Node.js 22 LTS with Fastify 5 and TypeScript. PostgreSQL 16 with Prisma 6 ORM provides data persistence. BullMQ 5 and Redis 7 handle background job processing. Schema validation uses TypeBox with Fastify type provider.
 
 The model service is built with Python 3.12, FastAPI 0.110+, and Pydantic v2. Machine learning capabilities use PyTorch 2.5+ and Transformers 4.47+. Inference runs on SGLang 0.4+ with vLLM 0.6+ fallback. All I/O operations are non-blocking with asyncio and aiohttp.
 
