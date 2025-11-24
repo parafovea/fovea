@@ -96,7 +96,7 @@ The backend uses repository classes to encapsulate database queries and abstract
 
 **Location**: `server/src/repositories/`
 
-**Example**: [`VideoRepository.ts`](../../api-reference/videos.md)
+**Example**: `VideoRepository.ts`
 
 ```typescript
 // Repository handles all video database queries
