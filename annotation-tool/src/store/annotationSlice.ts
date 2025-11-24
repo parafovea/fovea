@@ -109,7 +109,8 @@ export const saveAnnotations = createAsyncThunk(
   }, { getState }) => {
     const { videoId, annotations } = params
 
-    console.log(`[AUTO-SAVE] Starting save for video ${videoId}:`, {
+    console.log('[AUTO-SAVE] Starting save for video:', {
+      videoId,
       totalAnnotations: annotations.length,
       annotationIds: annotations.map(a => a.id),
       annotationsWithoutId: annotations.filter(a => !a.id).length
@@ -186,8 +187,9 @@ const annotationSlice = createSlice({
   initialState,
   reducers: {
     setAnnotations: (state, action: PayloadAction<{ videoId: string; annotations: Annotation[] }>) => {
-      if (isSafeKey(action.payload.videoId)) {
-        const videoId = action.payload.videoId
+      const videoId = action.payload.videoId
+      if (isSafeKey(videoId)) {
+        // Safe to use videoId as property key after validation
         state.annotations[videoId] = action.payload.annotations
         // Track which IDs were loaded from API (for distinguishing CREATE vs UPDATE in saveAnnotations)
         state.loadedAnnotationIds[videoId] = action.payload.annotations
@@ -671,12 +673,13 @@ const annotationSlice = createSlice({
 
         // Update loadedAnnotationIds and ID mapping
         if (isSafeKey(videoId)) {
+          // Safe to use videoId as property key after validation
           state.loadedAnnotationIds[videoId] = loadedIds
           state.annotationIdMapping[videoId] = idMapping
         }
 
         if (errors.length > 0) {
-          console.error(`Annotation save errors:`, errors)
+          console.error('Annotation save errors:', errors)
         }
       })
       .addCase(saveAnnotations.rejected, (_state, action) => {
