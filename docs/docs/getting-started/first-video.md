@@ -295,7 +295,7 @@ Should return JSON array with your videos:
 
 ### Check Frontend
 
-1. Open http://localhost:5173
+1. Open http://localhost:3000 (or 5173 if using manual dev setup)
 2. Navigate to Video Browser
 3. Your video should appear in the list
 4. Click on the video to open it for annotation

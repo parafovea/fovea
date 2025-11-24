@@ -96,7 +96,7 @@ All recommended features plus:
 - vLLM 0.6+ for high-throughput LLM serving
 - SGLang 0.4+ for structured generation
 - SAM-2 for video segmentation
-- All tracking models (SAMURAI, ByteTrack, BoT-SORT)
+- All tracking models (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg)
 - Production-optimized inference
 
 ### Use Cases

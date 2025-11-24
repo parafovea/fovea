@@ -142,7 +142,7 @@ Bounding box sequences integrate with automated tracking models. When you run ob
 ### Tracking Metadata
 
 - **Track ID**: Identifier from the tracking model
-- **Tracking source**: Model used (SAMURAI, SAM2Long, ByteTrack, etc.)
+- **Tracking source**: Model used (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg)
 - **Confidence**: Overall tracking quality score
 - **Per-frame confidence**: Individual frame confidence scores
 

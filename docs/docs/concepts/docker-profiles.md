@@ -65,7 +65,7 @@ The full build mode (`BUILD_MODE=full`) includes all inference engines:
 - SGLang inference engine (optimized for VLMs and LLMs)
 - vLLM fallback inference engine
 - All object detection models (YOLO variants)
-- All tracking models (SAMURAI, SAM2Long, ByteTrack)
+- All tracking models (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg)
 - Longer build times but better performance
 
 ## When to Use Each Mode

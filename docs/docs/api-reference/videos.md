@@ -6,6 +6,20 @@ title: Videos API
 
 List videos, retrieve metadata, stream video files, and perform object detection. Videos are served from the `/data` directory.
 
+## Route Organization
+
+The videos API is organized into modular route files for maintainability:
+
+- **`list.ts`** - [List videos](#list-videos) and [get metadata](#get-video-metadata) (`GET /api/videos`, `GET /api/videos/:videoId`)
+- **`stream.ts`** - [Video streaming](#stream-video) with range support (`GET /api/videos/:videoId/stream`)
+- **`thumbnail.ts`** - Thumbnail generation and serving (`GET /api/videos/:videoId/thumbnail`)
+- **`detect.ts`** - [Object detection](#detect-objects) with optional tracking (`POST /api/videos/:videoId/detect`)
+- **`sync.ts`** - Video synchronization from storage (`POST /api/videos/sync`)
+- **`url.ts`** - Get video URLs (`GET /api/videos/:videoId/url`)
+- **`schemas.ts`** - Shared TypeBox schema definitions
+
+All routes are registered through `server/src/routes/videos/index.ts`.
+
 ## List Videos
 
 Retrieve all available videos with metadata.

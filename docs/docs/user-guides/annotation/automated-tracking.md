@@ -25,12 +25,10 @@ This hybrid approach combines the speed of automation with the precision of manu
 | **SAMURAI** | General object tracking | High accuracy, handles occlusion | Medium |
 | **SAM2Long** | Long video sequences | Maintains identity across long clips | Slow |
 | **SAM2.1** | Short segments | Fast, good for quick iteration | Fast |
-| **ByteTrack** | Multiple objects | Tracks many objects simultaneously | Fast |
-| **BoT-SORT** | Crowded scenes | Handles overlapping objects | Medium |
 | **YOLO11n-seg** | Real-time detection | Very fast, good for pre-filtering | Very Fast |
 
 :::tip Model Selection
-Start with **SAMURAI** for general use. Switch to **ByteTrack** when tracking 5+ objects simultaneously.
+Start with **SAMURAI** for general use. Switch to **YOLO11n-seg** for speed-critical tasks with simple objects.
 :::
 
 ## Step 1: Open the Detection Dialog
@@ -52,11 +50,9 @@ Choose a tracking model from the dropdown:
 
 ```
 ┌─ Tracking Model ──────┐
-│ ○ SAMURAI            │
+│ ● SAMURAI            │
 │ ○ SAM2Long           │
 │ ○ SAM2.1             │
-│ ● ByteTrack          │
-│ ○ BoT-SORT           │
 │ ○ YOLO11n-seg        │
 └──────────────────────┘
 ```
@@ -358,7 +354,7 @@ This metadata allows you to:
 **Solutions**:
 - Accept the best track (highest confidence or longest duration)
 - Reject the duplicate tracks
-- Use ByteTrack or BoT-SORT models (designed for identity preservation)
+- Try SAMURAI model (best at maintaining object identity through occlusions)
 
 ### Tracking Takes Too Long
 
@@ -412,7 +408,7 @@ Tracking performance depends on hardware:
 | YOLO11n-seg | 10-15 | 60-100 | 6x |
 | SAMURAI | 2-5 | 15-25 | 7x |
 | SAM2Long | 1-3 | 8-15 | 8x |
-| ByteTrack | 5-10 | 30-50 | 6x |
+| SAM2.1 | 6-8 | 30-50 | 6x |
 
 For production deployments with many videos, GPU mode is recommended. See [GPU Mode Deployment](../../deployment/gpu-mode.md).
 

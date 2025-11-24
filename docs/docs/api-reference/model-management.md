@@ -25,9 +25,8 @@ Fovea supports multiple AI models for different tasks (object detection, trackin
 
 **Object Tracking:**
 - SAMURAI (segment anything with tracking)
-- SAM2, SAM2Long
+- SAM2.1, SAM2Long
 - YOLO11n-seg
-- ByteTrack, BoT-SORT
 
 **Video Summarization:**
 - LLaVA-NeXT variants (local VLMs)
@@ -434,7 +433,7 @@ Object.entries(status.loaded_models).forEach(([task, model]) => {
 
 **Fast Models (Low VRAM):**
 - Detection: YOLOv8n (512 MB)
-- Tracking: ByteTrack (256 MB)
+- Tracking: YOLO11n-seg (1 GB)
 - Summarization: External API (0 MB)
 
 **Balanced Models (Medium VRAM):**
