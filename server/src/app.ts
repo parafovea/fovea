@@ -253,7 +253,7 @@ export async function buildApp() {
   const claimsRoute = await import('./routes/claims.js')
   await app.register(claimsRoute.default)
 
-  const videosRoute = await import('./routes/videos.js')
+  const videosRoute = await import('./routes/videos/index.js')
   await app.register(videosRoute.default)
 
   const modelsRoute = await import('./routes/models.js')
