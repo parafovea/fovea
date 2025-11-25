@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { VideoRepository } from '../../src/repositories/VideoRepository.js'
+import { CacheService } from '../../src/services/CacheService.js'
 import { PrismaClient, Video } from '@prisma/client'
 
 /**
@@ -511,6 +512,157 @@ describe('VideoRepository', () => {
       expect(repo1).toBeInstanceOf(VideoRepository)
       expect(repo2).toBeInstanceOf(VideoRepository)
       expect(repo1).not.toBe(repo2)
+    })
+  })
+
+  describe('Caching integration', () => {
+    // Mock CacheService
+    const mockCache = {
+      get: vi.fn(),
+      set: vi.fn(),
+      del: vi.fn()
+    } as unknown as CacheService
+
+    let cachedRepository: VideoRepository
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+      cachedRepository = new VideoRepository(mockPrisma, mockCache)
+    })
+
+    describe('findById() with cache', () => {
+      it('should return cached video on cache hit', async () => {
+        mockCache.get = vi.fn().mockResolvedValue(mockVideo)
+
+        const result = await cachedRepository.findById('test-video-123')
+
+        expect(mockCache.get).toHaveBeenCalledWith('video:test-video-123')
+        expect(mockPrisma.video.findUnique).not.toHaveBeenCalled()
+        expect(result).toEqual(mockVideo)
+      })
+
+      it('should fetch from database and cache on cache miss', async () => {
+        mockCache.get = vi.fn().mockResolvedValue(null)
+        mockCache.set = vi.fn().mockResolvedValue(true)
+        mockPrisma.video.findUnique = vi.fn().mockResolvedValue(mockVideo)
+
+        const result = await cachedRepository.findById('test-video-123')
+
+        expect(mockCache.get).toHaveBeenCalledWith('video:test-video-123')
+        expect(mockPrisma.video.findUnique).toHaveBeenCalledWith({
+          where: { id: 'test-video-123' }
+        })
+        expect(mockCache.set).toHaveBeenCalledWith(
+          'video:test-video-123',
+          mockVideo,
+          3600 // 1 hour TTL
+        )
+        expect(result).toEqual(mockVideo)
+      })
+
+      it('should not cache null results', async () => {
+        mockCache.get = vi.fn().mockResolvedValue(null)
+        mockPrisma.video.findUnique = vi.fn().mockResolvedValue(null)
+
+        const result = await cachedRepository.findById('nonexistent-id')
+
+        expect(mockCache.get).toHaveBeenCalledWith('video:nonexistent-id')
+        expect(mockPrisma.video.findUnique).toHaveBeenCalled()
+        expect(mockCache.set).not.toHaveBeenCalled()
+        expect(result).toBeNull()
+      })
+
+      it('should fall back to database if cache fails', async () => {
+        mockCache.get = vi.fn().mockResolvedValue(null)
+        mockCache.set = vi.fn().mockResolvedValue(false) // Cache write fails
+        mockPrisma.video.findUnique = vi.fn().mockResolvedValue(mockVideo)
+
+        const result = await cachedRepository.findById('test-video-123')
+
+        expect(result).toEqual(mockVideo)
+        // Cache write attempted but failed gracefully
+        expect(mockCache.set).toHaveBeenCalled()
+      })
+    })
+
+    describe('update() with cache invalidation', () => {
+      it('should invalidate cache after update', async () => {
+        mockPrisma.video.update = vi.fn().mockResolvedValue(mockVideo)
+        mockCache.del = vi.fn().mockResolvedValue(true)
+
+        const result = await cachedRepository.update('test-video-123', {
+          duration: 150.0
+        })
+
+        expect(mockPrisma.video.update).toHaveBeenCalled()
+        expect(mockCache.del).toHaveBeenCalledWith('video:test-video-123')
+        expect(result).toEqual(mockVideo)
+      })
+
+      it('should still update even if cache invalidation fails', async () => {
+        mockPrisma.video.update = vi.fn().mockResolvedValue(mockVideo)
+        mockCache.del = vi.fn().mockResolvedValue(false) // Cache delete fails
+
+        const result = await cachedRepository.update('test-video-123', {
+          duration: 150.0
+        })
+
+        expect(result).toEqual(mockVideo)
+        expect(mockCache.del).toHaveBeenCalled()
+      })
+    })
+
+    describe('updateThumbnailPath() with cache invalidation', () => {
+      it('should invalidate cache after thumbnail update', async () => {
+        mockPrisma.video.update = vi.fn().mockResolvedValue(mockVideo)
+        mockCache.del = vi.fn().mockResolvedValue(true)
+
+        const result = await cachedRepository.updateThumbnailPath(
+          'test-video-123',
+          'thumbnails/test-video-123_medium.jpg'
+        )
+
+        expect(mockPrisma.video.update).toHaveBeenCalled()
+        expect(mockCache.del).toHaveBeenCalledWith('video:test-video-123')
+        expect(result).toEqual(mockVideo)
+      })
+    })
+
+    describe('delete() with cache invalidation', () => {
+      it('should invalidate cache after deletion', async () => {
+        mockPrisma.video.delete = vi.fn().mockResolvedValue(mockVideo)
+        mockCache.del = vi.fn().mockResolvedValue(true)
+
+        const result = await cachedRepository.delete('test-video-123')
+
+        expect(mockPrisma.video.delete).toHaveBeenCalledWith({
+          where: { id: 'test-video-123' }
+        })
+        expect(mockCache.del).toHaveBeenCalledWith('video:test-video-123')
+        expect(result).toEqual(mockVideo)
+      })
+
+      it('should still delete even if cache invalidation fails', async () => {
+        mockPrisma.video.delete = vi.fn().mockResolvedValue(mockVideo)
+        mockCache.del = vi.fn().mockResolvedValue(false) // Cache delete fails
+
+        const result = await cachedRepository.delete('test-video-123')
+
+        expect(result).toEqual(mockVideo)
+        expect(mockCache.del).toHaveBeenCalled()
+      })
+    })
+
+    describe('Repository without cache', () => {
+      it('should work normally without cache service', async () => {
+        const noCacheRepo = new VideoRepository(mockPrisma)
+        mockPrisma.video.findUnique = vi.fn().mockResolvedValue(mockVideo)
+
+        const result = await noCacheRepo.findById('test-video-123')
+
+        expect(mockPrisma.video.findUnique).toHaveBeenCalled()
+        expect(result).toEqual(mockVideo)
+      })
     })
   })
 })
