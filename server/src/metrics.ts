@@ -72,3 +72,21 @@ export const modelServiceDuration = meter.createHistogram('model.service.duratio
   description: 'Model service response time in milliseconds',
   unit: 'ms'
 })
+
+/**
+ * Counter for cache operations (hit/miss/error).
+ * Attributes: operation (get, set, del, flush), status (hit, miss, success, error)
+ */
+export const cacheHitCounter = meter.createCounter('cache.operations', {
+  description: 'Number of cache operations by type and status',
+  unit: '1'
+})
+
+/**
+ * Histogram for cache operation duration.
+ * Attributes: operation (get, set, del, flush), status (hit, miss, success, error)
+ */
+export const cacheOperationDuration = meter.createHistogram('cache.operation.duration', {
+  description: 'Cache operation duration in milliseconds',
+  unit: 'ms'
+})
