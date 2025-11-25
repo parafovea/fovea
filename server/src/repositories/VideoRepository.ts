@@ -1,4 +1,5 @@
 import { PrismaClient, Video, Prisma } from '@prisma/client'
+import { CacheService } from '../services/CacheService.js'
 
 /**
  * Query options for finding all videos.
@@ -60,11 +61,32 @@ export interface FindAllOptions {
  */
 export class VideoRepository {
   /**
+   * Cache TTL for video metadata (1 hour = 3600 seconds).
+   * Video metadata rarely changes, so 1 hour TTL provides good performance
+   * while ensuring stale data doesn't persist too long.
+   */
+  private static readonly CACHE_TTL = 3600
+
+  /**
    * Creates a new VideoRepository instance.
    *
    * @param prisma - Prisma client instance for database access
+   * @param cache - Optional CacheService for caching video metadata
    */
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly cache?: CacheService
+  ) {}
+
+  /**
+   * Generates cache key for a video.
+   *
+   * @param id - Video ID
+   * @returns Cache key in format "video:{id}"
+   */
+  private getCacheKey(id: string): string {
+    return `video:${id}`
+  }
 
   /**
    * Finds all videos with optional ordering.
@@ -104,6 +126,9 @@ export class VideoRepository {
    * This method returns the complete video record with all fields.
    * Returns null if the video is not found (caller should handle error).
    *
+   * **Caching:** If CacheService is provided, video metadata is cached for 1 hour.
+   * Cache is automatically checked before querying the database.
+   *
    * Used by GET /api/videos/:videoId to retrieve video metadata.
    *
    * @param id - Video ID (MD5 hash of filename)
@@ -118,6 +143,30 @@ export class VideoRepository {
    * ```
    */
   async findById(id: string): Promise<Video | null> {
+    // Try cache first if available
+    if (this.cache) {
+      const cacheKey = this.getCacheKey(id)
+      const cached = await this.cache.get<Video>(cacheKey)
+
+      if (cached) {
+        // Cache hit - return cached video
+        return cached
+      }
+
+      // Cache miss - fetch from database
+      const video = await this.prisma.video.findUnique({
+        where: { id }
+      })
+
+      // Cache the result if found (don't cache null results)
+      if (video) {
+        await this.cache.set(cacheKey, video, VideoRepository.CACHE_TTL)
+      }
+
+      return video
+    }
+
+    // No cache service - fetch directly from database
     return this.prisma.video.findUnique({
       where: { id }
     })
@@ -194,6 +243,9 @@ export class VideoRepository {
    * Note: This method does not throw if the video is not found;
    * it propagates Prisma's error. Callers should handle NotFoundError.
    *
+   * **Cache Invalidation:** If CacheService is provided, the cache entry
+   * for this video is invalidated after the update.
+   *
    * @param id - Video ID to update
    * @param data - Partial video data to update
    * @returns The updated video record
@@ -208,10 +260,18 @@ export class VideoRepository {
    * ```
    */
   async update(id: string, data: Prisma.VideoUpdateInput): Promise<Video> {
-    return this.prisma.video.update({
+    const video = await this.prisma.video.update({
       where: { id },
       data
     })
+
+    // Invalidate cache after update
+    if (this.cache) {
+      const cacheKey = this.getCacheKey(id)
+      await this.cache.del(cacheKey)
+    }
+
+    return video
   }
 
   /**
@@ -220,6 +280,9 @@ export class VideoRepository {
    * This is a specialized update method for setting the local thumbnail path
    * after thumbnail generation. It's more efficient than a general update
    * and makes the intent clearer.
+   *
+   * **Cache Invalidation:** If CacheService is provided, the cache entry
+   * for this video is invalidated after the update.
    *
    * Used by GET /api/videos/:videoId/thumbnail after generating a thumbnail.
    *
@@ -234,10 +297,18 @@ export class VideoRepository {
    * ```
    */
   async updateThumbnailPath(id: string, thumbnailPath: string): Promise<Video> {
-    return this.prisma.video.update({
+    const video = await this.prisma.video.update({
       where: { id },
       data: { localThumbnailPath: thumbnailPath }
     })
+
+    // Invalidate cache after update
+    if (this.cache) {
+      const cacheKey = this.getCacheKey(id)
+      await this.cache.del(cacheKey)
+    }
+
+    return video
   }
 
   /**
@@ -245,6 +316,9 @@ export class VideoRepository {
    *
    * This method removes a video from the database. Note that related records
    * (annotations, summaries) will be cascade deleted due to Prisma schema configuration.
+   *
+   * **Cache Invalidation:** If CacheService is provided, the cache entry
+   * for this video is invalidated after deletion.
    *
    * Note: This method does not throw if the video is not found;
    * it propagates Prisma's error. Callers should handle NotFoundError.
@@ -259,8 +333,16 @@ export class VideoRepository {
    * ```
    */
   async delete(id: string): Promise<Video> {
-    return this.prisma.video.delete({
+    const video = await this.prisma.video.delete({
       where: { id }
     })
+
+    // Invalidate cache after deletion
+    if (this.cache) {
+      const cacheKey = this.getCacheKey(id)
+      await this.cache.del(cacheKey)
+    }
+
+    return video
   }
 }
