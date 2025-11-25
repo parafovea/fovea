@@ -1,17 +1,13 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { Box, CircularProgress, Typography } from '@mui/material'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
-import AnnotationWorkspace from './components/AnnotationWorkspace'
-import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
-import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
-import Settings from './pages/Settings'
 import LoginPage from './components/auth/LoginPage.js'
 import RegisterPage from './components/auth/RegisterPage.js'
-import AdminPanel from './components/admin/AdminPanel.js'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { LoadingSpinner } from './components/shared/LoadingSpinner'
 import { AppDispatch, RootState } from './store/store'
 import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
 import { setWorldData } from './store/worldSlice'
@@ -21,6 +17,13 @@ import { useSession } from './hooks/auth/useSession.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { initializeCommands, initializeGlobalContext } from './lib/commands/init-commands.js'
 import { commandRegistry } from './lib/commands/command-registry.js'
+
+// Lazy load route components for code splitting
+const AnnotationWorkspace = lazy(() => import('./components/AnnotationWorkspace'))
+const OntologyWorkspace = lazy(() => import('./components/workspaces/OntologyWorkspace'))
+const ObjectWorkspace = lazy(() => import('./components/workspaces/ObjectWorkspace'))
+const Settings = lazy(() => import('./pages/Settings'))
+const AdminPanel = lazy(() => import('./components/admin/AdminPanel.js'))
 
 /**
  * Loading screen component.
@@ -174,7 +177,9 @@ function App() {
             path="annotate/:videoId"
             element={
               <ErrorBoundary context={{ route: 'AnnotationWorkspace' }}>
-                <AnnotationWorkspace />
+                <Suspense fallback={<LoadingSpinner message="Loading annotation workspace..." />}>
+                  <AnnotationWorkspace />
+                </Suspense>
               </ErrorBoundary>
             }
           />
@@ -182,7 +187,9 @@ function App() {
             path="ontology"
             element={
               <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
-                <OntologyWorkspace />
+                <Suspense fallback={<LoadingSpinner message="Loading ontology workspace..." />}>
+                  <OntologyWorkspace />
+                </Suspense>
               </ErrorBoundary>
             }
           />
@@ -190,16 +197,27 @@ function App() {
             path="objects"
             element={
               <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
-                <ObjectWorkspace />
+                <Suspense fallback={<LoadingSpinner message="Loading object workspace..." />}>
+                  <ObjectWorkspace />
+                </Suspense>
               </ErrorBoundary>
             }
           />
-          <Route path="settings" element={<Settings />} />
+          <Route
+            path="settings"
+            element={
+              <Suspense fallback={<LoadingSpinner message="Loading settings..." />}>
+                <Settings />
+              </Suspense>
+            }
+          />
           <Route
             path="admin"
             element={
               <ErrorBoundary context={{ route: 'AdminPanel' }}>
-                <AdminPanel />
+                <Suspense fallback={<LoadingSpinner message="Loading admin panel..." />}>
+                  <AdminPanel />
+                </Suspense>
               </ErrorBoundary>
             }
           />
