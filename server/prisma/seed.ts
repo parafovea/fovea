@@ -47,20 +47,31 @@ async function main() {
   console.log('✓ Created test user:', testUser.username)
 
   // Create default user for single-user mode (no password)
-  const defaultUser = await prisma.user.upsert({
-    where: { id: 'default-user' },
-    update: {},
-    create: {
-      id: 'default-user',
-      username: 'user',
-      email: null,
-      passwordHash: null, // No password required in single-user mode
-      displayName: 'Default User',
-      isAdmin: false, // NOT admin - security precaution
-    },
-  })
-  console.log('✓ Created default user for single-user mode:', defaultUser.username)
-  console.warn('⚠️  Default user has no password - only use FOVEA_MODE=single-user in local development!')
+  // Only create in single-user mode - not needed in multi-user mode
+  const mode = process.env.FOVEA_MODE || 'single-user'
+  let personaOwner
+
+  if (mode === 'single-user') {
+    const defaultUser = await prisma.user.upsert({
+      where: { id: 'default-user' },
+      update: {},
+      create: {
+        id: 'default-user',
+        username: 'user',
+        email: null,
+        passwordHash: null, // No password required in single-user mode
+        displayName: 'Default User',
+        isAdmin: false, // NOT admin - security precaution
+      },
+    })
+    console.log('✓ Created default user for single-user mode:', defaultUser.username)
+    console.warn('⚠️  Default user has no password - only use FOVEA_MODE=single-user in local development!')
+    personaOwner = defaultUser
+  } else {
+    console.log('ℹ️  Skipping default user creation (multi-user mode)')
+    // In multi-user mode, assign personas to admin user
+    personaOwner = admin
+  }
 
   // Create the Automated persona if it doesn't exist
   const existingAutomated = await prisma.persona.findFirst({
@@ -79,7 +90,7 @@ async function main() {
         informationNeed: 'Understanding the content and events in this video',
         isSystemGenerated: true,
         hidden: false,
-        userId: defaultUser.id,
+        userId: personaOwner.id,
       },
     })
     console.log('✓ Created Automated persona:', automatedPersona.name)

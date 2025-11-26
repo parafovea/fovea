@@ -10,10 +10,10 @@ Authentication endpoints for user management, sessions, and API keys.
 
 Fovea supports two authentication modes:
 
-- **Single-user mode** (default): Automatic authentication, no login required
-- **Multi-user mode**: Session-based authentication with user management
+- **Single-user mode**: Automatic authentication, no login required (for local development)
+- **Multi-user mode** (default): Session-based authentication with user management
 
-Set `SINGLE_USER_MODE=false` and `ALLOW_REGISTRATION=true` to enable multi-user mode.
+Set `FOVEA_MODE=multi-user` and `ALLOW_REGISTRATION=true` to enable multi-user mode with registration.
 
 ## Authentication Endpoints
 
@@ -28,7 +28,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "admin123",
+  "password": "your-secure-password",
   "rememberMe": false
 }
 ```
@@ -58,7 +58,7 @@ Content-Type: application/json
 ```bash
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' \
+  -d '{"username":"admin","password":"your-secure-password"}' \
   -c cookies.txt
 ```
 
@@ -456,25 +456,25 @@ Masked: `...xyz789`
 
 ```env
 # Authentication mode
-SINGLE_USER_MODE=false          # Enable multi-user mode
+FOVEA_MODE=multi-user           # Use 'single-user' for local dev, 'multi-user' for production
 ALLOW_REGISTRATION=true         # Allow user self-registration
 
 # Session configuration
 SESSION_TIMEOUT_DAYS=7          # Default session duration
 SESSION_SECRET=<random-string>  # Cookie signing secret (required)
 
-# Admin account (auto-created in multi-user mode)
-DEFAULT_ADMIN_USERNAME=admin
-DEFAULT_ADMIN_PASSWORD=admin123
+# Admin account (required for seeding in multi-user mode)
+ADMIN_PASSWORD=<secure-password>  # Generate with: openssl rand -base64 32
+TEST_USER_PASSWORD=<optional>     # Optional test user password
 ```
 
 ### Best Practices
 
 1. **Production Setup:**
    - Always use HTTPS in production
-   - Set strong `SESSION_SECRET`
-   - Change default admin password immediately
-   - Set `ALLOW_REGISTRATION=false` after initial setup
+   - Set strong `SESSION_SECRET` (use `openssl rand -base64 32`)
+   - Set strong `ADMIN_PASSWORD` (use `openssl rand -base64 32`)
+   - Configure `ALLOW_REGISTRATION` based on your needs (true for open demo, false for private)
 
 2. **Password Requirements:**
    - Enforce strong passwords in production
@@ -498,10 +498,11 @@ DEFAULT_ADMIN_PASSWORD=admin123
 
 When migrating from single-user mode to multi-user mode:
 
-1. Set `SINGLE_USER_MODE=false`
-2. Admin account created automatically from env vars
-3. Existing personas assigned to default user
-4. Users must log in to access system
-5. Default user can be deleted once personas reassigned
+1. Set `FOVEA_MODE=multi-user` in your environment
+2. Set `ADMIN_PASSWORD` environment variable
+3. Run database seed to create admin user: `npm run seed`
+4. Admin account created with password from `ADMIN_PASSWORD`
+5. Default user (if exists) will not have admin privileges
+6. Users must log in to access system
 
-See [Deployment Guide](../deployment/configuration.md) for detailed migration steps.
+See [Authentication Setup Guide](../deployment/authentication-setup.md) for detailed configuration steps.

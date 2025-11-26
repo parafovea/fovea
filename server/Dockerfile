@@ -25,6 +25,11 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
+# Compile seed script for production use (tsx not available in production)
+# Use .cjs extension since package.json has "type": "module"
+RUN npx tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
+    mv prisma/seed.js prisma/seed.cjs
+
 # Production dependencies stage
 FROM node:20-alpine AS deps
 
@@ -56,7 +61,7 @@ COPY --link --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 COPY --link --from=builder /app/dist ./dist
 COPY --link --from=builder /app/package.json ./package.json
 
-# Copy Prisma schema and migrations for database setup
+# Copy Prisma schema, migrations, and compiled seed script for database setup
 COPY --link --from=builder /app/prisma ./prisma
 
 # Create data directory

@@ -63,6 +63,23 @@ CUDA_VISIBLE_DEVICES=0,1
 GF_SECURITY_ADMIN_PASSWORD=grafana_password
 ```
 
+## Authentication Configuration
+
+FOVEA supports single-user and multi-user authentication modes:
+
+```env
+# Multi-user mode (production/demo)
+FOVEA_MODE=multi-user
+ADMIN_PASSWORD=<secure-password>  # Required for admin account
+SESSION_SECRET=<random-secret>    # Required for sessions
+ALLOW_REGISTRATION=true           # Allow user self-registration
+
+# Single-user mode (local development only)
+FOVEA_MODE=single-user
+```
+
+**See [Authentication Setup Guide](./authentication-setup.md) for complete configuration details.**
+
 ## Backend Configuration
 
 ### Database Connection
