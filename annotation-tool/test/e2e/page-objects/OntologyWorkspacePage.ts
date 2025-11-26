@@ -38,7 +38,7 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   // Navigation
-  async navigateTo(_personaId?: string) {
+  async navigateTo(personaId?: string) {
     // First navigate to home to initialize app state and load personas
     await this.goto('/')
     await this.page.waitForLoadState('networkidle', { timeout: 15000 })
@@ -68,17 +68,47 @@ export class OntologyWorkspacePage extends BasePage {
 
     // Check if tabs are already visible (persona auto-selected)
     const tabsVisible = await this.page.getByRole('tab', { name: /entity types/i }).isVisible().catch(() => false)
-    if (tabsVisible) {
-      // Already in ontology workspace
+
+    if (tabsVisible && personaId) {
+      // Tabs are visible, but we need to switch to a specific persona
+      // Click back button to return to PersonaBrowser
+      const backButton = this.page.locator('button[aria-label*="Back"]').or(
+        this.page.getByRole('button', { name: /back/i })
+      )
+      if (await backButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await backButton.click()
+        await this.page.waitForSelector('[data-persona-id]', { state: 'visible', timeout: 5000 })
+      }
+    } else if (tabsVisible) {
+      // Already in ontology workspace and no specific persona requested
       return
     }
 
-    // PersonaBrowser is showing, need to click "Open" button to select persona
+    // PersonaBrowser is showing
+    if (personaId) {
+      // Click the specific persona card by data-persona-id
+      const personaCard = this.page.locator(`[data-persona-id="${personaId}"]`)
+      await personaCard.waitFor({ state: 'visible', timeout: 5000 })
+
+      const openButton = personaCard.locator('button:has-text("Open")')
+      await openButton.click()
+
+      // Wait for tabs to appear after clicking
+      await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
+
+      // Wait for auto-save debounce to settle (1s debounce + buffer)
+      await this.wait(1500)
+
+      return
+    }
+
+    // No specific persona requested, click first "Open" button
     const openButton = this.page.locator('button:has-text("Open")').first()
     if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await openButton.click()
       // Wait for tabs to appear after clicking
       await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
+      await this.wait(1500)
       return
     }
 
