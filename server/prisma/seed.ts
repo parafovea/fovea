@@ -12,10 +12,14 @@ async function main() {
   console.log('Starting database seed...')
 
   // Create default admin user for multi-user mode
-  const adminPasswordHash = await bcrypt.hash('admin123', 12)
+  const adminPassword = process.env.ADMIN_PASSWORD
+  if (!adminPassword) {
+    throw new Error('ADMIN_PASSWORD environment variable is required for seeding')
+  }
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 12)
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
-    update: {},
+    update: { passwordHash: adminPasswordHash }, // Update password on re-seed
     create: {
       username: 'admin',
       email: 'admin@example.com',
@@ -26,8 +30,9 @@ async function main() {
   })
   console.log('✓ Created admin user:', admin.username)
 
-  // Create test user for development
-  const testUserHash = await bcrypt.hash('test123', 12)
+  // Create test user for development (optional)
+  const testPassword = process.env.TEST_USER_PASSWORD || 'test123'
+  const testUserHash = await bcrypt.hash(testPassword, 12)
   const testUser = await prisma.user.upsert({
     where: { username: 'testuser' },
     update: {},
@@ -51,10 +56,11 @@ async function main() {
       email: null,
       passwordHash: null, // No password required in single-user mode
       displayName: 'Default User',
-      isAdmin: true,
+      isAdmin: false, // NOT admin - security precaution
     },
   })
   console.log('✓ Created default user for single-user mode:', defaultUser.username)
+  console.warn('⚠️  Default user has no password - only use FOVEA_MODE=single-user in local development!')
 
   // Create the Automated persona if it doesn't exist
   const existingAutomated = await prisma.persona.findFirst({

@@ -27,7 +27,7 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - FOVEA_MODE=${FOVEA_MODE:-single-user}
+      - FOVEA_MODE=${FOVEA_MODE:-multi-user}
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=${REDIS_HOST:-redis}
@@ -35,6 +35,8 @@ services:
       - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-http://model-service:8000}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SESSION_SECRET=${SESSION_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
       # Video Storage Configuration
       - VIDEO_STORAGE_TYPE=${VIDEO_STORAGE_TYPE:-local}

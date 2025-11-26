@@ -128,6 +128,27 @@ jobs:
               echo 'AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}' >> .env
             fi
 
+            # Update admin password from GitHub secrets
+            if grep -q '^ADMIN_PASSWORD=' .env; then
+              sed -i 's|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}|' .env
+            else
+              echo 'ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}' >> .env
+            fi
+
+            # Ensure FOVEA_MODE is set to multi-user
+            if grep -q '^FOVEA_MODE=' .env; then
+              sed -i 's|^FOVEA_MODE=.*|FOVEA_MODE=multi-user|' .env
+            else
+              echo 'FOVEA_MODE=multi-user' >> .env
+            fi
+
+            # Ensure ALLOW_REGISTRATION is disabled
+            if grep -q '^ALLOW_REGISTRATION=' .env; then
+              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=false|' .env
+            else
+              echo 'ALLOW_REGISTRATION=false' >> .env
+            fi
+
             echo '📁 Creating required directories...'
             mkdir -p data/thumbnails
 
@@ -151,6 +172,9 @@ jobs:
 
             echo '🔄 Running database migrations...'
             docker compose exec -T backend npx prisma migrate deploy || exit 1
+
+            echo '👤 Seeding database with secure credentials...'
+            docker compose exec -T backend npm run seed || echo '⚠️  Seed failed - check ADMIN_PASSWORD is set'
 
             echo '⏳ Waiting for backend to be healthy...'
             for i in {1..30}; do
