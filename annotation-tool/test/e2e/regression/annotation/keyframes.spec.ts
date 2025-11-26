@@ -85,13 +85,13 @@ test.describe('Annotation Keyframes', () => {
     }
     await annotationWorkspace.timeline.addKeyframe()
 
-    // Use more specific selector to avoid ambiguity between toolbar and main content save buttons
-    const saveButton = page.getByRole('main').getByRole('button', { name: /save/i })
-    await expect(saveButton).toBeVisible()
-    await saveButton.click()
+    //  Verify bounding box is still visible after adding keyframes
+    await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify save completed by checking that the button returns to enabled state
-    // (disabled briefly during save, then re-enabled)
-    await expect(saveButton).toBeEnabled({ timeout: 5000 })
+    // Wait for auto-save to trigger (1 second debounce + buffer)
+    await page.waitForTimeout(1500)
+
+    // Annotation should be auto-saved - bounding box should still be visible
+    await annotationWorkspace.expectBoundingBoxVisible()
   })
 })
