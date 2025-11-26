@@ -190,7 +190,7 @@ function App() {
             element={
               <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
                 <Suspense fallback={<LoadingSpinner message="Loading ontology workspace..." />}>
-                  <OntologyWorkspace key={activePersonaId || 'default'} />
+                  <OntologyWorkspace />
                 </Suspense>
               </ErrorBoundary>
             }
@@ -200,7 +200,7 @@ function App() {
             element={
               <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
                 <Suspense fallback={<LoadingSpinner message="Loading object workspace..." />}>
-                  <ObjectWorkspace key={activePersonaId || 'default'} />
+                  <ObjectWorkspace />
                 </Suspense>
               </ErrorBoundary>
             }
