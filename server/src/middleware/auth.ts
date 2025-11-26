@@ -90,6 +90,7 @@ export async function requireAdmin(
   // Then check admin role
   if (!request.user?.isAdmin) {
     reply.code(403).send({ error: 'Admin access required' })
+    return
   }
 }
 
