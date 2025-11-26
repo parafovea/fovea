@@ -142,11 +142,11 @@ jobs:
               echo 'FOVEA_MODE=multi-user' >> .env
             fi
 
-            # Ensure ALLOW_REGISTRATION is disabled
+            # Enable user registration for demo deployment
             if grep -q '^ALLOW_REGISTRATION=' .env; then
-              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=false|' .env
+              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=true|' .env
             else
-              echo 'ALLOW_REGISTRATION=false' >> .env
+              echo 'ALLOW_REGISTRATION=true' >> .env
             fi
 
             echo '📁 Creating required directories...'
