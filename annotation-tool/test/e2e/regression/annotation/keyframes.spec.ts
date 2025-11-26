@@ -85,13 +85,8 @@ test.describe('Annotation Keyframes', () => {
     }
     await annotationWorkspace.timeline.addKeyframe()
 
-    // Use more specific selector to avoid ambiguity between toolbar and main content save buttons
-    const saveButton = page.getByRole('main').getByRole('button', { name: /save/i })
-    await expect(saveButton).toBeVisible()
-    await saveButton.click()
-
-    // Verify save completed by checking that the button returns to enabled state
-    // (disabled briefly during save, then re-enabled)
-    await expect(saveButton).toBeEnabled({ timeout: 5000 })
+    // Save annotation using keyboard shortcut (annotation workspace uses auto-save, no manual button)
+    await annotationWorkspace.saveAnnotation()
+    await annotationWorkspace.expectSaveSuccess()
   })
 })

@@ -38,7 +38,7 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   // Navigation
-  async navigateTo(_personaId?: string) {
+  async navigateTo(personaId?: string) {
     // First navigate to home to initialize app state and load personas
     await this.goto('/')
     await this.page.waitForLoadState('networkidle', { timeout: 15000 })
@@ -69,20 +69,44 @@ export class OntologyWorkspacePage extends BasePage {
     // Check if tabs are already visible (persona auto-selected)
     const tabsVisible = await this.page.getByRole('tab', { name: /entity types/i }).isVisible().catch(() => false)
     if (tabsVisible) {
-      // Already in ontology workspace
-      return
+      // If no specific persona requested, we're done
+      if (!personaId) {
+        return
+      }
+      // If specific persona requested, need to go back to PersonaBrowser and select it
+      const backButton = this.page.getByRole('button', { name: /back to persona browser/i })
+      if (await backButton.isVisible().catch(() => false)) {
+        await backButton.click()
+        await this.page.waitForLoadState('networkidle')
+      }
     }
 
-    // PersonaBrowser is showing, need to click "Open" button to select persona
-    const openButton = this.page.locator('button:has-text("Open")').first()
-    if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await openButton.click()
-      // Wait for tabs to appear after clicking
-      await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
-      return
+    // PersonaBrowser should be showing now - need to select the specific persona
+    // Wait for persona cards to load
+    await this.page.waitForSelector('[data-persona-id]', { state: 'visible', timeout: 5000 }).catch(() => {})
+
+    if (personaId) {
+      // Find the persona card by data-persona-id attribute and click its Open button
+      const personaCard = this.page.locator(`[data-persona-id="${personaId}"]`)
+      const openButton = personaCard.locator('button:has-text("Open")')
+
+      if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await openButton.click()
+      } else {
+        throw new Error(`Could not find Open button for persona ID: ${personaId}`)
+      }
+    } else {
+      // No specific persona requested, just select the first one
+      const openButton = this.page.locator('button:has-text("Open")').first()
+      if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await openButton.click()
+      } else {
+        throw new Error('Could not find persona selection UI')
+      }
     }
 
-    throw new Error('Could not find persona selection UI or ontology workspace tabs')
+    // Wait for tabs to appear after selecting persona
+    await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
   }
 
   async selectTab(tab: 'entities' | 'events' | 'roles' | 'relations') {
