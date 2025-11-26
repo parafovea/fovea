@@ -371,8 +371,7 @@ export default function OntologyWorkspace() {
       searchInputRef.current?.focus()
     },
   }, {
-    context: 'ontologyWorkspace',
-    enabled: selectedPersonaId !== null
+    context: 'ontologyWorkspace'
   })
   
   // Handle item selection with mouse

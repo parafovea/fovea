@@ -97,7 +97,10 @@ export default function PersonaBrowser({
             const stats = getOntologyStats(persona.id)
             return (
               <Grid item xs={12} sm={6} md={4} lg={3} key={persona.id}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Card
+                  data-persona-id={persona.id}
+                  sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                >
                   <CardContent sx={{ flexGrow: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                       <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
