@@ -73,6 +73,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
+  const location = useLocation()
+  const activePersonaId = useSelector((state: RootState) => state.persona.activePersonaId)
 
   // Restore session on mount (also fetches config)
   useSession()
@@ -178,7 +180,7 @@ function App() {
             element={
               <ErrorBoundary context={{ route: 'AnnotationWorkspace' }}>
                 <Suspense fallback={<LoadingSpinner message="Loading annotation workspace..." />}>
-                  <AnnotationWorkspace />
+                  <AnnotationWorkspace key={`${location.pathname}-${activePersonaId}`} />
                 </Suspense>
               </ErrorBoundary>
             }
@@ -188,7 +190,7 @@ function App() {
             element={
               <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
                 <Suspense fallback={<LoadingSpinner message="Loading ontology workspace..." />}>
-                  <OntologyWorkspace />
+                  <OntologyWorkspace key={activePersonaId || 'default'} />
                 </Suspense>
               </ErrorBoundary>
             }
@@ -198,7 +200,7 @@ function App() {
             element={
               <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
                 <Suspense fallback={<LoadingSpinner message="Loading object workspace..." />}>
-                  <ObjectWorkspace />
+                  <ObjectWorkspace key={activePersonaId || 'default'} />
                 </Suspense>
               </ErrorBoundary>
             }
