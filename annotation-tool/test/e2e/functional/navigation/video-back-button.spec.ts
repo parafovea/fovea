@@ -1,4 +1,4 @@
-import { test, expect } from '../../../fixtures/test-context.js'
+import { test, expect } from '../../fixtures/test-context.js'
 
 /**
  * Video Annotation - Back Button Tests
