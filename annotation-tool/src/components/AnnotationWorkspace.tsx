@@ -44,6 +44,7 @@ import {
   OpenInNew as ExternalLinkIcon,
   Build as BuildIcon,
   Search as DetectIcon,
+  ArrowBack as BackIcon,
 } from '@mui/icons-material'
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './annotation/VideoPlayer'
@@ -537,24 +538,34 @@ export default function AnnotationWorkspace() {
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack spacing={1}>
-            {/* Uploader as main title with clickable link */}
-            <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
-              {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
-              {currentVideo?.uploaderId && currentVideo?.uploaderUrl && (
-                <>
-                  {' '}(
-                  <Link
-                    href={currentVideo.uploaderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    underline="hover"
-                  >
-                    @{currentVideo.uploaderId}
-                  </Link>
-                  )
-                </>
-              )}
-            </Typography>
+            {/* Back button and uploader as main title */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton
+                onClick={() => navigate('/')}
+                size="small"
+                aria-label="Back to video browser"
+                sx={{ flexShrink: 0 }}
+              >
+                <BackIcon />
+              </IconButton>
+              <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
+                {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
+                {currentVideo?.uploaderId && currentVideo?.uploaderUrl && (
+                  <>
+                    {' '}(
+                    <Link
+                      href={currentVideo.uploaderUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      underline="hover"
+                    >
+                      @{currentVideo.uploaderId}
+                    </Link>
+                    )
+                  </>
+                )}
+              </Typography>
+            </Box>
             
             {/* Description (no need for title since it duplicates uploader + description) */}
             {currentVideo?.description && (

@@ -36,15 +36,15 @@ export default function BreadcrumbNavigation() {
     const breadcrumbs: BreadcrumbItem[] = []
     
     // Add root based on first segment
-    if (pathSegments.length === 0 || pathSegments[0] === 'videos') {
+    if (pathSegments.length === 0 || pathSegments[0] === 'videos' || pathSegments[0] === 'annotate') {
       breadcrumbs.push({
         label: 'Video Browser',
         path: '/',
         icon: <VideoIcon fontSize="small" />,
       })
-      
+
       // Check if we're in annotation workspace
-      if (pathSegments.length > 1) {
+      if (pathSegments[0] === 'annotate' && pathSegments.length > 1) {
         const videoId = pathSegments[1]
         const video = videos.find((v: any) => v.id === videoId)
         if (video) {
@@ -203,7 +203,7 @@ export default function BreadcrumbNavigation() {
       </Breadcrumbs>
       
       {/* Optional: Add context chips */}
-      {location.pathname.includes('/videos/') && (
+      {location.pathname.includes('/annotate/') && (
         <Chip
           label="Annotation Mode"
           color="primary"
