@@ -136,7 +136,7 @@ describe('Video Storage Providers', () => {
     beforeEach(() => {
       // Clear environment variables
       delete process.env.VIDEO_STORAGE_TYPE
-      delete process.env.VIDEO_STORAGE_PATH
+      delete process.env.STORAGE_PATH
       delete process.env.VIDEO_BASE_URL
       delete process.env.S3_BUCKET
       delete process.env.S3_REGION
@@ -148,7 +148,7 @@ describe('Video Storage Providers', () => {
       const config = loadStorageConfig()
 
       expect(config.type).toBe('local')
-      expect(config.localPath).toBe('/data')
+      expect(config.localPath).toBe('/videos')
       expect(config.baseUrl).toBe('/api/videos')
     })
 

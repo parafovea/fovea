@@ -13,9 +13,9 @@ export const thumbnailRoutes: FastifyPluginAsync<{
   videoRepository: VideoRepository
   storageProvider: VideoStorageProvider
   storageConfig: VideoStorageConfig
-  dataDir: string
+  storagePath: string
 }> = async (fastify, opts) => {
-  const { videoRepository, storageProvider, storageConfig, dataDir } = opts
+  const { videoRepository, storageProvider, storageConfig, storagePath } = opts
 
   /**
    * Get or generate video thumbnail.
@@ -61,7 +61,7 @@ export const thumbnailRoutes: FastifyPluginAsync<{
       }
 
       const thumbnailFilename = `${videoId}_${size}.jpg`
-      const thumbnailPath = path.join(dataDir, 'thumbnails', thumbnailFilename)
+      const thumbnailPath = path.join(storagePath, 'thumbnails', thumbnailFilename)
       const relativeThumbnailPath = `thumbnails/${thumbnailFilename}`
 
       // Check if thumbnail already exists
@@ -87,7 +87,7 @@ export const thumbnailRoutes: FastifyPluginAsync<{
 
       if (storageConfig.type === 'local') {
         // Model service can access local files directly via volume mount
-        modelVideoPath = video.path.replace(dataDir, '/videos')
+        modelVideoPath = video.path.replace(storagePath, '/videos')
       } else {
         // For S3/hybrid storage, generate a pre-signed URL for model service to download
         // URL expires in 15 minutes (900 seconds) - enough time for thumbnail generation
