@@ -177,7 +177,7 @@ REDIS_URL="redis://localhost:6379"
 MODEL_SERVICE_URL="http://localhost:8000"
 
 # Data Directory
-DATA_DIR="/absolute/path/to/fovea/data"
+STORAGE_PATH="/absolute/path/to/fovea/videos"
 
 # Server Port
 PORT=3001
@@ -282,7 +282,7 @@ DEVICE=cpu  # Use "cuda" if you have a GPU
 MODEL_CACHE_DIR=/absolute/path/to/fovea/model-service/models
 
 # Data Directory
-DATA_DIR=/absolute/path/to/fovea/data
+STORAGE_PATH=/absolute/path/to/fovea/videos
 
 # Redis (for job queue)
 REDIS_URL=redis://localhost:6379

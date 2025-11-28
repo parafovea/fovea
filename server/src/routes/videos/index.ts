@@ -10,7 +10,7 @@ import { urlRoutes } from './url.js'
 
 /**
  * Videos API routes for listing and streaming video files.
- * Serves videos from the /data directory.
+ * Serves videos from the configured storage path.
  *
  * This module aggregates all video-related routes:
  * - List and get video metadata
@@ -21,7 +21,7 @@ import { urlRoutes } from './url.js'
  * - Get video URLs
  */
 const videosRoute: FastifyPluginAsync = async (fastify) => {
-  const DATA_DIR = process.env.DATA_DIR || '/data'
+  const STORAGE_PATH = process.env.STORAGE_PATH || '/videos'
 
   // Initialize storage provider
   const storageConfig = loadStorageConfig()
@@ -36,14 +36,14 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   await fastify.register(streamRoutes, {
     videoRepository,
     storageProvider,
-    dataDir: DATA_DIR
+    storagePath: STORAGE_PATH
   })
 
   await fastify.register(thumbnailRoutes, {
     videoRepository,
     storageProvider,
     storageConfig,
-    dataDir: DATA_DIR
+    storagePath: STORAGE_PATH
   })
 
   await fastify.register(detectRoutes, {
@@ -61,7 +61,7 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     videoRepository,
     storageProvider,
     storageConfig,
-    dataDir: DATA_DIR
+    storagePath: STORAGE_PATH
   })
 }
 

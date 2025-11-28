@@ -16,7 +16,7 @@ const __dirname = dirname(__filename)
  * Checks if the data directory exists and logs the result.
  */
 async function initializeDataDirectory() {
-  const dataDir = join(dirname(__dirname), '..', 'data')
+  const dataDir = process.env.STORAGE_PATH || join(dirname(__dirname), '..', 'videos')
   try {
     await fs.access(dataDir)
     console.log(`Data directory found at: ${dataDir}`)

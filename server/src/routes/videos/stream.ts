@@ -9,9 +9,9 @@ import { VideoStorageProvider } from '../../services/videoStorage.js'
 export const streamRoutes: FastifyPluginAsync<{
   videoRepository: VideoRepository
   storageProvider: VideoStorageProvider
-  dataDir: string
+  storagePath: string
 }> = async (fastify, opts) => {
-  const { videoRepository, storageProvider, dataDir } = opts
+  const { videoRepository, storageProvider, storagePath } = opts
 
   /**
    * Stream video file with support for HTTP range requests.
@@ -47,9 +47,9 @@ export const streamRoutes: FastifyPluginAsync<{
 
       try {
         // Convert full path to relative path for storage provider
-        // Database stores: /data/filename.webm
+        // Database stores: /videos/filename.webm
         // Storage provider expects: filename.webm (relative to basePath)
-        const relativePath = video.path.replace(dataDir, '').replace(/^\//, '')
+        const relativePath = video.path.replace(storagePath, '').replace(/^\//, '')
 
         // Use storage provider to get video stream
         const result = await storageProvider.getVideoStream(relativePath, range)
