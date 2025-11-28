@@ -927,14 +927,14 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       expect(backButton).toHaveFocus()
     })
 
-    it('back button is in app bar', async () => {
+    it('back button is in metadata box', async () => {
       renderWorkspace()
 
       const backButton = await screen.findByLabelText('Back to video browser')
 
-      // Button should be in an AppBar/Toolbar
-      const toolbar = backButton.closest('[class*="MuiToolbar"]')
-      expect(toolbar).toBeInTheDocument()
+      // Button should be in the Paper component (metadata box)
+      const paper = backButton.closest('[class*="MuiPaper"]')
+      expect(paper).toBeInTheDocument()
     })
   })
 })
