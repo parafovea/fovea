@@ -172,7 +172,7 @@ model Video {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  /// Local thumbnail path (relative to DATA_DIR/thumbnails)
+  /// Local thumbnail path (relative to STORAGE_PATH/thumbnails)
   localThumbnailPath String?
   /// Last successful metadata sync timestamp
   lastMetadataSync   DateTime?

@@ -889,7 +889,7 @@ export function loadStorageConfig(): VideoStorageConfig {
 
   const config: VideoStorageConfig = {
     type: storageType,
-    localPath: process.env.VIDEO_STORAGE_PATH || '/data',
+    localPath: process.env.STORAGE_PATH || '/videos',
     baseUrl: process.env.VIDEO_BASE_URL || '/api/videos',
   };
 
@@ -924,7 +924,7 @@ export function loadStorageConfig(): VideoStorageConfig {
   config.thumbnails = {
     storageType:
       (process.env.THUMBNAIL_STORAGE_TYPE as 'local' | 's3') || 'local',
-    localPath: process.env.THUMBNAIL_PATH || '/data/thumbnails',
+    localPath: process.env.THUMBNAIL_PATH || '/videos/thumbnails',
     s3Prefix: process.env.THUMBNAIL_S3_PREFIX || 'thumbnails/',
   };
 

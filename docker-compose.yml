@@ -40,7 +40,7 @@ services:
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
       # Video Storage Configuration
       - VIDEO_STORAGE_TYPE=${VIDEO_STORAGE_TYPE:-local}
-      - VIDEO_STORAGE_PATH=${VIDEO_STORAGE_PATH:-/data}
+      - STORAGE_PATH=${STORAGE_PATH:-/videos}
       - VIDEO_BASE_URL=${VIDEO_BASE_URL:-/api/videos}
       # S3 Configuration (when VIDEO_STORAGE_TYPE=s3 or hybrid)
       - S3_BUCKET=${S3_BUCKET:-}
@@ -57,10 +57,10 @@ services:
       - CDN_SIGNED_URLS=${CDN_SIGNED_URLS:-true}
       # Thumbnail Storage Configuration
       - THUMBNAIL_STORAGE_TYPE=${THUMBNAIL_STORAGE_TYPE:-local}
-      - THUMBNAIL_PATH=${THUMBNAIL_PATH:-/data/thumbnails}
+      - THUMBNAIL_PATH=${THUMBNAIL_PATH:-/videos/thumbnails}
       - THUMBNAIL_S3_PREFIX=${THUMBNAIL_S3_PREFIX:-thumbnails/}
     volumes:
-      - ./data:/data
+      - ./videos:/videos
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,7 +95,7 @@ services:
       - MODEL_CONFIG_PATH=/config/models.yaml
     volumes:
       - model-cache:/models
-      - ./data:/videos
+      - ./videos:/videos
       - ./model-service/config:/config
     networks:
       - fovea-network

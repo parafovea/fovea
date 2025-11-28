@@ -10,9 +10,9 @@ export const urlRoutes: FastifyPluginAsync<{
   videoRepository: VideoRepository
   storageProvider: VideoStorageProvider
   storageConfig: VideoStorageConfig
-  dataDir: string
+  storagePath: string
 }> = async (fastify, opts) => {
-  const { videoRepository, storageProvider, storageConfig, dataDir } = opts
+  const { videoRepository, storageProvider, storageConfig, storagePath } = opts
 
   /**
    * Get a direct URL for video access (signed if using S3).
@@ -61,7 +61,7 @@ export const urlRoutes: FastifyPluginAsync<{
 
       try {
         // Convert full path to relative path for storage provider
-        const relativePath = video.path.replace(dataDir, '').replace(/^\//, '')
+        const relativePath = video.path.replace(storagePath, '').replace(/^\//, '')
 
         // Get URL from storage provider
         const url = await storageProvider.getVideoUrl(relativePath, expiresIn)

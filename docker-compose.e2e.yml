@@ -42,10 +42,10 @@ services:
       - ALLOW_TEST_ADMIN_BYPASS=true
       # Video Storage Configuration - Local storage for E2E tests
       - VIDEO_STORAGE_TYPE=local
-      - VIDEO_STORAGE_PATH=/data
+      - STORAGE_PATH=/test-videos
       - VIDEO_BASE_URL=/api/videos
     volumes:
-      - ./test-data:/data:rw
+      - ./test-videos:/test-videos:rw
     depends_on:
       postgres:
         condition: service_healthy
