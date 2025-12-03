@@ -140,9 +140,6 @@ function App() {
     const initializeData = async () => {
       // Check if developer test mode is enabled
       if (isTestDataEnabled()) {
-        console.warn('⚠️  DEVELOPER TEST MODE ENABLED')
-        console.warn('⚠️  Pre-populating with test data')
-        console.warn('⚠️  Set VITE_ENABLE_TEST_DATA=false to disable')
         await seedTestData()
       } else {
         // Normal mode: load from API

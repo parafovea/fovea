@@ -147,16 +147,12 @@ export class AnnotationWorkspacePage extends BasePage {
     await personaOption.click()
 
     // Wait for dropdown to close
-    await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {
-      console.log('Persona listbox did not close')
-    })
+    await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {})
 
     await this.page.waitForTimeout(500)
 
     // Wait for ontology to load after persona selection
-    await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {
-      console.log('Network idle timeout - continuing with test')
-    })
+    await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
 
     // Additional wait for React state updates
     await this.page.waitForTimeout(4000)

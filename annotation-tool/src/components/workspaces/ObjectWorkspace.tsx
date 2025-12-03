@@ -368,7 +368,7 @@ export default function ObjectWorkspace() {
     },
     'object.duplicate': () => {
       // TODO: Implement duplication logic
-      console.log('Duplicate object not yet implemented')
+      alert('Duplicate object not yet implemented')
     },
     'object.search': () => {
       searchInputRef.current?.focus()

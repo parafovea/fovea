@@ -218,7 +218,6 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
 
     // Debug: Check if gloss field has content
     const glossValue = await glossField.inputValue()
-    console.log(`Gloss field value: "${glossValue}"`)
 
     // Find Save/Create button (should now be enabled after filling required fields)
     const saveButton = dialog.getByRole('button', { name: /save|create/i })
@@ -227,31 +226,8 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
     // Wait for validation to run
     await page.waitForTimeout(1000)
 
-    // Debug: Check Save button state before assertion
-    const isEnabled = await saveButton.isEnabled()
-    console.log(`Save button enabled: ${isEnabled}`)
-
-    // If still disabled, check what validation failed
-    if (!isEnabled) {
-      const debugInfo = await page.evaluate(() => {
-        // Check the BaseTypeEditor validation state
-        const nameInputs = Array.from(document.querySelectorAll('input[name], input[aria-label*="Name"], input[label*="Name"]'))
-        const glossInputs = Array.from(document.querySelectorAll('textarea[aria-label*="Gloss"]'))
-
-        return {
-          nameValues: nameInputs.map((el: any) => el.value),
-          glossValues: glossInputs.map((el: any) => el.value),
-          checkboxes: Array.from(document.querySelectorAll('input[type="checkbox"]')).map((el: any) => ({
-            checked: el.checked,
-            label: el.closest('label')?.textContent || 'unknown'
-          }))
-        }
-      })
-      console.log('Debug info:', JSON.stringify(debugInfo, null, 2))
-    }
-
     // Verify Save button is enabled
-    expect(isEnabled).toBe(true)
+    await expect(saveButton).toBeEnabled()
 
     // Focus Save button
     await saveButton.focus()

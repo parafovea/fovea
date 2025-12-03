@@ -35,9 +35,6 @@ describe('Interpolation Performance Benchmarks', () => {
 
       expect(result.length).toBe(10001)
       expect(duration).toBeLessThan(100) // Target: <100ms
-
-      // Log for monitoring
-      console.log(`10,000 frame interpolation: ${duration.toFixed(2)}ms`)
     })
 
     it('interpolates 50,000 frame sequence in <500ms', () => {
@@ -56,8 +53,6 @@ describe('Interpolation Performance Benchmarks', () => {
 
       expect(result.length).toBe(50001)
       expect(duration).toBeLessThan(500)
-
-      console.log(`50,000 frame interpolation: ${duration.toFixed(2)}ms`)
     })
   })
 
@@ -103,9 +98,6 @@ describe('Interpolation Performance Benchmarks', () => {
 
       const hitRate = cacheHits / scrubbingPattern.length
       expect(hitRate).toBeGreaterThan(0.5) // >50% hit rate (realistic expectation)
-
-      console.log(`Cache hit rate during scrubbing: ${(hitRate * 100).toFixed(1)}%`)
-      console.log(`Total frames cached: ${lazy.getCacheSize()}`)
     })
 
     it('lazy evaluation is faster than eager for random access', () => {
@@ -136,9 +128,6 @@ describe('Interpolation Performance Benchmarks', () => {
       // Note: Performance tests can be flaky on CI due to system load variations.
       // We verify lazy access works but don't enforce strict timing requirements.
       // In practice, lazy evaluation should be faster for sparse frame access.
-      console.log(`Eager (all 10,000 frames): ${eagerDuration.toFixed(2)}ms`)
-      console.log(`Lazy (100 random frames): ${lazyDuration.toFixed(2)}ms`)
-      console.log(`Speedup: ${lazyDuration > 0 ? (eagerDuration / lazyDuration).toFixed(1) : 'N/A'}x`)
 
       // Sanity check: both methods should complete in reasonable time
       expect(eagerDuration).toBeLessThan(1000) // <1s for 10k frames
@@ -176,8 +165,6 @@ describe('Interpolation Performance Benchmarks', () => {
       // Should only recalculate affected segments (approximately 500 frames)
       // With caching, should be much faster than full interpolation
       expect(duration).toBeLessThan(50) // Target: <50ms for partial update
-
-      console.log(`Keyframe update (500 affected frames): ${duration.toFixed(2)}ms`)
 
       // Verify update applied
       const updatedKeyframe = updated.boxes.find((b) => b.frameNumber === 500)
@@ -217,9 +204,6 @@ describe('Interpolation Performance Benchmarks', () => {
       // 10 adds + 20 updates = 30 operations
       // Should complete in <500ms
       expect(duration).toBeLessThan(500)
-
-      console.log(`30 keyframe operations: ${duration.toFixed(2)}ms`)
-      console.log(`Average per operation: ${(duration / 30).toFixed(2)}ms`)
     })
   })
 
@@ -265,12 +249,6 @@ describe('Interpolation Performance Benchmarks', () => {
       // At sub-100ms for 10k frames, either interpolation type is imperceptible to users
       expect(linearDuration).toBeLessThan(100) // Linear should be very fast
       expect(bezierDuration).toBeLessThan(100) // Bezier should also be fast
-
-      console.log(`Linear: ${linearDuration.toFixed(2)}ms`)
-      console.log(`Bezier: ${bezierDuration.toFixed(2)}ms`)
-      if (linearDuration > 0) {
-        console.log(`Overhead: ${((bezierDuration / linearDuration - 1) * 100).toFixed(1)}%`)
-      }
     })
   })
 
@@ -313,10 +291,6 @@ describe('Interpolation Performance Benchmarks', () => {
 
       const memGrowth = memAfter - memBefore
       const memGrowthPercent = (memGrowth / memBefore) * 100
-
-      console.log(`Memory before: ${memBefore.toFixed(2)}MB`)
-      console.log(`Memory after: ${memAfter.toFixed(2)}MB`)
-      console.log(`Growth: ${memGrowth.toFixed(2)}MB (${memGrowthPercent.toFixed(1)}%)`)
 
       // Allow some memory growth, but should be <100% (CI has variable memory)
       expect(memGrowthPercent).toBeLessThan(100)
@@ -361,8 +335,6 @@ describe('Interpolation Performance Benchmarks', () => {
 
       expect(result.length).toBe(10001) // 0-10000
       expect(duration).toBeLessThan(200) // Should handle 10 segments in <200ms
-
-      console.log(`10 multi-type segments (10,000 frames): ${duration.toFixed(2)}ms`)
     })
   })
 })

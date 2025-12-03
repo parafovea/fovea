@@ -59,7 +59,6 @@ test.describe('Video Storage', () => {
       // Verify video appears in the list
       await expect(page.locator('text=test-video.mp4').first()).toBeVisible({ timeout: 10000 })
     } else {
-      console.log('ℹ️  Upload button not found - skipping upload test')
       test.skip()
     }
   })
@@ -88,7 +87,6 @@ test.describe('Video Storage', () => {
         expect(response.headers()['content-type']).toContain('video/')
       }
     } else {
-      console.log('ℹ️  No video element found - test may need UI adjustments')
       test.skip()
     }
   })
@@ -122,7 +120,6 @@ test.describe('Video Storage', () => {
         }
       }
     } else {
-      console.log('ℹ️  No video element found - skipping range request test')
       test.skip()
     }
   })
@@ -152,8 +149,6 @@ test.describe('Video Storage', () => {
         expect(response.status()).toBe(200)
         expect(response.headers()['content-type']).toMatch(/image\/(jpeg|png)/)
       }
-    } else {
-      console.log('ℹ️  No thumbnails found - may need video data seeded')
     }
   })
 
@@ -201,7 +196,6 @@ test.describe('Video Storage', () => {
         await expect(page.locator(`text=${videoTitle}`)).not.toBeVisible({ timeout: 5000 })
       }
     } else {
-      console.log('ℹ️  Delete button not found - skipping deletion test')
       test.skip()
     }
   })
@@ -223,11 +217,9 @@ test.describe('Video Storage - Backend API', () => {
         expect(streamResponse.status()).toBe(200)
         expect(streamResponse.headers()['content-type']).toMatch(/video\//)
       } else {
-        console.log('ℹ️  No videos in database - skipping stream endpoint test')
         test.skip()
       }
     } else {
-      console.log('ℹ️  Videos endpoint not accessible - skipping test')
       test.skip()
     }
   })
@@ -245,15 +237,12 @@ test.describe('Video Storage - Backend API', () => {
         if (thumbnailResponse.ok()) {
           expect(thumbnailResponse.headers()['content-type']).toMatch(/image\//)
         } else {
-          console.log('ℹ️  Thumbnail endpoint not available - may not be implemented')
           test.skip()
         }
       } else {
-        console.log('ℹ️  No videos in database - skipping thumbnail endpoint test')
         test.skip()
       }
     } else {
-      console.log('ℹ️  Videos endpoint not accessible - skipping test')
       test.skip()
     }
   })
