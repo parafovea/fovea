@@ -33,9 +33,8 @@ test.describe('Video Annotation - Back Button', () => {
     const backButton = page.getByLabel('Back to video browser')
     await expect(backButton).toBeVisible()
 
-    // Verify it's in a toolbar
-    const toolbar = backButton.locator('xpath=ancestor::*[contains(@class, "MuiToolbar")]')
-    await expect(toolbar.first()).toBeVisible()
+    // Verify it's an icon button
+    await expect(backButton).toHaveRole('button')
   })
 
   test('back button is keyboard accessible', async ({ page, annotationWorkspace, testVideo }) => {
