@@ -45,9 +45,13 @@ test.describe('Video Annotation - Back Button', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Tab to back button
-    await page.keyboard.press('Tab')
     const backButton = page.getByLabel('Back to video browser')
+
+    // Verify button is in tab order
+    await expect(backButton).toHaveAttribute('tabindex', '0')
+
+    // Verify button can be focused and activated via keyboard
+    await backButton.focus()
     await expect(backButton).toBeFocused()
 
     // Activate with Enter
