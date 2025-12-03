@@ -16,6 +16,9 @@ test.describe('Video Annotation - Back Button', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')
 
+    // Wait for workspace to be ready (ensures React components have rendered)
+    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+
     // Find and click back button
     const backButton = page.getByLabel('Back to video browser')
     await expect(backButton).toBeVisible()
@@ -30,6 +33,9 @@ test.describe('Video Annotation - Back Button', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')
 
+    // Wait for workspace to be ready
+    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+
     const backButton = page.getByLabel('Back to video browser')
     await expect(backButton).toBeVisible()
 
@@ -41,6 +47,9 @@ test.describe('Video Annotation - Back Button', () => {
   test('back button is keyboard accessible', async ({ page, testVideo }) => {
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')
+
+    // Wait for workspace to be ready
+    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
 
     // Tab to back button
     await page.keyboard.press('Tab')
@@ -55,6 +64,9 @@ test.describe('Video Annotation - Back Button', () => {
   test('back button works after video interaction', async ({ page, testVideo }) => {
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')
+
+    // Wait for workspace to be ready
+    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
 
     // Interact with video (play/pause)
     const playButton = page.getByLabel(/play video/i)
@@ -78,6 +90,9 @@ test.describe('Video Annotation - Back Button', () => {
     // Navigate to annotation
     await page.goto(`/annotate/${testVideo.id}`)
     await page.waitForLoadState('networkidle')
+
+    // Wait for workspace to be ready
+    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
 
     // Go back
     const backButton = page.getByLabel('Back to video browser')
