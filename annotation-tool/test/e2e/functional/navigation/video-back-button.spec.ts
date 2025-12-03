@@ -11,13 +11,10 @@ import { test, expect } from '../../fixtures/test-context.js'
  */
 
 test.describe('Video Annotation - Back Button', () => {
-  test('back button navigates to video browser', async ({ page, testVideo }) => {
+  test('back button navigates to video browser', async ({ page, annotationWorkspace, testVideo }) => {
     // Navigate to annotation workspace
     await page.goto(`/annotate/${testVideo.id}`)
-    await page.waitForLoadState('networkidle')
-
-    // Wait for workspace to be ready (ensures React components have rendered)
-    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await annotationWorkspace.expectWorkspaceReady()
 
     // Find and click back button
     const backButton = page.getByLabel('Back to video browser')
@@ -29,12 +26,9 @@ test.describe('Video Annotation - Back Button', () => {
     await expect(page.getByPlaceholder(/search videos/i)).toBeVisible()
   })
 
-  test('back button is properly positioned and styled', async ({ page, testVideo }) => {
+  test('back button is properly positioned and styled', async ({ page, annotationWorkspace, testVideo }) => {
     await page.goto(`/annotate/${testVideo.id}`)
-    await page.waitForLoadState('networkidle')
-
-    // Wait for workspace to be ready
-    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await annotationWorkspace.expectWorkspaceReady()
 
     const backButton = page.getByLabel('Back to video browser')
     await expect(backButton).toBeVisible()
@@ -44,12 +38,9 @@ test.describe('Video Annotation - Back Button', () => {
     await expect(toolbar.first()).toBeVisible()
   })
 
-  test('back button is keyboard accessible', async ({ page, testVideo }) => {
+  test('back button is keyboard accessible', async ({ page, annotationWorkspace, testVideo }) => {
     await page.goto(`/annotate/${testVideo.id}`)
-    await page.waitForLoadState('networkidle')
-
-    // Wait for workspace to be ready
-    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await annotationWorkspace.expectWorkspaceReady()
 
     // Tab to back button
     await page.keyboard.press('Tab')
@@ -61,12 +52,9 @@ test.describe('Video Annotation - Back Button', () => {
     await expect(page).toHaveURL('/')
   })
 
-  test('back button works after video interaction', async ({ page, testVideo }) => {
+  test('back button works after video interaction', async ({ page, annotationWorkspace, testVideo }) => {
     await page.goto(`/annotate/${testVideo.id}`)
-    await page.waitForLoadState('networkidle')
-
-    // Wait for workspace to be ready
-    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await annotationWorkspace.expectWorkspaceReady()
 
     // Interact with video (play/pause)
     const playButton = page.getByLabel(/play video/i)
@@ -81,7 +69,7 @@ test.describe('Video Annotation - Back Button', () => {
     await expect(page).toHaveURL('/')
   })
 
-  test('back button preserves video browser state', async ({ page, testVideo }) => {
+  test('back button preserves video browser state', async ({ page, annotationWorkspace, testVideo }) => {
     // Start at video browser with search query
     await page.goto('/')
     const searchInput = page.getByPlaceholder(/search videos/i)
@@ -89,10 +77,7 @@ test.describe('Video Annotation - Back Button', () => {
 
     // Navigate to annotation
     await page.goto(`/annotate/${testVideo.id}`)
-    await page.waitForLoadState('networkidle')
-
-    // Wait for workspace to be ready
-    await expect(page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await annotationWorkspace.expectWorkspaceReady()
 
     // Go back
     const backButton = page.getByLabel('Back to video browser')
