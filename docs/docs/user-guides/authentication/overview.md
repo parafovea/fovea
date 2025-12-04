@@ -46,28 +46,33 @@ In this mode:
 Set the following environment variables:
 
 ```env
-SINGLE_USER_MODE=false
+FOVEA_MODE=multi-user
 ALLOW_REGISTRATION=true
+SESSION_SECRET=$(openssl rand -base64 32)
+ADMIN_PASSWORD=$(openssl rand -base64 32)
 ```
 
-Restart the server. An admin account is created automatically from:
+After setting these variables, run the database seed script to create the admin user:
 
-```env
-DEFAULT_ADMIN_USERNAME=admin
-DEFAULT_ADMIN_PASSWORD=admin123
+```bash
+docker compose exec backend npm run seed
 ```
 
-**Important:** Change the default admin password immediately after first login.
+The admin account will be created with:
+- Username: `admin`
+- Password: The value you set in `ADMIN_PASSWORD`
+
+**Important:** Store your admin password securely.
 
 ### Return to Single-User Mode
 
 Set:
 
 ```env
-SINGLE_USER_MODE=true
+FOVEA_MODE=single-user
 ```
 
-Existing user accounts remain in the database but are not used for authentication.
+Restart the server. Existing user accounts remain in the database but are not used for authentication.
 
 ## User Roles
 
@@ -109,8 +114,13 @@ Administrators have all regular user permissions plus:
 - HttpOnly session cookies
 - Secure cookies in production (HTTPS)
 - SameSite=Lax for CSRF protection
+- Signed cookies with SESSION_SECRET environment variable
 - Configurable session timeout (default: 7 days)
 - Extended sessions with "Remember Me" (30 days)
+
+**Required Configuration:**
+- Ensure session secret is set: `SESSION_SECRET` (generate with `openssl rand -base64 32`)
+- Never commit SESSION_SECRET to version control
 
 ### Session Management
 

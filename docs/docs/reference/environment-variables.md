@@ -31,8 +31,9 @@ Complete reference for environment variables used across FOVEA services.
 |----------|---------|-------------|
 | `FOVEA_MODE` | `single-user` | Authentication mode: `single-user` (no login) or `multi-user` (session-based auth) |
 | `ALLOW_REGISTRATION` | `false` | Allow user self-registration (multi-user mode only) |
-| `COOKIE_SECRET` | (required) | Secret for session cookie signing (min 32 characters, required in multi-user mode) |
+| `SESSION_SECRET` | (required) | Secret for session cookie signing (min 32 characters, required in multi-user mode) |
 | `SESSION_TIMEOUT_DAYS` | `7` | Session expiration in days |
+| `ADMIN_PASSWORD` | (required) | Admin user password for database seeding (required in multi-user mode) |
 | `API_KEY_ENCRYPTION_KEY` | (required) | 32-byte hex key for API key encryption at rest |
 
 **Example** (in docker-compose.yml):
@@ -44,7 +45,8 @@ backend:
     DATABASE_URL: postgresql://fovea:${DB_PASSWORD}@postgres:5432/fovea
     FOVEA_MODE: multi-user
     ALLOW_REGISTRATION: false
-    COOKIE_SECRET: ${COOKIE_SECRET}
+    SESSION_SECRET: ${SESSION_SECRET}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     SESSION_TIMEOUT_DAYS: 7
     API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
 ```
@@ -165,9 +167,10 @@ MODEL_SERVICE_URL=http://localhost:8000
 LOG_LEVEL=info
 
 # Authentication & User Management
-FOVEA_MODE=single-user
+FOVEA_MODE=multi-user
 ALLOW_REGISTRATION=false
-COOKIE_SECRET=your-secret-key-here-min-32-chars
+SESSION_SECRET=your-secret-key-here-min-32-chars
+ADMIN_PASSWORD=your-secure-password-here
 SESSION_TIMEOUT_DAYS=7
 API_KEY_ENCRYPTION_KEY=your-32-byte-hex-key-here
 ```
@@ -222,7 +225,7 @@ REDIS_URL=redis://localhost:6379
 CORS_ORIGIN=http://localhost:5173
 MODEL_SERVICE_URL=http://localhost:8000
 FOVEA_MODE=single-user
-COOKIE_SECRET=dev-secret-key-min-32-chars-here
+SESSION_SECRET=dev-secret-key-min-32-chars-here
 API_KEY_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
@@ -286,7 +289,8 @@ backend:
   environment:
     FOVEA_MODE: multi-user
     ALLOW_REGISTRATION: false
-    COOKIE_SECRET: ${COOKIE_SECRET}
+    SESSION_SECRET: ${SESSION_SECRET}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     SESSION_TIMEOUT_DAYS: 7
     API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
 ```
@@ -338,7 +342,8 @@ openssl rand -hex 32
 
 Set in `.env` file:
 ```env
-COOKIE_SECRET=your-generated-secret-here
+SESSION_SECRET=your-generated-secret-here
+ADMIN_PASSWORD=your-generated-password-here
 API_KEY_ENCRYPTION_KEY=your-generated-hex-key-here
 ```
 
