@@ -381,11 +381,8 @@ async def create_llm_loader_with_fallback(
         try:
             loader = LLMLoader(config, cache_dir)
             await loader.load()
-            if i > 0:
-                print(f"Loaded fallback model: {config.model_id}")
             return loader
         except Exception as e:
-            print(f"Failed to load {config.model_id}: {e}")
             if i == len(configs_to_try) - 1:
                 raise RuntimeError(
                     "All model loading attempts failed. Check GPU memory and model IDs."

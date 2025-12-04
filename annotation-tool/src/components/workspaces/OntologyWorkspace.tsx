@@ -365,7 +365,7 @@ export default function OntologyWorkspace() {
     },
     'ontology.duplicateType': () => {
       // TODO: Implement duplication logic
-      console.log('Duplicate type not yet implemented')
+      alert('Duplicate type not yet implemented')
     },
     'ontology.search': () => {
       searchInputRef.current?.focus()

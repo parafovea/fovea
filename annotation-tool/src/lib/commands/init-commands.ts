@@ -34,8 +34,6 @@ export function initializeCommands(): void {
       }
     })
   })
-
-  console.log(`Initialized ${allCommands.length} commands`)
 }
 
 /**

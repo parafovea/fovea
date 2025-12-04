@@ -258,7 +258,6 @@ test.describe('ARIA Labels - Form Inputs', () => {
         }
       })
 
-      console.log('Textarea debug info:', debugInfo)
       expect(debugInfo.hasLabel).toBe(true)
     }
   })

@@ -36,9 +36,6 @@ describe('Timeline Rendering Performance', () => {
       const averageFrameDuration = frameTimings.reduce((a, b) => a + b, 0) / frameTimings.length
       const fps = 1000 / averageFrameDuration
 
-      console.log(`Average frame duration: ${averageFrameDuration.toFixed(2)}ms`)
-      console.log(`Effective FPS: ${fps.toFixed(1)}`)
-
       // Target: 55+ FPS (allowing 5fps margin)
       expect(fps).toBeGreaterThan(55)
     })
@@ -66,9 +63,6 @@ describe('Timeline Rendering Performance', () => {
       const maxFrameDuration = Math.max(...frameTimings)
       const jankFrames = frameTimings.filter((t) => t > 50).length
 
-      console.log(`Max frame duration: ${maxFrameDuration.toFixed(2)}ms`)
-      console.log(`Jank frames (>50ms): ${jankFrames}/${dragFrames}`)
-
       expect(maxFrameDuration).toBeLessThan(50)
       expect(jankFrames).toBe(0)
     })
@@ -93,9 +87,6 @@ describe('Timeline Rendering Performance', () => {
 
       const averageZoomDuration = zoomTimings.reduce((a, b) => a + b, 0) / zoomTimings.length
       const maxZoomDuration = Math.max(...zoomTimings)
-
-      console.log(`Average zoom step: ${averageZoomDuration.toFixed(2)}ms`)
-      console.log(`Max zoom step: ${maxZoomDuration.toFixed(2)}ms`)
 
       // Should maintain 60fps during zoom (16.67ms per frame)
       expect(averageZoomDuration).toBeLessThan(17)
@@ -151,9 +142,6 @@ describe('Timeline Rendering Performance', () => {
       const efficientDuration = performance.now() - efficientStart
       const efficientCalls = drawCallCount
 
-      console.log(`Inefficient: ${inefficientCalls} calls, ${inefficientDuration.toFixed(2)}ms`)
-      console.log(`Efficient: ${efficientCalls} calls, ${efficientDuration.toFixed(2)}ms`)
-
       // Efficient should use fewer draw calls (allowing for one beginPath call)
       // In practice, batching reduces calls but not by huge margins
       expect(efficientCalls).toBeLessThan(inefficientCalls)
@@ -206,9 +194,6 @@ describe('Timeline Rendering Performance', () => {
 
       const partialDrawCalls = fillRectCallCount
 
-      console.log(`Full redraw: ${fullDrawCalls} calls`)
-      console.log(`Partial redraw: ${partialDrawCalls} calls`)
-
       // Partial should be much faster
       expect(partialDrawCalls).toBeLessThan(fullDrawCalls / 10)
     })
@@ -234,10 +219,6 @@ describe('Timeline Rendering Performance', () => {
 
       const duration = performance.now() - start
 
-      console.log(`Total frames: ${totalFrames}`)
-      console.log(`Rendered elements: ${renderedElements}`)
-      console.log(`Render time: ${duration.toFixed(2)}ms`)
-
       // Should only render visible portion
       expect(renderedElements).toBe(visibleFrames)
       expect(renderedElements).toBeLessThan(totalFrames / 10)
@@ -261,10 +242,6 @@ describe('Timeline Rendering Performance', () => {
       }
 
       const duration = performance.now() - start
-
-      console.log(`Pan amount: ${panAmount} frames`)
-      console.log(`New frames rendered: ${newFramesRendered}`)
-      console.log(`Pan time: ${duration.toFixed(2)}ms`)
 
       // Should only render new frames, not entire viewport
       expect(newFramesRendered).toBe(panAmount)
@@ -304,10 +281,6 @@ describe('Timeline Rendering Performance', () => {
 
       const duration = performance.now() - start
 
-      console.log(`Total annotations: ${annotations.length}`)
-      console.log(`Visible annotations: ${visibleAnnotations}`)
-      console.log(`Culling time: ${duration.toFixed(2)}ms`)
-
       // Should cull efficiently
       expect(duration).toBeLessThan(5)
     })
@@ -342,10 +315,6 @@ describe('Timeline Rendering Performance', () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       const duration = performance.now() - start
-
-      console.log(`Updates: ${updates}`)
-      console.log(`RAF calls: ${rafCallCount}`)
-      console.log(`Duration: ${duration.toFixed(2)}ms`)
 
       // Should batch some updates (fewer raf calls than updates)
       // Note: Without proper batching, rafCallCount === updates
@@ -388,9 +357,6 @@ describe('Timeline Rendering Performance', () => {
       // Copy offscreen buffer to main canvas (single operation)
       const mainCtx: any = mainCanvas.getContext()
       mainCtx.drawImage(offscreenCanvas, 0, 0)
-
-      console.log(`Offscreen draws: ${offscreenDraws}`)
-      console.log(`Onscreen draws: ${onscreenDraws}`)
 
       // Should do many draws to offscreen, single blit to onscreen
       expect(offscreenDraws).toBe(1000)

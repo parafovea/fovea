@@ -31,8 +31,6 @@ import { generateId } from './uuid'
  * - GPS-tagged locations
  */
 export async function seedTestData(): Promise<void> {
-  console.log('🌱 Seeding test data for developer mode...')
-
   // Create tactical analyst persona and ontology
   const personaId = generateId()
   const persona = {
@@ -253,14 +251,6 @@ export async function seedTestData(): Promise<void> {
   ]
 
   locations.forEach(location => store.dispatch(addEntity(location)))
-
-  console.log('✅ Test data seeded successfully')
-  console.log(`   - Persona: ${persona.name}`)
-  console.log(`   - Entity Types: ${entityTypes.length}`)
-  console.log(`   - Event Types: ${eventTypes.length}`)
-  console.log(`   - Role Types: ${roleTypes.length}`)
-  console.log(`   - Entities: ${entities.length}`)
-  console.log(`   - Locations: ${locations.length}`)
 }
 
 /**

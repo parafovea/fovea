@@ -312,10 +312,6 @@ describe('Redux State Management', () => {
       const memGrowth = memAfter - memBefore
       const memGrowthPercent = (memGrowth / memBefore) * 100
 
-      console.log(`Memory before: ${memBefore.toFixed(2)}MB`)
-      console.log(`Memory after: ${memAfter.toFixed(2)}MB`)
-      console.log(`Growth: ${memGrowth.toFixed(2)}MB (${memGrowthPercent.toFixed(1)}%)`)
-
       // Allow some memory growth accounting for GC timing variance
       // Threshold set to catch actual leaks while tolerating normal variance and CI environment differences
       expect(memGrowthPercent).toBeLessThan(50)
@@ -377,10 +373,6 @@ describe('Redux State Management', () => {
       const memGrowth = memAfter - memBefore
       const memGrowthPercent = (memGrowth / memBefore) * 100
 
-      console.log(`1000 updates - Memory before: ${memBefore.toFixed(2)}MB`)
-      console.log(`1000 updates - Memory after: ${memAfter.toFixed(2)}MB`)
-      console.log(`1000 updates - Growth: ${memGrowth.toFixed(2)}MB (${memGrowthPercent.toFixed(1)}%)`)
-
       // Should not grow excessively (allow for some growth from Redux state, CI has variable memory)
       expect(memGrowthPercent).toBeLessThan(100)
     })
@@ -417,9 +409,6 @@ describe('Redux State Management', () => {
       }
 
       const duration = performance.now() - start
-
-      console.log(`1000 selector calls: ${duration.toFixed(2)}ms`)
-      console.log(`Average per call: ${(duration / 1000).toFixed(4)}ms`)
 
       // Should be very fast due to memoization
       expect(duration).toBeLessThan(10)

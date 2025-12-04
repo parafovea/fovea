@@ -43,7 +43,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global model_manager
 
     # Startup
-    print("Model service starting up...")
     configure_observability()
 
     # Initialize ModelManager
@@ -51,7 +50,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "MODEL_CONFIG_PATH",
         str(Path(__file__).parent.parent / "config" / "models.yaml"),
     )
-    print(f"Loading model configuration from: {config_path}")
 
     model_manager = ModelManager(config_path)
     set_model_manager(model_manager)
@@ -59,15 +57,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Warmup models if configured
     await model_manager.warmup_models()
 
-    print("Model service ready")
-
     yield
 
     # Shutdown
-    print("Model service shutting down...")
     if model_manager:
         await model_manager.shutdown()
-    print("Model service stopped")
 
 
 app = FastAPI(

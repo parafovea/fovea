@@ -114,8 +114,6 @@ class TestSummarizeEndpoint:
             },
         )
 
-        if response.status_code != 200:
-            print(f"Response: {response.json()}")
         assert response.status_code == 200
         data = response.json()
 

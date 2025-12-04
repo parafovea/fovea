@@ -112,7 +112,6 @@ export class VideoPlayerComponent {
     }
 
     // Context not ready - this is acceptable, fallback methods will handle it
-    console.warn('Command context not initialized within timeout, using fallback methods')
   }
 
   /**

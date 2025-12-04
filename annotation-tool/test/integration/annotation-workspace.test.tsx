@@ -904,4 +904,37 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       expect(screen.getByText('Hide Timeline')).toBeInTheDocument()
     })
   })
+
+  describe('Back Button', () => {
+    it('renders back button in toolbar', async () => {
+      renderWorkspace()
+
+      await waitFor(() => {
+        const backButton = screen.getByLabelText('Back to video browser')
+        expect(backButton).toBeInTheDocument()
+        expect(backButton).toBeVisible()
+      })
+    })
+
+    it('back button is accessible via keyboard', async () => {
+      renderWorkspace()
+
+      const backButton = await screen.findByLabelText('Back to video browser')
+      expect(backButton).not.toBeDisabled()
+
+      // Focus and activate
+      backButton.focus()
+      expect(backButton).toHaveFocus()
+    })
+
+    it('back button is in metadata box', async () => {
+      renderWorkspace()
+
+      const backButton = await screen.findByLabelText('Back to video browser')
+
+      // Button should be in the Paper component (metadata box)
+      const paper = backButton.closest('[class*="MuiPaper"]')
+      expect(paper).toBeInTheDocument()
+    })
+  })
 })

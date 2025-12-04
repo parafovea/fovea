@@ -122,22 +122,12 @@ export const saveAnnotations = createAsyncThunk(
   }, { getState }) => {
     const { videoId, annotations } = params
 
-    console.log('[AUTO-SAVE] Starting save for video:', {
-      videoId,
-      totalAnnotations: annotations.length,
-      annotationIds: annotations.map(a => a.id),
-      annotationsWithoutId: annotations.filter(a => !a.id).length
-    })
-
     // Get loaded IDs and ID mapping from Redux state
     const state = getState() as { annotations: AnnotationState }
     const safeKey = makeSafeVideoKey(videoId)
     const loadedIds = state.annotations.loadedAnnotationIds[safeKey] || []
     const loadedSet = new Set(loadedIds)
     const idMapping = { ...(state.annotations.annotationIdMapping[safeKey] || {}) } // Copy existing mapping
-
-    console.log(`[AUTO-SAVE] Loaded IDs from Redux:`, loadedIds)
-    console.log(`[AUTO-SAVE] ID mapping from Redux:`, idMapping)
 
     const savedCount = { created: 0, updated: 0 }
     const errors: Array<{ annotationId: string; error: string }> = []
@@ -147,7 +137,6 @@ export const saveAnnotations = createAsyncThunk(
     for (const annotation of annotations) {
       // Generate client-side ID if missing (for newly created annotations)
       if (!annotation.id) {
-        console.warn(`[AUTO-SAVE] Annotation missing ID, generating client-side UUID`)
         annotation.id = uuidv4()
       }
 
@@ -159,9 +148,7 @@ export const saveAnnotations = createAsyncThunk(
 
         if (isNew) {
           // Create new annotation (POST returns annotation with server-generated ID)
-          console.log(`[AUTO-SAVE] Creating annotation ${annotation.id} (POST)`)
           const savedAnnotation = await api.saveAnnotation(annotation)
-          console.log(`[AUTO-SAVE] Server returned ID: ${savedAnnotation.id}`)
           savedCount.created++
 
           // Map client ID to server ID for future reference
@@ -174,7 +161,6 @@ export const saveAnnotations = createAsyncThunk(
         } else {
           // Update existing annotation  - use server ID if we have a mapping
           const serverIdOrOriginal = idMapping[annotation.id] || annotation.id
-          console.log(`[AUTO-SAVE] Updating annotation ${annotation.id} → ${serverIdOrOriginal} (PUT)`)
 
           // Create a copy with the correct server ID for the API call
           const annotationForUpdate = { ...annotation, id: serverIdOrOriginal }
@@ -190,7 +176,6 @@ export const saveAnnotations = createAsyncThunk(
       }
     }
 
-    console.log(`[AUTO-SAVE] Complete:`, { savedCount, errorCount: errors.length, idMapping })
     // Return the updated loaded IDs and ID mapping for the fulfilled handler
     return { videoId, savedCount, errors, loadedIds: Array.from(loadedSet), idMapping }
   }

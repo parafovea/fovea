@@ -79,4 +79,27 @@ test.describe('Keyboard Shortcuts - Global Navigation', () => {
     await expect(page).toHaveURL('/objects')
   })
 
+  test('back button works alongside Ctrl+1 shortcut', async ({ page, testUser, testVideo }) => {
+    await page.goto(`/annotate/${testVideo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    // Both back button and Ctrl+1 should navigate to video browser
+    const backButton = page.getByLabel('Back to video browser')
+    await expect(backButton).toBeVisible()
+
+    // Test keyboard shortcut first
+    await page.keyboard.press('Control+1')
+    await page.waitForTimeout(500)
+    await expect(page).toHaveURL('/')
+
+    // Navigate back to annotation
+    await page.goto(`/annotate/${testVideo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    // Test back button
+    await backButton.click()
+    await page.waitForTimeout(500)
+    await expect(page).toHaveURL('/')
+  })
+
 })
