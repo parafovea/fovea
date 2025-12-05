@@ -78,7 +78,7 @@ export async function buildApp() {
 
   // Cookie support for session management
   await app.register(fastifyCookie, {
-    secret: process.env.COOKIE_SECRET || 'dev-secret-change-in-production',
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
   })
 
   // OpenAPI documentation
