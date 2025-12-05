@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import { Type } from '@sinclair/typebox'
 import { authService } from '../services/auth-service.js'
 import { prisma } from '../lib/prisma.js'
+import { UnauthorizedError, ForbiddenError, ConflictError } from '../lib/errors.js'
 
 /**
  * Authentication routes for login, logout, registration.
@@ -57,7 +58,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!result.success || !result.user) {
-        return reply.code(401).send({ error: result.error || 'Authentication failed' })
+        throw new UnauthorizedError(result.error || 'Authentication failed')
       }
 
       // Create session
@@ -160,7 +161,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!user) {
           reply.clearCookie('session_token', { path: '/' })
-          return reply.code(401).send({ error: 'Session expired' })
+          throw new UnauthorizedError('Session expired')
         }
 
         return {
@@ -228,7 +229,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Multi-user mode requires authentication
-      return reply.code(401).send({ error: 'Not authenticated' })
+      throw new UnauthorizedError('Not authenticated')
     }
   )
 
@@ -279,7 +280,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       // Check if registration is enabled
       if (process.env.ALLOW_REGISTRATION !== 'true') {
-        return reply.code(403).send({ error: 'Registration is disabled' })
+        throw new ForbiddenError('Registration is disabled')
       }
 
       const { username, email, password, displayName } = request.body
@@ -290,7 +291,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       if (existingUser) {
-        return reply.code(400).send({ error: 'Username already exists' })
+        throw new ConflictError('Username already exists')
       }
 
       // Hash password
