@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
-import { spawn } from 'child_process'
+import { seedDatabase } from '../../prisma/seed'
 
 /**
  * Integration tests for database seeding script.
@@ -35,11 +35,7 @@ describe('Database Seed Integration', () => {
       delete process.env.ADMIN_PASSWORD
 
       try {
-        // Run seed script without ADMIN_PASSWORD
-        const result = await runSeedScript({})
-
-        expect(result.exitCode).not.toBe(0)
-        expect(result.stderr).toContain('ADMIN_PASSWORD')
+        await expect(seedDatabase(prisma)).rejects.toThrow('ADMIN_PASSWORD environment variable is required')
       } finally {
         // Restore env
         if (originalPassword) {
@@ -50,13 +46,9 @@ describe('Database Seed Integration', () => {
 
     it('succeeds with ADMIN_PASSWORD environment variable', async () => {
       const testPassword = 'test-secure-password-12345'
+      process.env.ADMIN_PASSWORD = testPassword
 
-      const result = await runSeedScript({
-        ADMIN_PASSWORD: testPassword
-      })
-
-      expect(result.exitCode).toBe(0)
-      expect(result.stdout).toContain('Created admin user')
+      await seedDatabase(prisma)
 
       // Verify admin user was created
       const adminUser = await prisma.user.findUnique({
@@ -73,10 +65,9 @@ describe('Database Seed Integration', () => {
   describe('Admin user creation', () => {
     it('creates admin user with proper bcrypt hash', async () => {
       const testPassword = 'secure-password-789'
+      process.env.ADMIN_PASSWORD = testPassword
 
-      await runSeedScript({
-        ADMIN_PASSWORD: testPassword
-      })
+      await seedDatabase(prisma)
 
       const adminUser = await prisma.user.findUnique({
         where: { username: 'admin' }
@@ -94,9 +85,9 @@ describe('Database Seed Integration', () => {
     })
 
     it('creates admin user with correct properties', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'test-password-123'
-      })
+      process.env.ADMIN_PASSWORD = 'test-password-123'
+
+      await seedDatabase(prisma)
 
       const adminUser = await prisma.user.findUnique({
         where: { username: 'admin' }
@@ -113,9 +104,8 @@ describe('Database Seed Integration', () => {
     it('updates admin password when re-running seed', async () => {
       // First seed with initial password
       const initialPassword = 'initial-password-456'
-      await runSeedScript({
-        ADMIN_PASSWORD: initialPassword
-      })
+      process.env.ADMIN_PASSWORD = initialPassword
+      await seedDatabase(prisma)
 
       const adminAfterFirst = await prisma.user.findUnique({
         where: { username: 'admin' }
@@ -124,9 +114,8 @@ describe('Database Seed Integration', () => {
 
       // Re-run seed with different password
       const newPassword = 'new-password-789'
-      await runSeedScript({
-        ADMIN_PASSWORD: newPassword
-      })
+      process.env.ADMIN_PASSWORD = newPassword
+      await seedDatabase(prisma)
 
       const adminAfterSecond = await prisma.user.findUnique({
         where: { username: 'admin' }
@@ -147,9 +136,10 @@ describe('Database Seed Integration', () => {
 
   describe('Test user creation', () => {
     it('creates test user with default password if not specified', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password'
-      })
+      process.env.ADMIN_PASSWORD = 'admin-password'
+      delete process.env.TEST_USER_PASSWORD
+
+      await seedDatabase(prisma)
 
       const testUser = await prisma.user.findUnique({
         where: { username: 'testuser' }
@@ -166,11 +156,10 @@ describe('Database Seed Integration', () => {
 
     it('creates test user with custom password when TEST_USER_PASSWORD set', async () => {
       const customTestPassword = 'custom-test-password'
+      process.env.ADMIN_PASSWORD = 'admin-password'
+      process.env.TEST_USER_PASSWORD = customTestPassword
 
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password',
-        TEST_USER_PASSWORD: customTestPassword
-      })
+      await seedDatabase(prisma)
 
       const testUser = await prisma.user.findUnique({
         where: { username: 'testuser' }
@@ -186,10 +175,10 @@ describe('Database Seed Integration', () => {
 
   describe('FOVEA_MODE behavior', () => {
     it('creates default user in single-user mode', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password',
-        FOVEA_MODE: 'single-user'
-      })
+      process.env.ADMIN_PASSWORD = 'admin-password'
+      process.env.FOVEA_MODE = 'single-user'
+
+      await seedDatabase(prisma)
 
       const defaultUser = await prisma.user.findUnique({
         where: { id: 'default-user' }
@@ -202,10 +191,10 @@ describe('Database Seed Integration', () => {
     })
 
     it('does not create default user in multi-user mode', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password',
-        FOVEA_MODE: 'multi-user'
-      })
+      process.env.ADMIN_PASSWORD = 'admin-password'
+      process.env.FOVEA_MODE = 'multi-user'
+
+      await seedDatabase(prisma)
 
       const defaultUser = await prisma.user.findUnique({
         where: { id: 'default-user' }
@@ -217,10 +206,10 @@ describe('Database Seed Integration', () => {
 
   describe('Persona creation', () => {
     it('creates Automated persona owned by appropriate user', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password',
-        FOVEA_MODE: 'multi-user'
-      })
+      process.env.ADMIN_PASSWORD = 'admin-password'
+      process.env.FOVEA_MODE = 'multi-user'
+
+      await seedDatabase(prisma)
 
       const automatedPersona = await prisma.persona.findFirst({
         where: { name: 'Automated' }
@@ -238,9 +227,9 @@ describe('Database Seed Integration', () => {
     })
 
     it('creates test ontology for Automated persona', async () => {
-      await runSeedScript({
-        ADMIN_PASSWORD: 'admin-password'
-      })
+      process.env.ADMIN_PASSWORD = 'admin-password'
+
+      await seedDatabase(prisma)
 
       const automatedPersona = await prisma.persona.findFirst({
         where: { name: 'Automated' }
@@ -257,46 +246,3 @@ describe('Database Seed Integration', () => {
     })
   })
 })
-
-/**
- * Helper function to run the seed script as a child process with specific env vars
- */
-async function runSeedScript(envVars: Record<string, string>): Promise<{
-  exitCode: number
-  stdout: string
-  stderr: string
-}> {
-  return new Promise((resolve) => {
-    const env = {
-      ...process.env,
-      NODE_ENV: 'test',
-      DATABASE_URL: process.env.DATABASE_URL,
-      ...envVars
-    }
-
-    // Run the seed script via npm
-    const seedProcess = spawn('npm', ['run', 'seed'], {
-      env,
-      cwd: process.cwd()
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    seedProcess.stdout.on('data', (data) => {
-      stdout += data.toString()
-    })
-
-    seedProcess.stderr.on('data', (data) => {
-      stderr += data.toString()
-    })
-
-    seedProcess.on('close', (code) => {
-      resolve({
-        exitCode: code || 0,
-        stdout,
-        stderr
-      })
-    })
-  })
-}

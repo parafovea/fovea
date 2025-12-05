@@ -1,14 +1,16 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
-const prisma = new PrismaClient()
-
 /**
  * Seeds the database with initial users and system personas.
  * Creates admin user, test user, default user for single-user mode, and Automated persona.
  * Associates existing personas with the default user.
+ *
+ * @param prismaClient - Optional Prisma client instance (for testing)
  */
-async function main() {
+export async function seedDatabase(prismaClient?: PrismaClient) {
+  const prisma = prismaClient || new PrismaClient()
+
   console.log('Starting database seed...')
 
   // Create default admin user for multi-user mode
@@ -133,13 +135,18 @@ async function main() {
   }
 
   console.log('Database seed completed successfully')
+
+  // Only disconnect if we created our own client
+  if (!prismaClient) {
+    await prisma.$disconnect()
+  }
 }
 
-main()
-  .catch((e) => {
-    console.error('Error seeding database:', e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+// Run seed when executed directly
+if (require.main === module) {
+  seedDatabase()
+    .catch((e) => {
+      console.error('Error seeding database:', e)
+      process.exit(1)
+    })
+}
