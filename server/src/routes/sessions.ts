@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 
 /**
  * TypeBox schema for Session response.
@@ -124,11 +125,11 @@ const sessionsRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!session) {
-      return reply.code(404).send({ error: 'Session not found' })
+      throw new NotFoundError('Session', sessionId)
     }
 
     if (session.userId !== request.user!.id) {
-      return reply.code(403).send({ error: 'Cannot revoke another user\'s session' })
+      throw new ForbiddenError('Cannot revoke another user\'s session')
     }
 
     await fastify.prisma.session.delete({
@@ -217,7 +218,7 @@ const sessionsRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'Session not found' })
+        throw new NotFoundError('Session', sessionId)
       }
       throw error
     }
