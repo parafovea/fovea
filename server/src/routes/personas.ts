@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '../lib/errors.js'
 
 /**
  * Request body for ontology update endpoint.
@@ -143,7 +144,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     // In multi-user mode, require authentication
     if (mode !== 'single-user' && !request.user) {
-      return reply.code(401).send({ error: 'Authentication required' })
+      throw new UnauthorizedError('Authentication required')
     }
 
     // Get user ID: use authenticated user or find default user in single-user mode
@@ -156,7 +157,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
       if (!defaultUser) {
-        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+        throw new InternalError('Default user not found in single-user mode')
       }
       userId = defaultUser.id
     }
@@ -221,13 +222,13 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!persona) {
-      return reply.code(404).send({ error: 'Persona not found' })
+      throw new NotFoundError('Persona', id)
     }
 
     // In multi-user mode, verify access
     if (mode === 'multi-user' && request.user) {
       if (persona.userId !== request.user.id && !persona.isSystemGenerated) {
-        return reply.code(403).send({ error: 'Access denied' })
+        throw new ForbiddenError('Access denied')
       }
     }
 
@@ -280,11 +281,11 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!existingPersona) {
-      return reply.code(404).send({ error: 'Persona not found' })
+      throw new NotFoundError('Persona', id)
     }
 
     if (existingPersona.userId !== request.user!.id) {
-      return reply.code(403).send({ error: 'Cannot update another user\'s persona' })
+      throw new ForbiddenError('Cannot update another user\'s persona')
     }
 
     try {
@@ -295,7 +296,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send(persona)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'Persona not found' })
+        throw new NotFoundError('Persona', id)
       }
       throw error
     }
@@ -339,11 +340,11 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!existingPersona) {
-      return reply.code(404).send({ error: 'Persona not found' })
+      throw new NotFoundError('Persona', id)
     }
 
     if (existingPersona.userId !== request.user!.id) {
-      return reply.code(403).send({ error: 'Cannot delete another user\'s persona' })
+      throw new ForbiddenError('Cannot delete another user\'s persona')
     }
 
     try {
@@ -353,7 +354,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send({ message: 'Persona deleted successfully' })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'Persona not found' })
+        throw new NotFoundError('Persona', id)
       }
       throw error
     }
@@ -394,7 +395,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!persona || !persona.ontology) {
-      return reply.code(404).send({ error: 'Persona or ontology not found' })
+      throw new NotFoundError('Persona or ontology', id)
     }
 
     // Map database field names to API field names
@@ -454,7 +455,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!persona || !persona.ontology) {
-      return reply.code(404).send({ error: 'Persona or ontology not found' })
+      throw new NotFoundError('Persona or ontology', id)
     }
 
     // Map API field names to database field names
