@@ -274,8 +274,8 @@ async function runSeedScript(envVars: Record<string, string>): Promise<{
       ...envVars
     }
 
-    // Run the compiled seed script
-    const seedProcess = spawn('node', ['prisma/seed.cjs'], {
+    // Run the seed script via npm
+    const seedProcess = spawn('npm', ['run', 'seed'], {
       env,
       cwd: process.cwd()
     })
