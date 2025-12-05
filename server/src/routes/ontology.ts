@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { optionalAuth } from '../middleware/auth.js'
+import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -85,11 +86,11 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
       if (!defaultUser) {
-        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+        throw new InternalError('Default user not found in single-user mode')
       }
       userId = defaultUser.id
     } else {
-      return reply.code(401).send({ error: 'Authentication required' })
+      throw new UnauthorizedError('Authentication required')
     }
 
     // Fetch personas for this user with their ontologies
@@ -199,11 +200,11 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
       if (!defaultUser) {
-        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+        throw new InternalError('Default user not found in single-user mode')
       }
       userId = defaultUser.id
     } else {
-      return reply.code(401).send({ error: 'Authentication required' })
+      throw new UnauthorizedError('Authentication required')
     }
 
     interface PersonaInput {
@@ -430,7 +431,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!persona) {
-        return reply.code(400).send({ error: 'Persona not found' })
+        throw new NotFoundError('Persona', personaId)
       }
 
       // Call model service
