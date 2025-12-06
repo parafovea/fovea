@@ -8,6 +8,7 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { videoSummarizationQueue } from '../queues/setup.js'
+import { NotFoundError } from '../lib/errors.js'
 
 /**
  * Job data for video summarization queue.
@@ -153,7 +154,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', `${request.params.videoId}-${request.params.personaId}`)
       }
 
       return reply.send(summary)
@@ -191,7 +192,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!video) {
-        return reply.status(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
 
       const persona = await fastify.prisma.persona.findUnique({
@@ -199,7 +200,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!persona) {
-        return reply.status(404).send({ error: 'Persona not found' })
+        throw new NotFoundError('Persona', personaId)
       }
 
       const jobData: SummarizeJobData = {
@@ -265,7 +266,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const job = await videoSummarizationQueue.getJob(request.params.jobId)
 
       if (!job) {
-        return reply.status(404).send({ error: 'Job not found' })
+        throw new NotFoundError('Job', request.params.jobId)
       }
 
       const state = await job.getState()
@@ -428,7 +429,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!existing) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       const updated = await fastify.prisma.videoSummary.update({
@@ -472,7 +473,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({ success: true })
       } catch (error) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', `${videoId}-${personaId}`)
       }
     }
   )
