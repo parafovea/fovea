@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox'
 import { PrismaClient } from '@prisma/client'
 import { syncVideosFromStorage } from '../../services/videoSync.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
+import { InternalError } from '../../lib/errors.js'
 
 /**
  * Video synchronization route.
@@ -69,9 +70,7 @@ export const syncRoutes: FastifyPluginAsync<{
       })
     } catch (error) {
       fastify.log.error({ error }, 'Video sync failed')
-      return reply.code(500).send({
-        error: error instanceof Error ? error.message : 'Failed to sync videos'
-      })
+      throw new InternalError(error instanceof Error ? error.message : 'Failed to sync videos')
     }
   })
 }
