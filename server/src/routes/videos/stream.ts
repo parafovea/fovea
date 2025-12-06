@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider } from '../../services/videoStorage.js'
+import { NotFoundError, InternalError } from '../../lib/errors.js'
 
 /**
  * Video streaming route with range request support.
@@ -40,7 +41,7 @@ export const streamRoutes: FastifyPluginAsync<{
       })
 
       if (!video) {
-        return reply.code(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
 
       const range = request.headers.range
@@ -73,11 +74,11 @@ export const streamRoutes: FastifyPluginAsync<{
           .send(result.stream)
       } catch (error) {
         fastify.log.error({ error, videoId }, 'Failed to stream video')
-        return reply.code(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
     } catch (error) {
       fastify.log.error(error)
-      return reply.code(500).send({ error: 'Failed to stream video' })
+      throw new InternalError('Failed to stream video')
     }
   })
 }
