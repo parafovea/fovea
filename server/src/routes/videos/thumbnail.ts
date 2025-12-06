@@ -5,6 +5,7 @@ import path from 'path'
 import { createReadStream } from 'fs'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
+import { NotFoundError, InternalError } from '../../lib/errors.js'
 
 /**
  * Video thumbnail generation and serving route.
@@ -57,7 +58,7 @@ export const thumbnailRoutes: FastifyPluginAsync<{
       })
 
       if (!video) {
-        return reply.code(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
 
       const thumbnailFilename = `${videoId}_${size}.jpg`
@@ -128,11 +129,11 @@ export const thumbnailRoutes: FastifyPluginAsync<{
           .send(stream)
       } catch (error) {
         fastify.log.error({ error }, 'Failed to serve generated thumbnail')
-        return reply.code(500).send({ error: 'Failed to serve thumbnail' })
+        throw new InternalError('Failed to serve thumbnail')
       }
     } catch (error) {
       fastify.log.error(error)
-      return reply.code(500).send({ error: 'Failed to get thumbnail' })
+      throw new InternalError('Failed to get thumbnail')
     }
   })
 }
