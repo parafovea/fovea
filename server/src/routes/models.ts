@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
 import snakecaseKeys from 'snakecase-keys'
+import { InternalError } from '../lib/errors.js'
 
 /**
  * Model service API routes.
@@ -75,7 +76,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
         const message = data?.detail || error.message
         return reply.code(statusCode).send({ error: message })
       }
-      return reply.code(500).send({ error: 'Internal server error' })
+      throw new InternalError('Internal server error')
     }
   })
 
@@ -136,7 +137,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
         const message = data?.detail || error.message
         return reply.code(statusCode).send({ error: message })
       }
-      return reply.code(500).send({ error: 'Internal server error' })
+      throw new InternalError('Internal server error')
     }
   })
 
@@ -211,7 +212,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
         const message = data?.detail || error.message
         return reply.code(statusCode).send({ error: message })
       }
-      return reply.code(500).send({ error: 'Internal server error' })
+      throw new InternalError('Internal server error')
     }
   })
 
@@ -266,7 +267,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
         const message = data?.detail || error.message
         return reply.code(statusCode).send({ error: message })
       }
-      return reply.code(500).send({ error: 'Internal server error' })
+      throw new InternalError('Internal server error')
     }
   })
 }
