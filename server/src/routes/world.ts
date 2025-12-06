@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { optionalAuth, requireAdmin } from '../middleware/auth.js'
+import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
 
 /**
  * Request body for world state update endpoint.
@@ -71,11 +72,11 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
       if (!defaultUser) {
-        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+        throw new InternalError('Default user not found in single-user mode')
       }
       userId = defaultUser.id
     } else {
-      return reply.code(401).send({ error: 'Authentication required' })
+      throw new UnauthorizedError('Authentication required')
     }
 
     // Find or create world state for this user
@@ -168,11 +169,11 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
       })
       if (!defaultUser) {
-        return reply.code(500).send({ error: 'Default user not found in single-user mode' })
+        throw new InternalError('Default user not found in single-user mode')
       }
       userId = defaultUser.id
     } else {
-      return reply.code(401).send({ error: 'Authentication required' })
+      throw new UnauthorizedError('Authentication required')
     }
 
     const updateData = request.body as WorldStateUpdateBody
@@ -270,7 +271,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!user) {
-      return reply.code(404).send({ error: 'User not found' })
+      throw new NotFoundError('User', userId)
     }
 
     // Clear the user's world state by updating with empty arrays
