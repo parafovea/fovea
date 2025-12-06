@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
+import { NotFoundError, InternalError } from '../../lib/errors.js'
 
 /**
  * Video URL generation route.
@@ -56,7 +57,7 @@ export const urlRoutes: FastifyPluginAsync<{
       })
 
       if (!video) {
-        return reply.code(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
 
       try {
@@ -72,11 +73,11 @@ export const urlRoutes: FastifyPluginAsync<{
         })
       } catch (error) {
         fastify.log.error({ error, videoId }, 'Failed to get video URL')
-        return reply.code(500).send({ error: 'Failed to get video URL' })
+        throw new InternalError('Failed to get video URL')
       }
     } catch (error) {
       fastify.log.error(error)
-      return reply.code(500).send({ error: 'Failed to get video URL' })
+      throw new InternalError('Failed to get video URL')
     }
   })
 }
