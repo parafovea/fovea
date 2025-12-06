@@ -6,6 +6,7 @@ import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../../utils/queryBuilder.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
+import { NotFoundError, ValidationError, InternalError } from '../../lib/errors.js'
 
 /**
  * Object detection route.
@@ -64,9 +65,7 @@ export const detectRoutes: FastifyPluginAsync<{
 
         // Validate that either personaId or manualQuery is provided
         if (!personaId && !manualQuery) {
-          return reply.code(400).send({
-            error: 'Either personaId or manualQuery must be provided',
-          })
+          throw new ValidationError('Either personaId or manualQuery must be provided')
         }
 
         // Build query based on persona or use manual query
@@ -81,21 +80,15 @@ export const detectRoutes: FastifyPluginAsync<{
               queryOptions as DetectionQueryOptions
             )
           } catch (error) {
-            return reply.code(400).send({
-              error: error instanceof Error ? error.message : 'Failed to build query from persona',
-            })
+            throw new ValidationError(error instanceof Error ? error.message : 'Failed to build query from persona')
           }
         } else {
-          return reply.code(400).send({
-            error: 'Either personaId or manualQuery must be provided',
-          })
+          throw new ValidationError('Either personaId or manualQuery must be provided')
         }
 
         // Check if query is empty
         if (!query || query.trim() === '') {
-          return reply.code(400).send({
-            error: 'Generated query is empty. Persona may have no entity types defined.',
-          })
+          throw new ValidationError('Generated query is empty. Persona may have no entity types defined.')
         }
 
         // Fetch video to get path
@@ -104,9 +97,7 @@ export const detectRoutes: FastifyPluginAsync<{
         })
 
         if (!video) {
-          return reply.code(404).send({
-            error: 'Video not found',
-          })
+          throw new NotFoundError('Video', videoId)
         }
 
         // Convert backend path to model service path
@@ -169,9 +160,7 @@ export const detectRoutes: FastifyPluginAsync<{
         })
       } catch (error) {
         fastify.log.error(error)
-        return reply.code(500).send({
-          error: error instanceof Error ? error.message : 'Failed to detect objects',
-        })
+        throw new InternalError(error instanceof Error ? error.message : 'Failed to detect objects')
       }
     }
   )
