@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
+import { NotFoundError } from '../lib/errors.js'
 
 /**
  * TypeBox schema for Annotation response.
@@ -166,6 +167,16 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       source?: string
     }
 
+    // Check if annotation exists
+    const existing = await fastify.prisma.annotation.findUnique({
+      where: { id },
+      select: { id: true }
+    })
+
+    if (!existing) {
+      throw new NotFoundError('Annotation', id)
+    }
+
     const annotation = await fastify.prisma.annotation.update({
       where: { id },
       data: {
@@ -212,6 +223,16 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
+
+    // Check if annotation exists
+    const existing = await fastify.prisma.annotation.findUnique({
+      where: { id },
+      select: { id: true }
+    })
+
+    if (!existing) {
+      throw new NotFoundError('Annotation', id)
+    }
 
     await fastify.prisma.annotation.delete({
       where: { id }
