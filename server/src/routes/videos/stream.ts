@@ -77,6 +77,10 @@ export const streamRoutes: FastifyPluginAsync<{
         throw new NotFoundError('Video', videoId)
       }
     } catch (error) {
+      // Re-throw typed errors (NotFoundError, etc.) to be handled by global error handler
+      if (error instanceof NotFoundError || error instanceof InternalError) {
+        throw error
+      }
       fastify.log.error(error)
       throw new InternalError('Failed to stream video')
     }
