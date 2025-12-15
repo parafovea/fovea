@@ -202,7 +202,7 @@ describe('Claims API', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json().error).toContain('not found')
+      expect(response.json().error).toBe('NOT_FOUND')
     })
   })
 
@@ -273,7 +273,8 @@ describe('Claims API', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('Invalid parent claim')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('Invalid parent claim')
     })
   })
 
@@ -484,7 +485,8 @@ describe('Claims API', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('no claims')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('no claims')
     })
   })
 
@@ -609,7 +611,8 @@ describe('Claims API', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('Invalid relation type')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('Invalid relation type')
     })
 
     it('should reject relation type that does not support claims', async () => {
@@ -648,7 +651,8 @@ describe('Claims API', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('does not support claim-to-claim')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('does not support claim-to-claim')
     })
 
     it('should handle incoming and outgoing relations correctly', async () => {

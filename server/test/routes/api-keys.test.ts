@@ -209,8 +209,8 @@ describe('API Key Routes', () => {
         })
 
         expect(response.statusCode).toBe(409)
-        expect(response.json()).toHaveProperty('error')
-        expect(response.json().error).toContain('already exists')
+        expect(response.json().error).toBe('CONFLICT')
+        expect(response.json().message).toContain('already exists')
       })
 
       it('encrypts key value', async () => {
