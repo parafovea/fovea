@@ -4,6 +4,7 @@ import multipart from '@fastify/multipart'
 import { Prisma } from '@prisma/client'
 import { ImportHandler } from '../services/import-handler.js'
 import { DEFAULT_IMPORT_OPTIONS, ImportOptions } from '../services/import-types.js'
+import { ValidationError, InternalError } from '../lib/errors.js'
 
 /**
  * TypeBox schemas for import responses.
@@ -89,11 +90,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const data = await request.file()
 
       if (!data) {
-        reply.code(400)
-        return reply.send({
-          error: 'Bad Request',
-          message: 'No file provided'
-        })
+        throw new ValidationError('No file provided')
       }
 
       // Read file content
@@ -110,11 +107,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           options = { ...DEFAULT_IMPORT_OPTIONS, ...parsedOptions }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          reply.code(400)
-          return reply.send({
-            error: 'Bad Request',
-            message: `Invalid options JSON: ${errorMessage}`
-          })
+          throw new ValidationError(`Invalid options JSON: ${errorMessage}`)
         }
       }
 
@@ -128,11 +121,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           importLines.push(importLine)
         } catch (error) {
           const parseErrorMessage = error instanceof Error ? error.message : 'Unknown parse error'
-          reply.code(400)
-          return reply.send({
-            error: 'Parse Error',
-            message: parseErrorMessage
-          })
+          throw new ValidationError(parseErrorMessage)
         }
       }
 
@@ -156,13 +145,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
 
       return reply.send(result)
     } catch (error) {
+      // Re-throw typed errors (ValidationError, etc.) to be handled by global error handler
+      if (error instanceof ValidationError || error instanceof InternalError) {
+        throw error
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
-      reply.code(500)
-      return reply.send({
-        error: 'Internal Server Error',
-        message: errorMessage
-      })
+      throw new InternalError(errorMessage)
     }
   })
 
@@ -207,11 +196,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const data = await request.file()
 
       if (!data) {
-        reply.code(400)
-        return reply.send({
-          error: 'Bad Request',
-          message: 'No file provided'
-        })
+        throw new ValidationError('No file provided')
       }
 
       // Read file content
@@ -228,11 +213,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           importLines.push(importLine)
         } catch (error) {
           const parseErrorMessage = error instanceof Error ? error.message : 'Unknown parse error'
-          reply.code(400)
-          return reply.send({
-            error: 'Parse Error',
-            message: parseErrorMessage
-          })
+          throw new ValidationError(parseErrorMessage)
         }
       }
 
@@ -281,13 +262,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         warnings
       })
     } catch (error) {
+      // Re-throw typed errors to be handled by global error handler
+      if (error instanceof ValidationError || error instanceof InternalError) {
+        throw error
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
-      reply.code(500)
-      return reply.send({
-        error: 'Internal Server Error',
-        message: errorMessage
-      })
+      throw new InternalError(errorMessage)
     }
   })
 
@@ -359,11 +340,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
-      reply.code(500)
-      return reply.send({
-        error: 'Internal Server Error',
-        message: errorMessage
-      })
+      throw new InternalError(errorMessage)
     }
   })
 }
