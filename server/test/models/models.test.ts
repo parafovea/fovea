@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 import axios from 'axios'
 import modelsRoute from '../../src/routes/models.js'
+import { AppError } from '../../src/lib/errors.js'
 
 /**
  * Test suite for model service API routes.
@@ -17,7 +18,37 @@ describe('Model Routes', () => {
 
   beforeEach(async () => {
     // Create fresh Fastify instance for each test
-    app = Fastify()
+    app = Fastify({ logger: false })
+
+    // Register global error handler (same as app.ts)
+    app.setErrorHandler((error, request, reply) => {
+      if (error instanceof AppError) {
+        return reply.code(error.statusCode).send(error.toJSON())
+      }
+
+      // Handle Fastify validation errors (schema validation failures)
+      if (error.validation) {
+        return reply.code(400).send({
+          error: 'VALIDATION_ERROR',
+          message: error.message,
+          details: error.validation
+        })
+      }
+
+      request.log.error({
+        err: error,
+        url: request.url,
+        method: request.method,
+        params: request.params,
+        query: request.query
+      }, 'Unexpected error occurred')
+
+      return reply.code(500).send({
+        error: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred'
+      })
+    })
+
     await app.register(modelsRoute)
     await app.ready()
 
@@ -156,7 +187,8 @@ describe('Model Routes', () => {
 
       expect(response.statusCode).toBe(500)
       const body = response.json()
-      expect(body.error).toBe('Internal server error')
+      expect(body.error).toBe('INTERNAL_ERROR')
+      expect(body.message).toBe('Internal server error')
     })
   })
 
