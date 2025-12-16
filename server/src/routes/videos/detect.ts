@@ -6,7 +6,7 @@ import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../../utils/queryBuilder.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
-import { NotFoundError, ValidationError, InternalError } from '../../lib/errors.js'
+import { NotFoundError, ValidationError, InternalError, AppError, ErrorResponseSchema } from '../../lib/errors.js'
 
 /**
  * Object detection route.
@@ -45,9 +45,9 @@ export const detectRoutes: FastifyPluginAsync<{
         body: DetectionRequestSchema,
         response: {
           200: DetectionResponseSchema,
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() }),
-          500: Type.Object({ error: Type.String() }),
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          500: ErrorResponseSchema,
         },
       },
     },
@@ -125,7 +125,8 @@ export const detectRoutes: FastifyPluginAsync<{
           const errorText = await response.text()
           fastify.log.error({ status: response.status, error: errorText }, 'Model service error')
           return reply.code(response.status).send({
-            error: `Model service error: ${errorText}`,
+            error: 'SERVICE_ERROR',
+            message: `Model service error: ${errorText}`,
           })
         }
 
@@ -159,6 +160,10 @@ export const detectRoutes: FastifyPluginAsync<{
           })),
         })
       } catch (error) {
+        // Re-throw typed errors to preserve status codes
+        if (error instanceof AppError) {
+          throw error
+        }
         fastify.log.error(error)
         throw new InternalError(error instanceof Error ? error.message : 'Failed to detect objects')
       }

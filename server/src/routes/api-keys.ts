@@ -8,7 +8,7 @@ import {
   updateApiKey,
   deleteApiKey
 } from '../services/api-key-service.js'
-import { NotFoundError, ConflictError } from '../lib/errors.js'
+import { NotFoundError, ConflictError, ErrorResponseSchema } from '../lib/errors.js'
 
 /**
  * TypeBox schema for ApiKey response.
@@ -102,9 +102,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         201: ApiKeySchema,
-        409: Type.Object({
-          error: Type.String()
-        })
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -150,9 +148,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         200: ApiKeySchema,
-        404: Type.Object({
-          error: Type.String()
-        })
+        404: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -192,9 +188,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
         200: Type.Object({
           success: Type.Boolean()
         }),
-        404: Type.Object({
-          error: Type.String()
-        })
+        404: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -251,9 +245,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         201: ApiKeySchema,
-        409: Type.Object({
-          error: Type.String()
-        })
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {

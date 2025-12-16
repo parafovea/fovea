@@ -14,7 +14,7 @@ import {
   claimSynthesisQueue,
   ClaimSynthesisJobData
 } from '../queues/setup.js'
-import { NotFoundError, ValidationError } from '../lib/errors.js'
+import { NotFoundError, ValidationError, ErrorResponseSchema } from '../lib/errors.js'
 
 /**
  * Gloss item schema
@@ -257,7 +257,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Array(ClaimSchema),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -325,7 +325,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: ClaimSchema,
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -381,8 +381,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           201: Type.Object({
             claims: Type.Array(ClaimSchema)
           }),
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },
@@ -478,7 +478,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           200: Type.Object({
             claims: Type.Array(ClaimSchema)
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -549,7 +549,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({ success: Type.Boolean() }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -604,8 +604,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             status: Type.String(),
             summaryId: Type.String()
           }),
-          404: Type.Object({ error: Type.String() }),
-          400: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema,
+          400: ErrorResponseSchema
         }
       }
     },
@@ -680,7 +680,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             result: Type.Union([Type.Any(), Type.Null()]),
             error: Type.Union([Type.String(), Type.Null()])
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -774,7 +774,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             status: Type.String(),
             summaryId: Type.String()
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -852,7 +852,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             result: Type.Union([Type.Any(), Type.Null()]),
             error: Type.Union([Type.String(), Type.Null()])
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -960,8 +960,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         body: CreateClaimRelationSchema,
         response: {
           201: ClaimRelationSchema,
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1063,7 +1063,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             asSource: Type.Array(ClaimRelationSchema),
             asTarget: Type.Array(ClaimRelationSchema)
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1113,7 +1113,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({ success: Type.Boolean() }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1181,8 +1181,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             claim: ClaimSchema,
             summaryId: Type.String({ format: 'uuid' })
           }),
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },

@@ -263,7 +263,7 @@ describe('Session Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(403)
-      expect(response.json()).toEqual({ error: 'Cannot revoke another user\'s session' })
+      expect(response.json().error).toBe('FORBIDDEN')
 
       // Verify admin session still exists
       const adminSessionStillExists = await prisma.session.findUnique({
@@ -284,7 +284,7 @@ describe('Session Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'Session not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
 
     it('returns 400 for invalid UUID format', async () => {
@@ -354,7 +354,7 @@ describe('Session Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(403)
-      expect(response.json()).toEqual({ error: 'Admin access required' })
+      expect(response.json().error).toBe('FORBIDDEN')
     })
 
     it('returns 401 without authentication', async () => {
@@ -400,7 +400,7 @@ describe('Session Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'Session not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
 
     it('returns 403 for non-admin users', async () => {

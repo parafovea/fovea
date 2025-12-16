@@ -5,7 +5,7 @@ import path from 'path'
 import { createReadStream } from 'fs'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
-import { NotFoundError, InternalError } from '../../lib/errors.js'
+import { NotFoundError, InternalError, AppError } from '../../lib/errors.js'
 
 /**
  * Video thumbnail generation and serving route.
@@ -132,6 +132,10 @@ export const thumbnailRoutes: FastifyPluginAsync<{
         throw new InternalError('Failed to serve thumbnail')
       }
     } catch (error) {
+      // Re-throw typed errors to preserve status codes
+      if (error instanceof AppError) {
+        throw error
+      }
       fastify.log.error(error)
       throw new InternalError('Failed to get thumbnail')
     }

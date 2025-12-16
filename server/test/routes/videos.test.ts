@@ -66,9 +66,8 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json()).toEqual({
-        error: 'Either personaId or manualQuery must be provided',
-      })
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toBe('Either personaId or manualQuery must be provided')
     })
 
     it('builds structured query from persona ontology', async () => {
@@ -250,7 +249,8 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('Persona not found')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('Persona not found')
     })
 
     it('handles persona with no ontology', async () => {
@@ -272,7 +272,8 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(response.json().error).toContain('has no ontology')
+      expect(response.json().error).toBe('VALIDATION_ERROR')
+      expect(response.json().message).toContain('has no ontology')
     })
 
     it('generates query with persona context even when no types included', async () => {
@@ -437,7 +438,8 @@ describe('Videos API - Detection', () => {
       })
 
       expect(response.statusCode).toBe(500)
-      expect(response.json().error).toContain('Model service error')
+      expect(response.json().error).toBe('SERVICE_ERROR')
+      expect(response.json().message).toContain('Model service error')
     })
   })
 })
