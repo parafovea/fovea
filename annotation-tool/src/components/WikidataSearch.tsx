@@ -48,6 +48,48 @@ function getButtonLabel(
   return 'Import as Entity'
 }
 
+/**
+ * Gets the appropriate help text label based on import type
+ */
+function getHelpTextLabel(importType?: string): string {
+  if (importType) {
+    const labels: Record<string, string> = {
+      'entity-type': 'entity types',
+      'event-type': 'event types',
+      'role-type': 'role types',
+      'relation-type': 'relation types',
+      'entity': 'entities',
+      'event': 'events',
+      'location': 'locations',
+      'time': 'temporal data',
+    }
+    return labels[importType] || 'items'
+  }
+  // Generic fallback
+  return 'items'
+}
+
+/**
+ * Gets the appropriate placeholder text based on import type
+ */
+function getPlaceholderText(importType?: string): string {
+  if (importType) {
+    const placeholders: Record<string, string> = {
+      'entity-type': 'concepts (e.g., "Person", "Building")',
+      'event-type': 'event concepts (e.g., "Protest", "Election")',
+      'role-type': 'role concepts (e.g., "Participant", "Organizer")',
+      'relation-type': 'relation concepts (e.g., "Part of", "Located in")',
+      'entity': 'entities (e.g., "Albert Einstein", "Eiffel Tower")',
+      'event': 'events (e.g., "Battle of Waterloo", "2024 Olympics")',
+      'location': 'locations (e.g., "Paris", "Mount Everest")',
+      'time': 'events or periods (e.g., "Renaissance", "World War II")',
+    }
+    return placeholders[importType] || 'items'
+  }
+  // Generic fallback
+  return 'items'
+}
+
 interface WikidataSearchProps {
   onImport: (data: {
     name: string
@@ -135,8 +177,8 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Alert severity="info" icon={<WikidataIcon />}>
-        Search Wikidata to import {entityType === 'type' ? 'entity types' : entityType === 'time' ? 'temporal data' : 'entity instances'} into your ontology.
-        This will create a new {entityType === 'time' ? 'time object' : entityType} based on Wikidata information.
+        Search Wikidata to import {getHelpTextLabel(importType)} into your ontology.
+        This will create a new {entityType === 'time' ? 'time object' : entityType === 'type' ? 'type' : 'object'} based on Wikidata information.
       </Alert>
 
       <Autocomplete
@@ -150,7 +192,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
           <TextField
             {...params}
             label="Search Wikidata"
-            placeholder={`Search for ${entityType === 'type' ? 'concepts (e.g., "Person", "Building")' : entityType === 'time' ? 'events or periods (e.g., "Battle of Waterloo", "Renaissance")' : 'entities (e.g., "Albert Einstein", "Eiffel Tower")'}`}
+            placeholder={`Search for ${getPlaceholderText(importType)}`}
             InputProps={{
               ...params.InputProps,
               startAdornment: <WikidataIcon sx={{ mr: 1, color: 'action.active' }} />,
