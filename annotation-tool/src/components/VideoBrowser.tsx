@@ -258,8 +258,9 @@ export default function VideoBrowser() {
     if (!filter.searchTerm) return true
     const searchLower = filter.searchTerm.toLowerCase()
     return (
-      video.title.toLowerCase().includes(searchLower) ||
-      video.description.toLowerCase().includes(searchLower) ||
+      video.filename?.toLowerCase().includes(searchLower) ||
+      video.title?.toLowerCase().includes(searchLower) ||
+      video.description?.toLowerCase().includes(searchLower) ||
       video.uploader?.toLowerCase().includes(searchLower) ||
       video.uploaderId?.toLowerCase().includes(searchLower) ||
       video.tags?.some(tag => tag.toLowerCase().includes(searchLower))
