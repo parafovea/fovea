@@ -254,6 +254,8 @@ export default function VideoBrowser() {
     setIsBatchSummarizing(false)
   }
 
+  // Filter videos by search term across multiple fields.
+  // Uses optional chaining since metadata fields may be undefined.
   const filteredVideos = videos.filter((video: VideoMetadata) => {
     if (!filter.searchTerm) return true
     const searchLower = filter.searchTerm.toLowerCase()
