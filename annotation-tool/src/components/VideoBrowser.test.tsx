@@ -324,6 +324,120 @@ describe('VideoBrowser', () => {
         expect(screen.getByText('0 videos')).toBeInTheDocument()
       })
     })
+
+    it('filters videos by filename', async () => {
+      const user = userEvent.setup()
+
+      // Mock videos with filename but minimal metadata
+      server.use(
+        http.get('/api/videos', () => {
+          return HttpResponse.json([
+            {
+              id: 'video-1',
+              filename: 'baseball_highlights_2024.mp4',
+              title: 'Baseball Video',
+              description: 'Sports content',
+              duration: 300,
+              width: 1920,
+              height: 1080,
+            },
+            {
+              id: 'video-2',
+              filename: 'whale_migration.mp4',
+              title: 'Whale Video',
+              description: 'Marine content',
+              duration: 450,
+              width: 1920,
+              height: 1080,
+            },
+          ])
+        })
+      )
+
+      const store = createTestStore({
+        videos: {
+          videos: [],
+          isLoading: true,
+          filter: { searchTerm: '' },
+          activeSummaryJobs: {},
+          videoSummaries: {},
+        },
+        persona: {
+          personas: [],
+          activePersonaId: null,
+        },
+      })
+
+      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+
+      await waitFor(() => {
+        expect(screen.getByText('2 videos')).toBeInTheDocument()
+      })
+
+      const searchInput = screen.getByPlaceholderText(/search videos/i)
+      await user.type(searchInput, 'baseball_highlights')
+
+      await waitFor(() => {
+        expect(screen.getByText('1 video')).toBeInTheDocument()
+      })
+    })
+
+    it('handles videos with missing title and description fields', async () => {
+      const user = userEvent.setup()
+
+      // Mock videos with minimal metadata (no title/description) - regression test for #32
+      server.use(
+        http.get('/api/videos', () => {
+          return HttpResponse.json([
+            {
+              id: 'video-minimal-1',
+              filename: 'test_video_one.mp4',
+              duration: 300,
+              width: 1920,
+              height: 1080,
+              // No title, description, uploader, tags
+            },
+            {
+              id: 'video-minimal-2',
+              filename: 'another_video.mp4',
+              duration: 450,
+              width: 1920,
+              height: 1080,
+              // No title, description, uploader, tags
+            },
+          ])
+        })
+      )
+
+      const store = createTestStore({
+        videos: {
+          videos: [],
+          isLoading: true,
+          filter: { searchTerm: '' },
+          activeSummaryJobs: {},
+          videoSummaries: {},
+        },
+        persona: {
+          personas: [],
+          activePersonaId: null,
+        },
+      })
+
+      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+
+      await waitFor(() => {
+        expect(screen.getByText('2 videos')).toBeInTheDocument()
+      })
+
+      // This should NOT throw an error - regression test for GitHub issue #32
+      const searchInput = screen.getByPlaceholderText(/search videos/i)
+      await user.type(searchInput, 'test')
+
+      // Should filter by filename since title/description are undefined
+      await waitFor(() => {
+        expect(screen.getByText('1 video')).toBeInTheDocument()
+      })
+    })
   })
 
   describe('CPU-only mode', () => {
