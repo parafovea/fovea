@@ -628,6 +628,7 @@ export interface VideoFormat {
 
 export interface VideoMetadata {
   id: string
+  filename?: string
   title: string
   description: string
   duration: number
