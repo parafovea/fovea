@@ -267,7 +267,7 @@ describe('Video Summaries API', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'Summary not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
   })
 

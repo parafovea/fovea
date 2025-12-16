@@ -15,6 +15,25 @@
  * ```
  */
 
+import { Type, Static } from '@sinclair/typebox'
+
+/**
+ * Standard error response schema for OpenAPI documentation.
+ * All error responses follow this format for consistency.
+ *
+ * Based on industry standards:
+ * - RFC 7807 (Problem Details for HTTP APIs)
+ * - Google API Design Guide
+ * - OpenAPI best practices
+ */
+export const ErrorResponseSchema = Type.Object({
+  error: Type.String({ description: 'Machine-readable error code' }),
+  message: Type.String({ description: 'Human-readable error message' }),
+  details: Type.Optional(Type.Unknown({ description: 'Additional error context' }))
+})
+
+export type ErrorResponse = Static<typeof ErrorResponseSchema>
+
 /**
  * Base error class for all application errors.
  * Extends the native Error class with HTTP status code and error code.

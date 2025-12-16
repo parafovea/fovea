@@ -8,6 +8,7 @@ import {
   updateApiKey,
   deleteApiKey
 } from '../services/api-key-service.js'
+import { NotFoundError, ConflictError, ErrorResponseSchema } from '../lib/errors.js'
 
 /**
  * TypeBox schema for ApiKey response.
@@ -101,9 +102,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         201: ApiKeySchema,
-        409: Type.Object({
-          error: Type.String()
-        })
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -120,7 +119,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send(key)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-        return reply.code(409).send({ error: 'API key for this provider already exists' })
+        throw new ConflictError('API key for this provider already exists')
       }
       throw error
     }
@@ -149,9 +148,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         200: ApiKeySchema,
-        404: Type.Object({
-          error: Type.String()
-        })
+        404: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -166,7 +163,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
     )
 
     if (!key) {
-      return reply.code(404).send({ error: 'API key not found' })
+      throw new NotFoundError('API key', keyId)
     }
 
     return reply.send(key)
@@ -191,9 +188,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
         200: Type.Object({
           success: Type.Boolean()
         }),
-        404: Type.Object({
-          error: Type.String()
-        })
+        404: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -202,7 +197,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
     const deleted = await deleteApiKey(fastify.prisma, keyId, request.user!.id)
 
     if (!deleted) {
-      return reply.code(404).send({ error: 'API key not found' })
+      throw new NotFoundError('API key', keyId)
     }
 
     return reply.send({ success: true })
@@ -250,9 +245,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         201: ApiKeySchema,
-        409: Type.Object({
-          error: Type.String()
-        })
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -269,7 +262,7 @@ const apiKeysRoute: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send(key)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-        return reply.code(409).send({ error: 'Admin API key for this provider already exists' })
+        throw new ConflictError('Admin API key for this provider already exists')
       }
       throw error
     }

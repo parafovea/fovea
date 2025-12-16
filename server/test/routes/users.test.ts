@@ -141,7 +141,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(403)
-      expect(response.json()).toEqual({ error: 'Admin access required' })
+      expect(response.json().error).toBe('FORBIDDEN')
     })
   })
 
@@ -244,7 +244,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(409)
-      expect(response.json()).toEqual({ error: 'Username already exists' })
+      expect(response.json().error).toBe('CONFLICT')
     })
 
     it('validates password minimum length', async () => {
@@ -337,7 +337,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'User not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
 
     it('returns 400 for invalid UUID format', async () => {
@@ -484,7 +484,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'User not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
 
     it('validates password minimum length', async () => {
@@ -548,7 +548,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(403)
-      expect(response.json()).toEqual({ error: 'Cannot delete yourself' })
+      expect(response.json().error).toBe('FORBIDDEN')
 
       // Verify admin still exists
       const dbUser = await prisma.user.findUnique({
@@ -647,7 +647,7 @@ describe('User Management Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
-      expect(response.json()).toEqual({ error: 'User not found' })
+      expect(response.json().error).toBe('NOT_FOUND')
     })
 
     it('returns 403 for non-admin users', async () => {

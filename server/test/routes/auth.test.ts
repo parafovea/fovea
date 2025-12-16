@@ -414,7 +414,7 @@ describe('Authentication Routes', () => {
       })
 
       expect(response.statusCode).toBe(401)
-      expect(response.json()).toEqual({ error: 'Not authenticated' })
+      expect(response.json().error).toBe('UNAUTHORIZED')
     })
 
     it('returns 401 with invalid session token', async () => {
@@ -427,7 +427,7 @@ describe('Authentication Routes', () => {
       })
 
       expect(response.statusCode).toBe(401)
-      expect(response.json()).toEqual({ error: 'Session expired' })
+      expect(response.json().error).toBe('UNAUTHORIZED')
     })
 
     it('returns 401 and clears cookie with expired session', async () => {
@@ -463,7 +463,7 @@ describe('Authentication Routes', () => {
       })
 
       expect(response.statusCode).toBe(401)
-      expect(response.json()).toEqual({ error: 'Session expired' })
+      expect(response.json().error).toBe('UNAUTHORIZED')
 
       // Verify cookie cleared
       const setCookie = response.headers['set-cookie'] as string
@@ -549,12 +549,12 @@ describe('Authentication Routes', () => {
       })
 
       expect(response.statusCode).toBe(403)
-      expect(response.json()).toEqual({ error: 'Registration is disabled' })
+      expect(response.json().error).toBe('FORBIDDEN')
 
       delete process.env.ALLOW_REGISTRATION
     })
 
-    it('returns 400 for duplicate username', async () => {
+    it('returns 409 for duplicate username', async () => {
       process.env.ALLOW_REGISTRATION = 'true'
 
       // Create existing user
@@ -581,8 +581,8 @@ describe('Authentication Routes', () => {
         },
       })
 
-      expect(response.statusCode).toBe(400)
-      expect(response.json()).toEqual({ error: 'Username already exists' })
+      expect(response.statusCode).toBe(409)
+      expect(response.json().error).toBe('CONFLICT')
 
       delete process.env.ALLOW_REGISTRATION
     })

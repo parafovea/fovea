@@ -14,6 +14,7 @@ import {
   claimSynthesisQueue,
   ClaimSynthesisJobData
 } from '../queues/setup.js'
+import { NotFoundError, ValidationError, ErrorResponseSchema } from '../lib/errors.js'
 
 /**
  * Gloss item schema
@@ -256,7 +257,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Array(ClaimSchema),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -270,7 +271,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         : null // Future: Add collection summary support
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       // Build include object for nested subclaims
@@ -324,7 +325,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: ClaimSchema,
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -348,7 +349,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!claim || claim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Claim not found' })
+        throw new NotFoundError('Claim', claimId)
       }
 
       return reply.send(claim)
@@ -380,8 +381,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           201: Type.Object({
             claims: Type.Array(ClaimSchema)
           }),
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },
@@ -395,7 +396,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         : null
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       // If parentClaimId provided, verify it exists and belongs to same summary
@@ -405,7 +406,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         })
 
         if (!parentClaim || parentClaim.summaryId !== summaryId) {
-          return reply.status(400).send({ error: 'Invalid parent claim' })
+          throw new ValidationError('Invalid parent claim')
         }
       }
 
@@ -477,7 +478,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           200: Type.Object({
             claims: Type.Array(ClaimSchema)
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -491,7 +492,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!existingClaim || existingClaim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Claim not found' })
+        throw new NotFoundError('Claim', claimId)
       }
 
       // Update claim
@@ -548,7 +549,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({ success: Type.Boolean() }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -561,7 +562,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!claim || claim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Claim not found' })
+        throw new NotFoundError('Claim', claimId)
       }
 
       // Delete claim (cascades to subclaims via onDelete: Cascade)
@@ -603,8 +604,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             status: Type.String(),
             summaryId: Type.String()
           }),
-          404: Type.Object({ error: Type.String() }),
-          400: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema,
+          400: ErrorResponseSchema
         }
       }
     },
@@ -620,7 +621,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         : null
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       // Queue extraction job using BullMQ
@@ -679,7 +680,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             result: Type.Union([Type.Any(), Type.Null()]),
             error: Type.Union([Type.String(), Type.Null()])
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -690,7 +691,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const job = await claimExtractionQueue.getJob(jobId)
 
       if (!job) {
-        return reply.status(404).send({ error: 'Job not found' })
+        throw new NotFoundError('Job', jobId)
       }
 
       // Get job state
@@ -773,7 +774,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             status: Type.String(),
             summaryId: Type.String()
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -793,11 +794,11 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       if (!summary.claims || summary.claims.length === 0) {
-        return reply.status(400).send({ error: 'Summary has no claims to synthesize' })
+        throw new ValidationError('Summary has no claims to synthesize')
       }
 
       const jobData: ClaimSynthesisJobData = {
@@ -851,7 +852,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             result: Type.Union([Type.Any(), Type.Null()]),
             error: Type.Union([Type.String(), Type.Null()])
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -862,7 +863,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const job = await claimSynthesisQueue.getJob(jobId)
 
       if (!job) {
-        return reply.status(404).send({ error: 'Job not found' })
+        throw new NotFoundError('Job', jobId)
       }
 
       // Get job state
@@ -959,8 +960,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         body: CreateClaimRelationSchema,
         response: {
           201: ClaimRelationSchema,
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },
@@ -974,7 +975,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!sourceClaim || sourceClaim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Source claim not found' })
+        throw new NotFoundError('Source claim', claimId)
       }
 
       // Verify target claim exists
@@ -983,7 +984,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!targetClaim) {
-        return reply.status(404).send({ error: 'Target claim not found' })
+        throw new NotFoundError('Target claim', targetClaimId)
       }
 
       // Get summary to find persona and ontology
@@ -999,7 +1000,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!summary) {
-        return reply.status(404).send({ error: 'Summary not found' })
+        throw new NotFoundError('Summary', summaryId)
       }
 
       // Validate relationTypeId against ontology
@@ -1010,9 +1011,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         const relationType = relationTypes.find((rt: any) => rt.id === relationTypeId)
 
         if (!relationType) {
-          return reply.status(400).send({
-            error: `Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`
-          })
+          throw new ValidationError(`Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`)
         }
 
         // Check that this relation type allows claim→claim relations
@@ -1020,9 +1019,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         const targetTypes = relationType.targetTypes as string[]
 
         if (!sourceTypes.includes('claim') || !targetTypes.includes('claim')) {
-          return reply.status(400).send({
-            error: `Relation type '${relationType.name}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`
-          })
+          throw new ValidationError(`Relation type '${relationType.name}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`)
         }
       }
 
@@ -1066,7 +1063,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             asSource: Type.Array(ClaimRelationSchema),
             asTarget: Type.Array(ClaimRelationSchema)
           }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1079,7 +1076,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!claim || claim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Claim not found' })
+        throw new NotFoundError('Claim', claimId)
       }
 
       // Get relations where this claim is the source
@@ -1116,7 +1113,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({ success: Type.Boolean() }),
-          404: Type.Object({ error: Type.String() })
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1132,7 +1129,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!relation || relation.sourceClaim.summaryId !== summaryId) {
-        return reply.status(404).send({ error: 'Relation not found' })
+        throw new NotFoundError('Relation', relationId)
       }
 
       // Delete relation
@@ -1184,8 +1181,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
             claim: ClaimSchema,
             summaryId: Type.String({ format: 'uuid' })
           }),
-          400: Type.Object({ error: Type.String() }),
-          404: Type.Object({ error: Type.String() })
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema
         }
       }
     },
@@ -1198,7 +1195,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: videoId }
       })
       if (!video) {
-        return reply.status(404).send({ error: 'Video not found' })
+        throw new NotFoundError('Video', videoId)
       }
 
       // Verify persona exists
@@ -1206,7 +1203,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: personaId }
       })
       if (!persona) {
-        return reply.status(404).send({ error: 'Persona not found' })
+        throw new NotFoundError('Persona', personaId)
       }
 
       // Find or create VideoSummary
@@ -1232,7 +1229,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         })
 
         if (!parentClaim || parentClaim.summaryId !== summary.id) {
-          return reply.status(400).send({ error: 'Invalid parent claim' })
+          throw new ValidationError('Invalid parent claim')
         }
       }
 

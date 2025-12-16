@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { authService } from '../services/auth-service.js'
+import { UnauthorizedError, ForbiddenError } from '../lib/errors.js'
 
 /**
  * Extend Fastify request type to include user.
@@ -31,16 +32,14 @@ export async function requireAuth(
   const token = request.cookies.session_token
 
   if (!token) {
-    reply.code(401).send({ error: 'Authentication required' })
-    return
+    throw new UnauthorizedError('Authentication required')
   }
 
   const user = await authService.validateSession(token)
 
   if (!user) {
     reply.clearCookie('session_token', { path: '/' })
-    reply.code(401).send({ error: 'Session expired' })
-    return
+    throw new UnauthorizedError('Session expired')
   }
 
   // Attach user to request
@@ -89,7 +88,7 @@ export async function requireAdmin(
 
   // Then check admin role
   if (!request.user?.isAdmin) {
-    reply.code(403).send({ error: 'Admin access required' })
+    throw new ForbiddenError('Admin access required')
   }
 }
 

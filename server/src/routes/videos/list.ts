@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
-import { NotFoundError } from '../../lib/errors.js'
+import { NotFoundError, InternalError } from '../../lib/errors.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoSchema } from './schemas.js'
 
@@ -96,7 +96,7 @@ export const listRoutes: FastifyPluginAsync<{
       return reply.send(videos)
     } catch (error) {
       fastify.log.error(error)
-      return reply.code(500).send({ error: 'Failed to list videos' })
+      throw new InternalError('Failed to list videos')
     }
   })
 

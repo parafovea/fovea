@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import bcrypt from 'bcrypt'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, ConflictError } from '../lib/errors.js'
 
 /**
  * TypeBox schema for User response.
@@ -96,7 +97,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     if (!request.user) {
-      return reply.code(401).send({ error: 'Not authenticated' })
+      throw new UnauthorizedError('Not authenticated')
     }
 
     const user = await fastify.prisma.user.findUnique({
@@ -113,7 +114,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!user) {
-      return reply.code(404).send({ error: 'User not found' })
+      throw new NotFoundError('User', request.user.id)
     }
 
     return reply.send(user)
@@ -146,7 +147,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     if (!request.user) {
-      return reply.code(401).send({ error: 'Not authenticated' })
+      throw new UnauthorizedError('Not authenticated')
     }
 
     const validatedData = updateUserSchema.omit({ isAdmin: true }).parse(request.body)
@@ -259,7 +260,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (existingUser) {
-      return reply.code(409).send({ error: 'Username already exists' })
+      throw new ConflictError('Username already exists')
     }
 
     // Hash password
@@ -327,7 +328,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!user) {
-      return reply.code(404).send({ error: 'User not found' })
+      throw new NotFoundError('User', userId)
     }
 
     return reply.send(user)
@@ -405,7 +406,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send(user)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'User not found' })
+        throw new NotFoundError('User', userId)
       }
       throw error
     }
@@ -446,7 +447,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
 
     // Prevent self-deletion
     if (request.user?.id === userId) {
-      return reply.code(403).send({ error: 'Cannot delete yourself' })
+      throw new ForbiddenError('Cannot delete yourself')
     }
 
     try {
@@ -456,7 +457,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'User not found' })
+        throw new NotFoundError('User', userId)
       }
       throw error
     }
