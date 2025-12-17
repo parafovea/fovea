@@ -1,5 +1,18 @@
+import {
+  getWikidataUrl,
+  getWikidataConfig,
+  getReverseIdMapping,
+} from './wikidataConfig'
+
 interface WikidataSearchResult {
+  /** Local ID (may be auto-assigned in offline mode) */
   id: string
+  /**
+   * Original Wikidata ID (e.g., Q42).
+   * In online mode, this equals `id`.
+   * In offline mode, this is the original Wikidata ID mapped from the local ID.
+   */
+  wikidataId: string
   label: string
   description?: string
   concepturi: string
@@ -28,12 +41,13 @@ interface WikidataEntity {
   sitelinks?: any
 }
 
-const WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
-
 export async function searchWikidata(query: string, limit: number = 10): Promise<WikidataSearchResult[]> {
   if (!query || query.length < 2) {
     return []
   }
+
+  const wikidataApi = await getWikidataUrl()
+  const config = await getWikidataConfig()
 
   const params = new URLSearchParams({
     action: 'wbsearchentities',
@@ -45,16 +59,25 @@ export async function searchWikidata(query: string, limit: number = 10): Promise
   })
 
   try {
-    const response = await fetch(`${WIKIDATA_API}?${params}`)
+    const response = await fetch(`${wikidataApi}?${params}`)
     const data = await response.json()
-    
-    return data.search?.map((item: any) => ({
-      id: item.id,
-      label: item.label || item.id,
-      description: item.description,
-      concepturi: item.concepturi,
-      match: item.match
-    })) || []
+
+    // In offline mode, map local IDs back to original Wikidata IDs
+    const reverseMapping = config.mode === 'offline' ? await getReverseIdMapping() : null
+
+    return data.search?.map((item: any) => {
+      const localId = item.id
+      // Look up original Wikidata ID from reverse mapping
+      const wikidataId = reverseMapping?.[localId] || localId
+      return {
+        id: localId,
+        wikidataId,
+        label: item.label || localId,
+        description: item.description,
+        concepturi: item.concepturi,
+        match: item.match
+      }
+    }) || []
   } catch (error) {
     console.error('Error searching Wikidata:', error)
     return []
@@ -62,6 +85,8 @@ export async function searchWikidata(query: string, limit: number = 10): Promise
 }
 
 export async function getWikidataEntity(id: string): Promise<WikidataEntity | null> {
+  const wikidataApi = await getWikidataUrl()
+
   const params = new URLSearchParams({
     action: 'wbgetentities',
     ids: id,
@@ -71,9 +96,9 @@ export async function getWikidataEntity(id: string): Promise<WikidataEntity | nu
   })
 
   try {
-    const response = await fetch(`${WIKIDATA_API}?${params}`)
+    const response = await fetch(`${wikidataApi}?${params}`)
     const data = await response.json()
-    
+
     if (data.entities && data.entities[id]) {
       return data.entities[id]
     }
@@ -197,7 +222,35 @@ export function extractParticipantData(entity: WikidataEntity) {
   return participants
 }
 
-export function extractWikidataInfo(entity: WikidataEntity) {
+/**
+ * Options for extracting Wikidata info.
+ */
+interface ExtractWikidataInfoOptions {
+  /** Optional base URL for wiki links (defaults to public Wikidata) */
+  baseUrl?: string
+  /**
+   * Original Wikidata ID (e.g., Q42) if different from entity.id.
+   * Used in offline mode where entity.id is an auto-assigned local ID.
+   */
+  wikidataId?: string
+}
+
+/**
+ * Extracts structured information from a Wikidata entity.
+ *
+ * @param entity - The Wikidata entity to extract info from
+ * @param options - Optional extraction options including baseUrl and wikidataId
+ * @returns Extracted entity information including labels, types, coordinates, and temporal data
+ */
+export function extractWikidataInfo(entity: WikidataEntity, options?: ExtractWikidataInfoOptions | string) {
+  // Handle legacy signature where second param is baseUrl string
+  const opts: ExtractWikidataInfoOptions = typeof options === 'string'
+    ? { baseUrl: options }
+    : options || {}
+
+  const wikidataBaseUrl = opts.baseUrl || 'https://www.wikidata.org'
+  // Use provided wikidataId or fall back to entity.id
+  const wikidataId = opts.wikidataId || entity.id
   const label = entity.labels?.en?.value || entity.id
   const description = entity.descriptions?.en?.value || ''
   
@@ -258,6 +311,7 @@ export function extractWikidataInfo(entity: WikidataEntity) {
 
   return {
     id: entity.id,
+    wikidataId,
     label,
     description,
     instanceOf,
@@ -268,7 +322,7 @@ export function extractWikidataInfo(entity: WikidataEntity) {
     temporalData,
     locationData,
     participantData,
-    wikidataUrl: `https://www.wikidata.org/wiki/${entity.id}`
+    wikidataUrl: `${wikidataBaseUrl}/wiki/${entity.id}`
   }
 }
 
