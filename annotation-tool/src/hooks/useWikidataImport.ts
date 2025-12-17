@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../store/store'
+import { useState, useCallback, useRef, useMemo } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { AppDispatch, RootState } from '../store/store'
+import { DuplicateImportError } from '../lib/errors'
 import {
   addEntityToPersona,
   deleteEntityFromPersona,
@@ -56,6 +57,18 @@ interface UndoEntry {
 const UNDO_TIMEOUT_MS = 10000 // 10 seconds
 
 /**
+ * Checks if an item with the given wikidataId already exists in the list.
+ * Returns the existing item's name if found, null otherwise.
+ */
+function findExistingByWikidataId<T extends { wikidataId?: string; name: string }>(
+  items: T[],
+  wikidataId: string
+): string | null {
+  const existing = items.find(item => item.wikidataId === wikidataId)
+  return existing ? existing.name : null
+}
+
+/**
  * Custom hook for managing Wikidata imports with one-click save and undo functionality.
  *
  * Provides a standardized way to import items from Wikidata into the application,
@@ -88,6 +101,17 @@ export function useWikidataImport(
   const [error, setError] = useState<string | null>(null)
   const undoQueue = useRef<Map<string, UndoEntry>>(new Map())
 
+  // Get existing items from Redux state for duplicate detection
+  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
+  const worldEntities = useSelector((state: RootState) => state.world.entities)
+  const worldEvents = useSelector((state: RootState) => state.world.events)
+
+  // Memoize the current persona's ontology for efficient lookup
+  const currentOntology = useMemo(() => {
+    if (!personaId) return null
+    return personaOntologies.find(o => o.personaId === personaId) || null
+  }, [personaOntologies, personaId])
+
   /**
    * Imports an item from Wikidata with immediate persistence.
    * Returns the ID of the imported item for undo purposes.
@@ -97,6 +121,36 @@ export function useWikidataImport(
     setError(null)
 
     try {
+      // Check for duplicates based on wikidataId
+      const wikidataId = data.wikidataId
+      let existingItemName: string | null = null
+
+      switch (type) {
+        case 'entity-type':
+          if (currentOntology) existingItemName = findExistingByWikidataId(currentOntology.entities, wikidataId)
+          break
+        case 'role-type':
+          if (currentOntology) existingItemName = findExistingByWikidataId(currentOntology.roles, wikidataId)
+          break
+        case 'event-type':
+          if (currentOntology) existingItemName = findExistingByWikidataId(currentOntology.events, wikidataId)
+          break
+        case 'relation-type':
+          if (currentOntology) existingItemName = findExistingByWikidataId(currentOntology.relationTypes, wikidataId)
+          break
+        case 'entity':
+        case 'location':
+          existingItemName = findExistingByWikidataId(worldEntities, wikidataId)
+          break
+        case 'event':
+          existingItemName = findExistingByWikidataId(worldEvents, wikidataId)
+          break
+      }
+
+      if (existingItemName) {
+        throw new DuplicateImportError(wikidataId, existingItemName, type)
+      }
+
       const now = new Date().toISOString()
       const id = generateId()
 
@@ -266,7 +320,7 @@ export function useWikidataImport(
       onError?.(err instanceof Error ? err : new Error(errorMessage))
       throw err
     }
-  }, [type, personaId, dispatch, onSuccess, onError])
+  }, [type, personaId, dispatch, onSuccess, onError, currentOntology, worldEntities, worldEvents])
 
   /**
    * Undoes a previous import by ID.
