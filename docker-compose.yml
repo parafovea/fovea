@@ -59,8 +59,13 @@ services:
       - THUMBNAIL_STORAGE_TYPE=${THUMBNAIL_STORAGE_TYPE:-local}
       - THUMBNAIL_PATH=${THUMBNAIL_PATH:-/videos/thumbnails}
       - THUMBNAIL_S3_PREFIX=${THUMBNAIL_S3_PREFIX:-thumbnails/}
+      # Wikidata/Wikibase Configuration
+      - WIKIDATA_MODE=${WIKIDATA_MODE:-online}
+      - WIKIDATA_URL=${WIKIDATA_URL:-https://www.wikidata.org/w/api.php}
+      - WIKIBASE_ID_MAPPING_PATH=${WIKIBASE_ID_MAPPING_PATH:-/wikibase/id-mapping.json}
     volumes:
       - ./videos:/videos
+      - ./wikibase/output:/wikibase:ro
     depends_on:
       postgres:
         condition: service_healthy
