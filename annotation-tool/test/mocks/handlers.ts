@@ -361,6 +361,10 @@ export const handlers = [
     return HttpResponse.json({
       mode: 'multi-user',
       allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+      },
     })
   }),
 
@@ -905,6 +909,10 @@ export const handlers = [
     return HttpResponse.json({
       mode: 'multi-user',
       allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+      },
     })
   }),
 
