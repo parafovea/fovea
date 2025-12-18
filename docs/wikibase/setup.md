@@ -33,6 +33,7 @@ docker compose -f docker-compose.wikibase.yml --profile loader run --rm wikibase
 |----------|---------|-------------|
 | `WIKIDATA_MODE` | `online` | `online` for public Wikidata, `offline` for local Wikibase |
 | `WIKIDATA_URL` | `https://www.wikidata.org/w/api.php` | Wikidata/Wikibase API endpoint |
+| `WIKIBASE_ID_MAPPING_PATH` | `/wikibase/id-mapping.json` | Path to ID mapping file (see [ID Mapping](overview.md#id-mapping)) |
 
 ### Wikibase Service Configuration
 

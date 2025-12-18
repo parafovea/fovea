@@ -186,6 +186,44 @@ docker compose -f docker-compose.wikibase.yml --profile loader run --rm wikibase
 | SPARQL queries | Wikidata rate limits | Add delays between queries |
 | Batch size | Memory usage | Default 50 is usually optimal |
 
+## ID Mapping
+
+When the loader imports entities, Wikibase assigns new sequential IDs (Q1, Q2, Q3...) instead of preserving the original Wikidata IDs (Q42, Q937, Q60). The loader automatically generates a mapping file to track this relationship.
+
+### Mapping File Location
+
+The ID mapping file is saved to `wikibase/output/id-mapping.json`:
+
+```json
+{
+  "Q42": "Q4",
+  "Q937": "Q14",
+  "Q60": "Q7",
+  "Q5": "Q9"
+}
+```
+
+This maps original Wikidata IDs (keys) to local Wikibase IDs (values).
+
+### How It's Used
+
+1. The backend reads the mapping file from `WIKIBASE_ID_MAPPING_PATH`
+2. The `/api/config` endpoint serves the mapping to the frontend
+3. The frontend translates local IDs back to original Wikidata IDs in search results
+4. Annotations store the original `wikidataId` for interoperability
+
+### Regenerating the Mapping
+
+If you reset the Wikibase data (`docker compose down -v`), the old mapping becomes invalid. Re-run the loader to generate a new mapping:
+
+```bash
+docker compose -f docker-compose.wikibase.yml --profile loader run --rm wikibase-loader
+```
+
+> **Note**: Entity IDs are assigned in order of import. Importing entities in a different order will result in different local IDs.
+
+For more details on why ID mapping is necessary, see [ID Mapping](overview.md#id-mapping).
+
 ## Logging
 
 View loader logs:
