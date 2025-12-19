@@ -274,7 +274,8 @@ export interface Time {
   id: string
   label?: string  // Human-readable label for display
   type: 'instant' | 'interval'
-  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataId?: string  // Q-identifier from Wikidata (original ID)
+  wikibaseId?: string  // Local Wikibase ID (only set when using offline Wikibase)
   wikidataUrl?: string // Full URL to Wikidata entry
   importedFrom?: 'wikidata' | 'persona' // Track import source
   importedAt?: string  // ISO timestamp of import
@@ -425,7 +426,8 @@ export interface Entity {
   id: string
   name: string
   description: GlossItem[]
-  wikidataId?: string  // Q-identifier from Wikidata
+  wikidataId?: string  // Q-identifier from Wikidata (original ID)
+  wikibaseId?: string  // Local Wikibase ID (only set when using offline Wikibase)
   wikidataUrl?: string // Full URL to Wikidata entry
   importedFrom?: 'wikidata' | 'persona' // Track import source
   importedAt?: string  // ISO timestamp of import
