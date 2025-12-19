@@ -27,6 +27,11 @@ export interface WikidataConfig {
    * Only present in offline mode.
    */
   idMapping?: Record<string, string> | null
+  /**
+   * Whether external links to public Wikidata are allowed.
+   * True in online mode, false in offline mode.
+   */
+  allowExternalLinks: boolean
 }
 
 /**
@@ -47,10 +52,12 @@ async function fetchRuntimeConfig(): Promise<WikidataConfig> {
       const response = await fetch('/api/config', { credentials: 'include' })
       if (response.ok) {
         const config = await response.json()
+        const mode = config.wikidata?.mode || 'online'
         runtimeConfig = {
           url: config.wikidata?.url || DEFAULT_WIKIDATA_URL,
-          mode: config.wikidata?.mode || 'online',
+          mode,
           idMapping: config.wikidata?.idMapping || null,
+          allowExternalLinks: config.wikidata?.allowExternalLinks ?? mode === 'online',
         }
         return runtimeConfig
       }
@@ -58,8 +65,8 @@ async function fetchRuntimeConfig(): Promise<WikidataConfig> {
       console.warn('Failed to fetch Wikidata config from backend, using defaults:', error)
     }
 
-    // Fallback to defaults
-    runtimeConfig = { url: DEFAULT_WIKIDATA_URL, mode: 'online', idMapping: null }
+    // Fallback to defaults (online mode always allows external links)
+    runtimeConfig = { url: DEFAULT_WIKIDATA_URL, mode: 'online', idMapping: null, allowExternalLinks: true }
     return runtimeConfig
   })()
 
@@ -120,14 +127,20 @@ export async function getWikidataConfig(): Promise<WikidataConfig> {
   const envUrl = import.meta.env.VITE_WIKIDATA_URL
   const envMode = import.meta.env.VITE_WIKIDATA_MODE
 
-  // If both env vars are set, use them directly (but still fetch for idMapping)
+  // If both env vars are set, use them directly (but still fetch for idMapping and allowExternalLinks)
   if (envUrl && (envMode === 'online' || envMode === 'offline')) {
-    // For offline mode, we still need the ID mapping from runtime config
+    // For offline mode, we still need the ID mapping and allowExternalLinks from runtime config
     if (envMode === 'offline') {
       const runtimeCfg = await fetchRuntimeConfig()
-      return { url: envUrl, mode: envMode, idMapping: runtimeCfg.idMapping }
+      return {
+        url: envUrl,
+        mode: envMode,
+        idMapping: runtimeCfg.idMapping,
+        allowExternalLinks: runtimeCfg.allowExternalLinks,
+      }
     }
-    return { url: envUrl, mode: envMode, idMapping: null }
+    // Online mode always allows external links
+    return { url: envUrl, mode: envMode, idMapping: null, allowExternalLinks: true }
   }
 
   // Otherwise fetch runtime config and merge with any env vars
@@ -136,6 +149,7 @@ export async function getWikidataConfig(): Promise<WikidataConfig> {
     url: envUrl || runtimeCfg.url,
     mode: (envMode as 'online' | 'offline') || runtimeCfg.mode,
     idMapping: runtimeCfg.idMapping,
+    allowExternalLinks: runtimeCfg.allowExternalLinks,
   }
 }
 
@@ -201,6 +215,17 @@ export async function getReverseIdMapping(): Promise<Record<string, string> | nu
 export async function getWikidataIdFromLocal(localId: string): Promise<string> {
   const reverseMapping = await getReverseIdMapping()
   return reverseMapping?.[localId] || localId
+}
+
+/**
+ * Gets whether external Wikidata links are allowed.
+ * In online mode, always true. In offline mode, controlled by admin.
+ *
+ * @returns Promise resolving to whether external Wikidata links are allowed
+ */
+export async function getAllowExternalWikidataLinks(): Promise<boolean> {
+  const config = await getWikidataConfig()
+  return config.allowExternalLinks
 }
 
 /**
