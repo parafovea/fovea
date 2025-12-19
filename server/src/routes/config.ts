@@ -42,6 +42,21 @@ export default async function configRoutes(fastify: FastifyInstance) {
     const idMapping =
       wikidataMode === 'offline' ? loadIdMapping(idMappingPath) : null
 
+    // External link controls
+    // ALLOW_EXTERNAL_LINKS is a master switch that defaults both specific settings
+    const masterExternalLinks = process.env.ALLOW_EXTERNAL_LINKS !== 'false'
+
+    // Wikidata links: In online mode, always allowed. In offline mode, controlled by env var.
+    const allowExternalWikidataLinks =
+      wikidataMode === 'online' ||
+      (process.env.ALLOW_EXTERNAL_WIKIDATA_LINKS === 'true' ||
+        (process.env.ALLOW_EXTERNAL_WIKIDATA_LINKS !== 'false' && masterExternalLinks))
+
+    // Video source links (uploaderUrl, webpageUrl): controlled by env var
+    const allowExternalVideoSourceLinks =
+      process.env.ALLOW_EXTERNAL_VIDEO_SOURCE_LINKS === 'true' ||
+      (process.env.ALLOW_EXTERNAL_VIDEO_SOURCE_LINKS !== 'false' && masterExternalLinks)
+
     return {
       mode: mode as 'single-user' | 'multi-user',
       allowRegistration,
@@ -49,6 +64,11 @@ export default async function configRoutes(fastify: FastifyInstance) {
         mode: wikidataMode as 'online' | 'offline',
         url: wikidataUrl,
         idMapping,
+        allowExternalLinks: allowExternalWikidataLinks,
+      },
+      externalLinks: {
+        wikidata: allowExternalWikidataLinks,
+        videoSources: allowExternalVideoSourceLinks,
       },
     }
   })
