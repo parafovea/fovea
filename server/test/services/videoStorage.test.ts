@@ -112,25 +112,7 @@ describe('Video Storage Providers', () => {
     })
   })
 
-  describe('S3StorageProvider', () => {
-    // Note: S3 tests are skipped in unit tests due to AWS SDK complexity
-    // Full S3 integration is tested in integration tests with mocked AWS services
-    it.skip('should be tested in integration tests', () => {
-      // S3StorageProvider functionality is validated through:
-      // 1. Integration tests with LocalStack/MinIO
-      // 2. E2E tests with actual deployment
-      // 3. Manual testing with real S3 buckets
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('HybridStorageProvider', () => {
-    // Note: Hybrid tests are skipped in unit tests due to S3 dependency
-    // Tested in integration tests with mocked services
-    it.skip('should be tested in integration tests', () => {
-      expect(true).toBe(true)
-    })
-  })
+  // S3StorageProvider and HybridStorageProvider are tested in videoStorage.integration.test.ts
 
   describe('loadStorageConfig', () => {
     beforeEach(() => {
@@ -210,15 +192,7 @@ describe('Video Storage Providers', () => {
       expect(provider).toBeDefined()
     })
 
-    it.skip('should create S3StorageProvider for s3 type (integration test)', () => {
-      // Skipped - requires AWS SDK mocking, tested in integration tests
-      expect(true).toBe(true)
-    })
-
-    it.skip('should create HybridStorageProvider for hybrid type (integration test)', () => {
-      // Skipped - requires AWS SDK mocking, tested in integration tests
-      expect(true).toBe(true)
-    })
+    // S3StorageProvider and HybridStorageProvider creation tested in integration tests
 
     it('should throw error for unsupported storage type', () => {
       const config = {
