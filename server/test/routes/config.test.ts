@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createTestServer } from '../utils/test-server.js'
 import { FastifyInstance } from 'fastify'
-import { writeFileSync, unlinkSync, mkdirSync, existsSync, rmSync } from 'fs'
+import { writeFileSync, mkdirSync, existsSync, rmSync } from 'fs'
 import { join } from 'path'
 
 describe('Config Routes', () => {

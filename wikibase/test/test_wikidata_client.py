@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from scripts.wikidata_client import WikidataClient
 from scripts.exceptions import WikidataFetchError
+from scripts.wikidata_client import WikidataClient
 
 
 @pytest.fixture

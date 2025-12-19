@@ -6,11 +6,11 @@ to a local Wikibase instance.
 
 import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
 
+from scripts.exceptions import WikibaseImportError
 from scripts.import_entities import (
     EntityImporter,
     ImportConfig,
@@ -19,7 +19,6 @@ from scripts.import_entities import (
     load_id_mapping,
     save_id_mapping,
 )
-from scripts.exceptions import WikibaseImportError
 
 
 @pytest.fixture
@@ -212,7 +211,7 @@ class TestIdMappingPersistence:
         save_id_mapping(mapping, mapping_path)
 
         assert mapping_path.exists()
-        with open(mapping_path) as f:
+        with mapping_path.open() as f:
             saved = json.load(f)
         assert saved == mapping
 
@@ -225,7 +224,7 @@ class TestIdMappingPersistence:
         # Overwrite with new mapping
         save_id_mapping({"Q5": "Q2", "Q515": "Q3"}, mapping_path)
 
-        with open(mapping_path) as f:
+        with mapping_path.open() as f:
             saved = json.load(f)
         assert saved == {"Q5": "Q2", "Q515": "Q3"}
 
@@ -233,7 +232,7 @@ class TestIdMappingPersistence:
         """Test loading an existing ID mapping."""
         mapping_path = tmp_path / "id-mapping.json"
         expected = {"Q42": "Q1", "Q5": "Q2"}
-        with open(mapping_path, "w") as f:
+        with mapping_path.open("w") as f:
             json.dump(expected, f)
 
         result = load_id_mapping(mapping_path)
@@ -334,7 +333,7 @@ class TestImportEntities:
             )
 
         assert mapping_path.exists()
-        with open(mapping_path) as f:
+        with mapping_path.open() as f:
             saved = json.load(f)
         assert saved == {"Q42": "Q1", "Q5": "Q2"}
 

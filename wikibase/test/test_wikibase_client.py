@@ -3,12 +3,13 @@
 This module provides comprehensive tests for the Wikibase API client.
 """
 
-import pytest
 from http import HTTPStatus
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from scripts.wikibase_client import WikibaseClient
+import pytest
+
 from scripts.exceptions import WikibaseImportError
+from scripts.wikibase_client import WikibaseClient
 
 
 @pytest.fixture
@@ -17,7 +18,7 @@ def wikibase_client() -> WikibaseClient:
     return WikibaseClient(
         base_url="http://wikibase:8181",
         username="Admin",
-        password="adminpassword",
+        password="adminpassword",  # noqa: S106
     )
 
 
@@ -137,7 +138,7 @@ class TestGetCsrfToken:
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             token = wikibase_client.get_csrf_token()
-            assert token == "test_csrf_token"
+            assert token == "test_csrf_token"  # noqa: S105
 
     def test_get_csrf_token_cached(self, wikibase_client: WikibaseClient) -> None:
         """Test that CSRF token is cached after first retrieval."""
@@ -161,7 +162,7 @@ class TestCreateEntity:
 
     def test_create_entity_success(self, wikibase_client: WikibaseClient) -> None:
         """Test successful entity creation."""
-        wikibase_client._csrf_token = "test_token"
+        wikibase_client._csrf_token = "test_token"  # noqa: S105
 
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -175,7 +176,7 @@ class TestCreateEntity:
 
     def test_create_entity_with_labels(self, wikibase_client: WikibaseClient) -> None:
         """Test entity creation with labels."""
-        wikibase_client._csrf_token = "test_token"
+        wikibase_client._csrf_token = "test_token"  # noqa: S105
 
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -194,7 +195,7 @@ class TestCreateEntity:
 
     def test_create_entity_with_descriptions(self, wikibase_client: WikibaseClient) -> None:
         """Test entity creation with descriptions."""
-        wikibase_client._csrf_token = "test_token"
+        wikibase_client._csrf_token = "test_token"  # noqa: S105
 
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -211,7 +212,7 @@ class TestCreateEntity:
 
     def test_create_entity_error_response(self, wikibase_client: WikibaseClient) -> None:
         """Test entity creation with error response."""
-        wikibase_client._csrf_token = "test_token"
+        wikibase_client._csrf_token = "test_token"  # noqa: S105
 
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
