@@ -44,8 +44,11 @@ def read_dump_file(dump_path: str) -> Iterator[dict[str, Any]]:
 
     try:
         # Determine if file is gzipped and open with context manager
-        opener = gzip.open if path.suffix == ".gz" else open
-        with opener(path, "rt", encoding="utf-8") as f:
+        if path.suffix == ".gz":
+            file_ctx = gzip.open(path, "rt", encoding="utf-8")
+        else:
+            file_ctx = path.open(encoding="utf-8")
+        with file_ctx as f:
             # Wikidata dumps are JSON arrays, one entity per line
             # Format: [{"id": "Q1", ...},\n{"id": "Q2", ...},\n...]
             for raw_line in f:

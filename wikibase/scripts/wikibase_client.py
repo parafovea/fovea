@@ -249,9 +249,7 @@ class WikibaseClient:
             return entity
         return None
 
-    def get_entity_by_sitelink(
-        self, site: str, title: str
-    ) -> dict[str, Any] | None:
+    def get_entity_by_sitelink(self, site: str, title: str) -> dict[str, Any] | None:
         """Get an entity by its sitelink.
 
         Parameters

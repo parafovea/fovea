@@ -34,14 +34,16 @@ def mock_wikibase_client() -> Mock:
 def mock_wikidata_client() -> Mock:
     """Create a mock WikidataClient."""
     client = Mock()
-    client.fetch_entity = Mock(return_value={
-        "id": "Q42",
-        "type": "item",
-        "labels": {"en": {"value": "Douglas Adams"}},
-    })
-    client.fetch_entities = Mock(return_value={
-        "Q42": {"id": "Q42", "type": "item", "labels": {"en": {"value": "Test"}}}
-    })
+    client.fetch_entity = Mock(
+        return_value={
+            "id": "Q42",
+            "type": "item",
+            "labels": {"en": {"value": "Douglas Adams"}},
+        }
+    )
+    client.fetch_entities = Mock(
+        return_value={"Q42": {"id": "Q42", "type": "item", "labels": {"en": {"value": "Test"}}}}
+    )
     client.get_related_entities = Mock(return_value=set())
     return client
 
@@ -337,9 +339,7 @@ class TestImportEntities:
             saved = json.load(f)
         assert saved == {"Q42": "Q1", "Q5": "Q2"}
 
-    def test_import_entities_no_mapping_save(
-        self, mock_wikibase_client: Mock
-    ) -> None:
+    def test_import_entities_no_mapping_save(self, mock_wikibase_client: Mock) -> None:
         """Test that mapping is not saved when path is None."""
         with patch("scripts.import_entities.EntityImporter") as MockImporter:
             mock_importer = Mock()

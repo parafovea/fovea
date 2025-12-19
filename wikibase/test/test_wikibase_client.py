@@ -80,9 +80,7 @@ class TestLogin:
         """Test successful login."""
         token_response = Mock()
         token_response.raise_for_status = Mock()
-        token_response.json.return_value = {
-            "query": {"tokens": {"logintoken": "test_token"}}
-        }
+        token_response.json.return_value = {"query": {"tokens": {"logintoken": "test_token"}}}
 
         login_response = Mock()
         login_response.raise_for_status = Mock()
@@ -97,9 +95,7 @@ class TestLogin:
         """Test login with invalid credentials."""
         token_response = Mock()
         token_response.raise_for_status = Mock()
-        token_response.json.return_value = {
-            "query": {"tokens": {"logintoken": "test_token"}}
-        }
+        token_response.json.return_value = {"query": {"tokens": {"logintoken": "test_token"}}}
 
         login_response = Mock()
         login_response.raise_for_status = Mock()
@@ -129,9 +125,7 @@ class TestGetCsrfToken:
         """Test successful CSRF token retrieval."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
-        mock_response.json.return_value = {
-            "query": {"tokens": {"csrftoken": "test_csrf_token"}}
-        }
+        mock_response.json.return_value = {"query": {"tokens": {"csrftoken": "test_csrf_token"}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             token = wikibase_client.get_csrf_token()
@@ -141,9 +135,7 @@ class TestGetCsrfToken:
         """Test that CSRF token is cached after first retrieval."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
-        mock_response.json.return_value = {
-            "query": {"tokens": {"csrftoken": "cached_token"}}
-        }
+        mock_response.json.return_value = {"query": {"tokens": {"csrftoken": "cached_token"}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             token1 = wikibase_client.get_csrf_token()
@@ -245,9 +237,7 @@ class TestEntityExists:
         """Test that entity_exists returns False for missing entity."""
         mock_response = Mock()
         mock_response.status_code = HTTPStatus.OK
-        mock_response.json.return_value = {
-            "entities": {"Q999": {"id": "Q999", "missing": ""}}
-        }
+        mock_response.json.return_value = {"entities": {"Q999": {"id": "Q999", "missing": ""}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             assert wikibase_client.entity_exists("Q999") is False
@@ -283,9 +273,7 @@ class TestGetEntity:
         """Test entity retrieval for non-existent entity."""
         mock_response = Mock()
         mock_response.status_code = HTTPStatus.OK
-        mock_response.json.return_value = {
-            "entities": {"Q999": {"id": "Q999", "missing": ""}}
-        }
+        mock_response.json.return_value = {"entities": {"Q999": {"id": "Q999", "missing": ""}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             result = wikibase_client.get_entity("Q999")
@@ -324,9 +312,7 @@ class TestGetEntityBySitelink:
         """Test sitelink lookup for non-existent entity."""
         mock_response = Mock()
         mock_response.status_code = HTTPStatus.OK
-        mock_response.json.return_value = {
-            "entities": {"-1": {"id": "-1", "missing": ""}}
-        }
+        mock_response.json.return_value = {"entities": {"-1": {"id": "-1", "missing": ""}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             result = wikibase_client.get_entity_by_sitelink("wikidatawiki", "Q999999")
@@ -336,9 +322,7 @@ class TestGetEntityBySitelink:
 class TestGetLocalIdForWikidata:
     """Tests for the get_local_id_for_wikidata method."""
 
-    def test_get_local_id_for_wikidata_found(
-        self, wikibase_client: WikibaseClient
-    ) -> None:
+    def test_get_local_id_for_wikidata_found(self, wikibase_client: WikibaseClient) -> None:
         """Test finding local ID for Wikidata ID."""
         mock_response = Mock()
         mock_response.status_code = HTTPStatus.OK
@@ -356,15 +340,11 @@ class TestGetLocalIdForWikidata:
             result = wikibase_client.get_local_id_for_wikidata("Q42")
             assert result == "Q1"
 
-    def test_get_local_id_for_wikidata_not_found(
-        self, wikibase_client: WikibaseClient
-    ) -> None:
+    def test_get_local_id_for_wikidata_not_found(self, wikibase_client: WikibaseClient) -> None:
         """Test local ID lookup for non-existent Wikidata ID."""
         mock_response = Mock()
         mock_response.status_code = HTTPStatus.OK
-        mock_response.json.return_value = {
-            "entities": {"-1": {"id": "-1", "missing": ""}}
-        }
+        mock_response.json.return_value = {"entities": {"-1": {"id": "-1", "missing": ""}}}
 
         with patch.object(wikibase_client.session, "get", return_value=mock_response):
             result = wikibase_client.get_local_id_for_wikidata("Q999999")

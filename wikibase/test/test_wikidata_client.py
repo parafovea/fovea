@@ -119,20 +119,14 @@ class TestFetchEntities:
         for resp in mock_responses:
             resp.raise_for_status = Mock()
 
-        with patch.object(
-            wikidata_client.session, "get", side_effect=mock_responses
-        ):
-            result = wikidata_client.fetch_entities(
-                ["Q1", "Q2", "Q3"], show_progress=False
-            )
+        with patch.object(wikidata_client.session, "get", side_effect=mock_responses):
+            result = wikidata_client.fetch_entities(["Q1", "Q2", "Q3"], show_progress=False)
             assert len(result) == 3
             assert "Q1" in result
             assert "Q2" in result
             assert "Q3" in result
 
-    def test_fetch_entities_exceeds_batch_size(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_fetch_entities_exceeds_batch_size(self, wikidata_client: WikidataClient) -> None:
         """Test that entities exceeding batch size are correctly batched."""
         wikidata_client.batch_size = 2
 
@@ -143,8 +137,16 @@ class TestFetchEntities:
 
         # Create responses for each batch
         responses = [
-            Mock(json=Mock(return_value={"entities": {f"Q{i}": all_entities[f"Q{i}"] for i in [1, 2]}})),
-            Mock(json=Mock(return_value={"entities": {f"Q{i}": all_entities[f"Q{i}"] for i in [3, 4]}})),
+            Mock(
+                json=Mock(
+                    return_value={"entities": {f"Q{i}": all_entities[f"Q{i}"] for i in [1, 2]}}
+                )
+            ),
+            Mock(
+                json=Mock(
+                    return_value={"entities": {f"Q{i}": all_entities[f"Q{i}"] for i in [3, 4]}}
+                )
+            ),
             Mock(json=Mock(return_value={"entities": {"Q5": all_entities["Q5"]}})),
         ]
         for resp in responses:
@@ -156,17 +158,13 @@ class TestFetchEntities:
             )
             assert len(result) == 5
 
-    def test_fetch_entities_partial_success(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_fetch_entities_partial_success(self, wikidata_client: WikidataClient) -> None:
         """Test that batch failures don't fail entire operation."""
         wikidata_client.batch_size = 2
 
         success_response = Mock()
         success_response.raise_for_status = Mock()
-        success_response.json.return_value = {
-            "entities": {"Q1": {"id": "Q1", "type": "item"}}
-        }
+        success_response.json.return_value = {"entities": {"Q1": {"id": "Q1", "type": "item"}}}
 
         fail_response = Mock()
         fail_response.raise_for_status.side_effect = requests.RequestException("Failed")
@@ -176,9 +174,7 @@ class TestFetchEntities:
             "get",
             side_effect=[success_response, fail_response],
         ):
-            result = wikidata_client.fetch_entities(
-                ["Q1", "Q2", "Q3", "Q4"], show_progress=False
-            )
+            result = wikidata_client.fetch_entities(["Q1", "Q2", "Q3", "Q4"], show_progress=False)
             # First batch succeeds, second fails but operation continues
             assert "Q1" in result
 
@@ -187,9 +183,7 @@ class TestFetchEntities:
         result = wikidata_client.fetch_entities([], show_progress=False)
         assert result == {}
 
-    def test_fetch_entities_filters_missing(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_fetch_entities_filters_missing(self, wikidata_client: WikidataClient) -> None:
         """Test that missing entities are filtered from results."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -209,9 +203,7 @@ class TestFetchEntities:
 class TestGetRelatedEntities:
     """Tests for the get_related_entities method."""
 
-    def test_get_related_entities_from_claims(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_get_related_entities_from_claims(self, wikidata_client: WikidataClient) -> None:
         """Test extracting related entities from claims."""
         entity = {
             "id": "Q937",
@@ -240,9 +232,7 @@ class TestGetRelatedEntities:
         assert "Q5" in related
         assert "Q183" in related
 
-    def test_get_related_entities_from_qualifiers(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_get_related_entities_from_qualifiers(self, wikidata_client: WikidataClient) -> None:
         """Test extracting related entities from qualifiers."""
         entity = {
             "id": "Q937",
@@ -277,17 +267,13 @@ class TestGetRelatedEntities:
         related = wikidata_client.get_related_entities(entity, max_depth=1)
         assert len(related) == 0
 
-    def test_get_related_entities_no_claims(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_get_related_entities_no_claims(self, wikidata_client: WikidataClient) -> None:
         """Test extracting from entity without claims key."""
         entity = {"id": "Q1"}
         related = wikidata_client.get_related_entities(entity, max_depth=1)
         assert len(related) == 0
 
-    def test_get_related_entities_max_depth_zero(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_get_related_entities_max_depth_zero(self, wikidata_client: WikidataClient) -> None:
         """Test that max_depth=0 returns empty set."""
         entity = {
             "id": "Q1",
@@ -321,22 +307,14 @@ class TestGetRelatedEntities:
                         }
                     }
                 ],
-                "P18": [
-                    {
-                        "mainsnak": {
-                            "datavalue": {"type": "string", "value": "Einstein.jpg"}
-                        }
-                    }
-                ],
+                "P18": [{"mainsnak": {"datavalue": {"type": "string", "value": "Einstein.jpg"}}}],
             },
         }
 
         related = wikidata_client.get_related_entities(entity, max_depth=1)
         assert len(related) == 0
 
-    def test_get_related_entities_handles_missing_id(
-        self, wikidata_client: WikidataClient
-    ) -> None:
+    def test_get_related_entities_handles_missing_id(self, wikidata_client: WikidataClient) -> None:
         """Test handling of entityid values without id field."""
         entity = {
             "id": "Q1",
