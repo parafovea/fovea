@@ -13,6 +13,7 @@ import React from 'react'
 import VideoBrowser from './VideoBrowser'
 import videoSlice from '../store/videoSlice'
 import personaSlice from '../store/personaSlice'
+import userSlice from '../store/userSlice'
 import { server } from '../../test/setup'
 import { http, HttpResponse } from 'msw'
 
@@ -21,6 +22,7 @@ function createTestStore(initialState = {}) {
     reducer: {
       videos: videoSlice,
       persona: personaSlice,
+      user: userSlice,
     },
     preloadedState: initialState,
   })
