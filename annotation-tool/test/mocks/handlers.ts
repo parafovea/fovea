@@ -364,6 +364,11 @@ export const handlers = [
       wikidata: {
         mode: 'online',
         url: 'https://www.wikidata.org/w/api.php',
+        allowExternalLinks: true,
+      },
+      externalLinks: {
+        wikidata: true,
+        videoSources: true,
       },
     })
   }),
@@ -912,6 +917,11 @@ export const handlers = [
       wikidata: {
         mode: 'online',
         url: 'https://www.wikidata.org/w/api.php',
+        allowExternalLinks: true,
+      },
+      externalLinks: {
+        wikidata: true,
+        videoSources: true,
       },
     })
   }),
