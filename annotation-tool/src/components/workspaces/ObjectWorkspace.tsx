@@ -492,6 +492,7 @@ export default function ObjectWorkspace() {
                         <WikidataChip
                           wikidataId={entity.wikidataId}
                           wikidataUrl={entity.wikidataUrl}
+                          wikibaseId={entity.wikibaseId}
                           importedAt={entity.importedAt}
                           size="small"
                           showTimestamp={false}
@@ -547,9 +548,10 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">{event.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={event.wikidataId}
                         wikidataUrl={event.wikidataUrl}
+                        wikibaseId={event.wikibaseId}
                         importedAt={event.importedAt}
                         size="small"
                         showTimestamp={false}
@@ -589,9 +591,10 @@ export default function ObjectWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="body1">{location.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={location.wikidataId}
                         wikidataUrl={location.wikidataUrl}
+                        wikibaseId={location.wikibaseId}
                         importedAt={location.importedAt}
                         size="small"
                         showTimestamp={false}
@@ -636,6 +639,7 @@ export default function ObjectWorkspace() {
                       <WikidataChip
                         wikidataId={time.wikidataId}
                         wikidataUrl={time.wikidataUrl}
+                        wikibaseId={time.wikibaseId}
                         importedAt={time.importedAt}
                         size="small"
                         showTimestamp={false}
