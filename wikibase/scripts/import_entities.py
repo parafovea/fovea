@@ -188,7 +188,7 @@ def save_id_mapping(
     # Ensure directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, "w") as f:
+    with path.open("w") as f:
         json.dump(mapping, f, indent=2, sort_keys=True)
 
     logger.info("Saved ID mapping to %s (%d entries)", path, len(mapping))
@@ -210,7 +210,7 @@ def load_id_mapping(path: Path = DEFAULT_MAPPING_PATH) -> dict[str, str]:
     if not path.exists():
         return {}
 
-    with open(path) as f:
+    with path.open() as f:
         mapping: dict[str, str] = json.load(f)
     return mapping
 

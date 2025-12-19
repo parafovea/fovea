@@ -7,6 +7,7 @@ from http import HTTPStatus
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from scripts.exceptions import WikibaseImportError
 from scripts.wikibase_client import WikibaseClient
@@ -64,8 +65,6 @@ class TestIsAvailable:
 
     def test_returns_false_on_network_error(self, wikibase_client: WikibaseClient) -> None:
         """Test that is_available returns False on network errors."""
-        import requests
-
         with patch.object(
             wikibase_client.session,
             "get",
@@ -115,8 +114,6 @@ class TestLogin:
 
     def test_login_network_error(self, wikibase_client: WikibaseClient) -> None:
         """Test login with network error."""
-        import requests
-
         with patch.object(
             wikibase_client.session,
             "get",

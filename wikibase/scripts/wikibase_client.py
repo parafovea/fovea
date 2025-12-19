@@ -4,6 +4,7 @@ This module provides a client for interacting with the Wikibase MediaWiki API
 to create and update entities.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -162,8 +163,6 @@ class WikibaseClient:
         WikibaseImportError
             If entity creation fails.
         """
-        import json
-
         token = self.get_csrf_token()
 
         response = self.session.post(
