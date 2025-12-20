@@ -77,11 +77,14 @@ class TestFetchEntity:
 
     def test_fetch_entity_network_error(self, wikidata_client: WikidataClient) -> None:
         """Test fetch with network error."""
-        with patch.object(
-            wikidata_client.session,
-            "get",
-            side_effect=requests.RequestException("Connection failed"),
-        ), pytest.raises(WikidataFetchError, match="Failed to fetch entity Q5"):
+        with (
+            patch.object(
+                wikidata_client.session,
+                "get",
+                side_effect=requests.RequestException("Connection failed"),
+            ),
+            pytest.raises(WikidataFetchError, match="Failed to fetch entity Q5"),
+        ):
             wikidata_client.fetch_entity("Q5")
 
 

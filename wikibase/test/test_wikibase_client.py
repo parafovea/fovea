@@ -86,9 +86,10 @@ class TestLogin:
         login_response.raise_for_status = Mock()
         login_response.json.return_value = {"login": {"result": "Success"}}
 
-        with patch.object(
-            wikibase_client.session, "get", return_value=token_response
-        ), patch.object(wikibase_client.session, "post", return_value=login_response):
+        with (
+            patch.object(wikibase_client.session, "get", return_value=token_response),
+            patch.object(wikibase_client.session, "post", return_value=login_response),
+        ):
             wikibase_client.login()
 
     def test_login_invalid_credentials(self, wikibase_client: WikibaseClient) -> None:
@@ -101,20 +102,23 @@ class TestLogin:
         login_response.raise_for_status = Mock()
         login_response.json.return_value = {"login": {"result": "Failed"}}
 
-        with patch.object(
-            wikibase_client.session, "get", return_value=token_response
-        ), patch.object(
-            wikibase_client.session, "post", return_value=login_response
-        ), pytest.raises(WikibaseImportError, match="Login failed"):
+        with (
+            patch.object(wikibase_client.session, "get", return_value=token_response),
+            patch.object(wikibase_client.session, "post", return_value=login_response),
+            pytest.raises(WikibaseImportError, match="Login failed"),
+        ):
             wikibase_client.login()
 
     def test_login_network_error(self, wikibase_client: WikibaseClient) -> None:
         """Test login with network error."""
-        with patch.object(
-            wikibase_client.session,
-            "get",
-            side_effect=requests.HTTPError("Connection refused"),
-        ), pytest.raises(requests.HTTPError):
+        with (
+            patch.object(
+                wikibase_client.session,
+                "get",
+                side_effect=requests.HTTPError("Connection refused"),
+            ),
+            pytest.raises(requests.HTTPError),
+        ):
             wikibase_client.login()
 
 
@@ -207,9 +211,10 @@ class TestCreateEntity:
         mock_response.raise_for_status = Mock()
         mock_response.json.return_value = {"error": {"code": "failed", "info": "Error"}}
 
-        with patch.object(
-            wikibase_client.session, "post", return_value=mock_response
-        ), pytest.raises(WikibaseImportError, match="Entity creation failed"):
+        with (
+            patch.object(wikibase_client.session, "post", return_value=mock_response),
+            pytest.raises(WikibaseImportError, match="Entity creation failed"),
+        ):
             wikibase_client.create_entity({"labels": {}})
 
 

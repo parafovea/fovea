@@ -45,7 +45,7 @@ def read_dump_file(dump_path: str) -> Iterator[dict[str, Any]]:
     try:
         # Determine if file is gzipped and open with context manager
         if path.suffix == ".gz":
-            file_ctx = gzip.open(path, "rt", encoding="utf-8")
+            file_ctx = gzip.open(path, "rt", encoding="utf-8")  # noqa: SIM115
         else:
             file_ctx = path.open(encoding="utf-8")
         with file_ctx as f:
