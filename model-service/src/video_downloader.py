@@ -16,6 +16,29 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_for_log(value: str, max_length: int = 200) -> str:
+    """Sanitize a string for safe logging to prevent log injection.
+
+    Parameters
+    ----------
+    value : str
+        String to sanitize
+    max_length : int
+        Maximum length of output string
+
+    Returns
+    -------
+    str
+        Sanitized string safe for logging
+    """
+    # Remove newlines, carriage returns, and other control characters
+    sanitized = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", " ", value)
+    # Truncate to max length
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "..."
+    return sanitized
+
 # Allowed URL patterns for video downloads (S3, common CDNs)
 # This helps mitigate SSRF by restricting to expected video sources
 ALLOWED_URL_PATTERNS = [
@@ -99,10 +122,10 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
 
     # Validate URL against allowed patterns (SSRF mitigation)
     if not _is_url_allowed(video_path):
-        logger.warning("URL does not match allowed patterns: %s", video_path[:100])
+        logger.warning("URL does not match allowed patterns: %s", _sanitize_for_log(video_path, 100))
         raise ValueError("URL not allowed: must be from a trusted video source")
 
-    logger.info("Downloading video from URL: %s...", video_path[:100])
+    logger.info("Downloading video from URL: %s...", _sanitize_for_log(video_path, 100))
 
     # Parse URL to get file extension
     parsed_url = urlparse(video_path)
@@ -161,11 +184,11 @@ def cleanup_temp_video(video_path: str) -> None:
     """
     # Validate path is within temp directory (path injection mitigation)
     if not _is_safe_temp_path(video_path):
-        logger.warning("Refusing to delete path outside temp directory: %s", video_path)
+        logger.warning("Refusing to delete path outside temp directory: %s", _sanitize_for_log(video_path))
         return
 
     try:
         Path(video_path).unlink(missing_ok=True)
-        logger.info("Cleaned up temporary video: %s", video_path)
+        logger.info("Cleaned up temporary video: %s", _sanitize_for_log(video_path))
     except OSError as e:
-        logger.warning("Failed to clean up temporary video %s: %s", video_path, e)
+        logger.warning("Failed to clean up temporary video %s: %s", _sanitize_for_log(video_path), e)

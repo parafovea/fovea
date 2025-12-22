@@ -221,13 +221,13 @@ async def summarize_video(request: SummarizeRequest) -> SummarizeResponse:
         except HTTPException:
             raise
         except SummarizationError as e:
-            logger.error(f"Summarization error: {e}")
+            logger.error("Summarization error: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail=str(e),
             ) from e
         except Exception as e:
-            logger.error(f"Unexpected error in summarization: {e}")
+            logger.error("Unexpected error in summarization: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
@@ -363,13 +363,13 @@ async def augment_ontology(request: AugmentRequest) -> AugmentResponse:
         except HTTPException:
             raise
         except ValueError as e:
-            logger.error(f"Validation error in augmentation: {e}")
+            logger.error("Validation error in augmentation: %s", e)
             raise HTTPException(
                 status_code=400,
                 detail=str(e),
             ) from e
         except Exception as e:
-            logger.error(f"Unexpected error in augmentation: {e}")
+            logger.error("Unexpected error in augmentation: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
@@ -557,7 +557,7 @@ async def detect_objects(request: DetectionRequest) -> DetectionResponse:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in detection: {e}")
+            logger.error("Unexpected error in detection: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
@@ -788,13 +788,13 @@ async def track_objects(request: TrackingRequest) -> TrackingResponse:
         except HTTPException:
             raise
         except ValueError as e:
-            logger.error(f"Validation error in tracking: {e}")
+            logger.error("Validation error in tracking: %s", e)
             raise HTTPException(
                 status_code=400,
                 detail=str(e),
             ) from e
         except Exception as e:
-            logger.error(f"Unexpected error in tracking: {e}")
+            logger.error("Unexpected error in tracking: %s", e)
             raise HTTPException(
                 status_code=500,
                 detail=f"Internal server error: {e!s}",
@@ -1102,7 +1102,7 @@ async def extract_claims(request: ClaimExtractionRequest) -> ClaimExtractionResp
                 await loader.unload()
 
         except Exception as e:
-            logger.error(f"Claim extraction failed: {e}")
+            logger.error("Claim extraction failed: %s", e)
             span.set_attribute("error", str(e))
             raise HTTPException(status_code=500, detail=f"Claim extraction failed: {e}") from e
 
@@ -1222,7 +1222,7 @@ async def synthesize_summary(
                 await loader.unload()
 
         except Exception as e:
-            logger.error(f"Summary synthesis failed: {e}")
+            logger.error("Summary synthesis failed: %s", e)
             span.set_attribute("error", str(e))
             raise HTTPException(status_code=500, detail=f"Summary synthesis failed: {e}") from e
 

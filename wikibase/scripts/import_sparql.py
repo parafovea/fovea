@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import TypedDict
 from urllib.error import URLError
+from urllib.parse import urlparse
 
 from SPARQLWrapper import JSON, SPARQLWrapper
 from SPARQLWrapper.SPARQLExceptions import SPARQLWrapperException
@@ -80,9 +81,12 @@ def execute_sparql_query(query: str) -> list[str]:
             for var in ["item", "entity", "subject", "s"]:
                 if var in result:
                     uri = result[var]["value"]
-                    if "wikidata.org" in uri:
-                        qid = uri.split("/")[-1]
-                        entities.append(qid)
+                    # Properly validate URL host to prevent SSRF
+                    parsed = urlparse(uri)
+                    if parsed.netloc in ("www.wikidata.org", "wikidata.org"):
+                        qid = parsed.path.split("/")[-1]
+                        if qid.startswith("Q") and qid[1:].isdigit():
+                            entities.append(qid)
                     break
 
         logger.info("SPARQL query returned %d entities", len(entities))
