@@ -1,4 +1,4 @@
-import { test, expect } from '../../fixtures/test-context.js'
+import { test } from '../../fixtures/test-context.js'
 
 /**
  * Regression tests for keyframe management.
