@@ -122,13 +122,16 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
 
     # Validate URL against allowed patterns (SSRF mitigation)
     if not _is_url_allowed(video_path):
-        logger.warning("URL does not match allowed patterns: %s", _sanitize_for_log(video_path, 100))
+        # Log only URL scheme and host for security (avoid log injection)
+        parsed = urlparse(video_path)
+        logger.warning("URL does not match allowed patterns: %s://%s", parsed.scheme, parsed.netloc)
         raise ValueError("URL not allowed: must be from a trusted video source")
 
-    logger.info("Downloading video from URL: %s...", _sanitize_for_log(video_path, 100))
-
-    # Parse URL to get file extension
+    # Log only scheme and host for security (avoid log injection from full URL)
     parsed_url = urlparse(video_path)
+    logger.info("Downloading video from %s://%s...", parsed_url.scheme, parsed_url.netloc)
+
+    # Parse URL to get file extension (parsed_url already set above for logging)
     path_obj = Path(parsed_url.path)
     extension = path_obj.suffix or ".mp4"
 
@@ -184,11 +187,11 @@ def cleanup_temp_video(video_path: str) -> None:
     """
     # Validate path is within temp directory (path injection mitigation)
     if not _is_safe_temp_path(video_path):
-        logger.warning("Refusing to delete path outside temp directory: %s", _sanitize_for_log(video_path))
+        logger.warning("Refusing to delete path outside temp directory")
         return
 
     try:
         Path(video_path).unlink(missing_ok=True)
-        logger.info("Cleaned up temporary video: %s", _sanitize_for_log(video_path))
+        logger.info("Cleaned up temporary video file")
     except OSError as e:
-        logger.warning("Failed to clean up temporary video %s: %s", _sanitize_for_log(video_path), e)
+        logger.warning("Failed to clean up temporary video file: %s", type(e).__name__)

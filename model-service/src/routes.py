@@ -1367,7 +1367,7 @@ async def generate_thumbnail(request: ThumbnailGenerateRequest) -> ThumbnailGene
             )
 
         except VideoProcessingError as e:
-            logger.error("Thumbnail generation failed for video %s: %s", request.video_id, e)
+            logger.error("Thumbnail generation failed: %s", type(e).__name__)
             raise HTTPException(
                 status_code=500,
                 detail=f"Thumbnail generation failed: {e!s}",
