@@ -137,7 +137,7 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
 
     # Create temporary file with appropriate extension
     # Using NamedTemporaryFile without context manager because we need the file to persist
-    temp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+    temp_file = tempfile.NamedTemporaryFile(
         delete=False, suffix=extension, prefix="video_", dir=TEMP_VIDEO_DIR
     )
     temp_path = temp_file.name
