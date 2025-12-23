@@ -88,8 +88,10 @@ def _is_safe_temp_path(path: str) -> bool:
     """
     try:
         # Resolve to absolute path and check it's under temp dir
+        # Both paths must be resolved to handle symlinks (e.g., /tmp -> /private/tmp on macOS)
         resolved = os.path.realpath(path)
-        return resolved.startswith(TEMP_VIDEO_DIR + os.sep) or resolved == TEMP_VIDEO_DIR
+        temp_dir_resolved = os.path.realpath(TEMP_VIDEO_DIR)
+        return resolved.startswith(temp_dir_resolved + os.sep) or resolved == temp_dir_resolved
     except (OSError, ValueError):
         return False
 
