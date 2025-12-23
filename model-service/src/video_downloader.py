@@ -39,6 +39,7 @@ def _sanitize_for_log(value: str, max_length: int = 200) -> str:
         sanitized = sanitized[:max_length] + "..."
     return sanitized
 
+
 # Allowed URL patterns for video downloads (S3, common CDNs)
 # This helps mitigate SSRF by restricting to expected video sources
 ALLOWED_URL_PATTERNS = [
