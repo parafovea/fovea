@@ -1190,7 +1190,7 @@ async def synthesize_summary(
 
                 # Calculate claims used
                 claims_used = sum(
-                    _count_claims_recursive(cast("list[ClaimDict]", src.claims))
+                    _count_claims_recursive(cast(list[ClaimDict], src.claims))
                     for src in request.claim_sources
                 )
 
