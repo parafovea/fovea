@@ -12,7 +12,9 @@ from src.video_downloader import cleanup_temp_video, download_video_if_needed
 # Use S3 URLs that match the allowed patterns for SSRF protection
 TEST_S3_URL_HTTP = "http://bucket.s3.us-east-1.amazonaws.com/video.mp4"
 TEST_S3_URL_HTTPS = "https://bucket.s3.us-east-1.amazonaws.com/video.webm"
-TEST_S3_URL_NO_EXT = "https://bucket.s3.us-east-1.amazonaws.com/signed-url-without-extension?signature=abc"
+TEST_S3_URL_NO_EXT = (
+    "https://bucket.s3.us-east-1.amazonaws.com/signed-url-without-extension?signature=abc"
+)
 TEST_LOCALHOST_URL = "http://localhost:8080/video.mp4"
 
 
