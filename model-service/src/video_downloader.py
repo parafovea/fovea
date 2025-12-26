@@ -17,29 +17,6 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_for_log(value: str, max_length: int = 200) -> str:
-    """Sanitize a string for safe logging to prevent log injection.
-
-    Parameters
-    ----------
-    value : str
-        String to sanitize
-    max_length : int
-        Maximum length of output string
-
-    Returns
-    -------
-    str
-        Sanitized string safe for logging
-    """
-    # Remove newlines, carriage returns, and other control characters
-    sanitized = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", " ", value)
-    # Truncate to max length
-    if len(sanitized) > max_length:
-        sanitized = sanitized[:max_length] + "..."
-    return sanitized
-
-
 # Allowed URL patterns for video downloads (S3, common CDNs)
 # This helps mitigate SSRF by restricting to expected video sources
 ALLOWED_URL_PATTERNS = [
