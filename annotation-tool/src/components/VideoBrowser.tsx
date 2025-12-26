@@ -66,6 +66,7 @@ import { useGenerateSummary, useVideoSummary } from '../hooks/useSummaries'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from './JobStatusIndicator'
 import { useModelConfig } from '../hooks/useModelConfig'
+import { useExternalLinksConfig } from '../hooks/useAppConfig'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
@@ -79,6 +80,7 @@ export default function VideoBrowser() {
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
   const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
   const [isBatchSummarizing, setIsBatchSummarizing] = useState(false)
+  const { videoSources: allowExternalVideoLinks } = useExternalLinksConfig()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const { mutate: generateSummary } = useGenerateSummary()
@@ -466,6 +468,7 @@ export default function VideoBrowser() {
               handleSummaryJobComplete={handleSummaryJobComplete}
               handleSummaryJobFail={handleSummaryJobFail}
               isCpuOnly={isCpuOnly}
+              allowExternalVideoLinks={allowExternalVideoLinks}
             />
           )
         })}
@@ -531,6 +534,8 @@ interface VideoCardProps {
   handleSummaryJobFail: (videoId: string, personaId: string) => void
   /** Whether system is running in CPU-only mode */
   isCpuOnly: boolean
+  /** Whether external video source links are allowed */
+  allowExternalVideoLinks: boolean
 }
 
 /**
@@ -555,6 +560,7 @@ function VideoCard({
   handleSummaryJobComplete,
   handleSummaryJobFail,
   isCpuOnly,
+  allowExternalVideoLinks,
 }: VideoCardProps) {
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
@@ -638,18 +644,24 @@ function VideoCard({
         <CardContent sx={{ flexGrow: 1 }}>
           <Typography gutterBottom variant="h6" component="h2">
             {video.uploader || video.uploaderId || 'Unknown User'}
-            {video.uploaderId && video.uploaderUrl && (
+            {video.uploaderId && (
               <>
                 {' '}(
-                <Link
-                  href={video.uploaderUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="hover"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  @{video.uploaderId}
-                </Link>
+                {allowExternalVideoLinks && video.uploaderUrl ? (
+                  <Link
+                    href={video.uploaderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    underline="hover"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    @{video.uploaderId}
+                  </Link>
+                ) : (
+                  <Typography component="span" color="text.secondary">
+                    @{video.uploaderId}
+                  </Typography>
+                )}
                 )
               </>
             )}

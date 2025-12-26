@@ -498,9 +498,10 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{entity.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={entity.wikidataId}
                         wikidataUrl={entity.wikidataUrl}
+                        wikibaseId={entity.wikibaseId}
                         importedAt={entity.importedAt}
                         size="small"
                         showTimestamp={false}
@@ -558,9 +559,10 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{role.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={role.wikidataId}
                         wikidataUrl={role.wikidataUrl}
+                        wikibaseId={role.wikibaseId}
                         importedAt={role.importedAt}
                         size="small"
                         showTimestamp={false}
@@ -625,9 +627,10 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{event.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={event.wikidataId}
                         wikidataUrl={event.wikidataUrl}
+                        wikibaseId={event.wikibaseId}
                         importedAt={event.importedAt}
                         size="small"
                         showTimestamp={false}
@@ -694,9 +697,10 @@ export default function OntologyWorkspace() {
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography>{relation.name}</Typography>
-                      <WikidataChip 
+                      <WikidataChip
                         wikidataId={relation.wikidataId}
                         wikidataUrl={relation.wikidataUrl}
+                        wikibaseId={relation.wikibaseId}
                         importedAt={relation.importedAt}
                         size="small"
                         showTimestamp={false}

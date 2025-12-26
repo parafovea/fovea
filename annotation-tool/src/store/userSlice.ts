@@ -2,15 +2,57 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import { User } from '../models/types.js'
 
 /**
+ * Wikidata/Wikibase configuration.
+ */
+export interface WikidataConfig {
+  /** Mode: 'online' for public Wikidata, 'offline' for local Wikibase */
+  mode: 'online' | 'offline'
+  /** API endpoint URL */
+  url: string
+  /** ID mapping from Wikidata IDs to local Wikibase IDs (offline mode only) */
+  idMapping: Record<string, string> | null
+  /** Whether external Wikidata links are allowed */
+  allowExternalLinks: boolean
+}
+
+/**
+ * External links configuration.
+ */
+export interface ExternalLinksConfig {
+  /** Whether external Wikidata entity page links are allowed */
+  wikidata: boolean
+  /** Whether external video source links are allowed */
+  videoSources: boolean
+}
+
+/**
+ * Full application configuration from /api/config.
+ */
+export interface AppConfig {
+  /** Application mode */
+  mode: 'single-user' | 'multi-user'
+  /** Whether user registration is allowed */
+  allowRegistration: boolean
+  /** Wikidata/Wikibase configuration */
+  wikidata: WikidataConfig
+  /** External links configuration */
+  externalLinks: ExternalLinksConfig
+}
+
+/**
  * User authentication state.
- * Manages current user, authentication status, and application mode.
+ * Manages current user, authentication status, and application configuration.
  */
 export interface UserState {
   currentUser: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  /** Application mode (duplicated for backward compatibility) */
   mode: 'single-user' | 'multi-user'
+  /** Whether registration is allowed (duplicated for backward compatibility) */
   allowRegistration: boolean
+  /** Full application configuration */
+  appConfig: AppConfig | null
 }
 
 const initialState: UserState = {
@@ -19,6 +61,7 @@ const initialState: UserState = {
   isLoading: true,
   mode: 'single-user',
   allowRegistration: false,
+  appConfig: null,
 }
 
 const userSlice = createSlice({
@@ -72,9 +115,11 @@ const userSlice = createSlice({
      * Sets application configuration.
      *
      * @param state - Current user state
-     * @param action - Payload containing mode and allowRegistration
+     * @param action - Payload containing full app config
      */
-    setConfig: (state, action: PayloadAction<{ mode: 'single-user' | 'multi-user'; allowRegistration: boolean }>) => {
+    setConfig: (state, action: PayloadAction<AppConfig>) => {
+      state.appConfig = action.payload
+      // Backward compatibility: also set top-level mode and allowRegistration
       state.mode = action.payload.mode
       state.allowRegistration = action.payload.allowRegistration
     },

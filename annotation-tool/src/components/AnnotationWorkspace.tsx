@@ -48,6 +48,7 @@ import {
 } from '@mui/icons-material'
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './annotation/VideoPlayer'
+import { useExternalLinksConfig } from '../hooks/useAppConfig'
 import { RootState, AppDispatch } from '../store/store'
 import { setCurrentVideo, setLastAnnotation } from '../store/videoSlice'
 import {
@@ -113,6 +114,7 @@ export default function AnnotationWorkspace() {
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
   const [timelineExpanded, setTimelineExpanded] = useState(false)
   const [timelineMounted, setTimelineMounted] = useState(false)
+  const { videoSources: allowExternalVideoLinks } = useExternalLinksConfig()
 
   // Delayed mount/unmount for smooth animation
   useEffect(() => {
@@ -550,17 +552,23 @@ export default function AnnotationWorkspace() {
               </IconButton>
               <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
                 {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
-                {currentVideo?.uploaderId && currentVideo?.uploaderUrl && (
+                {currentVideo?.uploaderId && (
                   <>
                     {' '}(
-                    <Link
-                      href={currentVideo.uploaderUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      underline="hover"
-                    >
-                      @{currentVideo.uploaderId}
-                    </Link>
+                    {allowExternalVideoLinks && currentVideo?.uploaderUrl ? (
+                      <Link
+                        href={currentVideo.uploaderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                      >
+                        @{currentVideo.uploaderId}
+                      </Link>
+                    ) : (
+                      <Typography component="span" color="text.secondary">
+                        @{currentVideo.uploaderId}
+                      </Typography>
+                    )}
                     )
                   </>
                 )}
@@ -612,16 +620,31 @@ export default function AnnotationWorkspace() {
 
               {/* Source Link - More prominent */}
               {currentVideo?.webpageUrl && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<ExternalLinkIcon />}
-                  href={currentVideo.webpageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View Original
-                </Button>
+                allowExternalVideoLinks ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<ExternalLinkIcon />}
+                    href={currentVideo.webpageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Original
+                  </Button>
+                ) : (
+                  <Tooltip title="External video source links are disabled">
+                    <span>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<ExternalLinkIcon />}
+                        disabled
+                      >
+                        View Original
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )
               )}
             </Stack>
           </Stack>

@@ -89,7 +89,7 @@ async def extract_claims_from_summary(
     # Limit to max_claims
     claims = claims[:max_claims]
 
-    logger.info(f"Extracted {len(claims)} claims")
+    logger.info("Extracted %d claims", len(claims))
     return claims
 
 

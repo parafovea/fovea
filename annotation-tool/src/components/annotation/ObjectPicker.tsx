@@ -195,9 +195,10 @@ export default function ObjectPicker({
             primary={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body1">{item.name}</Typography>
-                <WikidataChip 
+                <WikidataChip
                   wikidataId={item.wikidataId}
                   wikidataUrl={item.wikidataUrl}
+                  wikibaseId={item.wikibaseId}
                   importedAt={item.importedAt}
                   size="small"
                   showTimestamp={false}

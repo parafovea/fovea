@@ -149,6 +149,20 @@ jobs:
               echo 'ALLOW_REGISTRATION=true' >> .env
             fi
 
+            # Ensure online Wikidata mode (not local Wikibase) for demo
+            if grep -q '^WIKIDATA_MODE=' .env; then
+              sed -i 's|^WIKIDATA_MODE=.*|WIKIDATA_MODE=online|' .env
+            else
+              echo 'WIKIDATA_MODE=online' >> .env
+            fi
+
+            # Ensure external links are enabled for demo
+            if grep -q '^ALLOW_EXTERNAL_LINKS=' .env; then
+              sed -i 's|^ALLOW_EXTERNAL_LINKS=.*|ALLOW_EXTERNAL_LINKS=true|' .env
+            else
+              echo 'ALLOW_EXTERNAL_LINKS=true' >> .env
+            fi
+
             echo '📁 Creating required directories...'
             mkdir -p data/thumbnails
 

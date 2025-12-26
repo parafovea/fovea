@@ -36,6 +36,24 @@ Complete reference for environment variables used across FOVEA services.
 | `ADMIN_PASSWORD` | (required) | Admin user password for database seeding (required in multi-user mode) |
 | `API_KEY_ENCRYPTION_KEY` | (required) | 32-byte hex key for API key encryption at rest |
 
+#### Wikidata/Wikibase Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WIKIDATA_MODE` | `online` | `online` for public Wikidata API, `offline` for local Wikibase |
+| `WIKIDATA_URL` | `https://www.wikidata.org/w/api.php` | Wikidata/Wikibase API endpoint |
+| `WIKIBASE_ID_MAPPING_PATH` | `/wikibase/id-mapping.json` | Path to ID mapping file (offline mode only) |
+
+#### External Links Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ALLOW_EXTERNAL_LINKS` | `true` | Master switch for all external links |
+| `ALLOW_EXTERNAL_WIKIDATA_LINKS` | (mode-dependent) | Control Wikidata entity page links. Always `true` in online mode. |
+| `ALLOW_EXTERNAL_VIDEO_SOURCE_LINKS` | (master switch) | Control video source links (uploaderUrl, webpageUrl) |
+
+See [Local Wikibase documentation](../wikibase/overview.md) for detailed configuration.
+
 **Example** (in docker-compose.yml):
 ```yaml
 backend:

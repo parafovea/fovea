@@ -1,0 +1,222 @@
+# Docker Compose configuration for local Wikibase instance
+# Based on Wikibase Suite Deploy (https://github.com/wmde/wikibase-release-pipeline/tree/main/deploy)
+# Adapted for local development without SSL/Traefik
+#
+# Usage:
+#   docker compose -f docker-compose.wikibase.yml up -d
+#   docker compose -f docker-compose.wikibase.yml --profile loader run --rm wikibase-loader
+name: fovea-wikibase
+
+services:
+  # --------------------------------------------------
+  # A. CORE WIKIBASE SUITE SERVICES
+  # --------------------------------------------------
+
+  wikibase:
+    image: wikibase/wikibase:5
+    platform: linux/amd64
+    container_name: fovea-wikibase
+    depends_on:
+      wikibase-mysql:
+        condition: service_healthy
+      wikibase-elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "${WIKIBASE_PORT:-8181}:80"
+    volumes:
+      - ./wikibase/config:/config:z
+      - wikibase-image-data:/var/www/html/images
+    environment:
+      # Required: opt-out of metadata callback
+      METADATA_CALLBACK: "false"
+      # Admin configuration
+      MW_ADMIN_NAME: ${WIKIBASE_ADMIN_USER:-admin}
+      MW_ADMIN_PASS: ${WIKIBASE_ADMIN_PASS:-adminpass123}
+      MW_ADMIN_EMAIL: ${WIKIBASE_ADMIN_EMAIL:-admin@localhost}
+      # Server URL (HTTP for local dev)
+      MW_WG_SERVER: http://localhost:${WIKIBASE_PORT:-8181}
+      # Database configuration
+      DB_SERVER: wikibase-mysql:3306
+      DB_USER: ${WIKIBASE_DB_USER:-wikibase}
+      DB_PASS: ${WIKIBASE_DB_PASS:-wikibasepassword}
+      DB_NAME: ${WIKIBASE_DB_NAME:-wikibase}
+      # Elasticsearch
+      ELASTICSEARCH_HOST: wikibase-elasticsearch
+    networks:
+      - fovea-network
+    healthcheck:
+      test: curl --silent --fail localhost/wiki/Main_Page
+      interval: 10s
+      start_period: 5m
+
+  wikibase-jobrunner:
+    image: wikibase/wikibase:5
+    platform: linux/amd64
+    container_name: fovea-wikibase-jobrunner
+    command: /jobrunner-entrypoint.sh
+    depends_on:
+      wikibase:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes_from:
+      - wikibase
+    networks:
+      - fovea-network
+
+  wikibase-mysql:
+    image: mariadb:10.11
+    container_name: fovea-wikibase-mysql
+    restart: unless-stopped
+    ports:
+      - "${WIKIBASE_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - wikibase-mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${WIKIBASE_DB_NAME:-wikibase}
+      MYSQL_USER: ${WIKIBASE_DB_USER:-wikibase}
+      MYSQL_PASSWORD: ${WIKIBASE_DB_PASS:-wikibasepassword}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    networks:
+      - fovea-network
+    healthcheck:
+      test: healthcheck.sh --connect --innodb_initialized
+      start_period: 1m
+      interval: 20s
+      timeout: 5s
+
+  # --------------------------------------------------
+  # B. EXTRA WIKIBASE SUITE SERVICES
+  # --------------------------------------------------
+
+  wikibase-elasticsearch:
+    image: wikibase/elasticsearch:1
+    platform: linux/amd64
+    container_name: fovea-wikibase-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "${WIKIBASE_ES_PORT:-9201}:9200"
+    volumes:
+      - wikibase-elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms512m -Xmx512m -Dlog4j2.formatMsgNoLookups=true
+    networks:
+      - fovea-network
+    healthcheck:
+      test: curl --silent --fail localhost:9200
+      interval: 10s
+      start_period: 2m
+
+  # --------------------------------------------------
+  # C. DATA LOADER SERVICE
+  # --------------------------------------------------
+
+  wikibase-loader:
+    build:
+      context: ./wikibase
+      dockerfile: Dockerfile
+    container_name: fovea-wikibase-loader
+    depends_on:
+      wikibase:
+        condition: service_healthy
+    environment:
+      - WIKIBASE_URL=http://wikibase
+      - WIKIBASE_ADMIN_USER=${WIKIBASE_ADMIN_USER:-admin}
+      - WIKIBASE_ADMIN_PASS=${WIKIBASE_ADMIN_PASS:-adminpass123}
+      # Data loading mode (set one of these)
+      - WIKIDATA_DUMP_PATH=${WIKIDATA_DUMP_PATH:-}
+      - WIKIDATA_SPARQL_FILE=${WIKIDATA_SPARQL_FILE:-}
+      - WIKIDATA_ENTITIES=${WIKIDATA_ENTITIES:-}
+      - WIKIDATA_DEPTH=${WIKIDATA_DEPTH:-1}
+      - WIKIDATA_TYPES=${WIKIDATA_TYPES:-}
+      - WIKIDATA_CONFIG_FILE=${WIKIDATA_CONFIG_FILE:-}
+    volumes:
+      - ./wikibase/config:/app/config:ro
+      - ./wikibase/test-data:/app/test-data:ro
+      - ./wikibase/output:/app/output
+      - ${WIKIDATA_DATA_DIR:-./data}:/data:ro
+    networks:
+      - fovea-network
+    profiles:
+      - loader
+
+  # --------------------------------------------------
+  # D. OPTIONAL: WIKIDATA QUERY SERVICE
+  # --------------------------------------------------
+
+  wdqs:
+    image: wikibase/wdqs:2
+    platform: linux/amd64
+    container_name: fovea-wdqs
+    command: /runBlazegraph.sh
+    depends_on:
+      wikibase:
+        condition: service_healthy
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 32768
+    volumes:
+      - wdqs-data:/wdqs/data
+    networks:
+      - fovea-network
+    profiles:
+      - wdqs
+    healthcheck:
+      test: curl --silent --fail localhost:9999/bigdata/namespace/wdq/sparql
+      interval: 10s
+      start_period: 2m
+
+  wdqs-updater:
+    image: wikibase/wdqs:2
+    platform: linux/amd64
+    container_name: fovea-wdqs-updater
+    command: /runUpdate.sh
+    depends_on:
+      wdqs:
+        condition: service_healthy
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 32768
+    environment:
+      WIKIBASE_CONCEPT_URI: http://localhost:${WIKIBASE_PORT:-8181}
+    networks:
+      - fovea-network
+    profiles:
+      - wdqs
+
+  wdqs-proxy:
+    image: wikibase/wdqs-frontend:2
+    platform: linux/amd64
+    container_name: fovea-wdqs-proxy
+    restart: unless-stopped
+    ports:
+      - "${WDQS_PROXY_PORT:-8282}:80"
+    depends_on:
+      wdqs:
+        condition: service_healthy
+    environment:
+      WDQS_PUBLIC_URL: http://localhost:${WDQS_PROXY_PORT:-8282}/sparql
+      WIKIBASE_PUBLIC_URL: http://localhost:${WIKIBASE_PORT:-8181}/w/api.php
+    networks:
+      - fovea-network
+    profiles:
+      - wdqs
+    healthcheck:
+      test: curl --silent --fail localhost
+      interval: 10s
+      start_period: 2m
+
+networks:
+  fovea-network:
+    driver: bridge
+
+volumes:
+  wikibase-image-data:
+  wikibase-mysql-data:
+  wikibase-elasticsearch-data:
+  wdqs-data:
