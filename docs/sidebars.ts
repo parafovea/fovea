@@ -125,6 +125,17 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Local Wikibase',
+      items: [
+        'wikibase/overview',
+        'wikibase/setup',
+        'wikibase/data-loading',
+        'wikibase/external-links',
+        'wikibase/troubleshooting',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Operations',
       items: [
         {

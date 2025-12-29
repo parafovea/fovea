@@ -75,7 +75,7 @@ dev = [
     "pytest==8.0.0",
     "pytest-asyncio==0.23.5",
     "pytest-cov==4.1.0",
-    "ruff==0.2.1",
+    "ruff>=0.14.0",
     "mypy==1.8.0",
     "types-PyYAML>=6.0.0",
 ]
@@ -113,8 +113,6 @@ select = [
 ignore = [
     "E501",    # line too long (handled by formatter)
     "S101",    # use of assert (allowed in tests)
-    "ANN101",  # missing type annotation for self in method
-    "ANN102",  # missing type annotation for cls in classmethod
     "ANN003",  # missing type annotation for **kwargs (standard idiom)
     "ANN401",  # typing.Any is disallowed (too strict, needed for model objects)
     "T201",    # print found (logging is not set up yet, using print)
@@ -135,10 +133,20 @@ ignore = [
     "SIM117",  # nested with statements (clearer error handling)
     "SIM105",  # use contextlib.suppress (simpler try-except-pass for cleanup)
     "S110",    # try-except-pass without logging (cleanup errors are non-critical)
+    "SIM115",  # context manager for NamedTemporaryFile (we need file to persist beyond the block)
+    "TC006",   # quote type in cast() (not necessary in Python 3.12+)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004"]
+"test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004", "PLC0415", "RUF059"]
+# Loader files use deferred imports for lazy loading of heavy ML dependencies
+"src/*_loader.py" = ["PLC0415"]
+"src/model_manager.py" = ["PLC0415"]
+"src/routes.py" = ["PLC0415"]
+"src/summarization.py" = ["PLC0415"]
+"src/av_fusion.py" = ["PLC0415"]
+"src/external_apis/*.py" = ["PLC0415"]
+"src/external_apis/**/*.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"

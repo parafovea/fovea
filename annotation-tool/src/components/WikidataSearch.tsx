@@ -16,6 +16,7 @@ import {
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
 import { searchWikidata, getWikidataEntity, extractWikidataInfo } from '../services/wikidataApi'
+import { getWikidataBaseUrl } from '../services/wikidataConfig'
 import debounce from 'lodash/debounce'
 
 /**
@@ -149,7 +150,9 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
     try {
       const entity = await getWikidataEntity(value.id)
       if (entity) {
-        const info = extractWikidataInfo(entity)
+        // Get the base URL for wiki links (may be local Wikibase)
+        const baseUrl = await getWikidataBaseUrl()
+        const info = extractWikidataInfo(entity, baseUrl)
         setEntityDetails(info)
       }
     } finally {

@@ -43,6 +43,7 @@ export interface BaseObjectEditorProps {
   // Wikidata state
   wikidataId?: string
   wikidataUrl?: string
+  wikibaseId?: string
   importedFrom?: 'wikidata' | 'persona'
   importedAt?: string
   onWikidataSelect?: (item: any) => void
@@ -77,6 +78,7 @@ export default function BaseObjectEditor({
   setMetadata: _setMetadata,
   wikidataId,
   wikidataUrl,
+  wikibaseId,
   importedFrom,
   importedAt,
   onWikidataSelect,
@@ -130,9 +132,10 @@ export default function BaseObjectEditor({
             {/* Wikidata Chip */}
             {wikidataId && wikidataUrl && (
               <Box>
-                <WikidataChip 
+                <WikidataChip
                   wikidataId={wikidataId}
                   wikidataUrl={wikidataUrl}
+                  wikibaseId={wikibaseId}
                   importedAt={importedAt}
                 />
                 {importedFrom === 'wikidata' && (

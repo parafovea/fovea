@@ -212,7 +212,7 @@ async def extract_audio_segment(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -500,7 +500,7 @@ async def extract_audio_track(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"

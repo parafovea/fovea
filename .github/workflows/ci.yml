@@ -282,6 +282,69 @@ jobs:
             model-service/htmlcov/
           retention-days: 30
 
+  # Wikibase loader jobs run in parallel
+  lint-wikibase:
+    name: Wikibase Loader / Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: wikibase/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: wikibase
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff check
+        working-directory: wikibase
+        run: ruff check .
+
+      - name: Run ruff format check
+        working-directory: wikibase
+        run: ruff format --check .
+
+      - name: Run mypy
+        working-directory: wikibase
+        run: mypy scripts/
+
+  test-wikibase:
+    name: Wikibase Loader / Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: wikibase/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: wikibase
+        run: |
+          pip install --upgrade pip
+          pip install --no-cache-dir -e ".[dev]"
+
+      - name: Run tests
+        working-directory: wikibase
+        run: pytest --cov=scripts --cov-report=term -v
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wikibase-coverage
+          path: wikibase/coverage/
+          retention-days: 30
+
   # E2E tests require all services passing
   test-e2e:
     name: E2E Tests
@@ -352,6 +415,8 @@ jobs:
       - test-backend
       - build-backend
       - lint-model-service
+      - lint-wikibase
+      - test-wikibase
       - test-e2e
       # test-model-service disabled due to disk space constraints
     if: always()
@@ -375,6 +440,10 @@ jobs:
             echo "- Lint: ${{ needs.lint-model-service.result }}"
             echo "- Tests: skipped (disk space constraints)"
             echo ""
+            echo "### Wikibase Loader"
+            echo "- Lint: ${{ needs.lint-wikibase.result }}"
+            echo "- Tests: ${{ needs.test-wikibase.result }}"
+            echo ""
             echo "### Integration"
             echo "- E2E Tests: ${{ needs.test-e2e.result }} (smoke + functional only)"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -387,6 +456,8 @@ jobs:
           TEST_BACKEND="${{ needs.test-backend.result }}"
           BUILD_BACKEND="${{ needs.build-backend.result }}"
           LINT_MODEL="${{ needs.lint-model-service.result }}"
+          LINT_WIKIBASE="${{ needs.lint-wikibase.result }}"
+          TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
           TEST_E2E="${{ needs.test-e2e.result }}"
 
           if [ "$LINT_FRONTEND" != "success" ] || \
@@ -396,6 +467,8 @@ jobs:
              [ "$TEST_BACKEND" != "success" ] || \
              [ "$BUILD_BACKEND" != "success" ] || \
              [ "$LINT_MODEL" != "success" ] || \
+             [ "$LINT_WIKIBASE" != "success" ] || \
+             [ "$TEST_WIKIBASE" != "success" ] || \
              [ "$TEST_E2E" != "success" ]; then
             {
               echo ""
