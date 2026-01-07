@@ -9,7 +9,7 @@ import { generateId } from '../utils/uuid'
 export const fetchPersonas = createAsyncThunk(
   'persona/fetchPersonas',
   async () => {
-    const response = await fetch('/api/personas')
+    const response = await fetch('/api/personas', { credentials: 'include' })
     if (!response.ok) {
       throw new Error('Failed to fetch personas')
     }
@@ -25,7 +25,9 @@ export const fetchPersonas = createAsyncThunk(
 export const fetchPersonaOntology = createAsyncThunk(
   'persona/fetchPersonaOntology',
   async (personaId: string) => {
-    const response = await fetch(`/api/personas/${personaId}/ontology`)
+    const response = await fetch(`/api/personas/${personaId}/ontology`, {
+      credentials: 'include',
+    })
     if (!response.ok) {
       throw new Error('Failed to fetch persona ontology')
     }

@@ -693,11 +693,319 @@ export const handlers = [
     )
   }),
 
-  // Duplicate handlers for raw fetch() calls (without baseURL)
-  // These match requests from hooks that use fetch() directly instead of API client
+  // Duplicate handlers for relative URL requests (without baseURL)
+  // These match requests from hooks that use the ApiClient singleton with relative URLs
+  // Required for SSH port forwarding compatibility where all requests go through Vite proxy
 
   http.get('/api/annotations/:videoId', () => {
     return HttpResponse.json([])
+  }),
+
+  // Video summaries endpoints (relative URLs)
+  http.get('/api/videos/:videoId/summaries', () => {
+    return HttpResponse.json([
+      {
+        id: 'summary-1',
+        videoId: 'video-1',
+        personaId: 'persona-1',
+        summary: 'Baseball scout analyzing pitcher mechanics during spring training game',
+        visualAnalysis: 'Pitcher demonstrates consistent three-quarter arm slot with late breaking curveball',
+        audioTranscript: null,
+        keyFrames: [0, 150, 300],
+        confidence: 0.92,
+        createdAt: '2025-10-01T10:00:00Z',
+        updatedAt: '2025-10-01T10:00:00Z',
+      },
+    ])
+  }),
+
+  http.get('/api/videos/:videoId/summaries/:personaId', ({ params }) => {
+    const { personaId } = params
+    if (personaId === 'persona-missing') {
+      return new HttpResponse(null, { status: 404 })
+    }
+    return HttpResponse.json({
+      id: 'summary-1',
+      videoId: 'video-1',
+      personaId: personaId as string,
+      summary: 'Wildlife researcher documenting whale pod behavior',
+      visualAnalysis: 'Three adult humpback whales surface in coordinated breathing pattern',
+      audioTranscript: null,
+      keyFrames: [0, 180, 360],
+      confidence: 0.88,
+      createdAt: '2025-10-01T10:00:00Z',
+      updatedAt: '2025-10-01T10:00:00Z',
+    })
+  }),
+
+  http.post('/api/videos/summaries/generate', async ({ request }) => {
+    const body = await request.json() as { videoId: string; personaId: string }
+    return HttpResponse.json(
+      {
+        jobId: 'job-123',
+        videoId: body.videoId,
+        personaId: body.personaId,
+      },
+      { status: 202 }
+    )
+  }),
+
+  http.delete('/api/videos/:videoId/summaries/:personaId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('/api/summaries', async ({ request }) => {
+    const body = await request.json() as {
+      videoId: string
+      personaId: string
+      summary: string
+    }
+    return HttpResponse.json(
+      {
+        id: 'summary-new',
+        ...body,
+        createdAt: '2025-10-01T10:00:00Z',
+        updatedAt: '2025-10-01T10:00:00Z',
+      },
+      { status: 201 }
+    )
+  }),
+
+  http.get('/api/jobs/:jobId', ({ params }) => {
+    const { jobId } = params
+    if (jobId === 'job-active') {
+      return HttpResponse.json({
+        id: 'job-active',
+        state: 'active',
+        progress: 50,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+      })
+    }
+    if (jobId === 'job-completed') {
+      return HttpResponse.json({
+        id: 'job-completed',
+        state: 'completed',
+        progress: 100,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+        returnvalue: {
+          id: 'summary-1',
+          videoId: 'video-1',
+          personaId: 'persona-1',
+          summary: 'Retail analyst studying customer flow patterns',
+          visualAnalysis: 'Peak traffic occurs near product displays with promotional signage',
+          audioTranscript: null,
+          keyFrames: [0, 200, 400],
+          confidence: 0.85,
+          createdAt: '2025-10-01T10:00:00Z',
+          updatedAt: '2025-10-01T10:00:00Z',
+        },
+        finishedOn: Date.now(),
+      })
+    }
+    if (jobId === 'job-failed') {
+      return HttpResponse.json({
+        id: 'job-failed',
+        state: 'failed',
+        progress: 70,
+        data: {
+          videoId: 'video-1',
+          personaId: 'persona-1',
+        },
+        failedReason: 'Video file not found',
+      })
+    }
+    return HttpResponse.json({
+      id: jobId as string,
+      state: 'waiting',
+      progress: 0,
+      data: {
+        videoId: 'video-1',
+        personaId: 'persona-1',
+      },
+    })
+  }),
+
+  // Model endpoints (relative URLs)
+  http.get('/api/models/config', () => {
+    return HttpResponse.json({
+      models: {
+        vlm: {
+          selected: 'llava',
+          options: {
+            llava: {
+              modelId: 'llava-hf/llava-1.5-7b-hf',
+              framework: 'transformers',
+              vramGb: 14.0,
+              speed: 'medium',
+              description: 'Vision-language model for image understanding',
+              fps: 2.5,
+            },
+          },
+        },
+        detection: {
+          selected: 'owlv2',
+          options: {
+            owlv2: {
+              modelId: 'google/owlv2-base-patch16-ensemble',
+              framework: 'transformers',
+              vramGb: 4.0,
+              speed: 'fast',
+              description: 'Open-vocabulary object detection',
+              fps: 15.0,
+            },
+          },
+        },
+      },
+      inference: {
+        maxMemoryPerModel: 24.0,
+        offloadThreshold: 0.8,
+        warmupOnStartup: true,
+      },
+      cudaAvailable: true,
+    })
+  }),
+
+  http.post('/api/models/select', async ({ request }) => {
+    const url = new URL(request.url)
+    const taskType = url.searchParams.get('taskType')
+    const modelName = url.searchParams.get('modelName')
+    return HttpResponse.json({
+      status: 'success',
+      taskType: taskType,
+      selectedModel: modelName,
+    })
+  }),
+
+  http.post('/api/models/validate', () => {
+    return HttpResponse.json({
+      valid: true,
+      totalVramGb: 24.0,
+      totalRequiredGb: 18.0,
+      threshold: 0.8,
+      maxAllowedGb: 19.2,
+      modelRequirements: {
+        vlm: {
+          modelId: 'llava-hf/llava-1.5-7b-hf',
+          vramGb: 14.0,
+        },
+        detection: {
+          modelId: 'google/owlv2-base-patch16-ensemble',
+          vramGb: 4.0,
+        },
+      },
+    })
+  }),
+
+  http.get('/api/models/status', () => {
+    return HttpResponse.json({
+      loadedModels: [
+        {
+          modelId: 'llava-hf/llava-1.5-7b-hf',
+          taskType: 'vlm',
+          modelName: 'llava',
+          framework: 'transformers',
+          quantization: null,
+          health: 'loaded' as const,
+          vramAllocatedGb: 14.0,
+          vramUsedGb: 13.8,
+          warmUpComplete: true,
+          lastUsed: '2025-10-03T10:00:00Z',
+          loadTimeMs: 3456,
+          performanceMetrics: {
+            totalRequests: 150,
+            averageLatencyMs: 234.5,
+            requestsPerSecond: 0.8,
+            averageFps: 2.5,
+          },
+          errorMessage: null,
+        },
+      ],
+      totalVramAllocatedGb: 14.0,
+      totalVramAvailableGb: 24.0,
+      timestamp: '2025-10-03T10:00:00Z',
+      cudaAvailable: true,
+    })
+  }),
+
+  // Ontology augmentation (relative URL)
+  http.post('/api/ontology/augment', async ({ request }) => {
+    const body = await request.json() as {
+      personaId: string
+      domain: string
+      targetCategory: string
+    }
+    return HttpResponse.json({
+      id: 'augment-1',
+      personaId: body.personaId,
+      targetCategory: body.targetCategory,
+      suggestions: [
+        {
+          name: 'Home Run',
+          description: 'A hit that allows the batter to circle all bases and score',
+          parent: 'Scoring Play',
+          confidence: 0.95,
+          examples: ['Grand slam', 'Solo homer', 'Walk-off home run'],
+        },
+        {
+          name: 'Strike Out',
+          description: 'When a batter accumulates three strikes during an at-bat',
+          parent: null,
+          confidence: 0.92,
+          examples: ['Swinging strikeout', 'Called strikeout', 'Caught looking'],
+        },
+      ],
+      reasoning: 'Based on baseball domain analysis and existing event types',
+    })
+  }),
+
+  // Object detection (relative URL)
+  http.post('/api/videos/:videoId/detect', async ({ request }) => {
+    const body = await request.json() as { manualQuery?: string }
+    return HttpResponse.json({
+      id: 'detection-1',
+      videoId: 'video-1',
+      query: body.manualQuery || 'baseball, bat, glove',
+      frames: [
+        {
+          frameNumber: 0,
+          timestamp: 0.0,
+          detections: [
+            {
+              label: 'baseball',
+              boundingBox: { x: 0.45, y: 0.3, width: 0.05, height: 0.05 },
+              confidence: 0.94,
+              trackId: 'track-1',
+            },
+            {
+              label: 'bat',
+              boundingBox: { x: 0.2, y: 0.4, width: 0.3, height: 0.1 },
+              confidence: 0.89,
+              trackId: 'track-2',
+            },
+          ],
+        },
+        {
+          frameNumber: 30,
+          timestamp: 1.0,
+          detections: [
+            {
+              label: 'baseball',
+              boundingBox: { x: 0.6, y: 0.25, width: 0.05, height: 0.05 },
+              confidence: 0.91,
+              trackId: 'track-1',
+            },
+          ],
+        },
+      ],
+      totalDetections: 3,
+      processingTime: 2.34,
+    })
   }),
 
   http.get('/api/admin/users/:userId', ({ params }) => {

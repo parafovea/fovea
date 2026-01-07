@@ -1,6 +1,10 @@
 import axios from 'axios'
 import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats, ImportOptions, ImportPreview, ImportResult, ImportHistoryItem } from '../models/types'
 
+// Configure axios to include credentials (cookies) with all requests
+// Required for Safari and other browsers with strict cookie policies
+axios.defaults.withCredentials = true
+
 const API_BASE = '/api'
 
 /**

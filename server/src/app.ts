@@ -71,8 +71,16 @@ export async function buildApp() {
     })
   }
 
+  // CORS configuration with credentials support
+  // Include both localhost and 127.0.0.1 to handle browser differences
+  // Some browsers treat localhost and 127.0.0.1 as different origins
   await app.register(fastifyCors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000'
+    ],
     credentials: true
   })
 

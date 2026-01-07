@@ -435,7 +435,7 @@ export default function AnnotationWorkspace() {
    */
   const loadVideo = useCallback(async () => {
     try {
-      const response = await fetch(`/api/videos/${videoId}`)
+      const response = await fetch(`/api/videos/${videoId}`, { credentials: 'include' })
       const data = await response.json()
       dispatch(setCurrentVideo(data))
     } catch (error) {
