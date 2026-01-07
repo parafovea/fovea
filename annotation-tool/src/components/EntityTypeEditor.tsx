@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   FormControl,
@@ -11,13 +10,18 @@ import {
   IconButton,
   Typography,
 } from '@mui/material'
-import { 
+import {
   Category as EntityTypeIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { addEntityToPersona, updateEntityInPersona, deleteEntityFromPersona } from '../store/personaSlice'
+import {
+  usePersonas,
+  usePersonaOntology,
+  useAddEntityToPersona,
+  useUpdateEntityInPersona,
+  useDeleteEntityFromPersona,
+} from '../store/queries'
 import { EntityType, GlossItem } from '../models/types'
 import BaseTypeEditor from './shared/BaseTypeEditor'
 
@@ -29,15 +33,25 @@ interface EntityTypeEditorProps {
 }
 
 export default function EntityTypeEditor({ open, onClose, entity, personaId }: EntityTypeEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const { mutate: addEntity } = useAddEntityToPersona()
+  const { mutate: updateEntity } = useUpdateEntityInPersona()
+  const { mutate: deleteEntity } = useDeleteEntityFromPersona()
+
   // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [examples, setExamples] = useState<string[]>([])
   const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
-  const [sourcePersonaId, setSourcePersonaId] = useState('')
+  const [sourcePersonaId, setSourcePersonaIdState] = useState('')
+
+  // Fetch source persona's ontology when copying
+  const { data: sourceOntology } = usePersonaOntology(sourcePersonaId || null)
+
+  const setSourcePersonaId = (id: string) => {
+    setSourcePersonaIdState(id)
+  }
   const [sourceEntityId, setSourceEntityId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [wikidataId, setWikidataId] = useState<string>('')
@@ -71,9 +85,8 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
 
   useEffect(() => {
     // When copying from another persona, populate the fields
-    if (mode === 'copy' && sourcePersonaId && sourceEntityId) {
-      const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-      const sourceEntity = sourceOntology?.entities.find(e => e.id === sourceEntityId)
+    if (mode === 'copy' && sourcePersonaId && sourceEntityId && sourceOntology) {
+      const sourceEntity = sourceOntology.entities.find(e => e.id === sourceEntityId)
       if (sourceEntity) {
         setName(sourceEntity.name)
         setGloss(sourceEntity.gloss)
@@ -83,11 +96,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
         setImportedAt(sourceEntity.importedAt || '')
       }
     }
-  }, [mode, sourcePersonaId, sourceEntityId, personaOntologies])
+  }, [mode, sourcePersonaId, sourceEntityId, sourceOntology])
 
   const handleSave = () => {
     const now = new Date().toISOString()
-    
+
     // If editing existing, update it
     if (entity) {
       const entityData: EntityType = {
@@ -100,9 +113,9 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
         importedAt: wikidataId ? (importedAt || now) : undefined,
         updatedAt: now,
       }
-      
+
       if (personaId) {
-        dispatch(updateEntityInPersona({ personaId, entity: entityData }))
+        updateEntity({ personaId, entity: entityData })
       }
     } else {
       // Creating new entity types for selected personas
@@ -119,17 +132,17 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
           createdAt: now,
           updatedAt: now,
         }
-        
-        dispatch(addEntityToPersona({ personaId: targetId, entity: entityData }))
+
+        addEntity({ personaId: targetId, entity: entityData })
       })
     }
-    
+
     onClose()
   }
 
   const handleDelete = () => {
     if (entity && personaId) {
-      dispatch(deleteEntityFromPersona({ personaId, entityId: entity.id }))
+      deleteEntity({ personaId, entityId: entity.id })
       onClose()
     }
   }
@@ -201,8 +214,8 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
           ))}
         </Select>
       </FormControl>
-      
-      {sourcePersonaId && (
+
+      {sourcePersonaId && sourceOntology && (
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Source Entity Type</InputLabel>
           <Select
@@ -210,13 +223,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             onChange={(e) => setSourceEntityId(e.target.value)}
             label="Source Entity Type"
           >
-            {personaOntologies
-              .find(o => o.personaId === sourcePersonaId)
-              ?.entities.map(entity => (
-                <MenuItem key={entity.id} value={entity.id}>
-                  {entity.name}
-                </MenuItem>
-              ))}
+            {sourceOntology.entities.map(entity => (
+              <MenuItem key={entity.id} value={entity.id}>
+                {entity.name}
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
       )}

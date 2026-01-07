@@ -1,7 +1,5 @@
 import { useEffect } from 'react'
-import { useDispatch } from 'react-redux'
-import { loginSuccess, logoutSuccess, setLoading, setConfig, AppConfig } from '../../store/userSlice.js'
-import { AppDispatch } from '../../store/store.js'
+import { useAuthStore, AppConfig } from '../../store/zustand/authStore.js'
 
 /** Default Wikidata API URL */
 const DEFAULT_WIKIDATA_URL = 'https://www.wikidata.org/w/api.php'
@@ -36,33 +34,36 @@ function parseConfig(apiConfig: Record<string, unknown>): AppConfig {
  * Call this hook in the root App component.
  */
 export function useSession(): void {
-  const dispatch = useDispatch<AppDispatch>()
+  const setLoading = useAuthStore(state => state.setLoading)
+  const setConfig = useAuthStore(state => state.setConfig)
+  const loginSuccess = useAuthStore(state => state.loginSuccess)
+  const logoutSuccess = useAuthStore(state => state.logoutSuccess)
 
   useEffect(() => {
     const checkSession = async () => {
-      dispatch(setLoading(true))
+      setLoading(true)
       try {
         // Fetch config first to determine mode
         const configResponse = await fetch('/api/config', { credentials: 'include' })
         if (configResponse.ok) {
           const apiConfig = await configResponse.json()
-          dispatch(setConfig(parseConfig(apiConfig)))
+          setConfig(parseConfig(apiConfig))
         }
 
         // Then check session
         const response = await fetch('/api/auth/me', { credentials: 'include' })
         if (response.ok) {
           const { user } = await response.json()
-          dispatch(loginSuccess(user))
+          loginSuccess(user)
         } else {
-          dispatch(logoutSuccess())
+          logoutSuccess()
         }
       } catch (error) {
         console.error('Session check error:', error)
-        dispatch(logoutSuccess())
+        logoutSuccess()
       }
     }
 
     checkSession()
-  }, [dispatch])
+  }, [setLoading, setConfig, loginSuccess, logoutSuccess])
 }

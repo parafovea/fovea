@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -31,8 +30,8 @@ import {
   Inventory2 as ObjectIcon,
   Language as WikidataIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { addEntity, updateEntity } from '../../store/worldSlice'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
 import { Entity, EntityTypeAssignment, GlossItem } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
@@ -45,8 +44,15 @@ interface EntityEditorProps {
 }
 
 export default function EntityEditor({ open, onClose, entity }: EntityEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies, activePersonaId } = useSelector((state: RootState) => state.persona)
+  // TanStack Query hooks for personas
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map((p) => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
+  const { mutate: addEntity } = useAddEntity()
+  const { mutate: updateEntity } = useUpdateEntity()
+
+  // Active persona from Zustand store
+  const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -122,9 +128,9 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     }
 
     if (entity) {
-      dispatch(updateEntity({ ...entity, ...entityData }))
+      updateEntity({ ...entity, ...entityData })
     } else {
-      dispatch(addEntity(entityData))
+      addEntity(entityData)
     }
 
     onClose()

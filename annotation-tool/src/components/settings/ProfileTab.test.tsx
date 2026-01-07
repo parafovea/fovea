@@ -2,13 +2,13 @@
  * Tests for ProfileTab component.
  */
 
-import { describe, it, expect } from 'vitest'
-import { screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
 import ProfileTab from './ProfileTab.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 describe('ProfileTab', () => {
   const mockUser = {
@@ -17,19 +17,19 @@ describe('ProfileTab', () => {
     displayName: 'Test User',
     email: 'test@example.com',
     isAdmin: false,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z',
   }
 
+  beforeEach(() => {
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
+    server.resetHandlers()
+  })
+
   it('renders profile form with pre-filled data', async () => {
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -39,16 +39,8 @@ describe('ProfileTab', () => {
   })
 
   it('username field is disabled with helper text', async () => {
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -59,17 +51,8 @@ describe('ProfileTab', () => {
 
   it('display name can be edited', async () => {
     const user = userEvent.setup()
-
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -82,17 +65,8 @@ describe('ProfileTab', () => {
 
   it('email can be edited', async () => {
     const user = userEvent.setup()
-
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -105,17 +79,8 @@ describe('ProfileTab', () => {
 
   it('validates display name required', async () => {
     const user = userEvent.setup()
-
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
@@ -132,17 +97,8 @@ describe('ProfileTab', () => {
 
   it('validates email format', async () => {
     const user = userEvent.setup()
-
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
@@ -166,25 +122,15 @@ describe('ProfileTab', () => {
       http.put('/api/user/profile', async ({ request }) => {
         savedProfile = await request.json()
         return HttpResponse.json({
-          user: {
-            ...mockUser,
-            displayName: savedProfile.displayName,
-            email: savedProfile.email,
-          },
+          ...mockUser,
+          displayName: savedProfile.displayName,
+          email: savedProfile.email,
         })
       })
     )
 
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
@@ -204,16 +150,14 @@ describe('ProfileTab', () => {
   it('shows success message on save', async () => {
     const user = userEvent.setup()
 
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    server.use(
+      http.put('/api/user/profile', () => {
+        return HttpResponse.json(mockUser)
+      })
+    )
+
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
@@ -241,16 +185,8 @@ describe('ProfileTab', () => {
       })
     )
 
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
@@ -267,16 +203,8 @@ describe('ProfileTab', () => {
   })
 
   it('password section visible when showPasswordChange=true', async () => {
-    renderWithProviders(<ProfileTab showPasswordChange={true} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={true} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -285,16 +213,8 @@ describe('ProfileTab', () => {
   })
 
   it('password section hidden when showPasswordChange=false', async () => {
-    renderWithProviders(<ProfileTab showPasswordChange={false} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={false} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -303,17 +223,8 @@ describe('ProfileTab', () => {
 
   it('validates password fields', async () => {
     const user = userEvent.setup()
-
-    renderWithProviders(<ProfileTab showPasswordChange={true} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={true} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -379,20 +290,12 @@ describe('ProfileTab', () => {
     server.use(
       http.put('/api/user/profile', async ({ request }) => {
         passwordPayload = await request.json()
-        return HttpResponse.json({ user: mockUser })
+        return HttpResponse.json(mockUser)
       })
     )
 
-    renderWithProviders(<ProfileTab showPasswordChange={true} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={true} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 
@@ -424,16 +327,14 @@ describe('ProfileTab', () => {
   it('clears password form on success', async () => {
     const user = userEvent.setup()
 
-    renderWithProviders(<ProfileTab showPasswordChange={true} />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    server.use(
+      http.put('/api/user/profile', () => {
+        return HttpResponse.json(mockUser)
+      })
+    )
+
+    useAuthStore.getState().loginSuccess(mockUser)
+    render(<ProfileTab showPasswordChange={true} />)
 
     await screen.findByRole('button', { name: /save profile/i })
 

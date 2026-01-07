@@ -1,206 +1,78 @@
 /**
  * @module seedTestData
  * @description Seed data utility for developer testing mode.
- * Pre-populates Redux store with tactical analyst persona, Wikidata-based ontology,
- * and sample entities/locations extracted from video metadata.
+ * NOTE: This utility is temporarily disabled during the state management migration.
+ * It will be re-enabled after Phase 3 when Redux is fully removed.
  *
  * IMPORTANT: This should only be used in development with VITE_ENABLE_TEST_DATA=true
  */
 
-import { store } from '../store/store'
-import {
-  addPersona,
-  setActivePersona,
-  addEntityToPersona,
-  addEventToPersona,
-  addRoleToPersona,
-} from '../store/personaSlice'
-import { addEntity } from '../store/worldSlice'
+import { fetchWorldState, saveWorldState, WorldState } from '../store/queries/useWorld'
+import { Entity } from '../models/types'
 import { generateId } from './uuid'
 
 /**
- * Seed test data into Redux store for developer testing.
+ * Seed test data for developer testing.
  * Only runs when VITE_ENABLE_TEST_DATA environment variable is set to 'true'.
  *
- * Pre-populates:
- * - Tactical analyst persona (disaster response focus)
- * - Entity types with Wikidata references
- * - Event types with Wikidata references
- * - Role types with Wikidata references
- * - Sample entities (locations, organizations) from video metadata
- * - GPS-tagged locations
+ * NOTE: Persona and ontology seeding is temporarily disabled during state management migration.
+ * Currently only seeds world entities (locations, organizations).
  */
 export async function seedTestData(): Promise<void> {
-  // Create tactical analyst persona and ontology
-  const personaId = generateId()
-  const persona = {
-    id: personaId,
-    name: 'Tactical Disaster Response Analyst',
-    role: 'Intelligence Analyst',
-    informationNeed: 'Track and assess natural disaster impacts, infrastructure damage, emergency response activities, and affected populations to support tactical decision-making and resource allocation.',
-    details: 'Focused on rapid assessment of disaster events including dust storms, earthquakes, container ship incidents, and other hazardous situations. Prioritizes identification of damaged infrastructure, affected locations, response organizations, and impact on civilian populations.',
-    isSystemGenerated: false,
-    hidden: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
+  const now = new Date().toISOString()
 
-  const ontology = {
-    id: generateId(),
-    personaId,
-    entities: [],
-    roles: [],
-    events: [],
-    relationTypes: [],
-    relations: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-
-  store.dispatch(addPersona({ persona, ontology }))
-  store.dispatch(setActivePersona(personaId))
-
-  // Entity Types with Wikidata references
-  const entityTypes = [
-    {
-      id: generateId(),
-      name: 'Infrastructure',
-      gloss: [{ type: 'text' as const, content: 'Physical structures and facilities including ports, airports, roads, buildings, and utilities' }],
-      wikidataId: 'Q121359', // Infrastructure
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Natural Phenomenon',
-      gloss: [{ type: 'text' as const, content: 'Weather events, natural disasters, and environmental phenomena' }],
-      wikidataId: 'Q1322005', // Natural phenomenon
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Organization',
-      gloss: [{ type: 'text' as const, content: 'Response organizations, government agencies, news outlets, and commercial entities' }],
-      wikidataId: 'Q43229', // Organization
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Person',
-      gloss: [{ type: 'text' as const, content: 'Individuals affected by or responding to disaster events' }],
-      wikidataId: 'Q5', // Human
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]
-
-  entityTypes.forEach(entity => store.dispatch(addEntityToPersona({ personaId, entity })))
-
-  // Event Types with Wikidata references
-  const eventTypes = [
-    {
-      id: generateId(),
-      name: 'Disaster Event',
-      gloss: [{ type: 'text' as const, content: 'Natural or human-caused disaster occurrence' }],
-      wikidataId: 'Q3839081', // Natural disaster
-      roles: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Response Action',
-      gloss: [{ type: 'text' as const, content: 'Emergency response and recovery activities' }],
-      wikidataId: 'Q1460335', // Emergency management
-      roles: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Impact Event',
-      gloss: [{ type: 'text' as const, content: 'Observable effects and consequences of disaster' }],
-      wikidataId: 'Q1190554', // Impact
-      roles: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]
-
-  eventTypes.forEach(event => store.dispatch(addEventToPersona({ personaId, event })))
-
-  // Role Types with Wikidata references
-  const roleTypes = [
-    {
-      id: generateId(),
-      name: 'Affected Party',
-      gloss: [{ type: 'text' as const, content: 'Individual or entity impacted by disaster event' }],
-      wikidataId: 'Q1802668', // Victim
-      allowedFillerTypes: ['entity' as const, 'event' as const],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Responder',
-      gloss: [{ type: 'text' as const, content: 'Person or organization providing emergency response' }],
-      wikidataId: 'Q1473346', // First responder
-      allowedFillerTypes: ['entity' as const, 'event' as const],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: generateId(),
-      name: 'Reporter',
-      gloss: [{ type: 'text' as const, content: 'Individual or organization documenting the event' }],
-      wikidataId: 'Q1930187', // Journalist
-      allowedFillerTypes: ['entity' as const, 'event' as const],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]
-
-  roleTypes.forEach(role => store.dispatch(addRoleToPersona({ personaId, role })))
+  // TODO: Re-enable persona seeding after Phase 3 of state management migration
+  // For now, only seed world entities which don't depend on Redux
+  console.log('[seedTestData] Persona seeding temporarily disabled during migration. Seeding world entities only.')
 
   // Sample Entities with Wikidata references (based on video content)
-  const entities = [
+  const entities: Entity[] = [
     {
+      id: generateId(),
       name: 'Port of Long Beach',
       description: [{ type: 'text' as const, content: 'Major seaport in Long Beach, California. Second-busiest container port in the United States.' }],
       wikidataId: 'Q1144228',
       typeAssignments: [],
       metadata: {},
+      createdAt: now,
+      updatedAt: now,
     },
     {
+      id: generateId(),
       name: 'Phoenix Sky Harbor International Airport',
       description: [{ type: 'text' as const, content: 'Primary airport serving Phoenix, Arizona metropolitan area.' }],
       wikidataId: 'Q845278',
       typeAssignments: [],
       metadata: {},
+      createdAt: now,
+      updatedAt: now,
     },
     {
+      id: generateId(),
       name: 'ABC7 Eyewitness News',
       description: [{ type: 'text' as const, content: 'Los Angeles-based television news organization (KABC-TV).' }],
       wikidataId: 'Q4649870',
       typeAssignments: [],
       metadata: {},
+      createdAt: now,
+      updatedAt: now,
     },
     {
+      id: generateId(),
       name: 'National Weather Service',
       description: [{ type: 'text' as const, content: 'U.S. government agency providing weather forecasts and warnings.' }],
       wikidataId: 'Q850795',
       typeAssignments: [],
       metadata: {},
+      createdAt: now,
+      updatedAt: now,
     },
   ]
 
-  entities.forEach(entity => store.dispatch(addEntity(entity)))
-
   // Sample Locations with GPS coordinates (locations are entities with location-specific fields)
-  const locations = [
+  const locations: Entity[] = [
     {
+      id: generateId(),
       name: 'Phoenix, Arizona',
       description: [{ type: 'text' as const, content: 'State capital and largest city in Arizona. Frequent dust storm activity.' }],
       wikidataId: 'Q16556',
@@ -211,8 +83,11 @@ export async function seedTestData(): Promise<void> {
         latitude: 33.4484,
         longitude: -112.0740,
       },
-    },
+      createdAt: now,
+      updatedAt: now,
+    } as Entity,
     {
+      id: generateId(),
       name: 'Long Beach, California',
       description: [{ type: 'text' as const, content: 'Coastal city in Los Angeles County, home to major seaport.' }],
       wikidataId: 'Q49085',
@@ -223,8 +98,11 @@ export async function seedTestData(): Promise<void> {
         latitude: 33.7701,
         longitude: -118.1937,
       },
-    },
+      createdAt: now,
+      updatedAt: now,
+    } as Entity,
     {
+      id: generateId(),
       name: 'Kunar Province, Afghanistan',
       description: [{ type: 'text' as const, content: 'Eastern province of Afghanistan, seismically active region.' }],
       wikidataId: 'Q173570',
@@ -235,8 +113,11 @@ export async function seedTestData(): Promise<void> {
         latitude: 34.8458,
         longitude: 71.0936,
       },
-    },
+      createdAt: now,
+      updatedAt: now,
+    } as Entity,
     {
+      id: generateId(),
       name: 'Black Rock Desert, Nevada',
       description: [{ type: 'text' as const, content: 'Desert region in northwestern Nevada, site of Burning Man festival.' }],
       wikidataId: 'Q894825',
@@ -247,10 +128,24 @@ export async function seedTestData(): Promise<void> {
         latitude: 40.8736,
         longitude: -119.0653,
       },
-    },
+      createdAt: now,
+      updatedAt: now,
+    } as Entity,
   ]
 
-  locations.forEach(location => store.dispatch(addEntity(location)))
+  // Save entities to world state via API
+  try {
+    const currentState = await fetchWorldState()
+    const allNewEntities = [...entities, ...locations]
+    const newState: Partial<WorldState> = {
+      ...currentState,
+      entities: [...(currentState.entities || []), ...allNewEntities],
+    }
+    await saveWorldState(newState)
+  } catch {
+    // If API fails (e.g., server not running), log and continue
+    console.warn('Could not save seed entities via API - world state may not persist')
+  }
 }
 
 /**

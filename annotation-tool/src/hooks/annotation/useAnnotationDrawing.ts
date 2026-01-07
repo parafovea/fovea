@@ -5,15 +5,8 @@
  */
 
 import { useState, useCallback, RefObject } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../../store/store'
-import {
-  setTemporaryBox,
-  addAnnotation,
-  clearDrawingState,
-  selectAnnotation,
-} from '../../store/annotationSlice'
-import { generateId } from '../../utils/uuid'
+import { useAnnotationUiStore } from '../../store/zustand'
+import { useAddAnnotation } from '../../store/queries'
 
 /**
  * @interface BoundingBox
@@ -50,7 +43,7 @@ interface UseAnnotationDrawingReturn {
   isDrawing: boolean
   /** Start point of drawing in video coordinates */
   startPoint: { x: number; y: number }
-  /** Temporary box being drawn (from Redux state) */
+  /** Temporary box being drawn (from Zustand state) */
   temporaryBox: BoundingBox | null
   /** Whether drawing is allowed based on current mode */
   canDraw: boolean
@@ -96,18 +89,25 @@ export function useAnnotationDrawing({
   videoWidth,
   videoHeight,
 }: UseAnnotationDrawingParams): UseAnnotationDrawingReturn {
-  const dispatch = useDispatch<AppDispatch>()
   const [isDrawing, setIsDrawing] = useState(false)
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 })
 
-  // Redux selectors for drawing mode and state
-  const drawingMode = useSelector((state: RootState) => state.annotations.drawingMode)
-  const temporaryBox = useSelector((state: RootState) => state.annotations.temporaryBox)
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
-  const selectedTypeId = useSelector((state: RootState) => state.annotations.selectedTypeId)
-  const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
-  const linkTargetId = useSelector((state: RootState) => state.annotations.linkTargetId)
-  const linkTargetType = useSelector((state: RootState) => state.annotations.linkTargetType)
+  // Zustand selectors for drawing mode and state
+  const drawingMode = useAnnotationUiStore((state) => state.drawingMode)
+  const temporaryBox = useAnnotationUiStore((state) => state.temporaryBox)
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const selectedTypeId = useAnnotationUiStore((state) => state.selectedTypeId)
+  const annotationMode = useAnnotationUiStore((state) => state.annotationMode)
+  const linkTargetId = useAnnotationUiStore((state) => state.linkTargetId)
+  const linkTargetType = useAnnotationUiStore((state) => state.linkTargetType)
+
+  // Zustand actions
+  const setTemporaryBox = useAnnotationUiStore((state) => state.setTemporaryBox)
+  const setSelectedAnnotation = useAnnotationUiStore((state) => state.setSelectedAnnotation)
+  const resetDrawingState = useAnnotationUiStore((state) => state.resetDrawingState)
+
+  // TanStack Query mutation for adding annotations
+  const { mutate: addAnnotation } = useAddAnnotation()
 
   /**
    * Determines if drawing is allowed based on current annotation mode and requirements.
@@ -172,7 +172,7 @@ export function useAnnotationDrawing({
   /**
    * Handle mouse move event during drawing to update temporary bounding box.
    * Calculates normalized rectangle from start point to current cursor position
-   * and dispatches to Redux for visual preview.
+   * and updates Zustand store for visual preview.
    *
    * @param e - Mouse event from SVG element
    * @param svgRef - Reference to SVG element
@@ -190,9 +190,9 @@ export function useAnnotationDrawing({
         height: Math.abs(coords.y - startPoint.y),
       }
 
-      dispatch(setTemporaryBox(box))
+      setTemporaryBox(box)
     },
-    [isDrawing, startPoint, getRelativeCoordinates, dispatch]
+    [isDrawing, startPoint, getRelativeCoordinates, setTemporaryBox]
   )
 
   /**
@@ -213,7 +213,6 @@ export function useAnnotationDrawing({
       const endFrame = currentFrame + fps // 1 second duration
 
       const annotation: any = {
-        id: generateId(),
         videoId,
         annotationType: annotationMode,
         boundingBoxSequence: {
@@ -266,13 +265,16 @@ export function useAnnotationDrawing({
         }
       }
 
-      dispatch(addAnnotation(annotation))
-      // Auto-select the newly created annotation to show timeline
-      dispatch(selectAnnotation(annotation))
+      addAnnotation(annotation, {
+        onSuccess: (savedAnnotation) => {
+          // Auto-select the newly created annotation to show timeline
+          setSelectedAnnotation(savedAnnotation)
+        },
+      })
     }
 
     setIsDrawing(false)
-    dispatch(clearDrawingState())
+    resetDrawingState()
   }, [
     isDrawing,
     temporaryBox,
@@ -285,7 +287,9 @@ export function useAnnotationDrawing({
     linkTargetId,
     linkTargetType,
     canDraw,
-    dispatch,
+    addAnnotation,
+    setSelectedAnnotation,
+    resetDrawingState,
   ])
 
   return {

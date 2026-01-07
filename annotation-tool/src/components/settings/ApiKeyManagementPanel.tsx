@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Box,
   Button,
@@ -29,8 +28,8 @@ import {
   ToggleOn as ToggleOnIcon,
   ToggleOff as ToggleOffIcon,
 } from '@mui/icons-material'
-import { RootState } from '../../store/store.js'
-import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '../../hooks/useApiKeys.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '../../store/queries/useApiKeys.js'
 import ApiKeyDialog from './ApiKeyDialog.js'
 import ConfirmDialog from '../shared/ConfirmDialog.js'
 
@@ -39,7 +38,7 @@ import ConfirmDialog from '../shared/ConfirmDialog.js'
  * Displays list of user API keys and admin keys with management options.
  */
 export default function ApiKeyManagementPanel() {
-  const { currentUser } = useSelector((state: RootState) => state.user)
+  const currentUser = useAuthStore(state => state.currentUser)
   const { data: apiKeys = [], isLoading, error } = useAllApiKeys(currentUser?.isAdmin || false)
   const deleteApiKey = useDeleteApiKey()
   const updateApiKey = useUpdateApiKey()

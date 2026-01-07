@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
 import {
   Box,
@@ -32,9 +31,14 @@ import {
   Language as WikidataIcon,
   Collections as CollectionIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { deleteEntity, deleteEvent, deleteTime, deleteEntityCollection, deleteEventCollection, loadWorldState, saveWorldState } from '../../store/worldSlice'
-import { fetchPersonas, fetchPersonaOntology } from '../../store/personaSlice'
+import {
+  useWorld,
+  useDeleteEntity,
+  useDeleteEvent,
+  useDeleteTime,
+  useDeleteEntityCollection,
+  useDeleteEventCollection,
+} from '../../store/queries'
 import { Entity, LocationPoint, LocationExtent, EntityCollection, EventCollection } from '../../models/types'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
@@ -70,9 +74,21 @@ function isLocation(entity: Entity): entity is LocationPoint | LocationExtent {
 }
 
 export default function ObjectWorkspace() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { entities, events, times, entityCollections, eventCollections, timeCollections, relations } = useSelector((state: RootState) => state.world)
-  const { personaOntologies } = useSelector((state: RootState) => state.persona)
+  // World data from TanStack Query
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const events = worldData?.events ?? []
+  const times = worldData?.times ?? []
+  const entityCollections = worldData?.entityCollections ?? []
+  const eventCollections = worldData?.eventCollections ?? []
+
+  // Mutation hooks
+  const { mutate: deleteEntityMutate } = useDeleteEntity()
+  const { mutate: deleteEventMutate } = useDeleteEvent()
+  const { mutate: deleteTimeMutate } = useDeleteTime()
+  const { mutate: deleteEntityCollectionMutate } = useDeleteEntityCollection()
+  const { mutate: deleteEventCollectionMutate } = useDeleteEventCollection()
+
   const locations = entities.filter(isLocation) // Locations are specialized entities
   
   const [tabValue, setTabValue] = useState(0)
@@ -197,19 +213,15 @@ export default function ObjectWorkspace() {
   const filteredAllCollections = [...filteredEntityCollections, ...filteredEventCollections]
 
   const getEntityTypeNames = (entity: typeof entities[0]) => {
-    return entity.typeAssignments.map(assignment => {
-      const ontology = personaOntologies.find(o => o.personaId === assignment.personaId)
-      const entityType = ontology?.entities.find(e => e.id === assignment.entityTypeId)
-      return entityType?.name || 'Unknown'
-    }).join(', ')
+    // Show number of type assignments
+    const count = entity.typeAssignments.length
+    return count > 0 ? `${count} type${count > 1 ? 's' : ''}` : 'Untyped'
   }
 
   const getEventTypeNames = (event: typeof events[0]) => {
-    return event.personaInterpretations.map(interp => {
-      const ontology = personaOntologies.find(o => o.personaId === interp.personaId)
-      const eventType = ontology?.events.find(e => e.id === interp.eventTypeId)
-      return eventType?.name || 'Unknown'
-    }).join(', ')
+    // Show number of persona interpretations
+    const count = event.personaInterpretations.length
+    return count > 0 ? `${count} interpretation${count > 1 ? 's' : ''}` : 'No interpretations'
   }
   
   const formatTimeDisplay = (time: typeof times[0]): string => {
@@ -352,15 +364,15 @@ export default function ObjectWorkspace() {
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex] as any
         switch(tabValue) {
-          case 0: dispatch(deleteEntity(item.id)); break
-          case 1: dispatch(deleteEvent(item.id)); break
-          case 2: dispatch(deleteEntity(item.id)); break // Locations are entities
-          case 3: dispatch(deleteTime(item.id)); break
+          case 0: deleteEntityMutate(item.id); break
+          case 1: deleteEventMutate(item.id); break
+          case 2: deleteEntityMutate(item.id); break // Locations are entities
+          case 3: deleteTimeMutate(item.id); break
           case 4:
             if ('entityIds' in item) {
-              dispatch(deleteEntityCollection(item.id))
+              deleteEntityCollectionMutate(item.id)
             } else {
-              dispatch(deleteEventCollection(item.id))
+              deleteEventCollectionMutate(item.id)
             }
             break
         }
@@ -382,27 +394,6 @@ export default function ObjectWorkspace() {
   const handleItemClick = (index: number) => {
     setSelectedItemIndex(index)
   }
-  
-  // Load personas and world state on mount
-  useEffect(() => {
-    dispatch(fetchPersonas() as any).then((action: any) => {
-      // After personas are loaded, fetch ontologies for each persona
-      if (action.payload && Array.isArray(action.payload)) {
-        action.payload.forEach((persona: any) => {
-          dispatch(fetchPersonaOntology(persona.id) as any)
-        })
-      }
-    })
-    dispatch(loadWorldState())
-  }, [dispatch])
-
-  // Auto-save world state on changes (debounced 1 second)
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      dispatch(saveWorldState())
-    }, 1000)
-    return () => clearTimeout(timeoutId)
-  }, [entities, events, times, entityCollections, eventCollections, timeCollections, relations, dispatch])
 
   // Reset selection when tab or search changes
   useEffect(() => {
@@ -524,7 +515,7 @@ export default function ObjectWorkspace() {
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => dispatch(deleteEntity(entity.id))} aria-label={`Delete ${entity.name}`}>
+                    <IconButton edge="end" onClick={() => deleteEntityMutate(entity.id)} aria-label={`Delete ${entity.name}`}>
                       <DeleteIcon />
                     </IconButton>
                   </ListItemSecondaryAction>
@@ -568,7 +559,7 @@ export default function ObjectWorkspace() {
                   <IconButton edge="end" onClick={() => handleEditEvent(event)} aria-label={`Edit ${event.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEvent(event.id))} aria-label={`Delete ${event.name}`}>
+                  <IconButton edge="end" onClick={() => deleteEventMutate(event.id)} aria-label={`Delete ${event.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -611,7 +602,7 @@ export default function ObjectWorkspace() {
                   <IconButton edge="end" onClick={() => handleEditLocation(location)} aria-label={`Edit ${location.name}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteEntity(location.id))} aria-label={`Delete ${location.name}`}>
+                  <IconButton edge="end" onClick={() => deleteEntityMutate(location.id)} aria-label={`Delete ${location.name}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -656,7 +647,7 @@ export default function ObjectWorkspace() {
                   <IconButton edge="end" onClick={() => handleEditTime(time)} aria-label={`Edit time ${formatTimeDisplay(time)}`}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton edge="end" onClick={() => dispatch(deleteTime(time.id))} aria-label={`Delete time ${formatTimeDisplay(time)}`}>
+                  <IconButton edge="end" onClick={() => deleteTimeMutate(time.id)} aria-label={`Delete time ${formatTimeDisplay(time)}`}>
                     <DeleteIcon />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -711,7 +702,7 @@ export default function ObjectWorkspace() {
                       </IconButton>
                       <IconButton
                         edge="end"
-                        onClick={() => dispatch(deleteEntityCollection(collection.id))}
+                        onClick={() => deleteEntityCollectionMutate(collection.id)}
                         aria-label={`Delete ${collection.name}`}
                       >
                         <DeleteIcon />
@@ -768,7 +759,7 @@ export default function ObjectWorkspace() {
                       </IconButton>
                       <IconButton
                         edge="end"
-                        onClick={() => dispatch(deleteEventCollection(collection.id))}
+                        onClick={() => deleteEventCollectionMutate(collection.id)}
                         aria-label={`Delete ${collection.name}`}
                       >
                         <DeleteIcon />

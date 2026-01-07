@@ -4,28 +4,27 @@
  */
 
 import type { Meta, StoryObj } from '@storybook/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
-import annotationReducer from '../store/annotationSlice'
 
 /**
- * Create mock Redux store for stories.
+ * Create QueryClient for stories.
  */
-function createMockStore() {
-  return configureStore({
-    reducer: {
-      annotations: annotationReducer,
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
     },
   })
 }
 
 /**
- * Wrapper component that provides Redux store.
+ * Wrapper component that provides QueryClient.
  */
 function StoryWrapper({ children }: { children: React.ReactNode }) {
-  const store = createMockStore()
-  return <Provider store={store}>{children}</Provider>
+  const queryClient = createQueryClient()
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
 const meta: Meta<typeof AnnotationCandidatesList> = {

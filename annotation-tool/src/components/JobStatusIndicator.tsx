@@ -16,7 +16,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import CloseIcon from '@mui/icons-material/Close'
-import { useJobStatus, getJobStatusMessage } from '../hooks/useJobStatus'
+import { useJobStatus, getJobStatusMessage } from '../store/queries/useJobStatus'
 import type { JobStatus } from '../api/client'
 
 /**

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useDispatch } from 'react-redux'
 import { Chip, Tooltip } from '@mui/material'
 import { AppDispatch } from '../../store/store'
-import { updateAnnotation, updateKeyframe, addKeyframe } from '../../store/annotationSlice'
+import { updateAnnotation, updateKeyframe, addKeyframe } from '../../store/slices/annotationSlice'
 import { BoundingBox } from '../../models/types.js'
 import { BoundingBoxInterpolator } from '../../utils/interpolation.js'
 

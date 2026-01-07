@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
 import { useSession } from './useSession.js'
-import userReducer from '../../store/userSlice.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 describe('useSession', () => {
   const mockUser = {
@@ -18,20 +16,24 @@ describe('useSession', () => {
     updatedAt: '2024-01-01T00:00:00.000Z',
   }
 
-  const createWrapper = () => {
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-    return ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
+  const mockConfig = {
+    mode: 'multi-user' as const,
+    allowRegistration: true,
+    wikidata: {
+      mode: 'online' as const,
+      url: 'https://www.wikidata.org/w/api.php',
+    },
+    externalLinks: {
+      wikidata: true,
+      videoSources: true,
+    },
   }
 
   beforeEach(() => {
     server.resetHandlers()
     vi.clearAllMocks()
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
   })
 
   it('checks session on mount', async () => {
@@ -39,15 +41,16 @@ describe('useSession', () => {
     let fetchCalled = false
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         fetchCalled = true
         return HttpResponse.json({ user: mockUser })
       })
     )
 
-    renderHook(() => useSession(), {
-      wrapper: createWrapper(),
-    })
+    renderHook(() => useSession())
 
     await waitFor(() => {
       expect(fetchCalled).toBe(true)
@@ -56,41 +59,36 @@ describe('useSession', () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it('dispatches loginSuccess on successful session restoration', async () => {
+  it('updates auth store on successful session restoration', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         return HttpResponse.json({ user: mockUser })
       })
     )
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    renderHook(() => useSession(), { wrapper })
+    renderHook(() => useSession())
 
     await waitFor(() => {
-      const state = store.getState()
-      expect(state.user.currentUser).toEqual(mockUser)
-      expect(state.user.isAuthenticated).toBe(true)
-      expect(state.user.isLoading).toBe(false)
+      expect(useAuthStore.getState().currentUser).toEqual(mockUser)
+      expect(useAuthStore.getState().isAuthenticated).toBe(true)
+      expect(useAuthStore.getState().isLoading).toBe(false)
     })
 
     consoleErrorSpy.mockRestore()
   })
 
-  it('dispatches logoutSuccess on failed session (401)', async () => {
+  it('updates auth store on failed session (401)', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         return HttpResponse.json(
           { message: 'Unauthorized' },
@@ -99,32 +97,24 @@ describe('useSession', () => {
       })
     )
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    renderHook(() => useSession(), { wrapper })
+    renderHook(() => useSession())
 
     await waitFor(() => {
-      const state = store.getState()
-      expect(state.user.currentUser).toBeNull()
-      expect(state.user.isAuthenticated).toBe(false)
-      expect(state.user.isLoading).toBe(false)
+      expect(useAuthStore.getState().currentUser).toBeNull()
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().isLoading).toBe(false)
     })
 
     consoleErrorSpy.mockRestore()
   })
 
-  it('dispatches logoutSuccess on failed session (404)', async () => {
+  it('updates auth store on failed session (404)', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         return HttpResponse.json(
           { message: 'Not found' },
@@ -133,23 +123,12 @@ describe('useSession', () => {
       })
     )
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    renderHook(() => useSession(), { wrapper })
+    renderHook(() => useSession())
 
     await waitFor(() => {
-      const state = store.getState()
-      expect(state.user.currentUser).toBeNull()
-      expect(state.user.isAuthenticated).toBe(false)
-      expect(state.user.isLoading).toBe(false)
+      expect(useAuthStore.getState().currentUser).toBeNull()
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().isLoading).toBe(false)
     })
 
     consoleErrorSpy.mockRestore()
@@ -159,28 +138,20 @@ describe('useSession', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         return HttpResponse.error()
       })
     )
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    renderHook(() => useSession(), { wrapper })
+    renderHook(() => useSession())
 
     await waitFor(() => {
-      const state = store.getState()
-      expect(state.user.currentUser).toBeNull()
-      expect(state.user.isAuthenticated).toBe(false)
-      expect(state.user.isLoading).toBe(false)
+      expect(useAuthStore.getState().currentUser).toBeNull()
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().isLoading).toBe(false)
     })
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -195,32 +166,46 @@ describe('useSession', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
       http.get('/api/auth/me', () => {
         return HttpResponse.json({ user: mockUser })
       })
     )
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
+    // Check initial loading state
+    expect(useAuthStore.getState().isLoading).toBe(true)
 
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    renderHook(() => useSession(), { wrapper })
-
-    // Check that loading is set to true initially (this happens synchronously)
-    const initialState = store.getState()
-    expect(initialState.user.isLoading).toBe(true)
+    renderHook(() => useSession())
 
     // Wait for the async operation to complete
     await waitFor(() => {
-      const state = store.getState()
-      expect(state.user.isLoading).toBe(false)
-      expect(state.user.isAuthenticated).toBe(true)
+      expect(useAuthStore.getState().isLoading).toBe(false)
+      expect(useAuthStore.getState().isAuthenticated).toBe(true)
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('fetches and stores config', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json(mockConfig)
+      }),
+      http.get('/api/auth/me', () => {
+        return HttpResponse.json({ user: mockUser })
+      })
+    )
+
+    renderHook(() => useSession())
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().appConfig).not.toBeNull()
+      expect(useAuthStore.getState().mode).toBe('multi-user')
+      expect(useAuthStore.getState().allowRegistration).toBe(true)
     })
 
     consoleErrorSpy.mockRestore()

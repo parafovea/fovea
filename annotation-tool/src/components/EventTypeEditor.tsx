@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   Typography,
@@ -23,8 +22,13 @@ import {
   Delete as DeleteIcon,
   Event as EventTypeIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
-import { addEventToPersona, updateEventInPersona, deleteEventFromPersona } from '../store/personaSlice'
+import {
+  usePersonas,
+  usePersonaOntology,
+  useAddEventToPersona,
+  useUpdateEventInPersona,
+  useDeleteEventFromPersona,
+} from '../store/queries'
 import { EventType, EventRole, GlossItem } from '../models/types'
 import BaseTypeEditor from './shared/BaseTypeEditor'
 
@@ -36,10 +40,13 @@ interface EventTypeEditorProps {
 }
 
 export default function EventTypeEditor({ open, onClose, event, personaId }: EventTypeEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  const ontology = personaOntologies.find(o => o.personaId === personaId)
-  
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const { data: ontology } = usePersonaOntology(personaId)
+  const { mutate: addEvent } = useAddEventToPersona()
+  const { mutate: updateEvent } = useUpdateEventInPersona()
+  const { mutate: deleteEvent } = useDeleteEventFromPersona()
+
   // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -47,7 +54,15 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   const [examples, setExamples] = useState<string[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState('')
   const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
-  const [sourcePersonaId, setSourcePersonaId] = useState('')
+  const [sourcePersonaIdState, setSourcePersonaIdState] = useState('')
+
+  // Fetch source persona's ontology when copying
+  const { data: sourceOntology } = usePersonaOntology(sourcePersonaIdState || null)
+
+  const setSourcePersonaId = (id: string) => {
+    setSourcePersonaIdState(id)
+  }
+  const sourcePersonaId = sourcePersonaIdState
   const [sourceEventId, setSourceEventId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [wikidataId, setWikidataId] = useState<string>('')
@@ -80,9 +95,8 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
 
   useEffect(() => {
     // When copying from another persona, populate the fields
-    if (mode === 'copy' && sourcePersonaId && sourceEventId) {
-      const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-      const sourceEvent = sourceOntology?.events.find(e => e.id === sourceEventId)
+    if (mode === 'copy' && sourcePersonaId && sourceEventId && sourceOntology) {
+      const sourceEvent = sourceOntology.events.find(e => e.id === sourceEventId)
       if (sourceEvent) {
         setName(sourceEvent.name)
         setGloss(sourceEvent.gloss)
@@ -93,11 +107,11 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
         setImportedAt(sourceEvent.importedAt || '')
       }
     }
-  }, [mode, sourcePersonaId, sourceEventId, personaOntologies])
+  }, [mode, sourcePersonaId, sourceEventId, sourceOntology])
 
   const handleSave = () => {
     if (!personaId) return
-    
+
     const now = new Date().toISOString()
     const eventData: EventType = {
       id: event?.id || generateId(),
@@ -112,22 +126,22 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       createdAt: event?.createdAt || now,
       updatedAt: now,
     }
-    
+
     if (event) {
-      dispatch(updateEventInPersona({ personaId, event: eventData }))
+      updateEvent({ personaId, event: eventData })
     } else {
       targetPersonaIds.forEach(targetId => {
         const newEventData = { ...eventData, id: generateId() }
-        dispatch(addEventToPersona({ personaId: targetId, event: newEventData }))
+        addEvent({ personaId: targetId, event: newEventData })
       })
     }
-    
+
     onClose()
   }
 
   const handleDelete = () => {
     if (event && personaId) {
-      dispatch(deleteEventFromPersona({ personaId, eventId: event.id }))
+      deleteEvent({ personaId, eventId: event.id })
       onClose()
     }
   }
@@ -282,8 +296,8 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
           ))}
         </Select>
       </FormControl>
-      
-      {sourcePersonaId && (
+
+      {sourcePersonaId && sourceOntology && (
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Source Event Type</InputLabel>
           <Select
@@ -291,13 +305,11 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
             onChange={(e) => setSourceEventId(e.target.value)}
             label="Source Event Type"
           >
-            {personaOntologies
-              .find(o => o.personaId === sourcePersonaId)
-              ?.events.map(event => (
-                <MenuItem key={event.id} value={event.id}>
-                  {event.name}
-                </MenuItem>
-              ))}
+            {sourceOntology.events.map(event => (
+              <MenuItem key={event.id} value={event.id}>
+                {event.name}
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
       )}

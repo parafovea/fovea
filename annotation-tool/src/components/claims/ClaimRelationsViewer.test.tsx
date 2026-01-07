@@ -1,47 +1,51 @@
 /**
  * Tests for ClaimRelationsViewer component.
+ *
+ * Following industry standards:
+ * - MSW for API mocking (configured in test/setup.ts)
+ * - Fresh QueryClient per test for isolation
+ * - No Redux - uses TanStack Query
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Provider } from 'react-redux'
 import { BrowserRouter } from 'react-router-dom'
-import { configureStore } from '@reduxjs/toolkit'
 import React from 'react'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
-import claimsSlice from '../../store/claimsSlice'
-import personaSlice from '../../store/personaSlice'
 import { ClaimRelation } from '../../models/types'
 import { server } from '../../../test/setup'
 import { http, HttpResponse } from 'msw'
 
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      claims: claimsSlice,
-      persona: personaSlice,
-    },
-    preloadedState: initialState,
-  })
-}
-
-function createWrapper(store: ReturnType<typeof createTestStore>) {
-  const queryClient = new QueryClient({
+/**
+ * Creates a fresh QueryClient for each test.
+ * Following TkDodo's pattern for test isolation.
+ */
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
+        retry: false,
+        gcTime: 0,
+        staleTime: 0,
+      },
+      mutations: {
         retry: false,
       },
     },
   })
+}
 
+/**
+ * Creates wrapper with QueryClientProvider.
+ */
+function createWrapper() {
+  const queryClient = createTestQueryClient()
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{children}</BrowserRouter>
-      </QueryClientProvider>
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{children}</BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -78,12 +82,46 @@ describe('ClaimRelationsViewer', () => {
   }
 
   beforeEach(() => {
-    // Mock fetch claim relations API
+    server.resetHandlers()
+    vi.clearAllMocks()
+
+    // Default MSW handlers for all tests
     server.use(
+      // Claim relations API
       http.get('/api/summaries/:summaryId/claims/:claimId/relations', () => {
         return HttpResponse.json({
           asSource: mockOutgoingRelations,
           asTarget: mockIncomingRelations,
+        })
+      }),
+      // Claims API for TanStack Query
+      http.get('/api/summaries/:summaryId/claims', () => {
+        return HttpResponse.json([
+          {
+            id: 'claim-1',
+            gloss: [{ type: 'text', content: 'Main claim text' }],
+          },
+          {
+            id: 'claim-2',
+            gloss: [{ type: 'text', content: 'Target claim text' }],
+          },
+          {
+            id: 'claim-3',
+            gloss: [{ type: 'text', content: 'Source claim text' }],
+          },
+        ])
+      }),
+      // Persona ontology API for relation type names
+      http.get('/api/personas/:personaId/ontology', () => {
+        return HttpResponse.json({
+          entities: [],
+          roles: [],
+          events: [],
+          relationTypes: [
+            { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
+            { id: 'rel-type-2', name: 'conflicts', sourceTypes: ['claim'], targetTypes: ['claim'] },
+          ],
+          relations: [],
         })
       })
     )
@@ -91,22 +129,7 @@ describe('ClaimRelationsViewer', () => {
 
   describe('Loading State', () => {
     it('shows loading spinner when fetching', () => {
-      const store = createTestStore({
-        claims: {
-          claimsBySummary: {},
-          relations: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })
@@ -121,22 +144,7 @@ describe('ClaimRelationsViewer', () => {
         })
       )
 
-      const store = createTestStore({
-        claims: {
-          claimsBySummary: {},
-          relations: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Wait for error to appear
       await waitFor(() => {
@@ -147,92 +155,20 @@ describe('ClaimRelationsViewer', () => {
 
   describe('Outgoing Relations', () => {
     it('renders outgoing relations section', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target claim text' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Wait for relations to load from MSW
       expect(await screen.findByText(/outgoing relations \(1\)/i)).toBeInTheDocument()
     })
 
     it('shows relation type name', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target claim' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText('supports')).toBeInTheDocument()
     })
 
     it('shows confidence badge', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText(/confidence: 90%/i)).toBeInTheDocument()
     })
@@ -245,22 +181,7 @@ describe('ClaimRelationsViewer', () => {
         })
       )
 
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText(/no outgoing relations/i)).toBeInTheDocument()
     })
@@ -268,62 +189,15 @@ describe('ClaimRelationsViewer', () => {
 
   describe('Incoming Relations', () => {
     it('renders incoming relations section', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-3',
-                gloss: [{ type: 'text', content: 'Source claim' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-2', name: 'conflicts', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText(/incoming relations \(1\)/i)).toBeInTheDocument()
     })
 
     it('shows source claim preview', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-3',
-                gloss: [{ type: 'text', content: 'Source claim text' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-2', name: 'conflicts', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
-
+      // Claims are now fetched via TanStack Query from MSW mock
       expect(await screen.findByText(/source claim text/i)).toBeInTheDocument()
     })
 
@@ -335,22 +209,7 @@ describe('ClaimRelationsViewer', () => {
         })
       )
 
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText(/no incoming relations/i)).toBeInTheDocument()
     })
@@ -364,22 +223,7 @@ describe('ClaimRelationsViewer', () => {
         })
       )
 
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByRole('button', { name: /add relation/i })).toBeInTheDocument()
     })
@@ -393,23 +237,9 @@ describe('ClaimRelationsViewer', () => {
 
       const user = userEvent.setup()
       const onAddRelation = vi.fn()
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {},
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
 
       render(<ClaimRelationsViewer {...defaultProps} onAddRelation={onAddRelation} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       const addButton = await screen.findByRole('button', { name: /add relation/i })
@@ -419,31 +249,7 @@ describe('ClaimRelationsViewer', () => {
     })
 
     it('shows delete button on each relation', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByRole('button', { name: /delete relation/i })).toBeInTheDocument()
     })
@@ -451,59 +257,26 @@ describe('ClaimRelationsViewer', () => {
 
   describe('Relation Type Display', () => {
     it('gets relation type name from ontology', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [
-                { id: 'rel-type-1', name: 'supports', sourceTypes: ['claim'], targetTypes: ['claim'] },
-              ],
-            },
-          ],
-        },
-      })
-
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(await screen.findByText('supports')).toBeInTheDocument()
     })
 
     it('shows "Unknown" for missing types', async () => {
-      const store = createTestStore({
-        claims: {
-          relations: {},
-          claimsBySummary: {
-            'summary-1': [
-              {
-                id: 'claim-2',
-                gloss: [{ type: 'text', content: 'Target' }],
-              },
-            ],
-          },
-        },
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [], // No matching relation type
-            },
-          ],
-        },
-      })
+      // Override ontology to have no matching relation types
+      server.use(
+        http.get('/api/personas/:personaId/ontology', () => {
+          return HttpResponse.json({
+            entities: [],
+            roles: [],
+            events: [],
+            relationTypes: [], // No matching relation type
+            relations: [],
+          })
+        })
+      )
 
-      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const unknowns = await screen.findAllByText('Unknown')
       expect(unknowns.length).toBeGreaterThan(0)

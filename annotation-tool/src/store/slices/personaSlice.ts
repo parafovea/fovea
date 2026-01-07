@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import { Persona, PersonaOntology, EntityType, RoleType, EventType, RelationType, OntologyRelation, ImportRequest } from '../models/types'
-import { generateId } from '../utils/uuid'
+import { Persona, PersonaOntology, EntityType, RoleType, EventType, RelationType, OntologyRelation, ImportRequest } from '../../models/types'
+import { generateId } from '../../utils/uuid'
 
 /**
  * Fetches all personas from the API.
@@ -36,6 +36,7 @@ export const fetchPersonaOntology = createAsyncThunk(
 
 /**
  * Creates a new persona in the database.
+ * If ontology creation fails, the persona is rolled back (deleted).
  */
 export const createPersona = createAsyncThunk(
   'persona/createPersona',
@@ -71,6 +72,16 @@ export const createPersona = createAsyncThunk(
       }),
     })
     if (!ontologyResponse.ok) {
+      // Rollback: delete the persona since ontology creation failed
+      try {
+        await fetch(`/api/personas/${persona.id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        })
+      } catch {
+        // Best effort rollback - log but don't fail on rollback error
+        console.error(`Failed to rollback persona ${persona.id} after ontology creation failure`)
+      }
       throw new Error('Failed to create persona ontology')
     }
     const ontology = await ontologyResponse.json()
@@ -154,6 +165,9 @@ export const savePersonaOntology = createAsyncThunk(
  * State shape for persona management.
  * Manages personas and their associated ontologies in the application.
  */
+/** Save status for async save operations */
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
 interface PersonaState {
   /** Array of all personas */
   personas: Persona[]
@@ -167,6 +181,8 @@ interface PersonaState {
   error: string | null
   /** Flag indicating whether there are unsaved changes */
   unsavedChanges: boolean
+  /** Status of save operations */
+  saveStatus: SaveStatus
 }
 
 const initialState: PersonaState = {
@@ -176,6 +192,7 @@ const initialState: PersonaState = {
   isLoading: false,
   error: null,
   unsavedChanges: false,
+  saveStatus: 'idle',
 }
 
 /**
@@ -495,6 +512,13 @@ const personaSlice = createSlice({
     markSaved: (state) => {
       state.unsavedChanges = false
     },
+    /**
+     * Clears the error state and resets saveStatus to idle.
+     */
+    clearPersonaError: (state) => {
+      state.error = null
+      state.saveStatus = 'idle'
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -537,15 +561,21 @@ const personaSlice = createSlice({
         state.isLoading = false
         state.error = action.error.message || 'Failed to create persona'
       })
+      .addCase(savePersona.pending, (state) => {
+        state.saveStatus = 'saving'
+        state.error = null
+      })
       .addCase(savePersona.fulfilled, (state, action) => {
         const index = state.personas.findIndex(p => p.id === action.payload.id)
         if (index !== -1) {
           state.personas[index] = action.payload
         }
         state.unsavedChanges = false
+        state.saveStatus = 'saved'
       })
       .addCase(savePersona.rejected, (state, action) => {
         state.error = action.error.message || 'Failed to save persona'
+        state.saveStatus = 'error'
       })
       .addCase(removePersona.fulfilled, (state, action) => {
         state.personas = state.personas.filter(p => p.id !== action.payload)
@@ -606,6 +636,7 @@ export const {
   setLoading,
   setError,
   markSaved,
+  clearPersonaError,
 } = personaSlice.actions
 
 export default personaSlice.reducer

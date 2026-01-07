@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -36,8 +35,8 @@ import {
   Language as WikidataIcon,
   Edit as EditIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { addEvent, updateEvent } from '../../store/worldSlice'
+import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
 import { Event, EventInterpretation, GlossItem, Location } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
@@ -55,9 +54,19 @@ interface ParticipantFormData {
 }
 
 export default function EventEditor({ open, onClose, event }: EventEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies, activePersonaId } = useSelector((state: RootState) => state.persona)
-  const { entities, times } = useSelector((state: RootState) => state.world)
+  // TanStack Query hooks for personas
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map((p) => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
+
+  // Active persona from Zustand store
+  const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const times = worldData?.times ?? []
+  const { mutate: addEvent } = useAddEvent()
+  const { mutate: updateEvent } = useUpdateEvent()
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -166,9 +175,9 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     }
 
     if (event) {
-      dispatch(updateEvent({ ...event, ...eventData }))
+      updateEvent({ ...event, ...eventData })
     } else {
-      dispatch(addEvent(eventData))
+      addEvent(eventData)
     }
 
     onClose()

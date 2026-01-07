@@ -4,7 +4,7 @@ import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { MotionPathOverlay } from './MotionPathOverlay'
 import { Annotation } from '../../models/types.js'
-import annotationReducer from '../../store/annotationSlice.js'
+import annotationReducer from '../../store/slices/annotationSlice.js'
 
 describe('MotionPathOverlay', () => {
   const mockAnnotation: Annotation = {

@@ -12,7 +12,7 @@ import {
   DetectionRequest,
   DetectionResponse,
   ApiError,
-} from '../api/client'
+} from '../../api/client'
 
 /**
  * Mutation hook for detecting objects in video frames.

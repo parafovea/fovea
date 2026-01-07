@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
   Paper,
@@ -37,18 +36,18 @@ import {
   Inventory2 as EntityIcon,
   AccessTime as TimeIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
 import {
-  addEntityCollection,
-  updateEntityCollection,
-  deleteEntityCollection,
-  addEventCollection,
-  updateEventCollection,
-  deleteEventCollection,
-  addTimeCollection,
-  updateTimeCollection,
-  deleteTimeCollection,
-} from '../../store/worldSlice'
+  useWorld,
+  useAddEntityCollection,
+  useUpdateEntityCollection,
+  useDeleteEntityCollection,
+  useAddEventCollection,
+  useUpdateEventCollection,
+  useDeleteEventCollection,
+  useAddTimeCollection,
+  useUpdateTimeCollection,
+  useDeleteTimeCollection,
+} from '../../store/queries'
 import {
   EntityCollection,
   EventCollection,
@@ -90,8 +89,10 @@ function EntityCollectionEditor({
   onClose: () => void
   collection: EntityCollection | null
 }) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { entities } = useSelector((state: RootState) => state.world)
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const { mutate: addEntityCollection } = useAddEntityCollection()
+  const { mutate: updateEntityCollection } = useUpdateEntityCollection()
   
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
@@ -126,9 +127,9 @@ function EntityCollectionEditor({
     }
 
     if (collection) {
-      dispatch(updateEntityCollection({ ...collection, ...collectionData }))
+      updateEntityCollection({ ...collection, ...collectionData })
     } else {
-      dispatch(addEntityCollection(collectionData))
+      addEntityCollection(collectionData)
     }
 
     onClose()
@@ -260,8 +261,11 @@ function EventCollectionEditor({
   onClose: () => void
   collection: EventCollection | null
 }) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { events, timeCollections } = useSelector((state: RootState) => state.world)
+  const { data: worldData } = useWorld()
+  const events = worldData?.events ?? []
+  const timeCollections = worldData?.timeCollections ?? []
+  const { mutate: addEventCollection } = useAddEventCollection()
+  const { mutate: updateEventCollection } = useUpdateEventCollection()
   
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
@@ -290,9 +294,9 @@ function EventCollectionEditor({
     }
 
     if (collection) {
-      dispatch(updateEventCollection({ ...collection, ...collectionData }))
+      updateEventCollection({ ...collection, ...collectionData })
     } else {
-      dispatch(addEventCollection(collectionData))
+      addEventCollection(collectionData)
     }
 
     onClose()
@@ -418,8 +422,10 @@ function TimeCollectionEditor({
   onClose: () => void
   collection: TimeCollection | null
 }) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { times } = useSelector((state: RootState) => state.world)
+  const { data: worldData } = useWorld()
+  const times = worldData?.times ?? []
+  const { mutate: addTimeCollection } = useAddTimeCollection()
+  const { mutate: updateTimeCollection } = useUpdateTimeCollection()
   
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState(collection?.description || '')
@@ -447,9 +453,9 @@ function TimeCollectionEditor({
     }
 
     if (collection) {
-      dispatch(updateTimeCollection({ ...collection, ...collectionData }))
+      updateTimeCollection({ ...collection, ...collectionData })
     } else {
-      dispatch(addTimeCollection(collectionData))
+      addTimeCollection(collectionData)
     }
 
     onClose()
@@ -571,10 +577,13 @@ function TimeCollectionEditor({
 
 // Main CollectionBuilder Component
 export default function CollectionBuilder() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { entityCollections, eventCollections, timeCollections } = useSelector(
-    (state: RootState) => state.world
-  )
+  const { data: worldData } = useWorld()
+  const entityCollections = worldData?.entityCollections ?? []
+  const eventCollections = worldData?.eventCollections ?? []
+  const timeCollections = worldData?.timeCollections ?? []
+  const { mutate: deleteEntityCollection } = useDeleteEntityCollection()
+  const { mutate: deleteEventCollection } = useDeleteEventCollection()
+  const { mutate: deleteTimeCollection } = useDeleteTimeCollection()
   
   const [tabValue, setTabValue] = useState(0)
   const [entityCollectionEditorOpen, setEntityCollectionEditorOpen] = useState(false)
@@ -676,9 +685,9 @@ export default function CollectionBuilder() {
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => dispatch(deleteEntityCollection(collection.id))}
+                    <IconButton
+                      edge="end"
+                      onClick={() => deleteEntityCollection(collection.id)}
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -743,9 +752,9 @@ export default function CollectionBuilder() {
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => dispatch(deleteEventCollection(collection.id))}
+                    <IconButton
+                      edge="end"
+                      onClick={() => deleteEventCollection(collection.id)}
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -805,9 +814,9 @@ export default function CollectionBuilder() {
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => dispatch(deleteTimeCollection(collection.id))}
+                    <IconButton
+                      edge="end"
+                      onClick={() => deleteTimeCollection(collection.id)}
                     >
                       <DeleteIcon />
                     </IconButton>

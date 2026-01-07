@@ -1,5 +1,4 @@
 import { useState, useMemo, memo, useCallback } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   Paper,
@@ -33,8 +32,7 @@ import { Claim, ClaimTextSpan } from '../../models/types'
 import { GlossRenderer } from '../GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
-import { createClaimRelation } from '../../store/claimsSlice'
-import { RootState, AppDispatch } from '../../store/store'
+import { useCreateClaimRelation, usePersonaOntology } from '../../store/queries'
 
 interface ClaimsViewerProps {
   claims: Claim[]
@@ -78,16 +76,16 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
   onAdd,
   onSelect,
 }: ClaimTreeNodeProps) {
-  const dispatch = useDispatch<AppDispatch>()
   const [expanded, setExpanded] = useState(true)
   const [showRelations, setShowRelations] = useState(false)
   const [relationEditorOpen, setRelationEditorOpen] = useState(false)
   const hasSubclaims = claim.subclaims && claim.subclaims.length > 0
   const isSelected = selectedClaimId === claim.id
 
-  const ontology = useSelector((state: RootState) =>
-    state.persona.personaOntologies.find((o) => o.personaId === personaId)
-  )
+  // TanStack Query hook for persona ontology
+  const { data: ontology } = usePersonaOntology(personaId)
+
+  const createClaimRelationMutation = useCreateClaimRelation()
 
   const handleToggle = () => {
     if (hasSubclaims) {
@@ -107,13 +105,11 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
     confidence?: number
     notes?: string
   }) => {
-    await dispatch(
-      createClaimRelation({
-        summaryId,
-        sourceClaimId: claim.id,
-        relation,
-      })
-    )
+    await createClaimRelationMutation.mutateAsync({
+      summaryId,
+      sourceClaimId: claim.id,
+      relation,
+    })
   }
 
   return (

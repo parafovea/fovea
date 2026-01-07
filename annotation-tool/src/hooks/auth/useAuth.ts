@@ -1,7 +1,5 @@
-import { useDispatch } from 'react-redux'
-import { loginSuccess, logoutSuccess } from '../../store/userSlice.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 import { User } from '../../models/types.js'
-import { AppDispatch } from '../../store/store.js'
 
 /**
  * Registration data for new user accounts.
@@ -20,7 +18,8 @@ export interface RegisterData {
  * @returns Object with login, logout, and register functions
  */
 export function useAuth() {
-  const dispatch = useDispatch<AppDispatch>()
+  const loginSuccess = useAuthStore(state => state.loginSuccess)
+  const logoutSuccess = useAuthStore(state => state.logoutSuccess)
 
   /**
    * Authenticates user with username and password.
@@ -45,7 +44,7 @@ export function useAuth() {
     }
 
     const { user } = await response.json()
-    dispatch(loginSuccess(user))
+    loginSuccess(user)
     return user
   }
 
@@ -61,7 +60,7 @@ export function useAuth() {
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      dispatch(logoutSuccess())
+      logoutSuccess()
     }
   }
 
@@ -86,7 +85,7 @@ export function useAuth() {
     }
 
     const { user } = await response.json()
-    dispatch(loginSuccess(user))
+    loginSuccess(user)
     return user
   }
 

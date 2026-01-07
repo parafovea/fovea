@@ -1,23 +1,19 @@
 import { useState, useCallback, useRef } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../store/store'
 import {
-  addEntityToPersona,
-  deleteEntityFromPersona,
-  addRoleToPersona,
-  deleteRoleFromPersona,
-  addEventToPersona,
-  deleteEventFromPersona,
-  addRelationType,
-  deleteRelationType,
-} from '../store/personaSlice'
-import {
-  addEntity,
-  deleteEntity,
-  addEvent,
-  deleteEvent,
-  deleteTime,
-} from '../store/worldSlice'
+  useAddEntityToPersona,
+  useDeleteEntityFromPersona,
+  useAddRoleToPersona,
+  useDeleteRoleFromPersona,
+  useAddEventToPersona,
+  useDeleteEventFromPersona,
+  useAddRelationTypeToPersona,
+  useDeleteRelationTypeFromPersona,
+  useAddEntity,
+  useDeleteEntity,
+  useAddEvent,
+  useDeleteEvent,
+  useDeleteTime,
+} from '../store/queries'
 import { EntityType, RoleType, EventType, RelationType, Entity, Event, Location } from '../models/types'
 import { generateId } from '../utils/uuid'
 
@@ -83,10 +79,26 @@ export function useWikidataImport(
   onSuccess?: (id: string) => void,
   onError?: (error: Error) => void
 ) {
-  const dispatch = useDispatch<AppDispatch>()
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const undoQueue = useRef<Map<string, UndoEntry>>(new Map())
+
+  // TanStack Query mutations for persona ontology types
+  const { mutate: addEntityToPersona } = useAddEntityToPersona()
+  const { mutate: deleteEntityFromPersona } = useDeleteEntityFromPersona()
+  const { mutate: addRoleToPersona } = useAddRoleToPersona()
+  const { mutate: deleteRoleFromPersona } = useDeleteRoleFromPersona()
+  const { mutate: addEventToPersona } = useAddEventToPersona()
+  const { mutate: deleteEventFromPersona } = useDeleteEventFromPersona()
+  const { mutate: addRelationType } = useAddRelationTypeToPersona()
+  const { mutate: deleteRelationType } = useDeleteRelationTypeFromPersona()
+
+  // TanStack Query mutations for world objects
+  const { mutate: addEntity } = useAddEntity()
+  const { mutate: deleteEntity } = useDeleteEntity()
+  const { mutate: addEvent } = useAddEvent()
+  const { mutate: deleteEvent } = useDeleteEvent()
+  const { mutate: deleteTime } = useDeleteTime()
 
   /**
    * Imports an item from Wikidata with immediate persistence.
@@ -100,7 +112,7 @@ export function useWikidataImport(
       const now = new Date().toISOString()
       const id = generateId()
 
-      // Dispatch appropriate action based on type
+      // Call appropriate mutation based on type
       switch (type) {
         case 'entity-type': {
           if (!personaId) throw new Error('personaId required for entity-type import')
@@ -116,7 +128,7 @@ export function useWikidataImport(
             createdAt: now,
             updatedAt: now,
           }
-          dispatch(addEntityToPersona({ personaId, entity: entityType }))
+          addEntityToPersona({ personaId, entity: entityType })
           break
         }
 
@@ -135,7 +147,7 @@ export function useWikidataImport(
             createdAt: now,
             updatedAt: now,
           }
-          dispatch(addRoleToPersona({ personaId, role: roleType }))
+          addRoleToPersona({ personaId, role: roleType })
           break
         }
 
@@ -154,7 +166,7 @@ export function useWikidataImport(
             createdAt: now,
             updatedAt: now,
           }
-          dispatch(addEventToPersona({ personaId, event: eventType }))
+          addEventToPersona({ personaId, event: eventType })
           break
         }
 
@@ -176,7 +188,7 @@ export function useWikidataImport(
             createdAt: now,
             updatedAt: now,
           }
-          dispatch(addRelationType({ personaId, relationType }))
+          addRelationType({ personaId, relationType })
           break
         }
 
@@ -195,7 +207,7 @@ export function useWikidataImport(
               properties: {},
             },
           }
-          dispatch(addEntity(entity))
+          addEntity(entity)
           break
         }
 
@@ -213,7 +225,7 @@ export function useWikidataImport(
               properties: {},
             },
           }
-          dispatch(addEvent(event))
+          addEvent(event)
           break
         }
 
@@ -235,7 +247,7 @@ export function useWikidataImport(
             coordinateSystem: 'GPS',
             coordinates: data.coordinates || {},
           } as any
-          dispatch(addEntity(location as any))
+          addEntity(location as any)
           break
         }
 
@@ -266,7 +278,7 @@ export function useWikidataImport(
       onError?.(err instanceof Error ? err : new Error(errorMessage))
       throw err
     }
-  }, [type, personaId, dispatch, onSuccess, onError])
+  }, [type, personaId, onSuccess, onError, addEntityToPersona, addRoleToPersona, addEventToPersona, addRelationType, addEntity, addEvent])
 
   /**
    * Undoes a previous import by ID.
@@ -282,40 +294,40 @@ export function useWikidataImport(
     clearTimeout(entry.timeout)
     undoQueue.current.delete(id)
 
-    // Dispatch delete action based on type
+    // Call delete mutation based on type
     switch (entry.type) {
       case 'entity-type':
         if (entry.personaId) {
-          dispatch(deleteEntityFromPersona({ personaId: entry.personaId, entityId: id }))
+          deleteEntityFromPersona({ personaId: entry.personaId, entityId: id })
         }
         break
       case 'role-type':
         if (entry.personaId) {
-          dispatch(deleteRoleFromPersona({ personaId: entry.personaId, roleId: id }))
+          deleteRoleFromPersona({ personaId: entry.personaId, roleId: id })
         }
         break
       case 'event-type':
         if (entry.personaId) {
-          dispatch(deleteEventFromPersona({ personaId: entry.personaId, eventId: id }))
+          deleteEventFromPersona({ personaId: entry.personaId, eventId: id })
         }
         break
       case 'relation-type':
         if (entry.personaId) {
-          dispatch(deleteRelationType({ personaId: entry.personaId, relationTypeId: id }))
+          deleteRelationType({ personaId: entry.personaId, relationTypeId: id })
         }
         break
       case 'entity':
       case 'location':
-        dispatch(deleteEntity(id))
+        deleteEntity(id)
         break
       case 'event':
-        dispatch(deleteEvent(id))
+        deleteEvent(id)
         break
       case 'time':
-        dispatch(deleteTime(id))
+        deleteTime(id)
         break
     }
-  }, [dispatch])
+  }, [deleteEntityFromPersona, deleteRoleFromPersona, deleteEventFromPersona, deleteRelationType, deleteEntity, deleteEvent, deleteTime])
 
   /**
    * Clears all undo timeouts on unmount.

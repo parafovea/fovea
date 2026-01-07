@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { VideoMetadata } from '../models/types'
+import { VideoMetadata } from '../../models/types'
 
 /**
  * State for video management in the annotation tool.

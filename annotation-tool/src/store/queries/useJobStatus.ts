@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query'
-import { apiClient, JobStatus, ApiError } from '../api/client'
+import { apiClient, JobStatus, ApiError } from '../../api/client'
 import { summaryKeys } from './useSummaries'
 
 /**

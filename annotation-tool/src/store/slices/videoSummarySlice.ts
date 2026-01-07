@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import { VideoSummary } from '../models/types'
+import { VideoSummary } from '../../models/types'
 
 interface VideoSummaryState {
   summaries: Record<string, VideoSummary[]> // videoId -> summaries

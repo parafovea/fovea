@@ -6,7 +6,7 @@
 
 import React from 'react'
 import { Annotation } from '../../models/types.js'
-import { selectMotionPath } from '../../store/annotationSlice.js'
+import { selectMotionPath } from '../../store/slices/annotationSlice.js'
 import { useAppSelector } from '../../store/store.js'
 
 /**

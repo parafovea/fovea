@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -20,7 +19,7 @@ import {
   Paper,
 } from '@mui/material'
 import { Claim, RelationType } from '../../models/types'
-import { RootState } from '../../store/store'
+import { useClaims } from '../../store/queries'
 
 interface ClaimRelationEditorProps {
   open: boolean
@@ -49,11 +48,8 @@ export function ClaimRelationEditor({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch claims directly from Redux to avoid stale prop issues
-  // Claims are already in Redux from UI creation flow
-  const allClaims = useSelector((state: RootState) =>
-    state.claims.claimsBySummary[sourceClaim.summaryId] || []
-  )
+  // Fetch claims using TanStack Query
+  const { data: allClaims = [] } = useClaims(sourceClaim.summaryId, sourceClaim.summaryType)
 
   // Flatten claim tree for selection
   const flattenClaims = (claims: Claim[]): Claim[] => {

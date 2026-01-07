@@ -16,7 +16,7 @@ import {
 import { Annotation, InterpolationType } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
 import { AppDispatch } from '../../store/store.js'
-import { moveKeyframe } from '../../store/annotationSlice.js'
+import { moveKeyframe } from '../../store/slices/annotationSlice.js'
 import { InterpolationModeSelector } from './InterpolationModeSelector.js'
 
 /**

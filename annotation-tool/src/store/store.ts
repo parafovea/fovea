@@ -1,12 +1,12 @@
 import { configureStore } from '@reduxjs/toolkit'
 import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux'
-import annotationReducer from './annotationSlice'
-import videoReducer from './videoSlice'
-import personaReducer from './personaSlice'
-import worldReducer from './worldSlice'
-import videoSummaryReducer from './videoSummarySlice'
-import userReducer from './userSlice'
-import claimsReducer from './claimsSlice'
+import annotationReducer from './slices/annotationSlice'
+import videoReducer from './slices/videoSlice'
+import personaReducer from './slices/personaSlice'
+import worldReducer from './slices/worldSlice'
+import videoSummaryReducer from './slices/videoSummarySlice'
+import userReducer from './slices/userSlice'
+import claimsReducer from './slices/claimsSlice'
 
 export const store = configureStore({
   reducer: {

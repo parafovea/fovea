@@ -56,6 +56,8 @@ describe('AnnotationUiStore', () => {
 
     it('should have correct initial timeline UI state', () => {
       const state = useAnnotationUiStore.getState()
+      expect(state.timelineExpanded).toBe(false)
+      expect(state.timelineMounted).toBe(false)
       expect(state.showMotionPath).toBe(false)
       expect(state.timelineZoom).toBe(1)
       expect(state.currentFrame).toBe(0)
@@ -286,6 +288,22 @@ describe('AnnotationUiStore', () => {
   })
 
   describe('Timeline UI Actions', () => {
+    it('should set timelineExpanded', () => {
+      const { setTimelineExpanded } = useAnnotationUiStore.getState()
+      setTimelineExpanded(true)
+      expect(useAnnotationUiStore.getState().timelineExpanded).toBe(true)
+      setTimelineExpanded(false)
+      expect(useAnnotationUiStore.getState().timelineExpanded).toBe(false)
+    })
+
+    it('should set timelineMounted', () => {
+      const { setTimelineMounted } = useAnnotationUiStore.getState()
+      setTimelineMounted(true)
+      expect(useAnnotationUiStore.getState().timelineMounted).toBe(true)
+      setTimelineMounted(false)
+      expect(useAnnotationUiStore.getState().timelineMounted).toBe(false)
+    })
+
     it('should set showMotionPath', () => {
       const { setShowMotionPath } = useAnnotationUiStore.getState()
       setShowMotionPath(true)
@@ -333,6 +351,8 @@ describe('AnnotationUiStore', () => {
       store.setShowDetectionCandidates(true)
       store.setTimelineZoom(5)
       store.setLinkTarget('entity-1', 'entity')
+      store.setTimelineExpanded(true)
+      store.setTimelineMounted(true)
 
       // Reset all
       store.resetAllState()
@@ -348,6 +368,8 @@ describe('AnnotationUiStore', () => {
       expect(state.timelineZoom).toBe(1)
       expect(state.linkTargetId).toBe(null)
       expect(state.linkTargetType).toBe(null)
+      expect(state.timelineExpanded).toBe(false)
+      expect(state.timelineMounted).toBe(false)
     })
   })
 

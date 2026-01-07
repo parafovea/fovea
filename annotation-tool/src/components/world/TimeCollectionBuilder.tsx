@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -47,8 +46,7 @@ import {
   Pattern as PatternIcon,
 } from '@mui/icons-material'
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns'
-import { AppDispatch, RootState } from '../../store/store'
-import { addTimeCollection, updateTimeCollection } from '../../store/worldSlice'
+import { useWorld, useAddTimeCollection, useUpdateTimeCollection } from '../../store/queries'
 import {
   TimeCollection,
   RecurrenceFrequency,
@@ -101,8 +99,11 @@ export default function TimeCollectionBuilder({
   onClose,
   collection,
 }: TimeCollectionBuilderProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { times, events } = useSelector((state: RootState) => state.world)
+  const { data: worldData } = useWorld()
+  const times = worldData?.times ?? []
+  const events = worldData?.events ?? []
+  const { mutate: addTimeCollection } = useAddTimeCollection()
+  const { mutate: updateTimeCollection } = useUpdateTimeCollection()
   
   // Basic fields
   const [name, setName] = useState('')
@@ -360,9 +361,9 @@ export default function TimeCollectionBuilder({
     }
     
     if (collection) {
-      dispatch(updateTimeCollection({ ...collection, ...collectionData }))
+      updateTimeCollection({ ...collection, ...collectionData })
     } else {
-      dispatch(addTimeCollection(collectionData))
+      addTimeCollection(collectionData)
     }
     
     onClose()

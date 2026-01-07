@@ -2,16 +2,14 @@
  * Tests for OntologyWorkspace component.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { http, HttpResponse } from 'msw'
 import React from 'react'
 import OntologyWorkspace from './OntologyWorkspace'
-import personaSlice from '../../store/personaSlice'
-import worldSlice from '../../store/worldSlice'
+import { server } from '../../../test/setup'
 
 /**
  * Mock PersonaBrowser to simplify persona selection testing.
@@ -142,38 +140,23 @@ vi.mock('../../hooks/usePreferences', () => ({
 
 /**
  * Mock model config hook with default GPU mode.
+ * Returns TanStack Query result shape.
  */
 const mockUseModelConfig = vi.fn(() => ({
   data: { cudaAvailable: true },
+  error: null,
+  isLoading: false,
+  isError: false,
 }))
 
-vi.mock('../../hooks/useModelConfig', () => ({
+vi.mock('../../store/queries/useModelConfig', () => ({
   useModelConfig: () => mockUseModelConfig(),
 }))
 
 /**
- * Creates a test Redux store with persona and world slices.
- *
- * @param initialState - Initial state for the store
- * @returns Configured Redux store for testing
+ * Creates a wrapper component with QueryClientProvider.
  */
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      persona: personaSlice,
-      world: worldSlice,
-    },
-    preloadedState: initialState,
-  })
-}
-
-/**
- * Creates a wrapper component with all required providers for OntologyWorkspace.
- *
- * @param store - Redux store instance
- * @returns React wrapper component with providers
- */
-function createWrapper(store: ReturnType<typeof createTestStore>) {
+function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -183,203 +166,217 @@ function createWrapper(store: ReturnType<typeof createTestStore>) {
   })
 
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </Provider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
 }
 
+// Mock data
+const mockPersonas = [
+  {
+    id: 'persona-urban-planner',
+    name: 'Urban Traffic Analyst',
+    role: 'Transportation Engineer',
+    informationNeed: 'Analyze traffic patterns and pedestrian flow for intersection optimization',
+  },
+  {
+    id: 'persona-food-inspector',
+    name: 'Health Inspector',
+    role: 'Food Safety Compliance Officer',
+    informationNeed: 'Document food handling violations and kitchen sanitation issues',
+  },
+  {
+    id: 'persona-art-curator',
+    name: 'Museum Curator',
+    role: 'Art Collections Manager',
+    informationNeed: 'Catalog artwork provenance and exhibition history',
+  },
+]
+
+const mockOntologies: Record<string, any> = {
+  'persona-urban-planner': {
+    personaId: 'persona-urban-planner',
+    entities: [
+      {
+        id: 'entity-vehicle',
+        name: 'Vehicle',
+        gloss: ['Motorized transportation on roadways'],
+      },
+      {
+        id: 'entity-pedestrian',
+        name: 'Pedestrian',
+        gloss: ['Person walking or crossing street'],
+      },
+      {
+        id: 'entity-traffic-signal',
+        name: 'Traffic Signal',
+        gloss: ['Light controlling traffic flow'],
+        wikidataId: 'Q123456',
+      },
+    ],
+    roles: [
+      {
+        id: 'role-operator',
+        name: 'Operator',
+        gloss: ['Entity controlling a vehicle'],
+        allowedFillerTypes: ['Person', 'Vehicle'],
+      },
+      {
+        id: 'role-location',
+        name: 'Location',
+        gloss: ['Where event occurs'],
+        allowedFillerTypes: ['Place', 'Intersection'],
+      },
+    ],
+    events: [
+      {
+        id: 'event-crossing',
+        name: 'Street Crossing',
+        gloss: ['Pedestrian traversing roadway'],
+        roles: ['role-operator', 'role-location'],
+      },
+      {
+        id: 'event-turning',
+        name: 'Vehicle Turn',
+        gloss: ['Vehicle changing direction at intersection'],
+        roles: ['role-operator'],
+      },
+    ],
+    relationTypes: [
+      {
+        id: 'relation-blocks',
+        name: 'Blocks',
+        gloss: ['One vehicle obstructs another'],
+        sourceTypes: ['Vehicle'],
+        targetTypes: ['Vehicle', 'Pedestrian'],
+      },
+      {
+        id: 'relation-adjacent',
+        name: 'Adjacent To',
+        gloss: ['Located next to'],
+        sourceTypes: ['Vehicle'],
+        targetTypes: ['Vehicle'],
+      },
+    ],
+  },
+  'persona-food-inspector': {
+    personaId: 'persona-food-inspector',
+    entities: [
+      {
+        id: 'entity-contamination',
+        name: 'Contamination Source',
+        gloss: ['Unsanitary condition or material'],
+      },
+    ],
+    roles: [
+      {
+        id: 'role-handler',
+        name: 'Food Handler',
+        gloss: ['Person preparing or serving food'],
+        allowedFillerTypes: ['Person'],
+      },
+    ],
+    events: [
+      {
+        id: 'event-violation',
+        name: 'Health Code Violation',
+        gloss: ['Failure to meet sanitation standards'],
+        roles: ['role-handler'],
+      },
+    ],
+    relationTypes: [
+      {
+        id: 'relation-contaminates',
+        name: 'Contaminates',
+        gloss: ['Source introduces unsafe material to food'],
+        sourceTypes: ['Contamination Source'],
+        targetTypes: ['Food Item'],
+      },
+    ],
+  },
+  'persona-art-curator': {
+    personaId: 'persona-art-curator',
+    entities: [
+      {
+        id: 'entity-artwork',
+        name: 'Artwork',
+        gloss: ['Creative work on display'],
+        wikidataId: 'Q234567',
+      },
+    ],
+    roles: [],
+    events: [],
+    relationTypes: [],
+  },
+}
+
+const mockWorld = {
+  entities: [],
+  events: [],
+  times: [],
+  locations: [],
+  relations: [],
+  collections: [],
+}
+
 /**
- * Creates default Redux state with diverse ontology examples.
+ * Sets up default MSW handlers for all APIs.
  */
-function createDefaultState() {
-  return {
-    persona: {
-      personas: [
-        {
-          id: 'persona-urban-planner',
-          name: 'Urban Traffic Analyst',
-          role: 'Transportation Engineer',
-          informationNeed: 'Analyze traffic patterns and pedestrian flow for intersection optimization',
-        },
-        {
-          id: 'persona-food-inspector',
-          name: 'Health Inspector',
-          role: 'Food Safety Compliance Officer',
-          informationNeed: 'Document food handling violations and kitchen sanitation issues',
-        },
-        {
-          id: 'persona-art-curator',
-          name: 'Museum Curator',
-          role: 'Art Collections Manager',
-          informationNeed: 'Catalog artwork provenance and exhibition history',
-        },
-      ],
-      personaOntologies: [
-        {
-          personaId: 'persona-urban-planner',
-          entities: [
-            {
-              id: 'entity-vehicle',
-              name: 'Vehicle',
-              gloss: ['Motorized transportation on roadways'],
-            },
-            {
-              id: 'entity-pedestrian',
-              name: 'Pedestrian',
-              gloss: ['Person walking or crossing street'],
-            },
-            {
-              id: 'entity-traffic-signal',
-              name: 'Traffic Signal',
-              gloss: ['Light controlling traffic flow'],
-              wikidataId: 'Q123456',
-            },
-          ],
-          roles: [
-            {
-              id: 'role-operator',
-              name: 'Operator',
-              gloss: ['Entity controlling a vehicle'],
-              allowedFillerTypes: ['Person', 'Vehicle'],
-            },
-            {
-              id: 'role-location',
-              name: 'Location',
-              gloss: ['Where event occurs'],
-              allowedFillerTypes: ['Place', 'Intersection'],
-            },
-          ],
-          events: [
-            {
-              id: 'event-crossing',
-              name: 'Street Crossing',
-              gloss: ['Pedestrian traversing roadway'],
-              roles: ['role-operator', 'role-location'],
-            },
-            {
-              id: 'event-turning',
-              name: 'Vehicle Turn',
-              gloss: ['Vehicle changing direction at intersection'],
-              roles: ['role-operator'],
-            },
-          ],
-          relationTypes: [
-            {
-              id: 'relation-blocks',
-              name: 'Blocks',
-              gloss: ['One vehicle obstructs another'],
-              sourceTypes: ['Vehicle'],
-              targetTypes: ['Vehicle', 'Pedestrian'],
-            },
-            {
-              id: 'relation-adjacent',
-              name: 'Adjacent To',
-              gloss: ['Located next to'],
-              sourceTypes: ['Vehicle'],
-              targetTypes: ['Vehicle'],
-            },
-          ],
-        },
-        {
-          personaId: 'persona-food-inspector',
-          entities: [
-            {
-              id: 'entity-contamination',
-              name: 'Contamination Source',
-              gloss: ['Unsanitary condition or material'],
-            },
-          ],
-          roles: [
-            {
-              id: 'role-handler',
-              name: 'Food Handler',
-              gloss: ['Person preparing or serving food'],
-              allowedFillerTypes: ['Person'],
-            },
-          ],
-          events: [
-            {
-              id: 'event-violation',
-              name: 'Health Code Violation',
-              gloss: ['Failure to meet sanitation standards'],
-              roles: ['role-handler'],
-            },
-          ],
-          relationTypes: [
-            {
-              id: 'relation-contaminates',
-              name: 'Contaminates',
-              gloss: ['Source introduces unsafe material to food'],
-              sourceTypes: ['Contamination Source'],
-              targetTypes: ['Food Item'],
-            },
-          ],
-        },
-        {
-          personaId: 'persona-art-curator',
-          entities: [
-            {
-              id: 'entity-artwork',
-              name: 'Artwork',
-              gloss: ['Creative work on display'],
-              wikidataId: 'Q234567',
-            },
-          ],
-          roles: [],
-          events: [],
-          relationTypes: [],
-        },
-      ],
-    },
-    world: {
-      entities: [],
-      events: [],
-      times: [],
-      locations: [],
-      relations: [],
-      collections: [],
-    },
-  }
+function setupDefaultHandlers(personas = mockPersonas, ontologies = mockOntologies) {
+  server.use(
+    http.get('/api/personas', () => {
+      return HttpResponse.json(personas)
+    }),
+    http.get('/api/personas/:personaId/ontology', ({ params }) => {
+      const ontology = ontologies[params.personaId as string]
+      if (ontology) {
+        return HttpResponse.json(ontology)
+      }
+      return HttpResponse.json({ entities: [], roles: [], events: [], relationTypes: [] })
+    }),
+    http.get('/api/world', () => {
+      return HttpResponse.json(mockWorld)
+    })
+  )
 }
 
 describe('OntologyWorkspace', () => {
+  beforeEach(() => {
+    server.resetHandlers()
+    // Reset model config mock to default GPU-available state
+    mockUseModelConfig.mockReturnValue({
+      data: { cudaAvailable: true },
+      error: null,
+      isLoading: false,
+      isError: false,
+    })
+  })
+
   describe('Initial Rendering', () => {
     it('renders ontology workspace with first persona auto-selected', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      // Pre-select the first persona
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Urban Traffic Analyst')).toBeInTheDocument()
       })
     })
 
-    it('renders persona browser when no personas exist', () => {
-      const emptyState = {
-        persona: {
-          personas: [],
-          personaOntologies: [],
-        },
-        world: {
-          entities: [],
-          events: [],
-          times: [],
-          locations: [],
-          relations: [],
-          collections: [],
-        },
-      }
-      const store = createTestStore(emptyState)
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+    it('renders persona browser when no personas exist', async () => {
+      setupDefaultHandlers([], {})
 
-      expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      })
     })
   })
 
   describe('Persona Selection', () => {
     it('displays persona information in header on load', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Urban Traffic Analyst')).toBeInTheDocument()
@@ -388,8 +385,8 @@ describe('OntologyWorkspace', () => {
     })
 
     it('shows back button to return to persona browser', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         const buttons = screen.getAllByRole('button')
@@ -403,8 +400,8 @@ describe('OntologyWorkspace', () => {
 
     it('returns to persona browser when back button clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Urban Traffic Analyst')).toBeInTheDocument()
@@ -426,31 +423,20 @@ describe('OntologyWorkspace', () => {
     })
 
     it('can select different persona from browser', async () => {
-      const emptyState = {
-        persona: {
-          personas: [],
-          personaOntologies: [],
-        },
-        world: {
-          entities: [],
-          events: [],
-          times: [],
-          locations: [],
-          relations: [],
-          collections: [],
-        },
-      }
-      const store = createTestStore(emptyState)
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers([], {})
 
-      expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      })
     })
   })
 
   describe('Tab Navigation', () => {
     it('displays all four ontology type tabs', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/Entity Types/)).toBeInTheDocument()
@@ -461,8 +447,8 @@ describe('OntologyWorkspace', () => {
     })
 
     it('shows entity types in first tab by default', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -473,8 +459,8 @@ describe('OntologyWorkspace', () => {
 
     it('switches to role types tab when clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -491,8 +477,8 @@ describe('OntologyWorkspace', () => {
 
     it('switches to event types tab when clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -509,8 +495,8 @@ describe('OntologyWorkspace', () => {
 
     it('switches to relation types tab when clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -526,8 +512,8 @@ describe('OntologyWorkspace', () => {
     })
 
     it('displays correct item count in tab labels', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/Entity Types \(3\/3\)/)).toBeInTheDocument()
@@ -540,8 +526,8 @@ describe('OntologyWorkspace', () => {
 
   describe('Search Functionality', () => {
     it('displays search input field', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/Search types by name/)).toBeInTheDocument()
@@ -550,8 +536,8 @@ describe('OntologyWorkspace', () => {
 
     it('filters entity types by name', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -568,8 +554,8 @@ describe('OntologyWorkspace', () => {
 
     it('updates tab label counts when filtering', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/Entity Types \(3\/3\)/)).toBeInTheDocument()
@@ -585,8 +571,8 @@ describe('OntologyWorkspace', () => {
 
     it('filters across different tabs', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -605,8 +591,8 @@ describe('OntologyWorkspace', () => {
 
     it('shows no results when search matches nothing', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -625,8 +611,8 @@ describe('OntologyWorkspace', () => {
   describe('CRUD Operations - Entity Types', () => {
     it('opens entity type editor when add button clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -643,8 +629,8 @@ describe('OntologyWorkspace', () => {
 
     it('opens entity type editor in edit mode when edit clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -660,8 +646,8 @@ describe('OntologyWorkspace', () => {
 
     it('closes entity type editor when close button clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -686,8 +672,8 @@ describe('OntologyWorkspace', () => {
   describe('CRUD Operations - Role Types', () => {
     it('opens role editor when add button clicked on roles tab', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -709,8 +695,13 @@ describe('OntologyWorkspace', () => {
 
     it('displays allowed filler types for roles', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      // Wait for data to load first
+      await waitFor(() => {
+        expect(screen.getByText('Vehicle')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText(/Role Types/))
 
@@ -723,8 +714,8 @@ describe('OntologyWorkspace', () => {
   describe('CRUD Operations - Event Types', () => {
     it('opens event type editor when add button clicked on events tab', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -746,8 +737,13 @@ describe('OntologyWorkspace', () => {
 
     it('displays role count for event types', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      // Wait for data to load first
+      await waitFor(() => {
+        expect(screen.getByText('Vehicle')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText(/Event Types/))
 
@@ -760,8 +756,8 @@ describe('OntologyWorkspace', () => {
   describe('CRUD Operations - Relation Types', () => {
     it('opens relation type editor when add button clicked on relations tab', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -783,8 +779,13 @@ describe('OntologyWorkspace', () => {
 
     it('displays source and target types for relations', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      // Wait for data to load first
+      await waitFor(() => {
+        expect(screen.getByText('Vehicle')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText(/Relation Types/))
 
@@ -796,8 +797,8 @@ describe('OntologyWorkspace', () => {
 
   describe('GPU/CPU Mode Detection', () => {
     it('shows ontology augmentation button when GPU available', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         const suggestButton = screen.getByRole('button', { name: /Suggest Types/i })
@@ -807,23 +808,30 @@ describe('OntologyWorkspace', () => {
     })
 
     it('hides ontology augmentation in CPU-only mode', async () => {
-      mockUseModelConfig.mockReturnValueOnce({
+      // Override mock to return CPU-only mode
+      mockUseModelConfig.mockReturnValue({
         data: { cudaAvailable: false },
+        error: null,
+        isLoading: false,
+        isError: false,
       })
 
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
+      // Wait for data to load first
       await waitFor(() => {
-        const suggestButton = screen.getByRole('button', { name: /Suggest Types/i })
-        expect(suggestButton).toBeDisabled()
+        expect(screen.getByText('Vehicle')).toBeInTheDocument()
       })
+
+      const suggestButton = screen.getByRole('button', { name: /Suggest Types/i })
+      expect(suggestButton).toBeDisabled()
     })
 
     it('opens ontology augmenter when suggest button clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -839,8 +847,8 @@ describe('OntologyWorkspace', () => {
 
     it('closes ontology augmenter when close clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -864,8 +872,8 @@ describe('OntologyWorkspace', () => {
 
   describe('Empty States', () => {
     it('shows correct tab counts with first persona auto-selected', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/Entity Types \(3\/3\)/)).toBeInTheDocument()
@@ -873,17 +881,14 @@ describe('OntologyWorkspace', () => {
     })
 
     it('shows empty ontology when persona has no types', async () => {
-      const state = createDefaultState()
-      state.persona.personaOntologies[0].entities = []
-      state.persona.personaOntologies[0].roles = []
-      state.persona.personaOntologies[0].events = []
-      state.persona.personaOntologies[0].relationTypes = []
+      // Set up with only art curator persona, which has empty roles, events, relationTypes
+      const artCuratorOnly = [mockPersonas[2]] // persona-art-curator
+      setupDefaultHandlers(artCuratorOnly, mockOntologies)
 
-      const store = createTestStore(state)
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
-        expect(screen.getByText(/Entity Types \(0\/0\)/)).toBeInTheDocument()
+        expect(screen.getByText(/Entity Types \(1\/1\)/)).toBeInTheDocument()
         expect(screen.getByText(/Role Types \(0\/0\)/)).toBeInTheDocument()
       })
     })
@@ -891,8 +896,8 @@ describe('OntologyWorkspace', () => {
 
   describe('Diverse Domain Examples', () => {
     it('displays urban planning ontology with traffic types', async () => {
-      const store = createTestStore(createDefaultState())
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Vehicle')).toBeInTheDocument()
@@ -902,9 +907,8 @@ describe('OntologyWorkspace', () => {
     })
 
     it('renders multiple persona ontologies correctly', async () => {
-      const state = createDefaultState()
-      const store = createTestStore(state)
-      render(<OntologyWorkspace />, { wrapper: createWrapper(store) })
+      setupDefaultHandlers()
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/Entity Types/)).toBeInTheDocument()

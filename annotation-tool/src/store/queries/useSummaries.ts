@@ -16,7 +16,7 @@ import {
   GenerateSummaryRequest,
   GenerateSummaryResponse,
   ApiError,
-} from '../api/client'
+} from '../../api/client'
 
 /**
  * Query key factory for video summaries.

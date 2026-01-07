@@ -709,6 +709,40 @@ export const handlers = [
     return HttpResponse.json([])
   }),
 
+  // World state endpoint (for useWorld hook)
+  http.get('/api/world', () => {
+    return HttpResponse.json({
+      entities: [],
+      events: [],
+      times: [],
+      entityCollections: [],
+      eventCollections: [],
+      timeCollections: [],
+      relations: [],
+    })
+  }),
+
+  // Claims endpoint (for useClaims hook)
+  http.get('/api/summaries/:summaryId/claims', () => {
+    return HttpResponse.json([])
+  }),
+
+  // Persona ontology endpoint (for usePersonaOntology hook)
+  http.get('/api/personas/:personaId/ontology', () => {
+    return HttpResponse.json({
+      entities: [],
+      roles: [],
+      events: [],
+      relationTypes: [],
+      relations: [],
+    })
+  }),
+
+  // Personas endpoint (for usePersonas hook)
+  http.get('/api/personas', () => {
+    return HttpResponse.json([])
+  }),
+
   http.get('/api/admin/users/:userId', ({ params }) => {
     const { userId } = params
     if (userId === 'user-1') {

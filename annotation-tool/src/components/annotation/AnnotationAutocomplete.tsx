@@ -18,7 +18,7 @@ import {
   Folder as CollectionIcon,
 } from '@mui/icons-material'
 import { RootState, AppDispatch } from '../../store/store'
-import { setLinkTarget } from '../../store/annotationSlice'
+import { setLinkTarget } from '../../store/slices/annotationSlice'
 
 interface AnnotationOption {
   id: string

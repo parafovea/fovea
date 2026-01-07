@@ -1,8 +1,8 @@
 import { createSlice, PayloadAction, createSelector, createAsyncThunk } from '@reduxjs/toolkit'
-import { Annotation, Time, BoundingBox, InterpolationType, TrackingResult } from '../models/types.js'
-import { DetectionResponse } from '../api/client.js'
-import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../utils/interpolation.js'
-import { api } from '../services/api'
+import { Annotation, Time, BoundingBox, InterpolationType, TrackingResult } from '../../models/types.js'
+import { DetectionResponse } from '../../api/client.js'
+import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../../utils/interpolation.js'
+import { api } from '../../services/api'
 import { v4 as uuidv4 } from 'uuid'
 
 type AnnotationMode =

@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { User } from '../models/types.js'
+import { User } from '../../models/types.js'
 
 /**
  * Wikidata/Wikibase configuration.

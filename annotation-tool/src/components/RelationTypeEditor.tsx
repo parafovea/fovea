@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -32,9 +31,14 @@ import {
   Add as AddIcon,
   ArrowForward as ArrowIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { addRelationType, updateRelationType, addRelation, deleteRelation } from '../store/personaSlice'
+import {
+  usePersonaOntology,
+  useAddRelationTypeToPersona,
+  useUpdateRelationTypeInPersona,
+  useAddRelationToPersona,
+  useDeleteRelationFromPersona,
+} from '../store/queries'
 import { RelationType, GlossItem, OntologyRelation } from '../models/types'
 import GlossEditor from './GlossEditor'
 
@@ -51,11 +55,13 @@ export default function RelationTypeEditor({
   relationType,
   personaId,
 }: RelationTypeEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const ontology = useSelector((state: RootState) => 
-    state.persona.personaOntologies.find(o => o.personaId === personaId)
-  )
-  
+  // TanStack Query hooks
+  const { data: ontology } = usePersonaOntology(personaId)
+  const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
+  const { mutate: updateRelationTypeMutation } = useUpdateRelationTypeInPersona()
+  const { mutate: addRelationMutation } = useAddRelationToPersona()
+  const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
+
   const [tabValue, setTabValue] = useState(0)
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([])
@@ -118,9 +124,9 @@ export default function RelationTypeEditor({
     }
 
     if (relationType) {
-      dispatch(updateRelationType({ personaId, relationType: relationTypeData }))
+      updateRelationTypeMutation({ personaId, relationType: relationTypeData })
     } else {
-      dispatch(addRelationType({ personaId, relationType: relationTypeData }))
+      addRelationTypeMutation({ personaId, relationType: relationTypeData })
     }
 
     onClose()
@@ -168,16 +174,16 @@ export default function RelationTypeEditor({
       updatedAt: new Date().toISOString(),
     }
 
-    dispatch(addRelation({ personaId, relation: newRelation }))
-    
+    addRelationMutation({ personaId, relation: newRelation })
+
     // Reset form
     setSourceId('')
     setTargetId('')
   }
-  
+
   const handleDeleteRelationInstance = (relationId: string) => {
     if (!personaId) return
-    dispatch(deleteRelation({ personaId, relationId }))
+    deleteRelationMutation({ personaId, relationId })
   }
   
   const getItemName = (type: 'entity' | 'role' | 'event' | 'time' | 'claim', id: string) => {

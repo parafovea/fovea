@@ -1,10 +1,9 @@
-import { useSelector } from 'react-redux'
-import { RootState } from '../store/store'
 import {
+  useAuthStore,
   AppConfig,
   WikidataConfig,
   ExternalLinksConfig,
-} from '../store/userSlice'
+} from '../store/zustand/authStore'
 
 /** Default Wikidata API URL */
 const DEFAULT_WIKIDATA_URL = 'https://www.wikidata.org/w/api.php'
@@ -27,12 +26,12 @@ const DEFAULT_CONFIG: AppConfig = {
 
 /**
  * Hook to access the full application configuration.
- * Returns the config from Redux store, or defaults if not yet loaded.
+ * Returns the config from Zustand store, or defaults if not yet loaded.
  *
  * @returns Full AppConfig object
  */
 export function useAppConfig(): AppConfig {
-  const appConfig = useSelector((state: RootState) => state.user.appConfig)
+  const appConfig = useAuthStore(state => state.appConfig)
   return appConfig ?? DEFAULT_CONFIG
 }
 
@@ -62,7 +61,7 @@ export function useExternalLinksConfig(): ExternalLinksConfig {
  * @returns true if config is loaded, false if using defaults
  */
 export function useIsConfigLoaded(): boolean {
-  const appConfig = useSelector((state: RootState) => state.user.appConfig)
+  const appConfig = useAuthStore(state => state.appConfig)
   return appConfig !== null
 }
 

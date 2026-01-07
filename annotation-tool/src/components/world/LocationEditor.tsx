@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -39,8 +38,8 @@ import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../../store/store'
-import { addEntity, updateEntity } from '../../store/worldSlice'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
@@ -63,8 +62,16 @@ interface Coordinate {
 }
 
 export default function LocationEditor({ open, onClose, location }: LocationEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies, activePersonaId } = useSelector((state: RootState) => state.persona)
+  // TanStack Query hooks for personas
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map((p) => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
+
+  // Active persona from Zustand store
+  const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+
+  const { mutate: addEntity } = useAddEntity()
+  const { mutate: updateEntity } = useUpdateEntity()
   
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
@@ -217,9 +224,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         properties: {},
       },
     }
-    
+
     let locationData: Omit<LocationPoint | LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
-    
+
     if (locationType === 'point') {
       locationData = {
         ...baseEntity,
@@ -236,13 +243,13 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         boundingBox: useBoundingBox ? boundingBox : undefined,
       } as Omit<LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
     }
-    
+
     if (location) {
-      dispatch(updateEntity({ ...location, ...locationData } as any))
+      updateEntity({ ...location, ...locationData } as any)
     } else {
-      dispatch(addEntity(locationData as any))
+      addEntity(locationData as any)
     }
-    
+
     onClose()
   }
 

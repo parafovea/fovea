@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect, FormEvent } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -24,8 +23,8 @@ import {
   AccordionDetails,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { useUpdateUser, useDeleteUser, UserWithStats } from '../../hooks/admin/useUsers.js'
-import { RootState } from '../../store/store.js'
+import { useUpdateUser, useDeleteUser, UserWithStats } from '../../store/queries/admin/useUsers.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 import ConfirmDialog from '../shared/ConfirmDialog.js'
 
 /**
@@ -49,7 +48,7 @@ interface EditUserDialogProps {
 export default function EditUserDialog({ open, user, onClose }: EditUserDialogProps) {
   const updateUser = useUpdateUser()
   const deleteUser = useDeleteUser()
-  const { currentUser } = useSelector((state: RootState) => state.user)
+  const currentUser = useAuthStore(state => state.currentUser)
 
   const [formData, setFormData] = useState({
     displayName: user.displayName,

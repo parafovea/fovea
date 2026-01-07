@@ -10,8 +10,8 @@ import {
   OntologyRelation,
   EventInterpretation,
   EntityTypeAssignment
-} from '../models/types'
-import { generateId } from '../utils/uuid'
+} from '../../models/types'
+import { generateId } from '../../utils/uuid'
 
 /**
  * API client for world state operations.

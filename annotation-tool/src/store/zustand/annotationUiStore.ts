@@ -26,7 +26,8 @@
 
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import { Annotation, Time, InterpolationType } from '../models/types.js'
+import { Annotation, Time, InterpolationType } from '../../models/types.js'
+import { DetectionResponse } from '../../api/client.js'
 
 /**
  * Annotation mode determines how annotations are created
@@ -62,7 +63,7 @@ interface TemporaryBox {
   height: number
 }
 
-interface AnnotationUiState {
+export interface AnnotationUiState {
   // ========== Drawing State ==========
   /** Whether user is currently drawing a bounding box */
   isDrawing: boolean
@@ -102,6 +103,8 @@ interface AnnotationUiState {
   detectionQuery: string
   /** Detection confidence threshold slider value */
   detectionConfidenceThreshold: number
+  /** Detection results from API (cached for UI display) */
+  detectionResults: DetectionResponse | null
 
   // ========== Tracking UI State ==========
   /** Whether to show tracking results overlay */
@@ -110,6 +113,10 @@ interface AnnotationUiState {
   previewedTrackId: string | number | null
 
   // ========== Timeline UI State ==========
+  /** Whether the timeline panel is expanded */
+  timelineExpanded: boolean
+  /** Whether the timeline component is mounted (for animation) */
+  timelineMounted: boolean
   /** Motion path visibility for sequence annotations */
   showMotionPath: boolean
   /** Timeline zoom level (1-10x) */
@@ -145,12 +152,16 @@ interface AnnotationUiState {
   setShowDetectionCandidates: (show: boolean) => void
   setDetectionQuery: (query: string) => void
   setDetectionConfidenceThreshold: (threshold: number) => void
+  setDetectionResults: (results: DetectionResponse | null) => void
+  clearDetectionState: () => void
 
   // Tracking UI actions
   setShowTrackingResults: (show: boolean) => void
   setPreviewedTrackId: (trackId: string | number | null) => void
 
   // Timeline UI actions
+  setTimelineExpanded: (expanded: boolean) => void
+  setTimelineMounted: (mounted: boolean) => void
   setShowMotionPath: (show: boolean) => void
   setTimelineZoom: (zoom: number) => void
   setCurrentFrame: (frame: number) => void
@@ -189,12 +200,15 @@ const initialState = {
   showDetectionCandidates: false,
   detectionQuery: '',
   detectionConfidenceThreshold: 0.5,
+  detectionResults: null,
 
   // Tracking UI state
   showTrackingResults: false,
   previewedTrackId: null,
 
   // Timeline UI state
+  timelineExpanded: false,
+  timelineMounted: false,
   showMotionPath: false,
   timelineZoom: 1,
   currentFrame: 0,
@@ -269,6 +283,15 @@ export const useAnnotationUiStore = create<AnnotationUiState>()(
         set({ detectionQuery }, false, 'setDetectionQuery'),
       setDetectionConfidenceThreshold: (detectionConfidenceThreshold) =>
         set({ detectionConfidenceThreshold }, false, 'setDetectionConfidenceThreshold'),
+      setDetectionResults: (detectionResults) =>
+        set({ detectionResults }, false, 'setDetectionResults'),
+      clearDetectionState: () =>
+        set({
+          showDetectionCandidates: false,
+          detectionQuery: '',
+          detectionConfidenceThreshold: 0.5,
+          detectionResults: null,
+        }, false, 'clearDetectionState'),
 
       // Tracking UI actions
       setShowTrackingResults: (showTrackingResults) =>
@@ -277,6 +300,10 @@ export const useAnnotationUiStore = create<AnnotationUiState>()(
         set({ previewedTrackId }, false, 'setPreviewedTrackId'),
 
       // Timeline UI actions
+      setTimelineExpanded: (timelineExpanded) =>
+        set({ timelineExpanded }, false, 'setTimelineExpanded'),
+      setTimelineMounted: (timelineMounted) =>
+        set({ timelineMounted }, false, 'setTimelineMounted'),
       setShowMotionPath: (showMotionPath) =>
         set({ showMotionPath }, false, 'setShowMotionPath'),
       setTimelineZoom: (timelineZoom) =>

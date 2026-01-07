@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -9,9 +8,8 @@ import {
   Button,
   Box,
 } from '@mui/material'
-import { AppDispatch } from '../store/store'
-import { addPersona, updatePersona } from '../store/personaSlice'
-import { Persona, PersonaOntology } from '../models/types'
+import { useCreatePersona, useUpdatePersona } from '../store/queries'
+import { Persona } from '../models/types'
 import { generateId } from '../utils/uuid'
 
 interface PersonaEditorProps {
@@ -21,7 +19,9 @@ interface PersonaEditorProps {
 }
 
 export default function PersonaEditor({ open, onClose, persona }: PersonaEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  // TanStack Query mutations
+  const { mutate: createPersonaMutation } = useCreatePersona()
+  const { mutate: updatePersonaMutation } = useUpdatePersona()
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [informationNeed, setInformationNeed] = useState('')
@@ -54,20 +54,23 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
     }
 
     if (persona) {
-      dispatch(updatePersona(personaData))
+      updatePersonaMutation(personaData)
     } else {
-      const newOntology: PersonaOntology = {
-        id: generateId(),
-        personaId: personaData.id,
-        entities: [],
-        roles: [],
-        events: [],
-        relationTypes: [],
-        relations: [],
-        createdAt: now,
-        updatedAt: now,
-      }
-      dispatch(addPersona({ persona: personaData, ontology: newOntology }))
+      createPersonaMutation({
+        persona: {
+          name: personaData.name,
+          role: personaData.role,
+          informationNeed: personaData.informationNeed,
+          details: personaData.details,
+        },
+        ontology: {
+          entities: [],
+          roles: [],
+          events: [],
+          relationTypes: [],
+          relations: [],
+        },
+      })
     }
     onClose()
   }

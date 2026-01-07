@@ -32,7 +32,7 @@ import {
   CloudOff as UnloadedIcon,
   Schedule as ScheduleIcon,
 } from '@mui/icons-material'
-import { useModelStatus } from '../hooks/useModelConfig'
+import { useModelStatus } from '../store/queries/useModelConfig'
 import { LoadedModelStatus, ModelHealth } from '../api/client'
 import { formatDistanceToNow } from 'date-fns'
 

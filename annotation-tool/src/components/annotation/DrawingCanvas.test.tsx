@@ -8,7 +8,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import DrawingCanvas from './DrawingCanvas'
-import annotationSlice from '../../store/annotationSlice'
+import annotationSlice from '../../store/slices/annotationSlice'
 import type { DetectionResponse } from '../../api/client'
 
 /**

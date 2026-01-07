@@ -1,17 +1,52 @@
 /**
  * Tests for ClaimRelationEditor component.
+ *
+ * Following industry standards:
+ * - MSW for API mocking (configured in test/setup.ts)
+ * - Fresh QueryClient per test for isolation
+ * - No Redux - uses TanStack Query + Zustand
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { http, HttpResponse } from 'msw'
 import React from 'react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
 import { Claim, RelationType } from '../../models/types'
-import claimsReducer from '../../store/claimsSlice'
-import personaReducer from '../../store/personaSlice'
+import { server } from '../../../test/setup'
+
+/**
+ * Creates a fresh QueryClient for each test.
+ * Following TkDodo's pattern for test isolation.
+ */
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+        staleTime: 0,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  })
+}
+
+/**
+ * Creates wrapper with QueryClientProvider.
+ */
+function createWrapper() {
+  const queryClient = createTestQueryClient()
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  )
+}
 
 const mockSourceClaim: Claim = {
   id: 'claim-1',
@@ -76,74 +111,47 @@ describe('ClaimRelationEditor', () => {
     relationTypes: mockRelationTypes,
   }
 
-  // Setup Redux store with claims data
-  const createTestStore = () => configureStore({
-    reducer: {
-      claims: claimsReducer,
-      persona: personaReducer,
-    },
-    preloadedState: {
-      claims: {
-        claimsBySummary: {
-          'summary-1': mockAvailableClaims,
-        },
-        selectedClaimId: null,
-        extracting: false,
-        extractionJobId: null,
-        extractionProgress: null,
-        extractionError: null,
-        loading: false,
-        error: null,
-        relations: {},
-      },
-      persona: {
-        personas: [],
-        personaOntologies: [],
-        loading: false,
-        error: null,
-      },
-    },
-  })
+  beforeEach(() => {
+    server.resetHandlers()
+    vi.clearAllMocks()
 
-  const createWrapper = (store: ReturnType<typeof createTestStore>) =>
-    ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
+    // Set up MSW handlers for claims API
+    server.use(
+      http.get('/api/summaries/:summaryId/claims', () => {
+        return HttpResponse.json(mockAvailableClaims)
+      })
     )
+  })
 
   describe('Form Display', () => {
     it('shows source claim as read-only', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/source claim/i)).toBeInTheDocument()
       expect(screen.getByText(/baseball is a popular sport/i)).toBeInTheDocument()
     })
 
     it('renders relation type dropdown', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByLabelText(/relation type/i)).toBeInTheDocument()
     })
 
     it('renders target claim autocomplete', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByLabelText(/target claim/i)).toBeInTheDocument()
     })
 
     it('renders confidence slider', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/confidence:/i)).toBeInTheDocument()
       expect(screen.getByRole('slider')).toBeInTheDocument()
     })
 
     it('renders notes textarea', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByLabelText(/notes \(optional\)/i)).toBeInTheDocument()
     })
@@ -151,8 +159,7 @@ describe('ClaimRelationEditor', () => {
 
   describe('Relation Type Filtering', () => {
     it('shows only claim-compatible types', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Should show the 2 claim-compatible types
       const relationTypeSelect = screen.getByLabelText(/relation type/i)
@@ -171,13 +178,12 @@ describe('ClaimRelationEditor', () => {
         updatedAt: '2024-01-01T00:00:00Z',
       }
 
-      const store = createTestStore()
       render(
         <ClaimRelationEditor
           {...defaultProps}
           relationTypes={[...mockRelationTypes, entityOnlyRelationType]}
         />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper() }
       )
 
       // The entity-only type should not be available in the dropdown
@@ -186,8 +192,7 @@ describe('ClaimRelationEditor', () => {
     })
 
     it('shows warning when no compatible types', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} relationTypes={[]} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} relationTypes={[]} />, { wrapper: createWrapper() })
 
       expect(
         screen.getByText(/no relation types support claim-to-claim relations/i)
@@ -198,8 +203,7 @@ describe('ClaimRelationEditor', () => {
   describe('Target Claim Selection', () => {
     it('lists all claims except source', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       const targetInput = screen.getByLabelText(/target claim/i)
       await user.click(targetInput)
@@ -213,8 +217,7 @@ describe('ClaimRelationEditor', () => {
 
     it('shows claim text preview in dropdown', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       const targetInput = screen.getByLabelText(/target claim/i)
       await user.click(targetInput)
@@ -227,8 +230,7 @@ describe('ClaimRelationEditor', () => {
 
   describe('Validation', () => {
     it('disables save when target not selected', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       const saveButton = screen.getByRole('button', { name: /save relation/i })
       expect(saveButton).toBeDisabled()
@@ -236,8 +238,7 @@ describe('ClaimRelationEditor', () => {
 
     it('disables save when type not selected', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Select target claim but not relation type
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -254,8 +255,7 @@ describe('ClaimRelationEditor', () => {
 
     it('enables save when all required fields filled', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Select target claim
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -286,8 +286,7 @@ describe('ClaimRelationEditor', () => {
     it('calls onSave with relation data', async () => {
       const user = userEvent.setup()
       const onSave = vi.fn().mockResolvedValue(undefined)
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Select target claim
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -320,8 +319,7 @@ describe('ClaimRelationEditor', () => {
     it('includes confidence value', async () => {
       const user = userEvent.setup()
       const onSave = vi.fn().mockResolvedValue(undefined)
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill required fields
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -357,8 +355,7 @@ describe('ClaimRelationEditor', () => {
     it('includes notes if provided', async () => {
       const user = userEvent.setup()
       const onSave = vi.fn().mockResolvedValue(undefined)
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill required fields
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -399,8 +396,7 @@ describe('ClaimRelationEditor', () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
       const onSave = vi.fn().mockResolvedValue(undefined)
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onClose={onClose} onSave={onSave} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onClose={onClose} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill and submit form
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -432,8 +428,7 @@ describe('ClaimRelationEditor', () => {
     it('shows error on failure', async () => {
       const user = userEvent.setup()
       const onSave = vi.fn().mockRejectedValue(new Error('Save failed'))
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill and submit form
       const targetInput = screen.getByLabelText(/target claim/i)
@@ -465,16 +460,14 @@ describe('ClaimRelationEditor', () => {
 
   describe('Dialog Behavior', () => {
     it('opens when open=true', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByRole('dialog')).toBeInTheDocument()
       expect(screen.getByText('Create Claim Relation')).toBeInTheDocument()
     })
 
     it('does not render when open=false', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} open={false} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} open={false} />, { wrapper: createWrapper() })
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
@@ -482,8 +475,7 @@ describe('ClaimRelationEditor', () => {
     it('closes when cancel clicked', async () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} onClose={onClose} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} onClose={onClose} />, { wrapper: createWrapper() })
 
       const cancelButton = screen.getByRole('button', { name: /cancel/i })
       await user.click(cancelButton)
@@ -494,19 +486,26 @@ describe('ClaimRelationEditor', () => {
 
   describe('Default Values', () => {
     it('starts with confidence at 80%', () => {
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/confidence: 80%/i)).toBeInTheDocument()
     })
 
     it('resets form when reopened', () => {
-      const store = createTestStore()
-      const { rerender } = render(<ClaimRelationEditor {...defaultProps} open={false} />, { wrapper: createWrapper(store) })
+      const Wrapper = createWrapper()
+      const { rerender } = render(
+        <Wrapper>
+          <ClaimRelationEditor {...defaultProps} open={false} />
+        </Wrapper>
+      )
 
       // Open with selections made would be tested here
       // For simplicity, just verify it opens clean
-      rerender(<ClaimRelationEditor {...defaultProps} open={true} />)
+      rerender(
+        <Wrapper>
+          <ClaimRelationEditor {...defaultProps} open={true} />
+        </Wrapper>
+      )
 
       const saveButton = screen.getByRole('button', { name: /save relation/i })
       expect(saveButton).toBeDisabled()
@@ -515,25 +514,29 @@ describe('ClaimRelationEditor', () => {
 
   describe('Available Claims', () => {
     it('handles claims with subclaims', () => {
-      const claimsWithSubclaims: Claim[] = [
-        {
-          ...mockAvailableClaims[0],
-          subclaims: [
+      // Set up MSW handler with subclaims
+      server.use(
+        http.get('/api/summaries/:summaryId/claims', () => {
+          return HttpResponse.json([
             {
-              id: 'subclaim-1',
-              summaryId: 'summary-1',
-              summaryType: 'video',
-              text: 'Subclaim text',
-              gloss: [{ type: 'text', content: 'Subclaim text' }],
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T00:00:00Z',
+              ...mockAvailableClaims[0],
+              subclaims: [
+                {
+                  id: 'subclaim-1',
+                  summaryId: 'summary-1',
+                  summaryType: 'video',
+                  text: 'Subclaim text',
+                  gloss: [{ type: 'text', content: 'Subclaim text' }],
+                  createdAt: '2024-01-01T00:00:00Z',
+                  updatedAt: '2024-01-01T00:00:00Z',
+                },
+              ],
             },
-          ],
-        },
-      ]
+          ])
+        })
+      )
 
-      const store = createTestStore()
-      render(<ClaimRelationEditor {...defaultProps} availableClaims={claimsWithSubclaims} />, { wrapper: createWrapper(store) })
+      render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Component should flatten claims including subclaims
       expect(screen.getByLabelText(/target claim/i)).toBeInTheDocument()

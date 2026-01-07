@@ -2,15 +2,13 @@
  * @module useAutoSaveAnnotations
  * @description Hook for automatically saving annotations to the database.
  * Follows the same pattern as ontology and world object auto-save:
- * - Simple debounced save using Redux async thunk
+ * - Simple debounced save using TanStack Query mutation
  * - Tracks which IDs were initially loaded to distinguish create vs update
  * - Prevents saving on initial load (annotations just fetched from database)
  */
 
 import { useEffect, useRef } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../store/store'
-import { saveAnnotations } from '../store/annotationSlice'
+import { useSaveAnnotations } from '../store/queries'
 import { Annotation } from '../models/types'
 
 /**
@@ -57,7 +55,7 @@ export function useAutoSaveAnnotations({
   annotations,
   debounceMs = 1000,
 }: UseAutoSaveAnnotationsParams): void {
-  const dispatch = useDispatch<AppDispatch>()
+  const { mutate: saveAnnotations } = useSaveAnnotations()
   const previousAnnotationsRef = useRef<Annotation[]>([])
   const loadedAnnotationIdsRef = useRef<Set<string>>(new Set())
 
@@ -93,16 +91,20 @@ export function useAutoSaveAnnotations({
         return
       }
 
-      dispatch(saveAnnotations({
+      // Filter annotations by persona if specified
+      const annotationsToSave = personaId
+        ? annotations.filter(a => 'personaId' in a && a.personaId === personaId)
+        : annotations
+
+      saveAnnotations({
         videoId,
-        personaId,
-        annotations
-      }))
+        annotations: annotationsToSave
+      })
     }, debounceMs)
 
     // Update ref immediately so we can detect future changes
     previousAnnotationsRef.current = annotations
 
     return () => clearTimeout(timeoutId)
-  }, [videoId, personaId, annotations, debounceMs, dispatch])
+  }, [videoId, personaId, annotations, debounceMs, saveAnnotations])
 }

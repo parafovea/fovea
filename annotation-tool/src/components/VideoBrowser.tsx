@@ -10,9 +10,8 @@
  * ```
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   Grid,
@@ -49,34 +48,38 @@ import {
   OpenInNew as ExternalLinkIcon,
   AutoAwesome as SummarizeIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
-import {
-  setVideos,
-  setSearchTerm,
-  setLoading,
-  setActiveSummaryJob,
-  clearSummaryJob,
-  addVideoSummary,
-} from '../store/videoSlice'
-import { setActivePersona } from '../store/personaSlice'
+import { usePersonas } from '../store/queries'
+import { useAnnotationUiStore } from '../store/zustand'
 import { formatTimestamp, formatDuration } from '../utils/formatters'
 import { VideoMetadata } from '../models/types'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
-import { useGenerateSummary, useVideoSummary } from '../hooks/useSummaries'
+import { useVideos, useGenerateSummary, useVideoSummary, useModelConfig } from '../store/queries'
+import { useVideoUiStore } from '../store/zustand'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from './JobStatusIndicator'
-import { useModelConfig } from '../hooks/useModelConfig'
 import { useExternalLinksConfig } from '../hooks/useAppConfig'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
-  const dispatch = useDispatch<AppDispatch>()
-  const { videos, isLoading, filter, activeSummaryJobs, videoSummaries } = useSelector(
-    (state: RootState) => state.videos
-  )
-  const activePersonaId = useSelector((state: RootState) => state.persona.activePersonaId)
-  const personas = useSelector((state: RootState) => state.persona.personas)
-  const [localSearchTerm, setLocalSearchTerm] = useState(filter.searchTerm)
+
+  // TanStack Query for server state
+  const { data: videos = [], isLoading } = useVideos()
+  const { data: personas = [] } = usePersonas()
+
+  // Zustand for UI state
+  const searchTerm = useVideoUiStore((state) => state.searchTerm)
+  const setSearchTerm = useVideoUiStore((state) => state.setSearchTerm)
+  const activeSummaryJobs = useVideoUiStore((state) => state.activeSummaryJobs)
+  const videoSummaries = useVideoUiStore((state) => state.videoSummaries)
+  const setActiveSummaryJob = useVideoUiStore((state) => state.setActiveSummaryJob)
+  const clearSummaryJob = useVideoUiStore((state) => state.clearSummaryJob)
+  const addVideoSummary = useVideoUiStore((state) => state.addVideoSummary)
+
+  // Zustand for active persona selection
+  const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
+
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm)
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
   const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
   const [isBatchSummarizing, setIsBatchSummarizing] = useState(false)
@@ -88,27 +91,6 @@ export default function VideoBrowser() {
   const isCpuOnly = !modelConfig?.cudaAvailable
 
   /**
-   * Fetches video list from backend API.
-   * Updates Redux store with video metadata and manages loading state.
-   */
-  const loadVideos = useCallback(async () => {
-    dispatch(setLoading(true))
-    try {
-      const response = await fetch('/api/videos')
-      const data = await response.json()
-      dispatch(setVideos(data))
-    } catch (error) {
-      console.error('Failed to load videos:', error)
-    } finally {
-      dispatch(setLoading(false))
-    }
-  }, [dispatch])
-
-  useEffect(() => {
-    loadVideos()
-  }, [loadVideos])
-
-  /**
    * Updates search filter for video list.
    * Filters videos by title, description, uploader, and tags.
    *
@@ -116,7 +98,7 @@ export default function VideoBrowser() {
    */
   const handleSearch = (value: string) => {
     setLocalSearchTerm(value)
-    dispatch(setSearchTerm(value))
+    setSearchTerm(value)
   }
 
   /**
@@ -140,13 +122,7 @@ export default function VideoBrowser() {
       },
       {
         onSuccess: (result) => {
-          dispatch(
-            setActiveSummaryJob({
-              videoId,
-              personaId: activePersonaId,
-              jobId: result.jobId,
-            })
-          )
+          setActiveSummaryJob(videoId, activePersonaId, result.jobId)
           setExpandedSummaries((prev) => ({ ...prev, [videoId]: true }))
         },
         onError: (error) => {
@@ -158,25 +134,25 @@ export default function VideoBrowser() {
 
   /**
    * Handles successful completion of a summary job.
-   * Clears job status and adds summary reference to Redux store.
+   * Clears job status and adds summary reference to store.
    *
    * @param videoId - Video identifier
    * @param personaId - Persona identifier
    */
   const handleSummaryJobComplete = (videoId: string, personaId: string) => {
-    dispatch(clearSummaryJob({ videoId, personaId }))
-    dispatch(addVideoSummary({ videoId, personaId }))
+    clearSummaryJob(videoId, personaId)
+    addVideoSummary(videoId, personaId)
   }
 
   /**
    * Handles failed summary job.
-   * Removes job status from Redux store to allow retry.
+   * Removes job status from store to allow retry.
    *
    * @param videoId - Video identifier
    * @param personaId - Persona identifier
    */
   const handleSummaryJobFail = (videoId: string, personaId: string) => {
-    dispatch(clearSummaryJob({ videoId, personaId }))
+    clearSummaryJob(videoId, personaId)
   }
 
   /**
@@ -193,12 +169,12 @@ export default function VideoBrowser() {
 
   /**
    * Sets the active persona for video analysis.
-   * Updates Redux store with selected persona ID.
+   * Updates Zustand store with selected persona ID.
    *
    * @param personaId - Persona identifier to activate
    */
   const handlePersonaChange = (personaId: string) => {
-    dispatch(setActivePersona(personaId))
+    setSelectedPersonaId(personaId)
   }
 
   /**
@@ -217,11 +193,11 @@ export default function VideoBrowser() {
     // Generate summaries for all filtered videos that don't already have one
     for (const video of filteredVideos) {
       const jobKey = `${video.id}:${activePersonaId}`
-      const hasSummary = videoSummaries[video.id]?.includes(activePersonaId)
+      const hasSummaryForVideo = videoSummaries[video.id]?.includes(activePersonaId)
       const hasActiveJob = !!activeSummaryJobs[jobKey]
 
       // Skip if already has summary or job in progress
-      if (hasSummary || hasActiveJob) {
+      if (hasSummaryForVideo || hasActiveJob) {
         continue
       }
 
@@ -235,13 +211,7 @@ export default function VideoBrowser() {
         },
         {
           onSuccess: (result) => {
-            dispatch(
-              setActiveSummaryJob({
-                videoId: video.id,
-                personaId: activePersonaId,
-                jobId: result.jobId,
-              })
-            )
+            setActiveSummaryJob(video.id, activePersonaId, result.jobId)
           },
           onError: (error) => {
             console.error(`Failed to generate summary for video ${video.id}:`, error)
@@ -259,8 +229,8 @@ export default function VideoBrowser() {
   // Filter videos by search term across multiple fields.
   // Uses optional chaining since metadata fields may be undefined.
   const filteredVideos = videos.filter((video: VideoMetadata) => {
-    if (!filter.searchTerm) return true
-    const searchLower = filter.searchTerm.toLowerCase()
+    if (!searchTerm) return true
+    const searchLower = searchTerm.toLowerCase()
     return (
       video.filename?.toLowerCase().includes(searchLower) ||
       video.title?.toLowerCase().includes(searchLower) ||
@@ -357,7 +327,7 @@ export default function VideoBrowser() {
   // Reset selection when search changes
   useEffect(() => {
     setSelectedVideoIndex(0)
-  }, [filter.searchTerm])
+  }, [searchTerm])
 
   /**
    * Selects a video card for keyboard navigation.
@@ -485,7 +455,7 @@ export default function VideoBrowser() {
           <Typography variant="h6" color="text.secondary">
             No videos found
           </Typography>
-          {filter.searchTerm && (
+          {searchTerm && (
             <Typography variant="body2" color="text.secondary">
               Try adjusting your search query
             </Typography>

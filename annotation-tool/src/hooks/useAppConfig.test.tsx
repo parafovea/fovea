@@ -2,12 +2,9 @@
  * Tests for useAppConfig hooks.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
-import React from 'react'
-import userSlice, { AppConfig } from '../store/userSlice'
+import { useAuthStore, AppConfig } from '../store/zustand/authStore'
 import {
   useAppConfig,
   useWikidataConfig,
@@ -16,38 +13,6 @@ import {
   useWikidataBaseUrl,
   useReverseIdMapping,
 } from './useAppConfig'
-
-/**
- * Creates a test Redux store with optional initial user state.
- */
-function createTestStore(userState: Partial<{
-  appConfig: AppConfig | null
-}> = {}) {
-  return configureStore({
-    reducer: {
-      user: userSlice,
-    },
-    preloadedState: {
-      user: {
-        currentUser: null,
-        isAuthenticated: false,
-        isLoading: false,
-        mode: 'single-user' as const,
-        allowRegistration: false,
-        appConfig: userState.appConfig ?? null,
-      },
-    },
-  })
-}
-
-/**
- * Creates a wrapper component for testing hooks with Redux.
- */
-function createWrapper(store: ReturnType<typeof createTestStore>) {
-  return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>{children}</Provider>
-  )
-}
 
 /** Sample online mode config */
 const onlineConfig: AppConfig = {
@@ -86,11 +51,14 @@ const offlineConfig: AppConfig = {
 }
 
 describe('useAppConfig', () => {
+  beforeEach(() => {
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
+  })
+
   it('returns default config when appConfig is null', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useAppConfig(), {
-      wrapper: createWrapper(store),
-    })
+    // Store starts with null appConfig
+    const { result } = renderHook(() => useAppConfig())
 
     expect(result.current.mode).toBe('single-user')
     expect(result.current.allowRegistration).toBe(false)
@@ -102,20 +70,16 @@ describe('useAppConfig', () => {
     expect(result.current.externalLinks.videoSources).toBe(true)
   })
 
-  it('returns stored appConfig from Redux state', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useAppConfig(), {
-      wrapper: createWrapper(store),
-    })
+  it('returns stored appConfig from Zustand state', () => {
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useAppConfig())
 
     expect(result.current).toEqual(onlineConfig)
   })
 
   it('returns offline config when stored', () => {
-    const store = createTestStore({ appConfig: offlineConfig })
-    const { result } = renderHook(() => useAppConfig(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(offlineConfig)
+    const { result } = renderHook(() => useAppConfig())
 
     expect(result.current.wikidata.mode).toBe('offline')
     expect(result.current.wikidata.idMapping).toEqual({
@@ -127,11 +91,13 @@ describe('useAppConfig', () => {
 })
 
 describe('useWikidataConfig', () => {
+  beforeEach(() => {
+    useAuthStore.getState().reset()
+  })
+
   it('returns wikidata config from appConfig', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useWikidataConfig(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useWikidataConfig())
 
     expect(result.current.mode).toBe('online')
     expect(result.current.url).toBe('https://www.wikidata.org/w/api.php')
@@ -139,10 +105,7 @@ describe('useWikidataConfig', () => {
   })
 
   it('returns default wikidata config when appConfig is null', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useWikidataConfig(), {
-      wrapper: createWrapper(store),
-    })
+    const { result } = renderHook(() => useWikidataConfig())
 
     expect(result.current.mode).toBe('online')
     expect(result.current.url).toBe('https://www.wikidata.org/w/api.php')
@@ -150,10 +113,8 @@ describe('useWikidataConfig', () => {
   })
 
   it('returns offline config with ID mapping', () => {
-    const store = createTestStore({ appConfig: offlineConfig })
-    const { result } = renderHook(() => useWikidataConfig(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(offlineConfig)
+    const { result } = renderHook(() => useWikidataConfig())
 
     expect(result.current.mode).toBe('offline')
     expect(result.current.url).toBe('http://localhost:8181/w/api.php')
@@ -167,31 +128,28 @@ describe('useWikidataConfig', () => {
 })
 
 describe('useExternalLinksConfig', () => {
+  beforeEach(() => {
+    useAuthStore.getState().reset()
+  })
+
   it('returns external links config', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useExternalLinksConfig(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useExternalLinksConfig())
 
     expect(result.current.wikidata).toBe(true)
     expect(result.current.videoSources).toBe(true)
   })
 
   it('returns defaults when appConfig is null', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useExternalLinksConfig(), {
-      wrapper: createWrapper(store),
-    })
+    const { result } = renderHook(() => useExternalLinksConfig())
 
     expect(result.current.wikidata).toBe(true)
     expect(result.current.videoSources).toBe(true)
   })
 
   it('returns disabled links in offline mode', () => {
-    const store = createTestStore({ appConfig: offlineConfig })
-    const { result } = renderHook(() => useExternalLinksConfig(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(offlineConfig)
+    const { result } = renderHook(() => useExternalLinksConfig())
 
     expect(result.current.wikidata).toBe(false)
     expect(result.current.videoSources).toBe(true)
@@ -199,49 +157,45 @@ describe('useExternalLinksConfig', () => {
 })
 
 describe('useIsConfigLoaded', () => {
+  beforeEach(() => {
+    useAuthStore.getState().reset()
+  })
+
   it('returns false when appConfig is null', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useIsConfigLoaded(), {
-      wrapper: createWrapper(store),
-    })
+    const { result } = renderHook(() => useIsConfigLoaded())
 
     expect(result.current).toBe(false)
   })
 
   it('returns true when appConfig is loaded', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useIsConfigLoaded(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useIsConfigLoaded())
 
     expect(result.current).toBe(true)
   })
 })
 
 describe('useWikidataBaseUrl', () => {
+  beforeEach(() => {
+    useAuthStore.getState().reset()
+  })
+
   it('derives base URL from API URL (removes /w/api.php)', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useWikidataBaseUrl(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useWikidataBaseUrl())
 
     expect(result.current).toBe('https://www.wikidata.org')
   })
 
   it('handles default Wikidata URL', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useWikidataBaseUrl(), {
-      wrapper: createWrapper(store),
-    })
+    const { result } = renderHook(() => useWikidataBaseUrl())
 
     expect(result.current).toBe('https://www.wikidata.org')
   })
 
   it('handles custom Wikibase URL', () => {
-    const store = createTestStore({ appConfig: offlineConfig })
-    const { result } = renderHook(() => useWikidataBaseUrl(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(offlineConfig)
+    const { result } = renderHook(() => useWikidataBaseUrl())
 
     expect(result.current).toBe('http://localhost:8181')
   })
@@ -254,10 +208,8 @@ describe('useWikidataBaseUrl', () => {
         url: 'https://custom.wikibase.org/api',
       },
     }
-    const store = createTestStore({ appConfig: configWithCustomUrl })
-    const { result } = renderHook(() => useWikidataBaseUrl(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(configWithCustomUrl)
+    const { result } = renderHook(() => useWikidataBaseUrl())
 
     // Should return URL as-is if it doesn't match the pattern
     expect(result.current).toBe('https://custom.wikibase.org/api')
@@ -265,29 +217,26 @@ describe('useWikidataBaseUrl', () => {
 })
 
 describe('useReverseIdMapping', () => {
+  beforeEach(() => {
+    useAuthStore.getState().reset()
+  })
+
   it('returns null when no ID mapping', () => {
-    const store = createTestStore({ appConfig: onlineConfig })
-    const { result } = renderHook(() => useReverseIdMapping(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(onlineConfig)
+    const { result } = renderHook(() => useReverseIdMapping())
 
     expect(result.current).toBeNull()
   })
 
   it('returns null when appConfig is null', () => {
-    const store = createTestStore({ appConfig: null })
-    const { result } = renderHook(() => useReverseIdMapping(), {
-      wrapper: createWrapper(store),
-    })
+    const { result } = renderHook(() => useReverseIdMapping())
 
     expect(result.current).toBeNull()
   })
 
   it('creates reverse mapping from wikidata -> local IDs', () => {
-    const store = createTestStore({ appConfig: offlineConfig })
-    const { result } = renderHook(() => useReverseIdMapping(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(offlineConfig)
+    const { result } = renderHook(() => useReverseIdMapping())
 
     // Original mapping: { Q5: 'Q1', Q42: 'Q2', Q515: 'Q3' }
     // Reverse should be: { Q1: 'Q5', Q2: 'Q42', Q3: 'Q515' }
@@ -306,10 +255,8 @@ describe('useReverseIdMapping', () => {
         idMapping: {},
       },
     }
-    const store = createTestStore({ appConfig: configWithEmptyMapping })
-    const { result } = renderHook(() => useReverseIdMapping(), {
-      wrapper: createWrapper(store),
-    })
+    useAuthStore.getState().setConfig(configWithEmptyMapping)
+    const { result } = renderHook(() => useReverseIdMapping())
 
     expect(result.current).toEqual({})
   })

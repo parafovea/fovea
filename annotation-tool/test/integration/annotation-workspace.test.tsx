@@ -12,12 +12,14 @@ import { configureStore } from '@reduxjs/toolkit'
 import { server } from '../setup'
 import { http, HttpResponse } from 'msw'
 import AnnotationWorkspace from '../../src/components/AnnotationWorkspace'
-import videoReducer from '../../src/store/videoSlice'
-import annotationReducer from '../../src/store/annotationSlice'
-import personaReducer from '../../src/store/personaSlice'
-import worldReducer from '../../src/store/worldSlice'
-import videoSummaryReducer from '../../src/store/videoSummarySlice'
-import claimsReducer from '../../src/store/claimsSlice'
+import videoReducer from '../../src/store/slices/videoSlice'
+import annotationReducer from '../../src/store/slices/annotationSlice'
+import personaReducer from '../../src/store/slices/personaSlice'
+import worldReducer from '../../src/store/slices/worldSlice'
+import videoSummaryReducer from '../../src/store/slices/videoSummarySlice'
+import claimsReducer from '../../src/store/slices/claimsSlice'
+import { useAnnotationUiStore } from '../../src/store/zustand/annotationUiStore'
+import { useVideoUiStore } from '../../src/store/zustand/videoUiStore'
 import type { Annotation, VideoMetadata } from '../../src/models/types'
 
 // Mock HTMLCanvasElement getContext for TimelineRenderer
@@ -128,6 +130,10 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks()
+
+    // Reset Zustand store state
+    useAnnotationUiStore.getState().resetAllState()
+    useVideoUiStore.getState().resetAllState()
 
     // Clear event handlers
     Object.keys(eventHandlers).forEach(key => delete eventHandlers[key])
@@ -297,10 +303,20 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
         },
       },
     })
+
+    // Initialize Zustand stores for the test
+    useAnnotationUiStore.setState({
+      selectedPersonaId: 'test-persona-id',
+      selectedTypeId: 'test-type-id',
+      annotationMode: 'type',
+    })
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    // Reset Zustand stores after each test
+    useAnnotationUiStore.getState().resetAllState()
+    useVideoUiStore.getState().resetAllState()
   })
 
   const renderWorkspace = (customStore = store) => {
@@ -766,8 +782,9 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       // Verify timeline is shown
       expect(screen.getByText('Hide Timeline')).toBeInTheDocument()
 
-      // Cleanup first render
+      // Cleanup first render and reset Zustand state
       cleanup()
+      useAnnotationUiStore.getState().resetAllState()
 
       // Simulate annotation deletion by creating new store with no annotations
       const updatedStore = configureStore({

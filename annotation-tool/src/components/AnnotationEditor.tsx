@@ -26,7 +26,7 @@ import {
   Folder as CollectionIcon,
 } from '@mui/icons-material'
 import { AppDispatch, RootState } from '../store/store'
-import { updateAnnotation } from '../store/annotationSlice'
+import { updateAnnotation } from '../store/slices/annotationSlice'
 import { Annotation } from '../models/types'
 import ObjectPicker from './annotation/ObjectPicker'
 

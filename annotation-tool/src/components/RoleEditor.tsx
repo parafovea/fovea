@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   FormControlLabel,
@@ -14,13 +13,18 @@ import {
   Chip,
   IconButton,
 } from '@mui/material'
-import { 
+import {
   GroupWork as RoleIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../store/store'
 import { generateId } from '../utils/uuid'
-import { addRoleToPersona, updateRoleInPersona, deleteRoleFromPersona } from '../store/personaSlice'
+import {
+  usePersonas,
+  usePersonaOntology,
+  useAddRoleToPersona,
+  useUpdateRoleInPersona,
+  useDeleteRoleFromPersona,
+} from '../store/queries'
 import { RoleType, GlossItem } from '../models/types'
 import BaseTypeEditor from './shared/BaseTypeEditor'
 
@@ -32,16 +36,27 @@ interface RoleEditorProps {
 }
 
 export default function RoleEditor({ open, onClose, role, personaId }: RoleEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const { mutate: addRole } = useAddRoleToPersona()
+  const { mutate: updateRole } = useUpdateRoleInPersona()
+  const { mutate: deleteRole } = useDeleteRoleFromPersona()
+
   // Form state
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [allowedFillerTypes, setAllowedFillerTypes] = useState<('entity' | 'event')[]>(['entity'])
   const [examples, setExamples] = useState<string[]>([])
   const [mode, setMode] = useState<'manual' | 'copy' | 'wikidata'>('manual')
-  const [sourcePersonaId, setSourcePersonaId] = useState('')
+  const [sourcePersonaIdState, setSourcePersonaIdState] = useState('')
+
+  // Fetch source persona's ontology when copying
+  const { data: sourceOntology } = usePersonaOntology(sourcePersonaIdState || null)
+
+  const setSourcePersonaId = (id: string) => {
+    setSourcePersonaIdState(id)
+  }
+  const sourcePersonaId = sourcePersonaIdState
   const [sourceRoleId, setSourceRoleId] = useState('')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [wikidataId, setWikidataId] = useState<string>('')
@@ -74,9 +89,8 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
 
   useEffect(() => {
     // When copying from another persona, populate the fields
-    if (mode === 'copy' && sourcePersonaId && sourceRoleId) {
-      const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-      const sourceRole = sourceOntology?.roles.find(r => r.id === sourceRoleId)
+    if (mode === 'copy' && sourcePersonaId && sourceRoleId && sourceOntology) {
+      const sourceRole = sourceOntology.roles.find(r => r.id === sourceRoleId)
       if (sourceRole) {
         setName(sourceRole.name)
         setGloss(sourceRole.gloss)
@@ -87,11 +101,11 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
         setImportedAt(sourceRole.importedAt || '')
       }
     }
-  }, [mode, sourcePersonaId, sourceRoleId, personaOntologies])
+  }, [mode, sourcePersonaId, sourceRoleId, sourceOntology])
 
   const handleSave = () => {
     if (!personaId) return
-    
+
     const now = new Date().toISOString()
     const roleData: RoleType = {
       id: role?.id || generateId(),
@@ -106,22 +120,22 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
       createdAt: role?.createdAt || now,
       updatedAt: now,
     }
-    
+
     if (role) {
-      dispatch(updateRoleInPersona({ personaId, role: roleData }))
+      updateRole({ personaId, role: roleData })
     } else {
       targetPersonaIds.forEach(targetId => {
         const newRoleData = { ...roleData, id: generateId() }
-        dispatch(addRoleToPersona({ personaId: targetId, role: newRoleData }))
+        addRole({ personaId: targetId, role: newRoleData })
       })
     }
-    
+
     onClose()
   }
 
   const handleDelete = () => {
     if (role && personaId) {
-      dispatch(deleteRoleFromPersona({ personaId, roleId: role.id }))
+      deleteRole({ personaId, roleId: role.id })
       onClose()
     }
   }
@@ -222,8 +236,8 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
           ))}
         </Select>
       </FormControl>
-      
-      {sourcePersonaId && (
+
+      {sourcePersonaId && sourceOntology && (
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Source Role Type</InputLabel>
           <Select
@@ -231,13 +245,11 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
             onChange={(e) => setSourceRoleId(e.target.value)}
             label="Source Role Type"
           >
-            {personaOntologies
-              .find(o => o.personaId === sourcePersonaId)
-              ?.roles.map(role => (
-                <MenuItem key={role.id} value={role.id}>
-                  {role.name}
-                </MenuItem>
-              ))}
+            {sourceOntology.roles.map(role => (
+              <MenuItem key={role.id} value={role.id}>
+                {role.name}
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
       )}

@@ -11,7 +11,7 @@ import annotationSlice, {
   updateAnnotation,
   deleteAnnotation,
   selectAnnotations,
-} from '../../src/store/annotationSlice.js'
+} from '../../src/store/slices/annotationSlice.js'
 import { Annotation } from '../../src/models/types.js'
 
 describe('Redux State Management', () => {

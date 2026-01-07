@@ -17,7 +17,7 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material'
-import { useCreateUser } from '../../hooks/admin/useUsers.js'
+import { useCreateUser } from '../../store/queries/admin/useUsers.js'
 
 /**
  * Props for CreateUserDialog component.

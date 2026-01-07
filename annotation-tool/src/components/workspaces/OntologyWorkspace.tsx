@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import { usePreferences } from '../../hooks/usePreferences'
 import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
 import {
@@ -33,7 +32,6 @@ import {
   Search as SearchIcon,
   AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
 import PersonaBrowser from '../browsers/PersonaBrowser'
 import PersonaEditor from '../PersonaEditor'
 import EntityTypeEditor from '../EntityTypeEditor'
@@ -44,14 +42,17 @@ import { GlossRenderer } from '../GlossRenderer'
 import { glossToText } from '../../utils/glossUtils'
 import { WikidataChip } from '../shared/WikidataChip'
 import {
-  deleteEntityFromPersona,
-  deleteRoleFromPersona,
-  deleteEventFromPersona,
-  deleteRelationType,
-  savePersonaOntology,
-} from '../../store/personaSlice'
+  usePersonas,
+  usePersonaOntology,
+  useDeleteEntityFromPersona,
+  useDeleteRoleFromPersona,
+  useDeleteEventFromPersona,
+  useDeleteRelationTypeFromPersona,
+  useSavePersonaOntology,
+  useWorld,
+} from '../../store/queries'
 import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
-import { useModelConfig } from '../../hooks/useModelConfig'
+import { useModelConfig } from '../../store/queries/useModelConfig'
 
 /**
  * Props for the TabPanel component.
@@ -108,12 +109,22 @@ function TabPanel(props: TabPanelProps) {
  * ```
  */
 export default function OntologyWorkspace() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
-  const { entities = [], events = [], times = [] } = useSelector((state: RootState) => state.world)
+  // TanStack Query hooks for data
+  const { data: personas = [] } = usePersonas()
+  const { data: world } = useWorld()
+  const entities = world?.entities || []
+  const events = world?.events || []
+  const times = world?.times || []
   const { data: modelConfig, error: modelConfigError } = useModelConfig()
   // Treat model service as CPU-only if unavailable (e.g., in E2E tests)
   const isCpuOnly = !!modelConfigError || !modelConfig?.cudaAvailable
+
+  // TanStack Query mutations
+  const { mutate: deleteEntityMutation } = useDeleteEntityFromPersona()
+  const { mutate: deleteRoleMutation } = useDeleteRoleFromPersona()
+  const { mutate: deleteEventMutation } = useDeleteEventFromPersona()
+  const { mutate: deleteRelationTypeMutation } = useDeleteRelationTypeFromPersona()
+  const { mutate: saveOntologyMutation } = useSavePersonaOntology()
 
   // Use preferences for smart defaults
   const {
@@ -170,21 +181,33 @@ export default function OntologyWorkspace() {
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
 
   const selectedPersona = personas.find(p => p.id === selectedPersonaId)
-  const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
+  const { data: selectedOntology } = usePersonaOntology(selectedPersonaId)
+
+  // Auto-select first persona when data loads and none is selected
+  // This is the industry-standard pattern for TanStack Query async initialization
+  // Uses a ref to track if we've done initial selection to avoid re-selecting
+  // when user explicitly navigates back to persona browser
+  const hasInitiallySelected = useRef(false)
+  useEffect(() => {
+    if (personas.length > 0 && !selectedPersonaId && !hasInitiallySelected.current) {
+      hasInitiallySelected.current = true
+      setSelectedPersonaId(personas[0].id)
+    }
+  }, [personas, selectedPersonaId])
 
   // Auto-save persona ontology on changes (debounced 1 second)
   useEffect(() => {
     if (!selectedPersonaId || !selectedOntology) return
 
     const timeoutId = setTimeout(() => {
-      dispatch(savePersonaOntology({
+      saveOntologyMutation({
         personaId: selectedPersonaId,
         ontology: selectedOntology
-      }))
+      })
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [selectedPersonaId, selectedOntology, dispatch])
+  }, [selectedPersonaId, selectedOntology, saveOntologyMutation])
 
   /**
    * Filters ontology type items by search term.
@@ -356,10 +379,10 @@ export default function OntologyWorkspace() {
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length && selectedPersonaId) {
         const item = items[selectedItemIndex]
         switch(tabValue) {
-          case 0: dispatch(deleteEntityFromPersona({ personaId: selectedPersonaId, entityId: item.id })); break
-          case 1: dispatch(deleteRoleFromPersona({ personaId: selectedPersonaId, roleId: item.id })); break
-          case 2: dispatch(deleteEventFromPersona({ personaId: selectedPersonaId, eventId: item.id })); break
-          case 3: dispatch(deleteRelationType({ personaId: selectedPersonaId, relationTypeId: item.id })); break
+          case 0: deleteEntityMutation({ personaId: selectedPersonaId, entityId: item.id }); break
+          case 1: deleteRoleMutation({ personaId: selectedPersonaId, roleId: item.id }); break
+          case 2: deleteEventMutation({ personaId: selectedPersonaId, eventId: item.id }); break
+          case 3: deleteRelationTypeMutation({ personaId: selectedPersonaId, relationTypeId: item.id }); break
         }
       }
     },
@@ -516,10 +539,10 @@ export default function OntologyWorkspace() {
                   </IconButton>
                   <IconButton
                     edge="end"
-                    onClick={() => dispatch(deleteEntityFromPersona({
+                    onClick={() => deleteEntityMutation({
                       personaId: selectedPersonaId,
                       entityId: entity.id
-                    }))}
+                    })}
                     aria-label={`Delete ${entity.name}`}
                   >
                     <DeleteIcon />
@@ -584,10 +607,10 @@ export default function OntologyWorkspace() {
                   </IconButton>
                   <IconButton
                     edge="end"
-                    onClick={() => dispatch(deleteRoleFromPersona({
+                    onClick={() => deleteRoleMutation({
                       personaId: selectedPersonaId,
                       roleId: role.id
-                    }))}
+                    })}
                     aria-label={`Delete ${role.name}`}
                   >
                     <DeleteIcon />
@@ -654,10 +677,10 @@ export default function OntologyWorkspace() {
                   </IconButton>
                   <IconButton
                     edge="end"
-                    onClick={() => dispatch(deleteEventFromPersona({
+                    onClick={() => deleteEventMutation({
                       personaId: selectedPersonaId,
                       eventId: event.id
-                    }))}
+                    })}
                     aria-label={`Delete ${event.name}`}
                   >
                     <DeleteIcon />
@@ -722,10 +745,10 @@ export default function OntologyWorkspace() {
                   </IconButton>
                   <IconButton
                     edge="end"
-                    onClick={() => dispatch(deleteRelationType({
+                    onClick={() => deleteRelationTypeMutation({
                       personaId: selectedPersonaId,
                       relationTypeId: relation.id
-                    }))}
+                    })}
                     aria-label={`Delete ${relation.name}`}
                   >
                     <DeleteIcon />

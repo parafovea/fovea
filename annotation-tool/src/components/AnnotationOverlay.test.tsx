@@ -3,14 +3,14 @@
  * Tests annotation creation flow with boundingBoxSequence structure.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { Provider } from 'react-redux'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { configureStore } from '@reduxjs/toolkit'
+import { http, HttpResponse } from 'msw'
 import AnnotationOverlay from './AnnotationOverlay'
-import annotationSlice, { selectAnnotations } from '../store/annotationSlice'
-import worldSlice from '../store/worldSlice'
+import { useAnnotationUiStore } from '../store/zustand/annotationUiStore'
+import { server } from '../../test/setup'
 
 /**
  * Mock InteractiveBoundingBox to avoid complex rendering.
@@ -30,65 +30,48 @@ vi.mock('./annotation/InteractiveBoundingBox', () => ({
 }))
 
 /**
- * Creates test Redux store with annotation and world slices.
+ * Creates QueryClient and wrapper for testing.
  */
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      annotations: annotationSlice,
-      world: worldSlice,
+function createWrapper(videoId = 'test-video') {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
     },
-    preloadedState: initialState,
   })
-}
 
-/**
- * Creates wrapper with React Router for accessing useParams.
- */
-function createWrapper(store: ReturnType<typeof createTestStore>, videoId = 'test-video') {
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/annotate/${videoId}`]}>
         <Routes>
           <Route path="/annotate/:videoId" element={children} />
         </Routes>
       </MemoryRouter>
-    </Provider>
+    </QueryClientProvider>
   )
 }
 
 /**
- * Default test state with type mode configured.
+ * Helper to set up Zustand store state for tests.
  */
-function createDefaultState() {
-  return {
-    annotations: {
-      annotations: {},
-      annotationMode: 'type',
-      selectedAnnotation: null,
-      selectedPersonaId: 'persona-1',
-      isDrawing: false,
-      drawingMode: 'entity',
-      selectedTypeId: 'test-type',
-      temporaryBox: null,
-      temporaryTime: null,
-      linkTargetId: null,
-      linkTargetType: null,
-      detectionResults: null,
-      detectionQuery: '',
-      detectionConfidenceThreshold: 0.5,
-      showDetectionCandidates: false,
-    },
-    world: {
-      entities: [],
-      events: [],
-      entityCollections: [],
-      eventCollections: [],
-      locations: [],
-      times: [],
-      relations: [],
-    },
-  }
+function setupStoreState(state: Partial<ReturnType<typeof useAnnotationUiStore.getState>>) {
+  useAnnotationUiStore.setState({
+    annotationMode: 'type',
+    selectedAnnotation: null,
+    selectedPersonaId: 'persona-1',
+    isDrawing: false,
+    drawingMode: 'entity',
+    selectedTypeId: 'test-type',
+    temporaryBox: null,
+    temporaryTime: null,
+    linkTargetId: null,
+    linkTargetType: null,
+    detectionResults: null,
+    detectionQuery: '',
+    detectionConfidenceThreshold: 0.5,
+    showDetectionCandidates: false,
+    ...state,
+  })
 }
 
 describe('AnnotationOverlay', () => {
@@ -97,10 +80,75 @@ describe('AnnotationOverlay', () => {
   const videoHeight = 1080
   const currentTime = 5.0
 
+  beforeEach(() => {
+    // Reset Zustand store before each test
+    useAnnotationUiStore.getState().resetAllState()
+
+    // Set up default store state
+    setupStoreState({})
+
+    // Set up default MSW handlers for world and annotations
+    server.use(
+      http.get('/api/world', () => {
+        return HttpResponse.json({
+          entities: [],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: [],
+        })
+      }),
+      http.get('/api/annotations/:videoId', () => {
+        return HttpResponse.json([])
+      }),
+      http.post('/api/annotations', async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>
+        // Return in backend format which will be transformed
+        return HttpResponse.json({
+          id: 'new-annotation-id',
+          videoId: body.videoId,
+          personaId: body.personaId,
+          type: body.type,
+          label: body.label,
+          frames: body.frames,
+          confidence: body.confidence ?? null,
+          source: body.source || 'manual',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }, { status: 201 })
+      })
+    )
+  })
+
+  afterEach(() => {
+    useAnnotationUiStore.getState().resetAllState()
+  })
+
   describe('Annotation Creation with boundingBoxSequence', () => {
     it('creates annotation with correct boundingBoxSequence structure', async () => {
-      const store = createTestStore(createDefaultState())
-      const Wrapper = createWrapper(store)
+      let savedAnnotation: any = null
+
+      server.use(
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      const Wrapper = createWrapper()
 
       const { container } = render(
         <AnnotationOverlay
@@ -144,39 +192,55 @@ describe('AnnotationOverlay', () => {
       // Simulate mouse up to finalize annotation
       fireEvent.mouseUp(svg!)
 
-      // Get created annotation from store
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'test-video')
+      // Wait for mutation to complete
+      await waitFor(() => {
+        expect(savedAnnotation).not.toBeNull()
+      }, { timeout: 2000 })
 
-      expect(annotations).toHaveLength(1)
-
-      const annotation = annotations[0]
-
-      // Verify boundingBoxSequence structure exists
-      expect(annotation.boundingBoxSequence).toBeDefined()
-      expect(annotation.boundingBoxSequence.boxes).toBeDefined()
-      expect(annotation.boundingBoxSequence.interpolationSegments).toBeDefined()
-      expect(annotation.boundingBoxSequence.visibilityRanges).toBeDefined()
+      // Verify frames structure exists (backend format for boundingBoxSequence)
+      expect(savedAnnotation.frames).toBeDefined()
+      expect(savedAnnotation.frames.boxes).toBeDefined()
+      expect(savedAnnotation.frames.interpolationSegments).toBeDefined()
+      expect(savedAnnotation.frames.visibilityRanges).toBeDefined()
 
       // Verify boxes array has one keyframe
-      expect(annotation.boundingBoxSequence.boxes).toHaveLength(1)
-      expect(annotation.boundingBoxSequence.boxes[0].isKeyframe).toBe(true)
-      expect(annotation.boundingBoxSequence.boxes[0].frameNumber).toBe(150) // 5.0s * 30fps
+      expect(savedAnnotation.frames.boxes).toHaveLength(1)
+      expect(savedAnnotation.frames.boxes[0].isKeyframe).toBe(true)
+      expect(savedAnnotation.frames.boxes[0].frameNumber).toBe(150) // 5.0s * 30fps
 
       // Verify visibility ranges
-      expect(annotation.boundingBoxSequence.visibilityRanges).toHaveLength(1)
-      expect(annotation.boundingBoxSequence.visibilityRanges[0].visible).toBe(true)
+      expect(savedAnnotation.frames.visibilityRanges).toHaveLength(1)
+      expect(savedAnnotation.frames.visibilityRanges[0].visible).toBe(true)
 
       // Verify metadata
       // Annotations have a 1-second default timespan at 30fps = 31 frames (0-30 inclusive)
-      expect(annotation.boundingBoxSequence.totalFrames).toBe(31)
-      expect(annotation.boundingBoxSequence.keyframeCount).toBe(1)
-      expect(annotation.boundingBoxSequence.interpolatedFrameCount).toBe(30)
+      expect(savedAnnotation.frames.totalFrames).toBe(31)
+      expect(savedAnnotation.frames.keyframeCount).toBe(1)
+      expect(savedAnnotation.frames.interpolatedFrameCount).toBe(30)
     })
 
     it('creates type annotation with persona and type IDs', async () => {
-      const store = createTestStore(createDefaultState())
-      const Wrapper = createWrapper(store)
+      let savedAnnotation: any = null
+
+      server.use(
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      const Wrapper = createWrapper()
 
       const { container } = render(
         <AnnotationOverlay
@@ -206,30 +270,61 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseMove(svg!, { clientX: 200, clientY: 200 })
       fireEvent.mouseUp(svg!)
 
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'test-video')
-      const annotation = annotations[0]
+      await waitFor(() => {
+        expect(savedAnnotation).not.toBeNull()
+      }, { timeout: 2000 })
 
-      expect(annotation.annotationType).toBe('type')
-      expect(annotation.personaId).toBe('persona-1')
-      expect(annotation.typeCategory).toBe('entity')
-      expect(annotation.typeId).toBe('test-type')
+      // Check backend format (type/label) since that's what's sent to API
+      expect(savedAnnotation.type).toBe('type')
+      expect(savedAnnotation.personaId).toBe('persona-1')
+      expect(savedAnnotation.label).toBe('test-type')
     })
 
     it('creates object annotation with linked entity', async () => {
-      const stateWithObjectMode = createDefaultState()
-      stateWithObjectMode.annotations.annotationMode = 'object'
-      stateWithObjectMode.annotations.linkTargetId = 'entity-1'
-      stateWithObjectMode.annotations.linkTargetType = 'entity'
-      stateWithObjectMode.world.entities = [{
-        id: 'entity-1',
-        name: 'Test Entity',
-        description: 'Test Description',
-        wikidataId: null,
-      }]
+      let savedAnnotation: any = null
 
-      const store = createTestStore(stateWithObjectMode)
-      const Wrapper = createWrapper(store)
+      // Set up object mode
+      setupStoreState({
+        annotationMode: 'object',
+        linkTargetId: 'entity-1',
+        linkTargetType: 'entity',
+      })
+
+      server.use(
+        http.get('/api/world', () => {
+          return HttpResponse.json({
+            entities: [{
+              id: 'entity-1',
+              name: 'Test Entity',
+              description: 'Test Description',
+              wikidataId: null,
+            }],
+            events: [],
+            times: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+            relations: [],
+          })
+        }),
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      const Wrapper = createWrapper()
 
       const { container } = render(
         <AnnotationOverlay
@@ -259,17 +354,37 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseMove(svg!, { clientX: 200, clientY: 200 })
       fireEvent.mouseUp(svg!)
 
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'test-video')
-      const annotation = annotations[0]
+      await waitFor(() => {
+        expect(savedAnnotation).not.toBeNull()
+      }, { timeout: 2000 })
 
-      expect(annotation.annotationType).toBe('object')
-      expect(annotation.linkedEntityId).toBe('entity-1')
+      // Check backend format - type is 'object', label is the entity ID
+      expect(savedAnnotation.type).toBe('object')
+      expect(savedAnnotation.label).toBe('entity-1')
     })
 
     it('does not create annotation if box is too small', async () => {
-      const store = createTestStore(createDefaultState())
-      const Wrapper = createWrapper(store)
+      let savedAnnotation: any = null
+
+      server.use(
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      const Wrapper = createWrapper()
 
       const { container } = render(
         <AnnotationOverlay
@@ -299,54 +414,54 @@ describe('AnnotationOverlay', () => {
       fireEvent.mouseMove(svg!, { clientX: 102, clientY: 102 }) // Only 2x2 pixels
       fireEvent.mouseUp(svg!)
 
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'test-video')
+      // Wait a bit to ensure no mutation was called
+      await new Promise(r => setTimeout(r, 100))
 
-      expect(annotations).toHaveLength(0)
+      expect(savedAnnotation).toBeNull()
     })
   })
 
   describe('Annotation Rendering with boundingBoxSequence', () => {
     it('renders existing annotations with boundingBoxSequence', async () => {
-      const stateWithAnnotations = createDefaultState()
-      stateWithAnnotations.annotations.annotations['video_test-video'] = [
-        {
-          id: 'ann-1',
-          videoId: 'test-video',
-          annotationType: 'type',
-          personaId: 'persona-1',
-          typeCategory: 'entity',
-          typeId: 'test-type',
-          boundingBoxSequence: {
-            boxes: [{
-              x: 100,
-              y: 100,
-              width: 200,
-              height: 200,
-              frameNumber: 150,
-              isKeyframe: true,
-            }],
-            interpolationSegments: [],
-            visibilityRanges: [{
-              startFrame: 150,
-              endFrame: 150,
-              visible: true,
-            }],
-            totalFrames: 1,
-            keyframeCount: 1,
-            interpolatedFrameCount: 0,
-          },
-          timeSpan: {
-            startTime: 5.0,
-            endTime: 6.0,
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
+      // Use backend format - the API transform will convert to frontend format
+      server.use(
+        http.get('/api/annotations/:videoId', () => {
+          return HttpResponse.json([
+            {
+              id: 'ann-1',
+              videoId: 'test-video',
+              personaId: 'persona-1',
+              type: 'type',
+              label: 'test-type',
+              frames: {
+                boxes: [{
+                  x: 100,
+                  y: 100,
+                  width: 200,
+                  height: 200,
+                  frameNumber: 150,
+                  isKeyframe: true,
+                }],
+                interpolationSegments: [],
+                visibilityRanges: [{
+                  startFrame: 150,
+                  endFrame: 150,
+                  visible: true,
+                }],
+                totalFrames: 1,
+                keyframeCount: 1,
+                interpolatedFrameCount: 0,
+              },
+              confidence: null,
+              source: 'manual',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+        })
+      )
 
-      const store = createTestStore(stateWithAnnotations)
-      const Wrapper = createWrapper(store)
+      const Wrapper = createWrapper()
 
       render(
         <AnnotationOverlay
@@ -366,27 +481,28 @@ describe('AnnotationOverlay', () => {
     })
 
     it('safely handles annotations without boundingBoxSequence', async () => {
-      const stateWithInvalidAnnotation = createDefaultState()
-      stateWithInvalidAnnotation.annotations.annotations['video_test-video'] = [
-        {
-          id: 'ann-invalid',
-          videoId: 'test-video',
-          annotationType: 'type',
-          personaId: 'persona-1',
-          typeCategory: 'entity',
-          typeId: 'test-type',
-          // Missing boundingBoxSequence - should not crash
-          timeSpan: {
-            startTime: 5.0,
-            endTime: 6.0,
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
+      // Use backend format - frames being null should be handled safely
+      server.use(
+        http.get('/api/annotations/:videoId', () => {
+          return HttpResponse.json([
+            {
+              id: 'ann-invalid',
+              videoId: 'test-video',
+              personaId: 'persona-1',
+              type: 'type',
+              label: 'test-type',
+              // Missing frames (boundingBoxSequence) - should not crash
+              frames: null,
+              confidence: null,
+              source: 'manual',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+        })
+      )
 
-      const store = createTestStore(stateWithInvalidAnnotation)
-      const Wrapper = createWrapper(store)
+      const Wrapper = createWrapper()
 
       // Should not throw error
       const { container } = render(
@@ -400,60 +516,65 @@ describe('AnnotationOverlay', () => {
         { wrapper: Wrapper }
       )
 
-      // Annotation should not be rendered
-      const annotationElement = screen.queryByTestId('annotation-ann-invalid')
-      expect(annotationElement).not.toBeInTheDocument()
+      // Wait for query to resolve
+      await waitFor(() => {
+        // Annotation should not be rendered (no boundingBoxSequence)
+        const annotationElement = screen.queryByTestId('annotation-ann-invalid')
+        expect(annotationElement).not.toBeInTheDocument()
+      })
 
       // SVG should still be present
       expect(container.querySelector('svg')).toBeInTheDocument()
     })
 
     it('filters annotations by selected persona in type mode', async () => {
-      const stateWithMultiplePersonas = createDefaultState()
-      stateWithMultiplePersonas.annotations.selectedPersonaId = 'persona-1'
-      stateWithMultiplePersonas.annotations.annotations['video_test-video'] = [
-        {
-          id: 'ann-1',
-          videoId: 'test-video',
-          annotationType: 'type',
-          personaId: 'persona-1',
-          typeCategory: 'entity',
-          typeId: 'test-type',
-          boundingBoxSequence: {
-            boxes: [{ x: 100, y: 100, width: 200, height: 200, frameNumber: 150, isKeyframe: true }],
-            interpolationSegments: [],
-            visibilityRanges: [{ startFrame: 150, endFrame: 150, visible: true }],
-            totalFrames: 1,
-            keyframeCount: 1,
-            interpolatedFrameCount: 0,
-          },
-          timeSpan: { startTime: 5.0, endTime: 6.0 },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 'ann-2',
-          videoId: 'test-video',
-          annotationType: 'type',
-          personaId: 'persona-2', // Different persona
-          typeCategory: 'entity',
-          typeId: 'test-type',
-          boundingBoxSequence: {
-            boxes: [{ x: 300, y: 300, width: 200, height: 200, frameNumber: 150, isKeyframe: true }],
-            interpolationSegments: [],
-            visibilityRanges: [{ startFrame: 150, endFrame: 150, visible: true }],
-            totalFrames: 1,
-            keyframeCount: 1,
-            interpolatedFrameCount: 0,
-          },
-          timeSpan: { startTime: 5.0, endTime: 6.0 },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
+      // Use backend format
+      server.use(
+        http.get('/api/annotations/:videoId', () => {
+          return HttpResponse.json([
+            {
+              id: 'ann-1',
+              videoId: 'test-video',
+              personaId: 'persona-1',
+              type: 'type',
+              label: 'test-type',
+              frames: {
+                boxes: [{ x: 100, y: 100, width: 200, height: 200, frameNumber: 150, isKeyframe: true }],
+                interpolationSegments: [],
+                visibilityRanges: [{ startFrame: 150, endFrame: 150, visible: true }],
+                totalFrames: 1,
+                keyframeCount: 1,
+                interpolatedFrameCount: 0,
+              },
+              confidence: null,
+              source: 'manual',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            {
+              id: 'ann-2',
+              videoId: 'test-video',
+              personaId: 'persona-2', // Different persona
+              type: 'type',
+              label: 'test-type',
+              frames: {
+                boxes: [{ x: 300, y: 300, width: 200, height: 200, frameNumber: 150, isKeyframe: true }],
+                interpolationSegments: [],
+                visibilityRanges: [{ startFrame: 150, endFrame: 150, visible: true }],
+                totalFrames: 1,
+                keyframeCount: 1,
+                interpolatedFrameCount: 0,
+              },
+              confidence: null,
+              source: 'manual',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+        })
+      )
 
-      const store = createTestStore(stateWithMultiplePersonas)
-      const Wrapper = createWrapper(store)
+      const Wrapper = createWrapper()
 
       render(
         <AnnotationOverlay
@@ -477,8 +598,7 @@ describe('AnnotationOverlay', () => {
 
   describe('Detection Results Display', () => {
     it('renders detection boxes from AI results', async () => {
-      const store = createTestStore(createDefaultState())
-      const Wrapper = createWrapper(store)
+      const Wrapper = createWrapper()
 
       const mockDetectionResults = {
         videoId: 'test-video',

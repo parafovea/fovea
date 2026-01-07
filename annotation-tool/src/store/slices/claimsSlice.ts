@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import { Claim, ClaimExtractionConfig, ExtractClaimsResponse, ClaimExtractionJobStatus, CreateClaimRequest, UpdateClaimRequest, ClaimRelation } from '../models/types'
+import { Claim, ClaimExtractionConfig, ExtractClaimsResponse, ClaimExtractionJobStatus, CreateClaimRequest, UpdateClaimRequest, ClaimRelation } from '../../models/types'
 
 interface ClaimRelationsData {
   asSource: ClaimRelation[]

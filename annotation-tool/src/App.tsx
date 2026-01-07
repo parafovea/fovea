@@ -1,6 +1,5 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useDispatch, useSelector } from 'react-redux'
 import { Box, CircularProgress, Typography } from '@mui/material'
 import Layout from './components/Layout'
 import VideoBrowser from './components/VideoBrowser'
@@ -12,10 +11,9 @@ import LoginPage from './components/auth/LoginPage.js'
 import RegisterPage from './components/auth/RegisterPage.js'
 import AdminPanel from './components/admin/AdminPanel.js'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { AppDispatch, RootState } from './store/store'
-import { setPersonas, setPersonaOntologies, setActivePersona } from './store/personaSlice'
-import { setWorldData } from './store/worldSlice'
-import { api } from './services/api'
+import { useAuthStore } from './store/zustand/authStore'
+import { useAnnotationUiStore } from './store/zustand'
+import { usePersonas } from './store/queries'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -54,7 +52,9 @@ function LoadingScreen() {
  * @returns Protected content or redirect to login
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, mode } = useSelector((state: RootState) => state.user)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  const isLoading = useAuthStore(state => state.isLoading)
+  const mode = useAuthStore(state => state.mode)
   const location = useLocation()
 
   if (isLoading) {
@@ -69,10 +69,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const dispatch = useDispatch<AppDispatch>()
-
   // Restore session on mount (also fetches config)
   useSession()
+
+  // Fetch personas via TanStack Query - this triggers initial data loading
+  const { data: personas = [] } = usePersonas()
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
 
   // Initialize command registry
   useEffect(() => {
@@ -115,40 +118,19 @@ function App() {
     }
   }, [])
 
-  const loadOntology = useCallback(async () => {
-    try {
-      const ontology = await api.getOntology()
-
-      if (ontology) {
-        dispatch(setPersonas(ontology.personas))
-        dispatch(setPersonaOntologies(ontology.personaOntologies))
-
-        if (ontology.world) {
-          dispatch(setWorldData(ontology.world))
-        }
-
-        if (ontology.personas.length > 0) {
-          dispatch(setActivePersona(ontology.personas[0].id))
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load ontology:', error)
-    }
-  }, [dispatch])
-
+  // Auto-select first persona if none selected
   useEffect(() => {
-    const initializeData = async () => {
-      // Check if developer test mode is enabled
-      if (isTestDataEnabled()) {
-        await seedTestData()
-      } else {
-        // Normal mode: load from API
-        await loadOntology()
-      }
+    if (personas.length > 0 && !selectedPersonaId) {
+      setSelectedPersonaId(personas[0].id)
     }
+  }, [personas, selectedPersonaId, setSelectedPersonaId])
 
-    initializeData()
-  }, [loadOntology])
+  // Seed test data if enabled
+  useEffect(() => {
+    if (isTestDataEnabled()) {
+      seedTestData()
+    }
+  }, [])
 
   return (
     <ErrorBoundary context={{ component: 'App' }}>

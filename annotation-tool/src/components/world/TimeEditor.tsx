@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -32,8 +31,8 @@ import {
   Edit as EditIcon,
   Language as WikidataIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../../store/store'
-import { addTime, updateTime } from '../../store/worldSlice'
+import { useVideos } from '../../store/queries'
+import { useAddTime, useUpdateTime } from '../../store/queries'
 import { Time, TimeInstant, TimeInterval } from '../../models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '../WikidataSearch'
@@ -54,8 +53,9 @@ interface VideoReference {
 }
 
 export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { videos } = useSelector((state: RootState) => state.videos)
+  const { data: videos = [] } = useVideos()
+  const { mutate: addTime } = useAddTime()
+  const { mutate: updateTime } = useUpdateTime()
   
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
@@ -168,7 +168,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       wikidataUrl: wikidataUrl || undefined,
       metadata: {},
     }
-    
+
     if (hasVagueness) {
       baseTime.vagueness = {
         type: vaguenessType,
@@ -181,7 +181,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         granularity: granularity as any,
       }
     }
-    
+
     if (hasDeictic) {
       baseTime.deictic = {
         anchorType: deicticAnchorType as any,
@@ -189,9 +189,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         expression: deicticExpression || undefined,
       }
     }
-    
+
     let timeData: Omit<Time, 'id'>
-    
+
     if (timeType === 'instant') {
       timeData = {
         ...baseTime,
@@ -206,13 +206,13 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         endTime: endTime || undefined,
       } as Omit<TimeInterval, 'id'>
     }
-    
+
     if (time) {
-      dispatch(updateTime({ ...time, ...timeData }))
+      updateTime({ ...time, ...timeData })
     } else {
-      dispatch(addTime({ ...timeData, id: generateId() } as Time))
+      addTime({ ...timeData, id: generateId() } as Time)
     }
-    
+
     onClose()
   }
 
@@ -537,7 +537,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     label="Video"
                   >
                     <MenuItem value="">None</MenuItem>
-                    {Object.values(videos).map(video => (
+                    {videos.map(video => (
                       <MenuItem key={video.id} value={video.id}>
                         {video.title}
                       </MenuItem>
