@@ -54,7 +54,7 @@ describe('useSummaries hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.get('http://localhost:3001/api/videos/:videoId/summaries', () => {
+        http.get('/api/videos/:videoId/summaries', () => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -136,7 +136,7 @@ describe('useSummaries hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.post('http://localhost:3001/api/videos/summaries/generate', () => {
+        http.post('/api/videos/summaries/generate', () => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -200,7 +200,7 @@ describe('useSummaries hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.delete('http://localhost:3001/api/videos/:videoId/summaries/:personaId', () => {
+        http.delete('/api/videos/:videoId/summaries/:personaId', () => {
           return HttpResponse.json(
             { message: 'Not found' },
             { status: 404 }

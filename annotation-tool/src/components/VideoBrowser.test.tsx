@@ -442,8 +442,9 @@ describe('VideoBrowser', () => {
 
   describe('CPU-only mode', () => {
     it('hides persona selector in CPU-only mode', async () => {
+      // Use relative URL to match the ApiClient's default behavior (SSH port forwarding compatible)
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {},
             inference: {
@@ -483,7 +484,7 @@ describe('VideoBrowser', () => {
 
     it('hides batch summarize button in CPU-only mode', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {},
             inference: {
@@ -523,7 +524,7 @@ describe('VideoBrowser', () => {
 
     it('disables individual video summarize button in CPU-only mode', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {},
             inference: {
@@ -568,7 +569,7 @@ describe('VideoBrowser', () => {
   describe('GPU mode', () => {
     it('shows persona selector in GPU mode', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -611,7 +612,7 @@ describe('VideoBrowser', () => {
 
     it('disables batch summarize button without persona', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -659,7 +660,7 @@ describe('VideoBrowser', () => {
       const user = userEvent.setup()
 
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -709,7 +710,7 @@ describe('VideoBrowser', () => {
 
     it('shows job status indicator during processing', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -757,7 +758,7 @@ describe('VideoBrowser', () => {
       const user = userEvent.setup()
 
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -918,7 +919,7 @@ describe('VideoBrowser', () => {
   describe('persona management', () => {
     it('allows changing active persona', async () => {
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {
@@ -967,7 +968,7 @@ describe('VideoBrowser', () => {
       const user = userEvent.setup()
 
       server.use(
-        http.get('http://localhost:3001/api/models/config', () => {
+        http.get('/api/models/config', () => {
           return HttpResponse.json({
             models: {
               vlm: {

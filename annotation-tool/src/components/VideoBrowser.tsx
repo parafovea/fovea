@@ -92,7 +92,7 @@ export default function VideoBrowser() {
   const loadVideos = useCallback(async () => {
     dispatch(setLoading(true))
     try {
-      const response = await fetch('/api/videos')
+      const response = await fetch('/api/videos', { credentials: 'include' })
       const data = await response.json()
       dispatch(setVideos(data))
     } catch (error) {
