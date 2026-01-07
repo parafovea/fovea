@@ -21,7 +21,9 @@ const initialState: VideoSummaryState = {
 export const fetchVideoSummaries = createAsyncThunk(
   'videoSummaries/fetch',
   async (videoId: string) => {
-    const response = await fetch(`/api/videos/${videoId}/summaries`)
+    const response = await fetch(`/api/videos/${videoId}/summaries`, {
+      credentials: 'include',
+    })
     if (!response.ok) {
       throw new Error('Failed to fetch video summaries')
     }
@@ -33,7 +35,9 @@ export const fetchVideoSummaries = createAsyncThunk(
 export const fetchVideoSummaryForPersona = createAsyncThunk(
   'videoSummaries/fetchForPersona',
   async ({ videoId, personaId }: { videoId: string; personaId: string }) => {
-    const response = await fetch(`/api/videos/${videoId}/summaries/${personaId}`)
+    const response = await fetch(`/api/videos/${videoId}/summaries/${personaId}`, {
+      credentials: 'include',
+    })
     if (!response.ok) {
       if (response.status === 404) {
         return null // No summary exists yet
@@ -54,6 +58,7 @@ export const saveVideoSummary = createAsyncThunk(
     const response = await fetch(url, {
       method: summary.id ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(summary),
     })
 
@@ -69,8 +74,9 @@ export const deleteVideoSummary = createAsyncThunk(
   async ({ videoId, summaryId }: { videoId: string; summaryId: string }) => {
     const response = await fetch(`/api/videos/${videoId}/summaries/${summaryId}`, {
       method: 'DELETE',
+      credentials: 'include',
     })
-    
+
     if (!response.ok) {
       throw new Error('Failed to delete video summary')
     }

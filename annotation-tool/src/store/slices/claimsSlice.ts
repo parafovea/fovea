@@ -41,7 +41,8 @@ export const fetchClaims = createAsyncThunk(
   'claims/fetch',
   async ({ summaryId, summaryType = 'video' }: { summaryId: string; summaryType?: 'video' | 'collection' }) => {
     const response = await fetch(
-      `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`
+      `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`,
+      { credentials: 'include' }
     )
     if (!response.ok) {
       throw new Error('Failed to fetch claims')
@@ -60,6 +61,7 @@ export const createClaim = createAsyncThunk(
     const response = await fetch(`/api/summaries/${summaryId}/claims`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(claim),
     })
     if (!response.ok) {
@@ -87,6 +89,7 @@ export const updateClaim = createAsyncThunk(
     const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(updates),
     })
     if (!response.ok) {
@@ -105,6 +108,7 @@ export const deleteClaim = createAsyncThunk(
   async ({ summaryId, claimId }: { summaryId: string; claimId: string }) => {
     const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}`, {
       method: 'DELETE',
+      credentials: 'include',
     })
     if (!response.ok) {
       throw new Error('Failed to delete claim')
@@ -122,6 +126,7 @@ export const extractClaims = createAsyncThunk(
     const response = await fetch(`/api/summaries/${summaryId}/claims/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(config),
     })
     if (!response.ok) {
@@ -138,7 +143,7 @@ export const extractClaims = createAsyncThunk(
 export const checkExtractionJob = createAsyncThunk(
   'claims/checkJob',
   async (jobId: string) => {
-    const response = await fetch(`/api/jobs/claims/${jobId}`)
+    const response = await fetch(`/api/jobs/claims/${jobId}`, { credentials: 'include' })
     if (!response.ok) {
       throw new Error('Failed to check job status')
     }
@@ -153,7 +158,9 @@ export const checkExtractionJob = createAsyncThunk(
 export const fetchClaimRelations = createAsyncThunk(
   'claims/fetchRelations',
   async ({ summaryId, claimId }: { summaryId: string; claimId: string }) => {
-    const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}/relations`)
+    const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}/relations`, {
+      credentials: 'include',
+    })
     if (!response.ok) {
       throw new Error('Failed to fetch claim relations')
     }
@@ -188,6 +195,7 @@ export const createClaimRelation = createAsyncThunk(
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(relation),
       }
     )
@@ -218,6 +226,7 @@ export const deleteClaimRelation = createAsyncThunk(
       `/api/summaries/${summaryId}/claims/relations/${relationId}`,
       {
         method: 'DELETE',
+        credentials: 'include',
       }
     )
     if (!response.ok) {

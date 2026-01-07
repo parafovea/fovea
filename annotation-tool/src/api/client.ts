@@ -339,15 +339,25 @@ export class ApiClient {
   /**
    * Create a new API client.
    *
+   * By default, uses relative URLs which work with the Vite proxy in development
+   * and direct backend access in production. This ensures compatibility with
+   * SSH port forwarding scenarios where only port 3000 may be forwarded.
+   *
    * @param config - Client configuration options
    */
   constructor(config: ApiClientConfig = {}) {
+    // Use relative URLs by default to work with Vite proxy
+    // This ensures SSH port forwarding works when only port 3000 is forwarded
+    // The Vite proxy forwards /api/* to the backend server
+    const baseURL = config.baseURL ?? import.meta.env.VITE_API_URL ?? ''
+
     this.client = axios.create({
-      baseURL: config.baseURL || import.meta.env.VITE_API_URL || 'http://localhost:3001',
+      baseURL,
       timeout: config.timeout || 30000,
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Required for Safari and cross-origin cookie handling
     })
   }
 
