@@ -21,9 +21,59 @@ Rich text definitions can include references to Wikidata entities and type relat
 
 AI capabilities include video summarization using Vision Language Models (local or external APIs), audio transcription with speaker diarization, audio-visual fusion strategies for multimodal analysis, and background job processing with real-time progress monitoring. External API support includes Claude Sonnet 4.5, GPT-4o, and Gemini 2.5 Flash for vision and language tasks, plus seven audio transcription providers (AssemblyAI, Deepgram, Azure, AWS, Google, Rev.ai, Gladia).
 
-## Quick Start
+## Prerequisites
 
-The recommended way to run FOVEA is with Docker Compose. If you prefer manual setup, you'll need Node.js 22+, Python 3.12+, PostgreSQL 16, and Redis 7.
+### For Docker Deployment (Recommended)
+
+- **Docker Desktop 4.0+** with Docker Compose v2
+- **8 GB RAM minimum** (16 GB recommended)
+- **10 GB free disk space** (more for video storage)
+- **NVIDIA GPU + CUDA** (optional, for GPU-accelerated inference)
+
+### For Manual Development
+
+- **Node.js 22 LTS** (`node --version` should show v22.x)
+- **Python 3.12+** (`python3.12 --version`)
+- **PostgreSQL 16**
+- **Redis 7**
+
+## Environment Setup
+
+FOVEA works out of the box with sensible defaults for local development. For production or customization, create a `.env` file:
+
+```bash
+git clone https://github.com/parafovea/fovea.git
+cd fovea
+
+# Optional: customize configuration
+cp .env.example .env
+```
+
+### Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_PASSWORD` | `admin` | Admin user password (change for production!) |
+| `FOVEA_MODE` | `multi-user` | `single-user` (no login) or `multi-user` (login required) |
+| `ALLOW_REGISTRATION` | `false` | Allow new user sign-ups |
+
+### External AI APIs (Optional)
+
+To use external AI models for video summarization, add API keys to `.env`:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...   # https://console.anthropic.com/
+OPENAI_API_KEY=sk-...          # https://platform.openai.com/api-keys
+GOOGLE_API_KEY=...             # https://aistudio.google.com/app/apikey
+```
+
+FOVEA works with local models if no API keys are configured.
+
+### Video Files
+
+Place `.mp4` video files in the `videos/` directory (created automatically). Optionally add `.info.json` metadata files (see [First Video Tutorial](https://fovea.video/docs/getting-started/first-video)).
+
+## Quick Start
 
 ### Docker Compose (Recommended)
 
@@ -39,7 +89,13 @@ For production deployment with NVIDIA GPU support:
 docker compose --profile gpu up
 ```
 
-Open your browser to [http://localhost:3000](http://localhost:3000) after the services start.
+Database migrations run automatically on startup. Open your browser to [http://localhost:3000](http://localhost:3000) after the services start.
+
+**Default login credentials:**
+- Username: `admin`
+- Password: `admin`
+
+For production, set `ADMIN_PASSWORD` in `.env` before first run.
 
 The stack includes frontend (port 3000), backend API (port 3001), model service (port 8000), PostgreSQL (port 5432), Redis (port 6379), and observability services (OpenTelemetry Collector, Prometheus, Grafana). CPU mode runs with minimal dependencies, while GPU mode enables NVIDIA GPU support with full inference engines. See the [Deployment Guide](https://fovea.video/docs/deployment/overview) for configuration details.
 
@@ -48,27 +104,50 @@ The stack includes frontend (port 3000), backend API (port 3001), model service 
 For active development with individual service control:
 
 ```bash
-# Start infrastructure
-docker compose up postgres redis
+# 1. Start infrastructure services
+docker compose up -d postgres redis
 
-# Backend
-cd server && npm install && npm run dev
+# 2. Set up backend
+cd server
+cp .env.example .env
+# Edit .env: set DATABASE_URL=postgresql://fovea:fovea_password@localhost:5432/fovea
+npm install
+npx prisma migrate dev    # Run database migrations
+npx prisma db seed        # Seed initial data (creates admin user)
+npm run dev
 
-# Frontend
-cd annotation-tool && npm install && npm run dev
+# 3. Set up frontend (new terminal)
+cd annotation-tool
+npm install
+npm run dev               # Runs on http://localhost:5173
 
-# Model service (optional)
-cd model-service && pip install -r requirements.txt
+# 4. Set up model service (new terminal, optional)
+cd model-service
+python3.12 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env      # Add API keys if using external models
 uvicorn src.main:app --reload --port 8000
 ```
+
+**Service URLs (manual setup):**
+- Frontend: http://localhost:5173 (Vite dev server)
+- Backend API: http://localhost:3001
+- Model Service: http://localhost:8000
 
 ### Development with Hot Reload and Debugging Tools
 
 For active development with live reload, distributed tracing, and email testing:
 
 ```bash
+# First time or after pulling changes: build with dev targets
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Subsequent runs (if images are already built)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
+
+**Note:** The `--build` flag is required when first switching to dev mode, as it builds containers with development dependencies (like `tsx` for hot reload). Without it, you may see errors like `tsx: not found`.
 
 This provides:
 - Hot-reload volumes for code changes (no rebuild needed)
