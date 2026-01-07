@@ -168,27 +168,19 @@ export function useCommands(
 
       keybindings.forEach((keybinding) => {
         const keyHandler = (event: KeyboardEvent) => {
-          // Get handler fresh from ref
-          const handler = handlersRef.current[command.id]
-          if (!handler) return
-
-          // Check if this event matches the keybinding
+          // Check if this event matches the keybinding FIRST
           if (!matchesKeybinding(event, keybinding)) {
             return
           }
 
-          // Check if focus is on form element FIRST (unless explicitly enabled)
+          // Check if focus is on form element (unless explicitly enabled)
           const target = event.target as HTMLElement
           const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
           if (isFormElement && !enableOnFormTags) {
             return
           }
 
-          // Prevent browser default to avoid browser capture (e.g., Ctrl+N opening new windows)
-          event.preventDefault()
-          event.stopPropagation()
-
-          // Check when clause
+          // Check when clause BEFORE preventing default
           if (command.when && !commandRegistry.evaluateWhenClause(command.when)) {
             return
           }
@@ -197,7 +189,14 @@ export function useCommands(
             return
           }
 
-          handler()
+          // Prevent browser default only if we're going to handle this
+          event.preventDefault()
+          event.stopPropagation()
+
+          // Execute via registry - this uses the handler registered by useCommands effect
+          commandRegistry.execute(command.id).catch(err => {
+            console.error(`Failed to execute command ${command.id}:`, err)
+          })
         }
 
         document.addEventListener('keydown', keyHandler)
@@ -208,7 +207,7 @@ export function useCommands(
     return () => {
       disposables.forEach(cleanup => cleanup())
     }
-  }, [context, enabled, enableOnFormTags]) // handlers intentionally excluded
+  }, [context, enabled, enableOnFormTags])
 }
 
 /**

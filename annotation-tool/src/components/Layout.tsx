@@ -28,7 +28,7 @@ import {
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store/store'
 import { markSaved as markPersonaSaved } from '../store/personaSlice'
@@ -72,6 +72,16 @@ export default function Layout() {
   const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
   const world = useSelector((state: RootState) => state.world)
   const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
+
+  // Use ref to avoid stale closure in keyboard shortcut handlers
+  const lastAnnotationRef = useRef(lastAnnotation)
+  useEffect(() => {
+    lastAnnotationRef.current = lastAnnotation
+  }, [lastAnnotation])
+
+  // Track the path we came from when toggling to each builder (separate refs for independent toggles)
+  const ontologyReturnPathRef = useRef<string | null>(null)
+  const objectsReturnPathRef = useRef<string | null>(null)
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
@@ -136,9 +146,10 @@ export default function Layout() {
   }
 
   // Set command context for global shortcuts
+  // Note: ontologyWorkspaceActive and personaBrowserActive are managed ONLY by OntologyWorkspace
+  // We don't set them here to avoid parent effect overriding child effect
   useCommandContext({
     videoBrowserActive: location.pathname === '/',
-    ontologyWorkspaceActive: location.pathname === '/ontology',
     objectWorkspaceActive: location.pathname === '/objects',
     annotationWorkspaceActive: location.pathname.startsWith('/annotate'),
     dialogOpen: shortcutsDialogOpen || exportDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
@@ -149,18 +160,32 @@ export default function Layout() {
     'navigate.videoBrowser': () => navigate('/'),
     'navigate.ontologyBuilder': () => navigate('/ontology'),
     'navigate.objectBuilder': () => navigate('/objects'),
-    'navigate.toggle': () => {
-      // If we're in the ontology builder and there's a last annotation, go back to it
-      if (location.pathname === '/ontology' && lastAnnotation.videoId) {
-        navigate(`/annotate/${lastAnnotation.videoId}`)
+    'navigate.toggleOntology': () => {
+      const currentPath = window.location.pathname
+      // If we're in the ontology builder, go back to where we came from
+      if (currentPath === '/ontology') {
+        const returnPath = ontologyReturnPathRef.current || '/'
+        ontologyReturnPathRef.current = null
+        navigate(returnPath)
       }
-      // If we're in the object builder and there's a last annotation, go back to it
-      else if (location.pathname === '/objects' && lastAnnotation.videoId) {
-        navigate(`/annotate/${lastAnnotation.videoId}`)
-      }
-      // Otherwise, go to the ontology builder
-      else if (location.pathname !== '/ontology') {
+      // Otherwise, store current path and go to ontology builder
+      else {
+        ontologyReturnPathRef.current = currentPath
         navigate('/ontology')
+      }
+    },
+    'navigate.toggleWorld': () => {
+      const currentPath = window.location.pathname
+      // If we're in the object builder, go back to where we came from
+      if (currentPath === '/objects') {
+        const returnPath = objectsReturnPathRef.current || '/'
+        objectsReturnPathRef.current = null
+        navigate(returnPath)
+      }
+      // Otherwise, store current path and go to object builder
+      else {
+        objectsReturnPathRef.current = currentPath
+        navigate('/objects')
       }
     },
     'file.save': () => {

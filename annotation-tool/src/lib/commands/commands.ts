@@ -51,11 +51,20 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
     description: 'Navigate to object builder workspace'
   },
   {
-    id: 'navigate.toggle',
-    title: 'Toggle Workspace',
+    id: 'navigate.toggleOntology',
+    title: 'Toggle Ontology Builder',
     category: 'navigation',
-    keybinding: 'mod+o',
-    description: 'Toggle between annotation and current workspace'
+    keybinding: 'o',
+    when: '!inputFocused && !dialogOpen',
+    description: 'Toggle between current view and ontology builder'
+  },
+  {
+    id: 'navigate.toggleWorld',
+    title: 'Toggle Object Builder',
+    category: 'navigation',
+    keybinding: 'w',
+    when: '!inputFocused && !dialogOpen',
+    description: 'Toggle between current view and object builder (world)'
   },
   {
     id: 'file.save',
@@ -424,6 +433,20 @@ export const objectCommands: Omit<Command, 'execute'>[] = [
 ]
 
 /**
+ * Persona browser commands.
+ */
+export const personaCommands: Omit<Command, 'execute'>[] = [
+  {
+    id: 'persona.new',
+    title: 'New Persona',
+    category: 'persona',
+    keybinding: 'n',
+    when: 'personaBrowserActive && !inputFocused',
+    description: 'Create new persona'
+  }
+]
+
+/**
  * All command definitions.
  */
 export const allCommandDefinitions = [
@@ -431,7 +454,8 @@ export const allCommandDefinitions = [
   ...videoCommands,
   ...annotationCommands,
   ...ontologyCommands,
-  ...objectCommands
+  ...objectCommands,
+  ...personaCommands
 ]
 
 /**
