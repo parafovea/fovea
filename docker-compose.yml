@@ -8,8 +8,9 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://backend:3001}
-        - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-http://localhost:8000}
+        # Empty defaults = use relative URLs (nginx proxies /api/* to backend)
+        - VITE_API_URL=${VITE_API_URL:-}
+        - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-}
     ports:
       - "3000:3000"
     depends_on:

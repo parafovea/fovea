@@ -177,22 +177,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       // In single-user mode, auto-authenticate with default user
       if (mode === 'single-user') {
-        // Find or create default user
-        const defaultUsername = process.env.DEFAULT_USER_USERNAME || 'default-user'
+        // Find default user by id (matches what seed.ts creates)
+        const defaultUserId = 'default-user'
         let defaultUser = await prisma.user.findUnique({
-          where: { username: defaultUsername },
+          where: { id: defaultUserId },
         })
 
         if (!defaultUser) {
-          // Create default user if doesn't exist
-          const bcryptRounds = 12
-          const defaultPassword = await bcrypt.hash('password', bcryptRounds)
+          // Create default user if doesn't exist (fallback if seed didn't run)
           defaultUser = await prisma.user.create({
             data: {
-              username: defaultUsername,
-              displayName: process.env.DEFAULT_USER_DISPLAY_NAME || 'Default User',
+              id: defaultUserId,
+              username: 'user',
+              displayName: 'Default User',
               email: null,
-              passwordHash: defaultPassword,
+              passwordHash: null,
               isAdmin: false,
             },
           })
