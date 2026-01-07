@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
+import { fileURLToPath } from 'url'
+import { resolve } from 'path'
 
 /**
  * Seeds the database with initial users and system personas.
@@ -142,8 +144,13 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   }
 }
 
-// Run seed when executed directly
-if (require.main === module) {
+// Run seed when executed directly (ESM compatible check)
+// Only run if this is the entry point, not when imported by tests
+const __filename = fileURLToPath(import.meta.url)
+const entryPoint = resolve(process.argv[1])
+const isMain = entryPoint === __filename || entryPoint.endsWith('/seed.ts')
+
+if (isMain) {
   seedDatabase()
     .catch((e) => {
       console.error('Error seeding database:', e)
