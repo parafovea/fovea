@@ -7,7 +7,7 @@
  * **Architectural Decision:**
  * - UI State (ephemeral, local) → Zustand (this store)
  * - Server State (persistent, backend) → TanStack Query
- * - Global App State (authentication, routing) → Redux (minimal)
+ * - Authentication State → Zustand authStore (with persist middleware)
  *
  * **What belongs in this store:**
  * - Drawing interactions (isDrawing, temporaryBox, drawingMode)
