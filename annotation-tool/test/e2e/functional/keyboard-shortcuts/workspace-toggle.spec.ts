@@ -13,9 +13,9 @@ import { test, expect } from '../../fixtures/test-context.js'
 
 test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
   // testUser fixture sets up authentication - must be included to trigger auth
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   test.beforeEach(async ({ testUser }) => {
-    // Auth is set up by testUser fixture
+    // Auth is set up by testUser fixture - testUser used for side effects
+    void testUser
   })
 
   test('o navigates from video browser to ontology builder', async ({ page }) => {
