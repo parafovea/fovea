@@ -45,6 +45,7 @@ export default function PersonaManager() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
+  const [createdPersonaId, setCreatedPersonaId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     role: '',
@@ -83,6 +84,61 @@ export default function PersonaManager() {
     return () => clearTimeout(timeoutId)
   }, [formData, editingPersona, editDialogOpen, dispatch])
 
+  // Auto-save persona creation on changes (debounced 1 second)
+  useEffect(() => {
+    if (!createDialogOpen) return
+
+    // Don't auto-save if required fields are incomplete
+    if (!formData.name || !formData.role || !formData.informationNeed) return
+
+    const timeoutId = setTimeout(async () => {
+      if (createdPersonaId) {
+        // Already created - update existing persona
+        const existingPersona = personas.find(p => p.id === createdPersonaId)
+        if (existingPersona) {
+          const updatedPersona: Persona = {
+            ...existingPersona,
+            name: formData.name,
+            role: formData.role,
+            informationNeed: formData.informationNeed,
+            details: formData.details,
+            updatedAt: new Date().toISOString(),
+          }
+          dispatch(savePersona(updatedPersona))
+        }
+      } else {
+        // First save - create new persona
+        const newOntology: PersonaOntology = {
+          id: generateId(),
+          personaId: '', // Will be set by backend
+          entities: [],
+          roles: [],
+          events: [],
+          relationTypes: [],
+          relations: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+
+        const result = await dispatch(createPersona({
+          persona: {
+            name: formData.name,
+            role: formData.role,
+            informationNeed: formData.informationNeed,
+            details: formData.details,
+          },
+          ontology: newOntology,
+        }))
+
+        if (createPersona.fulfilled.match(result)) {
+          setCreatedPersonaId(result.payload.persona.id)
+        }
+      }
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [formData, createDialogOpen, createdPersonaId, personas, dispatch])
+
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
   }
@@ -98,8 +154,24 @@ export default function PersonaManager() {
       informationNeed: '',
       details: '',
     })
+    setCreatedPersonaId(null) // Reset for fresh creation
     setCreateDialogOpen(true)
     handleMenuClose()
+  }
+
+  const handleCancelCreate = async () => {
+    // Delete auto-created persona if user cancels
+    if (createdPersonaId) {
+      await dispatch(removePersona(createdPersonaId))
+    }
+    setCreatedPersonaId(null)
+    setCreateDialogOpen(false)
+  }
+
+  const handleCloseCreate = () => {
+    // When closing via Done button, just close (persona already saved)
+    setCreatedPersonaId(null)
+    setCreateDialogOpen(false)
   }
 
   const handleEditPersona = (persona: Persona) => {
@@ -305,8 +377,8 @@ export default function PersonaManager() {
         </Menu>
       </Paper>
 
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create New Persona</DialogTitle>
+      <Dialog open={createDialogOpen} onClose={handleCancelCreate} maxWidth="md" fullWidth>
+        <DialogTitle>{createdPersonaId ? 'Edit New Persona' : 'Create New Persona'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             <TextField
@@ -346,13 +418,13 @@ export default function PersonaManager() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleCancelCreate}>Cancel</Button>
           <Button
-            onClick={handleSaveNew}
+            onClick={createdPersonaId ? handleCloseCreate : handleSaveNew}
             variant="contained"
             disabled={!formData.name || !formData.role || !formData.informationNeed}
           >
-            Create Persona
+            {createdPersonaId ? 'Done' : 'Create Persona'}
           </Button>
         </DialogActions>
       </Dialog>

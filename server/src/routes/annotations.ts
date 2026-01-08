@@ -9,11 +9,11 @@ import { NotFoundError } from '../lib/errors.js'
 const AnnotationResponseSchema = Type.Object({
   id: Type.String(),
   videoId: Type.String(),
-  personaId: Type.String(),
+  personaId: Type.Union([Type.Null(), Type.String()]),
   type: Type.String(),
   label: Type.String(),
   frames: Type.Unknown(),
-  confidence: Type.Union([Type.Number(), Type.Null()]),
+  confidence: Type.Union([Type.Null(), Type.Number()]),
   source: Type.String(),
   createdAt: Type.String(),
   updatedAt: Type.String()
@@ -83,7 +83,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       tags: ['annotations'],
       body: Type.Object({
         videoId: Type.String(),
-        personaId: Type.String(),
+        personaId: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         type: Type.String(),
         label: Type.String(),
         frames: Type.Unknown(),
@@ -97,7 +97,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const data = request.body as {
       videoId: string
-      personaId: string
+      personaId?: string | null
       type: string
       label: string
       frames: Prisma.InputJsonValue
@@ -108,7 +108,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const annotation = await fastify.prisma.annotation.create({
       data: {
         videoId: data.videoId,
-        personaId: data.personaId,
+        personaId: data.personaId ?? null,
         type: data.type,
         label: data.label,
         frames: data.frames,
