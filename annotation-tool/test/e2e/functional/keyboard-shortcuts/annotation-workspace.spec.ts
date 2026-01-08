@@ -46,7 +46,8 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
 
     // Clear any focused input that might block shortcuts
     await page.evaluate(() => {
-      ;(document.activeElement as HTMLElement)?.blur()
+      const el = document.activeElement as HTMLElement | null
+      el?.blur()
     })
     await page.waitForTimeout(300)
 
@@ -156,7 +157,8 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
 
     // Clear any focused input that might block shortcuts
     await page.evaluate(() => {
-      ;(document.activeElement as HTMLElement)?.blur()
+      const el = document.activeElement as HTMLElement | null
+      el?.blur()
     })
     await page.waitForTimeout(300)
 
