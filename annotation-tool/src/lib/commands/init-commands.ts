@@ -9,7 +9,8 @@ import {
   videoCommands,
   annotationCommands,
   ontologyCommands,
-  objectCommands
+  objectCommands,
+  personaCommands
 } from './commands.js'
 
 /**
@@ -23,7 +24,8 @@ export function initializeCommands(): void {
     ...videoCommands,
     ...annotationCommands,
     ...ontologyCommands,
-    ...objectCommands
+    ...objectCommands,
+    ...personaCommands
   ]
 
   allCommands.forEach(cmd => {
@@ -47,6 +49,7 @@ export function initializeGlobalContext(): void {
   commandRegistry.setContext('ontologyWorkspaceActive', false)
   commandRegistry.setContext('objectWorkspaceActive', false)
   commandRegistry.setContext('videoBrowserActive', false)
+  commandRegistry.setContext('personaBrowserActive', false)
 
   // Expose command registry globally for E2E tests
   if (typeof window !== 'undefined') {

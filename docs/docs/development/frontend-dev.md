@@ -6,7 +6,48 @@ title: Frontend Development
 
 The frontend provides the annotation interface for video analysis and ontology management. Built with React 18, TypeScript 5.3+, and Vite 5, it uses Redux Toolkit for state management and Material-UI v5 for components.
 
-## Development Environment
+## Development Modes
+
+FOVEA supports two development workflows. Choose the one that best fits your needs:
+
+### Host-Based Development
+
+Run services directly on your machine. Best for rapid iteration and debugging individual services.
+
+**When to use:**
+- Debugging frontend code with browser DevTools
+- Making frequent code changes with instant feedback
+- Running individual services in isolation
+
+**Setup:**
+1. Start backend: `cd server && npm run dev`
+2. Start frontend: `cd annotation-tool && npm run dev`
+3. Frontend available at `http://localhost:5173`
+
+### Docker-Based Development
+
+Run all services in containers with hot-reload. Best for testing the full stack.
+
+**When to use:**
+- Testing service integration
+- Reproducing production-like environments
+- Working with all services simultaneously
+
+**Setup:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+Frontend available at `http://localhost:3000` with:
+- Hot-reload for source code changes
+- Jaeger tracing at `http://localhost:16686`
+- Maildev for email testing at `http://localhost:1080`
+
+See [Docker Commands Reference](../reference/docker-commands.md) for more details.
+
+## Development Environment (Host-Based)
+
+This section describes host-based development where services run directly on your machine.
 
 ### Prerequisites
 

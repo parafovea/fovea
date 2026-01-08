@@ -533,7 +533,7 @@ export class AnnotationExporter {
 
     // Add type-specific fields
     if (annotationType === 'type') {
-      annotation.personaId = prismaAnnotation.personaId
+      annotation.personaId = prismaAnnotation.personaId ?? undefined
       annotation.typeCategory = frames.typeCategory
       annotation.typeId = frames.typeId
     } else {

@@ -30,7 +30,7 @@ export interface TrackingOptions {
 export interface BackendAnnotation {
   id: string
   videoId: string
-  personaId: string
+  personaId: string | null
   type: string
   label: string
   frames: any
@@ -58,8 +58,8 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     updatedAt: backendAnnotation.updatedAt,
   }
 
-  if (backendAnnotation.type === 'type') {
-    // Type annotation
+  if (backendAnnotation.type === 'type' && backendAnnotation.personaId) {
+    // Type annotation - requires personaId
     return {
       ...base,
       annotationType: 'type' as const,
@@ -88,22 +88,23 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
  */
 export function transformFrontendToBackend(annotation: Annotation): {
   videoId: string
-  personaId: string
+  personaId: string | null
   type: string
   label: string
   frames: any
   confidence?: number
   source: string
 } {
-  let personaId: string
+  let personaId: string | null
   let label: string
 
   if (annotation.annotationType === 'type') {
+    // Type annotations require personaId (persona-scoped ontology assignments)
     personaId = annotation.personaId
     label = annotation.typeId || 'unlabeled'
   } else {
-    // Object annotations don't have personaId, use videoId as fallback
-    personaId = annotation.videoId
+    // Object annotations are persona-agnostic (world object links)
+    personaId = null
     label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
   }
 

@@ -49,7 +49,12 @@ export default defineConfig({
       workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 720 }
+        viewport: { width: 1280, height: 720 },
+        // Use platform-specific user agent so keyboard shortcuts work correctly
+        // (app detects Mac vs Windows from user agent to determine if Cmd or Ctrl is the modifier)
+        userAgent: process.platform === 'darwin'
+          ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+          : undefined  // Use default Windows UA
       }
     },
 

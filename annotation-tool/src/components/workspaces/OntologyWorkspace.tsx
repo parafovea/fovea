@@ -316,6 +316,7 @@ export default function OntologyWorkspace() {
   // Set command context for when clauses
   useCommandContext({
     ontologyWorkspaceActive: selectedPersonaId !== null,
+    personaBrowserActive: selectedPersonaId === null,
     annotationWorkspaceActive: false,
     objectWorkspaceActive: false,
     videoBrowserActive: false,
@@ -326,6 +327,7 @@ export default function OntologyWorkspace() {
 
   // Register command handlers
   useCommands({
+    'persona.new': () => handleAddPersona(),
     'ontology.newType': () => handleAddType(),
     'ontology.nextTab': () => setTabValue((prev) => (prev + 1) % 4),
     'ontology.previousTab': () => setTabValue((prev) => (prev - 1 + 4) % 4),

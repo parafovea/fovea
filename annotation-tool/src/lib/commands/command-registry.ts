@@ -12,7 +12,7 @@
 /**
  * Command category for grouping related commands.
  */
-export type CommandCategory = 'video' | 'annotation' | 'ontology' | 'object' | 'global' | 'navigation' | 'file'
+export type CommandCategory = 'video' | 'annotation' | 'ontology' | 'object' | 'global' | 'navigation' | 'file' | 'persona'
 
 /**
  * Context expression for conditional command execution.
