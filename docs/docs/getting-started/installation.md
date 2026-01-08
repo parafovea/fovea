@@ -137,6 +137,64 @@ If the AI model service crashes on startup:
 2. Verify you're using CPU mode if no GPU is available
 3. Check logs: `docker compose logs model-service`
 
+### Database Table Does Not Exist
+
+If you see errors like `The table 'public.videos' does not exist`:
+
+```bash
+prisma:error The table `public.videos` does not exist in the current database.
+```
+
+Migrations should run automatically on startup. If they didn't, you can run them manually:
+
+```bash
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npx prisma db seed
+```
+
+If you're using an older docker-compose.yml, pull the latest version which includes automatic migrations.
+
+### Backend Shows "tsx: not found" (Development Mode)
+
+If you see `sh: tsx: not found` when running development mode:
+
+```bash
+backend-1  | sh: tsx: not found
+backend-1 exited with code 127
+```
+
+This happens because the container was built for production (without devDependencies). Fix it by rebuilding with the dev configuration:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+The `--build` flag rebuilds containers using the `builder` stage which includes development tools like `tsx`.
+
+### API Connection Errors in Development Mode
+
+If you see `ECONNREFUSED` errors in the frontend logs when running development mode:
+
+```
+AggregateError [ECONNREFUSED] - /api/videos
+AggregateError [ECONNREFUSED] - /api/health
+```
+
+This indicates the frontend's Vite dev server cannot reach the backend API. Common causes:
+
+1. **Backend not running**: Check that the backend container is healthy:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+   ```
+   Look for "healthy" status on the backend service.
+
+2. **Network issues**: Verify the backend is accessible:
+   ```bash
+   curl http://localhost:3001/api/health
+   ```
+
+3. **Missing environment variable**: Ensure `docker-compose.dev.yml` includes `VITE_BACKEND_URL=http://backend:3001` for the frontend service. This configures the Vite proxy to use Docker's internal DNS for inter-container communication.
+
 For more troubleshooting help, see [Common Issues](../operations/troubleshooting/common-issues.md).
 
 ## Next Steps

@@ -130,7 +130,7 @@ export default function KeyboardShortcutsDialog({
       global: allCommands.filter(cmd => cmd.category === 'global' || cmd.category === 'navigation' || cmd.category === 'file'),
       video: allCommands.filter(cmd => cmd.category === 'video'),
       annotation: allCommands.filter(cmd => cmd.category === 'annotation'),
-      ontology: allCommands.filter(cmd => cmd.category === 'ontology'),
+      ontology: allCommands.filter(cmd => cmd.category === 'ontology' || cmd.category === 'persona'),
       object: allCommands.filter(cmd => cmd.category === 'object'),
     }
   }, [])
@@ -185,12 +185,19 @@ export default function KeyboardShortcutsDialog({
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available when browsing videos
           </Typography>
-          <ShortcutTable commands={[]} />
+          <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              The Video Browser uses global shortcuts (see Global tab).
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Press <strong>O</strong> to toggle to Ontology Builder, <strong>W</strong> to toggle to Object Builder.
+            </Typography>
+          </Box>
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available in the Ontology Builder workspace
+            Available in the Ontology Builder workspace (including persona browser)
           </Typography>
           <ShortcutTable commands={commandsByCategory.ontology} />
         </TabPanel>

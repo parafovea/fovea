@@ -20,15 +20,18 @@ services:
       - ./annotation-tool/public:/app/public:ro
     environment:
       - NODE_ENV=development
+      - VITE_BACKEND_URL=http://backend:3001  # Use Docker service name for inter-container communication
     command: npm run dev -- --host 0.0.0.0 --port 3000
 
   backend:
+    build:
+      target: builder  # Use builder stage which has devDependencies (tsx)
     volumes:
       - ./server/src:/app/src:ro
       - ./server/prisma:/app/prisma:ro
     environment:
       - NODE_ENV=development
-    command: npm run dev
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run dev"
 
   model-service:
     volumes:

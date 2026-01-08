@@ -9,6 +9,13 @@ keywords: [docker, quickstart, installation, getting started]
 
 Get FOVEA running in 5 minutes with a single command. This guide uses Docker Compose to start all services with default configuration.
 
+:::note Development Mode
+This guide covers **production mode** deployment. For development with hot-reload and debugging tools, see [Frontend Development](../development/frontend-dev.md#docker-based-development) or use:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+:::
+
 ## Prerequisites
 
 - Docker Engine 24.0+ and Docker Compose 2.20+ installed

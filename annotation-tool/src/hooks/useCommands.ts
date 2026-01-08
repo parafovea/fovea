@@ -117,7 +117,9 @@ export function useCommands(
   handlers: CommandHandlers,
   options: UseCommandsOptions = {}
 ): void {
-  const { context, enabled = true, enableOnFormTags = false } = options
+  // Note: context is kept in API for backwards compatibility but no longer used for filtering
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { context: _context, enabled = true, enableOnFormTags = false } = options
 
   // Use ref to hold latest handlers without causing re-registration
   const handlersRef = useRef<CommandHandlers>(handlers)
@@ -126,18 +128,25 @@ export function useCommands(
   }, [handlers])
 
   // Register command handlers with registry
+  // Uses handlersRef to ensure we always call the latest handler (avoiding stale closure issues)
   useEffect(() => {
     if (!enabled) return
 
     const disposables: Array<{ dispose: () => void }> = []
 
-    Object.entries(handlers).forEach(([commandId, handler]) => {
+    Object.entries(handlers).forEach(([commandId]) => {
       const existingCommand = commandRegistry.getCommand(commandId)
 
       if (existingCommand) {
         const disposable = commandRegistry.register({
           ...existingCommand,
-          execute: handler
+          // Wrap handler to always use the latest from ref
+          execute: (args?: any) => {
+            const currentHandler = handlersRef.current[commandId]
+            if (currentHandler) {
+              return currentHandler(args)
+            }
+          }
         })
         disposables.push(disposable)
       }
@@ -150,12 +159,17 @@ export function useCommands(
   }, [enabled])
 
   // Register keyboard shortcuts once
+  // Only register shortcuts for commands that are in the handlers object
   useEffect(() => {
     if (!enabled) return
 
-    const commands = context
-      ? commandRegistry.getCommandsForContext(context)
-      : commandRegistry.getCommands()
+    // Get command IDs from handlers to filter which commands get keyboard listeners
+    const handlerCommandIds = new Set(Object.keys(handlersRef.current))
+
+    // Get ALL commands from registry and filter to only those this component handles
+    // This ensures we register listeners for all commands in handlers, regardless of their 'when' clause
+    const allCommands = commandRegistry.getCommands()
+    const commands = allCommands.filter(cmd => handlerCommandIds.has(cmd.id))
 
     const disposables: Array<() => void> = []
 
@@ -168,27 +182,19 @@ export function useCommands(
 
       keybindings.forEach((keybinding) => {
         const keyHandler = (event: KeyboardEvent) => {
-          // Get handler fresh from ref
-          const handler = handlersRef.current[command.id]
-          if (!handler) return
-
-          // Check if this event matches the keybinding
+          // Check if this event matches the keybinding FIRST
           if (!matchesKeybinding(event, keybinding)) {
             return
           }
 
-          // Check if focus is on form element FIRST (unless explicitly enabled)
+          // Check if focus is on form element (unless explicitly enabled)
           const target = event.target as HTMLElement
           const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
           if (isFormElement && !enableOnFormTags) {
             return
           }
 
-          // Prevent browser default to avoid browser capture (e.g., Ctrl+N opening new windows)
-          event.preventDefault()
-          event.stopPropagation()
-
-          // Check when clause
+          // Check when clause BEFORE preventing default
           if (command.when && !commandRegistry.evaluateWhenClause(command.when)) {
             return
           }
@@ -197,7 +203,14 @@ export function useCommands(
             return
           }
 
-          handler()
+          // Prevent browser default only if we're going to handle this
+          event.preventDefault()
+          event.stopPropagation()
+
+          // Execute via registry - this uses the handler registered by useCommands effect
+          commandRegistry.execute(command.id).catch(err => {
+            console.error(`Failed to execute command ${command.id}:`, err)
+          })
         }
 
         document.addEventListener('keydown', keyHandler)
@@ -208,7 +221,7 @@ export function useCommands(
     return () => {
       disposables.forEach(cleanup => cleanup())
     }
-  }, [context, enabled, enableOnFormTags]) // handlers intentionally excluded
+  }, [enabled, enableOnFormTags])
 }
 
 /**

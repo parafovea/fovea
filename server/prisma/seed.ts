@@ -142,8 +142,11 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   }
 }
 
-// Run seed when executed directly
-if (require.main === module) {
+// Run seed when executed directly, skip when imported by tests
+// Tests set VITEST=true or NODE_ENV=test
+const isTestEnvironment = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
+
+if (!isTestEnvironment) {
   seedDatabase()
     .catch((e) => {
       console.error('Error seeding database:', e)

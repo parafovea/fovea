@@ -44,26 +44,32 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     // Draw initial bounding box
     await annotationWorkspace.drawSimpleBoundingBox()
 
+    // Clear any focused input that might block shortcuts
+    await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null
+      el?.blur()
+    })
+    await page.waitForTimeout(300)
+
     const timeline = page.locator('[data-testid="timeline-canvas"]')
 
     // Timeline should be hidden initially
-    let isVisible = await timeline.isVisible().catch(() => false)
+    const initiallyVisible = await timeline.isVisible().catch(() => false)
+    expect(initiallyVisible).toBe(false)
 
-    // Press T to toggle
+    // Press T to show timeline
     await page.keyboard.press('t')
     await page.waitForTimeout(500)
 
-    // Verify visibility toggled
-    const newVisible = await timeline.isVisible().catch(() => false)
-    expect(newVisible).toBe(!isVisible)
+    // Verify timeline is now visible
+    await expect(timeline).toBeVisible({ timeout: 5000 })
 
-    // Press T again
+    // Press T again to hide
     await page.keyboard.press('t')
     await page.waitForTimeout(500)
 
-    // Verify back to original state
-    isVisible = await timeline.isVisible().catch(() => false)
-    expect(isVisible).toBe(!newVisible)
+    // Verify timeline is hidden again
+    await expect(timeline).not.toBeVisible({ timeout: 5000 })
   })
 
   test('V toggles annotation visibility', async ({ page, annotationWorkspace, testUser, testPersona, testEntityType }) => {
@@ -148,6 +154,13 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
 
     // Draw second annotation
     await annotationWorkspace.drawSimpleBoundingBox()
+
+    // Clear any focused input that might block shortcuts
+    await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null
+      el?.blur()
+    })
+    await page.waitForTimeout(300)
 
     // Timeline toggle should work
     await page.keyboard.press('t')

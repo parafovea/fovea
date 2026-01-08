@@ -90,26 +90,45 @@ MODEL_BUILD_MODE=recommended docker compose --profile gpu build model-service-gp
 
 ## Development Mode
 
-The default mode is optimized for local CPU development. For custom overrides:
+For development with hot reload, use the provided dev configuration:
 
 ```bash
-# Create a local override file (gitignored)
+# Start development mode with hot reload (first time or after changes)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Subsequent runs (if images already built with dev targets)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+This provides:
+- Hot reload for all services (code changes apply without rebuild)
+- Jaeger tracing UI at http://localhost:16686
+- Maildev email testing at http://localhost:1080
+
+**Important:** The `--build` flag is required when first switching to dev mode. Without it, you may see `tsx: not found` errors because containers need devDependencies.
+
+### Custom Overrides
+
+For additional customizations, create a local override file (gitignored):
+
+```bash
 cat > docker-compose.override.yml <<EOF
 services:
   backend:
-    command: npm run dev  # Hot reload
-    volumes:
-      - ./server/src:/app/src
+    environment:
+      - DEBUG=true
 EOF
 
 # Docker Compose automatically loads docker-compose.override.yml
-docker compose up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 ## Database
 
+Migrations run automatically on backend startup. For manual operations:
+
 ```bash
-# Run migrations
+# Run migrations manually (if needed)
 docker compose exec backend npx prisma migrate deploy
 
 # Access psql

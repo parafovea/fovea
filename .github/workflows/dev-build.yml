@@ -1,0 +1,96 @@
+name: Dev Build Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  dev-build:
+    name: Verify Dev Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start dev services
+        run: |
+          # Start only essential services for connectivity test
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d \
+            frontend backend postgres redis
+          echo "Waiting for backend to be healthy..."
+
+      - name: Wait for backend health
+        run: |
+          # Wait up to 180 seconds for backend to become healthy
+          for i in $(seq 1 36); do
+            if docker compose -f docker-compose.yml -f docker-compose.dev.yml ps backend | grep -q "healthy"; then
+              echo "Backend is healthy!"
+              break
+            fi
+            if [ $i -eq 36 ]; then
+              echo "Timeout waiting for backend"
+              docker compose -f docker-compose.yml -f docker-compose.dev.yml logs backend
+              exit 1
+            fi
+            echo "Waiting for backend... ($i/36)"
+            sleep 5
+          done
+
+      - name: Wait for Vite dev server
+        run: |
+          # Give Vite extra time to start and compile
+          echo "Waiting for Vite dev server to be ready..."
+          sleep 15
+          # Check if frontend is responding
+          for i in $(seq 1 12); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 | grep -q "200"; then
+              echo "Frontend is ready!"
+              break
+            fi
+            if [ $i -eq 12 ]; then
+              echo "Timeout waiting for frontend"
+              docker compose -f docker-compose.yml -f docker-compose.dev.yml logs frontend
+              exit 1
+            fi
+            echo "Waiting for frontend... ($i/12)"
+            sleep 5
+          done
+
+      - name: Verify frontend can reach backend API
+        run: |
+          # Test that the Vite proxy forwards /api requests to the backend
+          echo "Testing API connectivity through Vite proxy..."
+          response=$(curl -s -w "\n%{http_code}" http://localhost:3000/api/health)
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response code: $http_code"
+          echo "Response body: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "ERROR: Frontend cannot reach backend API (status: $http_code)"
+            echo "This indicates the Vite proxy is not correctly configured for Docker networking."
+            exit 1
+          fi
+
+          echo "SUCCESS: Frontend-backend connectivity verified through Vite proxy"
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Frontend Logs ==="
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml logs frontend --tail=100
+          echo ""
+          echo "=== Backend Logs ==="
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml logs backend --tail=100
+          echo ""
+          echo "=== Container Status ==="
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v

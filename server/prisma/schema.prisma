@@ -261,12 +261,14 @@ model VideoSummary {
 }
 
 /// Annotation represents a temporal-spatial annotation on a video
+/// Type annotations (persona-scoped ontology assignments) require personaId
+/// Object annotations (world object links) have null personaId as they are persona-agnostic
 model Annotation {
   id          String   @id @default(uuid())
   videoId     String
   video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  personaId   String
-  persona     Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  personaId   String?
+  persona     Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
 
   type        String
   label       String

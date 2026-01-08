@@ -8,8 +8,9 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://backend:3001}
-        - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-http://localhost:8000}
+        # Empty defaults = use relative URLs (nginx proxies /api/* to backend)
+        - VITE_API_URL=${VITE_API_URL:-}
+        - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -23,20 +24,21 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    command: sh -c "npx prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - FOVEA_MODE=${FOVEA_MODE:-multi-user}
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://fovea:fovea_password@postgres:5432/fovea}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-http://model-service:8000}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD}
+      - SESSION_SECRET=${SESSION_SECRET:-default-dev-secret-change-in-production-min-32-chars}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-test123}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-fovea-backend}
       # Video Storage Configuration
       - VIDEO_STORAGE_TYPE=${VIDEO_STORAGE_TYPE:-local}

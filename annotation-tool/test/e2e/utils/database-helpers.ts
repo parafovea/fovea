@@ -27,7 +27,9 @@ export interface Video {
 export interface Annotation {
   id: string
   videoId: string
-  personaId: string
+  personaId: string | null
+  type: string
+  label: string
 }
 
 export interface EntityType {
@@ -212,21 +214,37 @@ export class DatabaseHelper {
 
   /**
    * Create a test annotation.
-   * @param data - Partial annotation data
+   * @param data - Annotation data
+   * @param sessionToken - Session token for authentication
    */
-  async createAnnotation(data: Partial<Annotation>): Promise<Annotation> {
+  async createAnnotation(
+    data: {
+      videoId: string
+      personaId?: string | null
+      type: string
+      label: string
+      frames?: any
+    },
+    sessionToken: string
+  ): Promise<Annotation> {
     const response = await fetch(`${this.apiURL}/api/annotations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': `session_token=${sessionToken}`
+      },
       body: JSON.stringify({
         videoId: data.videoId,
-        personaId: data.personaId,
-        keyframes: []
+        personaId: data.personaId ?? null,
+        type: data.type,
+        label: data.label,
+        frames: data.frames || { boxes: [], interpolationSegments: [] }
       })
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to create annotation: ${response.statusText}`)
+      const error = await response.text()
+      throw new Error(`Failed to create annotation: ${response.statusText} - ${error}`)
     }
 
     return response.json()
@@ -234,12 +252,37 @@ export class DatabaseHelper {
 
   /**
    * Delete a test annotation.
+   * @param videoId - ID of video the annotation belongs to
    * @param annotationId - ID of annotation to delete
+   * @param sessionToken - Session token for authentication
    */
-  async deleteAnnotation(annotationId: string): Promise<void> {
-    await fetch(`${this.apiURL}/api/annotations/${annotationId}`, {
-      method: 'DELETE'
+  async deleteAnnotation(videoId: string, annotationId: string, sessionToken: string): Promise<void> {
+    await fetch(`${this.apiURL}/api/annotations/${videoId}/${annotationId}`, {
+      method: 'DELETE',
+      headers: {
+        'Cookie': `session_token=${sessionToken}`
+      }
     })
+  }
+
+  /**
+   * Get annotations for a video.
+   * @param videoId - ID of video
+   * @param sessionToken - Session token for authentication
+   * @returns Array of annotations
+   */
+  async getAnnotations(videoId: string, sessionToken: string): Promise<Annotation[]> {
+    const response = await fetch(`${this.apiURL}/api/annotations/${videoId}`, {
+      headers: {
+        'Cookie': `session_token=${sessionToken}`
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get annotations: ${response.statusText}`)
+    }
+
+    return response.json()
   }
 
   /**
