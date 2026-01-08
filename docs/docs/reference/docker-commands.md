@@ -61,6 +61,11 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 - Maildev email testing: http://localhost:1080, SMTP on port 1025
 - Auto-reload: `npm run dev`, `uvicorn --reload`
 
+**Environment Variables:**
+
+The dev compose file sets these environment variables for the frontend:
+- `VITE_BACKEND_URL=http://backend:3001` - Backend API URL for Vite proxy (uses Docker service name for inter-container communication)
+
 **When to use:**
 - Active development on frontend, backend, or model service
 - Debugging distributed request flows with Jaeger
