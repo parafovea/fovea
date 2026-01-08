@@ -36,7 +36,7 @@ annotation-tool/
 
 ### Unit Tests with Vitest
 
-Unit tests are co-located with source files (e.g., `Component.tsx` → `Component.test.tsx`). Use the `renderWithProviders()` helper to wrap components with Redux, React Query, and MUI providers.
+Unit tests are co-located with source files (e.g., `Component.tsx` → `Component.test.tsx`). Use the `renderWithProviders()` helper to wrap components with TanStack Query and MUI providers.
 
 Run unit tests:
 
@@ -105,46 +105,67 @@ const customAnnotation = createAnnotation({
 const persona = createPersona({ name: 'Baseball Scout' });
 ```
 
-### Redux Store Testing
+### Zustand Store Testing
 
-Test Redux slices in isolation by creating test stores with only the required reducers:
+Test Zustand stores directly without providers:
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useAnnotationUiStore } from '../../src/store/zustand/annotationUiStore';
+
+describe('annotationUiStore', () => {
+  beforeEach(() => {
+    // Reset store state before each test
+    useAnnotationUiStore.getState().resetAllState();
+  });
+
+  it('sets drawing mode', () => {
+    const { setDrawingMode } = useAnnotationUiStore.getState();
+
+    setDrawingMode('entity');
+
+    expect(useAnnotationUiStore.getState().drawingMode).toBe('entity');
+  });
+
+  it('updates selected annotation', () => {
+    const { setSelectedAnnotationId } = useAnnotationUiStore.getState();
+
+    setSelectedAnnotationId('annotation-123');
+
+    expect(useAnnotationUiStore.getState().selectedAnnotationId).toBe('annotation-123');
+  });
+});
+```
+
+### TanStack Query Testing
+
+Test components that use TanStack Query hooks with MSW for API mocking:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { configureStore } from '@reduxjs/toolkit';
-import worldReducer, { addEntity, updateEntity } from '../../src/store/worldSlice';
+import { renderWithProviders, screen, waitFor } from '@test/utils/test-utils';
+import { server } from '@test/setup';
+import { http, HttpResponse } from 'msw';
+import { VideoList } from './VideoList';
 
-describe('worldSlice', () => {
-  const createStore = () => {
-    return configureStore({
-      reducer: { world: worldReducer }
+describe('VideoList', () => {
+  it('displays videos from API', async () => {
+    // Setup MSW handler
+    server.use(
+      http.get('/api/videos', () => {
+        return HttpResponse.json([
+          { id: '1', filename: 'video1.mp4' },
+          { id: '2', filename: 'video2.mp4' },
+        ]);
+      })
+    );
+
+    renderWithProviders(<VideoList />);
+
+    await waitFor(() => {
+      expect(screen.getByText('video1.mp4')).toBeInTheDocument();
+      expect(screen.getByText('video2.mp4')).toBeInTheDocument();
     });
-  };
-
-  it('adds entity to state', () => {
-    const store = createStore();
-    const entity = {
-      id: '123',
-      name: 'Test Entity',
-      description: 'Test description'
-    };
-
-    store.dispatch(addEntity(entity));
-
-    const state = store.getState();
-    expect(state.world.entities).toContainEqual(entity);
-  });
-
-  it('updates existing entity', () => {
-    const store = createStore();
-    const entity = { id: '123', name: 'Original' };
-
-    store.dispatch(addEntity(entity));
-    store.dispatch(updateEntity({ id: '123', updates: { name: 'Updated' } }));
-
-    const state = store.getState();
-    const updated = state.world.entities.find(e => e.id === '123');
-    expect(updated?.name).toBe('Updated');
   });
 });
 ```

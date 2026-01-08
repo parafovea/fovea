@@ -94,104 +94,12 @@ describe('Axios Credentials Configuration', () => {
   })
 })
 
-describe('Fetch Credentials Configuration', () => {
-  let originalFetch: typeof fetch
-  let fetchCalls: Array<{ url: string; options?: RequestInit }> = []
-
-  beforeEach(() => {
-    fetchCalls = []
-    originalFetch = global.fetch
-
-    // Mock fetch to capture calls and verify credentials
-    global.fetch = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
-      const urlString = typeof url === 'string' ? url : url.toString()
-      fetchCalls.push({ url: urlString, options })
-
-      // Return a mock successful response
-      return new Response(JSON.stringify({}), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }) as typeof fetch
-  })
-
-  afterEach(() => {
-    global.fetch = originalFetch
-    vi.restoreAllMocks()
-  })
-
-  describe('Redux slice fetch calls', () => {
-    it('claimsSlice fetchClaims includes credentials', async () => {
-      const { fetchClaims } = await import('../store/claimsSlice')
-
-      // Create a minimal dispatch function
-      const dispatch = vi.fn()
-      const getState = vi.fn()
-
-      // Call the thunk
-      const thunk = fetchClaims({ summaryId: 'test-summary' })
-      try {
-        await thunk(dispatch, getState, undefined)
-      } catch {
-        // Ignore errors, we just want to verify the fetch call
-      }
-
-      expect(fetchCalls.length).toBeGreaterThan(0)
-      expect(fetchCalls[0].options?.credentials).toBe('include')
-    })
-
-    it('videoSummarySlice fetchVideoSummaries includes credentials', async () => {
-      const { fetchVideoSummaries } = await import('../store/videoSummarySlice')
-
-      const dispatch = vi.fn()
-      const getState = vi.fn()
-
-      const thunk = fetchVideoSummaries('test-video')
-      try {
-        await thunk(dispatch, getState, undefined)
-      } catch {
-        // Ignore errors
-      }
-
-      expect(fetchCalls.length).toBeGreaterThan(0)
-      expect(fetchCalls[0].options?.credentials).toBe('include')
-    })
-
-    it('personaSlice fetchPersonas includes credentials', async () => {
-      const { fetchPersonas } = await import('../store/personaSlice')
-
-      const dispatch = vi.fn()
-      const getState = vi.fn()
-
-      const thunk = fetchPersonas()
-      try {
-        await thunk(dispatch, getState, undefined)
-      } catch {
-        // Ignore errors
-      }
-
-      expect(fetchCalls.length).toBeGreaterThan(0)
-      expect(fetchCalls[0].options?.credentials).toBe('include')
-    })
-
-    it('personaSlice fetchPersonaOntology includes credentials', async () => {
-      const { fetchPersonaOntology } = await import('../store/personaSlice')
-
-      const dispatch = vi.fn()
-      const getState = vi.fn()
-
-      const thunk = fetchPersonaOntology('test-persona')
-      try {
-        await thunk(dispatch, getState, undefined)
-      } catch {
-        // Ignore errors
-      }
-
-      expect(fetchCalls.length).toBeGreaterThan(0)
-      expect(fetchCalls[0].options?.credentials).toBe('include')
-    })
-  })
-})
+// Note: Redux slice fetch credential tests were removed during the migration
+// from Redux to TanStack Query. The credentials are now configured via:
+// 1. axios.defaults.withCredentials (set by api.ts)
+// 2. ApiClient's axios instance withCredentials setting
+// 3. axiosInstance module withCredentials setting
+// All TanStack Query hooks use these configured axios instances.
 
 describe('Safari Compatibility', () => {
   it('all API modules configure credentials for cross-browser compatibility', async () => {

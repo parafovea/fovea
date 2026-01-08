@@ -7,9 +7,14 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Annotation } from '../../models/types'
+import { useCallback } from 'react'
+import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '../../models/types'
 import { api } from '../../services/api'
 import { generateId } from '../../utils/uuid'
+import { BoundingBoxInterpolator } from '../../utils/interpolation'
+
+// Shared interpolator instance
+const interpolator = new BoundingBoxInterpolator()
 
 /** Query keys for annotations */
 export const annotationKeys = {
@@ -234,4 +239,258 @@ export function useSetAnnotations() {
   return (videoId: string, annotations: Annotation[]) => {
     queryClient.setQueryData(annotationKeys.video(videoId), annotations)
   }
+}
+
+// ============= Keyframe Manipulation Hooks =============
+
+/**
+ * Helper to update timeSpan based on keyframes
+ */
+function updateAnnotationTimeSpan(annotation: Annotation, fps: number): Annotation {
+  const keyframes = annotation.boundingBoxSequence.boxes.filter(
+    b => b.isKeyframe || b.isKeyframe === undefined
+  )
+  if (keyframes.length > 0) {
+    const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+    const startTime = sortedKeyframes[0].frameNumber / fps
+    const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
+    return {
+      ...annotation,
+      timeSpan: {
+        startTime,
+        endTime: Math.max(endTime, startTime + 1), // Minimum 1 second duration
+      },
+    }
+  }
+  return annotation
+}
+
+/**
+ * Hook for adding a keyframe to an annotation.
+ * Updates the cache optimistically (no server call).
+ *
+ * @returns Function to add keyframe
+ */
+export function useAddKeyframe() {
+  const queryClient = useQueryClient()
+
+  return useCallback((params: {
+    videoId: string
+    annotationId: string
+    frameNumber: number
+    box: BoundingBox
+    fps?: number
+  }) => {
+    const { videoId, annotationId, frameNumber, box, fps = 30 } = params
+
+    queryClient.setQueryData<Annotation[]>(
+      annotationKeys.video(videoId),
+      (old = []) => old.map(annotation => {
+        if (annotation.id !== annotationId) return annotation
+
+        const updatedSequence = interpolator.addKeyframe(
+          annotation.boundingBoxSequence,
+          frameNumber
+        )
+
+        // Update the new keyframe with provided box data
+        const keyframeIndex = updatedSequence.boxes.findIndex(b => b.frameNumber === frameNumber)
+        if (keyframeIndex !== -1) {
+          updatedSequence.boxes[keyframeIndex] = {
+            ...updatedSequence.boxes[keyframeIndex],
+            ...box,
+          }
+        }
+
+        const updated = { ...annotation, boundingBoxSequence: updatedSequence }
+        return updateAnnotationTimeSpan(updated, fps)
+      })
+    )
+  }, [queryClient])
+}
+
+/**
+ * Hook for removing a keyframe from an annotation.
+ * Updates the cache optimistically (no server call).
+ *
+ * @returns Function to remove keyframe
+ */
+export function useRemoveKeyframe() {
+  const queryClient = useQueryClient()
+
+  return useCallback((params: {
+    videoId: string
+    annotationId: string
+    frameNumber: number
+    fps?: number
+  }) => {
+    const { videoId, annotationId, frameNumber, fps = 30 } = params
+
+    queryClient.setQueryData<Annotation[]>(
+      annotationKeys.video(videoId),
+      (old = []) => old.map(annotation => {
+        if (annotation.id !== annotationId) return annotation
+
+        const updatedSequence = interpolator.removeKeyframe(
+          annotation.boundingBoxSequence,
+          frameNumber
+        )
+
+        const updated = { ...annotation, boundingBoxSequence: updatedSequence }
+        return updateAnnotationTimeSpan(updated, fps)
+      })
+    )
+  }, [queryClient])
+}
+
+/**
+ * Hook for updating a keyframe's bounding box.
+ * Updates the cache optimistically (no server call).
+ *
+ * @returns Function to update keyframe
+ */
+export function useUpdateKeyframe() {
+  const queryClient = useQueryClient()
+
+  return useCallback((params: {
+    videoId: string
+    annotationId: string
+    frameNumber: number
+    box: Partial<BoundingBox>
+  }) => {
+    const { videoId, annotationId, frameNumber, box } = params
+
+    queryClient.setQueryData<Annotation[]>(
+      annotationKeys.video(videoId),
+      (old = []) => old.map(annotation => {
+        if (annotation.id !== annotationId) return annotation
+
+        const updatedSequence = interpolator.updateKeyframe(
+          annotation.boundingBoxSequence,
+          frameNumber,
+          box
+        )
+
+        return { ...annotation, boundingBoxSequence: updatedSequence }
+      })
+    )
+  }, [queryClient])
+}
+
+/**
+ * Hook for moving a keyframe to a new frame number.
+ * Updates the cache optimistically (no server call).
+ *
+ * @returns Function to move keyframe
+ */
+export function useMoveKeyframe() {
+  const queryClient = useQueryClient()
+
+  return useCallback((params: {
+    videoId: string
+    annotationId: string
+    oldFrame: number
+    newFrame: number
+    fps?: number
+  }) => {
+    const { videoId, annotationId, oldFrame, newFrame, fps = 30 } = params
+
+    queryClient.setQueryData<Annotation[]>(
+      annotationKeys.video(videoId),
+      (old = []) => old.map(annotation => {
+        if (annotation.id !== annotationId) return annotation
+
+        // Find the keyframe at oldFrame
+        const keyframe = annotation.boundingBoxSequence.boxes.find(
+          b => b.frameNumber === oldFrame && (b.isKeyframe || b.isKeyframe === undefined)
+        )
+        if (!keyframe) return annotation
+
+        // Remove old keyframe
+        const withoutOld = interpolator.removeKeyframe(
+          annotation.boundingBoxSequence,
+          oldFrame
+        )
+
+        // Add at new location
+        const withNew = interpolator.addKeyframe(withoutOld, newFrame)
+
+        // Update the new keyframe with old values
+        const newKeyframeIndex = withNew.boxes.findIndex(b => b.frameNumber === newFrame)
+        if (newKeyframeIndex !== -1) {
+          withNew.boxes[newKeyframeIndex] = {
+            ...keyframe,
+            frameNumber: newFrame,
+          }
+        }
+
+        const updated = { ...annotation, boundingBoxSequence: withNew }
+        return updateAnnotationTimeSpan(updated, fps)
+      })
+    )
+  }, [queryClient])
+}
+
+/**
+ * Hook for updating an interpolation segment's mode.
+ * Updates the cache optimistically (no server call).
+ *
+ * @returns Function to update interpolation segment
+ */
+export function useUpdateInterpolationSegment() {
+  const queryClient = useQueryClient()
+
+  return useCallback((params: {
+    videoId: string
+    annotationId: string
+    segmentIndex: number
+    interpolationType: InterpolationType
+    controlPoints?: InterpolationSegment['controlPoints']
+  }) => {
+    const { videoId, annotationId, segmentIndex, interpolationType, controlPoints } = params
+
+    queryClient.setQueryData<Annotation[]>(
+      annotationKeys.video(videoId),
+      (old = []) => old.map(annotation => {
+        if (annotation.id !== annotationId) return annotation
+
+        const segments = [...(annotation.boundingBoxSequence.interpolationSegments || [])]
+
+        // Get keyframes to compute segment frame bounds
+        const keyframes = annotation.boundingBoxSequence.boxes
+          .filter(b => b.isKeyframe || b.isKeyframe === undefined)
+          .sort((a, b) => a.frameNumber - b.frameNumber)
+
+        // Ensure segments array is long enough by creating proper segments from keyframes
+        while (segments.length <= segmentIndex && segments.length < keyframes.length - 1) {
+          const startKeyframe = keyframes[segments.length]
+          const endKeyframe = keyframes[segments.length + 1]
+          if (startKeyframe && endKeyframe) {
+            segments.push({
+              type: 'linear',
+              startFrame: startKeyframe.frameNumber,
+              endFrame: endKeyframe.frameNumber,
+            })
+          }
+        }
+
+        // Only update if segment exists
+        if (segmentIndex < segments.length) {
+          segments[segmentIndex] = {
+            ...segments[segmentIndex],
+            type: interpolationType,
+            ...(controlPoints && { controlPoints }),
+          }
+        }
+
+        return {
+          ...annotation,
+          boundingBoxSequence: {
+            ...annotation.boundingBoxSequence,
+            interpolationSegments: segments,
+          },
+        }
+      })
+    )
+  }, [queryClient])
 }

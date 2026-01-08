@@ -18,7 +18,7 @@ graph TB
 
     subgraph "Frontend Service (Port 5173)"
         React[React 18 + TypeScript]
-        Redux[Redux Toolkit]
+        TanStack[TanStack Query + Zustand]
         VideoJS[Video.js Player]
         MUI[Material-UI v5]
     end
@@ -69,10 +69,10 @@ graph TB
 The frontend is a single-page application built with React 18 and TypeScript 5.3+. Key technologies include:
 
 - **React 18 + TypeScript 5.3+**: Component-based UI with type safety
-- **Redux Toolkit**: Centralized state management for ontology, world state, and annotations
+- **TanStack Query v5**: Server state caching and synchronization for API data
+- **Zustand**: Client-side UI state management (selections, dialogs, drawing modes)
 - **Video.js v8**: Video playback with frame-accurate seeking
 - **Material-UI v5**: UI components with emotion-based styling
-- **TanStack Query v5**: Server state caching and synchronization
 - **Leaflet + react-leaflet**: Map interactions for location editing
 
 The frontend runs on port 5173 during development and communicates with the backend via REST API.

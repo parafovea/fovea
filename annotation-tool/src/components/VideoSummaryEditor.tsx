@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useState, useEffect, useRef } from 'react'
 import {
   Box,
   Paper,
@@ -13,13 +12,11 @@ import {
   Stack,
 } from '@mui/material'
 import { Save as SaveIcon, Add as AddIcon } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
 import {
-  fetchVideoSummaryForPersona,
-  saveVideoSummary,
-  updateCurrentSummary,
-} from '../store/slices/videoSummarySlice'
-import { usePersonaOntology } from '../store/queries'
+  usePersonaOntology,
+  useVideoSummary,
+  useSaveSummary,
+} from '../store/queries'
 import {
   useClaims,
   useCreateClaim,
@@ -36,7 +33,7 @@ import ClaimsViewer from './claims/ClaimsViewer'
 import ClaimEditor from './claims/ClaimEditor'
 import ClaimsExtractionDialog from './claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from './claims/ClaimSpanHighlighter'
-import { GlossItem, VideoSummary, Claim, ClaimExtractionConfig, ClaimTextSpan } from '../models/types'
+import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan } from '../models/types'
 import { debounce } from 'lodash'
 
 interface VideoSummaryEditorProps {
@@ -50,11 +47,17 @@ export default function VideoSummaryEditor({
   personaId,
   disabled = false,
 }: VideoSummaryEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
   const queryClient = useQueryClient()
-  const { currentSummary, loading, saving, error } = useSelector(
-    (state: RootState) => state.videoSummaries
-  )
+
+  // TanStack Query for video summary
+  const {
+    data: currentSummary,
+    isLoading: loading,
+    error: queryError,
+  } = useVideoSummary(videoId, personaId)
+  const saveSummaryMutation = useSaveSummary()
+  const saving = saveSummaryMutation.isPending
+  const error = queryError?.message || saveSummaryMutation.error?.message || null
 
   // Claims UI state from Zustand
   const selectedClaimId = useClaimsUiStore((state) => state.selectedClaimId)
@@ -96,28 +99,30 @@ export default function VideoSummaryEditor({
 
   // Load summary when component mounts or when video/persona changes
   useEffect(() => {
-    if (videoId && personaId) {
-      dispatch(fetchVideoSummaryForPersona({ videoId, personaId }))
-        .then((result) => {
-          if (result.payload) {
-            setLocalSummary((result.payload as VideoSummary).summary || [])
-          } else {
-            // No existing summary - create empty one immediately so claims can be added
-            const emptySummary: Partial<VideoSummary> & { videoId: string; personaId: string } = {
-              videoId,
-              personaId,
-              summary: [],
-            }
-            dispatch(saveVideoSummary(emptySummary as VideoSummary))
-              .then((saveResult) => {
-                if (saveResult.payload) {
-                  setLocalSummary([])
-                }
-              })
-          }
-        })
+    if (currentSummary) {
+      // Parse summary if it's a string (from API), or use directly if already array
+      const summaryData = typeof currentSummary.summary === 'string'
+        ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
+        : (currentSummary.summary || [])
+      setLocalSummary(summaryData)
+    } else if (!loading && videoId && personaId) {
+      // No existing summary - create empty one immediately so claims can be added
+      const emptySummary = {
+        videoId,
+        personaId,
+        summary: JSON.stringify([]),
+        visualAnalysis: null,
+        audioTranscript: null,
+        keyFrames: null,
+        confidence: null,
+      }
+      saveSummaryMutation.mutate(emptySummary, {
+        onSuccess: () => {
+          setLocalSummary([])
+        },
+      })
     }
-  }, [videoId, personaId, dispatch])
+  }, [videoId, personaId, currentSummary, loading])
 
   // Handle extraction job status updates from TanStack Query
   useEffect(() => {
@@ -135,39 +140,51 @@ export default function VideoSummaryEditor({
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
 
-  // Debounced save function
-  const debouncedSave = debounce(async (summary: GlossItem[]) => {
-    if (!currentSummary) {
-      // Create new summary - backend will generate ID
-      const newSummary = {
-        videoId,
-        personaId,
-        summary,
-      } as VideoSummary
-      await dispatch(saveVideoSummary(newSummary))
-    } else {
-      // Update existing summary
-      const updatedSummary: VideoSummary = {
-        ...currentSummary,
-        summary,
-        updatedAt: new Date().toISOString(),
+  // Debounced save function - use ref to keep stable reference
+  const debouncedSaveRef = useRef(
+    debounce(async (summary: GlossItem[], summaryData: typeof currentSummary, saveFn: typeof saveSummaryMutation.mutate) => {
+      // Convert GlossItem[] to JSON string for API
+      const summaryJson = JSON.stringify(summary)
+
+      if (!summaryData) {
+        // Create new summary - backend will generate ID
+        const newSummary = {
+          videoId,
+          personaId,
+          summary: summaryJson,
+          visualAnalysis: null,
+          audioTranscript: null,
+          keyFrames: null,
+          confidence: null,
+        }
+        saveFn(newSummary, {
+          onSuccess: () => setHasChanges(false),
+        })
+      } else {
+        // Update existing summary - preserve existing fields
+        const updatedSummary = {
+          videoId: summaryData.videoId,
+          personaId: summaryData.personaId,
+          summary: summaryJson,
+          visualAnalysis: summaryData.visualAnalysis,
+          audioTranscript: summaryData.audioTranscript,
+          keyFrames: summaryData.keyFrames,
+          confidence: summaryData.confidence,
+        }
+        saveFn(updatedSummary, {
+          onSuccess: () => setHasChanges(false),
+        })
       }
-      await dispatch(saveVideoSummary(updatedSummary))
-    }
-    setHasChanges(false)
-  }, 1000) // Save after 1 second of no changes
+    }, 1000) // Save after 1 second of no changes
+  )
+  const debouncedSave = debouncedSaveRef.current
 
   const handleSummaryChange = (summary: GlossItem[]) => {
     setLocalSummary(summary)
     setHasChanges(true)
 
-    // Update Redux state locally (without saving to backend yet)
-    if (currentSummary) {
-      dispatch(updateCurrentSummary({ summary }))
-    }
-
     // Trigger debounced save
-    debouncedSave(summary)
+    debouncedSave(summary, currentSummary, saveSummaryMutation.mutate)
   }
 
   // Claims handlers

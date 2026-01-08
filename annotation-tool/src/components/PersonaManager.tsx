@@ -105,7 +105,7 @@ export default function PersonaManager() {
     // Don't auto-save if required fields are incomplete
     if (!formData.name || !formData.role || !formData.informationNeed) return
 
-    const timeoutId = setTimeout(async () => {
+    const timeoutId = setTimeout(() => {
       if (createdPersonaId) {
         // Already created - update existing persona
         const existingPersona = personas.find(p => p.id === createdPersonaId)
@@ -118,40 +118,37 @@ export default function PersonaManager() {
             details: formData.details,
             updatedAt: new Date().toISOString(),
           }
-          dispatch(savePersona(updatedPersona))
+          updatePersonaMutation(updatedPersona)
         }
       } else {
-        // First save - create new persona
-        const newOntology: PersonaOntology = {
-          id: generateId(),
-          personaId: '', // Will be set by backend
-          entities: [],
-          roles: [],
-          events: [],
-          relationTypes: [],
-          relations: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-
-        const result = await dispatch(createPersona({
-          persona: {
-            name: formData.name,
-            role: formData.role,
-            informationNeed: formData.informationNeed,
-            details: formData.details,
+        // First save - create new persona using TanStack Query mutation
+        createPersonaMutation(
+          {
+            persona: {
+              name: formData.name,
+              role: formData.role,
+              informationNeed: formData.informationNeed,
+              details: formData.details,
+            },
+            ontology: {
+              entities: [],
+              roles: [],
+              events: [],
+              relationTypes: [],
+              relations: [],
+            },
           },
-          ontology: newOntology,
-        }))
-
-        if (createPersona.fulfilled.match(result)) {
-          setCreatedPersonaId(result.payload.persona.id)
-        }
+          {
+            onSuccess: (data) => {
+              setCreatedPersonaId(data.persona.id)
+            },
+          }
+        )
       }
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [formData, createDialogOpen, createdPersonaId, personas, dispatch])
+  }, [formData, createDialogOpen, createdPersonaId, personas, createPersonaMutation, updatePersonaMutation])
 
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
@@ -173,10 +170,10 @@ export default function PersonaManager() {
     handleMenuClose()
   }
 
-  const handleCancelCreate = async () => {
+  const handleCancelCreate = () => {
     // Delete auto-created persona if user cancels
     if (createdPersonaId) {
-      await dispatch(removePersona(createdPersonaId))
+      deletePersonaMutation(createdPersonaId)
     }
     setCreatedPersonaId(null)
     setCreateDialogOpen(false)

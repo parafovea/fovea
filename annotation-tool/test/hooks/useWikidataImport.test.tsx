@@ -1,62 +1,27 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useWikidataImport, WikidataImportData } from '../../src/hooks/useWikidataImport'
 import { DuplicateImportError } from '../../src/lib/errors'
-import personaSlice from '../../src/store/slices/personaSlice'
-import worldSlice from '../../src/store/slices/worldSlice'
+import * as queries from '../../src/store/queries'
 
 // Mock timer functions
 vi.useFakeTimers()
 
-const createMockStore = () => {
-  return configureStore({
-    reducer: {
-      persona: personaSlice,
-      world: worldSlice,
-    },
-    preloadedState: {
-      persona: {
-        personas: [],
-        personaOntologies: [],
-        activePersonaId: 'test-persona-id',
-        isLoading: false,
-        error: null,
-        unsavedChanges: false,
-      },
-      world: {
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
-        selectedEntity: null,
-        selectedEvent: null,
-        selectedTime: null,
-        selectedLocation: null,
-        selectedCollection: null,
-        isLoading: false,
-        error: null,
-      },
-    },
-  })
-}
-
-const createWrapper = () => {
-  const store = createMockStore()
-  const queryClient = new QueryClient({
+const createQueryClient = () => {
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   })
+}
+
+const createWrapper = () => {
+  const queryClient = createQueryClient()
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <Provider store={store}>{children}</Provider>
+      {children}
     </QueryClientProvider>
   )
 }
@@ -317,112 +282,115 @@ describe('useWikidataImport', () => {
   })
 
   describe('duplicate detection', () => {
-    // Create a mock store with existing items that have wikidataIds
-    const createMockStoreWithExistingItems = () => {
-      return configureStore({
-        reducer: {
-          persona: personaSlice,
-          world: worldSlice,
-        },
-        preloadedState: {
-          persona: {
-            personas: [],
-            personaOntologies: [{
-              id: 'test-ontology-id',
-              personaId: 'test-persona-id',
-              entities: [{
-                id: 'existing-entity-type',
-                name: 'Existing Entity Type',
-                wikidataId: 'Q12345',
-                gloss: [],
-                examples: [],
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }],
-              roles: [{
-                id: 'existing-role-type',
-                name: 'Existing Role Type',
-                wikidataId: 'Q67890',
-                gloss: [],
-                allowedFillerTypes: ['entity'],
-                examples: [],
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }],
-              events: [{
-                id: 'existing-event-type',
-                name: 'Existing Event Type',
-                wikidataId: 'Q11111',
-                gloss: [],
-                roles: [],
-                examples: [],
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }],
-              relationTypes: [{
-                id: 'existing-relation-type',
-                name: 'Existing Relation Type',
-                wikidataId: 'Q22222',
-                gloss: [],
-                sourceTypes: ['entity'],
-                targetTypes: ['entity'],
-                symmetric: false,
-                transitive: false,
-                examples: [],
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }],
-              relations: [],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }],
-            activePersonaId: 'test-persona-id',
-            isLoading: false,
-            error: null,
-            unsavedChanges: false,
-          },
-          world: {
-            entities: [{
-              id: 'existing-entity',
-              name: 'Existing Entity',
-              wikidataId: 'Q33333',
-              description: [],
-              typeAssignments: [],
-              metadata: { alternateNames: [], externalIds: {}, properties: {} },
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }],
-            events: [{
-              id: 'existing-event',
-              name: 'Existing Event',
-              wikidataId: 'Q44444',
-              description: [],
-              personaInterpretations: [],
-              metadata: { certainty: 1.0, properties: {} },
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }],
-            times: [],
-            entityCollections: [],
-            eventCollections: [],
-            timeCollections: [],
-            relations: [],
-            selectedEntity: null,
-            selectedEvent: null,
-            selectedTime: null,
-            selectedLocation: null,
-            selectedCollection: null,
-            isLoading: false,
-            error: null,
-          },
-        },
-      })
+    // Mock data for existing items
+    const existingOntology = {
+      id: 'test-ontology-id',
+      personaId: 'test-persona-id',
+      entities: [{
+        id: 'existing-entity-type',
+        name: 'Existing Entity Type',
+        wikidataId: 'Q12345',
+        gloss: [],
+        examples: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      roles: [{
+        id: 'existing-role-type',
+        name: 'Existing Role Type',
+        wikidataId: 'Q67890',
+        gloss: [],
+        allowedFillerTypes: ['entity'],
+        examples: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      events: [{
+        id: 'existing-event-type',
+        name: 'Existing Event Type',
+        wikidataId: 'Q11111',
+        gloss: [],
+        roles: [],
+        examples: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      relationTypes: [{
+        id: 'existing-relation-type',
+        name: 'Existing Relation Type',
+        wikidataId: 'Q22222',
+        gloss: [],
+        sourceTypes: ['entity'],
+        targetTypes: ['entity'],
+        symmetric: false,
+        transitive: false,
+        examples: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      relations: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
 
+    const existingWorldData = {
+      entities: [{
+        id: 'existing-entity',
+        name: 'Existing Entity',
+        wikidataId: 'Q33333',
+        description: [],
+        typeAssignments: [],
+        metadata: { alternateNames: [], externalIds: {}, properties: {} },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      events: [{
+        id: 'existing-event',
+        name: 'Existing Event',
+        wikidataId: 'Q44444',
+        description: [],
+        personaInterpretations: [],
+        metadata: { certainty: 1.0, properties: {} },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }],
+      times: [],
+      locations: [],
+      entityCollections: [],
+      eventCollections: [],
+      timeCollections: [],
+      relations: [],
+    }
+
+    // Mock TanStack Query hooks to return existing items for duplicate detection
+    beforeEach(() => {
+      vi.spyOn(queries, 'usePersonaOntology').mockReturnValue({
+        data: existingOntology,
+        isLoading: false,
+        error: null,
+      } as any)
+      vi.spyOn(queries, 'useWorld').mockReturnValue({
+        data: existingWorldData,
+        isLoading: false,
+        error: null,
+      } as any)
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
     const createWrapperWithExistingItems = () => {
-      const store = createMockStoreWithExistingItems()
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      })
       return ({ children }: { children: React.ReactNode }) => (
-        <Provider store={store}>{children}</Provider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
       )
     }
 

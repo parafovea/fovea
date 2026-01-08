@@ -12,8 +12,7 @@ import {
   AccessTime as TimeIcon,
   Folder as CollectionIcon,
 } from '@mui/icons-material'
-import { useSelector } from 'react-redux'
-import { RootState } from '../../store/store'
+import { usePersonas, useVideos, useWorld } from '../../store/queries'
 
 interface BreadcrumbItem {
   label: string
@@ -25,10 +24,13 @@ interface BreadcrumbItem {
 export default function BreadcrumbNavigation() {
   const location = useLocation()
   const navigate = useNavigate()
-  const personas = useSelector((state: RootState) => state.persona?.personas) || []
-  const videos = useSelector((state: RootState) => state.videos?.videos) || []
-  const entities = useSelector((state: RootState) => state.world?.entities) || []
-  const events = useSelector((state: RootState) => state.world?.events) || []
+
+  // TanStack Query for data
+  const { data: personas = [] } = usePersonas()
+  const { data: videos = [] } = useVideos()
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const events = worldData?.events ?? []
   
   // Parse the current path to build breadcrumbs
   const buildBreadcrumbs = (): BreadcrumbItem[] => {

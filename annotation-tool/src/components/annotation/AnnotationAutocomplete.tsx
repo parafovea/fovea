@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   TextField,
   Autocomplete,
@@ -17,8 +16,8 @@ import {
   LocationOn as LocationIcon,
   Folder as CollectionIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { setLinkTarget } from '../../store/slices/annotationSlice'
+import { usePersonaOntology, useWorld } from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand'
 
 interface AnnotationOption {
   id: string
@@ -41,20 +40,21 @@ export default function AnnotationAutocomplete({
   onSelect,
   disabled = false
 }: AnnotationAutocompleteProps) {
-  const dispatch = useDispatch<AppDispatch>()
   const [value, setValue] = useState<AnnotationOption | null>(null)
   const [inputValue, setInputValue] = useState('')
-  
-  // Get persona ontology for type mode
-  const personaOntology = useSelector((state: RootState) => 
-    personaId ? state.persona.personaOntologies.find(o => o.personaId === personaId) : null
-  )
-  
-  // Get world objects for object mode
-  const entities = useSelector((state: RootState) => state.world.entities)
-  const events = useSelector((state: RootState) => state.world.events)
-  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
-  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
+
+  // Zustand for link target state
+  const setLinkTarget = useAnnotationUiStore((state) => state.setLinkTarget)
+
+  // TanStack Query for persona ontology (type mode)
+  const { data: personaOntology } = usePersonaOntology(personaId)
+
+  // TanStack Query for world objects (object mode)
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const events = worldData?.events ?? []
+  const entityCollections = worldData?.entityCollections ?? []
+  const eventCollections = worldData?.eventCollections ?? []
 
   // Build options based on mode
   const options: AnnotationOption[] = React.useMemo(() => {
@@ -168,10 +168,10 @@ export default function AnnotationAutocomplete({
   const handleChange = (_: any, newValue: AnnotationOption | null) => {
     setValue(newValue)
     onSelect(newValue)
-    
-    // Update Redux state for link target if in object mode
+
+    // Update Zustand state for link target if in object mode
     if (mode === 'object' && newValue) {
-      let targetType: any = null
+      let targetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | null = null
       if (newValue.type === 'entity-object') targetType = 'entity'
       else if (newValue.type === 'event-object') targetType = 'event'
       else if (newValue.type === 'location-object') targetType = 'location'
@@ -180,11 +180,8 @@ export default function AnnotationAutocomplete({
         const isEntityCollection = entityCollections.some(c => c.id === newValue.id)
         targetType = isEntityCollection ? 'entity-collection' : 'event-collection'
       }
-      
-      dispatch(setLinkTarget({
-        id: newValue.id,
-        type: targetType
-      }))
+
+      setLinkTarget(newValue.id, targetType)
     }
   }
 

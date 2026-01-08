@@ -71,6 +71,11 @@ export {
   useSaveAnnotations,
   useInvalidateAnnotations,
   useSetAnnotations,
+  useAddKeyframe,
+  useRemoveKeyframe,
+  useUpdateKeyframe,
+  useMoveKeyframe,
+  useUpdateInterpolationSegment,
   annotationKeys,
 } from './useAnnotations'
 

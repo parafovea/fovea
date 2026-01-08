@@ -5,7 +5,6 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import { useDispatch } from 'react-redux'
 import { Box, Slider, IconButton, Typography, useTheme, Tooltip, Button } from '@mui/material'
 import {
   SkipPrevious,
@@ -15,8 +14,7 @@ import {
 } from '@mui/icons-material'
 import { Annotation, InterpolationType } from '../../models/types.js'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
-import { AppDispatch } from '../../store/store.js'
-import { moveKeyframe } from '../../store/slices/annotationSlice.js'
+import { useMoveKeyframe } from '../../store/queries'
 import { InterpolationModeSelector } from './InterpolationModeSelector.js'
 
 /**
@@ -66,7 +64,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   onClose,
 }) => {
   const theme = useTheme()
-  const dispatch = useDispatch<AppDispatch>()
+  const moveKeyframe = useMoveKeyframe()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<TimelineRenderer | null>(null)
@@ -291,16 +289,14 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
             dragStartFrame === keyframes[keyframes.length - 1].frameNumber
 
           if (!isFirstOrLast) {
-            // Dispatch move action
-            dispatch(
-              moveKeyframe({
-                videoId: annotation.videoId,
-                annotationId: annotation.id,
-                oldFrame: dragStartFrame,
-                newFrame,
-                fps: videoFps,
-              })
-            )
+            // Move keyframe
+            moveKeyframe({
+              videoId: annotation.videoId,
+              annotationId: annotation.id,
+              oldFrame: dragStartFrame,
+              newFrame,
+              fps: videoFps,
+            })
           }
         }
       }
@@ -309,7 +305,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       setDraggingKeyframe(null)
       setDragStartFrame(null)
     },
-    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, dispatch, videoFps]
+    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, moveKeyframe, videoFps]
   )
 
   // Handle mouse leave

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -25,8 +24,7 @@ import {
   LocationOn as LocationIcon,
   Folder as CollectionIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../store/store'
-import { updateAnnotation } from '../store/slices/annotationSlice'
+import { usePersonas, usePersonaOntology, useWorld, useUpdateAnnotation } from '../store/queries'
 import { Annotation } from '../models/types'
 import ObjectPicker from './annotation/ObjectPicker'
 
@@ -37,31 +35,30 @@ interface AnnotationEditorProps {
   videoFps?: number
 }
 
-export default function AnnotationEditor({ 
-  open, 
-  onClose, 
+export default function AnnotationEditor({
+  open,
+  onClose,
   annotation,
-  videoFps = 30 
+  videoFps = 30
 }: AnnotationEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  const { mutate: updateAnnotationMutation } = useUpdateAnnotation()
   const [objectPickerOpen, setObjectPickerOpen] = useState(false)
   const [objectPickerType, setObjectPickerType] = useState<'entity' | 'event' | 'location' | 'collection'>('entity')
-  
+
+  // Get the personaId from the annotation if it's a type annotation
+  const personaId = annotation?.annotationType === 'type' ? annotation.personaId : null
+
   // Get the persona and its ontology for this annotation
-  const persona = useSelector((state: RootState) => {
-    if (!annotation || annotation.annotationType !== 'type') return null
-    return state.persona.personas.find(p => p.id === annotation.personaId)
-  })
-  const personaOntology = useSelector((state: RootState) => {
-    if (!annotation || annotation.annotationType !== 'type') return null
-    return state.persona.personaOntologies.find(o => o.personaId === annotation.personaId)
-  })
-  
+  const { data: personas = [] } = usePersonas()
+  const persona = personaId ? personas.find(p => p.id === personaId) : null
+  const { data: personaOntology } = usePersonaOntology(personaId)
+
   // Get world objects for linked annotations
-  const entities = useSelector((state: RootState) => state.world.entities)
-  const events = useSelector((state: RootState) => state.world.events)
-  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
-  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const events = worldData?.events ?? []
+  const entityCollections = worldData?.entityCollections ?? []
+  const eventCollections = worldData?.eventCollections ?? []
   
   const [formData, setFormData] = useState({
     typeCategory: 'entity' as 'entity' | 'role' | 'event',
@@ -164,7 +161,7 @@ export default function AnnotationEditor({
       updatedAnnotation.linkedCollectionType = formData.linkedCollectionType
     }
 
-    dispatch(updateAnnotation(updatedAnnotation))
+    updateAnnotationMutation(updatedAnnotation)
     onClose()
   }
 

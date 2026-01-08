@@ -44,7 +44,7 @@ FOVEA consists of three main services:
 
 ```mermaid
 graph LR
-    A[Frontend<br/>React + Redux] --> B[Backend<br/>Fastify + Prisma]
+    A[Frontend<br/>React + TanStack Query] --> B[Backend<br/>Fastify + Prisma]
     B --> C[PostgreSQL]
     B --> D[Model Service<br/>FastAPI + PyTorch]
     D --> C

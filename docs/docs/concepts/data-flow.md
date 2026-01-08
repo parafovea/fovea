@@ -10,46 +10,46 @@ This page describes how data moves through FOVEA during common operations using 
 
 ## Annotation Creation Flow
 
-When a user creates an annotation, the data flows from the frontend through Redux to the backend and PostgreSQL.
+When a user creates an annotation, the data flows from the frontend through TanStack Query to the backend and PostgreSQL.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Frontend
-    participant Redux
+    participant TanStack as TanStack Query
     participant Backend
     participant Prisma
     participant PostgreSQL
 
     User->>Frontend: Draw bounding box
-    Frontend->>Redux: dispatch(addKeyframe)
-    Redux->>Redux: Interpolate frames
-    Redux->>Redux: Update annotation state
+    Frontend->>Frontend: Interpolate frames locally
+    Frontend->>Frontend: Update UI state (Zustand)
     Frontend->>User: Show interpolated boxes
 
     User->>Frontend: Click Save
-    Frontend->>Backend: POST /api/annotations
+    Frontend->>TanStack: useMutation (createAnnotation)
+    TanStack->>Backend: POST /api/annotations
     Backend->>Prisma: annotations.create()
     Prisma->>PostgreSQL: INSERT INTO annotations
     PostgreSQL-->>Prisma: Success
     Prisma-->>Backend: Annotation record
-    Backend-->>Frontend: 201 Created
-    Frontend->>Redux: dispatch(annotationSaved)
+    Backend-->>TanStack: 201 Created
+    TanStack->>TanStack: Invalidate cache
     Frontend->>User: Success notification
 ```
 
 **Flow Steps**:
 
 1. User draws bounding box in video player
-2. Frontend dispatches Redux action to add keyframe
-3. Redux interpolation engine generates frames between keyframes
+2. Frontend interpolates frames locally between keyframes
+3. Zustand store updates UI state (drawing mode, selection)
 4. Frontend displays interpolated boxes in real-time
 5. User clicks Save button
-6. Frontend sends POST request to backend API
+6. TanStack Query mutation sends POST request to backend API
 7. Backend creates annotation via Prisma ORM
 8. Prisma inserts record into PostgreSQL
 9. Backend returns created annotation to frontend
-10. Frontend updates Redux state and shows success notification
+10. TanStack Query invalidates cache and shows success notification
 
 ## Export Flow
 

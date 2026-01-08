@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -21,7 +20,7 @@ import {
   FormGroup,
   FormLabel,
 } from '@mui/material'
-import { RootState } from '../store/store'
+import { usePersonas, useVideos } from '../store/queries'
 import { api } from '../services/api'
 import { ExportOptions, ExportStats, VideoMetadata } from '../models/types'
 
@@ -45,8 +44,9 @@ interface ExportDialogProps {
  * @returns Export dialog component
  */
 export default function ExportDialog({ open, onClose }: ExportDialogProps) {
-  const { personas } = useSelector((state: RootState) => state.persona)
-  const videos = useSelector((state: RootState) => state.videos.videos)
+  // TanStack Query for personas and videos
+  const { data: personas = [] } = usePersonas()
+  const { data: videos = [] } = useVideos()
 
   const [includeInterpolated, setIncludeInterpolated] = useState(false)
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([])

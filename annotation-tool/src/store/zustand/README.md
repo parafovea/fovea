@@ -4,13 +4,14 @@ This document describes the state management approach for FOVEA's annotation too
 
 ## Overview
 
-FOVEA uses a **multi-layered state management strategy** to optimize for different types of state:
+FOVEA uses a **two-layer state management strategy** to optimize for different types of state:
 
 | State Type | Solution | Use Case | Location |
 |------------|----------|----------|----------|
-| **UI State** | Zustand | Ephemeral, local UI interactions | `src/stores/*.ts` |
-| **Server State** | TanStack Query | Data from API (caching, refetching) | `src/api/hooks/*.ts` (future) |
-| **Global App State** | Redux Toolkit | Authentication, routing (minimal) | `src/store/*.ts` (legacy) |
+| **UI State** | Zustand | Ephemeral, local UI interactions | `src/store/zustand/*.ts` |
+| **Server State** | TanStack Query | Data from API (caching, refetching) | `src/store/queries/*.ts` |
+
+> **Note:** Redux has been fully removed from the codebase. All state is now managed by Zustand (UI) and TanStack Query (server).
 
 ## Architecture Decision
 
@@ -62,16 +63,16 @@ Different types of state have different requirements. Using specialized tools fo
 - Cache invalidation on mutations
 - Eliminates need for Redux data slices
 
-#### 3. Global App State (Redux)
+#### 3. Authentication State (Zustand)
 
-**Definition:** App-wide state that needs to be accessible everywhere and doesn't fit other categories.
+**Definition:** User authentication and session state.
 
 **Examples:**
-- Current user authentication state
-- Global app settings
-- Feature flags (if needed)
+- Current user information
+- Authentication status
+- Login/logout actions
 
-**Note:** Redux usage should be **minimal**. Most Redux state should migrate to either Zustand or TanStack Query.
+**Location:** `src/store/zustand/authStore.ts`
 
 ---
 
@@ -329,11 +330,11 @@ function VideoList() {
 - You want automatic loading/error states
 - You need optimistic updates
 
-**Use Redux if:**
-- State is truly global (authentication, app-wide settings)
-- State needs to be accessed by many unrelated components
-- You need Redux DevTools time-travel debugging
-- **Note:** Most Redux usage should migrate to Zustand or TanStack Query
+**Use Zustand authStore if:**
+- Managing authentication state (user, login status)
+- App-wide settings that don't come from the server
+
+> **Note:** Redux has been fully removed from the codebase. Use Zustand for UI/client state and TanStack Query for server state.
 
 ### 2. Selector Pattern (Performance)
 
@@ -403,19 +404,20 @@ describe('AnnotationUiStore', () => {
 
 ## Migration Roadmap
 
-### Phase 1: ✅ Foundation (Current)
+### Phase 1: ✅ Foundation (Complete)
 - [x] Install Zustand
 - [x] Create `annotationUiStore.ts` with UI state structure
 - [x] Create `dialogStore.ts` for dialog management
 - [x] Add comprehensive tests
 - [x] Document migration strategy (this document)
 
-### Phase 2: 🔄 Gradual Adoption (Future)
-- [ ] Migrate dialog state from Layout.tsx to `dialogStore`
-- [ ] Migrate annotation UI state from Redux to `annotationUiStore`
-- [ ] Set up TanStack Query hooks for server data
-- [ ] Migrate annotation data fetching to TanStack Query
-- [ ] Remove corresponding Redux slices
+### Phase 2: ✅ Full Migration (Complete)
+- [x] Migrate dialog state from Layout.tsx to `dialogStore`
+- [x] Migrate annotation UI state from Redux to `annotationUiStore`
+- [x] Set up TanStack Query hooks for server data (`src/store/queries/`)
+- [x] Migrate all data fetching to TanStack Query (videos, annotations, personas, world, claims)
+- [x] Remove all Redux slices and store
+- [x] Uninstall Redux packages (`redux`, `@reduxjs/toolkit`, `react-redux`)
 
 ### Phase 3: 🎯 Optimization (Future)
 - [ ] Add persistence middleware for user preferences
@@ -456,8 +458,6 @@ Install Redux DevTools extension and refresh the page.
 
 - [Zustand Documentation](https://docs.pmnd.rs/zustand/)
 - [TanStack Query Documentation](https://tanstack.com/query/latest/docs/react/overview)
-- [Redux Toolkit Documentation](https://redux-toolkit.js.org/)
-- [EVALUATION.md Phase 6](../../EVALUATION.md#phase-6-install-and-configure-zustand)
 
 ---
 

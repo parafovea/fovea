@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
   Paper,
@@ -49,22 +48,20 @@ import {
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './annotation/VideoPlayer'
 import { useExternalLinksConfig } from '../hooks/useAppConfig'
-import { RootState, AppDispatch } from '../store/store'
 import {
   useVideo,
   useWorld,
   useAnnotations,
   useSaveAnnotations,
   useDeleteAnnotation,
+  useAddKeyframe,
+  useRemoveKeyframe,
+  useUpdateKeyframe,
+  useUpdateInterpolationSegment,
+  usePersonas,
+  useAllPersonaOntologies,
 } from '../store/queries'
 import { useVideoUiStore, useAnnotationUiStore } from '../store/zustand'
-import {
-  addKeyframe,
-  removeKeyframe,
-  updateKeyframe,
-  updateInterpolationSegment,
-  setAnnotations,
-} from '../store/slices/annotationSlice'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './annotation/AnnotationAutocomplete'
@@ -96,7 +93,13 @@ const DRAWER_WIDTH = 300
 export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
-  const dispatch = useDispatch<AppDispatch>()
+
+  // TanStack Query hooks for keyframe manipulation
+  const addKeyframe = useAddKeyframe()
+  const removeKeyframe = useRemoveKeyframe()
+  const updateKeyframe = useUpdateKeyframe()
+  const updateInterpolationSegmentHook = useUpdateInterpolationSegment()
+
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cudaAvailable
   const videoPlayerRef = useRef<VideoPlayerHandle>(null)
@@ -155,17 +158,10 @@ export default function AnnotationWorkspace() {
   const setShowDetectionCandidates = useAnnotationUiStore((state) => state.setShowDetectionCandidates)
   const clearDetectionState = useAnnotationUiStore((state) => state.clearDetectionState)
 
-  // Redux for persona data (Phase 1.3 - pending migration)
-  const personas = useSelector((state: RootState) => state.persona.personas)
-  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
-
-  // Sync TanStack Query annotations to Redux for keyframe operations
-  // (keyframe ops use Redux reducers until fully migrated)
-  useEffect(() => {
-    if (videoId && videoAnnotations && videoAnnotations.length > 0) {
-      dispatch(setAnnotations({ videoId, annotations: videoAnnotations }))
-    }
-  }, [videoId, videoAnnotations, dispatch])
+  // TanStack Query for persona data
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map(p => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
 
   // Get filtered annotations for display (by selected persona)
   const annotations = useMemo(() => {
@@ -283,25 +279,25 @@ export default function AnnotationWorkspace() {
       }
     }
 
-    dispatch(addKeyframe({
+    addKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
       box: currentBox,
       fps: currentVideo?.fps || 30,
-    }))
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+    })
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe])
 
   const handleDeleteKeyframe = useCallback(() => {
     if (!selectedAnnotation) return
 
-    dispatch(removeKeyframe({
+    removeKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
       fps: currentVideo?.fps || 30,
-    }))
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+    })
+  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe])
 
   const handleCopyPreviousFrame = useCallback(() => {
     if (!selectedAnnotation) return
@@ -320,36 +316,36 @@ export default function AnnotationWorkspace() {
     const isCurrentKeyframe = keyframes.some(k => k.frameNumber === currentFrame)
 
     if (isCurrentKeyframe) {
-      dispatch(updateKeyframe({
+      updateKeyframe({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         frameNumber: currentFrame,
         box: { ...prevBox, frameNumber: currentFrame },
-      }))
+      })
     } else {
-      dispatch(addKeyframe({
+      addKeyframe({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         frameNumber: currentFrame,
         box: { ...prevBox, frameNumber: currentFrame },
         fps: currentVideo?.fps || 30,
-      }))
+      })
     }
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe])
 
   const handleUpdateInterpolationSegment = useCallback(
     (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
-      dispatch(updateInterpolationSegment({
+      updateInterpolationSegmentHook({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         segmentIndex,
-        type,
+        interpolationType: type,
         controlPoints,
-      }))
+      })
     },
-    [selectedAnnotation, dispatch]
+    [selectedAnnotation, updateInterpolationSegmentHook]
   )
 
   // Track this as the last annotation when we load the component

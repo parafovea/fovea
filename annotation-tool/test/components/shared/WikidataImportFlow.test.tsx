@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import WikidataImportFlow from '../../../src/components/shared/WikidataImportFlow'
-import personaSlice from '../../../src/store/slices/personaSlice'
-import worldSlice from '../../../src/store/slices/worldSlice'
 
 // Mock WikidataSearch component
 vi.mock('../../../src/components/WikidataSearch', () => ({
@@ -28,41 +24,6 @@ vi.mock('../../../src/components/WikidataSearch', () => ({
   ),
 }))
 
-const createMockStore = () => {
-  return configureStore({
-    reducer: {
-      persona: personaSlice,
-      world: worldSlice,
-    },
-    preloadedState: {
-      persona: {
-        personas: [],
-        personaOntologies: [],
-        activePersonaId: 'test-persona-id',
-        isLoading: false,
-        error: null,
-        unsavedChanges: false,
-      },
-      world: {
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
-        selectedEntity: null,
-        selectedEvent: null,
-        selectedTime: null,
-        selectedLocation: null,
-        selectedCollection: null,
-        isLoading: false,
-        error: null,
-      },
-    },
-  })
-}
-
 const createQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: { retry: false },
@@ -70,11 +31,11 @@ const createQueryClient = () => new QueryClient({
   },
 })
 
-const renderWithProviders = (ui: React.ReactElement, store = createMockStore()) => {
+const renderWithProviders = (ui: React.ReactElement) => {
   const queryClient = createQueryClient()
   return render(
     <QueryClientProvider client={queryClient}>
-      <Provider store={store}>{ui}</Provider>
+      {ui}
     </QueryClientProvider>
   )
 }

@@ -1,8 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { useDispatch } from 'react-redux'
 import { Chip, Tooltip } from '@mui/material'
-import { AppDispatch } from '../../store/store'
-import { updateAnnotation, updateKeyframe, addKeyframe } from '../../store/slices/annotationSlice'
+import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '../../store/queries'
 import { BoundingBox } from '../../models/types.js'
 import { BoundingBoxInterpolator } from '../../utils/interpolation.js'
 
@@ -65,7 +63,11 @@ export default function InteractiveBoundingBox({
   mode,
   onUpdate,
 }: InteractiveBoundingBoxProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  // TanStack Query mutations for annotation operations
+  const addKeyframe = useAddKeyframe()
+  const updateKeyframe = useUpdateKeyframe()
+  const { mutate: updateAnnotationMutation } = useUpdateAnnotation()
+
   const [hovering, setHovering] = useState(false)
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none')
   const [activeHandle, setActiveHandle] = useState<ResizeHandle>(null)
@@ -176,12 +178,12 @@ export default function InteractiveBoundingBox({
 
     // If interpolated mode, convert to keyframe on handle click
     if (mode === 'interpolated') {
-      dispatch(addKeyframe({
+      addKeyframe({
         videoId: annotation.videoId,
         annotationId: annotation.id,
         frameNumber: currentFrame,
         box: currentBox,
-      }))
+      })
       return
     }
 
@@ -290,21 +292,21 @@ export default function InteractiveBoundingBox({
       onUpdate(newBox)
     } else if (mode === 'keyframe') {
       // Update keyframe directly
-      dispatch(updateKeyframe({
+      updateKeyframe({
         videoId: annotation.videoId,
         annotationId: annotation.id,
         frameNumber: currentFrame,
         box: newBox,
-      }))
+      })
     } else {
       // Fallback to updating annotation (legacy support)
-      dispatch(updateAnnotation({
+      updateAnnotationMutation({
         ...annotation,
         boundingBox: newBox,
         updatedAt: new Date().toISOString(),
-      }))
+      })
     }
-  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, dispatch, onUpdate, mode, currentFrame])
+  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, addKeyframe, updateKeyframe, updateAnnotationMutation, onUpdate, mode, currentFrame])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {

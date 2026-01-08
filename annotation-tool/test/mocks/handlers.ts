@@ -7,7 +7,15 @@ import { http, HttpResponse } from 'msw'
 export const handlers = [
   http.get('http://localhost:3001/api/personas', () => {
     return HttpResponse.json([
-      { id: '1', name: 'Test Persona', role: 'Analyst', informationNeed: 'Test need' }
+      {
+        id: 'test-persona-id',
+        name: 'Test Persona',
+        role: 'Analyst',
+        informationNeed: 'Test information need',
+        wikidataId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
     ])
   }),
 
@@ -739,9 +747,19 @@ export const handlers = [
     })
   }),
 
-  // Personas endpoint (for usePersonas hook)
-  http.get('/api/personas', () => {
-    return HttpResponse.json([])
+  // Personas endpoint (for usePersonas hook) - wildcard origin
+  http.get('*/api/personas', () => {
+    return HttpResponse.json([
+      {
+        id: 'test-persona-id',
+        name: 'Test Persona',
+        role: 'Analyst',
+        informationNeed: 'Test information need',
+        wikidataId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    ])
   }),
 
   // Video summaries endpoints (relative URLs)
