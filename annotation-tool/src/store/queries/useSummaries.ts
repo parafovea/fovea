@@ -13,6 +13,7 @@ import {
 import {
   apiClient,
   VideoSummary,
+  SaveSummaryRequest,
   GenerateSummaryRequest,
   GenerateSummaryResponse,
   ApiError,
@@ -118,19 +119,11 @@ export function useGenerateSummary(
  * @returns Mutation result with save function
  */
 export function useSaveSummary(
-  options?: UseMutationOptions<
-    VideoSummary,
-    ApiError,
-    Omit<VideoSummary, 'id' | 'createdAt' | 'updatedAt'>
-  >
+  options?: UseMutationOptions<VideoSummary, ApiError, SaveSummaryRequest>
 ) {
   const queryClient = useQueryClient()
 
-  return useMutation<
-    VideoSummary,
-    ApiError,
-    Omit<VideoSummary, 'id' | 'createdAt' | 'updatedAt'>
-  >({
+  return useMutation<VideoSummary, ApiError, SaveSummaryRequest>({
     mutationFn: (summary) => apiClient.saveSummary(summary),
     onSuccess: (data) => {
       // Update the specific summary in cache

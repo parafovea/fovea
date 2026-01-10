@@ -25,6 +25,7 @@ export const personaKeys = {
   list: () => [...personaKeys.all, 'list'] as const,
   detail: (id: string) => [...personaKeys.all, 'detail', id] as const,
   ontology: (personaId: string) => [...personaKeys.all, 'ontology', personaId] as const,
+  allOntologies: () => [...personaKeys.all, 'all-ontologies'] as const,
 }
 
 // ============================================================
@@ -69,7 +70,8 @@ export function usePersonas() {
   return useQuery({
     queryKey: personaKeys.list(),
     queryFn: fetchPersonas,
-    staleTime: 5 * 60 * 1000, // Consider fresh for 5 minutes
+    staleTime: 0, // Always refetch to ensure fresh data (personas can change externally)
+    refetchOnMount: 'always', // Force refetch when component mounts (needed for E2E tests)
   })
 }
 
@@ -101,7 +103,7 @@ export function useAllPersonaOntologies(personaIds: string[]) {
   const queryClient = useQueryClient()
 
   return useQuery({
-    queryKey: [...personaKeys.all, 'all-ontologies', personaIds.join(',')],
+    queryKey: [...personaKeys.allOntologies(), personaIds.join(',')],
     queryFn: async () => {
       const ontologies: PersonaOntology[] = []
       for (const personaId of personaIds) {
@@ -118,7 +120,8 @@ export function useAllPersonaOntologies(personaIds: string[]) {
       return ontologies
     },
     enabled: personaIds.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // Always refetch to get fresh data (needed for header Save button)
+    refetchOnMount: 'always', // Force refetch when component mounts
   })
 }
 
@@ -296,6 +299,8 @@ export function useSavePersonaOntology() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -339,6 +344,8 @@ export function useAddEntityToPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -378,6 +385,8 @@ export function useUpdateEntityInPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -417,6 +426,8 @@ export function useDeleteEntityFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -460,6 +471,8 @@ export function useAddRoleToPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -499,6 +512,8 @@ export function useUpdateRoleInPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -538,6 +553,8 @@ export function useDeleteRoleFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -581,6 +598,8 @@ export function useAddEventToPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -620,6 +639,8 @@ export function useUpdateEventInPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -659,6 +680,8 @@ export function useDeleteEventFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -702,6 +725,8 @@ export function useAddRelationTypeToPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -741,6 +766,8 @@ export function useUpdateRelationTypeInPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -782,6 +809,8 @@ export function useDeleteRelationTypeFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -825,6 +854,8 @@ export function useAddRelationToPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -864,6 +895,8 @@ export function useUpdateRelationInPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -903,6 +936,8 @@ export function useDeleteRelationFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
@@ -996,6 +1031,8 @@ export function useImportFromPersona() {
     },
     onSuccess: ({ personaId, ontology }) => {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
+      // Invalidate all-ontologies query so header Save button gets fresh data
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
     },
   })
 }
