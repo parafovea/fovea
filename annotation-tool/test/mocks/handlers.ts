@@ -1620,4 +1620,261 @@ export const handlers = [
       },
     }, { status: 201 })
   }),
+
+  // =============================================================================
+  // EXPORT ENDPOINTS
+  // =============================================================================
+
+  /**
+   * Export annotations endpoint.
+   * Returns JSONL format with annotation data.
+   */
+  http.get('http://localhost:3001/api/export', () => {
+    const exportLine = {
+      type: 'annotation',
+      data: {
+        id: 'annotation-1',
+        videoId: 'video-1',
+        annotationType: 'type',
+        personaId: 'persona-1',
+        typeId: 'entity-type-1',
+        typeCategory: 'entity',
+        boundingBoxSequence: {
+          boxes: [
+            { x: 100, y: 100, width: 200, height: 150, frameNumber: 0, isKeyframe: true },
+            { x: 120, y: 110, width: 200, height: 150, frameNumber: 100, isKeyframe: true },
+          ],
+          interpolationSegments: [{ startFrame: 0, endFrame: 100, type: 'linear' }],
+          visibilityRanges: [{ startFrame: 0, endFrame: 100, visible: true }],
+          totalFrames: 101,
+          keyframeCount: 2,
+          interpolatedFrameCount: 0,
+        },
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    }
+    return new HttpResponse(JSON.stringify(exportLine) + '\n', {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': 'attachment; filename="annotations.jsonl"',
+        'X-Export-Size': '0.01MB',
+        'X-Export-Annotations': '1',
+        'X-Export-Sequences': '1',
+        'X-Export-Keyframes': '2',
+        'X-Export-Interpolated-Frames': '0',
+      },
+    })
+  }),
+
+  /**
+   * Export statistics endpoint.
+   */
+  http.get('http://localhost:3001/api/export/stats', () => {
+    return HttpResponse.json({
+      totalSize: 1024,
+      totalSizeMB: '0.00MB',
+      annotationCount: 1,
+      sequenceCount: 1,
+      keyframeCount: 2,
+      interpolatedFrameCount: 0,
+    })
+  }),
+
+  /**
+   * Export personas endpoint.
+   */
+  http.get('http://localhost:3001/api/export/personas', () => {
+    const personaLine = {
+      type: 'persona',
+      data: {
+        id: 'persona-1',
+        name: 'Test Persona',
+        role: 'Analyst',
+        informationNeed: 'Testing export',
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    }
+    const ontologyLine = {
+      type: 'ontology',
+      data: {
+        personaId: 'persona-1',
+        entityTypes: [{ id: 'entity-1', name: 'Person', gloss: [] }],
+        eventTypes: [],
+        roleTypes: [],
+        relationTypes: [],
+      },
+    }
+    const content = [JSON.stringify(personaLine), JSON.stringify(ontologyLine)].join('\n') + '\n'
+    return new HttpResponse(content, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': 'attachment; filename="personas.jsonl"',
+      },
+    })
+  }),
+
+  /**
+   * Export world state endpoint.
+   */
+  http.get('http://localhost:3001/api/export/world', () => {
+    const entityLine = {
+      type: 'entity',
+      data: {
+        id: 'entity-1',
+        name: 'Test Entity',
+        description: [{ type: 'text', content: 'A test entity' }],
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    }
+    return new HttpResponse(JSON.stringify(entityLine) + '\n', {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': 'attachment; filename="world-state.jsonl"',
+      },
+    })
+  }),
+
+  /**
+   * Export summaries endpoint.
+   */
+  http.get('http://localhost:3001/api/export/summaries', () => {
+    const summaryLine = {
+      type: 'summary',
+      data: {
+        id: 'summary-1',
+        videoId: 'video-1',
+        personaId: 'persona-1',
+        summary: [{ type: 'text', content: 'Test video summary' }],
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    }
+    return new HttpResponse(JSON.stringify(summaryLine) + '\n', {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': 'attachment; filename="summaries.jsonl"',
+        'X-Export-Summaries': '1',
+        'X-Export-Claims': '0',
+        'X-Export-ClaimRelations': '0',
+      },
+    })
+  }),
+
+  /**
+   * Export all data endpoint.
+   */
+  http.get('http://localhost:3001/api/export/all', () => {
+    const lines = [
+      { type: 'persona', data: { id: 'persona-1', name: 'Test', role: 'Analyst', informationNeed: 'Testing', createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
+      { type: 'ontology', data: { personaId: 'persona-1', entityTypes: [], eventTypes: [], roleTypes: [], relationTypes: [] } },
+      { type: 'annotation', data: { id: 'annotation-1', videoId: 'video-1', annotationType: 'type', boundingBoxSequence: { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 }, createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
+    ]
+    const content = lines.map(l => JSON.stringify(l)).join('\n') + '\n'
+    return new HttpResponse(content, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': 'attachment; filename="fovea-export.jsonl"',
+        'X-Export-Personas': '1',
+        'X-Export-Ontologies': '1',
+        'X-Export-Summaries': '0',
+        'X-Export-Claims': '0',
+        'X-Export-Annotations': '1',
+      },
+    })
+  }),
+
+  // =============================================================================
+  // IMPORT ENDPOINTS
+  // =============================================================================
+
+  /**
+   * Import data endpoint.
+   */
+  http.post('http://localhost:3001/api/import', async () => {
+    return HttpResponse.json({
+      success: true,
+      summary: {
+        totalLines: 5,
+        processedLines: 5,
+        importedItems: {
+          personas: 1,
+          ontologies: 1,
+          entities: 0,
+          events: 0,
+          times: 0,
+          entityCollections: 0,
+          eventCollections: 0,
+          timeCollections: 0,
+          relations: 0,
+          summaries: 0,
+          claims: 0,
+          claimRelations: 0,
+          annotations: 3,
+          totalKeyframes: 6,
+          totalInterpolatedFrames: 0,
+          singleKeyframeSequences: 1,
+        },
+        skippedItems: {
+          personas: 0,
+          worldObjects: 0,
+          summaries: 0,
+          claims: 0,
+          annotations: 0,
+          sequenceAnnotations: 0,
+        },
+      },
+      warnings: [],
+      errors: [],
+      conflicts: [],
+    })
+  }),
+
+  /**
+   * Import preview endpoint.
+   */
+  http.post('http://localhost:3001/api/import/preview', async () => {
+    return HttpResponse.json({
+      counts: {
+        personas: 1,
+        ontologies: 1,
+        entities: 0,
+        events: 0,
+        times: 0,
+        entityCollections: 0,
+        eventCollections: 0,
+        timeCollections: 0,
+        relations: 0,
+        summaries: 0,
+        claims: 0,
+        claimRelations: 0,
+        annotations: 3,
+        totalKeyframes: 6,
+        singleKeyframeSequences: 1,
+      },
+      conflicts: [],
+      warnings: [],
+    })
+  }),
+
+  /**
+   * Import history endpoint.
+   */
+  http.get('http://localhost:3001/api/import/history', () => {
+    return HttpResponse.json({
+      imports: [
+        {
+          id: 'import-1',
+          filename: 'backup.jsonl',
+          success: true,
+          itemsImported: 5,
+          itemsSkipped: 0,
+          createdAt: '2025-01-01T10:00:00Z',
+        },
+      ],
+      total: 1,
+    })
+  }),
 ]
