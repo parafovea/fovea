@@ -80,7 +80,7 @@ jobs:
 
       - name: Sync code to server
         run: |
-          rsync -avz --no-g --no-perms \
+          rsync -avz --delete --no-g --no-perms \
             --exclude node_modules \
             --exclude .git \
             --exclude .env \
