@@ -129,7 +129,7 @@ export default function AnnotationWorkspace() {
       const timer = setTimeout(() => setTimelineMounted(false), 300)
       return () => clearTimeout(timer)
     }
-  }, [timelineExpanded])
+  }, [timelineExpanded, setTimelineMounted])
 
   // TanStack Query for video data (server state)
   const { data: currentVideo = null } = useVideo(videoId)
@@ -178,9 +178,9 @@ export default function AnnotationWorkspace() {
 
   // TanStack Query for world data
   const { data: worldData } = useWorld()
-  const worldEntities = worldData?.entities ?? []
-  const worldEvents = worldData?.events ?? []
-  const worldTimes = worldData?.times ?? []
+  const worldEntities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const worldEvents = useMemo(() => worldData?.events ?? [], [worldData?.events])
+  const worldTimes = useMemo(() => worldData?.times ?? [], [worldData?.times])
 
   // Detection mutation
   const detectMutation = useDetectObjects({

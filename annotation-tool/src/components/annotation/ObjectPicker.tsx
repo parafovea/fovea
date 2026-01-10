@@ -82,11 +82,11 @@ export default function ObjectPicker({
   
   // Get world objects from TanStack Query
   const { data: worldData } = useWorld()
-  const entities = worldData?.entities ?? []
-  const events = worldData?.events ?? []
-  const entityCollections = worldData?.entityCollections ?? []
-  const eventCollections = worldData?.eventCollections ?? []
-  const timeCollections = worldData?.timeCollections ?? []
+  const entities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const events = useMemo(() => worldData?.events ?? [], [worldData?.events])
+  const entityCollections = useMemo(() => worldData?.entityCollections ?? [], [worldData?.entityCollections])
+  const eventCollections = useMemo(() => worldData?.eventCollections ?? [], [worldData?.eventCollections])
+  const timeCollections = useMemo(() => worldData?.timeCollections ?? [], [worldData?.timeCollections])
   const { data: personas = [] } = usePersonas()
   
   // Filter locations from entities

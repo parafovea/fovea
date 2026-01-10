@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { DuplicateImportError } from '../lib/errors'
 import {
   useAddEntityToPersona,
@@ -118,8 +118,8 @@ export function useWikidataImport(
   // TanStack Query for reading current data (used for duplicate detection)
   const { data: currentOntology } = usePersonaOntology(personaId)
   const { data: worldData } = useWorld()
-  const worldEntities = worldData?.entities ?? []
-  const worldEvents = worldData?.events ?? []
+  const worldEntities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const worldEvents = useMemo(() => worldData?.events ?? [], [worldData?.events])
 
   /**
    * Imports an item from Wikidata with immediate persistence.

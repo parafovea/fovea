@@ -55,7 +55,7 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
   // Compute motion path from annotation's bounding box sequence
   const motionPath = useMemo(
     () => computeMotionPath(annotation),
-    [annotation.boundingBoxSequence]
+    [annotation]
   )
 
   if (!visible || motionPath.length < 2) {

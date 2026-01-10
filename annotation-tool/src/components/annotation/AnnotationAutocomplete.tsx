@@ -51,10 +51,10 @@ export default function AnnotationAutocomplete({
 
   // TanStack Query for world objects (object mode)
   const { data: worldData } = useWorld()
-  const entities = worldData?.entities ?? []
-  const events = worldData?.events ?? []
-  const entityCollections = worldData?.entityCollections ?? []
-  const eventCollections = worldData?.eventCollections ?? []
+  const entities = React.useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const events = React.useMemo(() => worldData?.events ?? [], [worldData?.events])
+  const entityCollections = React.useMemo(() => worldData?.entityCollections ?? [], [worldData?.entityCollections])
+  const eventCollections = React.useMemo(() => worldData?.eventCollections ?? [], [worldData?.eventCollections])
 
   // Build options based on mode
   const options: AnnotationOption[] = React.useMemo(() => {

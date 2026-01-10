@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -63,8 +63,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
 
   const { data: worldData } = useWorld()
-  const entities = worldData?.entities ?? []
-  const times = worldData?.times ?? []
+  const entities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const times = useMemo(() => worldData?.times ?? [], [worldData?.times])
   const { mutate: addEvent } = useAddEvent()
   const { mutate: updateEvent } = useUpdateEvent()
   
