@@ -179,7 +179,9 @@ export function VideoSummaryCard({
         </Box>
 
         <Typography variant="body1" paragraph>
-          {summary.summary}
+          {Array.isArray(summary.summary)
+            ? summary.summary.map(item => item.content).join(' ')
+            : summary.summary}
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>

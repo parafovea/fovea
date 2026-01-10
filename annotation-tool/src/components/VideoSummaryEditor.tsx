@@ -107,14 +107,11 @@ export default function VideoSummaryEditor({
       setLocalSummary(summaryData)
     } else if (!loading && videoId && personaId) {
       // No existing summary - create empty one immediately so claims can be added
+      // Only include required fields - optional fields should be omitted, not null
       const emptySummary = {
         videoId,
         personaId,
-        summary: JSON.stringify([]),
-        visualAnalysis: null,
-        audioTranscript: null,
-        keyFrames: null,
-        confidence: null,
+        summary: [] as GlossItem[],
       }
       saveSummaryMutation.mutate(emptySummary, {
         onSuccess: () => {
@@ -122,7 +119,7 @@ export default function VideoSummaryEditor({
         },
       })
     }
-  }, [videoId, personaId, currentSummary, loading])
+  }, [videoId, personaId, currentSummary, loading, saveSummaryMutation])
 
   // Handle extraction job status updates from TanStack Query
   useEffect(() => {
@@ -143,35 +140,22 @@ export default function VideoSummaryEditor({
   // Debounced save function - use ref to keep stable reference
   const debouncedSaveRef = useRef(
     debounce(async (summary: GlossItem[], summaryData: typeof currentSummary, saveFn: typeof saveSummaryMutation.mutate) => {
-      // Convert GlossItem[] to JSON string for API
-      const summaryJson = JSON.stringify(summary)
-
       if (!summaryData) {
-        // Create new summary - backend will generate ID
-        const newSummary = {
-          videoId,
-          personaId,
-          summary: summaryJson,
-          visualAnalysis: null,
-          audioTranscript: null,
-          keyFrames: null,
-          confidence: null,
-        }
-        saveFn(newSummary, {
+        // Create new summary - only required fields
+        saveFn({ videoId, personaId, summary }, {
           onSuccess: () => setHasChanges(false),
         })
       } else {
-        // Update existing summary - preserve existing fields
-        const updatedSummary = {
+        // Update existing summary - spread only defined optional fields
+        saveFn({
           videoId: summaryData.videoId,
           personaId: summaryData.personaId,
-          summary: summaryJson,
-          visualAnalysis: summaryData.visualAnalysis,
-          audioTranscript: summaryData.audioTranscript,
-          keyFrames: summaryData.keyFrames,
-          confidence: summaryData.confidence,
-        }
-        saveFn(updatedSummary, {
+          summary,
+          ...(summaryData.visualAnalysis && { visualAnalysis: summaryData.visualAnalysis }),
+          ...(summaryData.audioTranscript && { audioTranscript: summaryData.audioTranscript }),
+          ...(summaryData.keyFrames && { keyFrames: summaryData.keyFrames }),
+          ...(summaryData.confidence != null && { confidence: summaryData.confidence }),
+        }, {
           onSuccess: () => setHasChanges(false),
         })
       }
