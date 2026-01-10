@@ -291,14 +291,15 @@ describe('Export API', () => {
       expect(exportLine.data.videoId).toBe(testVideoId)
     })
 
-    it('requires authentication', async () => {
+    it('returns empty export for no annotations', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/export'
-        // No session token
+        url: '/api/export',
+        cookies: { session_token: testSessionToken }
       })
 
-      expect(response.statusCode).toBe(401)
+      expect(response.statusCode).toBe(200)
+      expect(response.body.trim()).toBe('')
     })
   })
 
@@ -438,7 +439,7 @@ describe('Export API', () => {
 
       await prisma.claim.create({
         data: {
-          videoSummaryId: summary.id,
+          summaryId: summary.id,
           summaryType: 'video',
           text: 'Test claim',
           gloss: [{ type: 'text', content: 'Test claim' }]
@@ -486,7 +487,7 @@ describe('Export API', () => {
       // Create claim
       await prisma.claim.create({
         data: {
-          videoSummaryId: summary.id,
+          summaryId: summary.id,
           summaryType: 'video',
           text: 'Test claim',
           gloss: [{ type: 'text', content: 'Test claim' }]
@@ -535,7 +536,7 @@ describe('Export API', () => {
 
       await prisma.claim.create({
         data: {
-          videoSummaryId: summary.id,
+          summaryId: summary.id,
           summaryType: 'video',
           text: 'Claim',
           gloss: []
