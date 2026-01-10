@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePreferences } from '../../hooks/usePreferences'
 import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
+import { useAnnotationUiStore } from '../../store/zustand'
 import {
   Box,
   Tabs,
@@ -128,28 +129,26 @@ export default function OntologyWorkspace() {
 
   // Use preferences for smart defaults
   const {
-    lastPersonaId,
     setLastPersonaId,
     getFilterState,
     setFilterState,
   } = usePreferences()
-  
-  // Initialize with last used persona or first available
-  const [selectedPersonaId, setSelectedPersonaIdState] = useState<string | null>(
-    lastPersonaId && personas.some(p => p.id === lastPersonaId) 
-      ? lastPersonaId 
-      : personas[0]?.id || null
-  )
-  
-  // Wrapper to also save to preferences
+
+  // Get ontology workspace UI state from Zustand store
+  // This persists across navigation - user stays on persona browser or editing persona
+  const selectedPersonaId = useAnnotationUiStore((state) => state.ontologySelectedPersonaId)
+  const setSelectedPersonaIdStore = useAnnotationUiStore((state) => state.setOntologySelectedPersonaId)
+  const tabValue = useAnnotationUiStore((state) => state.ontologyTabIndex)
+  const setTabValue = useAnnotationUiStore((state) => state.setOntologyTabIndex)
+
+  // Wrapper to also save to preferences when selecting a persona
   const setSelectedPersonaId = (id: string | null) => {
-    setSelectedPersonaIdState(id)
+    setSelectedPersonaIdStore(id)
     if (id) setLastPersonaId(id)
   }
-  
+
   const [personaEditorOpen, setPersonaEditorOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<typeof personas[0] | null>(null)
-  const [tabValue, setTabValue] = useState(0)
   
   // Initialize search from saved filter state
   const initialFilterState = getFilterState('ontology')
@@ -183,17 +182,12 @@ export default function OntologyWorkspace() {
   const selectedPersona = personas.find(p => p.id === selectedPersonaId)
   const { data: selectedOntology } = usePersonaOntology(selectedPersonaId)
 
-  // Auto-select first persona when data loads and none is selected
-  // This is the industry-standard pattern for TanStack Query async initialization
-  // Uses a ref to track if we've done initial selection to avoid re-selecting
-  // when user explicitly navigates back to persona browser
-  const hasInitiallySelected = useRef(false)
+  // Reset selectedPersonaId if the persona no longer exists (e.g., deleted)
   useEffect(() => {
-    if (personas.length > 0 && !selectedPersonaId && !hasInitiallySelected.current) {
-      hasInitiallySelected.current = true
-      setSelectedPersonaId(personas[0].id)
+    if (selectedPersonaId && personas.length > 0 && !selectedPersona) {
+      setSelectedPersonaIdStore(null)
     }
-  }, [personas, selectedPersonaId])
+  }, [selectedPersonaId, personas, selectedPersona, setSelectedPersonaIdStore])
 
   // Auto-save persona ontology on changes (debounced 1 second)
   useEffect(() => {
@@ -352,8 +346,8 @@ export default function OntologyWorkspace() {
   useCommands({
     'persona.new': () => handleAddPersona(),
     'ontology.newType': () => handleAddType(),
-    'ontology.nextTab': () => setTabValue((prev) => (prev + 1) % 4),
-    'ontology.previousTab': () => setTabValue((prev) => (prev - 1 + 4) % 4),
+    'ontology.nextTab': () => setTabValue((tabValue + 1) % 4),
+    'ontology.previousTab': () => setTabValue((tabValue - 1 + 4) % 4),
     'ontology.suggestTypes': () => {
       const categoryMap: Record<number, OntologyCategory> = {
         0: 'entity',

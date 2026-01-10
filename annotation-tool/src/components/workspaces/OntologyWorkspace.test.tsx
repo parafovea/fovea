@@ -2,7 +2,7 @@
  * Tests for OntologyWorkspace component.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { http, HttpResponse } from 'msw'
 import React from 'react'
 import OntologyWorkspace from './OntologyWorkspace'
 import { server } from '../../../test/setup'
+import { useAnnotationUiStore } from '../../store/zustand'
 
 /**
  * Mock PersonaBrowser to simplify persona selection testing.
@@ -339,6 +340,14 @@ function setupDefaultHandlers(personas = mockPersonas, ontologies = mockOntologi
   )
 }
 
+/**
+ * Helper to pre-select a persona in Zustand store before rendering.
+ * This simulates the user having previously selected a persona.
+ */
+function preSelectPersona(personaId: string) {
+  useAnnotationUiStore.getState().setOntologySelectedPersonaId(personaId)
+}
+
 describe('OntologyWorkspace', () => {
   beforeEach(() => {
     server.resetHandlers()
@@ -351,10 +360,26 @@ describe('OntologyWorkspace', () => {
     })
   })
 
+  afterEach(() => {
+    // Reset Zustand store state after each test
+    useAnnotationUiStore.getState().setOntologySelectedPersonaId(null)
+    useAnnotationUiStore.getState().setOntologyTabIndex(0)
+  })
+
   describe('Initial Rendering', () => {
-    it('renders ontology workspace with first persona auto-selected', async () => {
+    it('renders persona browser by default (no auto-select)', async () => {
       setupDefaultHandlers()
-      // Pre-select the first persona
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      })
+    })
+
+    it('renders ontology workspace when persona was previously selected', async () => {
+      setupDefaultHandlers()
+      // Pre-select a persona (simulating returning to the workspace)
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -374,8 +399,9 @@ describe('OntologyWorkspace', () => {
   })
 
   describe('Persona Selection', () => {
-    it('displays persona information in header on load', async () => {
+    it('displays persona information in header when persona selected', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -386,6 +412,7 @@ describe('OntologyWorkspace', () => {
 
     it('shows back button to return to persona browser', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -401,6 +428,7 @@ describe('OntologyWorkspace', () => {
     it('returns to persona browser when back button clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -422,13 +450,21 @@ describe('OntologyWorkspace', () => {
       })
     })
 
-    it('can select different persona from browser', async () => {
-      setupDefaultHandlers([], {})
+    it('can select persona from browser', async () => {
+      const user = userEvent.setup()
+      setupDefaultHandlers()
 
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
+      })
+
+      // Click to select a persona
+      await user.click(screen.getByText('Select Urban Planner'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Urban Traffic Analyst')).toBeInTheDocument()
       })
     })
   })
@@ -436,6 +472,7 @@ describe('OntologyWorkspace', () => {
   describe('Tab Navigation', () => {
     it('displays all four ontology type tabs', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -448,6 +485,7 @@ describe('OntologyWorkspace', () => {
 
     it('shows entity types in first tab by default', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -460,6 +498,7 @@ describe('OntologyWorkspace', () => {
     it('switches to role types tab when clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -478,6 +517,7 @@ describe('OntologyWorkspace', () => {
     it('switches to event types tab when clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -496,6 +536,7 @@ describe('OntologyWorkspace', () => {
     it('switches to relation types tab when clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -513,6 +554,7 @@ describe('OntologyWorkspace', () => {
 
     it('displays correct item count in tab labels', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -527,6 +569,7 @@ describe('OntologyWorkspace', () => {
   describe('Search Functionality', () => {
     it('displays search input field', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -537,6 +580,7 @@ describe('OntologyWorkspace', () => {
     it('filters entity types by name', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -555,6 +599,7 @@ describe('OntologyWorkspace', () => {
     it('updates tab label counts when filtering', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -572,6 +617,7 @@ describe('OntologyWorkspace', () => {
     it('filters across different tabs', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -592,6 +638,7 @@ describe('OntologyWorkspace', () => {
     it('shows no results when search matches nothing', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -612,6 +659,7 @@ describe('OntologyWorkspace', () => {
     it('opens entity type editor when add button clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -630,6 +678,7 @@ describe('OntologyWorkspace', () => {
     it('opens entity type editor in edit mode when edit clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -647,6 +696,7 @@ describe('OntologyWorkspace', () => {
     it('closes entity type editor when close button clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -673,6 +723,7 @@ describe('OntologyWorkspace', () => {
     it('opens role editor when add button clicked on roles tab', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -696,6 +747,7 @@ describe('OntologyWorkspace', () => {
     it('displays allowed filler types for roles', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       // Wait for data to load first
@@ -715,6 +767,7 @@ describe('OntologyWorkspace', () => {
     it('opens event type editor when add button clicked on events tab', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -738,6 +791,7 @@ describe('OntologyWorkspace', () => {
     it('displays role count for event types', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       // Wait for data to load first
@@ -757,6 +811,7 @@ describe('OntologyWorkspace', () => {
     it('opens relation type editor when add button clicked on relations tab', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -780,6 +835,7 @@ describe('OntologyWorkspace', () => {
     it('displays source and target types for relations', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       // Wait for data to load first
@@ -798,6 +854,7 @@ describe('OntologyWorkspace', () => {
   describe('GPU/CPU Mode Detection', () => {
     it('shows ontology augmentation button when GPU available', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -817,6 +874,7 @@ describe('OntologyWorkspace', () => {
       })
 
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       // Wait for data to load first
@@ -831,6 +889,7 @@ describe('OntologyWorkspace', () => {
     it('opens ontology augmenter when suggest button clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -848,6 +907,7 @@ describe('OntologyWorkspace', () => {
     it('closes ontology augmenter when close clicked', async () => {
       const user = userEvent.setup()
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -871,8 +931,9 @@ describe('OntologyWorkspace', () => {
   })
 
   describe('Empty States', () => {
-    it('shows correct tab counts with first persona auto-selected', async () => {
+    it('shows correct tab counts with persona selected', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -884,6 +945,7 @@ describe('OntologyWorkspace', () => {
       // Set up with only art curator persona, which has empty roles, events, relationTypes
       const artCuratorOnly = [mockPersonas[2]] // persona-art-curator
       setupDefaultHandlers(artCuratorOnly, mockOntologies)
+      preSelectPersona('persona-art-curator')
 
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
@@ -897,6 +959,7 @@ describe('OntologyWorkspace', () => {
   describe('Diverse Domain Examples', () => {
     it('displays urban planning ontology with traffic types', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
@@ -908,6 +971,7 @@ describe('OntologyWorkspace', () => {
 
     it('renders multiple persona ontologies correctly', async () => {
       setupDefaultHandlers()
+      preSelectPersona('persona-urban-planner')
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
