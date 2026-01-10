@@ -124,6 +124,12 @@ export interface AnnotationUiState {
   /** Current video frame number */
   currentFrame: number
 
+  // ========== Ontology Workspace UI State ==========
+  /** Selected persona ID in ontology workspace (null = show persona browser) */
+  ontologySelectedPersonaId: string | null
+  /** Selected tab index in ontology workspace (0=entities, 1=roles, 2=events, 3=relations) */
+  ontologyTabIndex: number
+
   // ========== Actions ==========
   // Drawing actions
   setIsDrawing: (isDrawing: boolean) => void
@@ -165,6 +171,10 @@ export interface AnnotationUiState {
   setShowMotionPath: (show: boolean) => void
   setTimelineZoom: (zoom: number) => void
   setCurrentFrame: (frame: number) => void
+
+  // Ontology workspace UI actions
+  setOntologySelectedPersonaId: (personaId: string | null) => void
+  setOntologyTabIndex: (index: number) => void
 
   // Utility actions
   resetDrawingState: () => void
@@ -212,6 +222,10 @@ const initialState = {
   showMotionPath: false,
   timelineZoom: 1,
   currentFrame: 0,
+
+  // Ontology workspace UI state
+  ontologySelectedPersonaId: null,
+  ontologyTabIndex: 0,
 }
 
 /**
@@ -310,6 +324,12 @@ export const useAnnotationUiStore = create<AnnotationUiState>()(
         set({ timelineZoom: Math.max(1, Math.min(10, timelineZoom)) }, false, 'setTimelineZoom'),
       setCurrentFrame: (currentFrame) =>
         set({ currentFrame: Math.max(0, currentFrame) }, false, 'setCurrentFrame'),
+
+      // Ontology workspace UI actions
+      setOntologySelectedPersonaId: (ontologySelectedPersonaId) =>
+        set({ ontologySelectedPersonaId }, false, 'setOntologySelectedPersonaId'),
+      setOntologyTabIndex: (ontologyTabIndex) =>
+        set({ ontologyTabIndex }, false, 'setOntologyTabIndex'),
 
       // Utility actions
       resetDrawingState: () =>

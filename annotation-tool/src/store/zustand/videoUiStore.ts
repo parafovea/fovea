@@ -126,7 +126,8 @@ export const useVideoUiStore = create<VideoUiState>()(
       clearSummaryJob: (videoId, personaId) =>
         set(
           (state) => {
-            const { [`${videoId}:${personaId}`]: _, ...rest } = state.activeSummaryJobs
+            const { [`${videoId}:${personaId}`]: _removed, ...rest } = state.activeSummaryJobs
+            void _removed // Acknowledge unused variable from destructuring
             return { activeSummaryJobs: rest }
           },
           false,
