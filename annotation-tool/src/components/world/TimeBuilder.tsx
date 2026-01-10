@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
 import {
   Dialog,
@@ -47,8 +46,13 @@ import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
-import { AppDispatch, RootState } from '../../store/store'
-import { addTime, updateTime, addTimeCollection } from '../../store/worldSlice'
+import {
+  useVideos,
+  useWorld,
+  useAddTime,
+  useUpdateTime,
+  useAddTimeCollection,
+} from '../../store/queries'
 import { 
   Time, 
   TimeInstant, 
@@ -102,9 +106,12 @@ export default function TimeBuilder({
   existingTime,
   existingCollection,
 }: TimeBuilderProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { videos } = useSelector((state: RootState) => state.videos)
-  const { events } = useSelector((state: RootState) => state.world)
+  const { data: videos = [] } = useVideos()
+  const { data: worldData } = useWorld()
+  const events = worldData?.events ?? []
+  const { mutate: addTime } = useAddTime()
+  const { mutate: updateTime } = useUpdateTime()
+  const { mutate: addTimeCollection } = useAddTimeCollection()
   
   // Import mode
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
@@ -320,11 +327,11 @@ export default function TimeBuilder({
       }
       
       const finalTime = { ...timeData, ...commonFields }
-      
+
       if (existingTime) {
-        dispatch(updateTime({ ...existingTime, ...finalTime }))
+        updateTime({ ...existingTime, ...finalTime })
       } else {
-        dispatch(addTime(finalTime as Omit<Time, 'id'>))
+        addTime(finalTime as Omit<Time, 'id'>)
       }
     } else {
       // Create a time collection for patterns
@@ -344,10 +351,10 @@ export default function TimeBuilder({
         } : undefined,
         metadata: {},
       }
-      
-      dispatch(addTimeCollection(collectionData))
+
+      addTimeCollection(collectionData)
     }
-    
+
     onClose()
   }
   

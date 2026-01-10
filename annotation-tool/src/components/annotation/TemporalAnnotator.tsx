@@ -25,11 +25,9 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../../store/store'
 import { Time } from '../../models/types'
 import { generateId } from '../../utils/uuid'
-import { addTime } from '../../store/worldSlice'
+import { useAddTime } from '../../store/queries'
 
 interface TemporalAnnotatorProps {
   videoId: string
@@ -56,7 +54,7 @@ export default function TemporalAnnotator({
   onTimeCreated,
   existingTime,
 }: TemporalAnnotatorProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  const { mutate: addTime } = useAddTime()
   const [timeType, setTimeType] = useState<'instant' | 'interval'>(
     existingTime?.type || 'instant'
   )
@@ -181,14 +179,13 @@ export default function TemporalAnnotator({
     setVideoReferences(newRefs)
   }
   
-  const createTimeObject = (): Time => {
+  const createTimeData = (): Omit<Time, 'id'> => {
     const baseTime: any = {
-      id: existingTime?.id || generateId(),
       type: timeType,
       videoReferences,
       certainty,
     }
-    
+
     // Add timestamp for instants
     if (timeType === 'instant') {
       baseTime.timestamp = new Date(startTime * 1000).toISOString()
@@ -196,7 +193,7 @@ export default function TemporalAnnotator({
       baseTime.startTime = new Date(startTime * 1000).toISOString()
       baseTime.endTime = new Date(endTime * 1000).toISOString()
     }
-    
+
     // Add vagueness if specified
     if (hasVagueness) {
       baseTime.vagueness = {
@@ -205,7 +202,7 @@ export default function TemporalAnnotator({
         granularity: granularity as any,
       }
     }
-    
+
     // Add deictic reference if specified
     if (hasDeictic) {
       baseTime.deictic = {
@@ -213,21 +210,24 @@ export default function TemporalAnnotator({
         expression: deicticExpression || undefined,
       }
     }
-    
+
     // Add metadata
     if (notes) {
       baseTime.metadata = { notes }
     }
-    
+
     return baseTime
   }
-  
+
   const handleSaveTime = () => {
-    const time = createTimeObject()
-    dispatch(addTime(time))
-    
+    const timeData = createTimeData()
+    const newId = generateId()
+    const timeWithId: Time = { ...timeData, id: newId } as Time
+
+    addTime({ ...timeData, id: newId })
+
     if (onTimeCreated) {
-      onTimeCreated(time)
+      onTimeCreated(timeWithId)
     }
   }
   

@@ -21,6 +21,9 @@ coverage.json
 test-results/
 playwright-report/
 htmlcov/
+html/
+.coverage
+coverage.json
 
 # IDE and editors
 .vscode/
@@ -77,7 +80,9 @@ storybook-static/
 docs/docs/api-reference/frontend/
 docs/docs/api-reference/backend/
 docs/static/api-reference/
+docs/api/
 model-service/docs/_build/
+model-service/docs/make.bat
 
 # Static HTML builds
 annotation-tool/html/

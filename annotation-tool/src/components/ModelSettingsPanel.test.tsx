@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ModelSettingsPanel } from './ModelSettingsPanel'
-import * as useModelConfigHooks from '../hooks/useModelConfig'
+import * as useModelConfigHooks from '../store/queries/useModelConfig'
 import type { ModelConfig, MemoryValidation, ApiError } from '../api/client'
 
 /**

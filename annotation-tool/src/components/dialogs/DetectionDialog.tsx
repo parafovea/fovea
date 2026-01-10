@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -30,7 +29,8 @@ import {
   Divider,
 } from '@mui/material'
 import { Search as DetectIcon } from '@mui/icons-material'
-import { RootState } from '../../store/store'
+import { usePersonas } from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand'
 
 /**
  * Detection query options for persona-based detection.
@@ -104,8 +104,8 @@ export function DetectionDialog({
   isLoading = false,
   error = null,
 }: DetectionDialogProps) {
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
-  const personas = useSelector((state: RootState) => state.persona.personas)
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const { data: personas = [] } = usePersonas()
 
   const [queryMode, setQueryMode] = useState<'persona' | 'manual'>('persona')
   const [manualQuery, setManualQuery] = useState('')

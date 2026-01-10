@@ -4,28 +4,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
 import { useAuth } from './useAuth.js'
-import userReducer, { loginSuccess, logoutSuccess } from '../../store/userSlice.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 describe('useAuth', () => {
-  const createWrapper = () => {
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    return ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-  }
-
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
   })
 
   describe('login', () => {
@@ -50,9 +38,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       const user = await result.current.login('testuser', 'password123', false)
 
@@ -80,9 +66,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       const user = await result.current.login('testuser', 'password123', true)
 
@@ -99,9 +83,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       await expect(
         result.current.login('testuser', 'wrongpassword', false)
@@ -115,16 +97,14 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       await expect(
         result.current.login('testuser', 'password123', false)
       ).rejects.toThrow()
     })
 
-    it('dispatches loginSuccess action on successful login', async () => {
+    it('updates auth store on successful login', async () => {
       const mockUser = {
         id: 'user-1',
         username: 'testuser',
@@ -133,39 +113,24 @@ describe('useAuth', () => {
         isAdmin: false,
       }
 
-      const dispatchSpy = vi.fn()
-      const store = configureStore({
-        reducer: {
-          user: userReducer,
-        },
-      })
-      const originalDispatch = store.dispatch
-      store.dispatch = vi.fn((action) => {
-        dispatchSpy(action)
-        return originalDispatch(action)
-      }) as typeof store.dispatch
-
       server.use(
         http.post('/api/auth/login', () => {
           return HttpResponse.json({ user: mockUser })
         })
       )
 
-      const wrapper = ({ children }: { children: React.ReactNode }) => (
-        <Provider store={store}>{children}</Provider>
-      )
+      const { result } = renderHook(() => useAuth())
 
-      const { result } = renderHook(() => useAuth(), { wrapper })
+      // Verify initial state
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().currentUser).toBe(null)
 
       await result.current.login('testuser', 'password123', false)
 
+      // Verify state was updated
       await waitFor(() => {
-        expect(dispatchSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            type: loginSuccess.type,
-            payload: mockUser,
-          })
-        )
+        expect(useAuthStore.getState().isAuthenticated).toBe(true)
+        expect(useAuthStore.getState().currentUser).toEqual(mockUser)
       })
     })
   })
@@ -178,9 +143,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       await expect(result.current.logout()).resolves.not.toThrow()
     })
@@ -194,9 +157,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       // Should not throw even if request fails
       await expect(result.current.logout()).resolves.not.toThrow()
@@ -205,18 +166,16 @@ describe('useAuth', () => {
       consoleErrorSpy.mockRestore()
     })
 
-    it('dispatches logoutSuccess action', async () => {
-      const dispatchSpy = vi.fn()
-      const store = configureStore({
-        reducer: {
-          user: userReducer,
-        },
+    it('updates auth store on logout', async () => {
+      // First set up authenticated state
+      useAuthStore.getState().loginSuccess({
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        isAdmin: false,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
       })
-      const originalDispatch = store.dispatch
-      store.dispatch = vi.fn((action) => {
-        dispatchSpy(action)
-        return originalDispatch(action)
-      }) as typeof store.dispatch
 
       server.use(
         http.post('/api/auth/logout', () => {
@@ -224,20 +183,17 @@ describe('useAuth', () => {
         })
       )
 
-      const wrapper = ({ children }: { children: React.ReactNode }) => (
-        <Provider store={store}>{children}</Provider>
-      )
+      const { result } = renderHook(() => useAuth())
 
-      const { result } = renderHook(() => useAuth(), { wrapper })
+      // Verify initially authenticated
+      expect(useAuthStore.getState().isAuthenticated).toBe(true)
 
       await result.current.logout()
 
+      // Verify state was updated
       await waitFor(() => {
-        expect(dispatchSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            type: logoutSuccess.type,
-          })
-        )
+        expect(useAuthStore.getState().isAuthenticated).toBe(false)
+        expect(useAuthStore.getState().currentUser).toBe(null)
       })
     })
   })
@@ -265,9 +221,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       const user = await result.current.register({
         username: 'newuser',
@@ -289,9 +243,7 @@ describe('useAuth', () => {
         })
       )
 
-      const { result } = renderHook(() => useAuth(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useAuth())
 
       await expect(
         result.current.register({
@@ -300,6 +252,40 @@ describe('useAuth', () => {
           password: 'password123',
         })
       ).rejects.toThrow('Username already exists')
+    })
+
+    it('updates auth store on successful registration', async () => {
+      const mockUser = {
+        id: 'user-2',
+        username: 'newuser',
+        displayName: 'New User',
+        email: 'new@example.com',
+        isAdmin: false,
+      }
+
+      server.use(
+        http.post('/api/auth/register', () => {
+          return HttpResponse.json({ user: mockUser })
+        })
+      )
+
+      const { result } = renderHook(() => useAuth())
+
+      // Verify initial state
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+
+      await result.current.register({
+        username: 'newuser',
+        displayName: 'New User',
+        email: 'new@example.com',
+        password: 'password123',
+      })
+
+      // Verify state was updated
+      await waitFor(() => {
+        expect(useAuthStore.getState().isAuthenticated).toBe(true)
+        expect(useAuthStore.getState().currentUser).toEqual(mockUser)
+      })
     })
   })
 })

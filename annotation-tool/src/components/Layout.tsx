@@ -29,9 +29,9 @@ import {
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material'
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../store/store'
-import { markSaved as markPersonaSaved } from '../store/personaSlice'
+import { usePersonas, useAllPersonaOntologies, useWorld } from '../store/queries'
+import { useVideoUiStore } from '../store/zustand/videoUiStore'
+import { useDialog } from '../store/zustand/dialogStore'
 import { api } from '../services/api'
 import { Ontology } from '../models/types'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
@@ -50,28 +50,35 @@ const DRAWER_WIDTH = 240
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const dispatch = useDispatch<AppDispatch>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [exportDialogOpen, setExportDialogOpen] = useState(false)
-  const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
-  const [userSettingsDialogOpen, setUserSettingsDialogOpen] = useState(false)
-  const [modelSettingsDialogOpen, setModelSettingsDialogOpen] = useState(false)
-  const [aboutDialogOpen, setAboutDialogOpen] = useState(false)
-  const [adminPanelDialogOpen, setAdminPanelDialogOpen] = useState(false)
+
+  // Use Zustand dialogStore for dialog state management
+  const exportDialog = useDialog('export')
+  const importDialog = useDialog('import')
+  const shortcutsDialog = useDialog('keyboardShortcuts')
+  const userSettingsDialog = useDialog('userSettings')
+  const modelSettingsDialog = useDialog('modelSettings')
+  const aboutDialog = useDialog('about')
+  const adminPanelDialog = useDialog('adminPanel')
+
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
     severity: 'success' | 'error' | 'info' | 'warning'
   }>({ open: false, message: '', severity: 'success' })
-  
-  const unsavedChanges = useSelector((state: RootState) =>
-    state.persona.unsavedChanges
-  )
-  const { personas = [], personaOntologies = [] } = useSelector((state: RootState) => state.persona)
-  const world = useSelector((state: RootState) => state.world)
-  const lastAnnotation = useSelector((state: RootState) => state.videos.lastAnnotation)
+
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map(p => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
+  const { data: world } = useWorld()
+
+  // Zustand stores
+  const lastAnnotation = useVideoUiStore((state) => state.lastAnnotation)
+
+  // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
+  const unsavedChanges = false
 
   // Use ref to avoid stale closure in keyboard shortcut handlers
   const lastAnnotationRef = useRef(lastAnnotation)
@@ -98,20 +105,19 @@ export default function Layout() {
         personas,
         personaOntologies,
         world: {
-          entities: world.entities || [],
-          events: world.events || [],
-          times: world.times || [],
-          entityCollections: world.entityCollections || [],
-          eventCollections: world.eventCollections || [],
-          timeCollections: world.timeCollections || [],
-          relations: world.relations || [],
+          entities: world?.entities || [],
+          events: world?.events || [],
+          times: world?.times || [],
+          entityCollections: world?.entityCollections || [],
+          eventCollections: world?.eventCollections || [],
+          timeCollections: world?.timeCollections || [],
+          relations: world?.relations || [],
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
 
       await api.saveOntology(ontology)
-      dispatch(markPersonaSaved())
       setNotification({
         open: true,
         message: 'Data saved successfully',
@@ -127,11 +133,11 @@ export default function Layout() {
     } finally {
       setSaving(false)
     }
-  }, [personas, personaOntologies, world, dispatch])
+  }, [personas, personaOntologies, world])
 
   const handleExport = useCallback(() => {
-    setExportDialogOpen(true)
-  }, [])
+    exportDialog.openDialog()
+  }, [exportDialog])
 
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false })
@@ -152,7 +158,7 @@ export default function Layout() {
     videoBrowserActive: location.pathname === '/',
     objectWorkspaceActive: location.pathname === '/objects',
     annotationWorkspaceActive: location.pathname.startsWith('/annotate'),
-    dialogOpen: shortcutsDialogOpen || exportDialogOpen || importDialogOpen || userSettingsDialogOpen || modelSettingsDialogOpen || aboutDialogOpen,
+    dialogOpen: shortcutsDialog.open || exportDialog.open || importDialog.open || userSettingsDialog.open || modelSettingsDialog.open || aboutDialog.open,
     inputFocused: false, // Updated dynamically by App.tsx
   })
 
@@ -194,7 +200,7 @@ export default function Layout() {
       }
     },
     'file.export': () => handleExport(),
-    'help.show': () => setShortcutsDialogOpen(true),
+    'help.show': () => shortcutsDialog.openDialog(),
   })
 
   return (
@@ -275,14 +281,14 @@ export default function Layout() {
           <Button
             color="inherit"
             startIcon={<ImportIcon />}
-            onClick={() => setImportDialogOpen(true)}
+            onClick={importDialog.openDialog}
           >
             Import
           </Button>
           <Tooltip title="Keyboard Shortcuts (?)">
             <IconButton
               color="inherit"
-              onClick={() => setShortcutsDialogOpen(true)}
+              onClick={shortcutsDialog.openDialog}
               sx={{ ml: 1 }}
               aria-label="Keyboard Shortcuts (?)"
             >
@@ -290,10 +296,10 @@ export default function Layout() {
             </IconButton>
           </Tooltip>
           <UserMenu
-            onSettingsClick={() => setUserSettingsDialogOpen(true)}
-            onModelSettingsClick={() => setModelSettingsDialogOpen(true)}
-            onAboutClick={() => setAboutDialogOpen(true)}
-            onAdminPanelClick={() => setAdminPanelDialogOpen(true)}
+            onSettingsClick={userSettingsDialog.openDialog}
+            onModelSettingsClick={modelSettingsDialog.openDialog}
+            onAboutClick={aboutDialog.openDialog}
+            onAdminPanelClick={adminPanelDialog.openDialog}
           />
         </Toolbar>
       </AppBar>
@@ -372,14 +378,14 @@ export default function Layout() {
       </Snackbar>
       
       <KeyboardShortcutsDialog
-        open={shortcutsDialogOpen}
-        onClose={() => setShortcutsDialogOpen(false)}
+        open={shortcutsDialog.open}
+        onClose={shortcutsDialog.close}
         currentContext={getCurrentContext()}
       />
 
       <ImportDataDialog
-        open={importDialogOpen}
-        onClose={() => setImportDialogOpen(false)}
+        open={importDialog.open}
+        onClose={importDialog.close}
         onImportComplete={(result) => {
           console.log('Import completed:', result)
           setNotification({
@@ -391,28 +397,28 @@ export default function Layout() {
       />
 
       <ExportDialog
-        open={exportDialogOpen}
-        onClose={() => setExportDialogOpen(false)}
+        open={exportDialog.open}
+        onClose={exportDialog.close}
       />
 
       <UserSettingsDialog
-        open={userSettingsDialogOpen}
-        onClose={() => setUserSettingsDialogOpen(false)}
+        open={userSettingsDialog.open}
+        onClose={userSettingsDialog.close}
       />
 
       <ModelSettingsDialog
-        open={modelSettingsDialogOpen}
-        onClose={() => setModelSettingsDialogOpen(false)}
+        open={modelSettingsDialog.open}
+        onClose={modelSettingsDialog.close}
       />
 
       <AboutDialog
-        open={aboutDialogOpen}
-        onClose={() => setAboutDialogOpen(false)}
+        open={aboutDialog.open}
+        onClose={aboutDialog.close}
       />
 
       <AdminPanelDialog
-        open={adminPanelDialogOpen}
-        onClose={() => setAdminPanelDialogOpen(false)}
+        open={adminPanelDialog.open}
+        onClose={adminPanelDialog.close}
       />
     </Box>
   )

@@ -32,8 +32,7 @@ import {
   AccessTime as RecentIcon,
 } from '@mui/icons-material'
 import { WikidataChip } from '../shared/WikidataChip'
-import { useSelector } from 'react-redux'
-import { RootState } from '../../store/store'
+import { useWorld, usePersonas } from '../../store/queries'
 import { Location } from '../../models/types'
 
 interface ObjectPickerProps {
@@ -81,13 +80,14 @@ export default function ObjectPicker({
   const [selectedTab, setSelectedTab] = useState(0)
   const [selectedObject, setSelectedObject] = useState<any>(null)
   
-  // Get world objects from store
-  const entities = useSelector((state: RootState) => state.world.entities)
-  const events = useSelector((state: RootState) => state.world.events)
-  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
-  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
-  const timeCollections = useSelector((state: RootState) => state.world.timeCollections)
-  const personas = useSelector((state: RootState) => state.persona.personas)
+  // Get world objects from TanStack Query
+  const { data: worldData } = useWorld()
+  const entities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const events = useMemo(() => worldData?.events ?? [], [worldData?.events])
+  const entityCollections = useMemo(() => worldData?.entityCollections ?? [], [worldData?.entityCollections])
+  const eventCollections = useMemo(() => worldData?.eventCollections ?? [], [worldData?.eventCollections])
+  const timeCollections = useMemo(() => worldData?.timeCollections ?? [], [worldData?.timeCollections])
+  const { data: personas = [] } = usePersonas()
   
   // Filter locations from entities
   const locations = useMemo(() => 
@@ -195,9 +195,10 @@ export default function ObjectPicker({
             primary={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body1">{item.name}</Typography>
-                <WikidataChip 
+                <WikidataChip
                   wikidataId={item.wikidataId}
                   wikidataUrl={item.wikidataUrl}
+                  wikibaseId={item.wikibaseId}
                   importedAt={item.importedAt}
                   size="small"
                   showTimestamp={false}

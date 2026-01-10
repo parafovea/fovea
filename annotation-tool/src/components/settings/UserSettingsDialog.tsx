@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -22,7 +21,7 @@ import {
   Settings as SettingsIcon,
   Close as CloseIcon,
 } from '@mui/icons-material'
-import { RootState } from '../../store/store.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 import ProfileTab from './ProfileTab.js'
 import ApiKeyManagementPanel from './ApiKeyManagementPanel.js'
 
@@ -66,7 +65,7 @@ interface UserSettingsDialogProps {
  * @returns User settings dialog
  */
 export default function UserSettingsDialog({ open, onClose }: UserSettingsDialogProps) {
-  const { mode } = useSelector((state: RootState) => state.user)
+  const mode = useAuthStore(state => state.mode)
   const [currentTab, setCurrentTab] = useState(0)
 
   /**

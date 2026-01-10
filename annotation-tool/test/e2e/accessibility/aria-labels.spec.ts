@@ -25,24 +25,29 @@ test.describe('ARIA Labels - Buttons and Interactive Elements', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await injectAxe(page)
 
-    // Configure axe to disable non-button-related rules
-    await page.evaluate(() => {
-      (window as any).axe.configure({
-        rules: [
-          { id: 'color-contrast', enabled: false }, // Intentional MUI design choice
-          { id: 'label', enabled: false }, // Not testing form labels here
-          { id: 'page-has-heading-one', enabled: false } // Not relevant to button testing
-        ]
+    // Run axe directly to check only button-name rule
+    const results = await page.evaluate(async () => {
+      return await (window as any).axe.run(document, {
+        runOnly: {
+          type: 'rule',
+          values: ['button-name']
+        }
       })
     })
 
-    // Run axe check for button-name rule only
-    await checkA11y(page, null, {
-      runOnly: {
-        type: 'rule',
-        values: ['button-name']
-      }
-    })
+    // Check for violations
+    const violations = results.violations || []
+    if (violations.length > 0) {
+      const violationDetails = violations.map((v: any) => ({
+        rule: v.id,
+        impact: v.impact,
+        nodes: v.nodes.length,
+        description: v.description
+      }))
+      console.log('Button name violations:', violationDetails)
+    }
+
+    expect(violations.length).toBe(0)
   })
 
   test('icon buttons have aria-label', async ({ page, ontologyWorkspace, testPersona }) => {

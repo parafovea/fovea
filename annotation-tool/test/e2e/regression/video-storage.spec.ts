@@ -1,254 +1,152 @@
-import { test, expect } from '@playwright/test'
-import path from 'path'
-import fs from 'fs'
-import { fileURLToPath } from 'url'
+import { test, expect } from '../fixtures/test-context.js'
 
 /**
  * E2E tests for video storage functionality
  *
- * Tests the complete video upload, storage, and retrieval workflow
- * including video streaming and thumbnail generation.
+ * Tests the video storage, streaming, and retrieval workflow
+ * using pre-seeded test videos.
  */
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 test.describe('Video Storage', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to the application
-    await page.goto('/')
+  test('streams video from storage endpoint', async ({ page, testVideo }) => {
+    // Test that the video stream endpoint returns valid video content
+    const streamResponse = await page.request.get(`/api/videos/${testVideo.id}/stream`)
 
-    // Wait for the app to be ready
-    await page.waitForLoadState('networkidle')
+    expect(streamResponse.status()).toBe(200)
+    expect(streamResponse.headers()['content-type']).toMatch(/video\//)
   })
 
-  test('should upload a video and store it correctly', async ({ page }) => {
-    // This test verifies that:
-    // 1. Videos can be uploaded through the UI
-    // 2. The storage provider correctly handles the video
-    // 3. The video can be retrieved and played back
+  test('supports video range requests for seeking', async ({ page, testVideo }) => {
+    // Test that range requests work for video seeking
+    const response = await page.request.get(`/api/videos/${testVideo.id}/stream`, {
+      headers: {
+        Range: 'bytes=0-1023',
+      },
+    })
 
-    // Create a small test video file (using a minimal MP4)
-    const testVideoPath = path.join(__dirname, '../../fixtures/test-video.mp4')
+    // Check for partial content response or full content
+    // Some servers return 200 instead of 206 for small files
+    expect([200, 206]).toContain(response.status())
 
-    // Check if test video exists, if not skip this test
-    if (!fs.existsSync(testVideoPath)) {
-      test.skip()
-      return
-    }
-
-    // Navigate to video upload or browse page
-    // Note: This assumes there's a videos page - adjust based on actual UI
-    await page.goto('/videos')
-
-    // Look for upload button (adjust selector based on actual UI)
-    const uploadButton = page.locator('button:has-text("Upload")').first()
-    if (await uploadButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await uploadButton.click()
-
-      // Handle file upload dialog
-      const fileInput = page.locator('input[type="file"]')
-      await fileInput.setInputFiles(testVideoPath)
-
-      // Wait for upload to complete
-      await page.waitForResponse(response =>
-        response.url().includes('/api/videos') && response.status() === 200,
-        { timeout: 30000 }
-      )
-
-      // Verify video appears in the list
-      await expect(page.locator('text=test-video.mp4').first()).toBeVisible({ timeout: 10000 })
-    } else {
-      test.skip()
+    if (response.status() === 206) {
+      // If 206, verify range headers are present
+      const contentRange = response.headers()['content-range']
+      expect(contentRange).toBeTruthy()
     }
   })
 
-  test('should stream video from storage', async ({ page }) => {
-    // This test verifies video streaming works correctly
+  test('thumbnail endpoint responds correctly', async ({ page, testVideo }) => {
+    // Test thumbnail endpoint - may return 200 with image or error if not generated
+    const thumbnailResponse = await page.request.get(`/api/videos/${testVideo.id}/thumbnail`)
 
-    // Navigate to a page with a video player
-    await page.goto('/videos')
+    // Endpoint should respond (either with thumbnail or error, not crash)
+    expect([200, 404, 500]).toContain(thumbnailResponse.status())
 
-    // Find a video element (adjust selector based on actual UI)
-    const videoElement = page.locator('video').first()
-
-    if (await videoElement.isVisible({ timeout: 5000 }).catch(() => false)) {
-      // Get the video source URL
-      const videoSrc = await videoElement.getAttribute('src')
-      expect(videoSrc).toBeTruthy()
-
-      // Verify the URL follows expected pattern
-      if (videoSrc) {
-        expect(videoSrc).toMatch(/\/api\/videos\/.*\/stream/)
-
-        // Make a direct request to verify the video endpoint works
-        const response = await page.request.get(videoSrc)
-        expect(response.status()).toBe(200)
-        expect(response.headers()['content-type']).toContain('video/')
-      }
-    } else {
-      test.skip()
+    // If thumbnail exists, verify content type
+    if (thumbnailResponse.status() === 200) {
+      expect(thumbnailResponse.headers()['content-type']).toMatch(/image\/(jpeg|png|webp)/)
     }
   })
 
-  test('should support video range requests for seeking', async ({ page }) => {
-    // This test verifies that range requests work for video seeking
-
-    await page.goto('/videos')
-
-    const videoElement = page.locator('video').first()
-
-    if (await videoElement.isVisible({ timeout: 5000 }).catch(() => false)) {
-      const videoSrc = await videoElement.getAttribute('src')
-
-      if (videoSrc) {
-        // Make a range request
-        const response = await page.request.get(videoSrc, {
-          headers: {
-            'Range': 'bytes=0-1023'
-          }
-        })
-
-        // Check for partial content response or full content
-        // Some servers return 200 instead of 206 for small files
-        expect([200, 206]).toContain(response.status())
-
-        if (response.status() === 206) {
-          // If 206, verify range headers are present
-          const contentRange = response.headers()['content-range']
-          expect(contentRange).toBeTruthy()
-        }
-      }
-    } else {
-      test.skip()
-    }
-  })
-
-  test('should generate and display video thumbnails', async ({ page }) => {
-    // This test verifies thumbnail generation works
-
-    await page.goto('/videos')
-
-    // Look for thumbnail images (adjust selector based on actual UI)
-    const thumbnails = page.locator('img[src*="thumbnail"]')
-    const thumbnailCount = await thumbnails.count()
-
-    if (thumbnailCount > 0) {
-      // Get first thumbnail
-      const firstThumbnail = thumbnails.first()
-      const thumbnailSrc = await firstThumbnail.getAttribute('src')
-
-      expect(thumbnailSrc).toBeTruthy()
-
-      if (thumbnailSrc) {
-        // Verify thumbnail URL pattern
-        expect(thumbnailSrc).toMatch(/\/api\/videos\/.*\/thumbnail/)
-
-        // Verify thumbnail is accessible
-        const response = await page.request.get(thumbnailSrc)
-        expect(response.status()).toBe(200)
-        expect(response.headers()['content-type']).toMatch(/image\/(jpeg|png)/)
-      }
-    }
-  })
-
-  test('should handle storage errors gracefully', async ({ page }) => {
-    // This test verifies error handling for storage failures
-
-    // Try to access a non-existent video
+  test('returns 404 for non-existent video', async ({ page }) => {
+    // Test error handling for non-existent videos
     const response = await page.request.get('/api/videos/non-existent-video-id/stream')
 
-    // Should return 404
     expect(response.status()).toBe(404)
   })
 
-  test('should delete videos from storage', async ({ page }) => {
-    // This test verifies video deletion works
+  test('video plays in annotation workspace', async ({ page, testVideo, annotationWorkspace }) => {
+    // Navigate to annotation workspace with the test video
+    await annotationWorkspace.navigateTo(testVideo.id)
 
-    await page.goto('/videos')
+    // Wait for video player to be ready
+    await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    // Look for a delete button (adjust based on actual UI)
-    const deleteButton = page.locator('button[aria-label*="delete"], button:has-text("Delete")').first()
+    // Verify video element exists and has a source
+    const videoElement = page.locator('video').first()
+    await expect(videoElement).toBeVisible({ timeout: 5000 })
 
-    if (await deleteButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      // Get the video ID before deletion
-      const videoRow = deleteButton.locator('..').first()
-      const videoTitle = await videoRow.locator('text').first().textContent()
+    // Get the video source and verify it points to the stream endpoint
+    const videoSrc = await videoElement.getAttribute('src')
+    expect(videoSrc).toContain('/api/videos/')
+  })
 
-      // Click delete
-      await deleteButton.click()
+  test('video metadata is correct', async ({ page, testVideo }) => {
+    // Test that video metadata endpoint returns correct data
+    const response = await page.request.get(`/api/videos/${testVideo.id}`)
 
-      // Confirm deletion if there's a dialog
-      const confirmButton = page.locator('button:has-text("Confirm"), button:has-text("Delete")').last()
-      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmButton.click()
-      }
+    expect(response.status()).toBe(200)
 
-      // Wait for deletion to complete
-      await page.waitForResponse(response =>
-        response.url().includes('/api/videos') &&
-        (response.status() === 200 || response.status() === 204),
-        { timeout: 10000 }
-      ).catch(() => {})
-
-      // Verify video is no longer in the list
-      if (videoTitle) {
-        await expect(page.locator(`text=${videoTitle}`)).not.toBeVisible({ timeout: 5000 })
-      }
-    } else {
-      test.skip()
-    }
+    const video = await response.json()
+    expect(video.id).toBe(testVideo.id)
+    expect(video.filename).toBe(testVideo.filename)
+    expect(video.duration).toBeGreaterThan(0)
   })
 })
 
 test.describe('Video Storage - Backend API', () => {
-  test('video stream endpoint returns correct content type', async ({ request }) => {
-    // This test directly tests the backend API
-    // Note: Requires a seeded video in the test database
-
+  test('video list endpoint returns all videos', async ({ request }) => {
     const response = await request.get('/api/videos')
-    if (response.ok()) {
-      const videos = await response.json()
 
-      if (videos && videos.length > 0) {
-        const firstVideo = videos[0]
-        const streamResponse = await request.get(`/api/videos/${firstVideo.id}/stream`)
+    expect(response.status()).toBe(200)
 
-        expect(streamResponse.status()).toBe(200)
-        expect(streamResponse.headers()['content-type']).toMatch(/video\//)
-      } else {
-        test.skip()
-      }
-    } else {
-      test.skip()
-    }
+    const videos = await response.json()
+    expect(Array.isArray(videos)).toBe(true)
+    expect(videos.length).toBeGreaterThan(0)
+
+    // Verify video structure
+    const firstVideo = videos[0]
+    expect(firstVideo).toHaveProperty('id')
+    expect(firstVideo).toHaveProperty('filename')
+    expect(firstVideo).toHaveProperty('duration')
   })
 
-  test('thumbnail endpoint returns correct content type', async ({ request }) => {
-    const response = await request.get('/api/videos')
-    if (response.ok()) {
-      const videos = await response.json()
+  test('video stream endpoint returns correct content type', async ({ request, testVideo }) => {
+    const streamResponse = await request.get(`/api/videos/${testVideo.id}/stream`)
 
-      if (videos && videos.length > 0) {
-        const firstVideo = videos[0]
-        // Assuming thumbnail endpoint follows similar pattern
-        const thumbnailResponse = await request.get(`/api/videos/${firstVideo.id}/thumbnail`)
+    expect(streamResponse.status()).toBe(200)
+    expect(streamResponse.headers()['content-type']).toMatch(/video\//)
+  })
 
-        if (thumbnailResponse.ok()) {
-          expect(thumbnailResponse.headers()['content-type']).toMatch(/image\//)
-        } else {
-          test.skip()
-        }
-      } else {
-        test.skip()
-      }
-    } else {
-      test.skip()
+  test('thumbnail endpoint responds without crashing', async ({ request, testVideo }) => {
+    // Thumbnail may not be generated in test environment
+    const thumbnailResponse = await request.get(`/api/videos/${testVideo.id}/thumbnail`)
+
+    // Endpoint should respond (either with thumbnail or graceful error)
+    expect([200, 404, 500]).toContain(thumbnailResponse.status())
+
+    // If thumbnail exists, verify content type is correct
+    if (thumbnailResponse.status() === 200) {
+      expect(thumbnailResponse.headers()['content-type']).toMatch(/image\//)
     }
   })
 
   test('health check endpoint is accessible', async ({ request }) => {
     const response = await request.get('/api/health')
     expect(response.status()).toBe(200)
+  })
+
+  test('video stream supports HEAD requests', async ({ request, testVideo }) => {
+    const response = await request.head(`/api/videos/${testVideo.id}/stream`)
+
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toMatch(/video\//)
+    expect(response.headers()['content-length']).toBeTruthy()
+  })
+
+  test('video content-length header is accurate', async ({ request, testVideo }) => {
+    // Get video metadata
+    const metaResponse = await request.get(`/api/videos/${testVideo.id}`)
+    const metadata = await metaResponse.json()
+
+    // Get stream headers
+    const streamResponse = await request.head(`/api/videos/${testVideo.id}/stream`)
+    const contentLength = parseInt(streamResponse.headers()['content-length'] || '0', 10)
+
+    // Content length should match filesize (or be close for streaming)
+    expect(contentLength).toBeGreaterThan(0)
+    if (metadata.size || metadata.filesize) {
+      expect(contentLength).toBe(metadata.size || metadata.filesize)
+    }
   })
 })

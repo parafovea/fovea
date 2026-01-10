@@ -6,27 +6,14 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Provider } from 'react-redux'
 import { BrowserRouter } from 'react-router-dom'
-import { configureStore } from '@reduxjs/toolkit'
 import React from 'react'
 import VideoBrowser from './VideoBrowser'
-import videoSlice from '../store/videoSlice'
-import personaSlice from '../store/personaSlice'
+import { useVideoUiStore, useAnnotationUiStore } from '../store/zustand'
 import { server } from '../../test/setup'
 import { http, HttpResponse } from 'msw'
 
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      videos: videoSlice,
-      persona: personaSlice,
-    },
-    preloadedState: initialState,
-  })
-}
-
-function createWrapper(store: ReturnType<typeof createTestStore>) {
+function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -36,11 +23,9 @@ function createWrapper(store: ReturnType<typeof createTestStore>) {
   })
 
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{children}</BrowserRouter>
-      </QueryClientProvider>
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{children}</BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -89,33 +74,32 @@ const mockVideos = [
   },
 ]
 
+// Mock personas for tests
+const mockPersonas = [
+  { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
+  { id: 'persona-2', name: 'Film Critic', role: 'Movie Reviewer' },
+]
+
 describe('VideoBrowser', () => {
   beforeEach(() => {
-    // Mock fetch for video list (for tests that trigger loading)
+    // Reset Zustand store state between tests
+    useVideoUiStore.getState().resetAllState()
+    useAnnotationUiStore.getState().setSelectedPersonaId(null)
+
+    // Mock fetch for video list and personas (for tests that trigger loading)
     server.use(
       http.get('/api/videos', () => {
         return HttpResponse.json(mockVideos)
+      }),
+      http.get('/api/personas', () => {
+        return HttpResponse.json(mockPersonas)
       })
     )
   })
 
   describe('loading state', () => {
     it('renders loading spinner while fetching videos', () => {
-      const store = createTestStore({
-        videos: {
-          videos: mockVideos,
-          isLoading: false,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
-
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })
@@ -123,21 +107,7 @@ describe('VideoBrowser', () => {
 
   describe('video grid display', () => {
     it('displays video cards with metadata', async () => {
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
-
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Sports Network')).toBeInTheDocument()
@@ -147,21 +117,7 @@ describe('VideoBrowser', () => {
     })
 
     it('displays video count in search bar', async () => {
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
-
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -172,21 +128,8 @@ describe('VideoBrowser', () => {
   describe('search filtering', () => {
     it('filters videos by title', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -204,21 +147,8 @@ describe('VideoBrowser', () => {
 
     it('filters videos by description', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -235,21 +165,8 @@ describe('VideoBrowser', () => {
 
     it('filters videos by uploader', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -266,21 +183,8 @@ describe('VideoBrowser', () => {
 
     it('filters videos by tags', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -297,21 +201,8 @@ describe('VideoBrowser', () => {
 
     it('shows empty state when no videos match search', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -354,21 +245,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('2 videos')).toBeInTheDocument()
@@ -409,21 +287,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('2 videos')).toBeInTheDocument()
@@ -457,23 +322,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
-          ],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -497,23 +347,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -537,23 +372,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Wildlife Researcher', role: 'Marine Biologist' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -587,23 +407,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Retail Analyst', role: 'Store Manager' },
-          ],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByLabelText(/persona/i)).toBeInTheDocument()
@@ -630,23 +435,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
-          ],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         const button = screen.getByText(/summarize all/i)
@@ -678,23 +468,10 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Wildlife Researcher', role: 'Marine Biologist' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
+      // Set active persona to enable summarize button
+      useAnnotationUiStore.getState().setSelectedPersonaId('persona-1')
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Wildlife Channel')).toBeInTheDocument()
@@ -728,25 +505,11 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {
-            'video-1:persona-1': 'job-active',
-          },
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
+      // Set active persona and active summary job
+      useAnnotationUiStore.getState().setSelectedPersonaId('persona-1')
+      useVideoUiStore.getState().setActiveSummaryJob('video-1', 'persona-1', 'job-active')
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText(/generating summary/i)).toBeInTheDocument()
@@ -776,25 +539,11 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {
-            'video-3': ['persona-1'],
-          },
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Retail Analyst', role: 'Store Manager' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
+      // Set active persona and video summary
+      useAnnotationUiStore.getState().setSelectedPersonaId('persona-1')
+      useVideoUiStore.getState().addVideoSummary('video-3', 'persona-1')
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Retail Analytics')).toBeInTheDocument()
@@ -814,21 +563,8 @@ describe('VideoBrowser', () => {
   describe('video card interactions', () => {
     it('navigates to annotation view when Annotate button clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Sports Network')).toBeInTheDocument()
@@ -860,21 +596,8 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Test Uploader')).toBeInTheDocument()
@@ -888,21 +611,8 @@ describe('VideoBrowser', () => {
     })
 
     it('displays video metadata when available', async () => {
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('Sports Network')).toBeInTheDocument()
@@ -937,24 +647,10 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Baseball Scout', role: 'Sports Analyst' },
-            { id: 'persona-2', name: 'Film Critic', role: 'Movie Reviewer' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
+      // Set active persona before rendering
+      useAnnotationUiStore.getState().setSelectedPersonaId('persona-1')
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByLabelText(/persona/i)).toBeInTheDocument()
@@ -986,23 +682,10 @@ describe('VideoBrowser', () => {
         })
       )
 
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [
-            { id: 'persona-1', name: 'Financial Trader', role: 'Commodity Analyst' },
-          ],
-          activePersonaId: 'persona-1',
-        },
-      })
+      // Set active persona to enable batch summarization
+      useAnnotationUiStore.getState().setSelectedPersonaId('persona-1')
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -1017,21 +700,8 @@ describe('VideoBrowser', () => {
 
   describe('keyboard navigation', () => {
     it('focuses search input on keyboard shortcut', async () => {
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
@@ -1043,21 +713,8 @@ describe('VideoBrowser', () => {
 
     it('supports card selection with click', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        videos: {
-          videos: [],
-          isLoading: true,
-          filter: { searchTerm: '' },
-          activeSummaryJobs: {},
-          videoSummaries: {},
-        },
-        persona: {
-          personas: [],
-          activePersonaId: null,
-        },
-      })
 
-      render(<VideoBrowser />, { wrapper: createWrapper(store) })
+      render(<VideoBrowser />, { wrapper: createWrapper() })
 
       await waitFor(() => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()

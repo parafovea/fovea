@@ -7,7 +7,15 @@ import { http, HttpResponse } from 'msw'
 export const handlers = [
   http.get('http://localhost:3001/api/personas', () => {
     return HttpResponse.json([
-      { id: '1', name: 'Test Persona', role: 'Analyst', informationNeed: 'Test need' }
+      {
+        id: 'test-persona-id',
+        name: 'Test Persona',
+        role: 'Analyst',
+        informationNeed: 'Test information need',
+        wikidataId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
     ])
   }),
 
@@ -361,6 +369,15 @@ export const handlers = [
     return HttpResponse.json({
       mode: 'multi-user',
       allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        allowExternalLinks: true,
+      },
+      externalLinks: {
+        wikidata: true,
+        videoSources: true,
+      },
     })
   }),
 
@@ -699,6 +716,316 @@ export const handlers = [
 
   http.get('/api/annotations/:videoId', () => {
     return HttpResponse.json([])
+  }),
+
+  // Annotation mutations - with wildcard for both absolute and relative URLs
+  http.post('*/api/annotations', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: 'annotation-new',
+      ...body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('*/api/annotations/:annotationId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: params.annotationId,
+      ...body,
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('*/api/annotations/:videoId/:annotationId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.put('*/api/annotations', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>[]
+    return HttpResponse.json(body)
+  }),
+
+  // World state endpoint (for useWorld hook)
+  http.get('/api/world', () => {
+    return HttpResponse.json({
+      entities: [],
+      events: [],
+      times: [],
+      entityCollections: [],
+      eventCollections: [],
+      timeCollections: [],
+      relations: [],
+    })
+  }),
+
+  // World mutations
+  http.put('/api/world', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json(body)
+  }),
+
+  // Claims endpoint (for useClaims hook)
+  http.get('/api/summaries/:summaryId/claims', () => {
+    return HttpResponse.json([])
+  }),
+
+  // Claim mutations - with wildcard for both absolute and relative URLs
+  http.post('*/api/summaries/:summaryId/claims', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: 'claim-new',
+      ...body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.put('*/api/summaries/:summaryId/claims/:claimId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: params.claimId,
+      ...body,
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('*/api/summaries/:summaryId/claims/:claimId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // Claim relation mutations - with wildcard
+  http.post('*/api/summaries/:summaryId/claims/:sourceClaimId/relations', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: 'relation-new',
+      ...body,
+      createdAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.delete('*/api/summaries/:summaryId/claims/relations/:relationId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // Persona ontology endpoint (for usePersonaOntology hook)
+  http.get('/api/personas/:personaId/ontology', () => {
+    return HttpResponse.json({
+      entities: [],
+      roles: [],
+      events: [],
+      relationTypes: [],
+      relations: [],
+    })
+  }),
+
+  // Persona ontology mutations - with wildcard
+  http.put('*/api/personas/:personaId/ontology', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: body,
+    })
+  }),
+
+  http.post('/api/personas/:personaId/ontology/entities', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [{ id: 'entity-new', ...body }],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.put('/api/personas/:personaId/ontology/entities/:entityId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [{ id: params.entityId, ...body }],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.delete('/api/personas/:personaId/ontology/entities/:entityId', ({ params }) => {
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.post('/api/personas/:personaId/ontology/roles', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [{ id: 'role-new', ...body }],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.put('/api/personas/:personaId/ontology/roles/:roleId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [{ id: params.roleId, ...body }],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.delete('/api/personas/:personaId/ontology/roles/:roleId', ({ params }) => {
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.post('/api/personas/:personaId/ontology/events', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [{ id: 'event-new', ...body }],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.put('/api/personas/:personaId/ontology/events/:eventId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [{ id: params.eventId, ...body }],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.delete('/api/personas/:personaId/ontology/events/:eventId', ({ params }) => {
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  http.post('/api/personas/:personaId/ontology/relation-types', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [{ id: 'relation-type-new', ...body }],
+        relations: [],
+      },
+    })
+  }),
+
+  http.put('/api/personas/:personaId/ontology/relation-types/:relationTypeId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [{ id: params.relationTypeId, ...body }],
+        relations: [],
+      },
+    })
+  }),
+
+  http.delete('/api/personas/:personaId/ontology/relation-types/:relationTypeId', ({ params }) => {
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
+  }),
+
+  // Personas endpoint (for usePersonas hook) - wildcard origin
+  http.get('*/api/personas', () => {
+    return HttpResponse.json([
+      {
+        id: 'test-persona-id',
+        name: 'Test Persona',
+        role: 'Analyst',
+        informationNeed: 'Test information need',
+        wikidataId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    ])
+  }),
+
+  // Persona creation - wildcard origin
+  http.post('*/api/personas', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: '2',
+      ...body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  // Persona ontology update - wildcard origin
+  http.put('*/api/personas/:personaId/ontology', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      personaId: params.personaId,
+      ...body,
+    })
   }),
 
   // Video summaries endpoints (relative URLs)
@@ -1213,6 +1540,15 @@ export const handlers = [
     return HttpResponse.json({
       mode: 'multi-user',
       allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        allowExternalLinks: true,
+      },
+      externalLinks: {
+        wikidata: true,
+        videoSources: true,
+      },
     })
   }),
 

@@ -1,53 +1,51 @@
 /**
  * Tests for ClaimsViewer component.
+ *
+ * Following industry standards:
+ * - MSW for API mocking (configured in test/setup.ts)
+ * - Fresh QueryClient per test for isolation
+ * - No Redux - uses TanStack Query
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Provider } from 'react-redux'
 import { BrowserRouter } from 'react-router-dom'
-import { configureStore } from '@reduxjs/toolkit'
 import React from 'react'
 import ClaimsViewer from './ClaimsViewer'
-import claimsSlice from '../../store/claimsSlice'
-import personaSlice from '../../store/personaSlice'
-import worldSlice from '../../store/worldSlice'
-import videoSlice from '../../store/videoSlice'
-import annotationSlice from '../../store/annotationSlice'
 import { Claim } from '../../models/types'
 import { server } from '../../../test/setup'
 import { http, HttpResponse } from 'msw'
 
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      claims: claimsSlice,
-      persona: personaSlice,
-      world: worldSlice,
-      videos: videoSlice,
-      annotations: annotationSlice,
-    },
-    preloadedState: initialState,
-  })
-}
-
-function createWrapper(store: ReturnType<typeof createTestStore>) {
-  const queryClient = new QueryClient({
+/**
+ * Creates a fresh QueryClient for each test.
+ * Following TkDodo's pattern for test isolation.
+ */
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
+        retry: false,
+        gcTime: 0,
+        staleTime: 0,
+      },
+      mutations: {
         retry: false,
       },
     },
   })
+}
 
+/**
+ * Creates wrapper with QueryClientProvider.
+ */
+function createWrapper() {
+  const queryClient = createTestQueryClient()
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{children}</BrowserRouter>
-      </QueryClientProvider>
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{children}</BrowserRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -101,20 +99,33 @@ describe('ClaimsViewer', () => {
   }
 
   beforeEach(() => {
-    // Mock claim relations API
+    server.resetHandlers()
+    vi.clearAllMocks()
+
+    // Default MSW handlers for all tests
     server.use(
+      // Claim relations API
       http.get('/api/summaries/:summaryId/claims/:claimId/relations', () => {
         return HttpResponse.json({ asSource: [], asTarget: [] })
+      }),
+      // Persona ontology API for relation type names
+      http.get('/api/personas/:personaId/ontology', () => {
+        return HttpResponse.json({
+          entities: [],
+          roles: [],
+          events: [],
+          relationTypes: [],
+          relations: [],
+        })
       })
     )
   })
 
   describe('Rendering', () => {
     it('renders empty state when no claims', () => {
-      const store = createTestStore()
       render(
         <ClaimsViewer {...defaultProps} claims={[]} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper() }
       )
 
       expect(screen.getByText('No claims yet')).toBeInTheDocument()
@@ -122,24 +133,21 @@ describe('ClaimsViewer', () => {
     })
 
     it('renders claims tree with root claims', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/Baseball is a popular sport/)).toBeInTheDocument()
       expect(screen.getByText(/Marine mammals migrate seasonally/)).toBeInTheDocument()
     })
 
     it('renders subclaims hierarchically', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Check that subclaim is present
       expect(screen.getByText(/Baseball is played professionally/)).toBeInTheDocument()
     })
 
     it('displays confidence chips correctly', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText('90% confident')).toBeInTheDocument()
       expect(screen.getByText('70% confident')).toBeInTheDocument()
@@ -147,8 +155,7 @@ describe('ClaimsViewer', () => {
     })
 
     it('displays extraction strategy chips', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const sentenceBasedChips = screen.getAllByText('sentence-based')
       expect(sentenceBasedChips.length).toBeGreaterThan(0)
@@ -156,8 +163,7 @@ describe('ClaimsViewer', () => {
     })
 
     it('displays model used chips', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const gpt4Chips = screen.getAllByText('gpt-4')
       expect(gpt4Chips.length).toBeGreaterThan(0)
@@ -167,10 +173,9 @@ describe('ClaimsViewer', () => {
 
   describe('Loading States', () => {
     it('shows skeleton loaders when loading=true', () => {
-      const store = createTestStore()
       const { container } = render(
         <ClaimsViewer {...defaultProps} loading={true} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper() }
       )
 
       const skeletons = container.querySelectorAll('.MuiSkeleton-root')
@@ -178,9 +183,8 @@ describe('ClaimsViewer', () => {
     })
 
     it('hides content while loading', () => {
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} loading={true} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       expect(screen.queryByText(/Baseball is a popular sport/)).not.toBeInTheDocument()
@@ -189,18 +193,16 @@ describe('ClaimsViewer', () => {
 
   describe('Error States', () => {
     it('shows error alert when error prop provided', () => {
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} error="Failed to load claims" />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       expect(screen.getByText('Failed to load claims')).toBeInTheDocument()
     })
 
     it('displays error message text', () => {
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} error="Network error occurred" />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       expect(screen.getByText('Network error occurred')).toBeInTheDocument()
@@ -211,8 +213,7 @@ describe('ClaimsViewer', () => {
   describe('Filtering', () => {
     it('filters claims by search term', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'baseball')
@@ -225,8 +226,7 @@ describe('ClaimsViewer', () => {
 
     it('filters by minimum confidence', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Open confidence filter dropdown
       const confidenceSelect = screen.getByRole('combobox', { name: /min confidence/i })
@@ -244,8 +244,7 @@ describe('ClaimsViewer', () => {
 
     it('filters by extraction strategy', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Open strategy filter dropdown
       const strategySelect = screen.getByRole('combobox', { name: /strategy/i })
@@ -264,8 +263,7 @@ describe('ClaimsViewer', () => {
 
     it('filters by model', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Open model filter dropdown
       const modelSelect = screen.getByRole('combobox', { name: /model/i })
@@ -282,8 +280,7 @@ describe('ClaimsViewer', () => {
 
     it('shows "no results" when filters exclude all claims', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'nonexistent search term xyz')
@@ -293,8 +290,7 @@ describe('ClaimsViewer', () => {
 
     it('filters subclaims recursively', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'professionally')
@@ -307,8 +303,7 @@ describe('ClaimsViewer', () => {
 
     it('shows parent if subclaim matches filter', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'professionally')
@@ -319,8 +314,7 @@ describe('ClaimsViewer', () => {
 
     it('updates results count on filter change', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Initially showing all claims
       expect(screen.getByText(/Showing 2 of 2 claims/)).toBeInTheDocument()
@@ -337,8 +331,7 @@ describe('ClaimsViewer', () => {
   describe('Searching', () => {
     it('searches claim text content', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'baseball')
@@ -349,8 +342,7 @@ describe('ClaimsViewer', () => {
 
     it('searches gloss content', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'mammals')
@@ -361,8 +353,7 @@ describe('ClaimsViewer', () => {
 
     it('is case-insensitive', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const searchInput = screen.getByPlaceholderText('Search claims...')
       await user.type(searchInput, 'BASEBALL')
@@ -373,8 +364,7 @@ describe('ClaimsViewer', () => {
 
   describe('Tree Interactions', () => {
     it('expands claim to show subclaims', async () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Subclaim should be visible initially (expanded by default)
       expect(screen.getByText(/Baseball is played professionally/)).toBeInTheDocument()
@@ -382,8 +372,7 @@ describe('ClaimsViewer', () => {
 
     it('collapses claim to hide subclaims', async () => {
       const user = userEvent.setup()
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Find the expand/collapse button for the claim with subclaims
       const expandButtons = screen.getAllByRole('button')
@@ -403,8 +392,7 @@ describe('ClaimsViewer', () => {
     })
 
     it('disables expand button when no subclaims', () => {
-      const store = createTestStore()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Find all icon buttons and check for disabled state
       const buttons = screen.getAllByRole('button')
@@ -419,9 +407,8 @@ describe('ClaimsViewer', () => {
     it('calls onEditClaim when edit button clicked', async () => {
       const user = userEvent.setup()
       const onEditClaim = vi.fn()
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} onEditClaim={onEditClaim} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       const editButtons = screen.getAllByRole('button', { name: /edit claim/i })
@@ -434,9 +421,8 @@ describe('ClaimsViewer', () => {
     it('calls onDeleteClaim when delete button clicked', async () => {
       const user = userEvent.setup()
       const onDeleteClaim = vi.fn()
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} onDeleteClaim={onDeleteClaim} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       const deleteButtons = screen.getAllByRole('button', { name: /delete claim/i })
@@ -449,9 +435,8 @@ describe('ClaimsViewer', () => {
     it('calls onAddClaim when add subclaim button clicked', async () => {
       const user = userEvent.setup()
       const onAddClaim = vi.fn()
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       const addButtons = screen.getAllByRole('button', { name: /add subclaim/i })
@@ -463,9 +448,8 @@ describe('ClaimsViewer', () => {
     it('passes parent claim ID when adding subclaim', async () => {
       const user = userEvent.setup()
       const onAddClaim = vi.fn()
-      const store = createTestStore()
       render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
-        wrapper: createWrapper(store),
+        wrapper: createWrapper(),
       })
 
       const addButtons = screen.getAllByRole('button', { name: /add subclaim/i })
@@ -477,17 +461,7 @@ describe('ClaimsViewer', () => {
 
   describe('Relations Integration', () => {
     it('shows relations icon button', () => {
-      const store = createTestStore({
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const relationsButtons = screen.getAllByRole('button', { name: /relations/i })
       expect(relationsButtons.length).toBeGreaterThan(0)
@@ -495,17 +469,7 @@ describe('ClaimsViewer', () => {
 
     it('expands relations viewer when icon clicked', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const relationsButtons = screen.getAllByRole('button', { name: /show relations/i })
       await user.click(relationsButtons[0])
@@ -518,17 +482,7 @@ describe('ClaimsViewer', () => {
 
     it('hides relations viewer when icon clicked again', async () => {
       const user = userEvent.setup()
-      const store = createTestStore({
-        persona: {
-          personaOntologies: [
-            {
-              personaId: 'persona-1',
-              relationTypes: [],
-            },
-          ],
-        },
-      })
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper(store) })
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       const relationsButton = screen.getAllByRole('button', { name: /show relations/i })[0]
       await user.click(relationsButton)

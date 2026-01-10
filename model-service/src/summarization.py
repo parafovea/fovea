@@ -330,6 +330,7 @@ async def transcribe_audio(
 
         import tempfile
 
+        # Need explicit close without context manager to keep file for external process
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         audio_path = temp_file.name
         temp_file.close()

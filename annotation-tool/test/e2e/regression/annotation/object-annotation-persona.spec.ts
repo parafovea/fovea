@@ -96,14 +96,15 @@ test.describe('Object Annotation Persona ID Handling', () => {
       label: 'ontology-type'
     }, workerSessionToken)
 
-    // Fetch all annotations
-    const annotations = await db.getAnnotations(testVideo.id, workerSessionToken)
+    // Fetch all annotations and filter to ones we created
+    const allAnnotations = await db.getAnnotations(testVideo.id, workerSessionToken)
 
-    expect(annotations).toHaveLength(2)
+    // Find annotations by their IDs (testVideo may have stale annotations from other tests)
+    const fetchedObject = allAnnotations.find(a => a.id === objectAnnotation.id)
+    const fetchedType = allAnnotations.find(a => a.id === typeAnnotation.id)
 
-    // Find and verify each annotation
-    const fetchedObject = annotations.find(a => a.type === 'object')
-    const fetchedType = annotations.find(a => a.type === 'type')
+    expect(fetchedObject).toBeDefined()
+    expect(fetchedType).toBeDefined()
 
     expect(fetchedObject?.personaId).toBeNull()
     expect(fetchedType?.personaId).toBe(testPersona.id)

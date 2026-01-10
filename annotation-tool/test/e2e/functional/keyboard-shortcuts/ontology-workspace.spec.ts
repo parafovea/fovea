@@ -7,179 +7,177 @@ import { test, expect } from '../../fixtures/test-context.js'
  * - n: Create new type (simple key, no browser conflicts)
  * - /: Focus search field (vim-style, avoids browser Ctrl+F conflict)
  * - Delete: Delete selected type
- * - Enter: Edit selected type
- * - Tab/Shift+Tab: Navigate between type tabs
+ * - Tab/Shift+Tab: Navigate between type tabs (workspace shortcuts, not browser Tab)
  */
 
 test.describe('Keyboard Shortcuts - Ontology Workspace', () => {
-  test.beforeEach(async ({ page, testUser, ontologyWorkspace, testPersona }) => {
+  test.beforeEach(async ({ ontologyWorkspace, testPersona }) => {
     await ontologyWorkspace.navigateTo(testPersona.id)
   })
 
-  test('n creates new entity type', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
-    // Ensure on entities tab
+  test('n opens entity type editor when on entities tab', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('entities')
 
     // Press n to create new type
     await page.keyboard.press('n')
-    await page.waitForTimeout(500)
 
-    // Verify dialog opened
+    // Verify entity type editor dialog opened with correct title
     const dialog = page.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible()
+    await expect(dialog).toBeVisible({ timeout: 2000 })
 
-    // Verify it's the create entity type dialog
-    await expect(dialog.getByText(/entity type/i)).toBeVisible()
+    // Check for specific entity type form elements
+    const nameInput = dialog.getByRole('textbox', { name: /^name/i })
+    await expect(nameInput).toBeVisible()
+
+    // Verify dialog title or heading indicates entity type
+    const dialogHeading = dialog.locator('h2, h6, [class*="DialogTitle"]').first()
+    await expect(dialogHeading).toContainText(/entity/i)
   })
 
-  test('n creates different types based on active tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
-    // Test on roles tab
+  test('n opens role editor when on roles tab', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('roles')
 
     await page.keyboard.press('n')
-    await page.waitForTimeout(500)
 
-    let dialog = page.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByText(/role/i)).toBeVisible()
+    const dialog = page.locator('[role="dialog"]')
+    await expect(dialog).toBeVisible({ timeout: 2000 })
 
-    // Close dialog
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(300)
+    // Verify it's a role editor - check for "Allowed Filler Types" which is unique to roles
+    const allowedFillersLabel = dialog.getByText(/allowed.*filler/i)
+    await expect(allowedFillersLabel).toBeVisible()
+  })
 
-    // Test on events tab
+  test('n opens event type editor when on events tab', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('events')
 
     await page.keyboard.press('n')
-    await page.waitForTimeout(500)
 
-    dialog = page.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByText(/event type/i)).toBeVisible()
+    const dialog = page.locator('[role="dialog"]')
+    await expect(dialog).toBeVisible({ timeout: 2000 })
+
+    // Verify it's an event type editor - check for "Roles" section which is unique to events
+    const rolesLabel = dialog.getByText(/^roles$/i)
+    await expect(rolesLabel).toBeVisible()
   })
 
-  test('/ focuses search field', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
+  test('n opens relation type editor when on relations tab', async ({ page, ontologyWorkspace }) => {
+    await ontologyWorkspace.selectTab('relations')
+
+    await page.keyboard.press('n')
+
+    const dialog = page.locator('[role="dialog"]')
+    await expect(dialog).toBeVisible({ timeout: 2000 })
+
+    // Verify it's a relation type editor - check for source/target type fields
+    const sourceLabel = dialog.getByText(/source.*type/i)
+    await expect(sourceLabel).toBeVisible()
+  })
+
+  test('/ focuses search field', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('entities')
 
-    // Wait for search input to be visible (ensures persona is selected and commands are enabled)
-    const searchInput = page.getByRole('textbox', { name: /search|filter/i })
+    const searchInput = page.getByPlaceholder(/search.*type/i)
     await expect(searchInput).toBeVisible()
+    await expect(searchInput).not.toBeFocused()
 
     // Press /
     await page.keyboard.press('/')
-    await page.waitForTimeout(300)
 
-    // Verify search input is focused
-    await expect(searchInput).toBeFocused()
+    // Verify search input is now focused
+    await expect(searchInput).toBeFocused({ timeout: 1000 })
   })
 
-  test('Tab navigates to next type tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
+  test('Tab cycles to next ontology tab', async ({ page, ontologyWorkspace }) => {
+    // Start on entities tab
     await ontologyWorkspace.selectTab('entities')
-
-    // Press Tab (should go to next tab)
-    await page.keyboard.press('Tab')
-    await page.waitForTimeout(300)
-
-    // Verify moved to roles tab
-    const rolesTab = page.getByRole('tab', { name: /role types/i })
-    await expect(rolesTab).toHaveAttribute('aria-selected', 'true')
-  })
-
-  test('Shift+Tab navigates to previous type tab', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
-    await ontologyWorkspace.selectTab('roles')
-
-    // Press Shift+Tab (should go to previous tab)
-    await page.keyboard.press('Shift+Tab')
-    await page.waitForTimeout(300)
-
-    // Verify moved to entities tab
     const entitiesTab = page.getByRole('tab', { name: /entity types/i })
     await expect(entitiesTab).toHaveAttribute('aria-selected', 'true')
+
+    // Press Tab - should go to roles tab
+    await page.keyboard.press('Tab')
+
+    const rolesTab = page.getByRole('tab', { name: /role types/i })
+    await expect(rolesTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 })
   })
 
-  test('Delete removes selected type', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
+  test('Shift+Tab cycles to previous ontology tab', async ({ page, ontologyWorkspace }) => {
+    // Start on roles tab
+    await ontologyWorkspace.selectTab('roles')
+    const rolesTab = page.getByRole('tab', { name: /role types/i })
+    await expect(rolesTab).toHaveAttribute('aria-selected', 'true')
+
+    // Press Shift+Tab - should go to entities tab
+    await page.keyboard.press('Shift+Tab')
+
+    const entitiesTab = page.getByRole('tab', { name: /entity types/i })
+    await expect(entitiesTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 })
+  })
+
+  test('Delete removes selected entity type', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('entities')
 
-    // Create a test entity type first
+    // Create a test entity type first via n shortcut
     await page.keyboard.press('n')
-    await page.waitForTimeout(500)
 
     const dialog = page.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible()
+    await expect(dialog).toBeVisible({ timeout: 2000 })
 
-    // Fill name input
-    const nameInput = dialog.getByRole('textbox', { name: /^name$/i })
-    await expect(nameInput).toBeVisible()
-    await nameInput.fill('Test Type To Delete')
-    await page.waitForTimeout(200)
+    // Fill required fields
+    const nameInput = dialog.getByRole('textbox', { name: /^name/i })
+    await nameInput.fill('DeleteMe')
 
-    // Fill gloss definition (required field)
-    const glossInput = dialog.getByRole('textbox', { name: /gloss definition/i })
-    await expect(glossInput).toBeVisible()
-    await glossInput.fill('Test entity type for deletion')
-    await page.waitForTimeout(200)
+    const glossInput = dialog.locator('textarea').first()
+    await glossInput.fill('Entity type to be deleted by keyboard shortcut')
 
+    // Save
     const saveButton = dialog.getByRole('button', { name: /save|create/i })
-
-    // Wait for save button to be enabled
-    await expect(saveButton).toBeEnabled({ timeout: 5000 })
+    await expect(saveButton).toBeEnabled({ timeout: 3000 })
     await saveButton.click()
-    await page.waitForTimeout(1000)
 
-    // Wait for dialog to close
-    await expect(dialog).not.toBeVisible()
+    // Wait for dialog to close and type to appear
+    await expect(dialog).not.toBeVisible({ timeout: 3000 })
 
-    // Find and click the newly created type to select it
-    const typeItem = page.getByText('Test Type To Delete').first()
-    await expect(typeItem).toBeVisible()
+    // Find and select the new type
+    const typeItem = page.getByText('DeleteMe').first()
+    await expect(typeItem).toBeVisible({ timeout: 3000 })
     await typeItem.click()
-    await page.waitForTimeout(300)
 
-    // Press Delete
+    // Press Delete to remove it
     await page.keyboard.press('Delete')
-    await page.waitForTimeout(500)
 
-    // Verify type was deleted (no longer in list)
-    await expect(typeItem).not.toBeVisible()
+    // Verify type is gone
+    await expect(typeItem).not.toBeVisible({ timeout: 3000 })
   })
 
-  test('shortcuts disabled when typing in search', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
+  test('n shortcut is disabled when search field is focused', async ({ page, ontologyWorkspace }) => {
     await ontologyWorkspace.selectTab('entities')
 
-    // Click search field to focus it
-    const searchInput = page.getByRole('textbox', { name: /search|filter/i })
+    // Focus search field by clicking
+    const searchInput = page.getByPlaceholder(/search.*type/i)
     await searchInput.click()
-    await page.waitForTimeout(200)
-
-    // Verify search input is focused
     await expect(searchInput).toBeFocused()
 
-    // Type "n" using keyboard
+    // Type "n" - should appear in search field, not open dialog
     await page.keyboard.type('n')
-    await page.waitForTimeout(300)
 
-    // Verify no dialog opened (main test - shortcut was disabled)
+    // Verify search field has the character
+    await expect(searchInput).toHaveValue('n')
+
+    // Verify NO dialog opened
     const dialog = page.locator('[role="dialog"]')
     await expect(dialog).not.toBeVisible()
   })
 
-  test('keyboard shortcuts work across all ontology tabs', async ({ page, testUser, ontologyWorkspace, testPersona }) => {
-    // Test that n works on each tab
-    const tabs = ['entities', 'roles', 'events', 'relations'] as const
+  test('Tab wraps from relations back to entities', async ({ page, ontologyWorkspace }) => {
+    // Start on relations tab (last tab)
+    await ontologyWorkspace.selectTab('relations')
+    const relationsTab = page.getByRole('tab', { name: /relation types/i })
+    await expect(relationsTab).toHaveAttribute('aria-selected', 'true')
 
-    for (const tab of tabs) {
-      await ontologyWorkspace.selectTab(tab)
-      await page.waitForTimeout(300)
+    // Press Tab - should wrap to entities tab
+    await page.keyboard.press('Tab')
 
-      await page.keyboard.press('n')
-      await page.waitForTimeout(500)
-
-      const dialog = page.locator('[role="dialog"]')
-      await expect(dialog).toBeVisible()
-
-      // Close dialog
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(300)
-    }
+    const entitiesTab = page.getByRole('tab', { name: /entity types/i })
+    await expect(entitiesTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 })
   })
 })

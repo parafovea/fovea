@@ -49,10 +49,24 @@ export interface BackendAnnotation {
  * @returns Frontend-formatted annotation
  */
 export function transformBackendToFrontend(backendAnnotation: BackendAnnotation): Annotation {
+  // Compute timeSpan from visibility ranges in frames data
+  const fps = 30 // Standard frame rate
+  let timeSpan: { startTime: number; endTime: number } | undefined
+  if (backendAnnotation.frames?.visibilityRanges?.length > 0) {
+    const ranges = backendAnnotation.frames.visibilityRanges
+    const startFrame = Math.min(...ranges.map((r: { startFrame: number }) => r.startFrame))
+    const endFrame = Math.max(...ranges.map((r: { endFrame: number }) => r.endFrame))
+    timeSpan = {
+      startTime: startFrame / fps,
+      endTime: endFrame / fps,
+    }
+  }
+
   const base = {
     id: backendAnnotation.id,
     videoId: backendAnnotation.videoId,
     boundingBoxSequence: backendAnnotation.frames,
+    timeSpan,
     confidence: backendAnnotation.confidence ?? undefined,
     createdAt: backendAnnotation.createdAt,
     updatedAt: backendAnnotation.updatedAt,

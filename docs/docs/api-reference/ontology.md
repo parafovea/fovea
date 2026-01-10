@@ -343,7 +343,7 @@ This allows different personas to interpret the same real-world object different
 
 ### Frontend Integration
 
-This endpoint is designed to work with Redux state management:
+This endpoint is designed to work with TanStack Query for state management:
 - Frontend fetches all ontology data on application load
 - Frontend sends complete state on save (not delta updates)
 - Transaction ensures consistency between personas, ontologies, and world state

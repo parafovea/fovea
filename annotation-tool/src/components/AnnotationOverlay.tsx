@@ -7,10 +7,10 @@
  */
 
 import { useMemo } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../store/store'
-import { selectAnnotation, selectAnnotations } from '../store/annotationSlice'
 import { useParams } from 'react-router-dom'
+import { useAnnotationUiStore } from '../store/zustand'
+import { useAnnotations } from '../store/queries'
+import { useEntities, useEvents, useEntityCollections, useEventCollections } from '../store/queries/useWorld'
 import DrawingCanvas from './annotation/DrawingCanvas'
 import type { DetectionResponse } from '../api/client'
 
@@ -58,25 +58,29 @@ export default function AnnotationOverlay({
   detectionResults,
 }: AnnotationOverlayProps) {
   const { videoId } = useParams()
-  const dispatch = useDispatch<AppDispatch>()
 
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
-  const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
-  const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
-  const annotations = useSelector((state: RootState) => {
-    const videoAnnotations = selectAnnotations(state, videoId || '')
-    // Filter annotations by selected persona if one is selected and in type mode
-    if (selectedPersonaId && videoAnnotations && annotationMode === 'type') {
-      return videoAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
+  // Zustand UI state
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const annotationMode = useAnnotationUiStore((state) => state.annotationMode)
+  const selectedAnnotation = useAnnotationUiStore((state) => state.selectedAnnotation)
+  const setSelectedAnnotation = useAnnotationUiStore((state) => state.setSelectedAnnotation)
+
+  // TanStack Query for annotations
+  const { data: allAnnotations = [] } = useAnnotations(videoId)
+
+  // Filter annotations by selected persona if one is selected and in type mode
+  const annotations = useMemo(() => {
+    if (selectedPersonaId && annotationMode === 'type') {
+      return allAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
     }
-    return videoAnnotations
-  })
+    return allAnnotations
+  }, [allAnnotations, selectedPersonaId, annotationMode])
 
-  // Get world objects for linked annotations
-  const entities = useSelector((state: RootState) => state.world.entities)
-  const events = useSelector((state: RootState) => state.world.events)
-  const entityCollections = useSelector((state: RootState) => state.world.entityCollections)
-  const eventCollections = useSelector((state: RootState) => state.world.eventCollections)
+  // TanStack Query for world objects used in linked annotations
+  const entities = useEntities()
+  const events = useEvents()
+  const entityCollections = useEntityCollections()
+  const eventCollections = useEventCollections()
 
   /**
    * Compute annotations with linked object information for display.
@@ -141,7 +145,7 @@ export default function AnnotationOverlay({
       annotations={annotationsWithInfo}
       selectedAnnotation={selectedAnnotation}
       detectionResults={detectionResults}
-      onAnnotationSelect={(annotation) => dispatch(selectAnnotation(annotation))}
+      onAnnotationSelect={setSelectedAnnotation}
     />
   )
 }

@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -28,8 +27,7 @@ import {
   Add as AddIcon,
   ArrowForward as ArrowIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
-import { addRelation, deleteRelation } from '../store/personaSlice'
+import { usePersonaOntology, useAddRelationToPersona, useDeleteRelationFromPersona } from '../store/queries'
 import { OntologyRelation } from '../models/types'
 
 interface RelationManagerProps {
@@ -39,11 +37,11 @@ interface RelationManagerProps {
 }
 
 export default function RelationManager({ open, onClose, personaId }: RelationManagerProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const ontology = useSelector((state: RootState) => 
-    state.persona.personaOntologies.find(o => o.personaId === personaId)
-  )
-  
+  // TanStack Query hooks
+  const { data: ontology } = usePersonaOntology(personaId)
+  const { mutate: addRelationMutation } = useAddRelationToPersona()
+  const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
+
   const [relationTypeId, setRelationTypeId] = useState<string>('')
   const [sourceType, setSourceType] = useState<'entity' | 'role' | 'event' | 'time' | 'claim'>('entity')
   const [sourceId, setSourceId] = useState<string>('')
@@ -102,7 +100,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
       updatedAt: new Date().toISOString(),
     }
 
-    dispatch(addRelation({ personaId, relation: newRelation }))
+    addRelationMutation({ personaId, relation: newRelation })
 
     // Reset form
     setSourceId('')
@@ -112,7 +110,7 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
   const handleDeleteRelation = (relationId: string) => {
     if (!personaId) return
     if (window.confirm('Delete this relation?')) {
-      dispatch(deleteRelation({ personaId, relationId }))
+      deleteRelationMutation({ personaId, relationId })
     }
   }
 

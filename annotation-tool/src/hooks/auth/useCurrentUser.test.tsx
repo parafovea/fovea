@@ -2,39 +2,24 @@
  * Tests for useCurrentUser hook.
  */
 
-import { describe, it, expect } from 'vitest'
-import { renderHook } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
 import { useCurrentUser } from './useCurrentUser.js'
-import userReducer from '../../store/userSlice.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 describe('useCurrentUser', () => {
+  beforeEach(() => {
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
+  })
+
   it('returns null user when not authenticated', () => {
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-      preloadedState: {
-        user: {
-          currentUser: null,
-          isAuthenticated: false,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result } = renderHook(() => useCurrentUser(), { wrapper })
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.user).toBeNull()
     expect(result.current.isAuthenticated).toBe(false)
     expect(result.current.isAdmin).toBe(false)
-    expect(result.current.isLoading).toBe(false)
+    expect(result.current.isLoading).toBe(true) // Default isLoading is true
   })
 
   it('returns user data when authenticated', () => {
@@ -44,27 +29,14 @@ describe('useCurrentUser', () => {
       displayName: 'Test User',
       email: 'test@example.com',
       isAdmin: false,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     }
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    // Set up store state before rendering hook
+    useAuthStore.getState().loginSuccess(mockUser)
 
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result } = renderHook(() => useCurrentUser(), { wrapper })
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.user).toEqual(mockUser)
     expect(result.current.isAuthenticated).toBe(true)
@@ -79,27 +51,13 @@ describe('useCurrentUser', () => {
       displayName: 'Admin User',
       email: 'admin@example.com',
       isAdmin: true,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     }
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
 
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result } = renderHook(() => useCurrentUser(), { wrapper })
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.user).toEqual(mockAdminUser)
     expect(result.current.isAuthenticated).toBe(true)
@@ -108,25 +66,8 @@ describe('useCurrentUser', () => {
   })
 
   it('returns isLoading true when loading', () => {
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-      preloadedState: {
-        user: {
-          currentUser: null,
-          isAuthenticated: false,
-          isLoading: true,
-          mode: 'multi-user',
-        },
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result } = renderHook(() => useCurrentUser(), { wrapper })
+    // Default state has isLoading: true
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.user).toBeNull()
     expect(result.current.isAuthenticated).toBe(false)
@@ -135,31 +76,24 @@ describe('useCurrentUser', () => {
   })
 
   it('reactively updates when user state changes', () => {
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-    })
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result, rerender } = renderHook(() => useCurrentUser(), { wrapper })
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.isAuthenticated).toBe(false)
 
-    // Dispatch login action
+    // Login
     const mockUser = {
       id: 'user-1',
       username: 'testuser',
       displayName: 'Test User',
       email: 'test@example.com',
       isAdmin: false,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     }
-    store.dispatch({ type: 'user/loginSuccess', payload: mockUser })
 
-    rerender()
+    act(() => {
+      useAuthStore.getState().loginSuccess(mockUser)
+    })
 
     expect(result.current.user).toEqual(mockUser)
     expect(result.current.isAuthenticated).toBe(true)
@@ -171,29 +105,40 @@ describe('useCurrentUser', () => {
       username: 'testuser',
       displayName: 'Test User',
       isAdmin: false,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     }
 
-    const store = configureStore({
-      reducer: {
-        user: userReducer,
-      },
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
 
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
-    )
-
-    const { result } = renderHook(() => useCurrentUser(), { wrapper })
+    const { result } = renderHook(() => useCurrentUser())
 
     expect(result.current.user).toEqual(mockUser)
     expect(result.current.isAuthenticated).toBe(true)
+  })
+
+  it('updates when logout is called', () => {
+    const mockUser = {
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      isAdmin: false,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    }
+
+    useAuthStore.getState().loginSuccess(mockUser)
+
+    const { result } = renderHook(() => useCurrentUser())
+
+    expect(result.current.isAuthenticated).toBe(true)
+
+    act(() => {
+      useAuthStore.getState().logoutSuccess()
+    })
+
+    expect(result.current.user).toBeNull()
+    expect(result.current.isAuthenticated).toBe(false)
+    expect(result.current.isAdmin).toBe(false)
   })
 })

@@ -14,8 +14,7 @@ import {
 } from '@mui/material'
 import { Close as CloseIcon } from '@mui/icons-material'
 import VideoSummaryEditor from './VideoSummaryEditor'
-import { useSelector } from 'react-redux'
-import { RootState } from '../store/store'
+import { usePersonas } from '../store/queries'
 
 interface VideoSummaryDialogProps {
   open: boolean
@@ -31,7 +30,7 @@ export default function VideoSummaryDialog({
   initialPersonaId,
 }: VideoSummaryDialogProps) {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(initialPersonaId)
-  const personas = useSelector((state: RootState) => state.persona.personas)
+  const { data: personas = [] } = usePersonas()
 
   // Update selected persona when initial persona changes (e.g., when dialog opens)
   useEffect(() => {

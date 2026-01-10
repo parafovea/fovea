@@ -4,31 +4,36 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { http, HttpResponse } from 'msw'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
-import annotationReducer, { selectAnnotations } from '../store/annotationSlice'
 import type { FrameDetections } from '../api/client'
+import { server } from '../../test/setup'
 
 /**
- * Create a mock Redux store for testing.
+ * Create QueryClient for testing.
  */
-function createMockStore() {
-  return configureStore({
-    reducer: {
-      annotations: annotationReducer,
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
     },
   })
 }
 
 /**
- * Render component with Redux provider.
+ * Render component with QueryClientProvider.
  */
-function renderWithStore(component: React.ReactElement) {
-  const store = createMockStore()
+function renderWithQueryClient(component: React.ReactElement) {
+  const queryClient = createQueryClient()
   return {
-    store,
-    ...render(<Provider store={store}>{component}</Provider>),
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        {component}
+      </QueryClientProvider>
+    ),
   }
 }
 
@@ -143,11 +148,29 @@ describe('AnnotationCandidatesList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Set up MSW handler for annotation creation
+    server.use(
+      http.post('/api/annotations', async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>
+        return HttpResponse.json({
+          id: body.id || 'new-annotation-id',
+          videoId: body.videoId,
+          personaId: body.personaId,
+          type: body.type,
+          label: body.label,
+          frames: body.frames,
+          confidence: body.confidence ?? null,
+          source: 'manual',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }, { status: 201 })
+      })
+    )
   })
 
   describe('rendering', () => {
     it('displays wildlife detection candidates with statistics', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -163,7 +186,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays sports detection candidates', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="sports-video"
           frames={mockSportsDetections}
@@ -175,7 +198,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays traffic detection candidates', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -188,7 +211,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays retail detection candidates', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="retail-video"
           frames={mockRetailDetections}
@@ -201,7 +224,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('shows empty state when no detections provided', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList videoId="empty-video" frames={[]} />
       )
 
@@ -211,7 +234,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays confidence scores with color coding', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -227,7 +250,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays track IDs when available', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -239,7 +262,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays frame and timestamp information', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="sports-video"
           frames={mockSportsDetections}
@@ -253,7 +276,7 @@ describe('AnnotationCandidatesList', () => {
 
   describe('confidence filtering', () => {
     it('filters detections by confidence threshold', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -270,7 +293,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('updates filter when threshold changes', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -294,7 +317,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('shows message when no candidates match filter', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -311,7 +334,7 @@ describe('AnnotationCandidatesList', () => {
   describe('accept/reject actions', () => {
     it('accepts a wildlife detection and updates statistics', () => {
       const onAccept = vi.fn()
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -339,7 +362,7 @@ describe('AnnotationCandidatesList', () => {
 
     it('rejects a sports detection', () => {
       const onReject = vi.fn()
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="sports-video"
           frames={mockSportsDetections}
@@ -362,8 +385,27 @@ describe('AnnotationCandidatesList', () => {
       expect(screen.getByText('Rejected: 1')).toBeInTheDocument()
     })
 
-    it('dispatches type annotation when persona and type provided', () => {
-      const { store } = renderWithStore(
+    it('dispatches type annotation when persona and type provided', async () => {
+      let savedAnnotation: any = null
+      server.use(
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: savedAnnotation.id || 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: savedAnnotation.confidence ?? null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="retail-video"
           frames={mockRetailDetections}
@@ -380,19 +422,38 @@ describe('AnnotationCandidatesList', () => {
       })
       fireEvent.click(acceptButton)
 
-      // Check Redux store
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'retail-video')
-      expect(annotations).toHaveLength(1)
-      expect(annotations[0].annotationType).toBe('type')
-      if (annotations[0].annotationType === 'type') {
-        expect(annotations[0].personaId).toBe('analyst-1')
-        expect(annotations[0].typeId).toBe('product-type')
-      }
+      // Wait for mutation
+      await vi.waitFor(() => {
+        expect(savedAnnotation).not.toBeNull()
+      })
+
+      // Check that type annotation was created with correct data
+      expect(savedAnnotation.type).toBe('type')
+      expect(savedAnnotation.personaId).toBe('analyst-1')
+      expect(savedAnnotation.label).toBe('product-type')
     })
 
-    it('dispatches object annotation when no persona provided', () => {
-      const { store } = renderWithStore(
+    it('dispatches object annotation when no persona provided', async () => {
+      let savedAnnotation: any = null
+      server.use(
+        http.post('/api/annotations', async ({ request }) => {
+          savedAnnotation = await request.json()
+          return HttpResponse.json({
+            id: savedAnnotation.id || 'new-annotation-id',
+            videoId: savedAnnotation.videoId,
+            personaId: savedAnnotation.personaId,
+            type: savedAnnotation.type,
+            label: savedAnnotation.label,
+            frames: savedAnnotation.frames,
+            confidence: savedAnnotation.confidence ?? null,
+            source: 'manual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { status: 201 })
+        })
+      )
+
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -406,18 +467,20 @@ describe('AnnotationCandidatesList', () => {
       })
       fireEvent.click(acceptButton)
 
-      // Check Redux store
-      const state = store.getState()
-      const annotations = selectAnnotations(state, 'wildlife-video')
-      expect(annotations).toHaveLength(1)
-      expect(annotations[0].annotationType).toBe('object')
+      // Wait for mutation
+      await vi.waitFor(() => {
+        expect(savedAnnotation).not.toBeNull()
+      })
+
+      // Check that object annotation was created
+      expect(savedAnnotation.type).toBe('object')
     })
   })
 
   describe('batch operations', () => {
     it('accepts all traffic detections at once', () => {
       const onAccept = vi.fn()
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -438,7 +501,7 @@ describe('AnnotationCandidatesList', () => {
 
     it('rejects all retail detections at once', () => {
       const onReject = vi.fn()
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="retail-video"
           frames={mockRetailDetections}
@@ -457,7 +520,7 @@ describe('AnnotationCandidatesList', () => {
 
     it('batch operations respect confidence filter', () => {
       const onAccept = vi.fn()
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -478,7 +541,7 @@ describe('AnnotationCandidatesList', () => {
 
   describe('UI interactions', () => {
     it('toggles filter panel', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="sports-video"
           frames={mockSportsDetections}
@@ -497,7 +560,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('displays bounding box coordinates', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="wildlife-video"
           frames={mockWildlifeDetections}
@@ -526,7 +589,7 @@ describe('AnnotationCandidatesList', () => {
         },
       ]
 
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="test-video"
           frames={noTrackDetections}
@@ -538,7 +601,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('handles zero confidence threshold', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="traffic-video"
           frames={mockTrafficDetections}
@@ -552,7 +615,7 @@ describe('AnnotationCandidatesList', () => {
     })
 
     it('handles single frame with multiple detections', () => {
-      renderWithStore(
+      renderWithQueryClient(
         <AnnotationCandidatesList
           videoId="retail-video"
           frames={mockRetailDetections}

@@ -5,7 +5,6 @@
  */
 
 import { useState } from 'react'
-import { useSelector } from 'react-redux'
 import { Navigate } from 'react-router-dom'
 import {
   Box,
@@ -20,7 +19,7 @@ import {
   Lock as LockIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material'
-import { RootState } from '../../store/store.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 import UserManagementPage from './UserManagementPage.js'
 import SessionManagementPage from './SessionManagementPage.js'
 
@@ -53,7 +52,7 @@ function TabPanel({ children, value, index }: TabPanelProps) {
  * Redirects non-admin users to home page.
  */
 export default function AdminPanel() {
-  const { currentUser } = useSelector((state: RootState) => state.user)
+  const currentUser = useAuthStore(state => state.currentUser)
   const [currentTab, setCurrentTab] = useState(0)
 
   // Redirect if not admin

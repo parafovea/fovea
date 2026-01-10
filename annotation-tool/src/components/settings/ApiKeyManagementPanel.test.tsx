@@ -3,12 +3,27 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ApiKeyManagementPanel from './ApiKeyManagementPanel.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  )
+}
 
 describe('ApiKeyManagementPanel', () => {
   const mockUser = {
@@ -17,6 +32,8 @@ describe('ApiKeyManagementPanel', () => {
     displayName: 'Test User',
     email: 'test@example.com',
     isAdmin: false,
+    createdAt: '2025-01-01T00:00:00Z',
+    updatedAt: '2025-01-01T00:00:00Z',
   }
 
   const mockAdminUser = {
@@ -63,6 +80,10 @@ describe('ApiKeyManagementPanel', () => {
   ]
 
   beforeEach(() => {
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
+    server.resetHandlers()
+
     // Set up default handlers for all tests
     server.use(
       http.get('/api/api-keys', () => {
@@ -86,16 +107,9 @@ describe('ApiKeyManagementPanel', () => {
       })
     )
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
@@ -110,16 +124,9 @@ describe('ApiKeyManagementPanel', () => {
       })
     )
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText(/failed to load api keys/i)).toBeInTheDocument()
@@ -133,16 +140,9 @@ describe('ApiKeyManagementPanel', () => {
       })
     )
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText(/no api keys configured/i)).toBeInTheDocument()
@@ -150,16 +150,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('renders table with API keys', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByRole('table')).toBeInTheDocument()
@@ -171,16 +164,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('displays provider names correctly', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('Anthropic')).toBeInTheDocument()
@@ -191,16 +177,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('displays key mask', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('sk-ant-...abc123')).toBeInTheDocument()
@@ -211,16 +190,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('shows Active chip for active keys', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       const activeChips = screen.getAllByText('Active')
@@ -229,16 +201,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('shows Inactive chip for inactive keys', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('Inactive')).toBeInTheDocument()
@@ -246,16 +211,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('formats last used date correctly', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('Oct 10, 2025')).toBeInTheDocument()
@@ -263,16 +221,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('shows lock icon and Admin Key chip for admin keys', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       const adminKeyChips = screen.getAllByText('Admin Key')
@@ -282,17 +233,9 @@ describe('ApiKeyManagementPanel', () => {
 
   it('Add Key button opens create dialog', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /add key/i })).toBeInTheDocument()
@@ -308,17 +251,9 @@ describe('ApiKeyManagementPanel', () => {
 
   it('Edit button opens edit dialog', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('My Anthropic Key')).toBeInTheDocument()
@@ -335,17 +270,9 @@ describe('ApiKeyManagementPanel', () => {
 
   it('Delete button opens confirm dialog', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('My Anthropic Key')).toBeInTheDocument()
@@ -371,16 +298,9 @@ describe('ApiKeyManagementPanel', () => {
       })
     )
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('My Anthropic Key')).toBeInTheDocument()
@@ -414,16 +334,9 @@ describe('ApiKeyManagementPanel', () => {
       })
     )
 
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('My Anthropic Key')).toBeInTheDocument()
@@ -439,16 +352,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('Admin keys have no edit/delete/toggle buttons', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('Shared Google Key')).toBeInTheDocument()
@@ -466,16 +372,9 @@ describe('ApiKeyManagementPanel', () => {
   })
 
   it('User keys have all action buttons', async () => {
-    renderWithProviders(<ApiKeyManagementPanel />, {
-      preloadedState: {
-        user: {
-          currentUser: mockAdminUser,
-          isAuthenticated: true,
-          isLoading: false,
-          mode: 'multi-user',
-        },
-      },
-    })
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('My Anthropic Key')).toBeInTheDocument()

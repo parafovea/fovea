@@ -39,74 +39,52 @@ export class OntologyWorkspacePage extends BasePage {
 
   // Navigation
   async navigateTo(personaId?: string) {
-    // First navigate to home to initialize app state and load personas
-    await this.goto('/')
+    if (!personaId) {
+      throw new Error('personaId is required - OntologyWorkspace no longer auto-selects personas')
+    }
+
+    // Navigate to ontology workspace with cache-bust
+    await this.page.goto(`/ontology?t=${Date.now()}`)
     await this.page.waitForLoadState('networkidle', { timeout: 15000 })
 
-    // Wait for logo to confirm app loaded
-    await this.page.waitForSelector('img[alt="FOVEA Logo"]', { state: 'visible', timeout: 15000 })
-
-    // Now navigate to ontology workspace
-    await this.goto('/ontology')
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 })
-
-    // Wait for EITHER tabs (persona auto-selected) OR persona browser to render
-    // Give more time since personas need to load from API if not already loaded
+    // Wait for either PersonaBrowser OR ontology tabs to be visible
     await Promise.race([
-      // Option 1: Tabs appear (persona was auto-selected)
-      this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 20000 }),
-      // Option 2: PersonaBrowser "Open" button appears
-      this.page.waitForSelector('button:has-text("Open")', { state: 'visible', timeout: 20000 }),
-      // Option 3: "No personas found" message (edge case)
-      this.page.waitForSelector('text="No personas found"', { state: 'visible', timeout: 20000 })
-    ]).catch(async () => {
-      // If nothing appears, log page content for debugging
-      const bodyText = await this.page.locator('body').textContent()
-      const htmlSnippet = await this.page.content().then(c => c.substring(0, 500))
-      throw new Error(`Navigation to /ontology timed out. Page text: ${bodyText?.substring(0, 200)}\n\nHTML: ${htmlSnippet}`)
-    })
+      this.page.locator('[data-persona-id]').first().waitFor({ state: 'visible', timeout: 10000 }),
+      this.entityTypesTab.waitFor({ state: 'visible', timeout: 10000 })
+    ])
 
-    // Check if tabs are already visible (persona auto-selected)
-    const tabsVisible = await this.page.getByRole('tab', { name: /entity types/i }).isVisible().catch(() => false)
+    // If tabs are visible, go back to PersonaBrowser
+    const tabsVisible = await this.entityTypesTab.isVisible().catch(() => false)
     if (tabsVisible) {
-      // If no specific persona requested, we're done
-      if (!personaId) {
-        return
-      }
-      // If specific persona requested, need to go back to PersonaBrowser and select it
-      const backButton = this.page.getByRole('button', { name: /back to persona browser/i })
-      if (await backButton.isVisible().catch(() => false)) {
-        await backButton.click()
-        await this.page.waitForLoadState('networkidle')
-      }
+      const backBtn = this.page.getByRole('button', { name: 'Back to persona browser' })
+      await backBtn.click()
+      // Wait for tabs to disappear (state change confirmation)
+      await this.entityTypesTab.waitFor({ state: 'hidden', timeout: 10000 })
+      await this.page.locator('[data-persona-id]').first().waitFor({ state: 'visible', timeout: 10000 })
     }
 
-    // PersonaBrowser should be showing now - need to select the specific persona
-    // Wait for persona cards to load
-    await this.page.waitForSelector('[data-persona-id]', { state: 'visible', timeout: 5000 }).catch(() => {})
+    // Find and click the specific persona
+    const personaCard = this.page.locator(`[data-persona-id="${personaId}"]`)
+    const cardVisible = await personaCard.isVisible({ timeout: 2000 }).catch(() => false)
 
-    if (personaId) {
-      // Find the persona card by data-persona-id attribute and click its Open button
-      const personaCard = this.page.locator(`[data-persona-id="${personaId}"]`)
-      const openButton = personaCard.locator('button:has-text("Open")')
-
-      if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await openButton.click()
-      } else {
-        throw new Error(`Could not find Open button for persona ID: ${personaId}`)
-      }
-    } else {
-      // No specific persona requested, just select the first one
-      const openButton = this.page.locator('button:has-text("Open")').first()
-      if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await openButton.click()
-      } else {
-        throw new Error('Could not find persona selection UI')
-      }
+    if (!cardVisible) {
+      // Persona not found - might need to reload to get fresh data
+      await this.page.reload()
+      await this.page.waitForLoadState('networkidle', { timeout: 10000 })
+      await personaCard.waitFor({ state: 'visible', timeout: 10000 }).catch(async () => {
+        const allPersonaIds = await this.page.locator('[data-persona-id]').evaluateAll(
+          els => els.map(el => el.getAttribute('data-persona-id'))
+        )
+        throw new Error(`Persona "${personaId}" not found. Available: [${allPersonaIds.join(', ')}]`)
+      })
     }
 
-    // Wait for tabs to appear after selecting persona
-    await this.page.waitForSelector('[role="tab"]', { state: 'visible', timeout: 10000 })
+    // Click Open button on the persona card
+    const openButton = personaCard.locator('button:has-text("Open")')
+    await openButton.click()
+
+    // Wait for ontology tabs to appear
+    await this.entityTypesTab.waitFor({ state: 'visible', timeout: 10000 })
   }
 
   async selectTab(tab: 'entities' | 'events' | 'roles' | 'relations') {
@@ -291,37 +269,41 @@ export class OntologyWorkspacePage extends BasePage {
 
   // Assertions
   async expectTypeExists(name: string) {
-    // Scope to visible tab panel to avoid conflicts with persona name
-    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
-    // Look for the exact name in Typography elements (type titles), not in descriptions
-    const typeItem = visiblePanel.locator('li').filter({ has: this.page.getByText(name, { exact: true }) }).first()
-    await expect(typeItem).toBeVisible({ timeout: 5000 })
+    // Wait for data to load
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 })
+
+    // Find visible (not hidden) tab panel and look for type by name
+    // MUI TabPanel hides inactive panels with hidden attribute
+    // Use p element with exact text to avoid matching definitions
+    const visibleTabPanel = this.page.locator('[role="tabpanel"]:not([hidden])')
+    const typeItem = visibleTabPanel.locator('li').locator('p').filter({ hasText: new RegExp(`^${name}$`) }).first()
+    await expect(typeItem).toBeVisible({ timeout: 10000 })
   }
 
   async expectTypeNotExists(name: string) {
-    // Scope to visible tab panel
-    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
-    // Look for the exact name in Typography elements (type titles)
-    const typeItem = visiblePanel.locator('li').filter({ has: this.page.getByText(name, { exact: true }) })
+    // Wait for data to load
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 })
+
+    // Find visible (not hidden) tab panel and check type doesn't exist
+    // Use p element with exact text to avoid matching definitions
+    const visibleTabPanel = this.page.locator('[role="tabpanel"]:not([hidden])')
+    const typeItem = visibleTabPanel.locator('li').locator('p').filter({ hasText: new RegExp(`^${name}$`) })
     await expect(typeItem).not.toBeVisible()
   }
 
   async expectTypeCount(count: number) {
-    await this.wait(500)
+    // Wait for data to load
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 })
 
-    // Count list items in visible tab panel
-    // Try to find the active tab panel first
-    const visiblePanel = this.page.locator('[role="tabpanel"]').filter({ has: this.page.locator(':visible') }).first()
-
-    // Count list items within the visible panel
-    const listItems = visiblePanel.locator('li')
+    // Count list items in visible (not hidden) tab panel
+    const visibleTabPanel = this.page.locator('[role="tabpanel"]:not([hidden])')
+    const listItems = visibleTabPanel.locator('li')
 
     if (count === 0) {
-      // For zero count, check that either no items exist or panel is empty
       const itemCount = await listItems.count()
       expect(itemCount).toBe(0)
     } else {
-      await expect(listItems).toHaveCount(count, { timeout: 5000 })
+      await expect(listItems).toHaveCount(count, { timeout: 10000 })
     }
   }
 
@@ -410,32 +392,19 @@ export class OntologyWorkspacePage extends BasePage {
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 
-    // Wait for dialog to close OR API response
-    await Promise.race([
-      this.page.waitForResponse(
-        resp => resp.url().includes('/api/personas') && resp.ok(),
-        { timeout: 10000 }
-      ),
-      this.page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 })
-    ]).catch(() => {
-      // Continue if neither happens (might have been fast)
+    // Wait for dialog to close
+    await this.page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 }).catch(() => {
+      // Dialog might have closed very quickly
     })
 
-    await this.wait(1000)
+    // Wait for network to settle (API calls + cache invalidation refetches)
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 })
   }
 
   private async clickEditButton(typeName: string) {
-    // Find the list item containing the type name
-    const listItem = this.page.locator('li').filter({ hasText: typeName }).first()
-    await listItem.waitFor({ state: 'visible', timeout: 5000 })
-
-    // Click the edit button within that list item
-    // Edit icon is usually the first icon button
-    const editButton = listItem.locator('button').first().or(
-      listItem.locator('svg[data-testid="EditIcon"]').locator('..').or(
-        listItem.getByRole('button').first()
-      )
-    )
+    // Find and click the Edit button using its aria-label which includes the type name
+    const editButton = this.page.getByRole('button', { name: `Edit ${typeName}` })
+    await editButton.waitFor({ state: 'visible', timeout: 5000 })
     await editButton.click()
     await this.wait(500)
   }

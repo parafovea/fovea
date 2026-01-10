@@ -4,10 +4,8 @@
  * Shows trajectory through all keyframes with interpolation.
  */
 
-import React from 'react'
-import { Annotation } from '../../models/types.js'
-import { selectMotionPath } from '../../store/annotationSlice.js'
-import { useAppSelector } from '../../store/store.js'
+import React, { useMemo } from 'react'
+import { Annotation, BoundingBox } from '../../models/types.js'
 
 /**
  * @interface MotionPathOverlayProps
@@ -28,13 +26,36 @@ export interface MotionPathOverlayProps {
  * @component MotionPathOverlay
  * @description Overlay showing motion path trajectory for bounding box sequence.
  */
+/**
+ * Compute motion path (center points) from annotation's bounding box sequence
+ */
+function computeMotionPath(annotation: Annotation): Array<{ x: number; y: number; frameNumber: number; isKeyframe: boolean }> {
+  if (!annotation.boundingBoxSequence?.boxes) {
+    return []
+  }
+
+  // Get keyframes sorted by frame number
+  const keyframes = annotation.boundingBoxSequence.boxes
+    .filter((box: BoundingBox) => box.isKeyframe !== false)
+    .sort((a: BoundingBox, b: BoundingBox) => a.frameNumber - b.frameNumber)
+
+  // Compute center point for each keyframe
+  return keyframes.map((box: BoundingBox) => ({
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+    frameNumber: box.frameNumber,
+    isKeyframe: true,
+  }))
+}
+
 export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
   annotation,
   visible,
 }) => {
-  // Get motion path from Redux selector
-  const motionPath = useAppSelector((state) =>
-    selectMotionPath(state, annotation.videoId, annotation.id)
+  // Compute motion path from annotation's bounding box sequence
+  const motionPath = useMemo(
+    () => computeMotionPath(annotation),
+    [annotation]
   )
 
   if (!visible || motionPath.length < 2) {

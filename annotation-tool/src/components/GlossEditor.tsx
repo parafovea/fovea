@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, KeyboardEvent, useCallback, useMemo } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Box,
   TextField,
@@ -13,8 +12,7 @@ import {
   ClickAwayListener,
   Chip,
 } from '@mui/material'
-import { RootState } from '../store/store'
-import { selectAnnotations } from '../store/annotationSlice'
+import { usePersonaOntology, useWorld, useAnnotations } from '../store/queries'
 import { GlossItem } from '../models/types'
 
 interface GlossEditorProps {
@@ -57,14 +55,14 @@ export default function GlossEditor({
   includeAnnotations = false,
   label = 'Gloss Definition'
 }: GlossEditorProps) {
-  const { personaOntologies } = useSelector((state: RootState) => state.persona)
-  const { entities, events, times } = useSelector((state: RootState) => state.world)
-  const annotations = useSelector((state: RootState) => {
-    if (!videoId) return []
-    return selectAnnotations(state, videoId)
-  }, (a, b) => a === b || (a.length === 0 && b.length === 0))
-  const activeOntology = personaOntologies.find(o => o.personaId === personaId)
-  
+  // TanStack Query hooks for data fetching
+  const { data: activeOntology } = usePersonaOntology(personaId)
+  const { data: world } = useWorld()
+  const entities = useMemo(() => world?.entities ?? [], [world?.entities])
+  const events = useMemo(() => world?.events ?? [], [world?.events])
+  const times = useMemo(() => world?.times ?? [], [world?.times])
+  const { data: annotations = [] } = useAnnotations(videoId)
+
   const [inputValue, setInputValue] = useState('')
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)

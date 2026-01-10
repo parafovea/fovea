@@ -29,11 +29,13 @@ test.describe('Manual Claim Management', () => {
       // Select second option (first is disabled placeholder)
       const personaOption = page.getByRole('option').nth(1)
       await personaOption.click()
+      // Wait for editor to load after persona selection
+      await page.waitForTimeout(500)
     }
 
-    // Navigate to Claims tab
-    const claimsTab = dialog.getByRole('tab', { name: /claims/i })
-    await expect(claimsTab).toBeVisible()
+    // Navigate to Claims tab - MUI Tab with Badge may have varying accessible name
+    const claimsTab = dialog.locator('[role="tab"]').filter({ hasText: 'Claims' })
+    await expect(claimsTab).toBeVisible({ timeout: 10000 })
     await claimsTab.click()
 
     // Wait for empty summary to be created - "Add Manual Claim" action button will be enabled

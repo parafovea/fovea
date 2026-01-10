@@ -9,7 +9,7 @@ import { renderWithProviders } from '../../../test/utils/test-utils.js'
 import ApiKeyDialog from './ApiKeyDialog.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
-import { ApiKey } from '../../hooks/useApiKeys.js'
+import { ApiKey } from '../../store/queries/useApiKeys.js'
 
 describe('ApiKeyDialog', () => {
   const mockOnClose = vi.fn()

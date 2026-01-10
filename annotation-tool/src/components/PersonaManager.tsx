@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
   Paper,
@@ -19,7 +18,6 @@ import {
   Divider,
   IconButton,
 } from '@mui/material'
-import { generateId } from '../utils/uuid'
 import {
   PersonAdd as AddPersonaIcon,
   ContentCopy as CopyIcon,
@@ -27,20 +25,36 @@ import {
   Edit as EditIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
 import {
-  setActivePersona,
-  createPersona,
-  savePersona,
-  removePersona,
-} from '../store/personaSlice'
-import { Persona, PersonaOntology } from '../models/types'
+  usePersonas,
+  usePersonaOntology,
+  useCreatePersona,
+  useUpdatePersona,
+  useDeletePersona,
+  useCopyPersona,
+} from '../store/queries'
+import { useAnnotationUiStore } from '../store/zustand'
+import { Persona } from '../models/types'
 
 export default function PersonaManager() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, activePersonaId, personaOntologies } = useSelector((state: RootState) => state.persona)
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const { mutate: createPersonaMutation } = useCreatePersona()
+  const { mutate: updatePersonaMutation } = useUpdatePersona()
+  const { mutate: deletePersonaMutation } = useDeletePersona()
+  const { mutate: copyPersonaMutation } = useCopyPersona()
+
+  // Zustand UI state
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
+
+  // Use selectedPersonaId as activePersonaId for backwards compatibility
+  const activePersonaId = selectedPersonaId
   const activePersona = personas.find(p => p.id === activePersonaId)
-  
+
+  // Fetch ontology for active persona
+  const { data: activeOntology } = usePersonaOntology(activePersonaId)
+
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -76,13 +90,13 @@ export default function PersonaManager() {
         details: formData.details,
         updatedAt: new Date().toISOString(),
       }
-      dispatch(savePersona(updatedPersona))
+      updatePersonaMutation(updatedPersona)
       // Update editingPersona to reflect saved state
       setEditingPersona(updatedPersona)
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [formData, editingPersona, editDialogOpen, dispatch])
+  }, [formData, editingPersona, editDialogOpen, updatePersonaMutation])
 
   // Auto-save persona creation on changes (debounced 1 second)
   useEffect(() => {
@@ -91,7 +105,7 @@ export default function PersonaManager() {
     // Don't auto-save if required fields are incomplete
     if (!formData.name || !formData.role || !formData.informationNeed) return
 
-    const timeoutId = setTimeout(async () => {
+    const timeoutId = setTimeout(() => {
       if (createdPersonaId) {
         // Already created - update existing persona
         const existingPersona = personas.find(p => p.id === createdPersonaId)
@@ -104,40 +118,37 @@ export default function PersonaManager() {
             details: formData.details,
             updatedAt: new Date().toISOString(),
           }
-          dispatch(savePersona(updatedPersona))
+          updatePersonaMutation(updatedPersona)
         }
       } else {
-        // First save - create new persona
-        const newOntology: PersonaOntology = {
-          id: generateId(),
-          personaId: '', // Will be set by backend
-          entities: [],
-          roles: [],
-          events: [],
-          relationTypes: [],
-          relations: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-
-        const result = await dispatch(createPersona({
-          persona: {
-            name: formData.name,
-            role: formData.role,
-            informationNeed: formData.informationNeed,
-            details: formData.details,
+        // First save - create new persona using TanStack Query mutation
+        createPersonaMutation(
+          {
+            persona: {
+              name: formData.name,
+              role: formData.role,
+              informationNeed: formData.informationNeed,
+              details: formData.details,
+            },
+            ontology: {
+              entities: [],
+              roles: [],
+              events: [],
+              relationTypes: [],
+              relations: [],
+            },
           },
-          ontology: newOntology,
-        }))
-
-        if (createPersona.fulfilled.match(result)) {
-          setCreatedPersonaId(result.payload.persona.id)
-        }
+          {
+            onSuccess: (data) => {
+              setCreatedPersonaId(data.persona.id)
+            },
+          }
+        )
       }
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [formData, createDialogOpen, createdPersonaId, personas, dispatch])
+  }, [formData, createDialogOpen, createdPersonaId, personas, createPersonaMutation, updatePersonaMutation])
 
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
@@ -159,10 +170,10 @@ export default function PersonaManager() {
     handleMenuClose()
   }
 
-  const handleCancelCreate = async () => {
+  const handleCancelCreate = () => {
     // Delete auto-created persona if user cancels
     if (createdPersonaId) {
-      await dispatch(removePersona(createdPersonaId))
+      deletePersonaMutation(createdPersonaId)
     }
     setCreatedPersonaId(null)
     setCreateDialogOpen(false)
@@ -185,60 +196,43 @@ export default function PersonaManager() {
     setEditDialogOpen(true)
   }
 
-  const handleCopyPersona = async (sourcePersonaId: string) => {
+  const handleCopyPersona = (sourcePersonaId: string) => {
     const sourcePersona = personas.find(p => p.id === sourcePersonaId)
-    const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
-    if (sourcePersona && sourceOntology) {
-      await dispatch(createPersona({
-        persona: {
+    if (sourcePersona) {
+      copyPersonaMutation({
+        sourcePersonaId,
+        newPersonaData: {
           name: `${sourcePersona.name} (Copy)`,
           role: sourcePersona.role,
           informationNeed: sourcePersona.informationNeed,
           details: sourcePersona.details,
         },
-        ontology: {
-          id: generateId(),
-          personaId: '', // Will be set by backend
-          entities: sourceOntology.entities,
-          roles: sourceOntology.roles,
-          events: sourceOntology.events,
-          relationTypes: sourceOntology.relationTypes,
-          relations: sourceOntology.relations,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      }))
+      })
     }
     handleMenuClose()
   }
 
-  const handleSaveNew = async () => {
-    const newOntology: PersonaOntology = {
-      id: generateId(),
-      personaId: '', // Will be set by backend
-      entities: [],
-      roles: [],
-      events: [],
-      relationTypes: [],
-      relations: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    await dispatch(createPersona({
+  const handleSaveNew = () => {
+    createPersonaMutation({
       persona: {
         name: formData.name,
         role: formData.role,
         informationNeed: formData.informationNeed,
         details: formData.details,
       },
-      ontology: newOntology,
-    }))
+      ontology: {
+        entities: [],
+        roles: [],
+        events: [],
+        relationTypes: [],
+        relations: [],
+      },
+    })
 
     setCreateDialogOpen(false)
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (editingPersona) {
       const updatedPersona: Persona = {
         ...editingPersona,
@@ -248,27 +242,31 @@ export default function PersonaManager() {
         details: formData.details,
         updatedAt: new Date().toISOString(),
       }
-      await dispatch(savePersona(updatedPersona))
+      updatePersonaMutation(updatedPersona)
       setEditDialogOpen(false)
       setEditingPersona(null)
     }
   }
 
-  const handleDeletePersona = async (personaId: string) => {
+  const handleDeletePersona = (personaId: string) => {
     if (personas.length > 1 && window.confirm('Are you sure you want to delete this persona and all its ontology data?')) {
-      await dispatch(removePersona(personaId))
+      deletePersonaMutation(personaId)
     }
   }
 
+  // Get ontology stats for active persona from activeOntology
   const getOntologyStats = (personaId: string) => {
-    const ontology = personaOntologies.find(o => o.personaId === personaId)
-    if (!ontology) return { entities: 0, roles: 0, events: 0, relations: 0 }
-    return {
-      entities: ontology.entities.length,
-      roles: ontology.roles.length,
-      events: ontology.events.length,
-      relations: ontology.relations.length,
+    // For active persona, use the loaded ontology
+    if (personaId === activePersonaId && activeOntology) {
+      return {
+        entities: activeOntology.entities.length,
+        roles: activeOntology.roles.length,
+        events: activeOntology.events.length,
+        relations: activeOntology.relations.length,
+      }
     }
+    // For other personas, return zeros (will be loaded on demand)
+    return { entities: 0, roles: 0, events: 0, relations: 0 }
   }
 
   return (
@@ -334,7 +332,7 @@ export default function PersonaManager() {
               key={persona.id}
               selected={persona.id === activePersonaId}
               onClick={() => {
-                dispatch(setActivePersona(persona.id))
+                setSelectedPersonaId(persona.id)
                 handleMenuClose()
               }}
             >

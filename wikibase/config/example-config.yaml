@@ -1,0 +1,71 @@
+# FOVEA Wikibase Data Configuration
+# This is an example configuration file for importing data into a local Wikibase.
+# Copy and modify this file for your specific use case.
+
+version: "1.0"
+name: "FOVEA Event Annotation Dataset"
+
+# Entity specifications - combine multiple methods
+entities:
+  # Direct entity IDs to import
+  direct:
+    - Q5          # Human
+    - Q515        # City
+    - Q6256       # Country
+    - Q82799      # Name
+    - Q178651     # Battle
+    - Q1190554    # Occurrence
+
+  # Import entities by type (instance-of P31)
+  by_type:
+    Q5:           # All humans
+      limit: 100
+      properties: all
+    Q515:         # All cities
+      limit: 50
+      properties:
+        - P31     # instance of
+        - P17     # country
+        - P625    # coordinate location
+
+  # SPARQL queries for complex selections
+  sparql_queries:
+    - name: "Famous Scientists"
+      query: |
+        SELECT ?item WHERE {
+          ?item wdt:P31 wd:Q5 .
+          ?item wdt:P106 wd:Q901 .
+          ?item wikibase:sitelinks ?sitelinks .
+          FILTER(?sitelinks > 50)
+        } LIMIT 20
+
+    - name: "Major Historical Events"
+      query: |
+        SELECT ?item WHERE {
+          ?item wdt:P31 wd:Q198 .
+          ?item wdt:P585 ?date .
+          FILTER(YEAR(?date) >= 1900)
+        } LIMIT 50
+
+# Properties to always include when importing
+required_properties:
+  - P31    # instance of
+  - P279   # subclass of
+  - P625   # coordinate location
+  - P585   # point in time
+  - P580   # start time
+  - P582   # end time
+  - P17    # country
+  - P131   # located in admin territory
+  - P710   # participant
+
+# How deep to follow entity references
+reference_depth: 1
+
+# Output settings
+output:
+  languages:
+    - en
+    - es
+    - fr
+    - de

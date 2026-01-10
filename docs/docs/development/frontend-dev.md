@@ -4,7 +4,7 @@ title: Frontend Development
 
 # Frontend Development
 
-The frontend provides the annotation interface for video analysis and ontology management. Built with React 18, TypeScript 5.3+, and Vite 5, it uses Redux Toolkit for state management and Material-UI v5 for components.
+The frontend provides the annotation interface for video analysis and ontology management. Built with React 18, TypeScript 5.3+, and Vite 5, it uses TanStack Query for server state, Zustand for UI state, and Material-UI v5 for components.
 
 ## Development Modes
 
@@ -81,21 +81,29 @@ annotation-tool/
 │   │   ├── annotation/     # Annotation tools
 │   │   ├── world/          # World object editors
 │   │   └── shared/         # Reusable components
-│   ├── store/              # Redux store
-│   │   ├── index.ts
-│   │   ├── ontologySlice.ts
-│   │   ├── worldSlice.ts
-│   │   ├── annotationSlice.ts
-│   │   └── videoSlice.ts
+│   ├── store/              # State management
+│   │   ├── queries/        # TanStack Query hooks (server state)
+│   │   │   ├── index.ts
+│   │   │   ├── useVideos.ts
+│   │   │   ├── useAnnotations.ts
+│   │   │   ├── usePersonas.ts
+│   │   │   ├── useWorld.ts
+│   │   │   └── useClaims.ts
+│   │   └── zustand/        # Zustand stores (UI state)
+│   │       ├── annotationUiStore.ts
+│   │       ├── dialogStore.ts
+│   │       ├── videoUiStore.ts
+│   │       └── authStore.ts
 │   ├── hooks/              # Custom hooks
-│   │   ├── useVideoAnnotations.ts
-│   │   └── useKeyboardShortcuts.ts
-│   ├── api/                # API client
-│   │   └── client.ts
-│   └── types/              # TypeScript types
+│   │   ├── useCommands.ts
+│   │   └── useDetection.ts
+│   ├── services/           # API client
+│   │   └── api.ts
+│   └── models/             # TypeScript types
 ├── test/                   # Test files
-│   ├── unit/
-│   └── e2e/
+│   ├── components/
+│   ├── hooks/
+│   └── integration/
 └── vite.config.ts          # Vite configuration
 ```
 
@@ -190,73 +198,62 @@ describe('MyComponent', () => {
 });
 ```
 
-## Redux State Management
+## State Management
 
-### Adding New Slice
+FOVEA uses a two-layer state management strategy:
 
-Create `src/store/mySlice.ts`:
+| State Type | Solution | Use Case |
+|------------|----------|----------|
+| **Server State** | TanStack Query | Data from API (caching, refetching) |
+| **UI State** | Zustand | Ephemeral, local UI interactions |
 
-```typescript
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+### Server State with TanStack Query
 
-interface MyState {
-  items: string[];
-  selectedId: string | null;
-}
+For data from the API (videos, annotations, personas, etc.), use TanStack Query hooks in `src/store/queries/`.
 
-const initialState: MyState = {
-  items: [],
-  selectedId: null
-};
-
-export const mySlice = createSlice({
-  name: 'my',
-  initialState,
-  reducers: {
-    addItem: (state, action: PayloadAction<string>) => {
-      state.items.push(action.payload);
-    },
-    selectItem: (state, action: PayloadAction<string>) => {
-      state.selectedId = action.payload;
-    }
-  }
-});
-
-export const { addItem, selectItem } = mySlice.actions;
-export default mySlice.reducer;
-```
-
-Register in `src/store/index.ts`:
+**Using existing hooks:**
 
 ```typescript
-import myReducer from './mySlice';
+import { useVideos, useAnnotations, usePersonas } from '../store/queries';
 
-export const store = configureStore({
-  reducer: {
-    // ... existing reducers
-    my: myReducer
-  }
-});
-```
+export const MyComponent = () => {
+  const { data: videos, isLoading } = useVideos();
+  const { data: annotations } = useAnnotations(videoId);
+  const { data: personas } = usePersonas();
 
-### Using in Component
-
-```typescript
-import { useSelector, useDispatch } from 'react-redux';
-import { addItem, selectItem } from '../store/mySlice';
-import type { RootState } from '../store';
-
-export const MyContainer = () => {
-  const items = useSelector((state: RootState) => state.my.items);
-  const dispatch = useDispatch();
-
-  const handleAdd = (item: string) => {
-    dispatch(addItem(item));
-  };
-
-  return <MyComponent items={items} onAdd={handleAdd} />;
+  if (isLoading) return <Loading />;
+  return <VideoList videos={videos} />;
 };
 ```
+
+### UI State with Zustand
+
+For UI-only state (drawing mode, selections, dialog state), use Zustand stores in `src/store/zustand/`.
+
+**Using existing stores:**
+
+```typescript
+import { useAnnotationUiStore } from '../store/zustand/annotationUiStore';
+import { useDialog } from '../store/zustand/dialogStore';
+
+export const MyComponent = () => {
+  // Select only the state you need (prevents unnecessary re-renders)
+  const isDrawing = useAnnotationUiStore(state => state.isDrawing);
+  const setIsDrawing = useAnnotationUiStore(state => state.setIsDrawing);
+
+  // Dialog management
+  const exportDialog = useDialog('export');
+
+  return (
+    <>
+      <button onClick={() => setIsDrawing(true)}>Start Drawing</button>
+      <button onClick={exportDialog.openDialog}>Export</button>
+    </>
+  );
+};
+```
+
+See `src/store/zustand/README.md` for detailed documentation.
 
 ## API Integration with TanStack Query
 
@@ -372,28 +369,27 @@ export const MySxComponent = () => {
 ### Example: useVideoAnnotations
 
 ```typescript
-import { useState, useCallback } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { addAnnotation, updateAnnotation } from '../store/annotationSlice';
+import { useAnnotations, useCreateAnnotation, useUpdateAnnotation } from '../store/queries';
 
 export function useVideoAnnotations(videoId: string) {
-  const annotations = useSelector(state =>
-    state.annotations.items.filter(a => a.videoId === videoId)
-  );
-  const dispatch = useDispatch();
+  const { data: annotations = [] } = useAnnotations(videoId);
+  const createMutation = useCreateAnnotation();
+  const updateMutation = useUpdateAnnotation();
 
-  const createAnnotation = useCallback((data) => {
-    dispatch(addAnnotation({ ...data, videoId }));
-  }, [videoId, dispatch]);
+  const createAnnotation = (data) => {
+    createMutation.mutate({ ...data, videoId });
+  };
 
-  const updateExisting = useCallback((id, updates) => {
-    dispatch(updateAnnotation({ id, updates }));
-  }, [dispatch]);
+  const updateExisting = (id, updates) => {
+    updateMutation.mutate({ id, ...updates });
+  };
 
   return {
     annotations,
     createAnnotation,
-    updateExisting
+    updateExisting,
+    isCreating: createMutation.isPending,
+    isUpdating: updateMutation.isPending,
   };
 }
 ```
@@ -437,9 +433,13 @@ test.describe('Annotation Workflow', () => {
 
 Install React DevTools browser extension for component inspection.
 
-### Redux DevTools
+### TanStack Query DevTools
 
-Install Redux DevTools browser extension. State changes visible in devtools.
+TanStack Query DevTools are built into the app. Click the floating icon in the bottom-right corner to inspect query state, cache, and mutations.
+
+### Zustand DevTools
+
+Install Redux DevTools browser extension. Zustand stores appear as "AnnotationUiStore", "DialogStore", etc. You can inspect state and see action history.
 
 ### VS Code Configuration
 

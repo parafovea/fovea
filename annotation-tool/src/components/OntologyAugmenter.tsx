@@ -38,15 +38,14 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material'
 import { useMutation } from '@tanstack/react-query'
-import { useDispatch, useSelector } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
 import {
-  addEntityToPersona,
-  addEventToPersona,
-  addRoleToPersona,
-} from '../store/personaSlice'
+  usePersonaOntology,
+  useAddEntityToPersona,
+  useAddEventToPersona,
+  useAddRoleToPersona,
+} from '../store/queries'
 import { apiClient } from '../api/client'
-import { RootState } from '../store/store'
 import { EntityType, EventType, RoleType } from '../models/types'
 
 /**
@@ -101,10 +100,11 @@ export function OntologyAugmenter({
   initialCategory = 'entity',
   initialDomain = '',
 }: OntologyAugmenterProps) {
-  const dispatch = useDispatch()
-  const ontology = useSelector((state: RootState) =>
-    state.persona.personaOntologies.find(o => o.personaId === personaId) ?? null
-  )
+  // TanStack Query hooks
+  const { data: ontology = null } = usePersonaOntology(personaId)
+  const { mutate: addEntityMutation } = useAddEntityToPersona()
+  const { mutate: addEventMutation } = useAddEventToPersona()
+  const { mutate: addRoleMutation } = useAddRoleToPersona()
 
   const [category, setCategory] = useState<OntologyCategory>(initialCategory)
   const [domain, setDomain] = useState(initialDomain)
@@ -191,7 +191,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addEntityToPersona({ personaId, entity: entityType }))
+            addEntityMutation({ personaId, entity: entityType })
             break
           }
           case 'event': {
@@ -204,7 +204,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addEventToPersona({ personaId, event: eventType }))
+            addEventMutation({ personaId, event: eventType })
             break
           }
           case 'role': {
@@ -217,7 +217,7 @@ export function OntologyAugmenter({
               createdAt: now,
               updatedAt: now,
             }
-            dispatch(addRoleToPersona({ personaId, role: roleType }))
+            addRoleMutation({ personaId, role: roleType })
             break
           }
         }

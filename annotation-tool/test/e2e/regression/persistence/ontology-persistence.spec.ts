@@ -4,7 +4,7 @@
  * and survive page reloads (not just Redux).
  */
 
-import { test, expect } from '../../fixtures/test-context.js'
+import { test } from '../../fixtures/test-context.js'
 
 test.describe('Ontology Type Auto-Save Persistence', () => {
   test('new entity type auto-saves and persists after page reload', async ({

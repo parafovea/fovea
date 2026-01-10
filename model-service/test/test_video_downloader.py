@@ -9,6 +9,14 @@ import pytest
 
 from src.video_downloader import cleanup_temp_video, download_video_if_needed
 
+# Use S3 URLs that match the allowed patterns for SSRF protection
+TEST_S3_URL_HTTP = "http://bucket.s3.us-east-1.amazonaws.com/video.mp4"
+TEST_S3_URL_HTTPS = "https://bucket.s3.us-east-1.amazonaws.com/video.webm"
+TEST_S3_URL_NO_EXT = (
+    "https://bucket.s3.us-east-1.amazonaws.com/signed-url-without-extension?signature=abc"
+)
+TEST_LOCALHOST_URL = "http://localhost:8080/video.mp4"
+
 
 class TestDownloadVideoIfNeeded:
     """Tests for download_video_if_needed function."""
@@ -36,7 +44,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_http_url_download(self):
         """Test downloading video from HTTP URL."""
-        url = "http://example.com/video.mp4"
+        url = TEST_S3_URL_HTTP
         fake_content = b"fake video content"
 
         # Mock aiohttp ClientSession
@@ -84,7 +92,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_https_url_download(self):
         """Test downloading video from HTTPS URL."""
-        url = "https://example.com/video.webm"
+        url = TEST_S3_URL_HTTPS
         fake_content = b"fake video content"
 
         mock_response = AsyncMock()
@@ -122,7 +130,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_url_without_extension_uses_mp4(self):
         """Test that URLs without extensions default to .mp4."""
-        url = "https://example.com/signed-url-without-extension?signature=abc"
+        url = TEST_S3_URL_NO_EXT
         fake_content = b"fake video content"
 
         mock_response = AsyncMock()
@@ -160,7 +168,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_large_file_chunked_download(self):
         """Test downloading large file in chunks."""
-        url = "https://example.com/large-video.mp4"
+        url = TEST_S3_URL_HTTP
         # Simulate 3 chunks
         chunks = [b"chunk1", b"chunk2", b"chunk3"]
         expected_content = b"".join(chunks)
@@ -205,7 +213,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_download_failure_cleans_up_temp_file(self):
         """Test that temp file is cleaned up on download failure."""
-        url = "https://example.com/video.mp4"
+        url = TEST_S3_URL_HTTPS
 
         mock_response = AsyncMock()
         mock_response.raise_for_status = MagicMock(
@@ -228,7 +236,7 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_http_error_raises_exception(self):
         """Test that HTTP errors raise appropriate exceptions."""
-        url = "https://example.com/video.mp4"
+        url = TEST_S3_URL_HTTPS
 
         mock_response = AsyncMock()
         mock_response.raise_for_status = MagicMock(
@@ -254,12 +262,13 @@ class TestDownloadVideoIfNeeded:
     @pytest.mark.asyncio
     async def test_preserves_file_extension_from_url(self):
         """Test that file extension is preserved from URL path."""
+        # Use S3 URLs that match allowed patterns
         test_cases = [
-            ("https://example.com/video.mp4", ".mp4"),
-            ("https://example.com/video.webm", ".webm"),
-            ("https://example.com/video.mkv", ".mkv"),
-            ("https://example.com/video.avi", ".avi"),
-            ("https://example.com/video.mov", ".mov"),
+            ("https://bucket.s3.us-east-1.amazonaws.com/video.mp4", ".mp4"),
+            ("https://bucket.s3.us-east-1.amazonaws.com/video.webm", ".webm"),
+            ("https://bucket.s3.us-east-1.amazonaws.com/video.mkv", ".mkv"),
+            ("https://bucket.s3.us-east-1.amazonaws.com/video.avi", ".avi"),
+            ("https://bucket.s3.us-east-1.amazonaws.com/video.mov", ".mov"),
         ]
 
         for url, expected_ext in test_cases:
@@ -302,8 +311,10 @@ class TestCleanupTempVideo:
 
     def test_cleanup_existing_file(self):
         """Test cleanup of existing temporary file."""
-        # Create a temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4", prefix="video_") as f:
+        # Create a temp file in /tmp to match TEMP_VIDEO_DIR
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4", prefix="video_", dir="/tmp"
+        ) as f:
             temp_path = f.name
             f.write(b"fake content")
 
@@ -322,8 +333,10 @@ class TestCleanupTempVideo:
 
     def test_cleanup_with_permission_error(self):
         """Test cleanup handles permission errors gracefully."""
-        # Create a temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4", prefix="video_") as f:
+        # Create a temp file in /tmp to match TEMP_VIDEO_DIR
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4", prefix="video_", dir="/tmp"
+        ) as f:
             temp_path = f.name
 
         # Mock Path.unlink to raise PermissionError

@@ -1,5 +1,3 @@
-import { useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
 import {
   Box,
   Typography,
@@ -22,8 +20,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { fetchClaimRelations, deleteClaimRelation } from '../../store/claimsSlice'
+import { useClaimRelations, useDeleteClaimRelation, useClaims, usePersonaOntology } from '../../store/queries'
 
 interface ClaimRelationsViewerProps {
   claimId: string
@@ -38,20 +35,15 @@ export function ClaimRelationsViewer({
   personaId,
   onAddRelation,
 }: ClaimRelationsViewerProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const relationData = useSelector((state: RootState) => state.claims.relations[claimId])
-  const ontology = useSelector((state: RootState) =>
-    state.persona.personaOntologies.find((o) => o.personaId === personaId)
-  )
-  const claims = useSelector((state: RootState) => state.claims.claimsBySummary[summaryId] || [])
-
-  useEffect(() => {
-    dispatch(fetchClaimRelations({ summaryId, claimId }))
-  }, [dispatch, summaryId, claimId])
+  // TanStack Query hooks
+  const { data: relationData, isLoading, error } = useClaimRelations(summaryId, claimId)
+  const { data: claims = [] } = useClaims(summaryId, 'video')
+  const deleteRelationMutation = useDeleteClaimRelation()
+  const { data: ontology } = usePersonaOntology(personaId)
 
   const handleDelete = async (relationId: string) => {
     if (window.confirm('Delete this relation?')) {
-      await dispatch(deleteClaimRelation({ summaryId, relationId, sourceClaimId: claimId }))
+      await deleteRelationMutation.mutateAsync({ summaryId, relationId, sourceClaimId: claimId })
     }
   }
 
@@ -76,7 +68,7 @@ export function ClaimRelationsViewer({
     return claim.gloss.map((g: any) => g.content).join(' ').substring(0, 60)
   }
 
-  if (!relationData || relationData.isLoading) {
+  if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" p={2}>
         <CircularProgress size={24} />
@@ -84,11 +76,12 @@ export function ClaimRelationsViewer({
     )
   }
 
-  if (relationData.error) {
-    return <Alert severity="error">{relationData.error}</Alert>
+  if (error) {
+    return <Alert severity="error">{error instanceof Error ? error.message : 'Failed to load relations'}</Alert>
   }
 
-  const { asSource, asTarget } = relationData
+  const asSource = relationData?.asSource || []
+  const asTarget = relationData?.asTarget || []
 
   return (
     <Box data-testid="claim-relations-viewer">

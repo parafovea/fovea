@@ -25,8 +25,7 @@ import {
   Cancel as RejectIcon,
   FilterList as FilterIcon,
 } from '@mui/icons-material'
-import { useDispatch } from 'react-redux'
-import { addAnnotation } from '../store/annotationSlice'
+import { useAddAnnotation } from '../store/queries'
 import type { Detection, FrameDetections } from '../api/client'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -148,7 +147,7 @@ export function AnnotationCandidatesList({
   onReject,
   initialConfidenceThreshold = 0.3,
 }: AnnotationCandidatesListProps) {
-  const dispatch = useDispatch()
+  const { mutate: addAnnotation } = useAddAnnotation()
   const [candidates, setCandidates] = useState<CandidateItem[]>(() => {
     // Flatten all detections into candidate items
     return frames.flatMap((frame) =>
@@ -202,73 +201,69 @@ export function AnnotationCandidatesList({
 
     if (personaId && typeId && typeCategory) {
       // Type annotation
-      dispatch(
-        addAnnotation({
-          id: annotationId,
-          videoId,
-          annotationType: 'type',
-          personaId,
-          typeCategory,
-          typeId,
-          boundingBoxSequence: {
-            boxes: [{
-              x: bbox.x,
-              y: bbox.y,
-              width: bbox.width,
-              height: bbox.height,
-              frameNumber: candidate.frameNumber,
-              confidence: candidate.detection.confidence,
-              isKeyframe: true,
-            }],
-            interpolationSegments: [],
-            visibilityRanges: [{
-              startFrame: candidate.frameNumber,
-              endFrame: candidate.frameNumber,
-              visible: true,
-            }],
-            totalFrames: 1,
-            keyframeCount: 1,
-            interpolatedFrameCount: 0,
-          },
-          confidence: candidate.detection.confidence,
-          notes: `Detected: ${candidate.detection.label}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      )
+      addAnnotation({
+        id: annotationId,
+        videoId,
+        annotationType: 'type',
+        personaId,
+        typeCategory,
+        typeId,
+        boundingBoxSequence: {
+          boxes: [{
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height,
+            frameNumber: candidate.frameNumber,
+            confidence: candidate.detection.confidence,
+            isKeyframe: true,
+          }],
+          interpolationSegments: [],
+          visibilityRanges: [{
+            startFrame: candidate.frameNumber,
+            endFrame: candidate.frameNumber,
+            visible: true,
+          }],
+          totalFrames: 1,
+          keyframeCount: 1,
+          interpolatedFrameCount: 0,
+        },
+        confidence: candidate.detection.confidence,
+        notes: `Detected: ${candidate.detection.label}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
     } else {
       // Object annotation (without linking yet - user needs to link manually)
-      dispatch(
-        addAnnotation({
-          id: annotationId,
-          videoId,
-          annotationType: 'object',
-          boundingBoxSequence: {
-            boxes: [{
-              x: bbox.x,
-              y: bbox.y,
-              width: bbox.width,
-              height: bbox.height,
-              frameNumber: candidate.frameNumber,
-              confidence: candidate.detection.confidence,
-              isKeyframe: true,
-            }],
-            interpolationSegments: [],
-            visibilityRanges: [{
-              startFrame: candidate.frameNumber,
-              endFrame: candidate.frameNumber,
-              visible: true,
-            }],
-            totalFrames: 1,
-            keyframeCount: 1,
-            interpolatedFrameCount: 0,
-          },
-          confidence: candidate.detection.confidence,
-          notes: `Detected: ${candidate.detection.label}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      )
+      addAnnotation({
+        id: annotationId,
+        videoId,
+        annotationType: 'object',
+        boundingBoxSequence: {
+          boxes: [{
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height,
+            frameNumber: candidate.frameNumber,
+            confidence: candidate.detection.confidence,
+            isKeyframe: true,
+          }],
+          interpolationSegments: [],
+          visibilityRanges: [{
+            startFrame: candidate.frameNumber,
+            endFrame: candidate.frameNumber,
+            visible: true,
+          }],
+          totalFrames: 1,
+          keyframeCount: 1,
+          interpolatedFrameCount: 0,
+        },
+        confidence: candidate.detection.confidence,
+        notes: `Detected: ${candidate.detection.label}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
     }
 
     // Callback

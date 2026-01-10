@@ -122,24 +122,20 @@ describe('Timeline Rendering Performance', () => {
       const ctx: any = mockCanvas.getContext()
 
       // Inefficient approach: separate path for each marker
-      const inefficientStart = performance.now()
       for (let i = 0; i < 1000; i++) {
         ctx.beginPath()
         ctx.fillRect(i, 0, 2, 10)
       }
-      const inefficientDuration = performance.now() - inefficientStart
       const inefficientCalls = drawCallCount
 
       // Reset
       drawCallCount = 0
 
       // Efficient approach: batch all markers in single path
-      const efficientStart = performance.now()
       ctx.beginPath()
       for (let i = 0; i < 1000; i++) {
         ctx.fillRect(i, 0, 2, 10)
       }
-      const efficientDuration = performance.now() - efficientStart
       const efficientCalls = drawCallCount
 
       // Efficient should use fewer draw calls (allowing for one beginPath call)
@@ -281,6 +277,9 @@ describe('Timeline Rendering Performance', () => {
 
       const duration = performance.now() - start
 
+      // Should have found some visible annotations
+      expect(visibleAnnotations).toBeGreaterThan(0)
+
       // Should cull efficiently
       expect(duration).toBeLessThan(5)
     })
@@ -288,37 +287,37 @@ describe('Timeline Rendering Performance', () => {
 
   describe('requestAnimationFrame optimization', () => {
     it('batches updates using requestAnimationFrame', async () => {
-      let rafCallCount = 0
+      let actualRenderCount = 0
+      let pendingRender = false
 
-      // Mock requestAnimationFrame
-      const mockRaf = (callback: FrameRequestCallback) => {
-        rafCallCount++
-        return setTimeout(() => callback(performance.now()), 16)
+      // RAF batching scheduler - coalesces multiple updates into single render
+      const scheduleRender = () => {
+        if (pendingRender) {
+          return // Already scheduled, skip duplicate
+        }
+        pendingRender = true
+        setTimeout(() => {
+          actualRenderCount++
+          pendingRender = false
+        }, 16)
       }
 
-      // Simulate multiple rapid updates (user scrubbing)
+      // Simulate 50 rapid updates (user scrubbing)
       const updates = 50
 
-      const start = performance.now()
-
       for (let i = 0; i < updates; i++) {
-        // Each update schedules a raf
-        mockRaf(() => {
-          // Render work
-        })
-
-        // Small delay to simulate rapid updates
+        scheduleRender()
+        // Rapid updates within same frame
         await new Promise((resolve) => setTimeout(resolve, 1))
       }
 
-      // Wait for all rafs to complete
+      // Wait for all renders to complete
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      const duration = performance.now() - start
-
-      // Should batch some updates (fewer raf calls than updates)
-      // Note: Without proper batching, rafCallCount === updates
-      // With batching, rafCallCount < updates (ideally much less)
+      // With batching, multiple rapid updates should coalesce into fewer renders
+      // 50 updates at 1ms intervals over ~50ms = roughly 3-4 16ms frames
+      expect(actualRenderCount).toBeLessThan(updates)
+      expect(actualRenderCount).toBeGreaterThan(0)
     })
   })
 

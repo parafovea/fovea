@@ -2,14 +2,29 @@
  * Tests for EditUserDialog component.
  */
 
-import { describe, it, expect } from 'vitest'
-import { screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import EditUserDialog from './EditUserDialog.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../test/setup.js'
-import { UserWithStats } from '../../hooks/admin/useUsers.js'
+import { UserWithStats } from '../../store/queries/admin/useUsers.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  )
+}
 
 describe('EditUserDialog', () => {
   const mockUser: UserWithStats = {
@@ -26,12 +41,28 @@ describe('EditUserDialog', () => {
 
   const mockOnClose = () => {}
 
+  beforeEach(() => {
+    // Reset Zustand store before each test
+    useAuthStore.getState().reset()
+    server.resetHandlers()
+
+    // Set up default success handlers
+    server.use(
+      http.put('/api/admin/users/:userId', () => {
+        return HttpResponse.json(mockUser)
+      }),
+      http.delete('/api/admin/users/:userId', () => {
+        return HttpResponse.json({ success: true })
+      })
+    )
+  })
+
   it('renders form pre-filled with user data', async () => {
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      {
-        preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } }
-      }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -42,9 +73,11 @@ describe('EditUserDialog', () => {
   })
 
   it('displays user statistics', async () => {
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -59,9 +92,11 @@ describe('EditUserDialog', () => {
   })
 
   it('username field is disabled', async () => {
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -73,10 +108,11 @@ describe('EditUserDialog', () => {
 
   it('display name can be edited', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -90,10 +126,11 @@ describe('EditUserDialog', () => {
 
   it('email can be edited', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -107,10 +144,11 @@ describe('EditUserDialog', () => {
 
   it('isAdmin checkbox can be toggled', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -124,10 +162,11 @@ describe('EditUserDialog', () => {
 
   it('password section is collapsible', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -151,10 +190,11 @@ describe('EditUserDialog', () => {
 
   it('new password validates minimum length', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     const submitButton = await screen.findByRole('button', { name: /save changes/i })
@@ -180,10 +220,11 @@ describe('EditUserDialog', () => {
 
   it('confirm password validates match', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     const submitButton = await screen.findByRole('button', { name: /save changes/i })
@@ -217,9 +258,11 @@ describe('EditUserDialog', () => {
       })
     )
 
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     const submitButton = await screen.findByRole('button', { name: /save changes/i })
@@ -240,9 +283,11 @@ describe('EditUserDialog', () => {
       dialogClosed = true
     }
 
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={onClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     const submitButton = await screen.findByRole('button', { name: /save changes/i })
@@ -269,9 +314,11 @@ describe('EditUserDialog', () => {
       })
     )
 
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     const submitButton = await screen.findByRole('button', { name: /save changes/i })
@@ -286,10 +333,11 @@ describe('EditUserDialog', () => {
 
   it('delete button opens confirmation dialog', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
-    renderWithProviders(
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -302,9 +350,12 @@ describe('EditUserDialog', () => {
   })
 
   it('delete button disabled if cannot delete', async () => {
-    renderWithProviders(
+    // Log in as the same user being edited - can't delete yourself
+    useAuthStore.getState().loginSuccess(mockUser)
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: mockUser, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -320,9 +371,11 @@ describe('EditUserDialog', () => {
       dialogClosed = true
     }
 
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={onClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -347,9 +400,11 @@ describe('EditUserDialog', () => {
       dialogClosed = true
     }
 
-    renderWithProviders(
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
+
+    render(
       <EditUserDialog open={true} user={mockUser} onClose={onClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+      { wrapper: createWrapper() }
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -363,6 +418,7 @@ describe('EditUserDialog', () => {
 
   it('form resets when user prop changes', async () => {
     const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess({ ...mockUser, id: 'other-user' })
 
     const newUser: UserWithStats = {
       ...mockUser,
@@ -371,9 +427,11 @@ describe('EditUserDialog', () => {
       displayName: 'New User',
     }
 
-    const { rerender } = renderWithProviders(
-      <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />,
-      { preloadedState: { user: { currentUser: { ...mockUser, id: 'other-user' }, isAuthenticated: true, isLoading: false, mode: 'multi-user' } } }
+    const Wrapper = createWrapper()
+    const { rerender } = render(
+      <Wrapper>
+        <EditUserDialog open={true} user={mockUser} onClose={mockOnClose} />
+      </Wrapper>
     )
 
     await screen.findByRole('button', { name: /save changes/i })
@@ -385,7 +443,11 @@ describe('EditUserDialog', () => {
     expect(displayNameField).toHaveValue('Modified Name')
 
     // Rerender with new user
-    rerender(<EditUserDialog open={true} user={newUser} onClose={mockOnClose} />)
+    rerender(
+      <Wrapper>
+        <EditUserDialog open={true} user={newUser} onClose={mockOnClose} />
+      </Wrapper>
+    )
 
     await waitFor(() => {
       expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue('New User')

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -25,8 +24,14 @@ import {
   Person as EntityIcon,
   Event as EventIcon,
 } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store'
-import { addEntityCollection, updateEntityCollection, addEventCollection, updateEventCollection } from '../../store/worldSlice'
+import {
+  useWorld,
+  useAddEntityCollection,
+  useUpdateEntityCollection,
+  useAddEventCollection,
+  useUpdateEventCollection,
+} from '../../store/queries'
+import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
 import { EntityCollection, EventCollection, GlossItem } from '../../models/types'
 import GlossEditor from '../GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
@@ -39,9 +44,17 @@ interface CollectionEditorProps {
 }
 
 export default function CollectionEditor({ open, onClose, collection, collectionType: initialType }: CollectionEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { entities, events } = useSelector((state: RootState) => state.world)
-  const { activePersonaId } = useSelector((state: RootState) => state.persona)
+  const { data: worldData } = useWorld()
+  const entities = worldData?.entities ?? []
+  const events = worldData?.events ?? []
+
+  // Active persona from Zustand store
+  const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+
+  const { mutate: addEntityCollection } = useAddEntityCollection()
+  const { mutate: updateEntityCollection } = useUpdateEntityCollection()
+  const { mutate: addEventCollection } = useAddEventCollection()
+  const { mutate: updateEventCollection } = useUpdateEventCollection()
 
   const [collectionType, setCollectionType] = useState<'entity' | 'event'>(initialType || 'entity')
   const [name, setName] = useState('')
@@ -89,13 +102,13 @@ export default function CollectionEditor({ open, onClose, collection, collection
       }
 
       if (collection && 'entityIds' in collection) {
-        dispatch(updateEntityCollection({
+        updateEntityCollection({
           ...collection,
           ...entityCollectionData,
           updatedAt: now
-        }))
+        })
       } else {
-        dispatch(addEntityCollection(entityCollectionData))
+        addEntityCollection(entityCollectionData)
       }
     } else {
       const eventCollectionData: Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -108,13 +121,13 @@ export default function CollectionEditor({ open, onClose, collection, collection
       }
 
       if (collection && 'eventIds' in collection) {
-        dispatch(updateEventCollection({
+        updateEventCollection({
           ...collection,
           ...eventCollectionData,
           updatedAt: now
-        }))
+        })
       } else {
-        dispatch(addEventCollection(eventCollectionData))
+        addEventCollection(eventCollectionData)
       }
     }
 

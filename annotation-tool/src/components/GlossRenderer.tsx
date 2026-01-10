@@ -1,7 +1,6 @@
 import { Box, Chip } from '@mui/material'
-import { useSelector } from 'react-redux'
 import { GlossItem } from '../models/types'
-import { RootState } from '../store/store'
+import { usePersonaOntology, useWorld } from '../store/queries'
 
 interface GlossRendererProps {
   gloss: GlossItem[]
@@ -10,9 +9,12 @@ interface GlossRendererProps {
 }
 
 export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendererProps) {
-  const { personaOntologies } = useSelector((state: RootState) => state.persona)
-  const { entities, events, times } = useSelector((state: RootState) => state.world)
-  const activeOntology = personaOntologies.find(o => o.personaId === personaId)
+  // TanStack Query hooks for data fetching
+  const { data: activeOntology } = usePersonaOntology(personaId)
+  const { data: world } = useWorld()
+  const entities = world?.entities ?? []
+  const events = world?.events ?? []
+  const times = world?.times ?? []
 
   // Handle undefined or null gloss
   if (!gloss || !Array.isArray(gloss)) {

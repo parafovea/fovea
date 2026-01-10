@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ImportDataDialog from './ImportDataDialog'
 
 // Mock API
@@ -13,13 +12,12 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-// Create mock store
-const createMockStore = () => {
-  return configureStore({
-    reducer: {
-      persona: () => ({ personas: [], personaOntologies: [] }),
-      world: () => ({ entities: [], events: [], times: [], entityCollections: [], eventCollections: [], timeCollections: [], relations: [] }),
-      videos: () => ({ videos: [] }),
+// Create QueryClient for tests
+const createQueryClient = () => {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
     },
   })
 }
@@ -33,16 +31,16 @@ describe('ImportDataDialog', () => {
   })
 
   it('renders when open', () => {
-    const store = createMockStore()
+    const queryClient = createQueryClient()
 
     render(
-      <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
         <ImportDataDialog
           open={true}
           onClose={mockOnClose}
           onImportComplete={mockOnImportComplete}
         />
-      </Provider>
+      </QueryClientProvider>
     )
 
     expect(screen.getByText('Import Data')).toBeInTheDocument()
@@ -50,16 +48,16 @@ describe('ImportDataDialog', () => {
   })
 
   it('does not render when closed', () => {
-    const store = createMockStore()
+    const queryClient = createQueryClient()
 
     render(
-      <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
         <ImportDataDialog
           open={false}
           onClose={mockOnClose}
           onImportComplete={mockOnImportComplete}
         />
-      </Provider>
+      </QueryClientProvider>
     )
 
     expect(screen.queryByText('Import Data')).not.toBeInTheDocument()

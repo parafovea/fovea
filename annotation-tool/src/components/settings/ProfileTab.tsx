@@ -4,7 +4,6 @@
  */
 
 import { useState, FormEvent, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
   TextField,
@@ -18,8 +17,7 @@ import {
   AccordionDetails,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../../store/store.js'
-import { updateUser } from '../../store/userSlice.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 /**
  * Props for ProfileTab component.
@@ -36,8 +34,8 @@ interface ProfileTabProps {
  * @returns Profile settings form
  */
 export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { currentUser } = useSelector((state: RootState) => state.user)
+  const currentUser = useAuthStore(state => state.currentUser)
+  const updateUser = useAuthStore(state => state.updateUser)
 
   const [formData, setFormData] = useState({
     displayName: currentUser?.displayName || '',
@@ -142,7 +140,7 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
       }
 
       const updatedUser = await response.json()
-      dispatch(updateUser(updatedUser))
+      updateUser(updatedUser)
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile')

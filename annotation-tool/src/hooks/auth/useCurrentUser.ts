@@ -1,5 +1,4 @@
-import { useSelector } from 'react-redux'
-import { RootState } from '../../store/store.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 import { User } from '../../models/types.js'
 
 /**
@@ -19,9 +18,9 @@ export interface CurrentUserInfo {
  * @returns Current user information with authentication flags
  */
 export function useCurrentUser(): CurrentUserInfo {
-  const user = useSelector((state: RootState) => state.user.currentUser)
-  const isAuthenticated = useSelector((state: RootState) => state.user.isAuthenticated)
-  const isLoading = useSelector((state: RootState) => state.user.isLoading)
+  const user = useAuthStore(state => state.currentUser)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  const isLoading = useAuthStore(state => state.isLoading)
   const isAdmin = user?.isAdmin ?? false
 
   return { user, isAuthenticated, isAdmin, isLoading }

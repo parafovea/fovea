@@ -88,7 +88,7 @@ async def synthesize_summary_from_claims(
     # TODO: Parse #/@/^ references and convert to proper GlossItem structure
     summary_gloss = [{"type": "text", "content": result.text}]
 
-    logger.info(f"Synthesized summary with {len(summary_gloss)} gloss items")
+    logger.info("Synthesized summary with %d gloss items", len(summary_gloss))
     return summary_gloss
 
 

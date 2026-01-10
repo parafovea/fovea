@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios'
+import { GlossItem } from '../models/types'
 
 /**
  * Video summary data structure returned by the API.
@@ -12,7 +13,7 @@ export interface VideoSummary {
   id: string
   videoId: string
   personaId: string
-  summary: string
+  summary: GlossItem[]
   visualAnalysis: string | null
   audioTranscript: string | null
   keyFrames: number[] | null
@@ -37,6 +38,31 @@ export interface VideoSummary {
   processingTimeVisual?: number | null
   /** Processing time for audio-visual fusion in seconds. */
   processingTimeFusion?: number | null
+}
+
+/**
+ * Request payload for saving a video summary.
+ * Required fields: videoId, personaId, summary
+ * All other fields are optional and should be omitted (not null) if not provided.
+ */
+export interface SaveSummaryRequest {
+  videoId: string
+  personaId: string
+  summary: GlossItem[]
+  visualAnalysis?: string
+  audioTranscript?: string
+  keyFrames?: number[]
+  confidence?: number
+  transcriptJson?: any
+  audioLanguage?: string
+  speakerCount?: number
+  audioModelUsed?: string
+  visualModelUsed?: string
+  fusionStrategy?: string
+  processingTimeAudio?: number
+  processingTimeVisual?: number
+  processingTimeFusion?: number
+  createdBy?: string
 }
 
 /**
@@ -448,9 +474,7 @@ export class ApiClient {
    * @returns Saved summary
    * @throws ApiError if request fails
    */
-  async saveSummary(
-    summary: Omit<VideoSummary, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<VideoSummary> {
+  async saveSummary(summary: SaveSummaryRequest): Promise<VideoSummary> {
     try {
       const response = await this.client.post<VideoSummary>(
         '/api/summaries',

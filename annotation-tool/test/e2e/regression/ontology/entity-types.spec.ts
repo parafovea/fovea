@@ -169,16 +169,16 @@ test.describe('Entity Type Management', () => {
     await ontologyWorkspace.createEntityType('Building', 'A constructed structure')
     await ontologyWorkspace.expectTypeExists('Building')
 
-    // Save the ontology (click SAVE button in header)
+    // Save the ontology (click SAVE button in header) and wait for save to complete
     const saveButton = page.getByRole('button', { name: /^save$/i }).first()
     if (await saveButton.isVisible()) {
       await saveButton.click()
-      await page.waitForTimeout(1000)
+      await page.waitForLoadState('networkidle', { timeout: 10000 })
     }
 
-    // Reload page
+    // Reload page and wait for full load
     await page.reload()
-    await page.waitForTimeout(1000)
+    await page.waitForLoadState('networkidle', { timeout: 10000 })
 
     // Navigate to ontology workspace again
     await ontologyWorkspace.navigateTo(testPersona.id)

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Box,
   Paper,
@@ -48,26 +47,21 @@ import {
 } from '@mui/icons-material'
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './annotation/VideoPlayer'
-import { RootState, AppDispatch } from '../store/store'
-import { setCurrentVideo, setLastAnnotation } from '../store/videoSlice'
+import { useExternalLinksConfig } from '../hooks/useAppConfig'
 import {
-  setDrawingMode,
-  setSelectedType,
-  selectAnnotation,
-  deleteAnnotation,
-  setSelectedPersona,
-  setAnnotationMode,
-  setDetectionResults,
-  setShowDetectionCandidates,
-  clearDetectionState,
-  addKeyframe,
-  removeKeyframe,
-  updateKeyframe,
-  updateInterpolationSegment,
-  setAnnotations,
-  saveAnnotations,
-  selectAnnotations,
-} from '../store/annotationSlice'
+  useVideo,
+  useWorld,
+  useAnnotations,
+  useSaveAnnotations,
+  useDeleteAnnotation,
+  useAddKeyframe,
+  useRemoveKeyframe,
+  useUpdateKeyframe,
+  useUpdateInterpolationSegment,
+  usePersonas,
+  useAllPersonaOntologies,
+} from '../store/queries'
+import { useVideoUiStore, useAnnotationUiStore } from '../store/zustand'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './annotation/AnnotationAutocomplete'
@@ -77,12 +71,11 @@ import { DetectionDialog } from './dialogs/DetectionDialog'
 import type { DetectionRequest } from './dialogs/DetectionDialog'
 import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '../utils/formatters'
-import { VideoMetadata, Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
-import { useDetectObjects } from '../hooks/useDetection'
-import { useModelConfig } from '../hooks/useModelConfig'
+import { Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment } from '../models/types'
+import { useDetectObjects } from '../store/queries/useDetection'
+import { useModelConfig } from '../store/queries/useModelConfig'
 import { TimelineComponent } from './annotation/TimelineComponent'
 import { useCommands, useCommandContext } from '../hooks/useCommands.js'
-import { api } from '../services/api'
 
 const DRAWER_WIDTH = 300
 
@@ -100,7 +93,13 @@ const DRAWER_WIDTH = 300
 export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
-  const dispatch = useDispatch<AppDispatch>()
+
+  // TanStack Query hooks for keyframe manipulation
+  const addKeyframe = useAddKeyframe()
+  const removeKeyframe = useRemoveKeyframe()
+  const updateKeyframe = useUpdateKeyframe()
+  const updateInterpolationSegmentHook = useUpdateInterpolationSegment()
+
   const { data: modelConfig } = useModelConfig()
   const isCpuOnly = !modelConfig?.cudaAvailable
   const videoPlayerRef = useRef<VideoPlayerHandle>(null)
@@ -111,8 +110,13 @@ export default function AnnotationWorkspace() {
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
-  const [timelineExpanded, setTimelineExpanded] = useState(false)
-  const [timelineMounted, setTimelineMounted] = useState(false)
+
+  // Timeline UI state from Zustand store
+  const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
+  const setTimelineExpanded = useAnnotationUiStore(state => state.setTimelineExpanded)
+  const timelineMounted = useAnnotationUiStore(state => state.timelineMounted)
+  const setTimelineMounted = useAnnotationUiStore(state => state.setTimelineMounted)
+  const { videoSources: allowExternalVideoLinks } = useExternalLinksConfig()
 
   // Delayed mount/unmount for smooth animation
   useEffect(() => {
@@ -125,51 +129,64 @@ export default function AnnotationWorkspace() {
       const timer = setTimeout(() => setTimelineMounted(false), 300)
       return () => clearTimeout(timer)
     }
-  }, [timelineExpanded])
+  }, [timelineExpanded, setTimelineMounted])
 
-  const currentVideo = useSelector((state: RootState) => state.videos.currentVideo) as VideoMetadata | null
-  const personas = useSelector((state: RootState) => state.persona.personas)
+  // TanStack Query for video data (server state)
+  const { data: currentVideo = null } = useVideo(videoId)
 
-  // Select individual fields to avoid re-renders when unrelated state changes
-  // CRITICAL: Don't destructure entire state.annotations because updating loadedAnnotationIds
-  // would cause new references for all destructured values, triggering infinite loops
-  const selectedPersonaId = useSelector((state: RootState) => state.annotations.selectedPersonaId)
-  const annotationMode = useSelector((state: RootState) => state.annotations.annotationMode)
+  // TanStack Query for annotations (server state)
+  const { data: videoAnnotations = [] } = useAnnotations(videoId)
+  const { mutate: saveAnnotationsMutation } = useSaveAnnotations()
+  const { mutate: deleteAnnotationMutation } = useDeleteAnnotation()
 
-  // Get annotations for this specific video ONLY (selector only re-runs if THIS video's annotations change)
-  const videoAnnotations = useSelector((state: RootState) =>
-    videoId ? selectAnnotations(state, videoId) : []
-  )
+  // Zustand for video UI state
+  const setLastAnnotation = useVideoUiStore((state) => state.setLastAnnotation)
+
+  // Zustand for annotation UI state
+  const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const annotationMode = useAnnotationUiStore((state) => state.annotationMode)
+  const selectedAnnotation = useAnnotationUiStore((state) => state.selectedAnnotation)
+  const detectionResults = useAnnotationUiStore((state) => state.detectionResults)
+  const detectionConfidenceThreshold = useAnnotationUiStore((state) => state.detectionConfidenceThreshold)
+  const showDetectionCandidates = useAnnotationUiStore((state) => state.showDetectionCandidates)
+  const setSelectedAnnotation = useAnnotationUiStore((state) => state.setSelectedAnnotation)
+  const setAnnotationMode = useAnnotationUiStore((state) => state.setAnnotationMode)
+  const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
+  const setSelectedTypeId = useAnnotationUiStore((state) => state.setSelectedTypeId)
+  const setDrawingMode = useAnnotationUiStore((state) => state.setDrawingMode)
+  const setDetectionResults = useAnnotationUiStore((state) => state.setDetectionResults)
+  const setShowDetectionCandidates = useAnnotationUiStore((state) => state.setShowDetectionCandidates)
+  const clearDetectionState = useAnnotationUiStore((state) => state.clearDetectionState)
+
+  // TanStack Query for persona data
+  const { data: personas = [] } = usePersonas()
+  const personaIds = personas.map(p => p.id)
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
 
   // Get filtered annotations for display (by selected persona)
   const annotations = useMemo(() => {
-    // Filter annotations by selected persona if one is selected
     if (selectedPersonaId && videoAnnotations) {
       return videoAnnotations.filter(a => {
-        // Only TypeAnnotations have personaId
         if (a.annotationType === 'type') {
           return (a as TypeAnnotation).personaId === selectedPersonaId
         }
-        // Object annotations are not filtered by persona
         return true
       })
     }
     return videoAnnotations || []
   }, [videoAnnotations, selectedPersonaId])
-  const selectedAnnotation = useSelector((state: RootState) => state.annotations.selectedAnnotation)
-  const detectionResults = useSelector((state: RootState) => state.annotations.detectionResults)
-  const detectionConfidenceThreshold = useSelector((state: RootState) => state.annotations.detectionConfidenceThreshold)
-  const showDetectionCandidates = useSelector((state: RootState) => state.annotations.showDetectionCandidates)
-  const personaOntologies = useSelector((state: RootState) => state.persona.personaOntologies)
-  const worldEntities = useSelector((state: RootState) => state.world.entities)
-  const worldEvents = useSelector((state: RootState) => state.world.events)
-  const worldTimes = useSelector((state: RootState) => state.world.times)
+
+  // TanStack Query for world data
+  const { data: worldData } = useWorld()
+  const worldEntities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
+  const worldEvents = useMemo(() => worldData?.events ?? [], [worldData?.events])
+  const worldTimes = useMemo(() => worldData?.times ?? [], [worldData?.times])
 
   // Detection mutation
   const detectMutation = useDetectObjects({
     onSuccess: (data) => {
-      dispatch(setDetectionResults(data))
-      dispatch(setShowDetectionCandidates(true))
+      setDetectionResults(data)
+      setShowDetectionCandidates(true)
       setDetectionDialogOpen(false)
     },
     onError: (error) => {
@@ -179,18 +196,14 @@ export default function AnnotationWorkspace() {
 
   // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
   useEffect(() => {
-    if (!videoId || !videoAnnotations) return
+    if (!videoId || !videoAnnotations || videoAnnotations.length === 0) return
 
     const timeoutId = setTimeout(() => {
-      dispatch(saveAnnotations({
-        videoId,
-        personaId: selectedPersonaId,
-        annotations: videoAnnotations
-      }))
+      saveAnnotationsMutation({ videoId, annotations: videoAnnotations })
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [videoId, videoAnnotations, selectedPersonaId, dispatch])
+  }, [videoId, videoAnnotations, saveAnnotationsMutation])
 
   // Helper function to get type name from typeId (for displaying human-readable names)
   const getTypeName = useCallback((annotation: TypeAnnotation): string => {
@@ -266,25 +279,25 @@ export default function AnnotationWorkspace() {
       }
     }
 
-    dispatch(addKeyframe({
+    addKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
       box: currentBox,
       fps: currentVideo?.fps || 30,
-    }))
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+    })
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe])
 
   const handleDeleteKeyframe = useCallback(() => {
     if (!selectedAnnotation) return
 
-    dispatch(removeKeyframe({
+    removeKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
       fps: currentVideo?.fps || 30,
-    }))
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+    })
+  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe])
 
   const handleCopyPreviousFrame = useCallback(() => {
     if (!selectedAnnotation) return
@@ -303,60 +316,46 @@ export default function AnnotationWorkspace() {
     const isCurrentKeyframe = keyframes.some(k => k.frameNumber === currentFrame)
 
     if (isCurrentKeyframe) {
-      dispatch(updateKeyframe({
+      updateKeyframe({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         frameNumber: currentFrame,
         box: { ...prevBox, frameNumber: currentFrame },
-      }))
+      })
     } else {
-      dispatch(addKeyframe({
+      addKeyframe({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         frameNumber: currentFrame,
         box: { ...prevBox, frameNumber: currentFrame },
         fps: currentVideo?.fps || 30,
-      }))
+      })
     }
-  }, [selectedAnnotation, currentFrame, currentVideo, dispatch])
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe])
 
   const handleUpdateInterpolationSegment = useCallback(
     (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
-      dispatch(updateInterpolationSegment({
+      updateInterpolationSegmentHook({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         segmentIndex,
-        type,
+        interpolationType: type,
         controlPoints,
-      }))
+      })
     },
-    [selectedAnnotation, dispatch]
+    [selectedAnnotation, updateInterpolationSegmentHook]
   )
 
   // Track this as the last annotation when we load the component
   useEffect(() => {
     if (videoId) {
-      dispatch(setLastAnnotation({ videoId, timestamp: Date.now() }))
+      setLastAnnotation(videoId, Date.now())
     }
-  }, [videoId, dispatch])
+  }, [videoId, setLastAnnotation])
 
-  // Load annotations from backend when component mounts
-  useEffect(() => {
-    const loadAnnotations = async () => {
-      if (!videoId) return
-
-      try {
-        const savedAnnotations = await api.getAnnotations(videoId)
-        dispatch(setAnnotations({ videoId, annotations: savedAnnotations }))
-      } catch (error) {
-        console.error('Failed to load annotations:', error)
-      }
-    }
-
-    loadAnnotations()
-  }, [videoId, dispatch])
+  // Note: Annotations are automatically loaded via useAnnotations() TanStack Query hook
 
   // Set command context for when clauses
   useCommandContext({
@@ -380,7 +379,7 @@ export default function AnnotationWorkspace() {
   // Register command handlers
   useCommands({
     'timeline.toggle': () => {
-      setTimelineExpanded(prev => !prev)
+      setTimelineExpanded(!timelineExpanded)
     },
     'video.playPause': () => {
       videoPlayerRef.current?.handlePlayPause()
@@ -418,35 +417,8 @@ export default function AnnotationWorkspace() {
     enableOnFormTags: false
   })
 
-
-  /**
-   * Loads video metadata from the API and stores it in Redux state.
-   * Fetches video information including dimensions, FPS, uploader data, and timestamps.
-   *
-   * @returns Promise that resolves when video metadata is loaded
-   *
-   * @example
-   * ```tsx
-   * // Called automatically on mount when videoId changes
-   * useEffect(() => {
-   *   loadVideo()
-   * }, [loadVideo])
-   * ```
-   */
-  const loadVideo = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/videos/${videoId}`, { credentials: 'include' })
-      const data = await response.json()
-      dispatch(setCurrentVideo(data))
-    } catch (error) {
-      console.error('Failed to load video:', error)
-    }
-  }, [videoId, dispatch])
-
-  useEffect(() => {
-    loadVideo()
-  }, [loadVideo])
-
+  // Note: Video metadata is loaded via useVideo() TanStack Query hook (see line 139)
+  // The hook automatically fetches and caches video data when videoId changes
 
   /**
    * Selects an annotation and seeks video to its start time.
@@ -454,7 +426,7 @@ export default function AnnotationWorkspace() {
    */
   const handleAnnotationClick = (annotation: Annotation) => {
     // Select the annotation
-    dispatch(selectAnnotation(annotation))
+    setSelectedAnnotation(annotation)
 
     // Seek video to start of annotation
     if (videoPlayerRef.current && annotation.timeSpan) {
@@ -483,7 +455,7 @@ export default function AnnotationWorkspace() {
   const handleGoToOntology = () => {
     // Save current annotation state before navigating
     if (videoId) {
-      dispatch(setLastAnnotation({ videoId, timestamp: currentTime }))
+      setLastAnnotation(videoId, currentTime)
     }
     navigate('/ontology')
   }
@@ -550,17 +522,23 @@ export default function AnnotationWorkspace() {
               </IconButton>
               <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
                 {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
-                {currentVideo?.uploaderId && currentVideo?.uploaderUrl && (
+                {currentVideo?.uploaderId && (
                   <>
                     {' '}(
-                    <Link
-                      href={currentVideo.uploaderUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      underline="hover"
-                    >
-                      @{currentVideo.uploaderId}
-                    </Link>
+                    {allowExternalVideoLinks && currentVideo?.uploaderUrl ? (
+                      <Link
+                        href={currentVideo.uploaderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                      >
+                        @{currentVideo.uploaderId}
+                      </Link>
+                    ) : (
+                      <Typography component="span" color="text.secondary">
+                        @{currentVideo.uploaderId}
+                      </Typography>
+                    )}
                     )
                   </>
                 )}
@@ -612,16 +590,31 @@ export default function AnnotationWorkspace() {
 
               {/* Source Link - More prominent */}
               {currentVideo?.webpageUrl && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<ExternalLinkIcon />}
-                  href={currentVideo.webpageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View Original
-                </Button>
+                allowExternalVideoLinks ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<ExternalLinkIcon />}
+                    href={currentVideo.webpageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Original
+                  </Button>
+                ) : (
+                  <Tooltip title="External video source links are disabled">
+                    <span>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<ExternalLinkIcon />}
+                        disabled
+                      >
+                        View Original
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )
               )}
             </Stack>
           </Stack>
@@ -673,9 +666,9 @@ export default function AnnotationWorkspace() {
                     exclusive
                     onChange={(_, newMode) => {
                       if (newMode) {
-                        dispatch(setAnnotationMode(newMode))
+                        setAnnotationMode(newMode)
                         if (newMode === 'object') {
-                          dispatch(setSelectedPersona(null))
+                          setSelectedPersonaId(null)
                         }
                       }
                     }}
@@ -745,7 +738,7 @@ export default function AnnotationWorkspace() {
                     id="persona-select"
                     value={selectedPersonaId || ''}
                     label="Select Persona"
-                    onChange={(e) => dispatch(setSelectedPersona(e.target.value || null))}
+                    onChange={(e) => setSelectedPersonaId(e.target.value || null)}
                     disabled={annotationMode === 'object'}
                   >
                     <MenuItem value="">
@@ -769,15 +762,14 @@ export default function AnnotationWorkspace() {
                         if (option) {
                           if (annotationMode === 'type') {
                             const drawMode = option.type as 'entity' | 'role' | 'event'
-                            dispatch(setSelectedType({
-                              typeId: option.id,
-                              category: drawMode
-                            }))
+                            setSelectedTypeId(option.id)
+                            setDrawingMode(drawMode)
                           } else {
-                            dispatch(setDrawingMode('entity'))
+                            setDrawingMode('entity')
                           }
                         } else {
-                          dispatch(setSelectedType({ typeId: null, category: null }))
+                          setSelectedTypeId(null)
+                          setDrawingMode(null)
                         }
                       }}
                       disabled={annotationMode === 'type' && !selectedPersonaId}
@@ -963,7 +955,7 @@ export default function AnnotationWorkspace() {
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation()
-                          dispatch(deleteAnnotation({ videoId: videoId || '', annotationId: annotation.id }))
+                          deleteAnnotationMutation({ videoId: videoId || '', annotationId: annotation.id })
                         }}
                         aria-label="Delete annotation"
                       >
@@ -1018,7 +1010,7 @@ export default function AnnotationWorkspace() {
       {detectionResults && showDetectionCandidates && videoId && (
         <Dialog
           open={showDetectionCandidates}
-          onClose={() => dispatch(setShowDetectionCandidates(false))}
+          onClose={() => setShowDetectionCandidates(false)}
           maxWidth="lg"
           fullWidth
         >
@@ -1040,8 +1032,8 @@ export default function AnnotationWorkspace() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => {
-              dispatch(setShowDetectionCandidates(false))
-              dispatch(clearDetectionState())
+              setShowDetectionCandidates(false)
+              clearDetectionState()
             }}>
               Close
             </Button>

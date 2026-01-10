@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import {
   Dialog,
   DialogTitle,
@@ -23,8 +22,7 @@ import {
   Chip,
   Alert,
 } from '@mui/material'
-import { RootState, AppDispatch } from '../store/store'
-import { importFromPersona } from '../store/personaSlice'
+import { usePersonas, usePersonaOntology, useImportFromPersona } from '../store/queries'
 import { ImportRequest } from '../models/types'
 
 interface ImportDialogProps {
@@ -53,9 +51,10 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export default function ImportDialog({ open, onClose, targetPersonaId }: ImportDialogProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { personas, personaOntologies } = useSelector((state: RootState) => state.persona)
-  
+  // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
+  const { mutate: importFromPersonaMutation } = useImportFromPersona()
+
   const [sourcePersonaId, setSourcePersonaId] = useState<string>('')
   const [tabValue, setTabValue] = useState(0)
   const [selectedEntities, setSelectedEntities] = useState<string[]>([])
@@ -64,7 +63,8 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
   const [selectedRelationTypes, setSelectedRelationTypes] = useState<string[]>([])
   const [includeRelations, setIncludeRelations] = useState(false)
 
-  const sourceOntology = personaOntologies.find(o => o.personaId === sourcePersonaId)
+  // Fetch source persona's ontology
+  const { data: sourceOntology } = usePersonaOntology(sourcePersonaId || null)
   const targetPersona = personas.find(p => p.id === targetPersonaId)
 
   const handleImport = () => {
@@ -80,7 +80,7 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
       includeRelations,
     }
 
-    dispatch(importFromPersona(importRequest))
+    importFromPersonaMutation(importRequest)
     onClose()
     resetSelections()
   }

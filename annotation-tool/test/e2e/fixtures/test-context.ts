@@ -202,10 +202,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Ontology workspace page object.
    * Automatically created for each test.
    * Depends on testUser to ensure authentication is set up.
+   * Clears localStorage to ensure fresh Zustand state.
    */
   // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ontologyWorkspace: async ({ page, testUser }, use) => {
+    // Clear localStorage to ensure fresh state for ontology workspace tests
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+
     const workspace = new OntologyWorkspacePage(page)
     await use(workspace)
   },

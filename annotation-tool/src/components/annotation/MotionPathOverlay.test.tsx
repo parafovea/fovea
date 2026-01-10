@@ -1,10 +1,8 @@
 import { describe, test, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MotionPathOverlay } from './MotionPathOverlay'
 import { Annotation } from '../../models/types.js'
-import annotationReducer from '../../store/annotationSlice.js'
 
 describe('MotionPathOverlay', () => {
   const mockAnnotation: Annotation = {
@@ -28,44 +26,21 @@ describe('MotionPathOverlay', () => {
     updatedAt: new Date().toISOString(),
   }
 
-  const createMockStore = (annotations: Annotation[] = [mockAnnotation]) => {
-    return configureStore({
-      reducer: {
-        annotations: annotationReducer,
-      },
-      preloadedState: {
-        annotations: {
-          annotations: { 'video_vid-1': annotations },
-          selectedAnnotation: mockAnnotation,
-          selectedPersonaId: null,
-          annotationMode: 'type' as const,
-          isDrawing: false,
-          drawingMode: null,
-          selectedTypeId: null,
-          temporaryBox: null,
-          temporaryTime: null,
-          linkTargetId: null,
-          linkTargetType: null,
-          detectionResults: null,
-          detectionQuery: '',
-          detectionConfidenceThreshold: 0.5,
-          showDetectionCandidates: false,
-          interpolationMode: 'linear' as const,
-          selectedKeyframes: [],
-          showMotionPath: true,
-          timelineZoom: 1,
-          currentFrame: 0,
-        },
+  const createQueryClient = () => {
+    return new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
       },
     })
   }
 
-  const renderWithStore = (component: React.ReactElement, store = createMockStore()) => {
-    return render(<Provider store={store}>{component}</Provider>)
+  const renderWithQueryClient = (component: React.ReactElement, queryClient = createQueryClient()) => {
+    return render(<QueryClientProvider client={queryClient}>{component}</QueryClientProvider>)
   }
 
   test('renders motion path when visible is true', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={mockAnnotation}
@@ -81,7 +56,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('does not render when visible is false', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={mockAnnotation}
@@ -109,9 +84,7 @@ describe('MotionPathOverlay', () => {
       },
     }
 
-    const store = createMockStore([singleKeyframeAnnotation])
-
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={singleKeyframeAnnotation}
@@ -119,8 +92,7 @@ describe('MotionPathOverlay', () => {
           videoHeight={1080}
           visible={true}
         />
-      </svg>,
-      store
+      </svg>
     )
 
     const motionPath = container.querySelector('[data-testid="motion-path-overlay"]')
@@ -128,7 +100,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('renders path with correct stroke color for entity', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={{ ...mockAnnotation, typeCategory: 'entity' }}
@@ -144,7 +116,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('renders path with correct stroke color for event', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={{ ...mockAnnotation, typeCategory: 'event' }}
@@ -160,7 +132,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('renders keyframe dots', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={mockAnnotation}
@@ -177,7 +149,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('applies correct opacity to path', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={mockAnnotation}
@@ -193,7 +165,7 @@ describe('MotionPathOverlay', () => {
   })
 
   test('applies pointer-events none to overlay', () => {
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <svg>
         <MotionPathOverlay
           annotation={mockAnnotation}

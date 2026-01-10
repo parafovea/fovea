@@ -577,33 +577,32 @@ await fetch('/api/world', {
 
 ## Frontend Integration
 
-### Redux Store
+### TanStack Query Hooks
 
-World state is managed by `worldSlice` in the Redux store:
+World state is managed by TanStack Query hooks in `src/store/queries/`:
 
 ```typescript
-// annotation-tool/src/store/worldSlice.ts
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+// annotation-tool/src/store/queries/useWorld.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../../services/api'
 
-export const fetchWorldState = createAsyncThunk(
-  'world/fetch',
-  async () => {
-    const response = await fetch('/api/world')
-    return response.json()
-  }
-)
+export function useWorld() {
+  return useQuery({
+    queryKey: ['world'],
+    queryFn: () => api.getWorld(),
+  })
+}
 
-export const updateWorldState = createAsyncThunk(
-  'world/update',
-  async (worldState: Partial<WorldState>) => {
-    const response = await fetch('/api/world', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(worldState)
-    })
-    return response.json()
-  }
-)
+export function useUpdateWorld() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (worldState: Partial<WorldState>) => api.updateWorld(worldState),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['world'] })
+    },
+  })
+}
 ```
 
 ### React Components

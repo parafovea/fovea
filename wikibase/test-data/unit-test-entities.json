@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Q5": {
+      "type": "item",
+      "id": "Q5",
+      "labels": {
+        "en": {"language": "en", "value": "human"}
+      },
+      "descriptions": {
+        "en": {"language": "en", "value": "common name of Homo sapiens"}
+      },
+      "aliases": {
+        "en": [
+          {"language": "en", "value": "person"},
+          {"language": "en", "value": "human being"}
+        ]
+      }
+    },
+    "Q515": {
+      "type": "item",
+      "id": "Q515",
+      "labels": {
+        "en": {"language": "en", "value": "city"}
+      },
+      "descriptions": {
+        "en": {"language": "en", "value": "large and permanent human settlement"}
+      }
+    },
+    "Q937": {
+      "type": "item",
+      "id": "Q937",
+      "labels": {
+        "en": {"language": "en", "value": "Albert Einstein"}
+      },
+      "descriptions": {
+        "en": {"language": "en", "value": "German-born theoretical physicist (1879–1955)"}
+      },
+      "aliases": {
+        "en": [
+          {"language": "en", "value": "Einstein"}
+        ]
+      }
+    },
+    "Q60": {
+      "type": "item",
+      "id": "Q60",
+      "labels": {
+        "en": {"language": "en", "value": "New York City"}
+      },
+      "descriptions": {
+        "en": {"language": "en", "value": "most populous city in the United States"}
+      },
+      "aliases": {
+        "en": [
+          {"language": "en", "value": "NYC"},
+          {"language": "en", "value": "New York"}
+        ]
+      }
+    },
+    "Q178651": {
+      "type": "item",
+      "id": "Q178651",
+      "labels": {
+        "en": {"language": "en", "value": "battle"}
+      },
+      "descriptions": {
+        "en": {"language": "en", "value": "military engagement"}
+      }
+    }
+  }
+}

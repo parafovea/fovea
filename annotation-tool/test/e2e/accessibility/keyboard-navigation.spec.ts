@@ -216,8 +216,8 @@ test.describe('Keyboard Navigation - Dialogs and Modals', () => {
     await page.keyboard.type('Created entirely with keyboard', { delay: 50 })
     await page.waitForTimeout(1000) // Wait for gloss to update
 
-    // Debug: Check if gloss field has content
-    const glossValue = await glossField.inputValue()
+    // Verify gloss field has content (filling is sufficient for validation)
+    await expect(glossField).toHaveValue(/./);
 
     // Find Save/Create button (should now be enabled after filling required fields)
     const saveButton = dialog.getByRole('button', { name: /save|create/i })

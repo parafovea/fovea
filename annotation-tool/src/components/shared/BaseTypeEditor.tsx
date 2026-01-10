@@ -47,6 +47,7 @@ export interface BaseTypeEditorProps {
   // Wikidata state
   wikidataId?: string
   wikidataUrl?: string
+  wikibaseId?: string
   importedAt?: string
   /** @deprecated No longer used - WikidataImportFlow handles import directly */
   _onWikidataSelect?: (item: any) => void
@@ -81,6 +82,7 @@ export default function BaseTypeEditor({
   setTargetPersonaIds,
   wikidataId,
   wikidataUrl,
+  wikibaseId,
   importedAt,
   onSave,
   onDelete,
@@ -136,9 +138,10 @@ export default function BaseTypeEditor({
             {/* Wikidata Chip */}
             {wikidataId && wikidataUrl && (
               <Box>
-                <WikidataChip 
+                <WikidataChip
                   wikidataId={wikidataId}
                   wikidataUrl={wikidataUrl}
+                  wikibaseId={wikibaseId}
                   importedAt={importedAt}
                 />
               </Box>

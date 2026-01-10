@@ -27,7 +27,7 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material'
-import { useUsers, useDeleteUser, UserWithStats } from '../../hooks/admin/useUsers.js'
+import { useUsers, useDeleteUser, UserWithStats } from '../../store/queries/admin/useUsers.js'
 import CreateUserDialog from './CreateUserDialog.js'
 import EditUserDialog from './EditUserDialog.js'
 import ConfirmDialog from '../shared/ConfirmDialog.js'

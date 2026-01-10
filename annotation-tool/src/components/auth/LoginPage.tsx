@@ -1,6 +1,5 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link as RouterLink } from 'react-router-dom'
-import { useSelector } from 'react-redux'
 import {
   Box,
   Paper,
@@ -14,7 +13,7 @@ import {
 } from '@mui/material'
 import { Login as LoginIcon } from '@mui/icons-material'
 import { useAuth } from '../../hooks/auth/useAuth.js'
-import { RootState } from '../../store/store.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 /**
  * Login page component.
@@ -24,7 +23,7 @@ import { RootState } from '../../store/store.js'
 export default function LoginPage() {
   const navigate = useNavigate()
   const { login } = useAuth()
-  const { allowRegistration } = useSelector((state: RootState) => state.user)
+  const allowRegistration = useAuthStore(state => state.allowRegistration)
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

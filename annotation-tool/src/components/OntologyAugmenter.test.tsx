@@ -7,83 +7,51 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
 import { OntologyAugmenter, AugmentationResponse } from './OntologyAugmenter'
-import personaReducer from '../store/personaSlice'
 import * as apiClient from '../api/client'
+import { server } from '../../test/setup'
+import { http, HttpResponse } from 'msw'
 
-const createMockStore = () => {
-  const store = configureStore({
-    reducer: {
-      persona: personaReducer as any,
+// Mock ontology data
+const mockOntology = {
+  id: 'ont-1',
+  personaId: 'persona-1',
+  entities: [
+    {
+      id: 'entity-1',
+      name: 'Player',
+      gloss: [{ type: 'text', content: 'A person playing the game' }],
+      createdAt: '2025-10-01T00:00:00Z',
+      updatedAt: '2025-10-01T00:00:00Z',
     },
-    preloadedState: {
-      persona: {
-        personas: [
-          {
-            id: 'persona-1',
-            name: 'Test Persona',
-            role: 'Test Role',
-            informationNeed: 'Test information need',
-            details: '',
-            createdAt: '2025-10-01T00:00:00Z',
-            updatedAt: '2025-10-01T00:00:00Z',
-          },
-        ],
-        personaOntologies: [
-          {
-            id: 'ont-1',
-            personaId: 'persona-1',
-            entities: [
-              {
-                id: 'entity-1',
-                name: 'Player',
-                gloss: [{ type: 'text', content: 'A person playing the game' }],
-                createdAt: '2025-10-01T00:00:00Z',
-                updatedAt: '2025-10-01T00:00:00Z',
-              },
-            ],
-            events: [
-              {
-                id: 'event-1',
-                name: 'Goal',
-                gloss: [{ type: 'text', content: 'A scoring event' }],
-                roles: [],
-                createdAt: '2025-10-01T00:00:00Z',
-                updatedAt: '2025-10-01T00:00:00Z',
-              },
-            ],
-            roles: [
-              {
-                id: 'role-1',
-                name: 'Scorer',
-                gloss: [{ type: 'text', content: 'The player who scores' }],
-                allowedFillerTypes: ['entity' as const],
-                createdAt: '2025-10-01T00:00:00Z',
-                updatedAt: '2025-10-01T00:00:00Z',
-              },
-            ],
-            relationTypes: [],
-            relations: [],
-            createdAt: '2025-10-01T00:00:00Z',
-            updatedAt: '2025-10-01T00:00:00Z',
-          },
-        ],
-        activePersonaId: 'persona-1',
-        isLoading: false,
-        error: null,
-        unsavedChanges: false,
-      },
+  ],
+  events: [
+    {
+      id: 'event-1',
+      name: 'Goal',
+      gloss: [{ type: 'text', content: 'A scoring event' }],
+      roles: [],
+      createdAt: '2025-10-01T00:00:00Z',
+      updatedAt: '2025-10-01T00:00:00Z',
     },
-  })
-  return store
+  ],
+  roles: [
+    {
+      id: 'role-1',
+      name: 'Scorer',
+      gloss: [{ type: 'text', content: 'The player who scores' }],
+      allowedFillerTypes: ['entity' as const],
+      createdAt: '2025-10-01T00:00:00Z',
+      updatedAt: '2025-10-01T00:00:00Z',
+    },
+  ],
+  relationTypes: [],
+  relations: [],
+  createdAt: '2025-10-01T00:00:00Z',
+  updatedAt: '2025-10-01T00:00:00Z',
 }
 
-const renderWithProviders = (
-  ui: React.ReactElement,
-  store = createMockStore()
-) => {
+function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -91,22 +59,28 @@ const renderWithProviders = (
     },
   })
 
-  return render(
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </Provider>
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
 }
 
 describe('OntologyAugmenter', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Setup MSW handler for persona ontology
+    server.use(
+      http.get('/api/personas/:personaId/ontology', () => {
+        return HttpResponse.json(mockOntology)
+      })
+    )
   })
 
   describe('Initial Render', () => {
-    it('renders component with default category', () => {
-      renderWithProviders(
-        <OntologyAugmenter personaId="persona-1" personaName="Baseball Scout" />
+    it('renders component with default category', async () => {
+      render(
+        <OntologyAugmenter personaId="persona-1" personaName="Baseball Scout" />,
+        { wrapper: createWrapper() }
       )
 
       expect(screen.getByText('AI Ontology Augmentation')).toBeInTheDocument()
@@ -115,31 +89,36 @@ describe('OntologyAugmenter', () => {
       expect(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i)).toBeInTheDocument()
     })
 
-    it('renders with initial category and domain', () => {
-      renderWithProviders(
+    it('renders with initial category and domain', async () => {
+      render(
         <OntologyAugmenter
           personaId="persona-1"
           initialCategory="event"
           initialDomain="Wildlife research tracking whale migration"
-        />
+        />,
+        { wrapper: createWrapper() }
       )
 
       expect(screen.getByDisplayValue('Wildlife research tracking whale migration')).toBeInTheDocument()
     })
 
-    it('displays existing entity types', () => {
-      renderWithProviders(
-        <OntologyAugmenter personaId="persona-1" initialCategory="entity" />
+    it('displays existing entity types', async () => {
+      render(
+        <OntologyAugmenter personaId="persona-1" initialCategory="entity" />,
+        { wrapper: createWrapper() }
       )
 
-      expect(screen.getByText('Existing entity types (1):')).toBeInTheDocument()
-      expect(screen.getByText('Player')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('Existing entity types (1):')).toBeInTheDocument()
+        expect(screen.getByText('Player')).toBeInTheDocument()
+      })
     })
 
     it('displays close button when onClose is provided', () => {
       const onClose = vi.fn()
-      renderWithProviders(
-        <OntologyAugmenter personaId="persona-1" onClose={onClose} />
+      render(
+        <OntologyAugmenter personaId="persona-1" onClose={onClose} />,
+        { wrapper: createWrapper() }
       )
 
       expect(screen.getByLabelText('close')).toBeInTheDocument()
@@ -149,9 +128,11 @@ describe('OntologyAugmenter', () => {
   describe('Category Selection', () => {
     it('updates existing types display when category changes', async () => {
       const user = userEvent.setup()
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
-      expect(screen.getByText('Existing entity types (1):')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('Existing entity types (1):')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('combobox'))
       await user.click(screen.getByText('Event Types'))
@@ -163,7 +144,11 @@ describe('OntologyAugmenter', () => {
 
     it('shows role types when role category is selected', async () => {
       const user = userEvent.setup()
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Existing entity types (1):')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('combobox'))
       await user.click(screen.getByText('Role Types'))
@@ -176,14 +161,14 @@ describe('OntologyAugmenter', () => {
 
   describe('Generate Button', () => {
     it('disables generate button when domain is empty', () => {
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       expect(screen.getByRole('button', { name: /generate suggestions/i })).toBeDisabled()
     })
 
     it('enables generate button when domain is provided', async () => {
       const user = userEvent.setup()
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -200,7 +185,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockImplementation(() => new Promise(() => {}))
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -240,7 +225,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -286,7 +271,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -331,8 +316,9 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(
-        <OntologyAugmenter personaId="persona-1" initialCategory="event" />
+      render(
+        <OntologyAugmenter personaId="persona-1" initialCategory="event" />,
+        { wrapper: createWrapper() }
       )
 
       await user.type(
@@ -378,7 +364,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -423,7 +409,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(
         screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i),
@@ -461,7 +447,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Soccer analysis')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -502,7 +488,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Soccer tactics')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -539,7 +525,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Soccer positions')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -568,7 +554,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockRejectedValue(new Error('Network error'))
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Test domain')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -592,7 +578,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Vague description')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -627,7 +613,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Test')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -659,7 +645,7 @@ describe('OntologyAugmenter', () => {
       const mockAugment = vi.spyOn(apiClient.apiClient, 'augmentOntology')
       mockAugment.mockResolvedValue(mockResponse)
 
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       await user.type(screen.getByPlaceholderText(/Wildlife research tracking whale pod behavior/i), 'Test')
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
@@ -674,7 +660,7 @@ describe('OntologyAugmenter', () => {
   describe('Max Suggestions Control', () => {
     it('allows changing max suggestions value', async () => {
       const user = userEvent.setup()
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       const input = screen.getByLabelText('Max Suggestions')
       expect(input).toHaveValue(10)
@@ -688,7 +674,7 @@ describe('OntologyAugmenter', () => {
 
     it('clamps max suggestions to valid range', async () => {
       const user = userEvent.setup()
-      renderWithProviders(<OntologyAugmenter personaId="persona-1" />)
+      render(<OntologyAugmenter personaId="persona-1" />, { wrapper: createWrapper() })
 
       const input = screen.getByLabelText('Max Suggestions')
 
@@ -705,8 +691,9 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
 
-      renderWithProviders(
-        <OntologyAugmenter personaId="persona-1" onClose={onClose} />
+      render(
+        <OntologyAugmenter personaId="persona-1" onClose={onClose} />,
+        { wrapper: createWrapper() }
       )
 
       await user.click(screen.getByLabelText('close'))

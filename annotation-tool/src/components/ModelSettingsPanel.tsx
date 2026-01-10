@@ -32,7 +32,7 @@ import {
   Error as ErrorIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material'
-import { useModelConfig, useSelectModel, useMemoryValidation } from '../hooks/useModelConfig'
+import { useModelConfig, useSelectModel, useMemoryValidation } from '../store/queries/useModelConfig'
 import { ModelOption } from '../api/client'
 
 /**

@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useState, useEffect, useRef } from 'react'
 import {
   Box,
   Paper,
@@ -13,28 +12,28 @@ import {
   Stack,
 } from '@mui/material'
 import { Save as SaveIcon, Add as AddIcon } from '@mui/icons-material'
-import { RootState, AppDispatch } from '../store/store'
 import {
-  fetchVideoSummaryForPersona,
-  saveVideoSummary,
-  updateCurrentSummary,
-} from '../store/videoSummarySlice'
+  usePersonaOntology,
+  useVideoSummary,
+  useSaveSummary,
+} from '../store/queries'
 import {
-  fetchClaims,
-  createClaim,
-  updateClaim,
-  deleteClaim,
-  extractClaims,
-  checkExtractionJob,
-  clearExtractionState,
-} from '../store/claimsSlice'
-import { fetchPersonaOntology } from '../store/personaSlice'
+  useClaims,
+  useCreateClaim,
+  useUpdateClaim,
+  useDeleteClaim,
+  useExtractClaims,
+  useExtractionJobStatus,
+  claimsQueryKeys,
+} from '../store/queries/useClaims'
+import { useClaimsUiStore } from '../store/zustand/claimsUiStore'
+import { useQueryClient } from '@tanstack/react-query'
 import GlossEditor from './GlossEditor'
 import ClaimsViewer from './claims/ClaimsViewer'
 import ClaimEditor from './claims/ClaimEditor'
 import ClaimsExtractionDialog from './claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from './claims/ClaimSpanHighlighter'
-import { GlossItem, VideoSummary, Claim, ClaimExtractionConfig, ClaimTextSpan } from '../models/types'
+import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan } from '../models/types'
 import { debounce } from 'lodash'
 
 interface VideoSummaryEditorProps {
@@ -48,18 +47,28 @@ export default function VideoSummaryEditor({
   personaId,
   disabled = false,
 }: VideoSummaryEditorProps) {
-  const dispatch = useDispatch<AppDispatch>()
-  const { currentSummary, loading, saving, error } = useSelector(
-    (state: RootState) => state.videoSummaries
-  )
+  const queryClient = useQueryClient()
+
+  // TanStack Query for video summary
   const {
-    claimsBySummary,
-    selectedClaimId,
-    extracting,
-    extractionJobId,
-    extractionProgress,
-    extractionError,
-  } = useSelector((state: RootState) => state.claims)
+    data: currentSummary,
+    isLoading: loading,
+    error: queryError,
+  } = useVideoSummary(videoId, personaId)
+  const saveSummaryMutation = useSaveSummary()
+  const saving = saveSummaryMutation.isPending
+  const error = queryError?.message || saveSummaryMutation.error?.message || null
+
+  // Claims UI state from Zustand
+  const selectedClaimId = useClaimsUiStore((state) => state.selectedClaimId)
+  const extracting = useClaimsUiStore((state) => state.extracting)
+  const extractionJobId = useClaimsUiStore((state) => state.extractionJobId)
+  const extractionProgress = useClaimsUiStore((state) => state.extractionProgress)
+  const extractionError = useClaimsUiStore((state) => state.extractionError)
+  const startExtraction = useClaimsUiStore((state) => state.startExtraction)
+  const updateExtractionProgress = useClaimsUiStore((state) => state.updateExtractionProgress)
+  const setExtractionError = useClaimsUiStore((state) => state.setExtractionError)
+  const clearExtractionState = useClaimsUiStore((state) => state.clearExtractionState)
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [hasChanges, setHasChanges] = useState(false)
@@ -71,104 +80,95 @@ export default function VideoSummaryEditor({
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
 
-  // Get current claims
-  const claims = currentSummary ? claimsBySummary[currentSummary.id] || [] : []
+  // TanStack Query hooks for claims
+  const summaryId = currentSummary?.id
+  const { data: claims = [], isLoading: claimsLoading } = useClaims(
+    activeTab === 1 ? summaryId : undefined, // Only fetch when on Claims tab
+    'video'
+  )
+  const createClaimMutation = useCreateClaim()
+  const updateClaimMutation = useUpdateClaim()
+  const deleteClaimMutation = useDeleteClaim()
+  const extractClaimsMutation = useExtractClaims()
+
+  // Extraction job status polling
+  const { data: jobStatus } = useExtractionJobStatus(extractionJobId, extracting)
+
+  // Fetch persona ontology via TanStack Query (auto-fetches when personaId changes)
+  usePersonaOntology(personaId)
 
   // Load summary when component mounts or when video/persona changes
   useEffect(() => {
-    if (videoId && personaId) {
-      dispatch(fetchVideoSummaryForPersona({ videoId, personaId }))
-        .then((result) => {
-          if (result.payload) {
-            setLocalSummary((result.payload as VideoSummary).summary || [])
-          } else {
-            // No existing summary - create empty one immediately so claims can be added
-            const emptySummary: Partial<VideoSummary> & { videoId: string; personaId: string } = {
-              videoId,
-              personaId,
-              summary: [],
-            }
-            dispatch(saveVideoSummary(emptySummary as VideoSummary))
-              .then((saveResult) => {
-                if (saveResult.payload) {
-                  setLocalSummary([])
-                }
-              })
-          }
-        })
-    }
-  }, [videoId, personaId, dispatch])
-
-  // Fetch persona ontology when personaId changes
-  useEffect(() => {
-    if (personaId) {
-      dispatch(fetchPersonaOntology(personaId))
-    }
-  }, [personaId, dispatch])
-
-  // Fetch claims when switching to Claims tab
-  useEffect(() => {
-    if (activeTab === 1 && currentSummary) {
-      dispatch(fetchClaims({ summaryId: currentSummary.id, summaryType: 'video' }))
-    }
-  }, [activeTab, currentSummary, dispatch])
-
-  // Poll for extraction job status
-  useEffect(() => {
-    if (extractionJobId && extracting) {
-      const interval = setInterval(() => {
-        dispatch(checkExtractionJob(extractionJobId))
-          .unwrap()
-          .then((status) => {
-            if (status.status === 'completed' && currentSummary) {
-              // Refresh claims when job completes
-              dispatch(fetchClaims({ summaryId: currentSummary.id, summaryType: 'video' }))
-              dispatch(clearExtractionState())
-            } else if (status.status === 'failed') {
-              dispatch(clearExtractionState())
-            }
-          })
-          .catch(() => {
-            dispatch(clearExtractionState())
-          })
-      }, 2000)
-      return () => clearInterval(interval)
-    }
-  }, [extractionJobId, extracting, currentSummary, dispatch])
-
-  // Debounced save function
-  const debouncedSave = debounce(async (summary: GlossItem[]) => {
-    if (!currentSummary) {
-      // Create new summary - backend will generate ID
-      const newSummary = {
+    if (currentSummary) {
+      // Parse summary if it's a string (from API), or use directly if already array
+      const summaryData = typeof currentSummary.summary === 'string'
+        ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
+        : (currentSummary.summary || [])
+      setLocalSummary(summaryData)
+    } else if (!loading && videoId && personaId) {
+      // No existing summary - create empty one immediately so claims can be added
+      // Only include required fields - optional fields should be omitted, not null
+      const emptySummary = {
         videoId,
         personaId,
-        summary,
-      } as VideoSummary
-      await dispatch(saveVideoSummary(newSummary))
-    } else {
-      // Update existing summary
-      const updatedSummary: VideoSummary = {
-        ...currentSummary,
-        summary,
-        updatedAt: new Date().toISOString(),
+        summary: [] as GlossItem[],
       }
-      await dispatch(saveVideoSummary(updatedSummary))
+      saveSummaryMutation.mutate(emptySummary, {
+        onSuccess: () => {
+          setLocalSummary([])
+        },
+      })
     }
-    setHasChanges(false)
-  }, 1000) // Save after 1 second of no changes
+  }, [videoId, personaId, currentSummary, loading, saveSummaryMutation])
+
+  // Handle extraction job status updates from TanStack Query
+  useEffect(() => {
+    if (jobStatus) {
+      if (jobStatus.progress !== undefined) {
+        updateExtractionProgress(jobStatus.progress)
+      }
+      if (jobStatus.status === 'completed' && summaryId) {
+        // Invalidate claims cache to trigger refetch
+        queryClient.invalidateQueries({ queryKey: claimsQueryKeys.bySummary(summaryId) })
+        clearExtractionState()
+      } else if (jobStatus.status === 'failed') {
+        setExtractionError(jobStatus.error || 'Extraction failed')
+      }
+    }
+  }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
+
+  // Debounced save function - use ref to keep stable reference
+  const debouncedSaveRef = useRef(
+    debounce(async (summary: GlossItem[], summaryData: typeof currentSummary, saveFn: typeof saveSummaryMutation.mutate) => {
+      if (!summaryData) {
+        // Create new summary - only required fields
+        saveFn({ videoId, personaId, summary }, {
+          onSuccess: () => setHasChanges(false),
+        })
+      } else {
+        // Update existing summary - spread only defined optional fields
+        saveFn({
+          videoId: summaryData.videoId,
+          personaId: summaryData.personaId,
+          summary,
+          ...(summaryData.visualAnalysis && { visualAnalysis: summaryData.visualAnalysis }),
+          ...(summaryData.audioTranscript && { audioTranscript: summaryData.audioTranscript }),
+          ...(summaryData.keyFrames && { keyFrames: summaryData.keyFrames }),
+          ...(summaryData.confidence != null && { confidence: summaryData.confidence }),
+        }, {
+          onSuccess: () => setHasChanges(false),
+        })
+      }
+    }, 1000) // Save after 1 second of no changes
+  )
+  const debouncedSave = debouncedSaveRef.current
 
   const handleSummaryChange = (summary: GlossItem[]) => {
     setLocalSummary(summary)
     setHasChanges(true)
 
-    // Update Redux state locally (without saving to backend yet)
-    if (currentSummary) {
-      dispatch(updateCurrentSummary({ summary }))
-    }
-
     // Trigger debounced save
-    debouncedSave(summary)
+    debouncedSave(summary, currentSummary, saveSummaryMutation.mutate)
   }
 
   // Claims handlers
@@ -185,43 +185,45 @@ export default function VideoSummaryEditor({
   }
 
   const handleDeleteClaim = async (claim: Claim) => {
-    if (currentSummary && confirm(`Delete this claim${claim.subclaims?.length ? ' and all its subclaims' : ''}?`)) {
-      await dispatch(deleteClaim({ summaryId: currentSummary.id, claimId: claim.id }))
+    if (summaryId && confirm(`Delete this claim${claim.subclaims?.length ? ' and all its subclaims' : ''}?`)) {
+      await deleteClaimMutation.mutateAsync({ summaryId, claimId: claim.id })
     }
   }
 
   const handleSaveClaim = async (claimData: Partial<Claim>) => {
-    if (!currentSummary) return
+    if (!summaryId) return
 
     if (editingClaim) {
       // Update existing claim - response includes full claims tree
-      await dispatch(updateClaim({
-        summaryId: currentSummary.id,
+      await updateClaimMutation.mutateAsync({
+        summaryId,
         claimId: editingClaim.id,
         updates: claimData,
-      }))
+      })
     } else {
       // Create new claim - response includes full claims tree
-      await dispatch(createClaim({
-        summaryId: currentSummary.id,
+      await createClaimMutation.mutateAsync({
+        summaryId,
         claim: {
           ...claimData,
-          summaryId: currentSummary.id,
+          summaryId,
           summaryType: 'video',
           text: claimData.text || '',
           parentClaimId,
         },
-      }))
+      })
     }
   }
 
   const handleExtractClaims = async (config: ClaimExtractionConfig) => {
-    if (!currentSummary) return
+    if (!summaryId) return
 
-    await dispatch(extractClaims({
-      summaryId: currentSummary.id,
+    const result = await extractClaimsMutation.mutateAsync({
+      summaryId,
       config,
-    }))
+    })
+    // Start tracking the extraction job in Zustand
+    startExtraction(result.jobId)
   }
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -291,7 +293,7 @@ export default function VideoSummaryEditor({
             <Button
               variant="contained"
               onClick={() => setExtractDialogOpen(true)}
-              disabled={extracting || !currentSummary || localSummary.length === 0}
+              disabled={extracting || !summaryId || localSummary.length === 0}
               size="small"
             >
               Extract Claims
@@ -300,7 +302,7 @@ export default function VideoSummaryEditor({
               variant="outlined"
               startIcon={<AddIcon />}
               onClick={() => handleAddClaim()}
-              disabled={!currentSummary}
+              disabled={!summaryId}
               size="small"
             >
               Add Manual Claim
@@ -358,19 +360,20 @@ export default function VideoSummaryEditor({
           {activeTab === 1 && (
             <>
               {extractionError && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => {}}>
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => clearExtractionState()}>
                   {extractionError}
                 </Alert>
               )}
               <ClaimsViewer
                 claims={claims}
-                summaryId={currentSummary?.id || ''}
+                summaryId={summaryId || ''}
                 personaId={personaId}
                 onEditClaim={handleEditClaim}
                 onAddClaim={handleAddClaim}
                 onDeleteClaim={handleDeleteClaim}
                 selectedClaimId={selectedClaimId}
                 onClaimSelect={handleClaimSelect}
+                loading={claimsLoading}
               />
             </>
           )}
@@ -387,7 +390,7 @@ export default function VideoSummaryEditor({
         }}
         onSave={handleSaveClaim}
         claim={editingClaim}
-        summaryId={currentSummary?.id || ''}
+        summaryId={summaryId || ''}
         personaId={personaId}
         videoId={videoId}
         parentClaimId={parentClaimId}

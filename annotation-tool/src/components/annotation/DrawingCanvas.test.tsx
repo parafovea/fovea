@@ -5,10 +5,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import DrawingCanvas from './DrawingCanvas'
-import annotationSlice from '../../store/annotationSlice'
 import type { DetectionResponse } from '../../api/client'
 
 /**
@@ -43,23 +41,23 @@ vi.mock('../../hooks/annotation/useAnnotationDrawing', () => ({
 }))
 
 /**
- * Creates test Redux store
+ * Creates test QueryClient
  */
-function createTestStore(initialState = {}) {
-  return configureStore({
-    reducer: {
-      annotations: annotationSlice,
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
     },
-    preloadedState: initialState,
   })
 }
 
 /**
- * Creates wrapper with Redux Provider
+ * Creates wrapper with QueryClientProvider
  */
-function createWrapper(store: ReturnType<typeof createTestStore>) {
+function createWrapper(queryClient = createQueryClient()) {
   return ({ children }: { children: React.ReactNode }) => (
-    <Provider store={store}>{children}</Provider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
 }
 
@@ -78,26 +76,17 @@ const defaultProps = {
 }
 
 describe('DrawingCanvas', () => {
-  let store: ReturnType<typeof createTestStore>
+  let queryClient: QueryClient
 
   beforeEach(() => {
-    store = createTestStore({
-      annotations: {
-        annotations: {},
-        annotationMode: 'type',
-        selectedPersonaId: 'persona-1',
-        drawingMode: 'entity',
-        selectedTypeId: 'type-1',
-        temporaryBox: null,
-      },
-    })
+    queryClient = createQueryClient()
   })
 
   describe('SVG Rendering', () => {
     it('should render SVG element with correct viewBox', () => {
       const { container } = render(
         <DrawingCanvas {...defaultProps} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const svg = container.querySelector('svg')
@@ -108,7 +97,7 @@ describe('DrawingCanvas', () => {
     it('should render SVG with crosshair cursor when canDraw is true', () => {
       const { container } = render(
         <DrawingCanvas {...defaultProps} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const svg = container.querySelector('svg')
@@ -118,7 +107,7 @@ describe('DrawingCanvas', () => {
     it('should preserve aspect ratio', () => {
       const { container } = render(
         <DrawingCanvas {...defaultProps} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const svg = container.querySelector('svg')
@@ -155,7 +144,7 @@ describe('DrawingCanvas', () => {
 
       render(
         <DrawingCanvas {...defaultProps} annotations={annotations} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       expect(screen.getByTestId('interactive-box-ann-1')).toBeTruthy()
@@ -174,7 +163,7 @@ describe('DrawingCanvas', () => {
 
       render(
         <DrawingCanvas {...defaultProps} annotations={annotations} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       expect(screen.queryByTestId('interactive-box-ann-1')).toBeNull()
@@ -199,7 +188,7 @@ describe('DrawingCanvas', () => {
           annotations={[annotation]}
           selectedAnnotation={annotation}
         />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const box = screen.getByTestId('interactive-box-ann-1')
@@ -221,7 +210,7 @@ describe('DrawingCanvas', () => {
 
       render(
         <DrawingCanvas {...defaultProps} annotations={[annotation]} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const box = screen.getByTestId('interactive-box-ann-1')
@@ -243,7 +232,7 @@ describe('DrawingCanvas', () => {
 
       render(
         <DrawingCanvas {...defaultProps} currentTime={5.0} annotations={[annotation]} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const box = screen.getByTestId('interactive-box-ann-1')
@@ -266,7 +255,7 @@ describe('DrawingCanvas', () => {
       // currentTime = 10.0 -> frame 300 (30 fps), which is outside range
       render(
         <DrawingCanvas {...defaultProps} currentTime={10.0} annotations={[annotation]} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const box = screen.getByTestId('interactive-box-ann-1')
@@ -297,7 +286,7 @@ describe('DrawingCanvas', () => {
 
       const { container } = render(
         <DrawingCanvas {...defaultProps} detectionResults={detectionResults} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const rects = container.querySelectorAll('rect[stroke="#ffeb3b"]')
@@ -332,7 +321,7 @@ describe('DrawingCanvas', () => {
 
       const { container } = render(
         <DrawingCanvas {...defaultProps} detectionResults={detectionResults} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const text = container.querySelector('text[fill="#ffeb3b"]')
@@ -361,7 +350,7 @@ describe('DrawingCanvas', () => {
 
       const { container } = render(
         <DrawingCanvas {...defaultProps} currentTime={5.0} detectionResults={detectionResults} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const rects = container.querySelectorAll('rect[stroke="#ffeb3b"]')
@@ -373,7 +362,7 @@ describe('DrawingCanvas', () => {
     it('should not render temporary box when null', () => {
       const { container } = render(
         <DrawingCanvas {...defaultProps} />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const tempBox = container.querySelector('rect[stroke="#f50057"]')
@@ -407,7 +396,7 @@ describe('DrawingCanvas', () => {
           annotations={[annotation]}
           onAnnotationSelect={onAnnotationSelect}
         />,
-        { wrapper: createWrapper(store) }
+        { wrapper: createWrapper(queryClient) }
       )
 
       const box = screen.getByTestId('interactive-box-ann-1')

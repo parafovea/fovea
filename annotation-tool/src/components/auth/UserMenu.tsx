@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
 import {
   Box,
   Avatar,
@@ -20,7 +19,7 @@ import {
 } from '@mui/icons-material'
 import { useAuth } from '../../hooks/auth/useAuth.js'
 import { useCurrentUser } from '../../hooks/auth/useCurrentUser.js'
-import { RootState } from '../../store/store.js'
+import { useAuthStore } from '../../store/zustand/authStore.js'
 
 /**
  * User menu component props.
@@ -46,7 +45,7 @@ export default function UserMenu({
   const navigate = useNavigate()
   const { logout } = useAuth()
   const { user, isAdmin } = useCurrentUser()
-  const { mode } = useSelector((state: RootState) => state.user)
+  const mode = useAuthStore(state => state.mode)
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)

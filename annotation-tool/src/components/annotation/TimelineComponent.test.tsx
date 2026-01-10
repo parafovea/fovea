@@ -6,11 +6,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
-import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TimelineComponent } from './TimelineComponent.js'
 import { Annotation, BoundingBoxSequence } from '../../models/types.js'
-import annotationReducer from '../../store/annotationSlice.js'
 
 // Mock TimelineRenderer
 vi.mock('./TimelineRenderer.js', () => ({
@@ -35,40 +33,21 @@ vi.mock('../../hooks/useTimelineKeyboardShortcuts.js', () => ({
 describe('TimelineComponent', () => {
   const mockOnSeek = vi.fn()
 
-  const createMockStore = () => {
-    return configureStore({
-      reducer: {
-        annotations: annotationReducer,
-      },
-      preloadedState: {
-        annotations: {
-          annotations: {},
-          selectedAnnotation: null,
-          selectedPersonaId: null,
-          annotationMode: 'type' as const,
-          isDrawing: false,
-          drawingMode: null,
-          selectedTypeId: null,
-          temporaryBox: null,
-          temporaryTime: null,
-          linkTargetId: null,
-          linkTargetType: null,
-          detectionResults: null,
-          detectionQuery: '',
-          detectionConfidenceThreshold: 0.5,
-          showDetectionCandidates: false,
-          interpolationMode: 'linear' as const,
-          selectedKeyframes: [],
-          showMotionPath: true,
-          timelineZoom: 1,
-          currentFrame: 0,
-        },
+  const createQueryClient = () => {
+    return new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
       },
     })
   }
 
-  const renderWithStore = (component: React.ReactElement, store = createMockStore()) => {
-    return render(<Provider store={store}>{component}</Provider>)
+  const renderWithQueryClient = (component: React.ReactElement, queryClient = createQueryClient()) => {
+    return render(
+      <QueryClientProvider client={queryClient}>
+        {component}
+      </QueryClientProvider>
+    )
   }
 
   const createTestAnnotation = (keyframes: number[]): Annotation => {
@@ -116,7 +95,7 @@ describe('TimelineComponent', () => {
   it('renders timeline with canvas', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -133,7 +112,7 @@ describe('TimelineComponent', () => {
   it('displays current frame counter', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -149,7 +128,7 @@ describe('TimelineComponent', () => {
   it('renders transport controls', () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -168,7 +147,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -192,7 +171,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={50}
@@ -214,7 +193,7 @@ describe('TimelineComponent', () => {
   it('handles zoom level changes', async () => {
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={25}
@@ -238,7 +217,7 @@ describe('TimelineComponent', () => {
   it('displays keyframes from annotation sequence', () => {
     const annotation = createTestAnnotation([0, 25, 50, 75, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -258,7 +237,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    const { container } = renderWithStore(
+    const { container } = renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={95}
@@ -280,7 +259,7 @@ describe('TimelineComponent', () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={0}
@@ -303,7 +282,7 @@ describe('TimelineComponent', () => {
   it('handles annotations with single keyframe', () => {
     const annotation = createTestAnnotation([42])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={42}
@@ -319,7 +298,7 @@ describe('TimelineComponent', () => {
   it('handles large frame counts', () => {
     const annotation = createTestAnnotation([0, 2500, 5000])
 
-    renderWithStore(
+    renderWithQueryClient(
       <TimelineComponent
         annotation={annotation}
         currentFrame={2500}
@@ -351,7 +330,7 @@ describe('TimelineComponent', () => {
       const user = userEvent.setup()
       const annotation = createTestAnnotation([0, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={50}
@@ -376,7 +355,7 @@ describe('TimelineComponent', () => {
     it('should disable add button when at keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={50}
@@ -399,7 +378,7 @@ describe('TimelineComponent', () => {
       const user = userEvent.setup()
       const annotation = createTestAnnotation([0, 25, 50, 75, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={50}
@@ -425,7 +404,7 @@ describe('TimelineComponent', () => {
     it('should disable delete for first keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={0}
@@ -447,7 +426,7 @@ describe('TimelineComponent', () => {
     it('should disable delete for last keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={100}
@@ -470,7 +449,7 @@ describe('TimelineComponent', () => {
       const user = userEvent.setup()
       const annotation = createTestAnnotation([0, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={50}
@@ -495,7 +474,7 @@ describe('TimelineComponent', () => {
     it('should disable copy at frame 0', () => {
       const annotation = createTestAnnotation([0, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={0}
@@ -518,7 +497,7 @@ describe('TimelineComponent', () => {
       const user = userEvent.setup()
       const annotation = createTestAnnotation([0, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={50}
@@ -544,7 +523,7 @@ describe('TimelineComponent', () => {
     it('should disable interpolation with less than 2 keyframes', () => {
       const annotation = createTestAnnotation([0])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={0}
@@ -567,7 +546,7 @@ describe('TimelineComponent', () => {
       const user = userEvent.setup()
       const annotation = createTestAnnotation([0, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={0}
@@ -597,7 +576,7 @@ describe('TimelineComponent', () => {
       const mockOnUpdateInterpolationSegment = vi.fn()
       const mockOnClose = vi.fn()
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={null}
           currentFrame={0}
@@ -630,7 +609,7 @@ describe('TimelineComponent', () => {
     it('should handle currentFrame beyond totalFrames', () => {
       const annotation = createTestAnnotation([0, 50, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={500}
@@ -648,7 +627,7 @@ describe('TimelineComponent', () => {
     it('should handle negative currentFrame', () => {
       const annotation = createTestAnnotation([0, 50, 100])
 
-      renderWithStore(
+      renderWithQueryClient(
         <TimelineComponent
           annotation={annotation}
           currentFrame={-10}
