@@ -73,7 +73,7 @@ describe('Export API', () => {
     testPersonaId = persona.id
 
     // Create test ontology
-    const ontology = await prisma.ontology.create({
+    await prisma.ontology.create({
       data: {
         personaId: testPersonaId,
         entityTypes: [
@@ -84,7 +84,6 @@ describe('Export API', () => {
         relationTypes: []
       }
     })
-    testOntologyId = ontology.id
 
     // Login to get session token
     const loginResponse = await app.inject({
