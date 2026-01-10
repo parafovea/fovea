@@ -43,8 +43,8 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
   const { data: ontology } = usePersonaOntology(personaId)
-  const { mutate: addEvent } = useAddEventToPersona()
-  const { mutate: updateEvent } = useUpdateEventInPersona()
+  const { mutateAsync: addEvent } = useAddEventToPersona()
+  const { mutateAsync: updateEvent } = useUpdateEventInPersona()
   const { mutate: deleteEvent } = useDeleteEventFromPersona()
 
   // Form state
@@ -109,7 +109,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     }
   }, [mode, sourcePersonaId, sourceEventId, sourceOntology])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!personaId) return
 
     const now = new Date().toISOString()
@@ -128,12 +128,12 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     }
 
     if (event) {
-      updateEvent({ personaId, event: eventData })
+      await updateEvent({ personaId, event: eventData })
     } else {
-      targetPersonaIds.forEach(targetId => {
+      await Promise.all(targetPersonaIds.map(async (targetId) => {
         const newEventData = { ...eventData, id: generateId() }
-        addEvent({ personaId: targetId, event: newEventData })
-      })
+        await addEvent({ personaId: targetId, event: newEventData })
+      }))
     }
 
     onClose()

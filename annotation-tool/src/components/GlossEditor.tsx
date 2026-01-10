@@ -58,9 +58,9 @@ export default function GlossEditor({
   // TanStack Query hooks for data fetching
   const { data: activeOntology } = usePersonaOntology(personaId)
   const { data: world } = useWorld()
-  const entities = world?.entities ?? []
-  const events = world?.events ?? []
-  const times = world?.times ?? []
+  const entities = useMemo(() => world?.entities ?? [], [world?.entities])
+  const events = useMemo(() => world?.events ?? [], [world?.events])
+  const times = useMemo(() => world?.times ?? [], [world?.times])
   const { data: annotations = [] } = useAnnotations(videoId)
 
   const [inputValue, setInputValue] = useState('')

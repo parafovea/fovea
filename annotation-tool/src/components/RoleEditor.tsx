@@ -38,8 +38,8 @@ interface RoleEditorProps {
 export default function RoleEditor({ open, onClose, role, personaId }: RoleEditorProps) {
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
-  const { mutate: addRole } = useAddRoleToPersona()
-  const { mutate: updateRole } = useUpdateRoleInPersona()
+  const { mutateAsync: addRole } = useAddRoleToPersona()
+  const { mutateAsync: updateRole } = useUpdateRoleInPersona()
   const { mutate: deleteRole } = useDeleteRoleFromPersona()
 
   // Form state
@@ -103,7 +103,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     }
   }, [mode, sourcePersonaId, sourceRoleId, sourceOntology])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!personaId) return
 
     const now = new Date().toISOString()
@@ -122,12 +122,12 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     }
 
     if (role) {
-      updateRole({ personaId, role: roleData })
+      await updateRole({ personaId, role: roleData })
     } else {
-      targetPersonaIds.forEach(targetId => {
+      await Promise.all(targetPersonaIds.map(async (targetId) => {
         const newRoleData = { ...roleData, id: generateId() }
-        addRole({ personaId: targetId, role: newRoleData })
-      })
+        await addRole({ personaId: targetId, role: newRoleData })
+      }))
     }
 
     onClose()

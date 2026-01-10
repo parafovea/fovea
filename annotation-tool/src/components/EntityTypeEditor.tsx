@@ -35,8 +35,8 @@ interface EntityTypeEditorProps {
 export default function EntityTypeEditor({ open, onClose, entity, personaId }: EntityTypeEditorProps) {
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
-  const { mutate: addEntity } = useAddEntityToPersona()
-  const { mutate: updateEntity } = useUpdateEntityInPersona()
+  const { mutateAsync: addEntity } = useAddEntityToPersona()
+  const { mutateAsync: updateEntity } = useUpdateEntityInPersona()
   const { mutate: deleteEntity } = useDeleteEntityFromPersona()
 
   // Form state
@@ -98,7 +98,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
     }
   }, [mode, sourcePersonaId, sourceEntityId, sourceOntology])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const now = new Date().toISOString()
 
     // If editing existing, update it
@@ -115,11 +115,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       }
 
       if (personaId) {
-        updateEntity({ personaId, entity: entityData })
+        await updateEntity({ personaId, entity: entityData })
       }
     } else {
       // Creating new entity types for selected personas
-      targetPersonaIds.forEach(targetId => {
+      await Promise.all(targetPersonaIds.map(async (targetId) => {
         const entityData: EntityType = {
           id: generateId(),
           name,
@@ -133,8 +133,8 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
           updatedAt: now,
         }
 
-        addEntity({ personaId: targetId, entity: entityData })
-      })
+        await addEntity({ personaId: targetId, entity: entityData })
+      }))
     }
 
     onClose()

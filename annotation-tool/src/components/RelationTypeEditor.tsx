@@ -57,8 +57,8 @@ export default function RelationTypeEditor({
 }: RelationTypeEditorProps) {
   // TanStack Query hooks
   const { data: ontology } = usePersonaOntology(personaId)
-  const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
-  const { mutate: updateRelationTypeMutation } = useUpdateRelationTypeInPersona()
+  const { mutateAsync: addRelationTypeMutation } = useAddRelationTypeToPersona()
+  const { mutateAsync: updateRelationTypeMutation } = useUpdateRelationTypeInPersona()
   const { mutate: addRelationMutation } = useAddRelationToPersona()
   const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
 
@@ -103,7 +103,7 @@ export default function RelationTypeEditor({
     setTargetId('')
   }, [relationType])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!personaId) return
 
     // Validate required fields
@@ -124,9 +124,9 @@ export default function RelationTypeEditor({
     }
 
     if (relationType) {
-      updateRelationTypeMutation({ personaId, relationType: relationTypeData })
+      await updateRelationTypeMutation({ personaId, relationType: relationTypeData })
     } else {
-      addRelationTypeMutation({ personaId, relationType: relationTypeData })
+      await addRelationTypeMutation({ personaId, relationType: relationTypeData })
     }
 
     onClose()
