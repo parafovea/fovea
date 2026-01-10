@@ -6,7 +6,7 @@
  * strict cookie policies to properly send session cookies.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import axios from 'axios'
 import { server } from '../../test/setup'
 import { http, HttpResponse } from 'msw'
