@@ -190,19 +190,91 @@ export class ImportHandler {
         }
         break
 
-      case 'ontology':
-        // Validate ontology structure
-        if (!line.data.personas || !Array.isArray(line.data.personas)) {
-          errors.push('Ontology missing required field: personas (array)')
+      case 'persona':
+        // Validate persona structure
+        if (!line.data.id) {
+          errors.push('Persona missing required field: id')
         }
-        if (!line.data.personaOntologies || !Array.isArray(line.data.personaOntologies)) {
-          errors.push('Ontology missing required field: personaOntologies (array)')
+        if (!line.data.name) {
+          errors.push('Persona missing required field: name')
+        }
+        if (!line.data.role) {
+          errors.push('Persona missing required field: role')
+        }
+        if (!line.data.informationNeed) {
+          errors.push('Persona missing required field: informationNeed')
+        }
+        break
+
+      case 'ontology':
+        // Validate ontology structure - new format uses personaId
+        if (!line.data.personaId) {
+          // Check for legacy format with personas array
+          if (!line.data.personas || !Array.isArray(line.data.personas)) {
+            errors.push('Ontology missing required field: personaId')
+          }
+        }
+        break
+
+      case 'summary':
+        // Validate summary structure
+        if (!line.data.id) {
+          errors.push('Summary missing required field: id')
+        }
+        if (!line.data.videoId) {
+          errors.push('Summary missing required field: videoId')
+        }
+        if (!line.data.personaId) {
+          errors.push('Summary missing required field: personaId')
+        }
+        break
+
+      case 'claim':
+        // Validate claim structure
+        if (!line.data.id) {
+          errors.push('Claim missing required field: id')
+        }
+        if (!line.data.summaryId) {
+          errors.push('Claim missing required field: summaryId')
+        }
+        if (!line.data.text) {
+          errors.push('Claim missing required field: text')
+        }
+        break
+
+      case 'claim_relation':
+        // Validate claim relation structure
+        if (!line.data.id) {
+          errors.push('ClaimRelation missing required field: id')
+        }
+        if (!line.data.sourceClaimId) {
+          errors.push('ClaimRelation missing required field: sourceClaimId')
+        }
+        if (!line.data.targetClaimId) {
+          errors.push('ClaimRelation missing required field: targetClaimId')
+        }
+        if (!line.data.relationTypeId) {
+          errors.push('ClaimRelation missing required field: relationTypeId')
         }
         break
 
       case 'video':
         if (!line.data.id) {
           errors.push('Video missing required field: id')
+        }
+        break
+
+      case 'relation':
+        if (!line.data.id) {
+          errors.push('Relation missing required field: id')
+        }
+        break
+
+      case 'entity_collection':
+      case 'event_collection':
+      case 'time_collection':
+        if (!line.data.id) {
+          errors.push(`Collection missing required field: id`)
         }
         break
 
@@ -578,10 +650,15 @@ export class ImportHandler {
    * @returns Existing data
    */
   async loadExistingData(): Promise<ExistingData> {
-    const [personas, videos, worldState] = await Promise.all([
+    const [personas, videos, worldState, annotations, summaries, claims, claimRelations, ontologies] = await Promise.all([
       this.prisma.persona.findMany({ select: { id: true } }),
       this.prisma.video.findMany({ select: { id: true } }),
-      this.prisma.worldState.findFirst()
+      this.prisma.worldState.findFirst(),
+      this.prisma.annotation.findMany({ select: { id: true } }),
+      this.prisma.videoSummary.findMany({ select: { id: true } }),
+      this.prisma.claim.findMany({ select: { id: true } }),
+      this.prisma.claimRelation.findMany({ select: { id: true } }),
+      this.prisma.ontology.findMany({ select: { personaId: true } })
     ])
 
     const existingData: ExistingData = {
@@ -590,8 +667,12 @@ export class ImportHandler {
       eventIds: new Set(),
       timeIds: new Set(),
       collectionIds: new Set(),
-      annotationIds: new Set(),
-      videoIds: new Set(videos.map(v => v.id))
+      annotationIds: new Set(annotations.map(a => a.id)),
+      videoIds: new Set(videos.map(v => v.id)),
+      summaryIds: new Set(summaries.map(s => s.id)),
+      claimIds: new Set(claims.map(c => c.id)),
+      claimRelationIds: new Set(claimRelations.map(r => r.id)),
+      ontologyPersonaIds: new Set(ontologies.map(o => o.personaId))
     }
 
     if (worldState) {
@@ -655,12 +736,6 @@ export class ImportHandler {
       }
     }
 
-    // Extract annotation IDs
-    const annotations = await this.prisma.annotation.findMany({ select: { id: true } })
-    for (const annotation of annotations) {
-      existingData.annotationIds.add(annotation.id)
-    }
-
     return existingData
   }
 
@@ -687,6 +762,9 @@ export class ImportHandler {
           eventCollections: 0,
           timeCollections: 0,
           relations: 0,
+          summaries: 0,
+          claims: 0,
+          claimRelations: 0,
           annotations: 0,
           totalKeyframes: 0,
           totalInterpolatedFrames: 0,
@@ -695,6 +773,8 @@ export class ImportHandler {
         skippedItems: {
           personas: 0,
           worldObjects: 0,
+          summaries: 0,
+          claims: 0,
           annotations: 0,
           sequenceAnnotations: 0
         }
@@ -765,6 +845,7 @@ export class ImportHandler {
 
   /**
    * Import lines in dependency order.
+   * Order: personas -> ontologies -> world state -> summaries -> claims -> claim relations -> annotations
    */
   private async importLines(
     lines: ImportLine[],
@@ -773,106 +854,785 @@ export class ImportHandler {
     options: ImportOptions,
     tx: PrismaClient
   ): Promise<void> {
-    // Group lines by type
+    // Group lines by type for dependency ordering
+    const personaLines = lines.filter(l => l.type === 'persona')
+    const ontologyLines = lines.filter(l => l.type === 'ontology')
+    const entityLines = lines.filter(l => l.type === 'entity')
+    const eventLines = lines.filter(l => l.type === 'event')
+    const timeLines = lines.filter(l => l.type === 'time')
+    const entityCollectionLines = lines.filter(l => l.type === 'entity_collection' || l.type === 'entityCollection')
+    const eventCollectionLines = lines.filter(l => l.type === 'event_collection' || l.type === 'eventCollection')
+    const timeCollectionLines = lines.filter(l => l.type === 'time_collection' || l.type === 'timeCollection')
+    const relationLines = lines.filter(l => l.type === 'relation')
+    const summaryLines = lines.filter(l => l.type === 'summary')
+    const claimLines = lines.filter(l => l.type === 'claim')
+    const claimRelationLines = lines.filter(l => l.type === 'claim_relation')
     const annotationLines = lines.filter(l => l.type === 'annotation')
 
-    // Import annotations
+    // Track imported IDs for dependency resolution
+    const importedIds = {
+      personas: new Set<string>(),
+      summaries: new Set<string>(),
+      claims: new Set<string>()
+    }
+
+    // 1. Import personas (no dependencies)
+    for (const line of personaLines) {
+      await this.importPersona(line, resolutionMap, result, options, tx, importedIds)
+    }
+
+    // 2. Import ontologies (depend on personas)
+    for (const line of ontologyLines) {
+      await this.importOntology(line, resolutionMap, result, options, tx, importedIds)
+    }
+
+    // 3. Import world state objects
+    // Get or create world state
+    let worldState = await tx.worldState.findFirst()
+    if (!worldState) {
+      worldState = await tx.worldState.create({
+        data: {
+          userId: 'default',
+          entities: [],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        }
+      })
+    }
+
+    // Import entities
+    for (const line of entityLines) {
+      await this.importWorldStateItem(line, 'entity', worldState.id, resolutionMap, result, options, tx)
+    }
+
+    // Import events
+    for (const line of eventLines) {
+      await this.importWorldStateItem(line, 'event', worldState.id, resolutionMap, result, options, tx)
+    }
+
+    // Import times
+    for (const line of timeLines) {
+      await this.importWorldStateItem(line, 'time', worldState.id, resolutionMap, result, options, tx)
+    }
+
+    // Import collections
+    for (const line of entityCollectionLines) {
+      await this.importWorldStateItem(line, 'entityCollection', worldState.id, resolutionMap, result, options, tx)
+    }
+    for (const line of eventCollectionLines) {
+      await this.importWorldStateItem(line, 'eventCollection', worldState.id, resolutionMap, result, options, tx)
+    }
+    for (const line of timeCollectionLines) {
+      await this.importWorldStateItem(line, 'timeCollection', worldState.id, resolutionMap, result, options, tx)
+    }
+
+    // Import relations
+    for (const line of relationLines) {
+      await this.importWorldStateItem(line, 'relation', worldState.id, resolutionMap, result, options, tx)
+    }
+
+    // 4. Import summaries (depend on videos and personas)
+    for (const line of summaryLines) {
+      await this.importSummary(line, resolutionMap, result, options, tx, importedIds)
+    }
+
+    // 5. Import claims (depend on summaries)
+    for (const line of claimLines) {
+      await this.importClaim(line, resolutionMap, result, options, tx, importedIds)
+    }
+
+    // 6. Import claim relations (depend on claims)
+    for (const line of claimRelationLines) {
+      await this.importClaimRelation(line, resolutionMap, result, options, tx, importedIds)
+    }
+
+    // 7. Import annotations (depend on videos, personas)
     for (const line of annotationLines) {
-      const annotationId = line.data.id
-      if (!annotationId) {
-        result.errors.push({
+      await this.importAnnotation(line, resolutionMap, result, options, tx)
+    }
+  }
+
+  /**
+   * Import a persona.
+   */
+  private async importPersona(
+    line: ImportLine,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient,
+    importedIds: { personas: Set<string>; summaries: Set<string>; claims: Set<string> }
+  ): Promise<void> {
+    const personaId = line.data.id
+    if (!personaId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'Persona missing required id field'
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(personaId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.personas++
+      return
+    }
+
+    try {
+      const validation = this.validateLine(line)
+      if (!validation.valid) {
+        if (options.validation.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+        }
+        result.warnings.push({
           line: line.lineNumber,
           type: 'validation',
-          message: 'Annotation missing required id field'
+          message: validation.errors.join(', ')
         })
-        continue
+        result.summary.skippedItems.personas++
+        return
       }
 
-      const resolution = resolutionMap.get(annotationId)
+      // Check if persona already exists
+      const existingPersona = await tx.persona.findUnique({ where: { id: personaId } })
 
-      // Skip if resolution says to skip
-      if (resolution && resolution.action === 'skip') {
-        result.summary.skippedItems.annotations++
-        continue
-      }
-
-      try {
-        // Validate line
-        const validation = this.validateLine(line)
-        if (!validation.valid) {
-          if (options.validation.strictMode) {
-            throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
-          } else {
-            result.warnings.push({
-              line: line.lineNumber,
-              type: 'validation',
-              message: validation.errors.join(', ')
-            })
-            result.summary.skippedItems.annotations++
-            continue
-          }
-        }
-
-        // Add warnings
-        for (const warning of validation.warnings) {
-          result.warnings.push({
-            line: line.lineNumber,
-            type: 'validation',
-            message: warning
-          })
-        }
-
-        // Import annotation
-        const annotation = line.data as AnnotationData
-        const sequence = annotation.boundingBoxSequence
-
-        // Count keyframes
-        const keyframes = sequence.boxes.filter((b) => b.isKeyframe ?? false)
-        result.summary.importedItems.totalKeyframes += keyframes.length
-
-        if (keyframes.length === 1) {
-          result.summary.importedItems.singleKeyframeSequences++
-        }
-
-        // Create or update annotation
-        if (resolution && resolution.action === 'replace') {
-          // Delete existing annotation
-          await tx.annotation.delete({
-            where: { id: annotation.id }
-          })
-        }
-
-        // Insert annotation
-        await tx.annotation.create({
+      if (existingPersona && resolution?.action === 'replace') {
+        await tx.persona.update({
+          where: { id: personaId },
           data: {
-            id: annotation.id,
-            videoId: annotation.videoId,
-            personaId: annotation.personaId ?? '',
-            type: annotation.annotationType ?? 'type',
-            label: annotation.typeId ?? annotation.linkedEntityId ?? '',
-            frames: annotation as unknown as Prisma.InputJsonValue,
-            confidence: annotation.confidence,
-            source: 'import',
-            createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),
-            updatedAt: annotation.updatedAt ? new Date(annotation.updatedAt) : new Date()
+            name: line.data.name as string,
+            role: line.data.role as string,
+            informationNeed: line.data.informationNeed as string,
+            details: (line.data.details as string) || '',
+            updatedAt: new Date()
           }
         })
-
-        result.summary.importedItems.annotations++
-        result.summary.processedLines++
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        result.errors.push({
-          line: line.lineNumber,
-          type: 'import',
-          message: `Failed to import annotation: ${errorMessage}`,
-          data: line.data
-        })
-
-        if (options.transaction.atomic) {
-          throw error
+      } else if (!existingPersona) {
+        // Create new persona - need to link to a user
+        // For import, we'll create a system user if needed
+        let systemUser = await tx.user.findFirst({ where: { username: 'import-system' } })
+        if (!systemUser) {
+          systemUser = await tx.user.create({
+            data: {
+              username: 'import-system',
+              email: 'import@system.local',
+              passwordHash: 'import-disabled',
+              displayName: 'Import System',
+              isAdmin: false
+            }
+          })
         }
+
+        await tx.persona.create({
+          data: {
+            id: personaId,
+            userId: systemUser.id,
+            name: line.data.name as string,
+            role: line.data.role as string,
+            informationNeed: line.data.informationNeed as string,
+            details: (line.data.details as string) || '',
+            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date(),
+            updatedAt: line.data.updatedAt ? new Date(line.data.updatedAt as string) : new Date()
+          }
+        })
       }
+
+      importedIds.personas.add(personaId)
+      result.summary.importedItems.personas++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import persona: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import an ontology.
+   */
+  private async importOntology(
+    line: ImportLine,
+    _resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient,
+    _importedIds: { personas: Set<string>; summaries: Set<string>; claims: Set<string> }
+  ): Promise<void> {
+    const personaId = line.data.personaId
+    if (!personaId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'Ontology missing required personaId field'
+      })
+      return
+    }
+
+    try {
+      // Check if ontology already exists for this persona
+      const existingOntology = await tx.ontology.findUnique({ where: { personaId } })
+
+      const ontologyData = {
+        entityTypes: (line.data.entityTypes as Prisma.InputJsonValue) || [],
+        eventTypes: (line.data.eventTypes as Prisma.InputJsonValue) || [],
+        roleTypes: (line.data.roleTypes as Prisma.InputJsonValue) || [],
+        relationTypes: (line.data.relationTypes as Prisma.InputJsonValue) || [],
+        updatedAt: new Date()
+      }
+
+      if (existingOntology) {
+        // Merge or replace based on strategy
+        await tx.ontology.update({
+          where: { personaId },
+          data: ontologyData
+        })
+      } else {
+        await tx.ontology.create({
+          data: {
+            personaId,
+            ...ontologyData,
+            createdAt: new Date()
+          }
+        })
+      }
+
+      result.summary.importedItems.ontologies++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import ontology: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import a world state item (entity, event, time, collection, relation).
+   */
+  private async importWorldStateItem(
+    line: ImportLine,
+    itemType: 'entity' | 'event' | 'time' | 'entityCollection' | 'eventCollection' | 'timeCollection' | 'relation',
+    worldStateId: string,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient
+  ): Promise<void> {
+    const itemId = line.data.id
+    if (!itemId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: `${itemType} missing required id field`
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(itemId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.worldObjects++
+      return
+    }
+
+    try {
+      // Get current world state
+      const worldState = await tx.worldState.findUnique({ where: { id: worldStateId } })
+      if (!worldState) {
+        throw new Error('World state not found')
+      }
+
+      // Determine which array to update
+      const fieldMap: Record<string, string> = {
+        'entity': 'entities',
+        'event': 'events',
+        'time': 'times',
+        'entityCollection': 'entityCollections',
+        'eventCollection': 'eventCollections',
+        'timeCollection': 'timeCollections',
+        'relation': 'relations'
+      }
+      const fieldName = fieldMap[itemType]
+
+      // Get current array
+      const currentArray = (worldState[fieldName as keyof typeof worldState] as Prisma.JsonValue) || []
+      const items = Array.isArray(currentArray) ? [...currentArray] : []
+
+      // Check if item already exists
+      const existingIndex = items.findIndex(
+        (item) => item && typeof item === 'object' && 'id' in item && item.id === itemId
+      )
+
+      if (existingIndex >= 0) {
+        if (resolution?.action === 'replace') {
+          items[existingIndex] = line.data as Prisma.JsonValue
+        }
+        // Otherwise skip (already exists)
+      } else {
+        items.push(line.data as Prisma.JsonValue)
+      }
+
+      // Update world state
+      await tx.worldState.update({
+        where: { id: worldStateId },
+        data: {
+          [fieldName]: items as Prisma.InputJsonValue,
+          updatedAt: new Date()
+        }
+      })
+
+      // Update result counts
+      switch (itemType) {
+        case 'entity':
+          result.summary.importedItems.entities++
+          break
+        case 'event':
+          result.summary.importedItems.events++
+          break
+        case 'time':
+          result.summary.importedItems.times++
+          break
+        case 'entityCollection':
+          result.summary.importedItems.entityCollections++
+          break
+        case 'eventCollection':
+          result.summary.importedItems.eventCollections++
+          break
+        case 'timeCollection':
+          result.summary.importedItems.timeCollections++
+          break
+        case 'relation':
+          result.summary.importedItems.relations++
+          break
+      }
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import ${itemType}: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import a video summary.
+   */
+  private async importSummary(
+    line: ImportLine,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient,
+    importedIds: { personas: Set<string>; summaries: Set<string>; claims: Set<string> }
+  ): Promise<void> {
+    const summaryId = line.data.id
+    if (!summaryId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'Summary missing required id field'
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(summaryId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.summaries++
+      return
+    }
+
+    try {
+      const validation = this.validateLine(line)
+      if (!validation.valid) {
+        if (options.validation.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+        }
+        result.warnings.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: validation.errors.join(', ')
+        })
+        result.summary.skippedItems.summaries++
+        return
+      }
+
+      // Check if summary already exists
+      const existingSummary = await tx.videoSummary.findUnique({ where: { id: summaryId } })
+
+      const summaryData: Prisma.VideoSummaryUncheckedUpdateInput = {
+        videoId: line.data.videoId as string,
+        personaId: line.data.personaId as string,
+        summary: (line.data.summary as Prisma.InputJsonValue) || [],
+        visualAnalysis: (line.data.visualAnalysis as string) || undefined,
+        audioTranscript: (line.data.audioTranscript as string) || undefined,
+        keyFrames: line.data.keyFrames ? (line.data.keyFrames as Prisma.InputJsonValue) : Prisma.JsonNull,
+        confidence: (line.data.confidence as number) || undefined,
+        transcriptJson: line.data.transcriptJson ? (line.data.transcriptJson as Prisma.InputJsonValue) : Prisma.JsonNull,
+        audioLanguage: (line.data.audioLanguage as string) || undefined,
+        speakerCount: (line.data.speakerCount as number) || undefined,
+        audioModelUsed: (line.data.audioModelUsed as string) || undefined,
+        visualModelUsed: (line.data.visualModelUsed as string) || undefined,
+        fusionStrategy: (line.data.fusionStrategy as string) || undefined,
+        createdBy: (line.data.createdBy as string) || undefined,
+        updatedAt: new Date()
+      }
+
+      if (existingSummary && resolution?.action === 'replace') {
+        await tx.videoSummary.update({
+          where: { id: summaryId },
+          data: summaryData
+        })
+      } else if (!existingSummary) {
+        await tx.videoSummary.create({
+          data: {
+            id: summaryId,
+            videoId: line.data.videoId as string,
+            personaId: line.data.personaId as string,
+            summary: (line.data.summary as Prisma.InputJsonValue) || [],
+            visualAnalysis: (line.data.visualAnalysis as string) || undefined,
+            audioTranscript: (line.data.audioTranscript as string) || undefined,
+            keyFrames: line.data.keyFrames ? (line.data.keyFrames as Prisma.InputJsonValue) : Prisma.JsonNull,
+            confidence: (line.data.confidence as number) || undefined,
+            transcriptJson: line.data.transcriptJson ? (line.data.transcriptJson as Prisma.InputJsonValue) : Prisma.JsonNull,
+            audioLanguage: (line.data.audioLanguage as string) || undefined,
+            speakerCount: (line.data.speakerCount as number) || undefined,
+            audioModelUsed: (line.data.audioModelUsed as string) || undefined,
+            visualModelUsed: (line.data.visualModelUsed as string) || undefined,
+            fusionStrategy: (line.data.fusionStrategy as string) || undefined,
+            createdBy: (line.data.createdBy as string) || undefined,
+            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
+          }
+        })
+      }
+
+      importedIds.summaries.add(summaryId)
+      result.summary.importedItems.summaries++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import summary: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import a claim.
+   */
+  private async importClaim(
+    line: ImportLine,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient,
+    importedIds: { personas: Set<string>; summaries: Set<string>; claims: Set<string> }
+  ): Promise<void> {
+    const claimId = line.data.id
+    if (!claimId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'Claim missing required id field'
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(claimId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.claims++
+      return
+    }
+
+    try {
+      const validation = this.validateLine(line)
+      if (!validation.valid) {
+        if (options.validation.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+        }
+        result.warnings.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: validation.errors.join(', ')
+        })
+        result.summary.skippedItems.claims++
+        return
+      }
+
+      // Check if claim already exists
+      const existingClaim = await tx.claim.findUnique({ where: { id: claimId } })
+
+      const claimData: Prisma.ClaimUncheckedUpdateInput = {
+        summaryId: line.data.summaryId as string,
+        summaryType: (line.data.summaryType as string) || 'video',
+        text: line.data.text as string,
+        gloss: (line.data.gloss as Prisma.InputJsonValue) || [],
+        parentClaimId: (line.data.parentClaimId as string) || undefined,
+        textSpans: line.data.textSpans ? (line.data.textSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+        claimerType: (line.data.claimerType as string) || undefined,
+        claimerGloss: line.data.claimerGloss ? (line.data.claimerGloss as Prisma.InputJsonValue) : Prisma.JsonNull,
+        claimRelation: (line.data.claimRelation as string) || undefined,
+        claimEventId: (line.data.claimEventId as string) || undefined,
+        claimTimeId: (line.data.claimTimeId as string) || undefined,
+        claimLocationId: (line.data.claimLocationId as string) || undefined,
+        confidence: (line.data.confidence as number) || undefined,
+        modelUsed: (line.data.modelUsed as string) || undefined,
+        extractionStrategy: (line.data.extractionStrategy as string) || undefined,
+        createdBy: (line.data.createdBy as string) || undefined,
+        updatedAt: new Date()
+      }
+
+      if (existingClaim && resolution?.action === 'replace') {
+        await tx.claim.update({
+          where: { id: claimId },
+          data: claimData
+        })
+      } else if (!existingClaim) {
+        await tx.claim.create({
+          data: {
+            id: claimId,
+            summaryId: line.data.summaryId as string,
+            summaryType: (line.data.summaryType as string) || 'video',
+            text: line.data.text as string,
+            gloss: (line.data.gloss as Prisma.InputJsonValue) || [],
+            parentClaimId: (line.data.parentClaimId as string) || undefined,
+            textSpans: line.data.textSpans ? (line.data.textSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+            claimerType: (line.data.claimerType as string) || undefined,
+            claimerGloss: line.data.claimerGloss ? (line.data.claimerGloss as Prisma.InputJsonValue) : Prisma.JsonNull,
+            claimRelation: (line.data.claimRelation as string) || undefined,
+            claimEventId: (line.data.claimEventId as string) || undefined,
+            claimTimeId: (line.data.claimTimeId as string) || undefined,
+            claimLocationId: (line.data.claimLocationId as string) || undefined,
+            confidence: (line.data.confidence as number) || undefined,
+            modelUsed: (line.data.modelUsed as string) || undefined,
+            extractionStrategy: (line.data.extractionStrategy as string) || undefined,
+            createdBy: (line.data.createdBy as string) || undefined,
+            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
+          }
+        })
+      }
+
+      importedIds.claims.add(claimId)
+      result.summary.importedItems.claims++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import claim: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import a claim relation.
+   */
+  private async importClaimRelation(
+    line: ImportLine,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient,
+    _importedIds: { personas: Set<string>; summaries: Set<string>; claims: Set<string> }
+  ): Promise<void> {
+    const relationId = line.data.id
+    if (!relationId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'ClaimRelation missing required id field'
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(relationId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.claims++
+      return
+    }
+
+    try {
+      const validation = this.validateLine(line)
+      if (!validation.valid) {
+        if (options.validation.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+        }
+        result.warnings.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: validation.errors.join(', ')
+        })
+        return
+      }
+
+      // Check if claim relation already exists
+      const existingRelation = await tx.claimRelation.findUnique({ where: { id: relationId } })
+
+      const relationData: Prisma.ClaimRelationUncheckedUpdateInput = {
+        sourceClaimId: line.data.sourceClaimId as string,
+        targetClaimId: line.data.targetClaimId as string,
+        relationTypeId: line.data.relationTypeId as string,
+        sourceSpans: line.data.sourceSpans ? (line.data.sourceSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+        targetSpans: line.data.targetSpans ? (line.data.targetSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+        confidence: (line.data.confidence as number) || undefined,
+        notes: (line.data.notes as string) || undefined,
+        createdBy: (line.data.createdBy as string) || undefined,
+        updatedAt: new Date()
+      }
+
+      if (existingRelation && resolution?.action === 'replace') {
+        await tx.claimRelation.update({
+          where: { id: relationId },
+          data: relationData
+        })
+      } else if (!existingRelation) {
+        await tx.claimRelation.create({
+          data: {
+            id: relationId,
+            sourceClaimId: line.data.sourceClaimId as string,
+            targetClaimId: line.data.targetClaimId as string,
+            relationTypeId: line.data.relationTypeId as string,
+            sourceSpans: line.data.sourceSpans ? (line.data.sourceSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+            targetSpans: line.data.targetSpans ? (line.data.targetSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
+            confidence: (line.data.confidence as number) || undefined,
+            notes: (line.data.notes as string) || undefined,
+            createdBy: (line.data.createdBy as string) || undefined,
+            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
+          }
+        })
+      }
+
+      result.summary.importedItems.claimRelations++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import claim relation: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
+    }
+  }
+
+  /**
+   * Import an annotation.
+   */
+  private async importAnnotation(
+    line: ImportLine,
+    resolutionMap: Map<string, Resolution>,
+    result: ImportResult,
+    options: ImportOptions,
+    tx: PrismaClient
+  ): Promise<void> {
+    const annotationId = line.data.id
+    if (!annotationId) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: 'Annotation missing required id field'
+      })
+      return
+    }
+
+    const resolution = resolutionMap.get(annotationId)
+    if (resolution && resolution.action === 'skip') {
+      result.summary.skippedItems.annotations++
+      return
+    }
+
+    try {
+      const validation = this.validateLine(line)
+      if (!validation.valid) {
+        if (options.validation.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+        }
+        result.warnings.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: validation.errors.join(', ')
+        })
+        result.summary.skippedItems.annotations++
+        return
+      }
+
+      for (const warning of validation.warnings) {
+        result.warnings.push({
+          line: line.lineNumber,
+          type: 'validation',
+          message: warning
+        })
+      }
+
+      const annotation = line.data as AnnotationData
+      const sequence = annotation.boundingBoxSequence
+
+      // Count keyframes
+      const keyframes = sequence?.boxes?.filter((b) => b.isKeyframe ?? false) || []
+      result.summary.importedItems.totalKeyframes += keyframes.length
+
+      if (keyframes.length === 1) {
+        result.summary.importedItems.singleKeyframeSequences++
+      }
+
+      // Create or update annotation
+      if (resolution && resolution.action === 'replace') {
+        await tx.annotation.delete({
+          where: { id: annotation.id }
+        })
+      }
+
+      // Store the boundingBoxSequence in the frames field
+      await tx.annotation.create({
+        data: {
+          id: annotation.id,
+          videoId: annotation.videoId,
+          personaId: annotation.personaId || null,
+          type: annotation.annotationType ?? 'type',
+          label: annotation.typeId ?? annotation.linkedEntityId ?? '',
+          frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,
+          confidence: annotation.confidence,
+          source: 'import',
+          createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),
+          updatedAt: annotation.updatedAt ? new Date(annotation.updatedAt) : new Date()
+        }
+      })
+
+      result.summary.importedItems.annotations++
+      result.summary.processedLines++
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'import',
+        message: `Failed to import annotation: ${errorMessage}`,
+        data: line.data
+      })
+      if (options.transaction.atomic) throw error
     }
   }
 }

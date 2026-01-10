@@ -103,8 +103,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
 
-    // Convert to export format
-    let annotations = prismaAnnotations.map(a => exporter.convertPrismaAnnotation(a))
+    // Convert to export format, filtering out any null results from malformed data
+    let annotations = prismaAnnotations
+      .map(a => exporter.convertPrismaAnnotation(a))
+      .filter((a): a is NonNullable<typeof a> => a !== null)
 
     // Filter by annotation type if specified
     if (annotationTypeArray && annotationTypeArray.length > 0) {
@@ -256,8 +258,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
 
-    // Convert to export format
-    let annotations = prismaAnnotations.map(a => exporter.convertPrismaAnnotation(a))
+    // Convert to export format, filtering out any null results from malformed data
+    let annotations = prismaAnnotations
+      .map(a => exporter.convertPrismaAnnotation(a))
+      .filter((a): a is NonNullable<typeof a> => a !== null)
 
     // Filter by annotation type if specified
     if (annotationTypeArray && annotationTypeArray.length > 0) {
@@ -296,6 +300,325 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send(response)
+  })
+
+  /**
+   * Export personas with their ontologies.
+   *
+   * @route GET /api/export/personas
+   * @queryparam format - Export format (default: jsonl)
+   * @returns JSON Lines file with personas and ontologies
+   */
+  fastify.get('/api/export/personas', {
+    schema: {
+      description: 'Export personas with their ontologies',
+      tags: ['export'],
+      querystring: Type.Object({
+        format: Type.Optional(Type.Union([
+          Type.Literal('jsonl'),
+          Type.Literal('json')
+        ]))
+      }),
+      response: {
+        200: Type.String()
+      }
+    }
+  }, async (request, reply) => {
+    const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
+
+    // Fetch all personas
+    const personas = await fastify.prisma.persona.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Fetch all ontologies
+    const ontologies = await fastify.prisma.ontology.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Export personas with ontologies
+    const exportData = exporter.exportPersonasWithOntologies(personas, ontologies)
+
+    // Set content type and disposition
+    if (format === 'jsonl') {
+      reply.header('Content-Type', 'application/x-ndjson')
+      reply.header('Content-Disposition', 'attachment; filename="personas.jsonl"')
+      return reply.send(exportData)
+    } else {
+      reply.header('Content-Type', 'application/json')
+      reply.header('Content-Disposition', 'attachment; filename="personas.json"')
+      const lines = exportData.split('\n').filter(Boolean)
+      const jsonArray = lines.map(line => JSON.parse(line))
+      return reply.send(JSON.stringify(jsonArray, null, 2))
+    }
+  })
+
+  /**
+   * Export world state objects (entities, events, times, collections, relations).
+   *
+   * @route GET /api/export/world
+   * @queryparam format - Export format (default: jsonl)
+   * @returns JSON Lines file with world state objects
+   */
+  fastify.get('/api/export/world', {
+    schema: {
+      description: 'Export world state objects',
+      tags: ['export'],
+      querystring: Type.Object({
+        format: Type.Optional(Type.Union([
+          Type.Literal('jsonl'),
+          Type.Literal('json')
+        ]))
+      }),
+      response: {
+        200: Type.String(),
+        404: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request, reply) => {
+    const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
+
+    // Fetch world state - for now, get the first one (or implement user-specific)
+    const worldState = await fastify.prisma.worldState.findFirst()
+
+    if (!worldState) {
+      reply.code(404)
+      return reply.send({
+        error: 'Not found',
+        message: 'No world state data found'
+      })
+    }
+
+    // Export world state
+    const exportData = exporter.exportWorldState(worldState)
+
+    // Set content type and disposition
+    if (format === 'jsonl') {
+      reply.header('Content-Type', 'application/x-ndjson')
+      reply.header('Content-Disposition', 'attachment; filename="world-state.jsonl"')
+      return reply.send(exportData)
+    } else {
+      reply.header('Content-Type', 'application/json')
+      reply.header('Content-Disposition', 'attachment; filename="world-state.json"')
+      const lines = exportData.split('\n').filter(Boolean)
+      const jsonArray = lines.map(line => JSON.parse(line))
+      return reply.send(JSON.stringify(jsonArray, null, 2))
+    }
+  })
+
+  /**
+   * Export video summaries with their claims and claim relations.
+   *
+   * @route GET /api/export/summaries
+   * @queryparam format - Export format (default: jsonl)
+   * @queryparam videoIds - Comma-separated list of video IDs to filter
+   * @queryparam personaIds - Comma-separated list of persona IDs to filter
+   * @returns JSON Lines file with summaries, claims, and claim relations
+   */
+  fastify.get('/api/export/summaries', {
+    schema: {
+      description: 'Export video summaries with claims',
+      tags: ['export'],
+      querystring: Type.Object({
+        format: Type.Optional(Type.Union([
+          Type.Literal('jsonl'),
+          Type.Literal('json')
+        ])),
+        videoIds: Type.Optional(Type.String()),
+        personaIds: Type.Optional(Type.String())
+      }),
+      response: {
+        200: Type.String()
+      }
+    }
+  }, async (request, reply) => {
+    const {
+      format = 'jsonl',
+      videoIds,
+      personaIds
+    } = request.query as {
+      format?: 'jsonl' | 'json'
+      videoIds?: string
+      personaIds?: string
+    }
+
+    // Parse filter parameters
+    const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
+    const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : undefined
+
+    // Build where clause
+    const where: {
+      videoId?: { in: string[] }
+      personaId?: { in: string[] }
+    } = {}
+
+    if (videoIdArray && videoIdArray.length > 0) {
+      where.videoId = { in: videoIdArray }
+    }
+    if (personaIdArray && personaIdArray.length > 0) {
+      where.personaId = { in: personaIdArray }
+    }
+
+    // Fetch summaries
+    const summaries = await fastify.prisma.videoSummary.findMany({
+      where,
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Fetch claims for these summaries
+    const summaryIds = summaries.map(s => s.id)
+    const claims = await fastify.prisma.claim.findMany({
+      where: { summaryId: { in: summaryIds } },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Fetch claim relations
+    const claimIds = claims.map(c => c.id)
+    const claimRelations = await fastify.prisma.claimRelation.findMany({
+      where: {
+        OR: [
+          { sourceClaimId: { in: claimIds } },
+          { targetClaimId: { in: claimIds } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Export summaries with claims
+    const exportData = exporter.exportSummariesWithClaims(summaries, claims, claimRelations)
+
+    // Set headers with export stats
+    reply.header('X-Export-Summaries', summaries.length.toString())
+    reply.header('X-Export-Claims', claims.length.toString())
+    reply.header('X-Export-ClaimRelations', claimRelations.length.toString())
+
+    // Set content type and disposition
+    if (format === 'jsonl') {
+      reply.header('Content-Type', 'application/x-ndjson')
+      reply.header('Content-Disposition', 'attachment; filename="summaries.jsonl"')
+      return reply.send(exportData)
+    } else {
+      reply.header('Content-Type', 'application/json')
+      reply.header('Content-Disposition', 'attachment; filename="summaries.json"')
+      const lines = exportData.split('\n').filter(Boolean)
+      const jsonArray = lines.map(line => JSON.parse(line))
+      return reply.send(JSON.stringify(jsonArray, null, 2))
+    }
+  })
+
+  /**
+   * Export all user data.
+   * Exports in dependency order: personas -> ontologies -> world state -> summaries -> claims -> annotations
+   *
+   * @route GET /api/export/all
+   * @queryparam format - Export format (default: jsonl)
+   * @queryparam includeInterpolated - Include all interpolated frames (default: false)
+   * @returns JSON Lines file with all data
+   */
+  fastify.get('/api/export/all', {
+    schema: {
+      description: 'Export all user data',
+      tags: ['export'],
+      querystring: Type.Object({
+        format: Type.Optional(Type.Union([
+          Type.Literal('jsonl'),
+          Type.Literal('json')
+        ])),
+        includeInterpolated: Type.Optional(Type.Boolean())
+      }),
+      response: {
+        200: Type.String()
+      }
+    }
+  }, async (request, reply) => {
+    const {
+      format = 'jsonl',
+      includeInterpolated = false
+    } = request.query as {
+      format?: 'jsonl' | 'json'
+      includeInterpolated?: boolean
+    }
+
+    const lines: string[] = []
+
+    // 1. Export personas with ontologies
+    const personas = await fastify.prisma.persona.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const ontologies = await fastify.prisma.ontology.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    if (personas.length > 0) {
+      lines.push(exporter.exportPersonasWithOntologies(personas, ontologies))
+    }
+
+    // 2. Export world state
+    const worldState = await fastify.prisma.worldState.findFirst()
+    if (worldState) {
+      const worldLines = exporter.exportWorldState(worldState)
+      if (worldLines) {
+        lines.push(worldLines)
+      }
+    }
+
+    // 3. Export summaries with claims
+    const summaries = await fastify.prisma.videoSummary.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const summaryIds = summaries.map(s => s.id)
+    const claims = await fastify.prisma.claim.findMany({
+      where: { summaryId: { in: summaryIds } },
+      orderBy: { createdAt: 'asc' }
+    })
+    const claimIds = claims.map(c => c.id)
+    const claimRelations = await fastify.prisma.claimRelation.findMany({
+      where: {
+        OR: [
+          { sourceClaimId: { in: claimIds } },
+          { targetClaimId: { in: claimIds } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+    if (summaries.length > 0 || claims.length > 0) {
+      lines.push(exporter.exportSummariesWithClaims(summaries, claims, claimRelations))
+    }
+
+    // 4. Export annotations
+    const prismaAnnotations = await fastify.prisma.annotation.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const convertedAnnotations = prismaAnnotations
+      .map(a => exporter.convertPrismaAnnotation(a))
+      .filter((a): a is NonNullable<typeof a> => a !== null)
+    if (convertedAnnotations.length > 0) {
+      lines.push(exporter.exportAnnotations(convertedAnnotations, { includeInterpolated }))
+    }
+
+    const exportData = lines.filter(Boolean).join('\n')
+
+    // Set headers with export stats
+    reply.header('X-Export-Personas', personas.length.toString())
+    reply.header('X-Export-Ontologies', ontologies.length.toString())
+    reply.header('X-Export-Summaries', summaries.length.toString())
+    reply.header('X-Export-Claims', claims.length.toString())
+    reply.header('X-Export-Annotations', convertedAnnotations.length.toString())
+
+    // Set content type and disposition
+    if (format === 'jsonl') {
+      reply.header('Content-Type', 'application/x-ndjson')
+      reply.header('Content-Disposition', 'attachment; filename="fovea-export.jsonl"')
+      return reply.send(exportData)
+    } else {
+      reply.header('Content-Type', 'application/json')
+      reply.header('Content-Disposition', 'attachment; filename="fovea-export.json"')
+      const jsonLines = exportData.split('\n').filter(Boolean)
+      const jsonArray = jsonLines.map(line => JSON.parse(line))
+      return reply.send(JSON.stringify(jsonArray, null, 2))
+    }
   })
 }
 

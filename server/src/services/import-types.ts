@@ -8,8 +8,10 @@
  * @description Represents a parsed line from JSON Lines import file.
  */
 export interface ImportLine {
-  type: 'ontology' | 'entity' | 'event' | 'time' | 'entityCollection' |
-        'eventCollection' | 'timeCollection' | 'relation' | 'annotation' | 'video' | 'metadata'
+  type: 'persona' | 'ontology' | 'entity' | 'event' | 'time' | 'entityCollection' |
+        'eventCollection' | 'timeCollection' | 'entity_collection' | 'event_collection' |
+        'time_collection' | 'relation' | 'annotation' | 'video' | 'metadata' |
+        'summary' | 'claim' | 'claim_relation'
   data: {
     id?: string
     videoId?: string
@@ -26,8 +28,23 @@ export interface ImportLine {
     personas?: unknown[]
     personaOntologies?: unknown[]
     name?: string
+    role?: string
+    informationNeed?: string
+    details?: string
     typeAssignments?: unknown[]
     personaInterpretations?: unknown[]
+    entityTypes?: unknown[]
+    eventTypes?: unknown[]
+    roleTypes?: unknown[]
+    relationTypes?: unknown[]
+    summary?: unknown[]
+    text?: string
+    gloss?: unknown[]
+    summaryId?: string
+    parentClaimId?: string
+    sourceClaimId?: string
+    targetClaimId?: string
+    relationTypeId?: string
     [key: string]: unknown
   }
   lineNumber: number
@@ -125,6 +142,9 @@ export interface ImportResult {
       eventCollections: number
       timeCollections: number
       relations: number
+      summaries: number
+      claims: number
+      claimRelations: number
       annotations: number
       totalKeyframes: number
       totalInterpolatedFrames: number
@@ -133,6 +153,8 @@ export interface ImportResult {
     skippedItems: {
       personas: number
       worldObjects: number
+      summaries: number
+      claims: number
       annotations: number
       sequenceAnnotations: number
     }
@@ -167,6 +189,9 @@ export interface ImportPreview {
     eventCollections: number
     timeCollections: number
     relations: number
+    summaries: number
+    claims: number
+    claimRelations: number
     annotations: number
     totalKeyframes: number
     singleKeyframeSequences: number
@@ -202,6 +227,10 @@ export interface ExistingData {
   collectionIds: Set<string>
   annotationIds: Set<string>
   videoIds: Set<string>
+  summaryIds: Set<string>
+  claimIds: Set<string>
+  claimRelationIds: Set<string>
+  ontologyPersonaIds: Set<string>
 }
 
 /**

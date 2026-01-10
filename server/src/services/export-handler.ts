@@ -1,4 +1,13 @@
-import { Annotation as PrismaAnnotation } from '@prisma/client'
+import {
+  Annotation as PrismaAnnotation,
+  Persona as PrismaPersona,
+  Ontology as PrismaOntology,
+  WorldState as PrismaWorldState,
+  VideoSummary as PrismaVideoSummary,
+  Claim as PrismaClaim,
+  ClaimRelation as PrismaClaimRelation,
+  PrismaClient
+} from '@prisma/client'
 
 /**
  * @interface BoundingBox
@@ -114,6 +123,7 @@ export class AnnotationExporter {
    * Export keyframes-only (recommended for most use cases).
    * Exports only boxes where isKeyframe: true along with interpolation configuration.
    * This preserves author intent and allows re-interpolation on import.
+   * Supports annotations without bounding boxes (exports with empty sequence).
    *
    * @param annotation - Annotation to export
    * @returns JSON string with keyframes-only
@@ -121,20 +131,25 @@ export class AnnotationExporter {
   exportKeyframesOnly(annotation: Annotation): string {
     const sequence = annotation.boundingBoxSequence
 
+    // Handle annotations without bounding boxes (empty sequences are valid)
+    const boxes = sequence?.boxes || []
+    const interpolationSegments = sequence?.interpolationSegments || []
+    const visibilityRanges = sequence?.visibilityRanges || []
+
     // Extract only keyframes
-    const keyframes = sequence.boxes.filter(box => box.isKeyframe)
+    const keyframes = boxes.filter(box => box.isKeyframe)
 
     // Create export-ready sequence
     const exportSequence: BoundingBoxSequence = {
       boxes: keyframes,
-      interpolationSegments: sequence.interpolationSegments,
-      visibilityRanges: sequence.visibilityRanges,
-      trackId: sequence.trackId,
-      trackingSource: sequence.trackingSource,
-      trackingConfidence: sequence.trackingConfidence,
-      totalFrames: sequence.totalFrames,
+      interpolationSegments,
+      visibilityRanges,
+      trackId: sequence?.trackId,
+      trackingSource: sequence?.trackingSource,
+      trackingConfidence: sequence?.trackingConfidence,
+      totalFrames: sequence?.totalFrames || 0,
       keyframeCount: keyframes.length,
-      interpolatedFrameCount: sequence.boxes.length - keyframes.length
+      interpolatedFrameCount: boxes.length - keyframes.length
     }
 
     // Create export data
@@ -204,6 +219,7 @@ export class AnnotationExporter {
    * Export full sequence with all interpolated frames.
    * Useful for debugging or external tools that don't support interpolation.
    * WARNING: File size can be 100x larger than keyframes-only export.
+   * Supports annotations without bounding boxes (exports with empty sequence).
    *
    * @param annotation - Annotation to export
    * @returns JSON string with all interpolated frames
@@ -211,18 +227,20 @@ export class AnnotationExporter {
   exportFullSequence(annotation: Annotation): string {
     const sequence = annotation.boundingBoxSequence
 
-    // All boxes (keyframes + interpolated)
-    const allBoxes = sequence.boxes
+    // Handle annotations without bounding boxes (empty sequences are valid)
+    const allBoxes = sequence?.boxes || []
+    const interpolationSegments = sequence?.interpolationSegments || []
+    const visibilityRanges = sequence?.visibilityRanges || []
 
     // Create export-ready sequence with all frames
     const exportSequence: BoundingBoxSequence = {
       boxes: allBoxes,
-      interpolationSegments: sequence.interpolationSegments,
-      visibilityRanges: sequence.visibilityRanges,
-      trackId: sequence.trackId,
-      trackingSource: sequence.trackingSource,
-      trackingConfidence: sequence.trackingConfidence,
-      totalFrames: sequence.totalFrames,
+      interpolationSegments,
+      visibilityRanges,
+      trackId: sequence?.trackId,
+      trackingSource: sequence?.trackingSource,
+      trackingConfidence: sequence?.trackingConfidence,
+      totalFrames: sequence?.totalFrames || 0,
       keyframeCount: allBoxes.filter(b => b.isKeyframe).length,
       interpolatedFrameCount: allBoxes.filter(b => !b.isKeyframe).length
     }
@@ -325,6 +343,13 @@ export class AnnotationExporter {
 
     for (const annotation of annotations) {
       const sequence = annotation.boundingBoxSequence
+
+      // Handle annotations without bounding boxes (empty sequences are valid)
+      if (!sequence || !sequence.boxes || !Array.isArray(sequence.boxes)) {
+        sequenceCount++
+        continue
+      }
+
       sequenceCount++
 
       const keyframes = sequence.boxes.filter(b => b.isKeyframe).length
@@ -354,6 +379,7 @@ export class AnnotationExporter {
 
   /**
    * Validate a bounding box sequence before export.
+   * Empty sequences are valid (for ontology-only annotations).
    *
    * @param sequence - Bounding box sequence to validate
    * @param videoWidth - Video width in pixels (optional, for boundary validation)
@@ -361,13 +387,18 @@ export class AnnotationExporter {
    * @returns Validation result
    */
   validateSequence(
-    sequence: BoundingBoxSequence,
+    sequence: BoundingBoxSequence | null | undefined,
     videoWidth?: number,
     videoHeight?: number
   ): SequenceValidationResult {
     const errors: string[] = []
 
-    // Validate minimum keyframes (at least 1)
+    // Empty sequences are valid (for ontology-only annotations)
+    if (!sequence || !sequence.boxes || sequence.boxes.length === 0) {
+      return { valid: true, errors: [] }
+    }
+
+    // Validate minimum keyframes (at least 1 if there are boxes)
     const keyframes = sequence.boxes.filter(b => b.isKeyframe)
     if (keyframes.length === 0) {
       errors.push('Sequence must have at least 1 keyframe')
@@ -496,29 +527,54 @@ export class AnnotationExporter {
    * Convert Prisma annotation to export format.
    * This handles the conversion from database format to the typed Annotation interface.
    *
+   * Database storage format:
+   * - `type` column: 'type' | 'object' (annotation type)
+   * - `label` column: typeId (for type annotations) or linkedEntityId (for object annotations)
+   * - `frames` column: BoundingBoxSequence directly (NOT nested as frames.boundingBoxSequence)
+   * - `personaId` column: persona ID for type annotations
+   * - `confidence` column: confidence score
+   *
    * @param prismaAnnotation - Annotation from Prisma
-   * @returns Typed annotation
+   * @returns Typed annotation, or null if annotation has invalid data
    */
-  convertPrismaAnnotation(prismaAnnotation: PrismaAnnotation): Annotation {
-    const frames = prismaAnnotation.frames as Record<string, unknown> & {
-      annotationType?: string
-      boundingBoxSequence: BoundingBoxSequence
-      typeCategory?: 'entity' | 'role' | 'event'
-      typeId?: string
-      linkedEntityId?: string
-      linkedEventId?: string
-      linkedTimeId?: string
-      linkedLocationId?: string
-      linkedCollectionId?: string
-      linkedCollectionType?: 'entity' | 'event' | 'time'
-      notes?: string
-      metadata?: Record<string, unknown>
-      createdBy?: string
+  convertPrismaAnnotation(prismaAnnotation: PrismaAnnotation): Annotation | null {
+    // The frames field IS the BoundingBoxSequence directly (not nested)
+    const frames = prismaAnnotation.frames as BoundingBoxSequence | Record<string, unknown> | null
+
+    // Create a default empty sequence for annotations without bounding boxes
+    // This supports ontology-only annotations (summaries, claims without spatial data)
+    const emptySequence: BoundingBoxSequence = {
+      boxes: [],
+      interpolationSegments: [],
+      visibilityRanges: [],
+      totalFrames: 0,
+      keyframeCount: 0,
+      interpolatedFrameCount: 0
     }
 
-    // Parse annotation type from frames data
-    const annotationType = (frames.annotationType === 'type' || frames.annotationType === 'object')
-      ? frames.annotationType
+    // Determine if frames contains a valid bounding box sequence
+    let boundingBoxSequence: BoundingBoxSequence
+    if (frames && typeof frames === 'object' && 'boxes' in frames && Array.isArray(frames.boxes)) {
+      // Valid sequence structure
+      boundingBoxSequence = {
+        boxes: frames.boxes || [],
+        interpolationSegments: (frames as BoundingBoxSequence).interpolationSegments || [],
+        visibilityRanges: (frames as BoundingBoxSequence).visibilityRanges || [],
+        trackId: (frames as BoundingBoxSequence).trackId,
+        trackingSource: (frames as BoundingBoxSequence).trackingSource,
+        trackingConfidence: (frames as BoundingBoxSequence).trackingConfidence,
+        totalFrames: (frames as BoundingBoxSequence).totalFrames || 0,
+        keyframeCount: (frames as BoundingBoxSequence).keyframeCount || 0,
+        interpolatedFrameCount: (frames as BoundingBoxSequence).interpolatedFrameCount || 0
+      }
+    } else {
+      // No bounding box data - use empty sequence (valid for ontology-only exports)
+      boundingBoxSequence = emptySequence
+    }
+
+    // Annotation type is stored in the 'type' column, NOT inside frames
+    const annotationType = (prismaAnnotation.type === 'type' || prismaAnnotation.type === 'object')
+      ? prismaAnnotation.type as 'type' | 'object'
       : 'type'
 
     // Build the annotation object
@@ -526,33 +582,406 @@ export class AnnotationExporter {
       id: prismaAnnotation.id,
       videoId: prismaAnnotation.videoId,
       annotationType,
-      boundingBoxSequence: frames.boundingBoxSequence,
+      boundingBoxSequence,
       createdAt: prismaAnnotation.createdAt.toISOString(),
       updatedAt: prismaAnnotation.updatedAt.toISOString()
     }
 
-    // Add type-specific fields
+    // Type-specific fields - read from database columns, not frames
     if (annotationType === 'type') {
       annotation.personaId = prismaAnnotation.personaId ?? undefined
-      annotation.typeCategory = frames.typeCategory
-      annotation.typeId = frames.typeId
+      // For type annotations, label contains the typeId
+      annotation.typeId = prismaAnnotation.label
+      // Default typeCategory since it's not stored separately
+      annotation.typeCategory = 'entity'
     } else {
-      annotation.linkedEntityId = frames.linkedEntityId
-      annotation.linkedEventId = frames.linkedEventId
-      annotation.linkedTimeId = frames.linkedTimeId
-      annotation.linkedLocationId = frames.linkedLocationId
-      annotation.linkedCollectionId = frames.linkedCollectionId
-      annotation.linkedCollectionType = frames.linkedCollectionType
+      // For object annotations, label contains the linked entity/event/time ID
+      // We store it as linkedEntityId by default; could be enhanced to detect type
+      annotation.linkedEntityId = prismaAnnotation.label
     }
 
-    // Add optional fields
+    // Add confidence from database column
     if (prismaAnnotation.confidence !== null) {
       annotation.confidence = prismaAnnotation.confidence
     }
-    if (frames.notes) annotation.notes = frames.notes
-    if (frames.metadata) annotation.metadata = frames.metadata
-    if (frames.createdBy) annotation.createdBy = frames.createdBy
 
     return annotation
+  }
+
+  // =============================================================================
+  // PERSONA AND ONTOLOGY EXPORT
+  // =============================================================================
+
+  /**
+   * Export a persona to JSONL format.
+   */
+  exportPersona(persona: PrismaPersona): string {
+    const exportData = {
+      type: 'persona',
+      data: {
+        id: persona.id,
+        name: persona.name,
+        role: persona.role,
+        informationNeed: persona.informationNeed,
+        details: persona.details || undefined,
+        createdAt: persona.createdAt.toISOString(),
+        updatedAt: persona.updatedAt.toISOString(),
+      }
+    }
+    return JSON.stringify(exportData)
+  }
+
+  /**
+   * Export an ontology to JSONL format.
+   */
+  exportOntology(ontology: PrismaOntology): string {
+    const exportData = {
+      type: 'ontology',
+      data: {
+        personaId: ontology.personaId,
+        entityTypes: ontology.entityTypes || [],
+        eventTypes: ontology.eventTypes || [],
+        roleTypes: ontology.roleTypes || [],
+        relationTypes: ontology.relationTypes || [],
+        relations: [], // Relations are stored in WorldState, not Ontology
+      }
+    }
+    return JSON.stringify(exportData)
+  }
+
+  /**
+   * Export personas with their ontologies.
+   */
+  exportPersonasWithOntologies(
+    personas: PrismaPersona[],
+    ontologies: PrismaOntology[]
+  ): string {
+    const lines: string[] = []
+
+    // Create a map of ontologies by personaId
+    const ontologyMap = new Map<string, PrismaOntology>()
+    for (const ontology of ontologies) {
+      ontologyMap.set(ontology.personaId, ontology)
+    }
+
+    // Export each persona followed by its ontology
+    for (const persona of personas) {
+      lines.push(this.exportPersona(persona))
+      const ontology = ontologyMap.get(persona.id)
+      if (ontology) {
+        lines.push(this.exportOntology(ontology))
+      }
+    }
+
+    return lines.join('\n')
+  }
+
+  // =============================================================================
+  // WORLD STATE EXPORT
+  // =============================================================================
+
+  /**
+   * Export world state objects to JSONL format.
+   * Exports entities, events, times, collections, and relations.
+   */
+  exportWorldState(worldState: PrismaWorldState): string {
+    const lines: string[] = []
+
+    // Export entities
+    const entities = worldState.entities as Array<Record<string, unknown>> || []
+    for (const entity of entities) {
+      lines.push(JSON.stringify({
+        type: 'entity',
+        data: {
+          ...entity,
+          createdAt: entity.createdAt || new Date().toISOString(),
+          updatedAt: entity.updatedAt || new Date().toISOString(),
+        }
+      }))
+    }
+
+    // Export events
+    const events = worldState.events as Array<Record<string, unknown>> || []
+    for (const event of events) {
+      lines.push(JSON.stringify({
+        type: 'event',
+        data: {
+          ...event,
+          createdAt: event.createdAt || new Date().toISOString(),
+          updatedAt: event.updatedAt || new Date().toISOString(),
+        }
+      }))
+    }
+
+    // Export times
+    const times = worldState.times as Array<Record<string, unknown>> || []
+    for (const time of times) {
+      lines.push(JSON.stringify({
+        type: 'time',
+        data: time
+      }))
+    }
+
+    // Export entity collections
+    const entityCollections = worldState.entityCollections as Array<Record<string, unknown>> || []
+    for (const collection of entityCollections) {
+      lines.push(JSON.stringify({
+        type: 'entity_collection',
+        data: {
+          ...collection,
+          createdAt: collection.createdAt || new Date().toISOString(),
+          updatedAt: collection.updatedAt || new Date().toISOString(),
+        }
+      }))
+    }
+
+    // Export event collections
+    const eventCollections = worldState.eventCollections as Array<Record<string, unknown>> || []
+    for (const collection of eventCollections) {
+      lines.push(JSON.stringify({
+        type: 'event_collection',
+        data: {
+          ...collection,
+          createdAt: collection.createdAt || new Date().toISOString(),
+          updatedAt: collection.updatedAt || new Date().toISOString(),
+        }
+      }))
+    }
+
+    // Export time collections
+    const timeCollections = worldState.timeCollections as Array<Record<string, unknown>> || []
+    for (const collection of timeCollections) {
+      lines.push(JSON.stringify({
+        type: 'time_collection',
+        data: collection
+      }))
+    }
+
+    // Export relations
+    const relations = worldState.relations as Array<Record<string, unknown>> || []
+    for (const relation of relations) {
+      lines.push(JSON.stringify({
+        type: 'relation',
+        data: {
+          ...relation,
+          createdAt: relation.createdAt || new Date().toISOString(),
+          updatedAt: relation.updatedAt || new Date().toISOString(),
+        }
+      }))
+    }
+
+    return lines.join('\n')
+  }
+
+  // =============================================================================
+  // SUMMARY AND CLAIM EXPORT
+  // =============================================================================
+
+  /**
+   * Export a video summary to JSONL format.
+   */
+  exportSummary(summary: PrismaVideoSummary): string {
+    const exportData = {
+      type: 'summary',
+      data: {
+        id: summary.id,
+        videoId: summary.videoId,
+        personaId: summary.personaId,
+        summary: summary.summary || [],
+        visualAnalysis: summary.visualAnalysis || undefined,
+        audioTranscript: summary.audioTranscript || undefined,
+        keyFrames: summary.keyFrames || undefined,
+        confidence: summary.confidence || undefined,
+        transcriptJson: summary.transcriptJson || undefined,
+        audioLanguage: summary.audioLanguage || undefined,
+        speakerCount: summary.speakerCount || undefined,
+        audioModelUsed: summary.audioModelUsed || undefined,
+        visualModelUsed: summary.visualModelUsed || undefined,
+        fusionStrategy: summary.fusionStrategy || undefined,
+        createdAt: summary.createdAt.toISOString(),
+        updatedAt: summary.updatedAt.toISOString(),
+        createdBy: summary.createdBy || undefined,
+      }
+    }
+    return JSON.stringify(exportData)
+  }
+
+  /**
+   * Export a claim to JSONL format.
+   */
+  exportClaim(claim: PrismaClaim): string {
+    const exportData = {
+      type: 'claim',
+      data: {
+        id: claim.id,
+        summaryId: claim.summaryId,
+        summaryType: claim.summaryType,
+        text: claim.text,
+        gloss: claim.gloss || [],
+        parentClaimId: claim.parentClaimId || undefined,
+        textSpans: claim.textSpans || undefined,
+        claimerType: claim.claimerType || undefined,
+        claimerGloss: claim.claimerGloss || undefined,
+        claimRelation: claim.claimRelation || undefined,
+        claimEventId: claim.claimEventId || undefined,
+        claimTimeId: claim.claimTimeId || undefined,
+        claimLocationId: claim.claimLocationId || undefined,
+        confidence: claim.confidence || undefined,
+        modelUsed: claim.modelUsed || undefined,
+        extractionStrategy: claim.extractionStrategy || undefined,
+        createdBy: claim.createdBy || undefined,
+        createdAt: claim.createdAt.toISOString(),
+        updatedAt: claim.updatedAt.toISOString(),
+      }
+    }
+    return JSON.stringify(exportData)
+  }
+
+  /**
+   * Export a claim relation to JSONL format.
+   */
+  exportClaimRelation(relation: PrismaClaimRelation): string {
+    const exportData = {
+      type: 'claim_relation',
+      data: {
+        id: relation.id,
+        sourceClaimId: relation.sourceClaimId,
+        targetClaimId: relation.targetClaimId,
+        relationTypeId: relation.relationTypeId,
+        sourceSpans: relation.sourceSpans || undefined,
+        targetSpans: relation.targetSpans || undefined,
+        confidence: relation.confidence || undefined,
+        notes: relation.notes || undefined,
+        createdBy: relation.createdBy || undefined,
+        createdAt: relation.createdAt.toISOString(),
+        updatedAt: relation.updatedAt.toISOString(),
+      }
+    }
+    return JSON.stringify(exportData)
+  }
+
+  /**
+   * Export summaries with their claims and claim relations.
+   */
+  exportSummariesWithClaims(
+    summaries: PrismaVideoSummary[],
+    claims: PrismaClaim[],
+    claimRelations: PrismaClaimRelation[]
+  ): string {
+    const lines: string[] = []
+
+    // Create maps for efficient lookup
+    const claimsBySummary = new Map<string, PrismaClaim[]>()
+    for (const claim of claims) {
+      const summaryId = claim.summaryId
+      if (!claimsBySummary.has(summaryId)) {
+        claimsBySummary.set(summaryId, [])
+      }
+      claimsBySummary.get(summaryId)!.push(claim)
+    }
+
+    // Export each summary followed by its claims
+    for (const summary of summaries) {
+      lines.push(this.exportSummary(summary))
+
+      const summaryClaims = claimsBySummary.get(summary.id) || []
+      // Sort claims to ensure parents come before children
+      summaryClaims.sort((a, b) => {
+        if (a.parentClaimId === null && b.parentClaimId !== null) return -1
+        if (a.parentClaimId !== null && b.parentClaimId === null) return 1
+        return 0
+      })
+
+      for (const claim of summaryClaims) {
+        lines.push(this.exportClaim(claim))
+      }
+    }
+
+    // Export claim relations at the end
+    for (const relation of claimRelations) {
+      lines.push(this.exportClaimRelation(relation))
+    }
+
+    return lines.join('\n')
+  }
+
+  // =============================================================================
+  // FULL EXPORT
+  // =============================================================================
+
+  /**
+   * Export all data for a user.
+   * Order: personas -> ontologies -> world state -> summaries -> claims -> annotations
+   * This order ensures dependencies are exported before dependents.
+   */
+  async exportAll(prisma: PrismaClient, userId: string): Promise<string> {
+    const lines: string[] = []
+
+    // 1. Export personas with ontologies
+    const personas = await prisma.persona.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' }
+    })
+    const ontologies = await prisma.ontology.findMany({
+      where: { persona: { userId } },
+      orderBy: { createdAt: 'asc' }
+    })
+    if (personas.length > 0) {
+      lines.push(this.exportPersonasWithOntologies(personas, ontologies))
+    }
+
+    // 2. Export world state
+    const worldState = await prisma.worldState.findUnique({
+      where: { userId }
+    })
+    if (worldState) {
+      const worldLines = this.exportWorldState(worldState)
+      if (worldLines) {
+        lines.push(worldLines)
+      }
+    }
+
+    // 3. Export summaries with claims
+    const summaries = await prisma.videoSummary.findMany({
+      where: { persona: { userId } },
+      orderBy: { createdAt: 'asc' }
+    })
+    const summaryIds = summaries.map(s => s.id)
+    const claims = await prisma.claim.findMany({
+      where: { summaryId: { in: summaryIds } },
+      orderBy: { createdAt: 'asc' }
+    })
+    const claimIds = claims.map(c => c.id)
+    const claimRelations = await prisma.claimRelation.findMany({
+      where: {
+        OR: [
+          { sourceClaimId: { in: claimIds } },
+          { targetClaimId: { in: claimIds } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+    if (summaries.length > 0 || claims.length > 0) {
+      lines.push(this.exportSummariesWithClaims(summaries, claims, claimRelations))
+    }
+
+    // 4. Export annotations
+    const annotations = await prisma.annotation.findMany({
+      where: {
+        OR: [
+          { personaId: { in: personas.map(p => p.id) } },
+          { personaId: null } // Object annotations
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+    const convertedAnnotations = annotations
+      .map(a => this.convertPrismaAnnotation(a))
+      .filter((a): a is NonNullable<typeof a> => a !== null)
+    if (convertedAnnotations.length > 0) {
+      lines.push(this.exportAnnotations(convertedAnnotations))
+    }
+
+    return lines.filter(Boolean).join('\n')
   }
 }

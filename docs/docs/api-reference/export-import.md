@@ -4,7 +4,22 @@ title: Export & Import API
 
 # Export & Import API
 
-Export annotations in JSON Lines format and import them with conflict resolution. Supports keyframes-only or fully interpolated export modes.
+Export and import all user-created data in JSON Lines format with conflict resolution. Supports annotations, personas, ontologies, world state objects, summaries, and claims.
+
+## Supported Data Types
+
+The export/import system supports all user-created data types:
+
+| Data Type | Export Endpoint | Description |
+|-----------|----------------|-------------|
+| Personas | `/api/export/personas` | User personas with roles and information needs |
+| Ontologies | `/api/export/personas` | Type definitions (entity, event, role, relation types) |
+| World State | `/api/export/world` | Entities, events, times, locations, collections, relations |
+| Summaries | `/api/export/summaries` | Video summaries with claims |
+| Claims | `/api/export/summaries` | Extracted claims from summaries |
+| Claim Relations | `/api/export/summaries` | Relationships between claims |
+| Annotations | `/api/export` | Bounding box annotations |
+| All Data | `/api/export/all` | Complete data export |
 
 ## Export Annotations
 
@@ -179,9 +194,161 @@ GET /api/export/stats
 curl "http://localhost:3001/api/export/stats?includeInterpolated=true"
 ```
 
-## Import Annotations
+## Export Personas
 
-Import annotations from a JSON Lines file with conflict resolution.
+Export personas with their associated ontologies (type definitions).
+
+### Request
+
+```
+GET /api/export/personas
+```
+
+### Response
+
+**Status:** 200 OK
+
+**Content-Type:** application/x-ndjson
+
+JSON Lines format with personas followed by their ontologies:
+
+```jsonl
+{"type":"persona","data":{"id":"660e8400-e29b-41d4-a716-446655440001","name":"Analyst","role":"Video Analyst","informationNeed":"Track objects across frames","createdAt":"2025-10-06T14:30:00.000Z","updatedAt":"2025-10-06T14:30:00.000Z"}}
+{"type":"ontology","data":{"personaId":"660e8400-e29b-41d4-a716-446655440001","entityTypes":[{"id":"entity-001","name":"Person","gloss":[{"type":"text","content":"A human being"}]}],"eventTypes":[],"roleTypes":[],"relationTypes":[]}}
+```
+
+### Example
+
+```bash
+curl "http://localhost:3001/api/export/personas" --output personas.jsonl
+```
+
+## Export World State
+
+Export world state objects including entities, events, times, locations, collections, and relations.
+
+### Request
+
+```
+GET /api/export/world
+```
+
+### Response
+
+**Status:** 200 OK
+
+**Content-Type:** application/x-ndjson
+
+JSON Lines format with world state objects:
+
+```jsonl
+{"type":"entity","data":{"id":"entity-123","name":"John Smith","description":[{"type":"text","content":"A person in the video"}],"typeAssignments":[{"personaId":"660e8400","entityTypeId":"entity-001"}]}}
+{"type":"event","data":{"id":"event-456","name":"Meeting","description":[{"type":"text","content":"A meeting event"}],"personaInterpretations":[]}}
+{"type":"entity_collection","data":{"id":"coll-789","name":"Team Members","entityIds":["entity-123","entity-456"],"collectionType":"group"}}
+```
+
+### Example
+
+```bash
+curl "http://localhost:3001/api/export/world" --output world-state.jsonl
+```
+
+## Export Summaries
+
+Export video summaries with their associated claims and claim relations.
+
+### Request
+
+```
+GET /api/export/summaries
+```
+
+### Response
+
+**Status:** 200 OK
+
+**Content-Type:** application/x-ndjson
+
+JSON Lines format with summaries followed by claims and claim relations:
+
+```jsonl
+{"type":"summary","data":{"id":"sum-123","videoId":"vid-456","personaId":"660e8400","summary":[{"type":"text","content":"Video summary content"}],"createdAt":"2025-10-06T14:30:00.000Z","updatedAt":"2025-10-06T14:30:00.000Z"}}
+{"type":"claim","data":{"id":"claim-789","summaryId":"sum-123","summaryType":"video","text":"The person entered the room","gloss":[{"type":"text","content":"The person entered the room"}]}}
+{"type":"claim_relation","data":{"id":"rel-012","sourceClaimId":"claim-789","targetClaimId":"claim-abc","relationTypeId":"supports"}}
+```
+
+### Example
+
+```bash
+curl "http://localhost:3001/api/export/summaries" --output summaries.jsonl
+```
+
+## Export All Data
+
+Export all user-created data in dependency order: personas, ontologies, world state, summaries, claims, and annotations.
+
+### Request
+
+```
+GET /api/export/all
+```
+
+### Response
+
+**Status:** 200 OK
+
+**Content-Type:** application/x-ndjson
+
+JSON Lines format with all data types in dependency order:
+
+```jsonl
+{"type":"persona","data":{...}}
+{"type":"ontology","data":{...}}
+{"type":"entity","data":{...}}
+{"type":"event","data":{...}}
+{"type":"summary","data":{...}}
+{"type":"claim","data":{...}}
+{"type":"claim_relation","data":{...}}
+{"type":"annotation","data":{...}}
+```
+
+### Export Order
+
+Data is exported in dependency order to ensure imports can be processed correctly:
+
+1. **Personas** - Must exist before ontologies
+2. **Ontologies** - Type definitions linked to personas
+3. **World State** - Entities, events, times, collections
+4. **Summaries** - Linked to videos and personas
+5. **Claims** - Linked to summaries
+6. **Claim Relations** - Linked to claims
+7. **Annotations** - Linked to videos and personas
+
+### Example
+
+```bash
+curl "http://localhost:3001/api/export/all" --output backup.jsonl
+```
+
+## Import Data
+
+Import all data types from a JSON Lines file with conflict resolution. The import system automatically processes data in dependency order.
+
+### Supported Import Types
+
+- `persona` - Personas with roles and information needs
+- `ontology` - Type definitions (entity, event, role, relation types)
+- `entity` - Entity world objects
+- `event` - Event world objects
+- `time` - Time references
+- `entity_collection` - Collections of entities
+- `event_collection` - Collections of events
+- `time_collection` - Collections of times
+- `relation` - Relations between world objects
+- `summary` - Video summaries
+- `claim` - Claims extracted from summaries
+- `claim_relation` - Relationships between claims
+- `annotation` - Bounding box annotations
 
 ### Request
 
@@ -200,13 +367,25 @@ POST /api/import
 ```json
 {
   "conflictResolution": {
-    "duplicateIds": "skip",
-    "overlappingFrames": "merge",
-    "missingDependencies": "skip"
+    "personas": "skip",
+    "worldObjects": "skip",
+    "missingDependencies": "skip-item",
+    "duplicateIds": "preserve-id",
+    "sequences": {
+      "duplicateSequenceIds": "skip",
+      "overlappingFrameRanges": "fail-import",
+      "interpolationConflicts": "use-existing"
+    }
+  },
+  "scope": {
+    "includePersonas": true,
+    "includeWorldState": true,
+    "includeAnnotations": true
   },
   "validation": {
     "strictMode": false,
-    "requireKeyframes": true
+    "validateReferences": true,
+    "validateSequenceIntegrity": true
   },
   "transaction": {
     "atomic": true
@@ -216,11 +395,15 @@ POST /api/import
 
 | Field | Type | Values | Default | Description |
 |-------|------|--------|---------|-------------|
-| conflictResolution.duplicateIds | string | skip, overwrite, merge, fail | skip | How to handle duplicate annotation IDs |
-| conflictResolution.overlappingFrames | string | skip, merge, overwrite, fail | merge | How to handle overlapping frame ranges |
-| conflictResolution.missingDependencies | string | skip, create, fail | skip | How to handle missing personas/videos |
-| validation.strictMode | boolean | - | false | Reject any annotation with warnings |
-| validation.requireKeyframes | boolean | - | true | Require at least one keyframe per sequence |
+| conflictResolution.personas | string | skip, replace, merge, rename | skip | How to handle existing personas |
+| conflictResolution.worldObjects | string | skip, replace, merge-assignments | skip | How to handle existing world objects |
+| conflictResolution.missingDependencies | string | skip-item, create-placeholder, fail-import | skip-item | How to handle missing dependencies |
+| conflictResolution.duplicateIds | string | preserve-id, regenerate-id | preserve-id | How to handle duplicate IDs |
+| scope.includePersonas | boolean | - | true | Import personas and ontologies |
+| scope.includeWorldState | boolean | - | true | Import world state objects |
+| scope.includeAnnotations | boolean | - | true | Import annotations |
+| validation.strictMode | boolean | - | false | Reject items with warnings |
+| validation.validateReferences | boolean | - | true | Validate all references exist |
 | transaction.atomic | boolean | - | true | All-or-nothing import (rollback on error) |
 
 ### Response
@@ -231,15 +414,33 @@ POST /api/import
 {
   "success": true,
   "summary": {
-    "totalLines": 150,
-    "processedLines": 150,
+    "totalLines": 250,
+    "processedLines": 250,
     "importedItems": {
-      "annotations": 145,
+      "personas": 5,
+      "ontologies": 5,
+      "entities": 20,
+      "events": 15,
+      "times": 10,
+      "entityCollections": 3,
+      "eventCollections": 2,
+      "timeCollections": 1,
+      "relations": 8,
+      "summaries": 12,
+      "claims": 45,
+      "claimRelations": 20,
+      "annotations": 100,
       "totalKeyframes": 450,
+      "totalInterpolatedFrames": 3600,
       "singleKeyframeSequences": 30
     },
     "skippedItems": {
-      "annotations": 5
+      "personas": 1,
+      "worldObjects": 3,
+      "summaries": 0,
+      "claims": 2,
+      "annotations": 5,
+      "sequenceAnnotations": 0
     }
   },
   "warnings": [
@@ -247,10 +448,24 @@ POST /api/import
       "line": 42,
       "type": "single_keyframe",
       "message": "Annotation has only one keyframe"
+    },
+    {
+      "line": 78,
+      "type": "missing_reference",
+      "message": "Video xyz-123 not found, skipping annotation"
     }
   ],
   "errors": [],
-  "conflicts": []
+  "conflicts": [
+    {
+      "type": "duplicate-persona",
+      "line": 12,
+      "originalId": "persona-123",
+      "existingId": "persona-123",
+      "details": "Persona with same ID already exists",
+      "resolution": "skip"
+    }
+  ]
 }
 ```
 
@@ -326,26 +541,41 @@ POST /api/import/preview
 ```json
 {
   "counts": {
-    "annotations": 150,
+    "personas": 5,
+    "ontologies": 5,
+    "entities": 20,
+    "events": 15,
+    "times": 10,
+    "entityCollections": 3,
+    "eventCollections": 2,
+    "timeCollections": 1,
+    "relations": 8,
+    "summaries": 12,
+    "claims": 45,
+    "claimRelations": 20,
+    "annotations": 100,
     "totalKeyframes": 450,
     "singleKeyframeSequences": 30
   },
   "conflicts": [
     {
-      "type": "duplicate_id",
-      "annotationId": "550e8400-e29b-41d4-a716-446655440000",
-      "message": "Annotation ID already exists in database"
+      "type": "duplicate-persona",
+      "line": 5,
+      "originalId": "persona-123",
+      "existingId": "persona-123",
+      "details": "Persona with same ID already exists"
     },
     {
-      "type": "overlapping_frames",
-      "annotationId": "660e8400-e29b-41d4-a716-446655440001",
-      "existingAnnotationId": "770e8400-e29b-41d4-a716-446655440002",
-      "message": "Frame ranges overlap: 0-100 and 50-150"
+      "type": "duplicate-object",
+      "line": 42,
+      "originalId": "entity-456",
+      "existingId": "entity-456",
+      "details": "Entity with same ID already exists"
     }
   ],
   "warnings": [
     "Line 42: Annotation has only one keyframe",
-    "Line 78: Missing persona reference"
+    "Line 78: Missing persona reference for ontology"
   ]
 }
 ```
@@ -372,7 +602,7 @@ or
 
 ```bash
 curl -X POST http://localhost:3001/api/import/preview \
-  -F "file=@annotations.jsonl"
+  -F "file=@backup.jsonl"
 ```
 
 ## Import History
