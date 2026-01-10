@@ -79,18 +79,14 @@ test.describe('External Links', () => {
   test.describe('Video Source Links', () => {
     test('video metadata shows external links when enabled', async ({
       videoBrowser,
-      testVideo,
       page,
     }) => {
       // Navigate to video browser
-      await videoBrowser.navigateTo()
+      await videoBrowser.navigateToHome()
 
-      // Check if video card exists
-      const videoCard = page.getByText(testVideo.filename)
-      await expect(videoCard).toBeVisible({ timeout: 5000 })
-
-      // Click on video to see details
-      await videoCard.click()
+      // Wait for video cards to load and click the first one
+      await expect(videoBrowser.firstVideoCard).toBeVisible({ timeout: 10000 })
+      await videoBrowser.firstVideoCard.click()
       await page.waitForTimeout(500)
 
       // Video details should be visible

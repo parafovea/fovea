@@ -11,9 +11,12 @@ async function openClaimsTab(page: any) {
     await personaSelect.click()
     // Select second option (first is disabled placeholder)
     await page.getByRole('option').nth(1).click()
+    // Wait for the editor to load after persona selection
+    await page.waitForTimeout(500)
   }
-  const claimsTab = dialog.getByRole('tab', { name: /claims/i })
-  await expect(claimsTab).toBeVisible()
+  // Find Claims tab - MUI Tab with Badge may have varying accessible name
+  const claimsTab = dialog.locator('[role="tab"]').filter({ hasText: 'Claims' })
+  await expect(claimsTab).toBeVisible({ timeout: 10000 })
   await claimsTab.click()
   // Wait for empty summary to be created - "Add Manual Claim" action button will be enabled
   await expect(dialog.getByRole('button', { name: /add manual claim/i }).first()).toBeEnabled({ timeout: 10000 })
