@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useAuthStore, AppConfig } from '../../store/zustand/authStore.js'
+import { useAuthStore, AppConfig } from '@store/zustand/authStore'
 
 /** Default Wikidata API URL */
 const DEFAULT_WIKIDATA_URL = 'https://www.wikidata.org/w/api.php'

@@ -1,5 +1,5 @@
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import { User } from '../../models/types.js'
+import { useAuthStore } from '@store/zustand/authStore'
+import { User } from '@models/types'
 
 /**
  * Current user information.

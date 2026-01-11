@@ -4,7 +4,7 @@
  */
 
 import { useEffect } from 'react'
-import { BoundingBox } from '../models/types.js'
+import { BoundingBox } from '@models/types'
 
 /**
  * @hook useTimelineKeyboardShortcuts

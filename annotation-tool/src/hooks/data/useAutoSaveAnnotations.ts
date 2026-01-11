@@ -8,8 +8,8 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useSaveAnnotations } from '../store/queries'
-import { Annotation } from '../models/types'
+import { useSaveAnnotations } from '@store/queries'
+import { Annotation } from '@models/types'
 
 /**
  * @interface UseAutoSaveAnnotationsParams

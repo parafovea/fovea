@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from 'react'
-import { DuplicateImportError } from '../lib/errors'
+import { DuplicateImportError } from '@lib/errors'
 import {
   useAddEntityToPersona,
   useDeleteEntityFromPersona,
@@ -16,14 +16,78 @@ import {
   useDeleteTime,
   usePersonaOntology,
   useWorld,
-} from '../store/queries'
-import { EntityType, RoleType, EventType, RelationType, Entity, Event, Location } from '../models/types'
-import { generateId } from '../utils/uuid'
+} from '@store/queries'
+import { EntityType, RoleType, EventType, RelationType, Entity, Event, LocationPoint } from '@models/types'
+import { generateId } from '@utils/uuid'
 
 /**
  * Wikidata import types supported by the hook.
  */
 export type ImportType = 'entity-type' | 'role-type' | 'event-type' | 'relation-type' | 'entity' | 'event' | 'location' | 'time'
+
+/**
+ * Coordinate data from Wikidata.
+ */
+export interface WikidataCoordinates {
+  latitude?: number
+  longitude?: number
+  altitude?: number
+  precision?: number
+  globe?: string
+}
+
+/**
+ * Bounding box data from Wikidata.
+ */
+export interface WikidataBoundingBox {
+  minLatitude?: number
+  maxLatitude?: number
+  minLongitude?: number
+  maxLongitude?: number
+}
+
+/**
+ * Parsed temporal data from Wikidata.
+ */
+export interface WikidataTemporalData {
+  pointInTime?: WikidataParsedTime | null
+  startTime?: WikidataParsedTime | null
+  endTime?: WikidataParsedTime | null
+  inception?: WikidataParsedTime | null
+  dissolved?: WikidataParsedTime | null
+  publicationDate?: WikidataParsedTime | null
+  earliestDate?: WikidataParsedTime | null
+  latestDate?: WikidataParsedTime | null
+  circa?: boolean
+  disputed?: boolean
+  presumably?: boolean
+}
+
+export interface WikidataParsedTime {
+  timestamp: string
+  precision: number
+  granularity: string
+  timezone: number
+  calendarModel?: string
+  originalValue: string
+}
+
+/**
+ * Location data from Wikidata.
+ */
+export interface WikidataLocationData {
+  property: string
+  wikidataId: string
+}
+
+/**
+ * Participant data from Wikidata.
+ */
+export interface WikidataParticipantData {
+  property: string
+  wikidataId: string
+  role?: string | null
+}
 
 /**
  * Data structure for importing items from Wikidata.
@@ -34,11 +98,11 @@ export interface WikidataImportData {
   wikidataId: string
   wikidataUrl: string
   aliases?: string[]
-  coordinates?: any
-  boundingBox?: any
-  temporalData?: any
-  locationData?: any[]
-  participantData?: any[]
+  coordinates?: WikidataCoordinates
+  boundingBox?: WikidataBoundingBox
+  temporalData?: WikidataTemporalData
+  locationData?: WikidataLocationData[]
+  participantData?: WikidataParticipantData[]
 }
 
 /**
@@ -281,7 +345,7 @@ export function useWikidataImport(
         }
 
         case 'location': {
-          const location: Omit<Location, 'id' | 'createdAt' | 'updatedAt'> = {
+          const location: Omit<LocationPoint, 'id' | 'createdAt' | 'updatedAt'> = {
             name: data.name,
             description: [{ type: 'text', content: data.description }],
             typeAssignments: [],
@@ -296,9 +360,13 @@ export function useWikidataImport(
             },
             locationType: 'point',
             coordinateSystem: 'GPS',
-            coordinates: data.coordinates || {},
-          } as any
-          addEntity(location as any)
+            coordinates: {
+              latitude: data.coordinates?.latitude,
+              longitude: data.coordinates?.longitude,
+              altitude: data.coordinates?.altitude,
+            },
+          }
+          addEntity(location)
           break
         }
 

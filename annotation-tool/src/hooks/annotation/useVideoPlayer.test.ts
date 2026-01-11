@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useVideoPlayer } from './useVideoPlayer'
-import type { VideoMetadata } from '../../models/types'
+import type { VideoMetadata } from '@models/types'
 import videojs from 'video.js'
 
 // Mock video.js

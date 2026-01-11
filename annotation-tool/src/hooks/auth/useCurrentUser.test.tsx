@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCurrentUser } from './useCurrentUser.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 describe('useCurrentUser', () => {
   beforeEach(() => {

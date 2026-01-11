@@ -5,9 +5,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
+import { server } from '@test/setup.js'
 import { useAuth } from './useAuth.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 describe('useAuth', () => {
   beforeEach(() => {

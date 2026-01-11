@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
-import { VideoMetadata } from '../../models/types'
+import { VideoMetadata } from '@models/types'
 
 export interface UseVideoPlayerOptions {
   videoId: string | undefined

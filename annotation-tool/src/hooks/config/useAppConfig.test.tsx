@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import { useAuthStore, AppConfig } from '../store/zustand/authStore'
+import { useAuthStore, AppConfig } from '@store/zustand/authStore'
 import {
   useAppConfig,
   useWikidataConfig,

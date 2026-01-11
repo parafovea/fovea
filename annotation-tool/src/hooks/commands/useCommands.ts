@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react'
-import { commandRegistry } from '../lib/commands/command-registry.js'
+import { commandRegistry } from '@lib/commands/command-registry'
 
 /**
  * Check if a keyboard event matches a keybinding string.
@@ -71,7 +71,7 @@ function matchesKeybinding(event: KeyboardEvent, keybinding: string): boolean {
  * Command execution callback map.
  * Maps command IDs to their execution functions.
  */
-export type CommandHandlers = Record<string, (args?: any) => void | Promise<void>>
+export type CommandHandlers = Record<string, (args?: unknown) => void | Promise<void>>
 
 /**
  * Hook options for command registration.
@@ -141,7 +141,7 @@ export function useCommands(
         const disposable = commandRegistry.register({
           ...existingCommand,
           // Wrap handler to always use the latest from ref
-          execute: (args?: any) => {
+          execute: (args?: unknown) => {
             const currentHandler = handlersRef.current[commandId]
             if (currentHandler) {
               return currentHandler(args)
@@ -273,9 +273,9 @@ export function useCommandContext(context: Record<string, boolean>): void {
  * }
  * ```
  */
-export function useCommand(commandId: string): (args?: any) => Promise<void> {
+export function useCommand(commandId: string): (args?: unknown) => Promise<void> {
   return useCallback(
-    async (args?: any) => {
+    async (args?: unknown) => {
       await commandRegistry.execute(commandId, args)
     },
     [commandId]

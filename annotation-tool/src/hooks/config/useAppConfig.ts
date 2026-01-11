@@ -3,7 +3,7 @@ import {
   AppConfig,
   WikidataConfig,
   ExternalLinksConfig,
-} from '../store/zustand/authStore'
+} from '@store/zustand/authStore'
 
 /** Default Wikidata API URL */
 const DEFAULT_WIKIDATA_URL = 'https://www.wikidata.org/w/api.php'
