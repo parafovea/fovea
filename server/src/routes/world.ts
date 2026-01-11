@@ -1,8 +1,19 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { optionalAuth, requireAdmin, requireAuth } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
-import { convertObjectRefsToText, countObjectRefsInGlosses } from '../lib/reference-cleanup.js'
+import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
+import { NotFoundError, UnauthorizedError, InternalError } from '@lib/errors.js'
+import { convertObjectRefsToText, countObjectRefsInGlosses } from '@lib/reference-cleanup.js'
+import {
+  asEntityTypes,
+  asRoleTypes,
+  asEventTypes,
+  asRelationTypes,
+  asEntities,
+  asEvents,
+  asTimes,
+  asWorldRelations,
+  asWorldCollections,
+} from '@lib/prisma-json.js'
 
 /**
  * Request body for world state update endpoint.
@@ -310,51 +321,6 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   // ==========================================================================
 
   /**
-   * Helper interfaces for world objects.
-   */
-  interface WorldEntity {
-    id: string
-    name?: string
-    typeAssignments?: Array<{ personaId: string; typeId: string }>
-    [key: string]: unknown
-  }
-
-  interface WorldEvent {
-    id: string
-    name?: string
-    personaInterpretations?: Array<{ personaId: string; eventTypeId: string }>
-    [key: string]: unknown
-  }
-
-  interface WorldTime {
-    id: string
-    label?: string
-    [key: string]: unknown
-  }
-
-  interface WorldRelation {
-    id: string
-    sourceType: string
-    sourceId: string
-    targetType: string
-    targetId: string
-    [key: string]: unknown
-  }
-
-  interface WorldCollection {
-    id: string
-    members?: string[]
-    [key: string]: unknown
-  }
-
-  interface TypeWithGloss {
-    id: string
-    name: string
-    gloss?: Array<{ type: string; content: string; refType?: string }>
-    [key: string]: unknown
-  }
-
-  /**
    * Helper to get user ID from request or default user.
    */
   async function getUserId(request: { user?: { id: string } }): Promise<string> {
@@ -413,7 +379,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const entities = (worldState.entities as WorldEntity[]) || []
+      const entities = asEntities(worldState.entities)
       const targetEntity = entities.find(e => e.id === entityId)
       if (!targetEntity) {
         throw new NotFoundError('Entity', entityId)
@@ -428,10 +394,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       for (const persona of personas) {
         if (!persona.ontology) continue
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         glossReferences += countObjectRefsInGlosses(entityTypes, entityId, 'entity-object')
         glossReferences += countObjectRefsInGlosses(roleTypes, entityId, 'entity-object')
@@ -445,14 +411,14 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const annotationCount = 0 // Would need to scan frames JSON field
 
       // Count relations referencing this entity
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationCount = relations.filter(
         r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
              (r.targetType === 'entity' && r.targetId === entityId)
       ).length
 
       // Count collection memberships
-      const entityCollections = (worldState.entityCollections as WorldCollection[]) || []
+      const entityCollections = asWorldCollections(worldState.entityCollections)
       let collectionMemberships = 0
       for (const collection of entityCollections) {
         if (collection.members?.includes(entityId)) {
@@ -509,7 +475,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const entities = (worldState.entities as WorldEntity[]) || []
+      const entities = asEntities(worldState.entities)
       const targetEntity = entities.find(e => e.id === entityId)
       if (!targetEntity) {
         throw new NotFoundError('Entity', entityId)
@@ -521,7 +487,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const updatedEntities = entities.filter(e => e.id !== entityId)
 
       // Remove relations referencing this entity
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationsRemoved = relations.filter(
         r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
              (r.targetType === 'entity' && r.targetId === entityId)
@@ -532,7 +498,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       // Remove from collections
-      const entityCollections = (worldState.entityCollections as WorldCollection[]) || []
+      const entityCollections = asWorldCollections(worldState.entityCollections)
       let collectionMemberships = 0
       const updatedEntityCollections = entityCollections.map(collection => {
         if (collection.members?.includes(entityId)) {
@@ -568,10 +534,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       for (const persona of personas) {
         if (!persona.ontology) continue
 
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         // Count references
         glossReferences += countObjectRefsInGlosses(entityTypes, entityId, 'entity-object')
@@ -662,7 +628,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const events = (worldState.events as WorldEvent[]) || []
+      const events = asEvents(worldState.events)
       const targetEvent = events.find(e => e.id === eventId)
       if (!targetEvent) {
         throw new NotFoundError('Event', eventId)
@@ -677,10 +643,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       for (const persona of personas) {
         if (!persona.ontology) continue
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         glossReferences += countObjectRefsInGlosses(entityTypes, eventId, 'event-object')
         glossReferences += countObjectRefsInGlosses(roleTypes, eventId, 'event-object')
@@ -689,14 +655,14 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Count relations
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationCount = relations.filter(
         r => (r.sourceType === 'event' && r.sourceId === eventId) ||
              (r.targetType === 'event' && r.targetId === eventId)
       ).length
 
       // Count collection memberships
-      const eventCollections = (worldState.eventCollections as WorldCollection[]) || []
+      const eventCollections = asWorldCollections(worldState.eventCollections)
       let collectionMemberships = 0
       for (const collection of eventCollections) {
         if (collection.members?.includes(eventId)) {
@@ -753,7 +719,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const events = (worldState.events as WorldEvent[]) || []
+      const events = asEvents(worldState.events)
       const targetEvent = events.find(e => e.id === eventId)
       if (!targetEvent) {
         throw new NotFoundError('Event', eventId)
@@ -765,7 +731,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const updatedEvents = events.filter(e => e.id !== eventId)
 
       // Remove relations
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationsRemoved = relations.filter(
         r => (r.sourceType === 'event' && r.sourceId === eventId) ||
              (r.targetType === 'event' && r.targetId === eventId)
@@ -776,7 +742,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       // Remove from collections
-      const eventCollections = (worldState.eventCollections as WorldCollection[]) || []
+      const eventCollections = asWorldCollections(worldState.eventCollections)
       let collectionMemberships = 0
       const updatedEventCollections = eventCollections.map(collection => {
         if (collection.members?.includes(eventId)) {
@@ -812,10 +778,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       for (const persona of personas) {
         if (!persona.ontology) continue
 
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         glossReferences += countObjectRefsInGlosses(entityTypes, eventId, 'event-object')
         glossReferences += countObjectRefsInGlosses(roleTypes, eventId, 'event-object')
@@ -903,7 +869,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const times = (worldState.times as WorldTime[]) || []
+      const times = asTimes(worldState.times)
       const targetTime = times.find(t => t.id === timeId)
       if (!targetTime) {
         throw new NotFoundError('Time', timeId)
@@ -918,10 +884,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       for (const persona of personas) {
         if (!persona.ontology) continue
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         glossReferences += countObjectRefsInGlosses(entityTypes, timeId, 'time-object')
         glossReferences += countObjectRefsInGlosses(roleTypes, timeId, 'time-object')
@@ -930,14 +896,14 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Count relations
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationCount = relations.filter(
         r => (r.sourceType === 'time' && r.sourceId === timeId) ||
              (r.targetType === 'time' && r.targetId === timeId)
       ).length
 
       // Count collection memberships
-      const timeCollections = (worldState.timeCollections as WorldCollection[]) || []
+      const timeCollections = asWorldCollections(worldState.timeCollections)
       let collectionMemberships = 0
       for (const collection of timeCollections) {
         if (collection.members?.includes(timeId)) {
@@ -994,19 +960,20 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('World state', userId)
       }
 
-      const times = (worldState.times as WorldTime[]) || []
+      const times = asTimes(worldState.times)
       const targetTime = times.find(t => t.id === timeId)
       if (!targetTime) {
         throw new NotFoundError('Time', timeId)
       }
 
-      const timeName = targetTime.label || timeId
+      // Time objects don't have a name/label, use id for reference cleanup
+      const timeName = timeId
 
       // Remove time
       const updatedTimes = times.filter(t => t.id !== timeId)
 
       // Remove relations
-      const relations = (worldState.relations as WorldRelation[]) || []
+      const relations = asWorldRelations(worldState.relations)
       const relationsRemoved = relations.filter(
         r => (r.sourceType === 'time' && r.sourceId === timeId) ||
              (r.targetType === 'time' && r.targetId === timeId)
@@ -1017,7 +984,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       // Remove from collections
-      const timeCollections = (worldState.timeCollections as WorldCollection[]) || []
+      const timeCollections = asWorldCollections(worldState.timeCollections)
       let collectionMemberships = 0
       const updatedTimeCollections = timeCollections.map(collection => {
         if (collection.members?.includes(timeId)) {
@@ -1053,10 +1020,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       for (const persona of personas) {
         if (!persona.ontology) continue
 
-        const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-        const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-        const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-        const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
 
         glossReferences += countObjectRefsInGlosses(entityTypes, timeId, 'time-object')
         glossReferences += countObjectRefsInGlosses(roleTypes, timeId, 'time-object')

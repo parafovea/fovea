@@ -1,17 +1,21 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requireAuth, optionalAuth } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '../lib/errors.js'
+import { requireAuth, optionalAuth } from '@middleware/auth.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '@lib/errors.js'
 import {
   updateGlossesInTypes,
   countTypeRefsInGlosses,
-  removeRoleFromEventTypes,
   removeTypeAssignmentsFromEntities,
   removeEventInterpretationsFromEvents,
   countTypeAssignments,
-  countEventInterpretations
-} from '../lib/reference-cleanup.js'
+  countEventInterpretations,
+} from '@lib/reference-cleanup.js'
+import {
+  asTypesWithGloss,
+  asEntities,
+  asEvents,
+} from '@lib/prisma-json.js'
 
 /**
  * Request body for ontology update endpoint.
@@ -672,16 +676,6 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   // ==========================================================================
 
   /**
-   * Helper interface for ontology types with gloss arrays.
-   */
-  interface TypeWithGloss {
-    id: string
-    name: string
-    gloss?: Array<{ type: string; content: string; refType?: string; refPersonaId?: string | null }>
-    [key: string]: unknown
-  }
-
-  /**
    * Get deletion preview for an entity type.
    * Returns counts of items that will be affected.
    *
@@ -725,16 +719,16 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Check if type exists
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
       const targetType = entityTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Entity type', typeId)
       }
 
       // Count gloss references across all types
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes.filter(t => t.id !== typeId), typeId, personaId, 'entity')
@@ -758,7 +752,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (worldState) {
-        const entities = (worldState.entities as Array<{ typeAssignments?: Array<{ personaId: string; typeId: string }> }>) || []
+        const entities = asEntities(worldState.entities)
         worldAssignmentCount = countTypeAssignments(entities, typeId, personaId)
       }
 
@@ -817,7 +811,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Find and remove the type
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
       const targetType = entityTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Entity type', typeId)
@@ -828,9 +822,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Convert typeRefs in glosses across all types
       let glossReferences = 0
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       // Count before updating
       glossReferences += countTypeRefsInGlosses(updatedEntityTypes, typeId, personaId, 'entity')
@@ -860,7 +854,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (worldState) {
-        const entities = (worldState.entities as Array<{ typeAssignments?: Array<{ personaId: string; typeId: string }> }>) || []
+        const entities = asEntities(worldState.entities)
         worldAssignments = countTypeAssignments(entities, typeId, personaId)
         const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
 
@@ -939,21 +933,21 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot access another user\'s persona')
       }
 
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
       const targetType = roleTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Role type', typeId)
       }
 
       // Count gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as Array<TypeWithGloss & { roles?: Array<{ roleTypeId: string }> }>) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const eventTypesForGloss = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'role')
       glossReferences += countTypeRefsInGlosses(roleTypes.filter(t => t.id !== typeId), typeId, personaId, 'role')
-      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(eventTypesForGloss, typeId, personaId, 'role')
       glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'role')
 
       // Count annotations with this role type
@@ -965,11 +959,17 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         }
       })
 
-      // Count event types that use this role
+      // Count event types that use this role - need full EventType for roles property
+      const eventTypesRaw = persona.ontology.eventTypes
       let eventRoleReferences = 0
-      for (const eventType of eventTypes) {
-        if (eventType.roles) {
-          eventRoleReferences += eventType.roles.filter(r => r.roleTypeId === typeId).length
+      if (Array.isArray(eventTypesRaw)) {
+        for (const eventType of eventTypesRaw) {
+          if (eventType && typeof eventType === 'object' && 'roles' in eventType) {
+            const roles = (eventType as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              eventRoleReferences += roles.filter(r => r.roleTypeId === typeId).length
+            }
+          }
         }
       }
 
@@ -1024,7 +1024,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot modify another user\'s persona')
       }
 
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
       const targetType = roleTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Role type', typeId)
@@ -1034,29 +1034,48 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       const updatedRoleTypes = roleTypes.filter(t => t.id !== typeId)
 
       // Count and update gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as Array<TypeWithGloss & { roles?: Array<{ roleTypeId: string }> }>) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const eventTypesForGloss = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'role')
       glossReferences += countTypeRefsInGlosses(updatedRoleTypes, typeId, personaId, 'role')
-      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(eventTypesForGloss, typeId, personaId, 'role')
       glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'role')
 
       const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'role', typeName)
       const cleanedRoleTypes = updateGlossesInTypes(updatedRoleTypes, typeId, personaId, 'role', typeName)
-      let cleanedEventTypes = updateGlossesInTypes(eventTypes, typeId, personaId, 'role', typeName)
+      const cleanedEventTypesGloss = updateGlossesInTypes(eventTypesForGloss, typeId, personaId, 'role', typeName)
       const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'role', typeName)
 
-      // Remove role from event type role slots
+      // Remove role from event type role slots - need full EventType for roles property
+      const eventTypesRaw = persona.ontology.eventTypes
       let eventRoleReferences = 0
-      for (const eventType of eventTypes) {
-        if (eventType.roles) {
-          eventRoleReferences += eventType.roles.filter(r => r.roleTypeId === typeId).length
+      let cleanedEventTypes = cleanedEventTypesGloss
+      if (Array.isArray(eventTypesRaw)) {
+        for (const eventType of eventTypesRaw) {
+          if (eventType && typeof eventType === 'object' && 'roles' in eventType) {
+            const roles = (eventType as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              eventRoleReferences += roles.filter(r => r.roleTypeId === typeId).length
+            }
+          }
         }
+        // Update cleanedEventTypes to also remove role references
+        cleanedEventTypes = cleanedEventTypesGloss.map(et => {
+          const rawEvent = eventTypesRaw.find(raw =>
+            raw && typeof raw === 'object' && 'id' in raw && (raw as { id: string }).id === et.id
+          )
+          if (rawEvent && typeof rawEvent === 'object' && 'roles' in rawEvent) {
+            const roles = (rawEvent as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              return { ...et, roles: roles.filter(r => r.roleTypeId !== typeId) }
+            }
+          }
+          return et
+        })
       }
-      cleanedEventTypes = removeRoleFromEventTypes(cleanedEventTypes, typeId)
 
       // Delete annotations
       const deleteResult = await fastify.prisma.annotation.deleteMany({
@@ -1133,16 +1152,16 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot access another user\'s persona')
       }
 
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
       const targetType = eventTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Event type', typeId)
       }
 
       // Count gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'event')
@@ -1166,7 +1185,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (worldState) {
-        const events = (worldState.events as Array<{ personaInterpretations?: Array<{ personaId: string; eventTypeId: string }> }>) || []
+        const events = asEvents(worldState.events)
         worldInterpretationCount = countEventInterpretations(events, typeId, personaId)
       }
 
@@ -1221,7 +1240,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot modify another user\'s persona')
       }
 
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
       const targetType = eventTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Event type', typeId)
@@ -1231,9 +1250,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       const updatedEventTypes = eventTypes.filter(t => t.id !== typeId)
 
       // Count and update gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'event')
@@ -1262,7 +1281,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       })
 
       if (worldState) {
-        const events = (worldState.events as Array<{ personaInterpretations?: Array<{ personaId: string; eventTypeId: string }> }>) || []
+        const events = asEvents(worldState.events)
         worldInterpretations = countEventInterpretations(events, typeId, personaId)
         const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
 
@@ -1340,16 +1359,16 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot access another user\'s persona')
       }
 
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
       const targetType = relationTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Relation type', typeId)
       }
 
       // Count gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'relation')
@@ -1409,7 +1428,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot modify another user\'s persona')
       }
 
-      const relationTypes = (persona.ontology.relationTypes as TypeWithGloss[]) || []
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
       const targetType = relationTypes.find(t => t.id === typeId)
       if (!targetType) {
         throw new NotFoundError('Relation type', typeId)
@@ -1419,9 +1438,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       const updatedRelationTypes = relationTypes.filter(t => t.id !== typeId)
 
       // Count and update gloss references
-      const entityTypes = (persona.ontology.entityTypes as TypeWithGloss[]) || []
-      const roleTypes = (persona.ontology.roleTypes as TypeWithGloss[]) || []
-      const eventTypes = (persona.ontology.eventTypes as TypeWithGloss[]) || []
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
 
       let glossReferences = 0
       glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'relation')

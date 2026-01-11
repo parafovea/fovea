@@ -4,26 +4,30 @@
  * Implements the "Convert References to Text" strategy (Option 3) for graceful deletion.
  */
 
-/**
- * Gloss item structure from the frontend.
- */
-interface GlossItem {
-  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef' | 'claimRef'
-  content: string
-  refType?: string
-  refPersonaId?: string | null
-  refClaimId?: string
-}
+import type {
+  GlossItem,
+  EntityType,
+  RoleType,
+  EventType,
+  RelationType,
+  Entity,
+  Event,
+} from '@models/types.js'
 
 /**
- * Type definition for ontology types with gloss arrays.
+ * Minimal interface for types that have a gloss field.
+ * Used by reference cleanup functions that only need access to id, name, and gloss.
  */
-interface TypeWithGloss {
+export interface TypeWithGloss {
   id: string
   name: string
   gloss?: GlossItem[]
-  [key: string]: unknown
 }
+
+/**
+ * Ontology type with gloss - union of all types that have a gloss field.
+ */
+export type OntologyTypeWithGloss = EntityType | RoleType | EventType | RelationType
 
 /**
  * Converts typeRef items in a gloss array to plain text when the referenced type is deleted.
@@ -47,12 +51,9 @@ export function convertTypeRefsToText(
       item.refType === deletedRefType &&
       item.refPersonaId === deletedPersonaId
     ) {
-      // Convert to plain text, preserving the display content
-      // We need to look up the type name, but since we're deleting it,
-      // we'll mark it as [Deleted Type] or use a placeholder
       return {
         type: 'text' as const,
-        content: item.content // This will just show the ID; see note below
+        content: item.content
       }
     }
     return item
@@ -84,7 +85,6 @@ export function convertTypeRefsToTextWithName(
       item.refType === deletedRefType &&
       item.refPersonaId === deletedPersonaId
     ) {
-      // Convert to plain text using the type name
       return {
         type: 'text' as const,
         content: typeName
@@ -115,7 +115,6 @@ export function convertObjectRefsToText(
       item.content === deletedObjectId &&
       item.refType === deletedRefType
     ) {
-      // Convert to plain text using the object name
       return {
         type: 'text' as const,
         content: objectName
@@ -155,7 +154,6 @@ export function updateGlossesInTypes<T extends TypeWithGloss>(
       typeName
     )
 
-    // Only return updated type if gloss actually changed
     const hasChanges = JSON.stringify(type.gloss) !== JSON.stringify(updatedGloss)
     if (hasChanges) {
       return { ...type, gloss: updatedGloss }
@@ -174,8 +172,8 @@ export function updateGlossesInTypes<T extends TypeWithGloss>(
  * @param targetRefType - The refType category
  * @returns Number of references found
  */
-export function countTypeRefsInGlosses<T extends TypeWithGloss>(
-  types: T[],
+export function countTypeRefsInGlosses(
+  types: TypeWithGloss[],
   targetTypeId: string,
   targetPersonaId: string,
   targetRefType: 'entity' | 'role' | 'event' | 'relation'
@@ -206,8 +204,8 @@ export function countTypeRefsInGlosses<T extends TypeWithGloss>(
  * @param targetRefType - The refType category
  * @returns Number of references found
  */
-export function countObjectRefsInGlosses<T extends TypeWithGloss>(
-  types: T[],
+export function countObjectRefsInGlosses(
+  types: TypeWithGloss[],
   targetObjectId: string,
   targetRefType: 'entity-object' | 'event-object' | 'time-object' | 'location-object'
 ): number {
@@ -235,9 +233,9 @@ export function countObjectRefsInGlosses<T extends TypeWithGloss>(
  * @returns Updated event types with role references removed
  */
 export function removeRoleFromEventTypes(
-  eventTypes: Array<{ id: string; roles?: Array<{ roleTypeId: string }> } & TypeWithGloss>,
+  eventTypes: EventType[],
   deletedRoleTypeId: string
-): Array<{ id: string; roles?: Array<{ roleTypeId: string }> } & TypeWithGloss> {
+): EventType[] {
   return eventTypes.map(eventType => {
     if (!eventType.roles || eventType.roles.length === 0) {
       return eventType
@@ -253,23 +251,6 @@ export function removeRoleFromEventTypes(
 }
 
 /**
- * World object types for type assignments.
- */
-interface EntityWithAssignments {
-  id: string
-  name?: string
-  typeAssignments?: Array<{ personaId: string; typeId: string; [key: string]: unknown }>
-  [key: string]: unknown
-}
-
-interface EventWithInterpretations {
-  id: string
-  name?: string
-  personaInterpretations?: Array<{ personaId: string; eventTypeId: string; [key: string]: unknown }>
-  [key: string]: unknown
-}
-
-/**
  * Removes type assignments from entities when a type is deleted.
  *
  * @param entities - Array of world entities
@@ -278,17 +259,17 @@ interface EventWithInterpretations {
  * @returns Updated entities with matching type assignments removed
  */
 export function removeTypeAssignmentsFromEntities(
-  entities: EntityWithAssignments[],
+  entities: Entity[],
   deletedTypeId: string,
   deletedPersonaId: string
-): EntityWithAssignments[] {
+): Entity[] {
   return entities.map(entity => {
     if (!entity.typeAssignments || entity.typeAssignments.length === 0) {
       return entity
     }
 
     const filtered = entity.typeAssignments.filter(
-      a => !(a.personaId === deletedPersonaId && a.typeId === deletedTypeId)
+      a => !(a.personaId === deletedPersonaId && a.entityTypeId === deletedTypeId)
     )
 
     if (filtered.length !== entity.typeAssignments.length) {
@@ -307,10 +288,10 @@ export function removeTypeAssignmentsFromEntities(
  * @returns Updated events with matching interpretations removed
  */
 export function removeEventInterpretationsFromEvents(
-  events: EventWithInterpretations[],
+  events: Event[],
   deletedEventTypeId: string,
   deletedPersonaId: string
-): EventWithInterpretations[] {
+): Event[] {
   return events.map(event => {
     if (!event.personaInterpretations || event.personaInterpretations.length === 0) {
       return event
@@ -336,7 +317,7 @@ export function removeEventInterpretationsFromEvents(
  * @returns Count of matching assignments
  */
 export function countTypeAssignments(
-  entities: EntityWithAssignments[],
+  entities: Entity[],
   targetTypeId: string,
   targetPersonaId: string
 ): number {
@@ -344,7 +325,7 @@ export function countTypeAssignments(
   for (const entity of entities) {
     if (!entity.typeAssignments) continue
     count += entity.typeAssignments.filter(
-      a => a.personaId === targetPersonaId && a.typeId === targetTypeId
+      a => a.personaId === targetPersonaId && a.entityTypeId === targetTypeId
     ).length
   }
   return count
@@ -359,7 +340,7 @@ export function countTypeAssignments(
  * @returns Count of matching interpretations
  */
 export function countEventInterpretations(
-  events: EventWithInterpretations[],
+  events: Event[],
   targetEventTypeId: string,
   targetPersonaId: string
 ): number {
