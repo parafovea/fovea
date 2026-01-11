@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ApiClient } from './client'
-import { server } from '../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 describe('ApiClient', () => {

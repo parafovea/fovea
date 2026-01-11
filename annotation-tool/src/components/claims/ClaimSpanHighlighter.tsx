@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Box, Typography } from '@mui/material'
-import { ClaimSpan } from '../../models/types'
+import { ClaimSpan } from '@models/types'
 
 interface ClaimSpanHighlighterProps {
   text: string

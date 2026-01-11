@@ -12,7 +12,7 @@
  * - Object: Object builder actions
  */
 
-import { Command } from './command-registry.js'
+import { Command } from './command-registry'
 
 /**
  * Detect platform for modifier keys.

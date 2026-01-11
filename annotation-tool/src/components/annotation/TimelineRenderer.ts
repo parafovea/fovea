@@ -4,7 +4,7 @@
  * Uses offscreen canvas for double buffering and virtual scrolling for large videos.
  */
 
-import { BoundingBox, InterpolationSegment } from '../../models/types.js'
+import { BoundingBox, InterpolationSegment } from '@models/types'
 
 /**
  * @interface RenderOptions
@@ -339,7 +339,7 @@ export class TimelineRenderer {
    * @param keyframes - Array of keyframe bounding boxes
    * @returns Frame number if keyframe found, null otherwise
    */
-  getKeyframeAtX(x: number, keyframes: any[]): number | null {
+  getKeyframeAtX(x: number, keyframes: BoundingBox[]): number | null {
     const clickRadius = 10
 
     for (const keyframe of keyframes) {

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useAnnotationUiStore } from './annotationUiStore'
-import { Annotation } from '../models/types'
+import { Annotation } from '@models/types'
 
 describe('AnnotationUiStore', () => {
   // Reset store before each test

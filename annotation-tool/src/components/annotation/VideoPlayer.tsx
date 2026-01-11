@@ -2,8 +2,8 @@ import React, { forwardRef, useImperativeHandle } from 'react'
 import { Box } from '@mui/material'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
-import { VideoMetadata } from '../../models/types'
-import { useVideoPlayer } from '../../hooks/annotation/useVideoPlayer'
+import { VideoMetadata } from '@models/types'
+import { useVideoPlayer } from '@hooks/annotation/useVideoPlayer'
 
 export interface VideoPlayerProps {
   videoId: string | undefined

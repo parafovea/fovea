@@ -28,11 +28,11 @@ import {
   AccountTree as RelationIcon,
   Search as SearchIcon,
 } from '@mui/icons-material'
-import { Claim, ClaimTextSpan } from '../../models/types'
-import { GlossRenderer } from '../GlossRenderer'
+import { Claim, ClaimTextSpan } from '@models/types'
+import { GlossRenderer } from '@components/ontology/GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
-import { useCreateClaimRelation, usePersonaOntology } from '../../store/queries'
+import { useCreateClaimRelation, usePersonaOntology } from '@store/queries'
 
 interface ClaimsViewerProps {
   claims: Claim[]

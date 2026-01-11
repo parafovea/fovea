@@ -6,10 +6,10 @@ import { describe, it, expect } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { renderWithProviders } from '@test/utils/test-utils.js'
 import RegisterPage from './RegisterPage.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
+import { server } from '@test/setup.js'
 
 describe('RegisterPage', () => {
   it('renders registration form with all required fields', () => {

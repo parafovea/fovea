@@ -7,11 +7,14 @@ import { useState } from 'react'
 import { Box, IconButton } from '@mui/material'
 import { ExpandMore as ExpandIcon, ChevronRight as CollapseIcon } from '@mui/icons-material'
 
+/** JSON-compatible value type for the viewer. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
 /**
  * Props for ExpandableJsonViewer component.
  */
 interface ExpandableJsonViewerProps {
-  data: any
+  data: JsonValue
   initialCollapsed?: boolean
 }
 
@@ -58,7 +61,7 @@ export default function ExpandableJsonViewer({
     return expandedPaths.has(path) || !initialCollapsed
   }
 
-  const renderValue = (value: any, path: string = '', indent: number = 0): React.ReactNode => {
+  const renderValue = (value: JsonValue, path: string = '', indent: number = 0): React.ReactNode => {
     const indentStr = '  '.repeat(indent)
 
     if (value === null) {

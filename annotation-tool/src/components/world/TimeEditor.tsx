@@ -31,12 +31,21 @@ import {
   Edit as EditIcon,
   Language as WikidataIcon,
 } from '@mui/icons-material'
-import { useVideos } from '../../store/queries'
-import { useAddTime, useUpdateTime } from '../../store/queries'
-import { Time, TimeInstant, TimeInterval } from '../../models/types'
+import { useVideos } from '@store/queries'
+import { useAddTime, useUpdateTime } from '@store/queries'
+import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
-import WikidataSearch from '../WikidataSearch'
-import { generateId } from '../../utils/uuid'
+import WikidataSearch from '@components/shared/WikidataSearch'
+import { generateId } from '@utils/uuid'
+
+/** Granularity options for vagueness */
+type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
+
+/** Deictic anchor type options */
+type DeicticAnchorType = 'annotation_time' | 'video_time' | 'reference_time'
+
+/** Vagueness type options */
+type VaguenessType = 'approximate' | 'bounded' | 'fuzzy'
 
 interface TimeEditorProps {
   open: boolean
@@ -77,11 +86,11 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const [earliestBound, setEarliestBound] = useState('')
   const [latestBound, setLatestBound] = useState('')
   const [typicalTime, setTypicalTime] = useState('')
-  const [granularity, setGranularity] = useState<string>('minute')
+  const [granularity, setGranularity] = useState<VaguenessGranularity>('minute')
   
   // Deictic reference
   const [hasDeictic, setHasDeictic] = useState(false)
-  const [deicticAnchorType, setDeicticAnchorType] = useState<string>('video_time')
+  const [deicticAnchorType, setDeicticAnchorType] = useState<DeicticAnchorType>('video_time')
   const [deicticExpression, setDeicticExpression] = useState('')
   
   // Video references
@@ -114,12 +123,12 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
         setEarliestBound(time.vagueness.bounds?.earliest || '')
         setLatestBound(time.vagueness.bounds?.latest || '')
         setTypicalTime(time.vagueness.bounds?.typical || '')
-        setGranularity(time.vagueness.granularity || 'minute')
+        setGranularity((time.vagueness.granularity || 'minute') as VaguenessGranularity)
       }
 
       if (time.deictic) {
         setHasDeictic(true)
-        setDeicticAnchorType(time.deictic.anchorType)
+        setDeicticAnchorType(time.deictic.anchorType as DeicticAnchorType)
         setDeicticExpression(time.deictic.expression || '')
       }
 
@@ -178,13 +187,13 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           latest: latestBound || undefined,
           typical: typicalTime || undefined,
         } : undefined,
-        granularity: granularity as any,
+        granularity: granularity,
       }
     }
 
     if (hasDeictic) {
       baseTime.deictic = {
-        anchorType: deicticAnchorType as any,
+        anchorType: deicticAnchorType,
         anchorTime: undefined, // Would be set based on context
         expression: deicticExpression || undefined,
       }
@@ -274,26 +283,28 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     // Set vagueness if needed
                     if (td.startTime.granularity !== 'day' || td.endTime.granularity !== 'day') {
                       setHasVagueness(true)
-                      setGranularity(td.startTime.granularity)
+                      setGranularity(td.startTime.granularity as VaguenessGranularity)
                     }
                   }
                   // Handle single point in time
                   else if (td.pointInTime || td.inception || td.publicationDate) {
                     setTimeType('instant')
-                    const timeData = td.pointInTime || td.inception || td.publicationDate
-                    setTimestamp(timeData.timestamp)
-                    
-                    // Set vagueness based on granularity
-                    if (timeData.granularity !== 'day') {
-                      setHasVagueness(true)
-                      setGranularity(timeData.granularity)
-                      
-                      if (td.circa) {
-                        setVaguenessType('approximate')
-                        setVaguenessDescription('circa')
-                      } else if (td.disputed) {
-                        setVaguenessType('fuzzy')
-                        setVaguenessDescription('disputed')
+                    const timeData = td.pointInTime ?? td.inception ?? td.publicationDate
+                    if (timeData) {
+                      setTimestamp(timeData.timestamp)
+
+                      // Set vagueness based on granularity
+                      if (timeData.granularity !== 'day') {
+                        setHasVagueness(true)
+                        setGranularity(timeData.granularity as VaguenessGranularity)
+
+                        if (td.circa) {
+                          setVaguenessType('approximate')
+                          setVaguenessDescription('circa')
+                        } else if (td.disputed) {
+                          setVaguenessType('fuzzy')
+                          setVaguenessDescription('disputed')
+                        }
                       }
                     }
                   }
@@ -407,7 +418,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                   <InputLabel>Vagueness Type</InputLabel>
                   <Select
                     value={vaguenessType}
-                    onChange={(e) => setVaguenessType(e.target.value as any)}
+                    onChange={(e) => setVaguenessType(e.target.value as VaguenessType)}
                     label="Vagueness Type"
                   >
                     <MenuItem value="approximate">Approximate</MenuItem>
@@ -458,7 +469,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                   <InputLabel>Granularity</InputLabel>
                   <Select
                     value={granularity}
-                    onChange={(e) => setGranularity(e.target.value)}
+                    onChange={(e) => setGranularity(e.target.value as VaguenessGranularity)}
                     label="Granularity"
                   >
                     <MenuItem value="millisecond">Millisecond</MenuItem>
@@ -494,7 +505,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                   <InputLabel>Anchor Type</InputLabel>
                   <Select
                     value={deicticAnchorType}
-                    onChange={(e) => setDeicticAnchorType(e.target.value)}
+                    onChange={(e) => setDeicticAnchorType(e.target.value as DeicticAnchorType)}
                     label="Anchor Type"
                   >
                     <MenuItem value="annotation_time">Annotation Time</MenuItem>

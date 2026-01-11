@@ -15,8 +15,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
 import ClaimEditor from './ClaimEditor'
-import { Claim } from '../../models/types'
-import { server } from '../../../test/setup'
+import { Claim } from '@models/types'
+import { server } from '@test/setup'
 
 /**
  * Creates a fresh QueryClient for each test.

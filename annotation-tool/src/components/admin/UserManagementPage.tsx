@@ -27,10 +27,10 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material'
-import { useUsers, useDeleteUser, UserWithStats } from '../../store/queries/admin/useUsers.js'
-import CreateUserDialog from './CreateUserDialog.js'
-import EditUserDialog from './EditUserDialog.js'
-import ConfirmDialog from '../shared/ConfirmDialog.js'
+import { useUsers, useDeleteUser, UserWithStats } from '@store/queries/admin/useUsers'
+import CreateUserDialog from './CreateUserDialog'
+import EditUserDialog from './EditUserDialog'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 type SortField = 'username' | 'displayName' | 'email' | 'createdAt' | 'personaCount' | 'sessionCount'
 type SortOrder = 'asc' | 'desc'

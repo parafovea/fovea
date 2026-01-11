@@ -38,10 +38,13 @@ import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
-import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
-import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
+import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment, Entity } from '@models/types'
+
+/** Coordinate system type options */
+type CoordinateSystemType = 'GPS' | 'cartesian' | 'relative'
+import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import MapLocationPicker from './MapLocationPicker'
@@ -245,9 +248,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     }
 
     if (location) {
-      updateEntity({ ...location, ...locationData } as any)
+      updateEntity({ ...location, ...locationData } as Entity)
     } else {
-      addEntity(locationData as any)
+      addEntity(locationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
     }
 
     onClose()
@@ -468,7 +471,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                 <InputLabel>Coordinate System</InputLabel>
                 <Select
                   value={coordinateSystem}
-                  onChange={(e) => setCoordinateSystem(e.target.value as any)}
+                  onChange={(e) => setCoordinateSystem(e.target.value as CoordinateSystemType)}
                   label="Coordinate System"
                 >
                   <MenuItem value="GPS">

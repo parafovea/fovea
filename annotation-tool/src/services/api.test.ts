@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { transformFrontendToBackend, transformBackendToFrontend, BackendAnnotation } from './api.js'
-import type { ObjectAnnotation, TypeAnnotation, BoundingBoxSequence } from '../models/types.js'
+import type { ObjectAnnotation, TypeAnnotation, BoundingBoxSequence } from '@models/types.js'
 
 /**
  * Unit tests for API transformation functions.

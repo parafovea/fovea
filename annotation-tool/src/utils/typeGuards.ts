@@ -13,42 +13,47 @@ import {
   Annotation,
   ObjectAnnotation,
   TypeAnnotation,
-} from '../models/types'
+} from '@models/types'
 
 /**
- * Type guard functions use `any` for runtime type checking.
- * This is intentional as these functions validate unknown values at runtime.
+ * Type guard functions for runtime type checking.
+ * Use `unknown` as input type following TypeScript best practices.
  */
 
+/** Helper to check if value is a non-null object */
+function isObject(obj: unknown): obj is Record<string, unknown> {
+  return typeof obj === 'object' && obj !== null
+}
+
 // Time type guards
-export function isTime(obj: any): obj is Time {
+export function isTime(obj: unknown): obj is Time {
   return (
-    obj &&
-    typeof obj === 'object' &&
+    isObject(obj) &&
+    'id' in obj &&
     typeof obj.id === 'string' &&
+    'type' in obj &&
     (obj.type === 'instant' || obj.type === 'interval')
   )
 }
 
-export function isTimeInstant(obj: any): obj is TimeInstant {
+export function isTimeInstant(obj: unknown): obj is TimeInstant {
   return (
     isTime(obj) &&
     obj.type === 'instant' &&
-    typeof (obj as TimeInstant).timestamp === 'string'
+    'timestamp' in obj &&
+    typeof obj.timestamp === 'string'
   )
 }
 
-export function isTimeInterval(obj: any): obj is TimeInterval {
+export function isTimeInterval(obj: unknown): obj is TimeInterval {
   if (!isTime(obj) || obj.type !== 'interval') return false
-  const interval = obj as TimeInterval
-  return (
-    (interval.startTime === undefined || typeof interval.startTime === 'string') &&
-    (interval.endTime === undefined || typeof interval.endTime === 'string')
-  )
+  const startValid = !('startTime' in obj) || obj.startTime === undefined || typeof obj.startTime === 'string'
+  const endValid = !('endTime' in obj) || obj.endTime === undefined || typeof obj.endTime === 'string'
+  return startValid && endValid
 }
 
 // Location type guards
-export function isLocation(obj: any): obj is Location {
+export function isLocation(obj: unknown): obj is Location {
   return (
     isEntity(obj) &&
     'locationType' in obj &&
@@ -56,7 +61,7 @@ export function isLocation(obj: any): obj is Location {
   )
 }
 
-export function isLocationPoint(obj: any): obj is LocationPoint {
+export function isLocationPoint(obj: unknown): obj is LocationPoint {
   return (
     isLocation(obj) &&
     obj.locationType === 'point' &&
@@ -65,7 +70,7 @@ export function isLocationPoint(obj: any): obj is LocationPoint {
   )
 }
 
-export function isLocationExtent(obj: any): obj is LocationExtent {
+export function isLocationExtent(obj: unknown): obj is LocationExtent {
   return (
     isLocation(obj) &&
     obj.locationType === 'extent' &&
@@ -74,68 +79,57 @@ export function isLocationExtent(obj: any): obj is LocationExtent {
 }
 
 // Entity type guard
-export function isEntity(obj: any): obj is Entity {
+export function isEntity(obj: unknown): obj is Entity {
   return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    Array.isArray(obj.description) &&
-    Array.isArray(obj.typeAssignments) &&
-    typeof obj.createdAt === 'string' &&
-    typeof obj.updatedAt === 'string'
+    isObject(obj) &&
+    'id' in obj && typeof obj.id === 'string' &&
+    'name' in obj && typeof obj.name === 'string' &&
+    'description' in obj && Array.isArray(obj.description) &&
+    'typeAssignments' in obj && Array.isArray(obj.typeAssignments) &&
+    'createdAt' in obj && typeof obj.createdAt === 'string' &&
+    'updatedAt' in obj && typeof obj.updatedAt === 'string'
   )
 }
 
 // Event type guard
-export function isEvent(obj: any): obj is Event {
+export function isEvent(obj: unknown): obj is Event {
   return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    Array.isArray(obj.description) &&
-    Array.isArray(obj.personaInterpretations) &&
-    typeof obj.createdAt === 'string' &&
-    typeof obj.updatedAt === 'string'
+    isObject(obj) &&
+    'id' in obj && typeof obj.id === 'string' &&
+    'name' in obj && typeof obj.name === 'string' &&
+    'description' in obj && Array.isArray(obj.description) &&
+    'personaInterpretations' in obj && Array.isArray(obj.personaInterpretations) &&
+    'createdAt' in obj && typeof obj.createdAt === 'string' &&
+    'updatedAt' in obj && typeof obj.updatedAt === 'string'
   )
 }
 
 // Collection type guards
-export function isEntityCollection(obj: any): obj is EntityCollection {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    Array.isArray(obj.entityIds) &&
-    typeof obj.collectionType === 'string' &&
-    ['group', 'kind', 'functional', 'stage', 'portion', 'variant'].includes(obj.collectionType)
-  )
+export function isEntityCollection(obj: unknown): obj is EntityCollection {
+  if (!isObject(obj)) return false
+  if (!('id' in obj) || typeof obj.id !== 'string') return false
+  if (!('name' in obj) || typeof obj.name !== 'string') return false
+  if (!('entityIds' in obj) || !Array.isArray(obj.entityIds)) return false
+  if (!('collectionType' in obj) || typeof obj.collectionType !== 'string') return false
+  return ['group', 'kind', 'functional', 'stage', 'portion', 'variant'].includes(obj.collectionType)
 }
 
-export function isEventCollection(obj: any): obj is EventCollection {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    Array.isArray(obj.eventIds) &&
-    typeof obj.collectionType === 'string' &&
-    ['sequence', 'iteration', 'complex', 'alternative', 'group'].includes(obj.collectionType)
-  )
+export function isEventCollection(obj: unknown): obj is EventCollection {
+  if (!isObject(obj)) return false
+  if (!('id' in obj) || typeof obj.id !== 'string') return false
+  if (!('name' in obj) || typeof obj.name !== 'string') return false
+  if (!('eventIds' in obj) || !Array.isArray(obj.eventIds)) return false
+  if (!('collectionType' in obj) || typeof obj.collectionType !== 'string') return false
+  return ['sequence', 'iteration', 'complex', 'alternative', 'group'].includes(obj.collectionType)
 }
 
-export function isTimeCollection(obj: any): obj is TimeCollection {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    Array.isArray(obj.times) &&
-    typeof obj.collectionType === 'string' &&
-    ['periodic', 'cyclical', 'calendar', 'irregular', 'anchored'].includes(obj.collectionType)
-  )
+export function isTimeCollection(obj: unknown): obj is TimeCollection {
+  if (!isObject(obj)) return false
+  if (!('id' in obj) || typeof obj.id !== 'string') return false
+  if (!('name' in obj) || typeof obj.name !== 'string') return false
+  if (!('times' in obj) || !Array.isArray(obj.times)) return false
+  if (!('collectionType' in obj) || typeof obj.collectionType !== 'string') return false
+  return ['periodic', 'cyclical', 'calendar', 'irregular', 'anchored'].includes(obj.collectionType)
 }
 
 // Annotation type guards
@@ -185,7 +179,7 @@ export function isValidObjectAnnotation(annotation: ObjectAnnotation): boolean {
 
   // Must have spatial or temporal information
   const hasSpatial = !!annotation.boundingBoxSequence
-  const hasTemporal = !!(annotation.time || annotation.timeSpan)
+  const hasTemporal = !!annotation.time
 
   return hasSpatial || hasTemporal
 }
@@ -199,7 +193,7 @@ export function isValidTypeAnnotation(annotation: TypeAnnotation): boolean {
 
   // Must have spatial or temporal information
   const hasSpatial = !!annotation.boundingBoxSequence
-  const hasTemporal = !!(annotation.time || annotation.timeSpan)
+  const hasTemporal = !!annotation.time
 
   return hasSpatial || hasTemporal
 }
@@ -223,51 +217,51 @@ export function isValidUUID(id: string): boolean {
 // Validators for creating new objects
 export function validateEntity(entity: Partial<Entity>): string[] {
   const errors: string[] = []
-  
+
   if (!entity.name || entity.name.trim() === '') {
     errors.push('Entity name is required')
   }
-  
+
   if (!entity.description || !Array.isArray(entity.description)) {
     errors.push('Entity description must be an array of GlossItems')
   }
-  
+
   if (entity.id && !isValidUUID(entity.id)) {
     errors.push('Entity ID must be a valid UUID')
   }
-  
+
   return errors
 }
 
 export function validateEvent(event: Partial<Event>): string[] {
   const errors: string[] = []
-  
+
   if (!event.name || event.name.trim() === '') {
     errors.push('Event name is required')
   }
-  
+
   if (!event.description || !Array.isArray(event.description)) {
     errors.push('Event description must be an array of GlossItems')
   }
-  
+
   if (event.id && !isValidUUID(event.id)) {
     errors.push('Event ID must be a valid UUID')
   }
-  
+
   if (event.time && !isTime(event.time)) {
     errors.push('Event time must be a valid Time object')
   }
-  
+
   if (event.location && !isLocation(event.location)) {
     errors.push('Event location must be a valid Location object')
   }
-  
+
   return errors
 }
 
 export function validateTimeInstant(time: Partial<TimeInstant>): string[] {
   const errors: string[] = []
-  
+
   if (!time.timestamp) {
     errors.push('TimeInstant must have a timestamp')
   } else {
@@ -277,31 +271,31 @@ export function validateTimeInstant(time: Partial<TimeInstant>): string[] {
       errors.push('TimeInstant timestamp must be a valid ISO 8601 date')
     }
   }
-  
+
   if (time.id && !isValidUUID(time.id)) {
     errors.push('Time ID must be a valid UUID')
   }
-  
+
   return errors
 }
 
 export function validateTimeInterval(time: Partial<TimeInterval>): string[] {
   const errors: string[] = []
-  
+
   if (time.startTime) {
     const startDate = new Date(time.startTime)
     if (isNaN(startDate.getTime())) {
       errors.push('TimeInterval startTime must be a valid ISO 8601 date')
     }
   }
-  
+
   if (time.endTime) {
     const endDate = new Date(time.endTime)
     if (isNaN(endDate.getTime())) {
       errors.push('TimeInterval endTime must be a valid ISO 8601 date')
     }
   }
-  
+
   if (time.startTime && time.endTime) {
     const start = new Date(time.startTime)
     const end = new Date(time.endTime)
@@ -309,11 +303,11 @@ export function validateTimeInterval(time: Partial<TimeInterval>): string[] {
       errors.push('TimeInterval startTime must be before endTime')
     }
   }
-  
+
   if (time.id && !isValidUUID(time.id)) {
     errors.push('Time ID must be a valid UUID')
   }
-  
+
   return errors
 }
 

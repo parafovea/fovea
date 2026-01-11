@@ -14,7 +14,7 @@ import {
   useCreateClaimRelation,
   useDeleteClaimRelation,
 } from './useClaims'
-import { server } from '../../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 /**

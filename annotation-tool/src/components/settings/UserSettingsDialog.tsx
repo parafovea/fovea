@@ -21,9 +21,9 @@ import {
   Settings as SettingsIcon,
   Close as CloseIcon,
 } from '@mui/icons-material'
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import ProfileTab from './ProfileTab.js'
-import ApiKeyManagementPanel from './ApiKeyManagementPanel.js'
+import { useAuthStore } from '@store/zustand/authStore'
+import ProfileTab from './ProfileTab'
+import ApiKeyManagementPanel from './ApiKeyManagementPanel'
 
 /**
  * Tab panel component.

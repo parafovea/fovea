@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
+import { server } from '@test/setup.js'
 import { useSession } from './useSession.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 describe('useSession', () => {
   const mockUser = {

@@ -5,10 +5,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { renderWithProviders } from '@test/utils/test-utils.js'
 import SessionManagementDialog from './SessionManagementDialog.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
+import { server } from '@test/setup.js'
 
 describe('SessionManagementDialog', () => {
   const mockOnClose = vi.fn()

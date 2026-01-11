@@ -8,10 +8,10 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
-import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '../../models/types'
-import { api } from '../../services/api'
-import { generateId } from '../../utils/uuid'
-import { BoundingBoxInterpolator } from '../../utils/interpolation'
+import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '@models/types'
+import { api } from '@services/api'
+import { generateId } from '@utils/uuid'
+import { BoundingBoxInterpolator } from '@utils/interpolation'
 
 // Shared interpolator instance
 const interpolator = new BoundingBoxInterpolator()
@@ -244,28 +244,6 @@ export function useSetAnnotations() {
 // ============= Keyframe Manipulation Hooks =============
 
 /**
- * Helper to update timeSpan based on keyframes
- */
-function updateAnnotationTimeSpan(annotation: Annotation, fps: number): Annotation {
-  const keyframes = annotation.boundingBoxSequence.boxes.filter(
-    b => b.isKeyframe || b.isKeyframe === undefined
-  )
-  if (keyframes.length > 0) {
-    const sortedKeyframes = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
-    const startTime = sortedKeyframes[0].frameNumber / fps
-    const endTime = sortedKeyframes[sortedKeyframes.length - 1].frameNumber / fps
-    return {
-      ...annotation,
-      timeSpan: {
-        startTime,
-        endTime: Math.max(endTime, startTime + 1), // Minimum 1 second duration
-      },
-    }
-  }
-  return annotation
-}
-
-/**
  * Hook for adding a keyframe to an annotation.
  * Updates the cache optimistically (no server call).
  *
@@ -281,7 +259,7 @@ export function useAddKeyframe() {
     box: BoundingBox
     fps?: number
   }) => {
-    const { videoId, annotationId, frameNumber, box, fps = 30 } = params
+    const { videoId, annotationId, frameNumber, box } = params
 
     queryClient.setQueryData<Annotation[]>(
       annotationKeys.video(videoId),
@@ -302,8 +280,7 @@ export function useAddKeyframe() {
           }
         }
 
-        const updated = { ...annotation, boundingBoxSequence: updatedSequence }
-        return updateAnnotationTimeSpan(updated, fps)
+        return { ...annotation, boundingBoxSequence: updatedSequence }
       })
     )
   }, [queryClient])
@@ -324,7 +301,7 @@ export function useRemoveKeyframe() {
     frameNumber: number
     fps?: number
   }) => {
-    const { videoId, annotationId, frameNumber, fps = 30 } = params
+    const { videoId, annotationId, frameNumber } = params
 
     queryClient.setQueryData<Annotation[]>(
       annotationKeys.video(videoId),
@@ -336,8 +313,7 @@ export function useRemoveKeyframe() {
           frameNumber
         )
 
-        const updated = { ...annotation, boundingBoxSequence: updatedSequence }
-        return updateAnnotationTimeSpan(updated, fps)
+        return { ...annotation, boundingBoxSequence: updatedSequence }
       })
     )
   }, [queryClient])
@@ -393,7 +369,7 @@ export function useMoveKeyframe() {
     newFrame: number
     fps?: number
   }) => {
-    const { videoId, annotationId, oldFrame, newFrame, fps = 30 } = params
+    const { videoId, annotationId, oldFrame, newFrame } = params
 
     queryClient.setQueryData<Annotation[]>(
       annotationKeys.video(videoId),
@@ -424,8 +400,7 @@ export function useMoveKeyframe() {
           }
         }
 
-        const updated = { ...annotation, boundingBoxSequence: withNew }
-        return updateAnnotationTimeSpan(updated, fps)
+        return { ...annotation, boundingBoxSequence: withNew }
       })
     )
   }, [queryClient])

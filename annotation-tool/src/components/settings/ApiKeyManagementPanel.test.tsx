@@ -8,8 +8,8 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ApiKeyManagementPanel from './ApiKeyManagementPanel.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { server } from '@test/setup.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 function createWrapper() {
   const queryClient = new QueryClient({

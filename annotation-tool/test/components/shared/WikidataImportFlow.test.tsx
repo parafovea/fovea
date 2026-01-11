@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import WikidataImportFlow from '../../../src/components/shared/WikidataImportFlow'
 
 // Mock WikidataSearch component
-vi.mock('../../../src/components/WikidataSearch', () => ({
+vi.mock('@components/shared/WikidataSearch', () => ({
   default: ({ onImport }: { onImport: (data: any) => void }) => (
     <div data-testid="wikidata-search">
       <button

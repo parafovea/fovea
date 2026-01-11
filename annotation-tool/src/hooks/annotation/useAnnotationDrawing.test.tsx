@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAnnotationDrawing } from './useAnnotationDrawing'
-import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { RefObject } from 'react'
 
 /**

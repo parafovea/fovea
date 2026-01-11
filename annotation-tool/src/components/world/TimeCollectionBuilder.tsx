@@ -46,9 +46,11 @@ import {
   Pattern as PatternIcon,
 } from '@mui/icons-material'
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns'
-import { useWorld, useAddTimeCollection, useUpdateTimeCollection } from '../../store/queries'
+import { useWorld, useAddTimeCollection, useUpdateTimeCollection } from '@store/queries'
 import {
   TimeCollection,
+  TimeInstant,
+  TimeInterval,
   RecurrenceFrequency,
   DayOfWeek,
   RecurrenceByDay,
@@ -56,7 +58,13 @@ import {
   HabitualPattern,
   CyclicalPattern,
   HabitualFrequency,
-} from '../../models/types'
+} from '@models/types'
+
+/** Vagueness type options for natural language patterns */
+type VaguenessType = 'precise' | 'approximate' | 'fuzzy'
+
+/** Anchor type options for temporal patterns */
+type AnchorType = 'event' | 'time_of_day' | 'season' | 'cultural'
 
 interface TimeCollectionBuilderProps {
   open: boolean
@@ -758,7 +766,7 @@ export default function TimeCollectionBuilder({
                       <InputLabel>Vagueness</InputLabel>
                       <Select
                         value={vagueness}
-                        onChange={(e) => setVagueness(e.target.value as any)}
+                        onChange={(e) => setVagueness(e.target.value as VaguenessType)}
                         label="Vagueness"
                       >
                         <MenuItem value="precise">Precise</MenuItem>
@@ -806,7 +814,7 @@ export default function TimeCollectionBuilder({
                       <InputLabel>Anchor Type</InputLabel>
                       <Select
                         value={anchorType}
-                        onChange={(e) => setAnchorType(e.target.value as any)}
+                        onChange={(e) => setAnchorType(e.target.value as AnchorType)}
                         label="Anchor Type"
                       >
                         <MenuItem value="time_of_day">Time of Day</MenuItem>
@@ -886,9 +894,9 @@ export default function TimeCollectionBuilder({
                   >
                     {times.map(time => (
                       <MenuItem key={time.id} value={time.id}>
-                        {time.type === 'instant' 
-                          ? `Instant: ${(time as any).timestamp || 'unspecified'}`
-                          : `Interval: ${(time as any).startTime || '?'} to ${(time as any).endTime || '?'}`
+                        {time.type === 'instant'
+                          ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
+                          : `Interval: ${(time as TimeInterval).startTime || '?'} to ${(time as TimeInterval).endTime || '?'}`
                         }
                       </MenuItem>
                     ))}

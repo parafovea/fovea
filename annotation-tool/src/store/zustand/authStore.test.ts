@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useAuthStore, AppConfig } from './authStore'
-import { User } from '../../models/types'
+import { User } from '@models/types'
 
 describe('AuthStore', () => {
   // Reset store before each test

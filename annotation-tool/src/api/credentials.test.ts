@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import axios from 'axios'
-import { server } from '../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 describe('Axios Credentials Configuration', () => {

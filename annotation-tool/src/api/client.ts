@@ -4,7 +4,8 @@
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios'
-import { GlossItem } from '../models/types'
+import { GlossItem } from '@models/types'
+import { TranscriptJson } from '@components/video/types'
 
 /**
  * Video summary data structure returned by the API.
@@ -21,7 +22,7 @@ export interface VideoSummary {
   createdAt: string
   updatedAt: string
   /** Structured transcript with segments, speakers, and language. */
-  transcriptJson?: any | null
+  transcriptJson?: TranscriptJson | null
   /** ISO language code detected from audio (e.g., "en", "es"). */
   audioLanguage?: string | null
   /** Number of distinct speakers detected. */
@@ -53,7 +54,7 @@ export interface SaveSummaryRequest {
   audioTranscript?: string
   keyFrames?: number[]
   confidence?: number
-  transcriptJson?: any
+  transcriptJson?: TranscriptJson
   audioLanguage?: string
   speakerCount?: number
   audioModelUsed?: string

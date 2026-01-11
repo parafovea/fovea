@@ -30,7 +30,7 @@ import {
   Cancel as RejectIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material'
-import { TrackingResult } from '../../models/types.js'
+import { TrackingResult } from '@models/types'
 
 /**
  * @interface TrackPreviewProps

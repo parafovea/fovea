@@ -6,7 +6,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Box, Button, Typography, Tabs, Tab } from '@mui/material'
-import { BezierControlPoint } from '../../models/types.js'
+import { BezierControlPoint } from '@models/types'
 
 /**
  * @interface BezierCurveEditorProps

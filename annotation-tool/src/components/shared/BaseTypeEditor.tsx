@@ -15,13 +15,13 @@ import {
   Alert,
 } from '@mui/material'
 import { Category as TypeIcon } from '@mui/icons-material'
-import { GlossItem } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+import { GlossItem } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 import WikidataImportFlow from './WikidataImportFlow'
 import ModeSelector from './ModeSelector'
 import { WikidataChip } from './WikidataChip'
 import { TypeObjectBadge } from './TypeObjectToggle'
-import { ImportType } from '../../hooks/useWikidataImport'
+import { ImportType } from '@hooks/wikidata'
 
 export interface BaseTypeEditorProps {
   // Required props
@@ -50,7 +50,7 @@ export interface BaseTypeEditorProps {
   wikibaseId?: string
   importedAt?: string
   /** @deprecated No longer used - WikidataImportFlow handles import directly */
-  _onWikidataSelect?: (item: any) => void
+  _onWikidataSelect?: (item: unknown) => void
 
   // Actions
   onSave: () => void

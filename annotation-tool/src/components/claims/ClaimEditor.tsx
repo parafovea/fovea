@@ -18,8 +18,8 @@ import {
   InputLabel,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { Claim, GlossItem, ClaimerType } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+import { Claim, GlossItem, ClaimerType } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 
 interface ClaimEditorProps {
   open: boolean

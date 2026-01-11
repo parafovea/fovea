@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AppError, DuplicateImportError } from '../../src/lib/errors'
+import { AppError, DuplicateImportError } from '@lib/errors'
 
 describe('AppError', () => {
   it('sets name to constructor name', () => {

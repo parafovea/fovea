@@ -11,7 +11,7 @@ import {
   CreateClaimRequest,
   UpdateClaimRequest,
   ClaimRelation,
-} from '../../models/types'
+} from '@models/types'
 
 /** Query key factory for claims */
 export const claimsQueryKeys = {

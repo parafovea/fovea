@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { VideoMetadata } from '../../models/types'
+import { VideoMetadata } from '@models/types'
 
 /** Query key factory for videos */
 export const videoKeys = {

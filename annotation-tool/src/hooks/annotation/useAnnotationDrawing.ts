@@ -5,8 +5,15 @@
  */
 
 import { useState, useCallback, RefObject } from 'react'
-import { useAnnotationUiStore } from '../../store/zustand'
-import { useAddAnnotation } from '../../store/queries'
+import { useAnnotationUiStore } from '@store/zustand'
+import { useAddAnnotation } from '@store/queries'
+import type { Annotation } from '@models/types'
+
+/**
+ * @description Input type for creating new annotations.
+ * Matches the expected input for useAddAnnotation mutation.
+ */
+type NewAnnotationInput = Partial<Annotation> & Pick<Annotation, 'videoId' | 'annotationType' | 'boundingBoxSequence'>
 
 /**
  * @interface BoundingBox
@@ -212,9 +219,8 @@ export function useAnnotationDrawing({
       const currentFrame = Math.floor(currentTime * fps)
       const endFrame = currentFrame + fps // 1 second duration
 
-      const annotation: any = {
+      const baseAnnotation = {
         videoId,
-        annotationType: annotationMode,
         boundingBoxSequence: {
           boxes: [
             {
@@ -246,23 +252,32 @@ export function useAnnotationDrawing({
         updatedAt: new Date().toISOString(),
       }
 
+      let annotation: NewAnnotationInput
+
       if (annotationMode === 'type') {
-        annotation.annotationType = 'type'
-        annotation.personaId = selectedPersonaId
-        annotation.typeCategory = drawingMode
-        annotation.typeId = selectedTypeId || 'temp-type'
-      } else {
-        annotation.annotationType = 'object'
-        if (linkTargetType === 'entity') {
-          annotation.linkedEntityId = linkTargetId
-        } else if (linkTargetType === 'event') {
-          annotation.linkedEventId = linkTargetId
-        } else if (linkTargetType === 'location') {
-          annotation.linkedLocationId = linkTargetId
-        } else if (linkTargetType?.includes('collection')) {
-          annotation.linkedCollectionId = linkTargetId
-          annotation.linkedCollectionType = linkTargetType.replace('-collection', '')
+        annotation = {
+          ...baseAnnotation,
+          annotationType: 'type',
+          personaId: selectedPersonaId ?? undefined,
+          typeCategory: drawingMode as 'entity' | 'role' | 'event',
+          typeId: selectedTypeId ?? 'temp-type',
         }
+      } else {
+        const objectAnnotation: NewAnnotationInput = {
+          ...baseAnnotation,
+          annotationType: 'object',
+        }
+        if (linkTargetType === 'entity') {
+          objectAnnotation.linkedEntityId = linkTargetId ?? undefined
+        } else if (linkTargetType === 'event') {
+          objectAnnotation.linkedEventId = linkTargetId ?? undefined
+        } else if (linkTargetType === 'location') {
+          objectAnnotation.linkedLocationId = linkTargetId ?? undefined
+        } else if (linkTargetType?.includes('collection')) {
+          objectAnnotation.linkedCollectionId = linkTargetId ?? undefined
+          objectAnnotation.linkedCollectionType = linkTargetType.replace('-collection', '') as 'entity' | 'event' | 'time'
+        }
+        annotation = objectAnnotation
       }
 
       addAnnotation(annotation, {

@@ -52,15 +52,22 @@ import {
   useAddTime,
   useUpdateTime,
   useAddTimeCollection,
-} from '../../store/queries'
-import { 
-  Time, 
-  TimeInstant, 
-  TimeInterval, 
+} from '@store/queries'
+import {
+  Time,
+  TimeInstant,
+  TimeInterval,
   TimeCollection,
   RecurrenceFrequency,
-} from '../../models/types'
-import WikidataSearch from '../WikidataSearch'
+} from '@models/types'
+
+/** Granularity options for vagueness */
+type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
+
+/** Deictic anchor type options */
+type DeicticAnchorType = 'annotation_time' | 'video_time' | 'reference_time'
+import WikidataSearch from '@components/shared/WikidataSearch'
+import { WikidataImportData } from '@hooks/wikidata/useWikidataImport'
 
 interface TimeBuilderProps {
   open: boolean
@@ -138,14 +145,14 @@ export default function TimeBuilder({
   const [hasVagueness, setHasVagueness] = useState(false)
   const [vaguenessType, setVaguenessType] = useState<'approximate' | 'bounded' | 'fuzzy'>('approximate')
   const [vaguenessDescription, setVaguenessDescription] = useState('')
-  const [vaguenessGranularity, setVaguenessGranularity] = useState<string>('hour')
+  const [vaguenessGranularity, setVaguenessGranularity] = useState<VaguenessGranularity>('hour')
   const [earliestBound, setEarliestBound] = useState<Date | null>(null)
   const [latestBound, setLatestBound] = useState<Date | null>(null)
   const [typicalTime, setTypicalTime] = useState<Date | null>(null)
   
   // Deictic reference
   const [hasDeictic, setHasDeictic] = useState(false)
-  const [deicticAnchorType, setDeicticAnchorType] = useState<'annotation_time' | 'video_time' | 'reference_time'>('video_time')
+  const [deicticAnchorType, setDeicticAnchorType] = useState<DeicticAnchorType>('video_time')
   const [deicticExpression, setDeicticExpression] = useState('')
   const [deicticAnchorTime, setDeicticAnchorTime] = useState('')
   
@@ -309,7 +316,7 @@ export default function TimeBuilder({
         commonFields.vagueness = {
           type: vaguenessType,
           description: vaguenessDescription || undefined,
-          granularity: vaguenessGranularity as any,
+          granularity: vaguenessGranularity,
           bounds: (earliestBound || latestBound || typicalTime) ? {
             earliest: earliestBound?.toISOString(),
             latest: latestBound?.toISOString(),
@@ -424,7 +431,7 @@ export default function TimeBuilder({
                 <Box sx={{ mb: 2 }}>
                   <WikidataSearch
                     entityType="time"
-                    onImport={(data: any) => {
+                    onImport={(data: WikidataImportData) => {
                       setImportedName(data.name)
                       setWikidataId(data.wikidataId)
                       setWikidataUrl(data.wikidataUrl)
@@ -442,7 +449,7 @@ export default function TimeBuilder({
                           // Set vagueness based on granularity
                           if (td.pointInTime.granularity !== 'day' && td.pointInTime.granularity !== 'hour') {
                             setHasVagueness(true)
-                            setVaguenessGranularity(td.pointInTime.granularity)
+                            setVaguenessGranularity(td.pointInTime.granularity as VaguenessGranularity)
                             
                             if (td.circa) {
                               setVaguenessType('approximate')
@@ -466,7 +473,7 @@ export default function TimeBuilder({
                           // Set vagueness if dates are imprecise
                           if (td.startTime.granularity !== 'day' || td.endTime.granularity !== 'day') {
                             setHasVagueness(true)
-                            setVaguenessGranularity(td.startTime.granularity)
+                            setVaguenessGranularity(td.startTime.granularity as VaguenessGranularity)
                           }
                         }
                         
@@ -490,14 +497,16 @@ export default function TimeBuilder({
                         // Handle other single dates
                         else if (td.inception || td.dissolved || td.publicationDate) {
                           const timeData = td.inception || td.dissolved || td.publicationDate
-                          setTimeType('instant')
-                          const date = new Date(timeData.timestamp)
-                          setInstantDate(date)
-                          setInstantTime(date)
-                          
-                          if (timeData.granularity !== 'day') {
-                            setHasVagueness(true)
-                            setVaguenessGranularity(timeData.granularity)
+                          if (timeData) {
+                            setTimeType('instant')
+                            const date = new Date(timeData.timestamp)
+                            setInstantDate(date)
+                            setInstantTime(date)
+
+                            if (timeData.granularity !== 'day') {
+                              setHasVagueness(true)
+                              setVaguenessGranularity(timeData.granularity as VaguenessGranularity)
+                            }
                           }
                         }
                       }
@@ -647,7 +656,7 @@ export default function TimeBuilder({
                         <InputLabel>Granularity</InputLabel>
                         <Select
                           value={vaguenessGranularity}
-                          onChange={(e) => setVaguenessGranularity(e.target.value)}
+                          onChange={(e) => setVaguenessGranularity(e.target.value as VaguenessGranularity)}
                           label="Granularity"
                         >
                           {granularityOptions.map(opt => (
@@ -861,7 +870,7 @@ export default function TimeBuilder({
                         <InputLabel>Anchor Type</InputLabel>
                         <Select
                           value={deicticAnchorType}
-                          onChange={(e) => setDeicticAnchorType(e.target.value as any)}
+                          onChange={(e) => setDeicticAnchorType(e.target.value as DeicticAnchorType)}
                           label="Anchor Type"
                         >
                           <MenuItem value="annotation_time">

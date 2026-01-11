@@ -7,7 +7,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 import { useJobStatus, getJobStatusMessage, isJobActive } from './useJobStatus'
-import type { JobStatus } from '../../api/client'
+import type { JobStatus } from '@api/client'
 
 /**
  * Create a wrapper component with QueryClient for testing hooks.

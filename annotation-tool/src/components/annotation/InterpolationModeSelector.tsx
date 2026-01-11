@@ -19,8 +19,18 @@ import {
   Typography,
   Box,
 } from '@mui/material'
-import { Annotation, InterpolationType, INTERPOLATION_PRESETS } from '../../models/types.js'
-import { BezierCurveEditor } from './BezierCurveEditor.js'
+import { Annotation, InterpolationType, INTERPOLATION_PRESETS, BezierControlPoint } from '@models/types'
+
+/**
+ * @description Control points for bezier interpolation, organized by property.
+ */
+export interface BezierControlPointSet {
+  x?: BezierControlPoint[]
+  y?: BezierControlPoint[]
+  width?: BezierControlPoint[]
+  height?: BezierControlPoint[]
+}
+import { BezierCurveEditor } from './BezierCurveEditor'
 
 /**
  * @interface InterpolationModeSelectorProps
@@ -36,7 +46,7 @@ export interface InterpolationModeSelectorProps {
   /** Callback to close dialog */
   onClose: () => void
   /** Callback to apply interpolation mode */
-  onApply: (segmentIndex: number, mode: InterpolationType, controlPoints?: any) => void
+  onApply: (segmentIndex: number, mode: InterpolationType, controlPoints?: BezierControlPointSet) => void
 }
 
 /**
@@ -69,7 +79,7 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
   )
   const [previewFrame, setPreviewFrame] = useState(currentFrame)
   const [showBezierEditor, setShowBezierEditor] = useState(false)
-  const [bezierControlPoints, setBezierControlPoints] = useState<any>(
+  const [bezierControlPoints, setBezierControlPoints] = useState<BezierControlPointSet>(
     segment?.controlPoints || {}
   )
 
@@ -248,7 +258,7 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
                 { x: 0.58, y: 1 },
               ]}
               onChange={(controlPoints) => {
-                setBezierControlPoints((prev: any) => ({
+                setBezierControlPoints((prev: BezierControlPointSet) => ({
                   ...prev,
                   x: controlPoints,
                   y: controlPoints, // Apply same curve to y for simplicity

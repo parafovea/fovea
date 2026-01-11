@@ -16,8 +16,8 @@ import type {
   RelationType,
   OntologyRelation,
   ImportRequest,
-} from '../../models/types'
-import { generateId } from '../../utils/uuid'
+} from '@models/types'
+import { generateId } from '@utils/uuid'
 
 /** Query keys for personas */
 export const personaKeys = {

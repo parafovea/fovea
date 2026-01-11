@@ -17,7 +17,7 @@ import {
   AccordionDetails,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuthStore } from '@store/zustand/authStore'
 
 /**
  * Props for ProfileTab component.

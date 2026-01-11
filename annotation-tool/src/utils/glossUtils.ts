@@ -1,4 +1,4 @@
-import { GlossItem, PersonaOntology, WorldStateData, TimeInstant } from '../models/types'
+import { GlossItem, PersonaOntology, WorldStateData, TimeInstant } from '@models/types'
 
 /**
  * Helper function for simple text rendering of gloss items (no React components)

@@ -18,8 +18,8 @@ import {
   Box,
   Paper,
 } from '@mui/material'
-import { Claim, RelationType } from '../../models/types'
-import { useClaims } from '../../store/queries'
+import { Claim, RelationType } from '@models/types'
+import { useClaims } from '@store/queries'
 
 interface ClaimRelationEditorProps {
   open: boolean
@@ -109,8 +109,8 @@ export function ClaimRelationEditor({
         notes: notes.trim() || undefined,
       })
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to save relation')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save relation')
     } finally {
       setSaving(false)
     }

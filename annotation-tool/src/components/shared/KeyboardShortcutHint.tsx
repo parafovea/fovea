@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Box, Typography, Paper, IconButton, Collapse } from '@mui/material'
 import { Close as CloseIcon, Keyboard as KeyboardIcon } from '@mui/icons-material'
 import { useLocation } from 'react-router-dom'
-import { commandRegistry } from '../../lib/commands/command-registry.js'
-import { formatKeybinding } from '../../lib/commands/commands.js'
+import { commandRegistry } from '@lib/commands/command-registry'
+import { formatKeybinding } from '@lib/commands/commands'
 
 export default function KeyboardShortcutHint() {
   const location = useLocation()

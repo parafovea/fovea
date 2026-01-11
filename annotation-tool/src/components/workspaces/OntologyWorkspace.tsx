@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { usePreferences } from '../../hooks/usePreferences'
-import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
-import { useAnnotationUiStore } from '../../store/zustand'
+import { usePreferences } from '@hooks/preferences'
+import { useCommands, useCommandContext } from '@hooks/commands'
+import { useAnnotationUiStore } from '@store/zustand'
 import {
   Box,
   Tabs,
@@ -34,13 +34,13 @@ import {
   AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material'
 import PersonaBrowser from '../browsers/PersonaBrowser'
-import PersonaEditor from '../PersonaEditor'
-import EntityTypeEditor from '../EntityTypeEditor'
-import RoleEditor from '../RoleEditor'
-import EventTypeEditor from '../EventTypeEditor'
-import RelationTypeEditor from '../RelationTypeEditor'
-import { GlossRenderer } from '../GlossRenderer'
-import { glossToText } from '../../utils/glossUtils'
+import PersonaEditor from '@components/persona/PersonaEditor'
+import EntityTypeEditor from '@components/ontology/EntityTypeEditor'
+import RoleEditor from '@components/ontology/RoleEditor'
+import EventTypeEditor from '@components/ontology/EventTypeEditor'
+import RelationTypeEditor from '@components/ontology/RelationTypeEditor'
+import { GlossRenderer } from '@components/ontology/GlossRenderer'
+import { glossToText } from '@utils/glossUtils'
 import { WikidataChip } from '../shared/WikidataChip'
 import {
   usePersonas,
@@ -51,9 +51,20 @@ import {
   useDeleteRelationTypeFromPersona,
   useSavePersonaOntology,
   useWorld,
-} from '../../store/queries'
-import { OntologyAugmenter, OntologyCategory } from '../OntologyAugmenter'
-import { useModelConfig } from '../../store/queries/useModelConfig'
+} from '@store/queries'
+import { OntologyAugmenter, OntologyCategory } from '@components/ontology/OntologyAugmenter'
+import { useModelConfig } from '@store/queries/useModelConfig'
+import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@models/types'
+
+/**
+ * Union type for any ontology type item that can be filtered/edited.
+ */
+type OntologyTypeItem = {
+  id: string
+  name: string
+  gloss: GlossItem[] | string
+  wikidataId?: string
+}
 
 /**
  * Props for the TabPanel component.
@@ -210,13 +221,13 @@ export default function OntologyWorkspace() {
    * @param item - Ontology type item (entity, role, event, or relation type)
    * @returns True if item matches search term, false otherwise
    */
-  const filterBySearchTerm = (item: any) => {
+  const filterBySearchTerm = (item: OntologyTypeItem) => {
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
-    
+
     // Check name
     if (item.name?.toLowerCase().includes(searchLower)) return true
-    
+
     // Check gloss - handle both array (correct format) and string (legacy)
     if (Array.isArray(item.gloss)) {
       // Convert gloss array to searchable text using the helper
@@ -226,10 +237,10 @@ export default function OntologyWorkspace() {
       // Handle legacy string glosses if they exist
       return true
     }
-    
+
     // Check wikidataId
     if (item.wikidataId?.toLowerCase().includes(searchLower)) return true
-    
+
     return false
   }
 
@@ -285,22 +296,22 @@ export default function OntologyWorkspace() {
     }
   }
 
-  const handleEditEntityType = (type: any) => {
+  const handleEditEntityType = (type: EntityType) => {
     setSelectedEntityType(type)
     setEntityTypeEditorOpen(true)
   }
 
-  const handleEditRole = (role: any) => {
+  const handleEditRole = (role: RoleType) => {
     setSelectedRole(role)
     setRoleEditorOpen(true)
   }
 
-  const handleEditEventType = (event: any) => {
+  const handleEditEventType = (event: EventType) => {
     setSelectedEventType(event)
     setEventTypeEditorOpen(true)
   }
 
-  const handleEditRelationType = (relation: any) => {
+  const handleEditRelationType = (relation: RelationType) => {
     setSelectedRelationType(relation)
     setRelationTypeEditorOpen(true)
   }
@@ -363,10 +374,10 @@ export default function OntologyWorkspace() {
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex]
         switch(tabValue) {
-          case 0: handleEditEntityType(item); break
-          case 1: handleEditRole(item); break
-          case 2: handleEditEventType(item); break
-          case 3: handleEditRelationType(item); break
+          case 0: handleEditEntityType(item as EntityType); break
+          case 1: handleEditRole(item as RoleType); break
+          case 2: handleEditEventType(item as EventType); break
+          case 3: handleEditRelationType(item as RelationType); break
         }
       }
     },

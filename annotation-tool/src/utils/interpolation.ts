@@ -11,7 +11,7 @@ import {
   InterpolationType,
   BezierControlPoint,
   ParametricFunction,
-} from '../models/types.js'
+} from '@models/types'
 
 /**
  * @class BoundingBoxInterpolator

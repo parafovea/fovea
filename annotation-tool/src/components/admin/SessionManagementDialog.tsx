@@ -23,8 +23,8 @@ import {
   Chip,
 } from '@mui/material'
 import { Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
-import { useSessions, useRevokeSession } from '../../store/queries/admin/useSessions.js'
-import ConfirmDialog from '../shared/ConfirmDialog.js'
+import { useSessions, useRevokeSession } from '@store/queries/admin/useSessions'
+import ConfirmDialog from '../shared/ConfirmDialog'
 import { useState } from 'react'
 
 /**

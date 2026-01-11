@@ -10,7 +10,7 @@ import {
   decimateKeyframes,
   calculateOptimalDecimation,
 } from './trackingConverter.js'
-import { TrackingResult, TrackFrame } from '../models/types.js'
+import { TrackingResult, TrackFrame } from '@models/types.js'
 
 describe('trackingConverter', () => {
   describe('convertTrackToSequence', () => {

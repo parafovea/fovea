@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BoundingBoxInterpolator } from './interpolation'
-import { BoundingBox } from '../models/types'
+import { BoundingBox } from '@models/types'
 
 describe('BoundingBoxInterpolator', () => {
   const interpolator = new BoundingBoxInterpolator()

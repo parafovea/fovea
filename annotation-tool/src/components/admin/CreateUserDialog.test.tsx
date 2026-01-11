@@ -6,10 +6,10 @@ import { describe, it, expect } from 'vitest'
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { renderWithProviders } from '@test/utils/test-utils.js'
 import CreateUserDialog from './CreateUserDialog.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
+import { server } from '@test/setup.js'
 
 describe('CreateUserDialog', () => {
   const createWrapper = () => {

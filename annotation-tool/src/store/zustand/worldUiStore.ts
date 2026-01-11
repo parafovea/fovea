@@ -27,7 +27,7 @@ import {
   EntityCollection,
   EventCollection,
   TimeCollection,
-} from '../../models/types'
+} from '@models/types'
 
 export interface WorldUiState {
   // ========== Selection State ==========

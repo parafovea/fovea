@@ -35,10 +35,10 @@ import {
   Language as WikidataIcon,
   Edit as EditIcon,
 } from '@mui/icons-material'
-import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
-import { Event, EventInterpretation, GlossItem, Location } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
+import { Event, EventInterpretation, GlossItem, Location, TimeInstant, TimeInterval } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 
@@ -318,8 +318,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                 {times.map(time => (
                   <MenuItem key={time.id} value={time.id}>
                     {time.label || (time.type === 'instant'
-                      ? `Instant: ${(time as any).timestamp}`
-                      : `Interval: ${(time as any).startTime || '?'} - ${(time as any).endTime || '?'}`)}
+                      ? `Instant: ${(time as TimeInstant).timestamp}`
+                      : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`)}
                   </MenuItem>
                 ))}
               </Select>

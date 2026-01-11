@@ -25,9 +25,18 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material'
-import { Time } from '../../models/types'
-import { generateId } from '../../utils/uuid'
-import { useAddTime } from '../../store/queries'
+import { Time, TimeInstant, TimeInterval } from '@models/types'
+import { generateId } from '@utils/uuid'
+import { useAddTime } from '@store/queries'
+
+/** Vagueness type options */
+type VaguenessType = 'approximate' | 'bounded' | 'fuzzy'
+
+/** Granularity options for time vagueness */
+type GranularityType = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
+
+/** Video reference field names */
+type VideoRefField = keyof VideoReference
 
 interface TemporalAnnotatorProps {
   videoId: string
@@ -67,7 +76,7 @@ export default function TemporalAnnotator({
   const [hasVagueness, setHasVagueness] = useState(false)
   const [vaguenessType, setVaguenessType] = useState<'approximate' | 'bounded' | 'fuzzy'>('approximate')
   const [vaguenessDescription, setVaguenessDescription] = useState('')
-  const [granularity, setGranularity] = useState<string>('second')
+  const [granularity, setGranularity] = useState<GranularityType>('second')
   
   // Deictic reference
   const [hasDeictic, setHasDeictic] = useState(false)
@@ -156,7 +165,8 @@ export default function TemporalAnnotator({
       }
       
       setCertainty(existingTime.certainty || 1.0)
-      setNotes(existingTime.metadata?.notes || '')
+      const notesValue = existingTime.metadata?.notes
+      setNotes(typeof notesValue === 'string' ? notesValue : '')
     }
   }, [existingTime, videoId])
   
@@ -173,50 +183,54 @@ export default function TemporalAnnotator({
     }
   }
   
-  const handleUpdateVideoReference = (index: number, field: string, value: any) => {
+  const handleUpdateVideoReference = (index: number, field: VideoRefField, value: VideoReference[VideoRefField]) => {
     const newRefs = [...videoReferences]
     newRefs[index] = { ...newRefs[index], [field]: value }
     setVideoReferences(newRefs)
   }
   
   const createTimeData = (): Omit<Time, 'id'> => {
-    const baseTime: any = {
-      type: timeType,
-      videoReferences,
-      certainty,
-    }
+    // Build vagueness if specified
+    const vagueness = hasVagueness ? {
+      type: vaguenessType,
+      description: vaguenessDescription || undefined,
+      granularity,
+    } : undefined
 
-    // Add timestamp for instants
+    // Build deictic reference if specified
+    const deictic = hasDeictic ? {
+      anchorType: 'video_time' as const,
+      expression: deicticExpression || undefined,
+    } : undefined
+
+    // Build metadata if notes exist
+    const metadata = notes ? { notes } : undefined
+
+    // Build time data based on type
     if (timeType === 'instant') {
-      baseTime.timestamp = new Date(startTime * 1000).toISOString()
+      const instantTime: Omit<TimeInstant, 'id'> = {
+        type: 'instant',
+        timestamp: new Date(startTime * 1000).toISOString(),
+        videoReferences,
+        certainty,
+        vagueness,
+        deictic,
+        metadata,
+      }
+      return instantTime
     } else {
-      baseTime.startTime = new Date(startTime * 1000).toISOString()
-      baseTime.endTime = new Date(endTime * 1000).toISOString()
-    }
-
-    // Add vagueness if specified
-    if (hasVagueness) {
-      baseTime.vagueness = {
-        type: vaguenessType,
-        description: vaguenessDescription || undefined,
-        granularity: granularity as any,
+      const intervalTime: Omit<TimeInterval, 'id'> = {
+        type: 'interval',
+        startTime: new Date(startTime * 1000).toISOString(),
+        endTime: new Date(endTime * 1000).toISOString(),
+        videoReferences,
+        certainty,
+        vagueness,
+        deictic,
+        metadata,
       }
+      return intervalTime
     }
-
-    // Add deictic reference if specified
-    if (hasDeictic) {
-      baseTime.deictic = {
-        anchorType: 'video_time',
-        expression: deicticExpression || undefined,
-      }
-    }
-
-    // Add metadata
-    if (notes) {
-      baseTime.metadata = { notes }
-    }
-
-    return baseTime
   }
 
   const handleSaveTime = () => {
@@ -359,7 +373,7 @@ export default function TemporalAnnotator({
                 <InputLabel>Vagueness Type</InputLabel>
                 <Select
                   value={vaguenessType}
-                  onChange={(e) => setVaguenessType(e.target.value as any)}
+                  onChange={(e) => setVaguenessType(e.target.value as VaguenessType)}
                   label="Vagueness Type"
                 >
                   <MenuItem value="approximate">Approximate (around this time)</MenuItem>
@@ -381,7 +395,7 @@ export default function TemporalAnnotator({
                 <InputLabel>Granularity</InputLabel>
                 <Select
                   value={granularity}
-                  onChange={(e) => setGranularity(e.target.value)}
+                  onChange={(e) => setGranularity(e.target.value as GranularityType)}
                   label="Granularity"
                 >
                   <MenuItem value="millisecond">Millisecond</MenuItem>

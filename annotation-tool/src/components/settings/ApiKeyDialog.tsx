@@ -22,7 +22,7 @@ import {
   IconButton,
 } from '@mui/material'
 import { Visibility, VisibilityOff } from '@mui/icons-material'
-import { useCreateApiKey, useUpdateApiKey, ApiKey, ApiKeyProvider } from '../../store/queries/useApiKeys.js'
+import { useCreateApiKey, useUpdateApiKey, ApiKey, ApiKeyProvider } from '@store/queries/useApiKeys'
 
 /**
  * Props for ApiKeyDialog component.

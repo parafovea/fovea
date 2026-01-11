@@ -12,7 +12,7 @@ import {
   AccessTime as TimeIcon,
   Folder as CollectionIcon,
 } from '@mui/icons-material'
-import { usePersonas, useVideos, useWorld } from '../../store/queries'
+import { usePersonas, useVideos, useWorld } from '@store/queries'
 
 interface BreadcrumbItem {
   label: string
@@ -48,7 +48,7 @@ export default function BreadcrumbNavigation() {
       // Check if we're in annotation workspace
       if (pathSegments[0] === 'annotate' && pathSegments.length > 1) {
         const videoId = pathSegments[1]
-        const video = videos.find((v: any) => v.id === videoId)
+        const video = videos.find(v => v.id === videoId)
         if (video) {
           breadcrumbs.push({
             label: `Video: "${video.title}"`,

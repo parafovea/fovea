@@ -1,15 +1,29 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Chip, Tooltip } from '@mui/material'
-import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '../../store/queries'
-import { BoundingBox } from '../../models/types.js'
-import { BoundingBoxInterpolator } from '../../utils/interpolation.js'
+import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '@store/queries'
+import { BoundingBox, Annotation, TypeAnnotation, ObjectAnnotation } from '@models/types'
+
+/**
+ * Type guard to check if annotation is a TypeAnnotation.
+ */
+function isTypeAnnotation(ann: Annotation): ann is TypeAnnotation {
+  return ann.annotationType === 'type'
+}
+
+/**
+ * Type guard to check if annotation is an ObjectAnnotation.
+ */
+function isObjectAnnotation(ann: Annotation): ann is ObjectAnnotation {
+  return ann.annotationType === 'object'
+}
+import { BoundingBoxInterpolator } from '@utils/interpolation'
 
 /**
  * Props for InteractiveBoundingBox component.
  */
 interface InteractiveBoundingBoxProps {
   /** Annotation object containing bounding box sequence and metadata */
-  annotation: any
+  annotation: Annotation
   /** Current video frame number */
   currentFrame: number
   /** Video width in pixels */
@@ -120,11 +134,18 @@ export default function InteractiveBoundingBox({
 
   // Get stroke color based on type
   const getStrokeColor = () => {
-    if (annotation.linkedType === 'entity' || annotation.typeCategory === 'entity') return '#4caf50'
-    if (annotation.linkedType === 'event' || annotation.typeCategory === 'event') return '#ff9800'
-    if (annotation.linkedType === 'location') return '#9c27b0'
-    if (annotation.linkedType?.includes('collection')) return '#ff5722'
-    if (annotation.typeCategory === 'role') return '#2196f3'
+    if (isTypeAnnotation(annotation)) {
+      // Type annotation - color by type category
+      if (annotation.typeCategory === 'entity') return '#4caf50'
+      if (annotation.typeCategory === 'event') return '#ff9800'
+      if (annotation.typeCategory === 'role') return '#2196f3'
+    } else if (isObjectAnnotation(annotation)) {
+      // Object annotation - color by linked object type
+      if (annotation.linkedEntityId) return '#4caf50'
+      if (annotation.linkedEventId) return '#ff9800'
+      if (annotation.linkedLocationId) return '#9c27b0'
+      if (annotation.linkedCollectionId) return '#ff5722'
+    }
     return '#757575'
   }
 
@@ -299,10 +320,16 @@ export default function InteractiveBoundingBox({
         box: newBox,
       })
     } else {
-      // Fallback to updating annotation (legacy support)
+      // Fallback to updating annotation - update the first keyframe in the sequence
+      const updatedSequence = {
+        ...annotation.boundingBoxSequence,
+        boxes: annotation.boundingBoxSequence.boxes.map((box, idx) =>
+          idx === 0 ? { ...box, ...newBox } : box
+        ),
+      }
       updateAnnotationMutation({
         ...annotation,
-        boundingBox: newBox,
+        boundingBoxSequence: updatedSequence,
         updatedAt: new Date().toISOString(),
       })
     }
@@ -465,24 +492,33 @@ export default function InteractiveBoundingBox({
         </>
       )}
 
-      {/* Label for linked objects */}
-      {annotation.linkedObject && mode !== 'ghost' && (
+      {/* Label for annotation type indicator */}
+      {mode !== 'ghost' && (
         <foreignObject
           x={currentBox.x}
           y={currentBox.y - 30}
-          width={Math.max(currentBox.width, 150)}
+          width={Math.max(currentBox.width, 100)}
           height={30}
           style={{ pointerEvents: 'none' }}
         >
           <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start' }}>
             <Chip
-              label={annotation.linkedObject.name}
+              label={
+                isTypeAnnotation(annotation) ? annotation.typeCategory :
+                isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'Entity' :
+                isObjectAnnotation(annotation) && annotation.linkedEventId ? 'Event' :
+                isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'Location' :
+                isObjectAnnotation(annotation) && annotation.linkedCollectionId ? 'Collection' :
+                'Annotation'
+              }
               size="small"
               color={
-                annotation.linkedType === 'entity' ? 'success' :
-                annotation.linkedType === 'event' ? 'warning' :
-                annotation.linkedType === 'location' ? 'secondary' :
-                'error'
+                isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'success' :
+                isObjectAnnotation(annotation) && annotation.linkedEventId ? 'warning' :
+                isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'secondary' :
+                isTypeAnnotation(annotation) && annotation.typeCategory === 'entity' ? 'success' :
+                isTypeAnnotation(annotation) && annotation.typeCategory === 'event' ? 'warning' :
+                'info'
               }
               sx={{
                 fontSize: '0.75rem',

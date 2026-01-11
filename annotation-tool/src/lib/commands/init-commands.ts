@@ -3,7 +3,7 @@
  * Registers all command definitions with the command registry.
  */
 
-import { commandRegistry } from './command-registry.js'
+import { commandRegistry } from './command-registry'
 import {
   globalCommands,
   videoCommands,
@@ -11,7 +11,7 @@ import {
   ontologyCommands,
   objectCommands,
   personaCommands
-} from './commands.js'
+} from './commands'
 
 /**
  * Initialize all commands with placeholder handlers.

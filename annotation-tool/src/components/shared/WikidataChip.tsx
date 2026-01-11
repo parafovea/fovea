@@ -1,6 +1,6 @@
 import { Box, Chip, Typography, Tooltip } from '@mui/material'
 import { Language as WikidataIcon, Storage as WikibaseIcon } from '@mui/icons-material'
-import { useWikidataConfig, useWikidataBaseUrl } from '../../hooks/useAppConfig'
+import { useWikidataConfig, useWikidataBaseUrl } from '@hooks/config'
 
 interface WikidataChipProps {
   /** Original Wikidata Q-identifier (e.g., Q42) */

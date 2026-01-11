@@ -16,8 +16,8 @@ import {
   LocationOn as LocationIcon,
   Folder as CollectionIcon,
 } from '@mui/icons-material'
-import { usePersonaOntology, useWorld } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand'
+import { usePersonaOntology, useWorld } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand'
 
 interface AnnotationOption {
   id: string
@@ -165,7 +165,7 @@ export default function AnnotationAutocomplete({
     return grouped
   }, [options])
 
-  const handleChange = (_: any, newValue: AnnotationOption | null) => {
+  const handleChange = (_: React.SyntheticEvent, newValue: AnnotationOption | null) => {
     setValue(newValue)
     onSelect(newValue)
 

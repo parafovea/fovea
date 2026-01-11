@@ -21,8 +21,8 @@ import {
   Dashboard as DashboardIcon,
   Close as CloseIcon,
 } from '@mui/icons-material'
-import { ModelSettingsPanel } from '../ModelSettingsPanel.js'
-import { ModelStatusDashboard } from '../ModelStatusDashboard.js'
+import { ModelSettingsPanel } from '@components/model/ModelSettingsPanel'
+import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
 
 /**
  * Tab panel component.

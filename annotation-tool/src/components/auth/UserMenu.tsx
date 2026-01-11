@@ -17,9 +17,9 @@ import {
   Dashboard as DashboardIcon,
   Info as InfoIcon,
 } from '@mui/icons-material'
-import { useAuth } from '../../hooks/auth/useAuth.js'
-import { useCurrentUser } from '../../hooks/auth/useCurrentUser.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuth } from '@hooks/auth'
+import { useCurrentUser } from '@hooks/auth'
+import { useAuthStore } from '@store/zustand/authStore'
 
 /**
  * User menu component props.

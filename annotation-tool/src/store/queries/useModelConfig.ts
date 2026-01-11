@@ -18,7 +18,7 @@ import {
   MemoryValidation,
   ModelStatusResponse,
   ApiError,
-} from '../../api/client'
+} from '@api/client'
 
 /**
  * Query key factory for model configuration.

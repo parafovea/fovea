@@ -47,15 +47,29 @@ import {
   useAddTimeCollection,
   useUpdateTimeCollection,
   useDeleteTimeCollection,
-} from '../../store/queries'
+} from '@store/queries'
 import {
   EntityCollection,
   EventCollection,
   TimeCollection,
+  TimeInstant,
+  TimeInterval,
   GlossItem,
-} from '../../models/types'
-import GlossEditor from '../GlossEditor'
+} from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+
+/** Entity collection type options */
+type EntityCollectionType = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
+
+/** Event collection type options */
+type EventCollectionType = 'sequence' | 'iteration' | 'complex' | 'alternative' | 'group'
+
+/** Time collection type options */
+type TimeCollectionType = 'periodic' | 'calendar' | 'irregular' | 'anchored' | 'habitual'
+
+/** Habitual frequency options */
+type HabitualFrequency = 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -101,7 +115,7 @@ function EntityCollectionEditor({
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>(
     collection?.entityIds || []
   )
-  const [collectionType, setCollectionType] = useState<string>(
+  const [collectionType, setCollectionType] = useState<EntityCollectionType>(
     collection?.collectionType || 'group'
   )
   const [homogeneous, setHomogeneous] = useState(
@@ -116,7 +130,7 @@ function EntityCollectionEditor({
       name,
       description,
       entityIds: selectedEntityIds,
-      collectionType: collectionType as any,
+      collectionType,
       typeAssignments: collection?.typeAssignments || [],
       aggregateProperties: {
         homogeneous,
@@ -169,7 +183,7 @@ function EntityCollectionEditor({
             <InputLabel>Collection Type</InputLabel>
             <Select
               value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value)}
+              onChange={(e) => setCollectionType(e.target.value as EntityCollectionType)}
               label="Collection Type"
             >
               <MenuItem value="group">Group (set of entities)</MenuItem>
@@ -274,7 +288,7 @@ function EventCollectionEditor({
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>(
     collection?.eventIds || []
   )
-  const [collectionType, setCollectionType] = useState<string>(
+  const [collectionType, setCollectionType] = useState<EventCollectionType>(
     collection?.collectionType || 'sequence'
   )
   const [timeCollectionId, setTimeCollectionId] = useState(
@@ -286,7 +300,7 @@ function EventCollectionEditor({
       name,
       description,
       eventIds: selectedEventIds,
-      collectionType: collectionType as any,
+      collectionType,
       typeAssignments: collection?.typeAssignments || [],
       timeCollectionId: timeCollectionId || undefined,
       structure: collection?.structure,
@@ -336,7 +350,7 @@ function EventCollectionEditor({
             <InputLabel>Collection Type</InputLabel>
             <Select
               value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value)}
+              onChange={(e) => setCollectionType(e.target.value as EventCollectionType)}
               label="Collection Type"
             >
               <MenuItem value="sequence">Sequence (ordered events)</MenuItem>
@@ -432,10 +446,10 @@ function TimeCollectionEditor({
   const [selectedTimeIds, setSelectedTimeIds] = useState<string[]>(
     collection?.times?.map(t => t.id) || []
   )
-  const [collectionType, setCollectionType] = useState<string>(
+  const [collectionType, setCollectionType] = useState<TimeCollectionType>(
     collection?.collectionType || 'periodic'
   )
-  const [frequency, setFrequency] = useState(
+  const [frequency, setFrequency] = useState<HabitualFrequency>(
     collection?.habituality?.frequency || 'sometimes'
   )
 
@@ -444,9 +458,9 @@ function TimeCollectionEditor({
       name,
       description,
       times: times.filter(t => selectedTimeIds.includes(t.id)),
-      collectionType: collectionType as any,
+      collectionType,
       habituality: {
-        frequency: frequency as any,
+        frequency,
         typicality: 0.5,
       },
       metadata: {},
@@ -493,18 +507,18 @@ function TimeCollectionEditor({
             <InputLabel>Collection Type</InputLabel>
             <Select
               value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value)}
+              onChange={(e) => setCollectionType(e.target.value as TimeCollectionType)}
               label="Collection Type"
             >
               <MenuItem value="periodic">Periodic (regular intervals)</MenuItem>
-              <MenuItem value="cyclical">Cyclical (repeating cycle)</MenuItem>
+              <MenuItem value="habitual">Habitual (repeating pattern)</MenuItem>
               <MenuItem value="calendar">Calendar (date-based)</MenuItem>
               <MenuItem value="irregular">Irregular (no pattern)</MenuItem>
               <MenuItem value="anchored">Anchored (event-based)</MenuItem>
             </Select>
           </FormControl>
 
-          {(collectionType === 'periodic' || collectionType === 'cyclical') && (
+          {(collectionType === 'periodic' || collectionType === 'habitual') && (
             <FormControl fullWidth>
               <InputLabel>Frequency</InputLabel>
               <Select
@@ -550,9 +564,9 @@ function TimeCollectionEditor({
               >
                 {times.map((time) => (
                   <MenuItem key={time.id} value={time.id}>
-                    {time.type === 'instant' 
-                      ? `Instant: ${(time as any).timestamp || 'unspecified'}`
-                      : `Interval: ${(time as any).startTime || '?'} - ${(time as any).endTime || '?'}`}
+                    {time.type === 'instant'
+                      ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
+                      : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`}
                   </MenuItem>
                 ))}
               </Select>

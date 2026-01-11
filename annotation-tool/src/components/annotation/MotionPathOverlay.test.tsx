@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MotionPathOverlay } from './MotionPathOverlay'
-import { Annotation } from '../../models/types.js'
+import { Annotation } from '@models/types.js'
 
 describe('MotionPathOverlay', () => {
   const mockAnnotation: Annotation = {

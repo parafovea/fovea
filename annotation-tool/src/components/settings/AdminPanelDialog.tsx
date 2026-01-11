@@ -22,8 +22,8 @@ import {
   Settings as SettingsIcon,
   Close as CloseIcon,
 } from '@mui/icons-material'
-import UserManagementPage from '../admin/UserManagementPage.js'
-import SessionManagementPage from '../admin/SessionManagementPage.js'
+import UserManagementPage from '../admin/UserManagementPage'
+import SessionManagementPage from '../admin/SessionManagementPage'
 
 /**
  * Tab panel component.

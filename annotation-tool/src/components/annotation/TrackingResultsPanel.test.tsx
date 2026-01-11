@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TrackingResultsPanel } from './TrackingResultsPanel.js'
-import { TrackingResult } from '../../models/types.js'
+import { TrackingResult } from '@models/types.js'
 
 describe('TrackingResultsPanel', () => {
   const mockTracks: TrackingResult[] = [

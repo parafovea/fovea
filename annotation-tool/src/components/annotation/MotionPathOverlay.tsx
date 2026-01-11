@@ -5,7 +5,18 @@
  */
 
 import React, { useMemo } from 'react'
-import { Annotation, BoundingBox } from '../../models/types.js'
+import { Annotation, BoundingBox } from '@models/types'
+
+/**
+ * @interface MotionPathPoint
+ * @description Represents a point along the motion path trajectory.
+ */
+interface MotionPathPoint {
+  x: number
+  y: number
+  frameNumber: number
+  isKeyframe: boolean
+}
 
 /**
  * @interface MotionPathOverlayProps
@@ -29,7 +40,7 @@ export interface MotionPathOverlayProps {
 /**
  * Compute motion path (center points) from annotation's bounding box sequence
  */
-function computeMotionPath(annotation: Annotation): Array<{ x: number; y: number; frameNumber: number; isKeyframe: boolean }> {
+function computeMotionPath(annotation: Annotation): MotionPathPoint[] {
   if (!annotation.boundingBoxSequence?.boxes) {
     return []
   }
@@ -81,7 +92,7 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
 
   // Build SVG path from motion path points
   const pathData = motionPath
-    .map((point: any, index: number) => {
+    .map((point: MotionPathPoint, index: number) => {
       if (index === 0) {
         return `M ${point.x} ${point.y}`
       }
@@ -118,8 +129,8 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
 
       {/* Keyframe dots */}
       {motionPath
-        .filter((point: any) => point.isKeyframe)
-        .map((point: any) => (
+        .filter((point: MotionPathPoint) => point.isKeyframe)
+        .map((point: MotionPathPoint) => (
           <circle
             key={`keyframe-${point.frameNumber}`}
             cx={point.x}

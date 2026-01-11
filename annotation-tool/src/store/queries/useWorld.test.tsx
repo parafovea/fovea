@@ -25,7 +25,7 @@ import {
   useUpdateEventCollection,
   useDeleteEventCollection,
 } from './useWorld'
-import { server } from '../../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 /**

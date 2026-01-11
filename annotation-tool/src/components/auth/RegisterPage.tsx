@@ -11,7 +11,7 @@ import {
   LinearProgress,
 } from '@mui/material'
 import { PersonAdd as RegisterIcon } from '@mui/icons-material'
-import { useAuth } from '../../hooks/auth/useAuth.js'
+import { useAuth } from '@hooks/auth'
 
 /**
  * Registration page component.

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React, { createRef } from 'react'
 import { VideoPlayer, VideoPlayerHandle } from './VideoPlayer'
-import type { VideoMetadata } from '../../models/types'
+import type { VideoMetadata } from '@models/types'
 
 // Mock video.js
 vi.mock('video.js', () => {
