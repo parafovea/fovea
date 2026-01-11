@@ -484,10 +484,11 @@ export class BoundingBoxInterpolator {
       (a, b) => a.frameNumber - b.frameNumber
     )
 
-    // Update interpolation segments
+    // Update interpolation segments (pass keyframes to create segments if empty)
     const updatedSegments = this.updateSegmentsForNewKeyframe(
       sequence.interpolationSegments,
-      frameNumber
+      frameNumber,
+      updatedKeyframes
     )
 
     // Update visibility ranges to include new keyframe
@@ -607,15 +608,32 @@ export class BoundingBoxInterpolator {
 
   /**
    * Update interpolation segments when adding a new keyframe.
+   * If segments array is empty but we have 2+ keyframes, creates segments between all keyframes.
    *
    * @param segments - Current interpolation segments
    * @param frameNumber - New keyframe frame number
+   * @param keyframes - All keyframes including the new one
    * @returns Updated segments
    */
   private updateSegmentsForNewKeyframe(
     segments: InterpolationSegment[],
-    frameNumber: number
+    frameNumber: number,
+    keyframes: BoundingBox[]
   ): InterpolationSegment[] {
+    // If segments array is empty but we have 2+ keyframes, create segments
+    if (segments.length === 0 && keyframes.length >= 2) {
+      const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+      const newSegments: InterpolationSegment[] = []
+      for (let i = 0; i < sorted.length - 1; i++) {
+        newSegments.push({
+          type: 'linear',
+          startFrame: sorted[i].frameNumber,
+          endFrame: sorted[i + 1].frameNumber,
+        })
+      }
+      return newSegments
+    }
+
     const updatedSegments: InterpolationSegment[] = []
 
     for (const segment of segments) {

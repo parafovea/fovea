@@ -249,6 +249,61 @@ export class TimelineRenderer {
   }
 
   /**
+   * Get color for interpolation type.
+   *
+   * @param type - Interpolation type
+   * @param theme - Theme colors
+   * @returns Color string
+   */
+  private getInterpolationColor(type: string | undefined, theme: RenderOptions['theme']): string {
+    switch (type) {
+      case 'linear':
+        return theme.primaryLight
+      case 'ease-in':
+        return '#4caf50' // Green
+      case 'ease-out':
+        return '#ff9800' // Orange
+      case 'ease-in-out':
+        return '#9c27b0' // Purple
+      case 'hold':
+        return '#607d8b' // Blue-gray
+      case 'bezier':
+        return '#e91e63' // Pink
+      case 'parametric':
+        return '#00bcd4' // Cyan
+      default:
+        return theme.primaryLight
+    }
+  }
+
+  /**
+   * Get icon/label for interpolation type.
+   *
+   * @param type - Interpolation type
+   * @returns Icon character
+   */
+  private getInterpolationIcon(type: string | undefined): string {
+    switch (type) {
+      case 'linear':
+        return '―'
+      case 'ease-in':
+        return '⌒'
+      case 'ease-out':
+        return '⌓'
+      case 'ease-in-out':
+        return '∿'
+      case 'hold':
+        return '▭'
+      case 'bezier':
+        return '∾'
+      case 'parametric':
+        return '∫'
+      default:
+        return '―'
+    }
+  }
+
+  /**
    * Render keyframes and interpolation segments.
    *
    * @param ctx - Canvas rendering context
@@ -268,8 +323,7 @@ export class TimelineRenderer {
     ctx.fillStyle = options.theme.backgroundColor
     ctx.fillRect(0, y, this.canvas.width, height)
 
-    // Draw interpolation segment lines
-    ctx.strokeStyle = options.theme.primaryLight
+    // Draw interpolation segments with type-specific styling
     ctx.lineWidth = 2
 
     for (const segment of options.interpolationSegments) {
@@ -279,26 +333,65 @@ export class TimelineRenderer {
 
       const startX = this.frameToX(segment.startFrame)
       const endX = this.frameToX(segment.endFrame)
+      const segmentColor = this.getInterpolationColor(segment.type, options.theme)
 
-      // Draw straight line for linear interpolation
-      // For bezier, will draw curves in Session 5
+      ctx.strokeStyle = segmentColor
       ctx.beginPath()
       ctx.moveTo(startX, centerY)
 
       if (segment.type === 'linear' || !segment.type) {
+        // Straight line for linear
         ctx.lineTo(endX, centerY)
       } else if (segment.type === 'hold') {
         // Step function for hold
         ctx.lineTo(endX - 5, centerY)
-        ctx.lineTo(endX - 5, centerY - 10)
-        ctx.lineTo(endX, centerY - 10)
+        ctx.lineTo(endX - 5, centerY - 8)
+        ctx.lineTo(endX, centerY - 8)
+      } else if (segment.type === 'ease-in') {
+        // Curved line that starts slow
+        const cpX = startX + (endX - startX) * 0.7
+        ctx.quadraticCurveTo(cpX, centerY, endX, centerY - 5)
+      } else if (segment.type === 'ease-out') {
+        // Curved line that ends slow
+        const cpX = startX + (endX - startX) * 0.3
+        ctx.quadraticCurveTo(cpX, centerY - 5, endX, centerY)
+      } else if (segment.type === 'ease-in-out') {
+        // S-curve
+        const midX = (startX + endX) / 2
+        ctx.bezierCurveTo(
+          startX + (midX - startX) * 0.7, centerY,
+          midX - (midX - startX) * 0.3, centerY - 5,
+          midX, centerY - 5
+        )
+        ctx.bezierCurveTo(
+          midX + (endX - midX) * 0.3, centerY - 5,
+          endX - (endX - midX) * 0.7, centerY,
+          endX, centerY
+        )
+      } else if (segment.type === 'bezier') {
+        // Show bezier as a distinctive wavy line
+        const midX = (startX + endX) / 2
+        ctx.quadraticCurveTo(midX, centerY - 10, endX, centerY)
       } else {
-        // For other types (bezier, easing), draw straight for now
-        // Session 5 will add curve visualization
+        // Default: straight line for parametric and others
         ctx.lineTo(endX, centerY)
       }
 
       ctx.stroke()
+
+      // Draw interpolation type indicator icon in the middle of the segment
+      const midX = (startX + endX) / 2
+      const segmentWidth = endX - startX
+
+      // Only show icon if segment is wide enough
+      if (segmentWidth > 30) {
+        const icon = this.getInterpolationIcon(segment.type)
+        ctx.fillStyle = segmentColor
+        ctx.font = 'bold 10px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(icon, midX, centerY - 12)
+      }
     }
 
     // Draw keyframe dots
@@ -348,6 +441,37 @@ export class TimelineRenderer {
 
       if (distance <= clickRadius) {
         return keyframe.frameNumber
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Get interpolation segment at specific canvas X coordinate.
+   *
+   * @param x - Canvas X coordinate
+   * @param segments - Array of interpolation segments
+   * @returns Segment info if found, null otherwise
+   */
+  getSegmentAtX(x: number, segments: InterpolationSegment[]): { segment: InterpolationSegment; label: string } | null {
+    const frame = this.xToFrame(x)
+
+    for (const segment of segments) {
+      if (frame > segment.startFrame && frame < segment.endFrame) {
+        const typeLabels: Record<string, string> = {
+          'linear': 'Linear',
+          'ease-in': 'Ease In',
+          'ease-out': 'Ease Out',
+          'ease-in-out': 'Ease In-Out',
+          'hold': 'Hold',
+          'bezier': 'Bezier Curve',
+          'parametric': 'Parametric',
+        }
+        return {
+          segment,
+          label: typeLabels[segment.type] || 'Linear',
+        }
       }
     }
 

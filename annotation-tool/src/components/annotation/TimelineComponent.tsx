@@ -72,6 +72,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   const [isDragging, setIsDragging] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [hoveredFrame, setHoveredFrame] = useState<number | null>(null)
+  const [hoveredSegmentInfo, setHoveredSegmentInfo] = useState<string | null>(null)
 
   // Update ref without triggering re-render
   useEffect(() => {
@@ -247,6 +248,11 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       // Update hovered frame for tooltip
       setHoveredFrame(clampedFrame)
 
+      // Check if hovering over an interpolation segment
+      const segments = annotation?.boundingBoxSequence?.interpolationSegments || []
+      const segmentInfo = renderer.getSegmentAtX(x, segments)
+      setHoveredSegmentInfo(segmentInfo?.label || null)
+
       // If dragging keyframe, update preview position
       if (draggingKeyframe !== null && dragStartFrame !== null) {
         // Show preview at new position (actual move happens on mouse up)
@@ -314,6 +320,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     setDraggingKeyframe(null)
     setDragStartFrame(null)
     setHoveredFrame(null)
+    setHoveredSegmentInfo(null)
   }, [])
 
   // Sync with video timeupdate
@@ -404,7 +411,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           data-testid="timeline-canvas"
         />
 
-        {/* Tooltip for hovered frame */}
+        {/* Tooltip for hovered frame and segment */}
         {hoveredFrame !== null && !isDragging && (
           <Box
             sx={{
@@ -420,6 +427,11 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
             }}
           >
             Frame {hoveredFrame}
+            {hoveredSegmentInfo && (
+              <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                | {hoveredSegmentInfo}
+              </span>
+            )}
           </Box>
         )}
       </Box>
