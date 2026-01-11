@@ -1,14 +1,13 @@
 /**
- * @module TimelineRenderer
- * @description Canvas-based timeline rendering with 60fps performance target.
- * Uses offscreen canvas for double buffering and virtual scrolling for large videos.
+ * Canvas-based timeline rendering with double buffering and virtual scrolling.
+ *
+ * @packageDocumentation
  */
 
 import { BoundingBox, InterpolationSegment } from '@models/types'
 
 /**
- * @interface RenderOptions
- * @description Configuration options for timeline rendering.
+ * Configuration options for timeline rendering.
  */
 export interface RenderOptions {
   totalFrames: number
@@ -28,8 +27,11 @@ export interface RenderOptions {
 }
 
 /**
- * @class TimelineRenderer
- * @description High-performance canvas renderer for timeline component.
+ * High-performance canvas renderer for the timeline component.
+ *
+ * @remarks
+ * Uses OffscreenCanvas for double buffering when available.
+ * Supports high-DPI displays and virtual scrolling for long videos.
  */
 export class TimelineRenderer {
   private canvas: HTMLCanvasElement
@@ -39,21 +41,16 @@ export class TimelineRenderer {
   private needsRedraw: boolean = true
   private animationFrameId: number | null = null
 
-  // Viewport state
   private viewportStartFrame: number = 0
   private viewportEndFrame: number = 100
   private pixelsPerFrame: number = 10
 
-  // Layout constants
   private readonly FRAME_RULER_HEIGHT = 20
   private readonly KEYFRAME_TRACK_HEIGHT = 30
   private readonly PADDING = 5
 
   /**
-   * Create a timeline renderer.
-   *
-   * @param canvas - Canvas element to render to
-   * @param totalFrames - Total number of frames in video
+   * @throws Error if canvas 2D context cannot be obtained
    */
   constructor(canvas: HTMLCanvasElement, totalFrames: number) {
     this.canvas = canvas
@@ -83,20 +80,15 @@ export class TimelineRenderer {
   }
 
   /**
-   * Set zoom level (1-10x).
-   *
-   * @param level - Zoom level
+   * Sets zoom level (1-10x). Higher values show more detail.
    */
   setZoom(level: number): void {
-    this.pixelsPerFrame = level * 10  // Base 10 pixels per frame at 1x zoom
+    this.pixelsPerFrame = level * 10
     this.needsRedraw = true
   }
 
   /**
-   * Set viewport to display specific frame range.
-   *
-   * @param startFrame - First visible frame
-   * @param endFrame - Last visible frame
+   * Sets the visible frame range for virtual scrolling.
    */
   setViewport(startFrame: number, endFrame: number): void {
     this.viewportStartFrame = startFrame
@@ -105,10 +97,10 @@ export class TimelineRenderer {
   }
 
   /**
-   * Resize canvas and offscreen canvas.
+   * Resizes the canvas, handling high-DPI scaling.
    *
-   * @param width - New width (CSS pixels)
-   * @param height - New height (CSS pixels)
+   * @param width - CSS pixels (not device pixels)
+   * @param height - CSS pixels (not device pixels)
    */
   resize(width: number, height: number): void {
     const dpr = window.devicePixelRatio || 1
@@ -126,10 +118,7 @@ export class TimelineRenderer {
   }
 
   /**
-   * Main render loop using requestAnimationFrame.
-   *
-   * @param options - Render options
-   * @param selectedKeyframes - Array of selected keyframe frame numbers
+   * Renders the timeline if invalidated. Call on each animation frame.
    */
   render(options: RenderOptions, selectedKeyframes: number[] = []): void {
     if (!this.needsRedraw) {
@@ -163,11 +152,6 @@ export class TimelineRenderer {
     this.needsRedraw = false
   }
 
-  /**
-   * Update viewport to keep current frame centered when zooming.
-   *
-   * @param options - Render options
-   */
   private updateViewport(options: RenderOptions): void {
     const visibleFrames = Math.floor(this.canvas.width / this.pixelsPerFrame)
 
@@ -191,12 +175,6 @@ export class TimelineRenderer {
     this.viewportEndFrame = endFrame
   }
 
-  /**
-   * Render frame ruler with tick marks and frame numbers.
-   *
-   * @param ctx - Canvas rendering context
-   * @param options - Render options
-   */
   private renderFrameRuler(
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     options: RenderOptions
@@ -248,13 +226,6 @@ export class TimelineRenderer {
     ctx.stroke()
   }
 
-  /**
-   * Get color for interpolation type.
-   *
-   * @param type - Interpolation type
-   * @param theme - Theme colors
-   * @returns Color string
-   */
   private getInterpolationColor(type: string | undefined, theme: RenderOptions['theme']): string {
     switch (type) {
       case 'linear':
@@ -276,12 +247,6 @@ export class TimelineRenderer {
     }
   }
 
-  /**
-   * Get icon/label for interpolation type.
-   *
-   * @param type - Interpolation type
-   * @returns Icon character
-   */
   private getInterpolationIcon(type: string | undefined): string {
     switch (type) {
       case 'linear':
@@ -303,13 +268,6 @@ export class TimelineRenderer {
     }
   }
 
-  /**
-   * Render keyframes and interpolation segments.
-   *
-   * @param ctx - Canvas rendering context
-   * @param options - Render options
-   * @param selectedKeyframes - Array of selected keyframe frame numbers
-   */
   private renderKeyframes(
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     options: RenderOptions,
@@ -426,11 +384,9 @@ export class TimelineRenderer {
   }
 
   /**
-   * Get keyframe at specific canvas X coordinate (within 10px radius).
+   * Finds a keyframe within 10px of the given X coordinate.
    *
-   * @param x - Canvas X coordinate
-   * @param keyframes - Array of keyframe bounding boxes
-   * @returns Frame number if keyframe found, null otherwise
+   * @returns Frame number if found, null otherwise
    */
   getKeyframeAtX(x: number, keyframes: BoundingBox[]): number | null {
     const clickRadius = 10
@@ -448,11 +404,9 @@ export class TimelineRenderer {
   }
 
   /**
-   * Get interpolation segment at specific canvas X coordinate.
+   * Finds the interpolation segment containing the given X coordinate.
    *
-   * @param x - Canvas X coordinate
-   * @param segments - Array of interpolation segments
-   * @returns Segment info if found, null otherwise
+   * @returns Segment with human-readable label, or null if not in a segment
    */
   getSegmentAtX(x: number, segments: InterpolationSegment[]): { segment: InterpolationSegment; label: string } | null {
     const frame = this.xToFrame(x)
@@ -478,12 +432,6 @@ export class TimelineRenderer {
     return null
   }
 
-  /**
-   * Render playhead as vertical red line.
-   *
-   * @param ctx - Canvas rendering context
-   * @param options - Render options
-   */
   private renderPlayhead(
     ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     options: RenderOptions
@@ -517,12 +465,6 @@ export class TimelineRenderer {
     ctx.stroke()
   }
 
-  /**
-   * Get major tick interval based on zoom level.
-   *
-   * @param zoom - Zoom level (1-10x)
-   * @returns Frame interval for major ticks
-   */
   private getMajorTickInterval(zoom: number): number {
     if (zoom >= 8) return 1
     if (zoom >= 5) return 5
@@ -532,34 +474,28 @@ export class TimelineRenderer {
   }
 
   /**
-   * Convert frame number to canvas X coordinate.
-   *
-   * @param frame - Frame number
-   * @returns X coordinate on canvas
+   * Converts a frame number to canvas X coordinate.
    */
   frameToX(frame: number): number {
     return (frame - this.viewportStartFrame) * this.pixelsPerFrame
   }
 
   /**
-   * Convert canvas X coordinate to frame number.
-   *
-   * @param x - X coordinate on canvas
-   * @returns Frame number
+   * Converts a canvas X coordinate to frame number.
    */
   xToFrame(x: number): number {
     return Math.round(this.viewportStartFrame + x / this.pixelsPerFrame)
   }
 
   /**
-   * Mark timeline as needing redraw and schedule render.
+   * Marks the timeline for redraw on next render call.
    */
   invalidate(): void {
     this.needsRedraw = true
   }
 
   /**
-   * Cancel any pending animation frame.
+   * Cleans up animation frame. Call when unmounting.
    */
   destroy(): void {
     if (this.animationFrameId !== null) {

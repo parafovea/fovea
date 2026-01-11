@@ -1,7 +1,7 @@
 /**
- * @module TimelineComponent
- * @description Timeline component for bounding box sequence visualization and navigation.
- * Provides canvas-based rendering with 60fps performance for smooth playhead updates.
+ * Timeline component for bounding box sequence visualization and navigation.
+ *
+ * @packageDocumentation
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
@@ -17,38 +17,22 @@ import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
 import { useMoveKeyframe } from '@store/queries'
 import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
 
-/**
- * @interface TimelineComponentProps
- * @description Props for TimelineComponent.
- */
 export interface TimelineComponentProps {
-  /** Annotation with boundingBoxSequence (optional - when null, controls are disabled) */
   annotation: Annotation | null
-  /** Current frame number */
   currentFrame: number
-  /** Total frames in video */
   totalFrames: number
-  /** Video frames per second */
   videoFps: number
-  /** Callback when user seeks to a frame */
   onSeek: (frameNumber: number) => void
-  /** Optional video element ref for playback sync */
   videoRef?: React.RefObject<HTMLVideoElement>
-  /** Callback to add keyframe at current frame */
   onAddKeyframe: () => void
-  /** Callback to delete keyframe at current frame */
   onDeleteKeyframe: () => void
-  /** Callback to copy previous frame's box */
   onCopyPreviousFrame: () => void
-  /** Callback when interpolation mode is changed */
   onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: BezierControlPointSet) => void
-  /** Callback to close/hide timeline */
   onClose: () => void
 }
 
 /**
- * @component TimelineComponent
- * @description Timeline component with canvas rendering and keyboard navigation.
+ * Canvas-based timeline with keyboard navigation and keyframe management.
  */
 export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   annotation,
