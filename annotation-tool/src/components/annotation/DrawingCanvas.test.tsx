@@ -104,14 +104,14 @@ describe('DrawingCanvas', () => {
       expect(svg?.style.cursor).toBe('crosshair')
     })
 
-    it('should preserve aspect ratio', () => {
+    it('should preserve aspect ratio with xMidYMid meet', () => {
       const { container } = render(
         <DrawingCanvas {...defaultProps} />,
         { wrapper: createWrapper(queryClient) }
       )
 
       const svg = container.querySelector('svg')
-      expect(svg?.getAttribute('preserveAspectRatio')).toBe('none')
+      expect(svg?.getAttribute('preserveAspectRatio')).toBe('xMidYMid meet')
     })
   })
 

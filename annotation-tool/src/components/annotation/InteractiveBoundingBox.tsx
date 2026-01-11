@@ -16,7 +16,7 @@ function isTypeAnnotation(ann: Annotation): ann is TypeAnnotation {
 function isObjectAnnotation(ann: Annotation): ann is ObjectAnnotation {
   return ann.annotationType === 'object'
 }
-import { BoundingBoxInterpolator } from '@utils/interpolation'
+import { LazyBoundingBoxSequence } from '@utils/interpolation'
 
 /**
  * Props for InteractiveBoundingBox component.
@@ -89,22 +89,26 @@ export default function InteractiveBoundingBox({
   const svgRef = useRef<SVGSVGElement | null>(null)
   const rectRef = useRef<SVGRectElement | null>(null)
 
-  // Get all interpolated frames for this annotation
-  const allFrames = useMemo(() => {
-    if (!annotation.boundingBoxSequence) return []
-    const interpolator = new BoundingBoxInterpolator()
-    const result = interpolator.interpolate(
-      annotation.boundingBoxSequence.boxes,
-      annotation.boundingBoxSequence.interpolationSegments || [],
-      annotation.boundingBoxSequence.visibilityRanges
+  // Create lazy interpolator for on-demand frame lookup with caching
+  // This is more efficient than pre-generating all frames
+  const lazySequence = useMemo(() => {
+    if (!annotation.boundingBoxSequence) return null
+    const keyframes = annotation.boundingBoxSequence.boxes.filter(
+      (b: BoundingBox) => b.isKeyframe !== false
     )
-    return result
+    return new LazyBoundingBoxSequence(
+      keyframes,
+      annotation.boundingBoxSequence.interpolationSegments || []
+    )
   }, [annotation.boundingBoxSequence])
 
-  // Get the box for the current frame
+  // Get the box for the current frame using lazy evaluation
   // If no box at current frame, use the nearest keyframe for ghost display
   const currentBox = useMemo(() => {
-    const exactFrame = allFrames.find(f => f.frameNumber === currentFrame)
+    if (!lazySequence) return null
+
+    // Try to get interpolated box for current frame (O(1) cached lookup)
+    const exactFrame = lazySequence.getBoxAtFrame(currentFrame)
     if (exactFrame) {
       return exactFrame
     }
@@ -122,7 +126,7 @@ export default function InteractiveBoundingBox({
     }
 
     return null
-  }, [allFrames, currentFrame, annotation.boundingBoxSequence])
+  }, [lazySequence, currentFrame, annotation.boundingBoxSequence])
 
   const [originalBox, setOriginalBox] = useState(currentBox)
 
@@ -497,11 +501,11 @@ export default function InteractiveBoundingBox({
         <foreignObject
           x={currentBox.x}
           y={currentBox.y - 30}
-          width={Math.max(currentBox.width, 100)}
+          width={200}
           height={30}
-          style={{ pointerEvents: 'none' }}
+          style={{ pointerEvents: 'none', overflow: 'visible' }}
         >
-          <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{ width: 'fit-content', display: 'flex', justifyContent: 'flex-start' }}>
             <Chip
               label={
                 isTypeAnnotation(annotation) ? annotation.typeCategory :
@@ -521,9 +525,10 @@ export default function InteractiveBoundingBox({
                 'info'
               }
               sx={{
-                fontSize: '0.75rem',
+                fontSize: 'clamp(10px, 0.75rem, 14px)',
                 height: 24,
-                maxWidth: '100%',
+                minWidth: 60,
+                maxWidth: 180,
                 '& .MuiChip-label': {
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',

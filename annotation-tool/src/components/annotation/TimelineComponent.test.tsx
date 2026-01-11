@@ -20,6 +20,7 @@ vi.mock('./TimelineRenderer.js', () => ({
     frameToX: vi.fn((frame: number) => frame * 10),
     xToFrame: vi.fn((x: number) => Math.floor(x / 10)),
     getKeyframeAtX: vi.fn(() => null),
+    getSegmentAtX: vi.fn(() => null),
     invalidate: vi.fn(),
     destroy: vi.fn(),
   })),

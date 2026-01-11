@@ -1,7 +1,7 @@
 /**
- * @module TimelineComponent
- * @description Timeline component for bounding box sequence visualization and navigation.
- * Provides canvas-based rendering with 60fps performance for smooth playhead updates.
+ * Timeline component for bounding box sequence visualization and navigation.
+ *
+ * @packageDocumentation
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
@@ -17,38 +17,22 @@ import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
 import { useMoveKeyframe } from '@store/queries'
 import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
 
-/**
- * @interface TimelineComponentProps
- * @description Props for TimelineComponent.
- */
 export interface TimelineComponentProps {
-  /** Annotation with boundingBoxSequence (optional - when null, controls are disabled) */
   annotation: Annotation | null
-  /** Current frame number */
   currentFrame: number
-  /** Total frames in video */
   totalFrames: number
-  /** Video frames per second */
   videoFps: number
-  /** Callback when user seeks to a frame */
   onSeek: (frameNumber: number) => void
-  /** Optional video element ref for playback sync */
   videoRef?: React.RefObject<HTMLVideoElement>
-  /** Callback to add keyframe at current frame */
   onAddKeyframe: () => void
-  /** Callback to delete keyframe at current frame */
   onDeleteKeyframe: () => void
-  /** Callback to copy previous frame's box */
   onCopyPreviousFrame: () => void
-  /** Callback when interpolation mode is changed */
   onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: BezierControlPointSet) => void
-  /** Callback to close/hide timeline */
   onClose: () => void
 }
 
 /**
- * @component TimelineComponent
- * @description Timeline component with canvas rendering and keyboard navigation.
+ * Canvas-based timeline with keyboard navigation and keyframe management.
  */
 export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   annotation,
@@ -72,6 +56,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   const [isDragging, setIsDragging] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [hoveredFrame, setHoveredFrame] = useState<number | null>(null)
+  const [hoveredSegmentInfo, setHoveredSegmentInfo] = useState<string | null>(null)
 
   // Update ref without triggering re-render
   useEffect(() => {
@@ -142,6 +127,12 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     }
   }, [totalFrames, zoom])
 
+  // Track previous values to detect changes and gate invalidation
+  const prevFrameRef = useRef<number>(-1)
+  const prevKeyframesLengthRef = useRef<number>(0)
+  const prevZoomRef = useRef<number>(1)
+  const prevSelectedRef = useRef<number[]>([])
+
   // Render loop - use ref to avoid triggering React re-renders on every frame
   useEffect(() => {
     if (!rendererRef.current) return
@@ -175,8 +166,22 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         },
       }
 
-      // Invalidate renderer to ensure it renders on every frame
-      renderer.invalidate()
+      // Only invalidate if something actually changed
+      // This prevents unnecessary redraws and improves performance
+      const frameChanged = currentFrameRef.current !== prevFrameRef.current
+      const keyframesChanged = keyframes.length !== prevKeyframesLengthRef.current
+      const zoomChanged = zoom !== prevZoomRef.current
+      const selectedChanged = selectedKeyframes.length !== prevSelectedRef.current.length ||
+        selectedKeyframes.some((f, i) => f !== prevSelectedRef.current[i])
+
+      if (frameChanged || keyframesChanged || zoomChanged || selectedChanged) {
+        renderer.invalidate()
+        prevFrameRef.current = currentFrameRef.current
+        prevKeyframesLengthRef.current = keyframes.length
+        prevZoomRef.current = zoom
+        prevSelectedRef.current = [...selectedKeyframes]
+      }
+
       renderer.render(renderOptions, selectedKeyframes)
       rafId = requestAnimationFrame(render)
     }
@@ -247,6 +252,11 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       // Update hovered frame for tooltip
       setHoveredFrame(clampedFrame)
 
+      // Check if hovering over an interpolation segment
+      const segments = annotation?.boundingBoxSequence?.interpolationSegments || []
+      const segmentInfo = renderer.getSegmentAtX(x, segments)
+      setHoveredSegmentInfo(segmentInfo?.label || null)
+
       // If dragging keyframe, update preview position
       if (draggingKeyframe !== null && dragStartFrame !== null) {
         // Show preview at new position (actual move happens on mouse up)
@@ -314,6 +324,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     setDraggingKeyframe(null)
     setDragStartFrame(null)
     setHoveredFrame(null)
+    setHoveredSegmentInfo(null)
   }, [])
 
   // Sync with video timeupdate
@@ -404,7 +415,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           data-testid="timeline-canvas"
         />
 
-        {/* Tooltip for hovered frame */}
+        {/* Tooltip for hovered frame and segment */}
         {hoveredFrame !== null && !isDragging && (
           <Box
             sx={{
@@ -420,6 +431,11 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
             }}
           >
             Frame {hoveredFrame}
+            {hoveredSegmentInfo && (
+              <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                | {hoveredSegmentInfo}
+              </span>
+            )}
           </Box>
         )}
       </Box>

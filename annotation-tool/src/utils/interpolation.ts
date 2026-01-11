@@ -1,7 +1,11 @@
 /**
- * @module interpolation
- * @description Core interpolation engine for bounding box sequences.
- * Provides linear and bezier interpolation with lazy evaluation and caching.
+ * Core interpolation engine for bounding box sequences.
+ *
+ * @remarks
+ * Supports linear, bezier, easing, and parametric interpolation modes
+ * with lazy evaluation and frame-level caching for performance.
+ *
+ * @packageDocumentation
  */
 
 import {
@@ -14,17 +18,14 @@ import {
 } from '@models/types'
 
 /**
- * @class BoundingBoxInterpolator
- * @description Interpolates bounding boxes between keyframes using various interpolation modes.
+ * Interpolates bounding boxes between keyframes using configurable easing modes.
  */
 export class BoundingBoxInterpolator {
   /**
-   * Generate all frames for a bounding box sequence.
+   * Generates all frames for a bounding box sequence by interpolating between keyframes.
    *
-   * @param keyframes - User-defined keyframes
-   * @param segments - Interpolation configuration per segment
-   * @param visibilityRanges - Optional visibility ranges for discontiguous sequences
-   * @returns Complete sequence with interpolated frames
+   * @param visibilityRanges - When provided, frames outside visible ranges are skipped
+   * @returns Sorted array of boxes including keyframes and interpolated frames
    */
   interpolate(
     keyframes: BoundingBox[],
@@ -86,13 +87,7 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Interpolate a single frame between two keyframes.
-   *
-   * @param startKeyframe - Starting keyframe
-   * @param endKeyframe - Ending keyframe
-   * @param currentFrame - Frame to interpolate
-   * @param segment - Interpolation configuration
-   * @returns Interpolated bounding box
+   * Interpolates a single frame between two keyframes.
    */
   private interpolateFrame(
     startKeyframe: BoundingBox,
@@ -151,16 +146,9 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Interpolate a single property between two keyframes.
+   * Interpolates a single numeric property between two values using the specified easing.
    *
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param startFrame - Starting frame number
-   * @param endFrame - Ending frame number
-   * @param currentFrame - Current frame number
-   * @param type - Interpolation type
-   * @param config - Optional bezier control points or parametric function
-   * @returns Interpolated value
+   * @param config - Bezier control points or parametric function configuration
    */
   interpolateProperty(
     startValue: number,
@@ -207,65 +195,30 @@ export class BoundingBoxInterpolator {
     }
   }
 
-  /**
-   * Linear interpolation.
-   *
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param t - Normalized time (0-1)
-   * @returns Interpolated value
-   */
   private linearInterpolate(startValue: number, endValue: number, t: number): number {
     return startValue + (endValue - startValue) * t
   }
 
-  /**
-   * Ease-in interpolation (gradual acceleration).
-   *
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param t - Normalized time (0-1)
-   * @returns Interpolated value
-   */
   private easeIn(startValue: number, endValue: number, t: number): number {
     const easedT = t * t
     return startValue + (endValue - startValue) * easedT
   }
 
-  /**
-   * Ease-out interpolation (gradual deceleration).
-   *
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param t - Normalized time (0-1)
-   * @returns Interpolated value
-   */
   private easeOut(startValue: number, endValue: number, t: number): number {
     const easedT = t * (2 - t)
     return startValue + (endValue - startValue) * easedT
   }
 
-  /**
-   * Ease-in-out interpolation (smooth acceleration and deceleration).
-   *
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param t - Normalized time (0-1)
-   * @returns Interpolated value
-   */
   private easeInOut(startValue: number, endValue: number, t: number): number {
     const easedT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
     return startValue + (endValue - startValue) * easedT
   }
 
   /**
-   * Evaluate cubic Bezier curve.
+   * Evaluates a cubic Bezier curve using Newton-Raphson iteration to solve for t.
    *
-   * @param t - Normalized time (0-1)
-   * @param p0 - Start value
-   * @param p3 - End value
-   * @param controlPoints - Bezier control points
-   * @returns Interpolated value
+   * @param controlPoints - Must contain exactly 2 control points
+   * @returns Falls back to linear interpolation if control points are invalid
    */
   evaluateBezier(
     t: number,
@@ -295,12 +248,7 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Solve for t parameter in Bezier curve given x value using Newton-Raphson iteration.
-   *
-   * @param x - Target x value (temporal position, 0-1)
-   * @param p1x - First control point x
-   * @param p2x - Second control point x
-   * @returns Solved t parameter
+   * Solves for t parameter in Bezier curve given x value using Newton-Raphson iteration.
    */
   private solveBezierT(x: number, p1x: number, p2x: number): number {
     // Newton-Raphson iteration
@@ -338,13 +286,7 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Evaluate parametric function.
-   *
-   * @param t - Normalized time (0-1)
-   * @param startValue - Starting value
-   * @param endValue - Ending value
-   * @param func - Parametric function configuration
-   * @returns Interpolated value
+   * Evaluates a parametric function (quadratic physics, sinusoidal oscillation, etc.).
    */
   evaluateParametric(
     t: number,
@@ -384,12 +326,9 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Update a keyframe in the sequence (immutable).
+   * Updates a keyframe and re-interpolates the sequence.
    *
-   * @param sequence - Bounding box sequence
-   * @param frameNumber - Frame number to update
-   * @param newBox - New bounding box values
-   * @returns Updated sequence
+   * @returns New sequence with updated keyframe (original unchanged)
    */
   updateKeyframe(
     sequence: BoundingBoxSequence,
@@ -424,11 +363,12 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Add a new keyframe at the specified frame.
+   * Adds a new keyframe at the specified frame.
    *
-   * @param sequence - Bounding box sequence
-   * @param frameNumber - Frame number for new keyframe
-   * @returns Updated sequence
+   * @remarks
+   * If the frame already has a keyframe, returns the original sequence unchanged.
+   * If no box exists at the frame, interpolates from surrounding keyframes.
+   * Creates interpolation segments if none exist.
    */
   addKeyframe(sequence: BoundingBoxSequence, frameNumber: number): BoundingBoxSequence {
     // Check if keyframe already exists
@@ -484,10 +424,11 @@ export class BoundingBoxInterpolator {
       (a, b) => a.frameNumber - b.frameNumber
     )
 
-    // Update interpolation segments
+    // Update interpolation segments (pass keyframes to create segments if empty)
     const updatedSegments = this.updateSegmentsForNewKeyframe(
       sequence.interpolationSegments,
-      frameNumber
+      frameNumber,
+      updatedKeyframes
     )
 
     // Update visibility ranges to include new keyframe
@@ -512,12 +453,7 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Expand visibility ranges to include a new keyframe.
-   *
-   * @param ranges - Current visibility ranges
-   * @param frameNumber - New keyframe frame number
-   * @param keyframes - All keyframes including the new one
-   * @returns Updated visibility ranges
+   * Expands visibility ranges to include a new keyframe.
    */
   private expandVisibilityForKeyframe(
     ranges: Array<{ startFrame: number; endFrame: number; visible: boolean }>,
@@ -561,11 +497,11 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Remove a keyframe from the sequence.
+   * Removes a keyframe from the sequence and re-interpolates.
    *
-   * @param sequence - Bounding box sequence
-   * @param frameNumber - Frame number to remove
-   * @returns Updated sequence
+   * @remarks
+   * Cannot remove first or last keyframe, or if only one keyframe exists.
+   * Returns original sequence if removal is not allowed.
    */
   removeKeyframe(sequence: BoundingBoxSequence, frameNumber: number): BoundingBoxSequence {
     const keyframes = sequence.boxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
@@ -606,16 +542,31 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Update interpolation segments when adding a new keyframe.
+   * Updates interpolation segments when adding a new keyframe.
    *
-   * @param segments - Current interpolation segments
-   * @param frameNumber - New keyframe frame number
-   * @returns Updated segments
+   * @remarks
+   * If segments array is empty but we have 2+ keyframes, creates linear segments
+   * between all keyframe pairs. Otherwise, splits the segment containing the new frame.
    */
   private updateSegmentsForNewKeyframe(
     segments: InterpolationSegment[],
-    frameNumber: number
+    frameNumber: number,
+    keyframes: BoundingBox[]
   ): InterpolationSegment[] {
+    // If segments array is empty but we have 2+ keyframes, create segments
+    if (segments.length === 0 && keyframes.length >= 2) {
+      const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
+      const newSegments: InterpolationSegment[] = []
+      for (let i = 0; i < sorted.length - 1; i++) {
+        newSegments.push({
+          type: 'linear',
+          startFrame: sorted[i].frameNumber,
+          endFrame: sorted[i + 1].frameNumber,
+        })
+      }
+      return newSegments
+    }
+
     const updatedSegments: InterpolationSegment[] = []
 
     for (const segment of segments) {
@@ -638,11 +589,7 @@ export class BoundingBoxInterpolator {
   }
 
   /**
-   * Update interpolation segments when removing a keyframe.
-   *
-   * @param segments - Current interpolation segments
-   * @param frameNumber - Removed keyframe frame number
-   * @returns Updated segments
+   * Merges adjacent segments when a keyframe is removed.
    */
   private updateSegmentsForRemovedKeyframe(
     segments: InterpolationSegment[],
@@ -674,8 +621,11 @@ export class BoundingBoxInterpolator {
 }
 
 /**
- * @class LazyBoundingBoxSequence
- * @description Lazy evaluation wrapper for bounding box sequences with caching.
+ * Lazy evaluation wrapper for bounding box sequences with frame-level caching.
+ *
+ * @remarks
+ * Computes interpolated frames on-demand and caches results to avoid recalculation
+ * during rapid scrubbing. Use {@link invalidateCache} when the sequence changes.
  */
 export class LazyBoundingBoxSequence {
   private keyframes: BoundingBox[]
@@ -683,12 +633,6 @@ export class LazyBoundingBoxSequence {
   private cache: Map<number, BoundingBox> = new Map()
   private interpolator: BoundingBoxInterpolator
 
-  /**
-   * Create a lazy bounding box sequence.
-   *
-   * @param keyframes - Keyframe bounding boxes
-   * @param segments - Interpolation segments
-   */
   constructor(keyframes: BoundingBox[], segments: InterpolationSegment[]) {
     this.keyframes = keyframes
     this.segments = segments
@@ -696,10 +640,9 @@ export class LazyBoundingBoxSequence {
   }
 
   /**
-   * Get bounding box at a specific frame with caching.
+   * Gets the bounding box at a specific frame, computing and caching if needed.
    *
-   * @param frameNumber - Frame number
-   * @returns Bounding box at frame
+   * @returns The box, or null if the frame is outside all segments
    */
   getBoxAtFrame(frameNumber: number): BoundingBox | null {
     // Check cache first
@@ -787,9 +730,9 @@ export class LazyBoundingBoxSequence {
   }
 
   /**
-   * Invalidate cache for specific frame range.
+   * Invalidates cached frames. Call after modifying keyframes or segments.
    *
-   * @param affectedFrameRange - Optional frame range to invalidate
+   * @param affectedFrameRange - Specific range to invalidate, or omit to clear all
    */
   invalidateCache(affectedFrameRange?: [number, number]): void {
     if (affectedFrameRange) {
@@ -802,22 +745,15 @@ export class LazyBoundingBoxSequence {
     }
   }
 
-  /**
-   * Get cache statistics.
-   *
-   * @returns Cache size
-   */
   getCacheSize(): number {
     return this.cache.size
   }
 }
 
 /**
- * Check visibility of a frame in a sequence.
+ * Checks whether a frame is visible based on visibility ranges.
  *
- * @param visibilityRanges - Visibility ranges from sequence
- * @param frameNumber - Frame to check
- * @returns True if frame is visible
+ * @returns True if visible (defaults to true if no ranges defined)
  */
 export function getVisibilityAtFrame(
   visibilityRanges: Array<{ startFrame: number; endFrame: number; visible: boolean }>,
@@ -835,12 +771,9 @@ export function getVisibilityAtFrame(
 }
 
 /**
- * Interpolate a bounding box sequence and return the box at a specific frame.
- * This is a convenience function that respects visibility ranges.
+ * Convenience function to get the interpolated box at a specific frame.
  *
- * @param sequence - Bounding box sequence
- * @param frameNumber - Frame number to get box for
- * @returns Bounding box at frame, or null if frame is hidden
+ * @returns The box, or null if frame is hidden or outside the sequence
  */
 export function interpolate(
   sequence: BoundingBoxSequence,
@@ -888,13 +821,6 @@ export function interpolate(
   return interpolator['interpolateFrame'](prevKeyframe, nextKeyframe, frameNumber, segment)
 }
 
-/**
- * Find the previous keyframe before a given frame.
- *
- * @param keyframes - Array of keyframes
- * @param frameNumber - Current frame
- * @returns Previous keyframe or null
- */
 function findPreviousKeyframe(keyframes: BoundingBox[], frameNumber: number): BoundingBox | null {
   const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
   for (let i = sorted.length - 1; i >= 0; i--) {
@@ -905,13 +831,6 @@ function findPreviousKeyframe(keyframes: BoundingBox[], frameNumber: number): Bo
   return null
 }
 
-/**
- * Find the next keyframe after a given frame.
- *
- * @param keyframes - Array of keyframes
- * @param frameNumber - Current frame
- * @returns Next keyframe or null
- */
 function findNextKeyframe(keyframes: BoundingBox[], frameNumber: number): BoundingBox | null {
   const sorted = [...keyframes].sort((a, b) => a.frameNumber - b.frameNumber)
   for (let i = 0; i < sorted.length; i++) {

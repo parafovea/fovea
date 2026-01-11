@@ -39,6 +39,8 @@ interface AnnotationOverlayProps {
   videoWidth: number
   /** Video frame height in pixels */
   videoHeight: number
+  /** Video frame rate (defaults to 30) */
+  videoFps?: number
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
 }
@@ -67,6 +69,7 @@ export default function AnnotationOverlay({
   currentTime,
   videoWidth,
   videoHeight,
+  videoFps = 30,
   detectionResults,
 }: AnnotationOverlayProps) {
   const { videoId } = useParams()
@@ -94,11 +97,31 @@ export default function AnnotationOverlay({
   const entityCollections = useEntityCollections()
   const eventCollections = useEventCollections()
 
+  // Create lookup maps for O(1) entity/event/collection lookups
+  // This is much faster than O(n) .find() calls per annotation
+  const entityMap = useMemo(
+    () => new Map(entities.map(e => [e.id, e])),
+    [entities]
+  )
+  const eventMap = useMemo(
+    () => new Map(events.map(e => [e.id, e])),
+    [events]
+  )
+  const entityCollectionMap = useMemo(
+    () => new Map(entityCollections.map(c => [c.id, c])),
+    [entityCollections]
+  )
+  const eventCollectionMap = useMemo(
+    () => new Map(eventCollections.map(c => [c.id, c])),
+    [eventCollections]
+  )
+
   /**
    * Compute annotations with linked object information for display.
    * Filters annotations to current video time window and enriches object annotations
    * with linked entity/event/location/collection data from world state.
    * Type annotations are displayed as-is without additional lookups.
+   * Uses Map-based O(1) lookups instead of O(n) .find() calls.
    *
    * @returns Array of annotations enriched with linkedObject and linkedType fields
    */
@@ -116,29 +139,31 @@ export default function AnnotationOverlay({
       const enriched: EnrichedAnnotation = { ...ann }
 
       // Get linked object info (only for object annotations)
+      // Using O(1) Map lookups instead of O(n) .find() calls
       if (ann.annotationType === 'object') {
         if (ann.linkedEntityId) {
-          const entity = entities.find(e => e.id === ann.linkedEntityId)
+          const entity = entityMap.get(ann.linkedEntityId)
           if (entity) {
             enriched.linkedObject = entity
             enriched.linkedType = 'entity'
           }
         } else if (ann.linkedEventId) {
-          const event = events.find(e => e.id === ann.linkedEventId)
+          const event = eventMap.get(ann.linkedEventId)
           if (event) {
             enriched.linkedObject = event
             enriched.linkedType = 'event'
           }
         } else if (ann.linkedLocationId) {
-          const location = entities.find(e => e.id === ann.linkedLocationId && 'locationType' in e)
-          if (location) {
+          // Locations are stored as entities with locationType field
+          const location = entityMap.get(ann.linkedLocationId)
+          if (location && 'locationType' in location) {
             enriched.linkedObject = location
             enriched.linkedType = 'location'
           }
         } else if (ann.linkedCollectionId) {
           const collection = ann.linkedCollectionType === 'entity'
-            ? entityCollections.find(c => c.id === ann.linkedCollectionId)
-            : eventCollections.find(c => c.id === ann.linkedCollectionId)
+            ? entityCollectionMap.get(ann.linkedCollectionId)
+            : eventCollectionMap.get(ann.linkedCollectionId)
           if (collection) {
             enriched.linkedObject = collection
             enriched.linkedType = ann.linkedCollectionType === 'entity' ? 'entity-collection' : 'event-collection'
@@ -148,7 +173,7 @@ export default function AnnotationOverlay({
 
       return enriched
     })
-  }, [annotations, currentTime, entities, events, entityCollections, eventCollections, selectedAnnotation])
+  }, [annotations, currentTime, entityMap, eventMap, entityCollectionMap, eventCollectionMap, selectedAnnotation])
 
   return (
     <DrawingCanvas
@@ -156,6 +181,7 @@ export default function AnnotationOverlay({
       currentTime={currentTime}
       videoWidth={videoWidth}
       videoHeight={videoHeight}
+      videoFps={videoFps}
       annotations={annotationsWithInfo}
       selectedAnnotation={selectedAnnotation}
       detectionResults={detectionResults}

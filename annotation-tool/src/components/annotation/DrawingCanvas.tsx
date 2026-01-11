@@ -25,6 +25,8 @@ interface DrawingCanvasProps {
   videoWidth: number
   /** Video frame height in pixels */
   videoHeight: number
+  /** Video frame rate (defaults to 30) */
+  videoFps?: number
   /** Annotations to display */
   annotations: Annotation[]
   /** Currently selected annotation */
@@ -63,6 +65,7 @@ export default function DrawingCanvas({
   currentTime,
   videoWidth,
   videoHeight,
+  videoFps = 30,
   annotations,
   selectedAnnotation,
   detectionResults,
@@ -131,7 +134,7 @@ export default function DrawingCanvas({
           backgroundColor: 'transparent',
         }}
         viewBox={`0 0 ${videoWidth} ${videoHeight}`}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMid meet"
         onMouseDown={(e) => handleMouseDown(e, svgRef)}
         onMouseMove={(e) => handleMouseMove(e, svgRef)}
         onMouseUp={handleMouseUp}
@@ -141,8 +144,7 @@ export default function DrawingCanvas({
         {annotations.map((ann) => {
           if (!ann.boundingBoxSequence) return null
 
-          const fps = 30
-          const currentFrame = Math.floor(currentTime * fps)
+          const currentFrame = Math.floor(currentTime * videoFps)
 
           const isKeyframe = ann.boundingBoxSequence.boxes.some(
             (b: BoundingBox) => (b.isKeyframe || b.isKeyframe === undefined) && b.frameNumber === currentFrame

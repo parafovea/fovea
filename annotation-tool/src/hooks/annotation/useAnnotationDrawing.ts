@@ -39,6 +39,8 @@ interface UseAnnotationDrawingParams {
   videoWidth: number
   /** Video frame height in pixels */
   videoHeight: number
+  /** Video frame rate (defaults to 30) */
+  videoFps?: number
 }
 
 /**
@@ -95,6 +97,7 @@ export function useAnnotationDrawing({
   currentTime,
   videoWidth,
   videoHeight,
+  videoFps = 30,
 }: UseAnnotationDrawingParams): UseAnnotationDrawingReturn {
   const [isDrawing, setIsDrawing] = useState(false)
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 })
@@ -215,9 +218,8 @@ export function useAnnotationDrawing({
     if (!canDraw()) return
 
     if (temporaryBox.width > 5 && temporaryBox.height > 5) {
-      const fps = 30
-      const currentFrame = Math.floor(currentTime * fps)
-      const endFrame = currentFrame + fps // 1 second duration
+      const currentFrame = Math.floor(currentTime * videoFps)
+      const endFrame = currentFrame + videoFps // 1 second duration
 
       const baseAnnotation = {
         videoId,
@@ -295,6 +297,7 @@ export function useAnnotationDrawing({
     temporaryBox,
     videoId,
     currentTime,
+    videoFps,
     annotationMode,
     selectedPersonaId,
     drawingMode,
