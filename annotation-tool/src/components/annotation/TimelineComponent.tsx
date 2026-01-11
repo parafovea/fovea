@@ -12,10 +12,10 @@ import {
   FastForward,
   SkipNext,
 } from '@mui/icons-material'
-import { Annotation, InterpolationType } from '../../models/types.js'
-import { TimelineRenderer, RenderOptions } from './TimelineRenderer.js'
-import { useMoveKeyframe } from '../../store/queries'
-import { InterpolationModeSelector } from './InterpolationModeSelector.js'
+import { Annotation, InterpolationType } from '@models/types'
+import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
+import { useMoveKeyframe } from '@store/queries'
+import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
 
 /**
  * @interface TimelineComponentProps
@@ -41,7 +41,7 @@ export interface TimelineComponentProps {
   /** Callback to copy previous frame's box */
   onCopyPreviousFrame: () => void
   /** Callback when interpolation mode is changed */
-  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: any) => void
+  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: BezierControlPointSet) => void
   /** Callback to close/hide timeline */
   onClose: () => void
 }

@@ -18,8 +18,8 @@ import {
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material'
-import WikidataSearch from '../WikidataSearch'
-import { useWikidataImport, ImportType, WikidataImportData } from '../../hooks/useWikidataImport'
+import WikidataSearch from './WikidataSearch'
+import { useWikidataImport, ImportType, WikidataImportData } from '@hooks/wikidata'
 
 interface WikidataImportFlowProps {
   /** Type of item being imported */

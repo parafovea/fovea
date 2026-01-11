@@ -32,8 +32,33 @@ import {
   AccessTime as RecentIcon,
 } from '@mui/icons-material'
 import { WikidataChip } from '../shared/WikidataChip'
-import { useWorld, usePersonas } from '../../store/queries'
-import { Location } from '../../models/types'
+import { useWorld, usePersonas } from '@store/queries'
+import { GlossItem, LocationPoint } from '@models/types'
+
+/**
+ * Supported object type identifiers.
+ */
+type WorldObjectType = 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection'
+
+/**
+ * World object with all possible properties for rendering.
+ * Using a permissive interface to handle various world object types.
+ */
+interface WorldObjectForDisplay {
+  id: string
+  name: string
+  type?: WorldObjectType
+  description?: GlossItem[] | string
+  wikidataId?: string
+  wikidataUrl?: string
+  wikibaseId?: string
+  importedAt?: string
+  typeAssignments?: Array<{ personaId: string; entityTypeId?: string; eventTypeId?: string }>
+  personaInterpretations?: Array<{ personaId: string; eventTypeId: string }>
+  coordinates?: LocationPoint['coordinates']
+  entityIds?: string[]
+  eventIds?: string[]
+}
 
 interface ObjectPickerProps {
   open: boolean
@@ -90,8 +115,8 @@ export default function ObjectPicker({
   const { data: personas = [] } = usePersonas()
   
   // Filter locations from entities
-  const locations = useMemo(() => 
-    entities.filter(e => 'locationType' in e) as Location[],
+  const locations = useMemo(() =>
+    entities.filter(e => 'locationType' in e) as unknown as LocationPoint[],
     [entities]
   )
   
@@ -101,18 +126,24 @@ export default function ObjectPicker({
     [entities]
   )
   
-  // Search filtering
-  const filterBySearch = (items: any[], query: string) => {
+  // Search filtering - works with arrays of world objects
+  const filterBySearch = <T extends { name: string; description?: GlossItem[] | string }>(items: T[], query: string): T[] => {
     if (!query) return items
     const lowerQuery = query.toLowerCase()
-    return items.filter(item => 
-      item.name.toLowerCase().includes(lowerQuery) ||
-      item.description?.some?.((d: any) => 
-        d.gloss?.toLowerCase().includes(lowerQuery)
-      )
-    )
+    return items.filter(item => {
+      if (item.name.toLowerCase().includes(lowerQuery)) return true
+      if (typeof item.description === 'string') {
+        return item.description.toLowerCase().includes(lowerQuery)
+      }
+      if (Array.isArray(item.description)) {
+        return item.description.some((d: GlossItem) =>
+          d.type === 'text' && d.content?.toLowerCase().includes(lowerQuery)
+        )
+      }
+      return false
+    })
   }
-  
+
   const filteredEntities = filterBySearch(regularEntities, searchQuery)
   const filteredEvents = filterBySearch(events, searchQuery)
   const filteredLocations = filterBySearch(locations, searchQuery)
@@ -121,8 +152,8 @@ export default function ObjectPicker({
   const filteredTimeCollections = filterBySearch(timeCollections, searchQuery)
   
   // Get recent objects
-  const recentObjects = useMemo(() => {
-    const objects: any[] = []
+  const recentObjects = useMemo((): WorldObjectForDisplay[] => {
+    const objects: WorldObjectForDisplay[] = []
     recentIds.forEach(id => {
       const entity = entities.find(e => e.id === id)
       if (entity) {
@@ -152,8 +183,8 @@ export default function ObjectPicker({
     setSelectedObject(null)
   }
   
-  const handleObjectSelect = (object: any, type: string) => {
-    setSelectedObject({ ...object, type })
+  const handleObjectSelect = (object: { id: string; name: string }, type: WorldObjectType) => {
+    setSelectedObject({ id: object.id, name: object.name, type })
   }
   
   const handleConfirmSelection = () => {
@@ -175,7 +206,7 @@ export default function ObjectPicker({
     setSearchQuery('')
   }
   
-  const renderObjectList = (items: any[], type: string, icon: React.ReactElement) => (
+  const renderObjectList = (items: WorldObjectForDisplay[], type: WorldObjectType, icon: React.ReactElement) => (
     <List>
       {items.length === 0 && (
         <ListItem>
@@ -207,20 +238,23 @@ export default function ObjectPicker({
             }
             secondary={
               <Stack spacing={0.5}>
-                {item.description?.[0]?.gloss && (
+                {item.description && (
                   <Typography variant="caption" color="text.secondary">
-                    {item.description[0].gloss}
+                    {typeof item.description === 'string'
+                      ? item.description
+                      : item.description[0]?.content}
                   </Typography>
                 )}
                 {/* Show type assignments for entities */}
-                {type === 'entity' && item.typeAssignments?.length > 0 && (
+                {type === 'entity' && item.typeAssignments && item.typeAssignments.length > 0 && (
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                    {item.typeAssignments.map((assignment: any) => {
+                    {item.typeAssignments.map((assignment) => {
                       const persona = personas.find(p => p.id === assignment.personaId)
+                      const typeId = assignment.entityTypeId || assignment.eventTypeId || 'Unknown'
                       return (
                         <Chip
                           key={assignment.personaId}
-                          label={`${persona?.name || 'Unknown'}: ${assignment.entityTypeId}`}
+                          label={`${persona?.name || 'Unknown'}: ${typeId}`}
                           size="small"
                           variant="outlined"
                         />
@@ -229,9 +263,9 @@ export default function ObjectPicker({
                   </Box>
                 )}
                 {/* Show interpretations for events */}
-                {type === 'event' && item.personaInterpretations?.length > 0 && (
+                {type === 'event' && item.personaInterpretations && item.personaInterpretations.length > 0 && (
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                    {item.personaInterpretations.map((interp: any) => {
+                    {item.personaInterpretations.map((interp) => {
                       const persona = personas.find(p => p.id === interp.personaId)
                       return (
                         <Chip
@@ -318,11 +352,11 @@ export default function ObjectPicker({
               Recently Used
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {recentObjects.slice(0, 5).map((obj) => (
+              {recentObjects.slice(0, 5).filter(obj => obj.type).map((obj) => (
                 <Chip
                   key={obj.id}
                   label={obj.name}
-                  onClick={() => handleObjectSelect(obj, obj.type)}
+                  onClick={() => handleObjectSelect(obj, obj.type!)}
                   icon={
                     obj.type === 'entity' ? <EntityIcon /> :
                     obj.type === 'event' ? <EventIcon /> :

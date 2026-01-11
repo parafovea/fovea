@@ -7,8 +7,8 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Paper, IconButton, Typography, Box, Tooltip } from '@mui/material'
-import { Annotation, InterpolationType } from '../../models/types.js'
-import { InterpolationModeSelector } from './InterpolationModeSelector.js'
+import { Annotation, InterpolationType } from '@models/types'
+import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
 
 /**
  * @interface QuickActionsPanelProps
@@ -28,7 +28,7 @@ export interface QuickActionsPanelProps {
   /** Callback to copy previous frame's box */
   onCopyPreviousFrame: () => void
   /** Callback when interpolation mode is changed */
-  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: any) => void
+  onUpdateInterpolationSegment: (segmentIndex: number, type: InterpolationType, controlPoints?: BezierControlPointSet) => void
   /** Whether current frame is a keyframe */
   isKeyframe: boolean
   /** Video width for edge detection */

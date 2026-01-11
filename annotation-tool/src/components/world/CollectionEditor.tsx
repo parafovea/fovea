@@ -30,11 +30,17 @@ import {
   useUpdateEntityCollection,
   useAddEventCollection,
   useUpdateEventCollection,
-} from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
-import { EntityCollection, EventCollection, GlossItem } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+} from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
+import { EntityCollection, EventCollection, GlossItem } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+
+/** Entity collection type options */
+type EntityCollectionTypeOption = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
+
+/** Event collection type options */
+type EventCollectionTypeOption = 'sequence' | 'iteration' | 'complex' | 'alternative' | 'group'
 
 interface CollectionEditorProps {
   open: boolean
@@ -207,7 +213,7 @@ export default function CollectionEditor({ open, onClose, collection, collection
             {collectionType === 'entity' ? (
               <Select
                 value={entityCollectionType}
-                onChange={(e) => setEntityCollectionType(e.target.value as any)}
+                onChange={(e) => setEntityCollectionType(e.target.value as EntityCollectionTypeOption)}
                 label="Collection Subtype"
               >
                 <MenuItem value="group">Group - A set of related entities</MenuItem>
@@ -220,7 +226,7 @@ export default function CollectionEditor({ open, onClose, collection, collection
             ) : (
               <Select
                 value={eventCollectionType}
-                onChange={(e) => setEventCollectionType(e.target.value as any)}
+                onChange={(e) => setEventCollectionType(e.target.value as EventCollectionTypeOption)}
                 label="Collection Subtype"
               >
                 <MenuItem value="sequence">Sequence - Ordered events</MenuItem>

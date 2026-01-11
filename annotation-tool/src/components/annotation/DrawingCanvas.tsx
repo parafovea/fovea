@@ -7,10 +7,10 @@
 
 import { useRef, useMemo } from 'react'
 import { Box } from '@mui/material'
-import { useAnnotationDrawing } from '../../hooks/annotation/useAnnotationDrawing'
+import { useAnnotationDrawing } from '@hooks/annotation/useAnnotationDrawing'
 import InteractiveBoundingBox from './InteractiveBoundingBox'
-import type { DetectionResponse } from '../../api/client'
-import { Annotation } from '../../models/types'
+import type { DetectionResponse } from '@api/client'
+import { Annotation, BoundingBox } from '@models/types'
 
 /**
  * @interface DrawingCanvasProps
@@ -26,13 +26,13 @@ interface DrawingCanvasProps {
   /** Video frame height in pixels */
   videoHeight: number
   /** Annotations to display */
-  annotations: any[]
+  annotations: Annotation[]
   /** Currently selected annotation */
   selectedAnnotation: Annotation | null
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
   /** Callback when annotation is selected */
-  onAnnotationSelect: (annotation: any) => void
+  onAnnotationSelect: (annotation: Annotation) => void
 }
 
 /**
@@ -145,12 +145,12 @@ export default function DrawingCanvas({
           const currentFrame = Math.floor(currentTime * fps)
 
           const isKeyframe = ann.boundingBoxSequence.boxes.some(
-            (b: any) => (b.isKeyframe || b.isKeyframe === undefined) && b.frameNumber === currentFrame
+            (b: BoundingBox) => (b.isKeyframe || b.isKeyframe === undefined) && b.frameNumber === currentFrame
           )
 
           // Check if current frame is within any visibility range
           const isVisible = ann.boundingBoxSequence.visibilityRanges?.some(
-            (range: any) => currentFrame >= range.startFrame && currentFrame <= range.endFrame && range.visible
+            (range) => currentFrame >= range.startFrame && currentFrame <= range.endFrame && range.visible
           ) || false
 
           const mode: 'keyframe' | 'interpolated' | 'ghost' =

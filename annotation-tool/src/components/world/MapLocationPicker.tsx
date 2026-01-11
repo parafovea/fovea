@@ -49,17 +49,28 @@ interface MapLocationPickerProps {
   coordinateSystem?: 'GPS' | 'cartesian' | 'relative'
 }
 
+interface MapInteractionProps {
+  mode: 'point' | 'extent'
+  onPointClick: (latlng: L.LatLng) => void
+  onPolygonComplete: (polygon: L.LatLng[]) => void
+  pointCoordinate: Coordinate | null
+  polygonCoordinates: Coordinate[]
+  drawing: boolean
+  setDrawing: (drawing: boolean) => void
+  setPolygonCoordinates: (coords: Coordinate[]) => void
+}
+
 // Component to handle map interactions
-function MapInteraction({ 
-  mode, 
-  onPointClick, 
+function MapInteraction({
+  mode,
+  onPointClick,
   onPolygonComplete,
   pointCoordinate,
   polygonCoordinates,
   drawing,
   setDrawing,
   setPolygonCoordinates,
-}: any) {
+}: MapInteractionProps) {
   const map = useMap()
   const [tempPolygon, setTempPolygon] = useState<L.LatLng[]>([])
 

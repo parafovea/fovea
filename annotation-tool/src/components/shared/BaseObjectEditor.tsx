@@ -14,12 +14,20 @@ import {
   Chip,
 } from '@mui/material'
 import { Public as ObjectIcon } from '@mui/icons-material'
-import { GlossItem } from '../../models/types'
-import GlossEditor from '../GlossEditor'
-import WikidataSearch from '../WikidataSearch'
+import { GlossItem } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
+import WikidataSearch, { WikidataImportCallbackData } from './WikidataSearch'
 import ModeSelector from './ModeSelector'
 import { WikidataChip } from './WikidataChip'
 import { TypeObjectBadge } from './TypeObjectToggle'
+
+/** Metadata structure for world objects (entities, events, locations, times). */
+export interface ObjectMetadata {
+  alternateNames?: string[]
+  externalIds?: Record<string, string>
+  certainty?: number
+  [key: string]: unknown
+}
 
 export interface BaseObjectEditorProps {
   // Required props
@@ -37,8 +45,8 @@ export interface BaseObjectEditorProps {
   setMode: (mode: 'manual' | 'copy' | 'wikidata') => void
   
   // Metadata
-  metadata?: Record<string, any>
-  setMetadata?: (metadata: Record<string, any>) => void
+  metadata?: ObjectMetadata
+  setMetadata?: (metadata: ObjectMetadata) => void
   
   // Wikidata state
   wikidataId?: string
@@ -46,7 +54,7 @@ export interface BaseObjectEditorProps {
   wikibaseId?: string
   importedFrom?: 'wikidata' | 'persona'
   importedAt?: string
-  onWikidataSelect?: (item: any) => void
+  onWikidataSelect?: (item: WikidataImportCallbackData) => void
   
   // Actions
   onSave: () => void
