@@ -127,6 +127,12 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     }
   }, [totalFrames, zoom])
 
+  // Track previous values to detect changes and gate invalidation
+  const prevFrameRef = useRef<number>(-1)
+  const prevKeyframesLengthRef = useRef<number>(0)
+  const prevZoomRef = useRef<number>(1)
+  const prevSelectedRef = useRef<number[]>([])
+
   // Render loop - use ref to avoid triggering React re-renders on every frame
   useEffect(() => {
     if (!rendererRef.current) return
@@ -160,8 +166,22 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         },
       }
 
-      // Invalidate renderer to ensure it renders on every frame
-      renderer.invalidate()
+      // Only invalidate if something actually changed
+      // This prevents unnecessary redraws and improves performance
+      const frameChanged = currentFrameRef.current !== prevFrameRef.current
+      const keyframesChanged = keyframes.length !== prevKeyframesLengthRef.current
+      const zoomChanged = zoom !== prevZoomRef.current
+      const selectedChanged = selectedKeyframes.length !== prevSelectedRef.current.length ||
+        selectedKeyframes.some((f, i) => f !== prevSelectedRef.current[i])
+
+      if (frameChanged || keyframesChanged || zoomChanged || selectedChanged) {
+        renderer.invalidate()
+        prevFrameRef.current = currentFrameRef.current
+        prevKeyframesLengthRef.current = keyframes.length
+        prevZoomRef.current = zoom
+        prevSelectedRef.current = [...selectedKeyframes]
+      }
+
       renderer.render(renderOptions, selectedKeyframes)
       rafId = requestAnimationFrame(render)
     }

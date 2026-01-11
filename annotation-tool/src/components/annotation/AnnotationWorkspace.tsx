@@ -640,6 +640,7 @@ export default function AnnotationWorkspace() {
               currentTime={currentTime}
               videoWidth={videoPlayerRef.current.videoRef.current.videoWidth || currentVideo.width}
               videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
+              videoFps={currentVideo.fps || 30}
               detectionResults={detectionResults}
             />
           )}
