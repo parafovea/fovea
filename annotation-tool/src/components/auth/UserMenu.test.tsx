@@ -7,8 +7,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import UserMenu from './UserMenu.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import { server } from '../../../test/setup.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
+import { server } from '@test/setup.js'
 import { http, HttpResponse } from 'msw'
 
 describe('UserMenu', () => {

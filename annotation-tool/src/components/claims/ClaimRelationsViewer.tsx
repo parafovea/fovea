@@ -20,7 +20,8 @@ import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { useClaimRelations, useDeleteClaimRelation, useClaims, usePersonaOntology } from '../../store/queries'
+import { useClaimRelations, useDeleteClaimRelation, useClaims, usePersonaOntology } from '@store/queries'
+import { Claim } from '@models/types'
 
 interface ClaimRelationsViewerProps {
   claimId: string
@@ -52,8 +53,8 @@ export function ClaimRelationsViewer({
   }
 
   const getClaimText = (claimId: string): string => {
-    const findClaim = (claims: any[], targetId: string): any => {
-      for (const claim of claims) {
+    const findClaim = (claimList: Claim[], targetId: string): Claim | null => {
+      for (const claim of claimList) {
         if (claim.id === targetId) return claim
         if (claim.subclaims) {
           const found = findClaim(claim.subclaims, targetId)
@@ -65,7 +66,7 @@ export function ClaimRelationsViewer({
 
     const claim = findClaim(claims, claimId)
     if (!claim) return `Claim ${claimId.substring(0, 8)}...`
-    return claim.gloss.map((g: any) => g.content).join(' ').substring(0, 60)
+    return claim.gloss.map((g) => g.content).join(' ').substring(0, 60)
   }
 
   if (isLoading) {

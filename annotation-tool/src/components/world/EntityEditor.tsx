@@ -30,10 +30,10 @@ import {
   Inventory2 as ObjectIcon,
   Language as WikidataIcon,
 } from '@mui/icons-material'
-import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand/annotationUiStore'
-import { Entity, EntityTypeAssignment, GlossItem } from '../../models/types'
-import GlossEditor from '../GlossEditor'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
+import { Entity, EntityTypeAssignment, GlossItem } from '@models/types'
+import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 

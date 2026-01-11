@@ -20,8 +20,8 @@ import {
   Dashboard as DashboardIcon,
   Info as InfoIcon,
 } from '@mui/icons-material'
-import { ModelSettingsPanel } from '../components/ModelSettingsPanel'
-import { ModelStatusDashboard } from '../components/ModelStatusDashboard'
+import { ModelSettingsPanel } from '@components/model/ModelSettingsPanel'
+import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
 
 /**
  * Tab panel component for Settings page.

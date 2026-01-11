@@ -1,7 +1,7 @@
 import { describe, test, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { QuickActionsPanel } from './QuickActionsPanel'
-import { Annotation } from '../../models/types.js'
+import { Annotation } from '@models/types.js'
 
 describe('QuickActionsPanel', () => {
   const mockAnnotation: Annotation = {

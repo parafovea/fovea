@@ -26,8 +26,8 @@
 
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import { Annotation, Time, InterpolationType } from '../../models/types.js'
-import { DetectionResponse } from '../../api/client.js'
+import { Annotation, Time, InterpolationType } from '@models/types'
+import { DetectionResponse } from '@api/client'
 
 /**
  * Annotation mode determines how annotations are created

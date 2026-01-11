@@ -14,7 +14,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { User } from '../../models/types.js'
+import { User } from '@models/types'
 
 /**
  * Wikidata/Wikibase configuration.

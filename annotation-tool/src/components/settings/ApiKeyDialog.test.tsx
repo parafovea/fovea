@@ -5,11 +5,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { renderWithProviders } from '@test/utils/test-utils.js'
 import ApiKeyDialog from './ApiKeyDialog.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
-import { ApiKey } from '../../store/queries/useApiKeys.js'
+import { server } from '@test/setup.js'
+import { ApiKey } from '@store/queries/useApiKeys.js'
 
 describe('ApiKeyDialog', () => {
   const mockOnClose = vi.fn()

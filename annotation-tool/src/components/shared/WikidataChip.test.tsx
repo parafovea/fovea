@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
 import { WikidataChip } from './WikidataChip'
-import { useAuthStore, AppConfig } from '../../store/zustand/authStore'
+import { useAuthStore, AppConfig } from '@store/zustand/authStore'
 
 /** Online mode config with external links allowed */
 const onlineConfig: AppConfig = {

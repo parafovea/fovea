@@ -4,13 +4,13 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '../../src/utils/interpolation.js'
+import { BoundingBoxInterpolator, LazyBoundingBoxSequence } from '@utils/interpolation.js'
 import {
   BoundingBox,
   BoundingBoxSequence,
   InterpolationSegment,
   BezierControlPoint,
-} from '../../src/models/types.js'
+} from '@models/types.js'
 
 describe('BoundingBoxInterpolator', () => {
   let interpolator: BoundingBoxInterpolator

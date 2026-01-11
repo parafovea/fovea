@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useWikidataImport, WikidataImportData } from '../../src/hooks/useWikidataImport'
-import { DuplicateImportError } from '../../src/lib/errors'
-import * as queries from '../../src/store/queries'
+import { useWikidataImport, WikidataImportData } from '@hooks/wikidata'
+import { DuplicateImportError } from '@lib/errors'
+import * as queries from '@store/queries'
 
 // Mock timer functions
 vi.useFakeTimers()

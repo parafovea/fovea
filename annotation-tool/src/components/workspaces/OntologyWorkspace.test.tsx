@@ -9,8 +9,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
 import OntologyWorkspace from './OntologyWorkspace'
-import { server } from '../../../test/setup'
-import { useAnnotationUiStore } from '../../store/zustand'
+import { server } from '@test/setup'
+import { useAnnotationUiStore } from '@store/zustand'
 
 /**
  * Mock PersonaBrowser to simplify persona selection testing.
@@ -27,7 +27,7 @@ vi.mock('../browsers/PersonaBrowser', () => ({
 /**
  * Mock PersonaEditor to avoid complex form dependencies.
  */
-vi.mock('../PersonaEditor', () => ({
+vi.mock('@components/persona/PersonaEditor', () => ({
   default: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
     open ? (
       <div role="dialog" data-testid="persona-editor">
@@ -39,7 +39,7 @@ vi.mock('../PersonaEditor', () => ({
 /**
  * Mock EntityTypeEditor to simplify entity type editing tests.
  */
-vi.mock('../EntityTypeEditor', () => ({
+vi.mock('@components/ontology/EntityTypeEditor', () => ({
   default: ({ open, onClose, entity }: { open: boolean; onClose: () => void; entity: any }) =>
     open ? (
       <div role="dialog" data-testid="entity-type-editor">
@@ -52,7 +52,7 @@ vi.mock('../EntityTypeEditor', () => ({
 /**
  * Mock RoleEditor to simplify role editing tests.
  */
-vi.mock('../RoleEditor', () => ({
+vi.mock('@components/ontology/RoleEditor', () => ({
   default: ({ open, onClose, role }: { open: boolean; onClose: () => void; role: any }) =>
     open ? (
       <div role="dialog" data-testid="role-editor">
@@ -65,7 +65,7 @@ vi.mock('../RoleEditor', () => ({
 /**
  * Mock EventTypeEditor to simplify event type editing tests.
  */
-vi.mock('../EventTypeEditor', () => ({
+vi.mock('@components/ontology/EventTypeEditor', () => ({
   default: ({ open, onClose, event }: { open: boolean; onClose: () => void; event: any }) =>
     open ? (
       <div role="dialog" data-testid="event-type-editor">
@@ -78,7 +78,7 @@ vi.mock('../EventTypeEditor', () => ({
 /**
  * Mock RelationTypeEditor to simplify relation type editing tests.
  */
-vi.mock('../RelationTypeEditor', () => ({
+vi.mock('@components/ontology/RelationTypeEditor', () => ({
   default: ({ open, onClose, relationType }: { open: boolean; onClose: () => void; relationType: any }) =>
     open ? (
       <div role="dialog" data-testid="relation-type-editor">
@@ -91,7 +91,7 @@ vi.mock('../RelationTypeEditor', () => ({
 /**
  * Mock OntologyAugmenter to simplify AI suggestion testing.
  */
-vi.mock('../OntologyAugmenter', () => ({
+vi.mock('@components/ontology/OntologyAugmenter', () => ({
   OntologyAugmenter: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="ontology-augmenter">
       <button onClick={onClose}>Close Augmenter</button>
@@ -102,7 +102,7 @@ vi.mock('../OntologyAugmenter', () => ({
 /**
  * Mock GlossRenderer to simplify gloss display.
  */
-vi.mock('../GlossRenderer', () => ({
+vi.mock('@components/ontology/GlossRenderer', () => ({
   GlossRenderer: ({ gloss }: { gloss: any }) => <span>{Array.isArray(gloss) ? 'Gloss content' : gloss}</span>,
 }))
 
@@ -128,15 +128,16 @@ vi.mock('../../hooks/useKeyboardShortcuts', () => ({
 }))
 
 /**
- * Mock preferences hook.
+ * Mock preferences hook - mock both the old path and the new barrel export.
  */
-vi.mock('../../hooks/usePreferences', () => ({
+vi.mock('@hooks/preferences', () => ({
   usePreferences: () => ({
     lastPersonaId: null,
     setLastPersonaId: vi.fn(),
     getFilterState: () => ({ searchQuery: '' }),
     setFilterState: vi.fn(),
   }),
+  useTimelineKeyboardShortcuts: vi.fn(),
 }))
 
 /**

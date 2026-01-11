@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
-import { BoundingBox, InterpolationSegment } from '../../models/types'
+import { BoundingBox, InterpolationSegment } from '@models/types'
 
 describe('TimelineRenderer', () => {
   let canvas: HTMLCanvasElement

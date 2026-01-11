@@ -7,7 +7,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { useVideos, useVideo, videoKeys } from './useVideos'
-import { server } from '../../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 const mockVideos = [

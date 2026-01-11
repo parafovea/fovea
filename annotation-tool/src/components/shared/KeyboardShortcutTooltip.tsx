@@ -4,8 +4,8 @@
  */
 
 import { Tooltip, TooltipProps, Box, Typography } from '@mui/material'
-import { commandRegistry } from '../../lib/commands/command-registry.js'
-import { formatKeybinding } from '../../lib/commands/commands.js'
+import { commandRegistry } from '@lib/commands/command-registry'
+import { formatKeybinding } from '@lib/commands/commands'
 
 interface KeyboardShortcutTooltipProps extends Omit<TooltipProps, 'title'> {
   /** Command ID to fetch shortcut for */

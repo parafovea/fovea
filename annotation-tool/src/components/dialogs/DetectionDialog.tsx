@@ -29,8 +29,8 @@ import {
   Divider,
 } from '@mui/material'
 import { Search as DetectIcon } from '@mui/icons-material'
-import { usePersonas } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand'
+import { usePersonas } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand'
 
 /**
  * Detection query options for persona-based detection.

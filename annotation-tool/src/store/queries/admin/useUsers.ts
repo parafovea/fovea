@@ -10,7 +10,7 @@ import {
   UseQueryOptions,
   UseMutationOptions,
 } from '@tanstack/react-query'
-import { User } from '../../../models/types.js'
+import { User } from '@models/types'
 
 /**
  * API error response.

@@ -8,7 +8,7 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TimelineComponent } from './TimelineComponent.js'
-import { Annotation, BoundingBoxSequence } from '../../models/types.js'
+import { Annotation, BoundingBoxSequence } from '@models/types.js'
 
 // Mock TimelineRenderer
 vi.mock('./TimelineRenderer.js', () => ({

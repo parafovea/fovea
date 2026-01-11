@@ -21,8 +21,8 @@ import {
   OntologyRelation,
   EventInterpretation,
   EntityTypeAssignment,
-} from '../../models/types'
-import { generateId } from '../../utils/uuid'
+} from '@models/types'
+import { generateId } from '@utils/uuid'
 
 /** World state structure from API */
 export interface WorldState {

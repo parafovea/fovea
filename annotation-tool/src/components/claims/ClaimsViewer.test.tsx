@@ -14,8 +14,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import React from 'react'
 import ClaimsViewer from './ClaimsViewer'
-import { Claim } from '../../models/types'
-import { server } from '../../../test/setup'
+import { Claim } from '@models/types'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 /**

@@ -13,7 +13,7 @@ import {
   useSaveSummary,
   useDeleteSummary,
 } from './useSummaries'
-import { server } from '../../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 /**

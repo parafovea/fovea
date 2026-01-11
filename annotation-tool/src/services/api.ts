@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats, ImportOptions, ImportPreview, ImportResult, ImportHistoryItem } from '../models/types'
+import { Ontology, Annotation, VideoMetadata, OntologyExport, TrackingResponse, ExportOptions, ExportStats, ImportOptions, ImportPreview, ImportResult, ImportHistoryItem, BoundingBoxSequence } from '@models/types'
 
 // Configure axios to include credentials (cookies) with all requests
 // Required for Safari and other browsers with strict cookie policies
@@ -33,7 +33,7 @@ export interface BackendAnnotation {
   personaId: string | null
   type: string
   label: string
-  frames: any
+  frames: BoundingBoxSequence
   confidence: number | null
   source: string
   createdAt: string
@@ -105,7 +105,7 @@ export function transformFrontendToBackend(annotation: Annotation): {
   personaId: string | null
   type: string
   label: string
-  frames: any
+  frames: BoundingBoxSequence | undefined
   confidence?: number
   source: string
 } {
@@ -211,7 +211,7 @@ export const api = {
     }
   },
 
-  async validateOntology(data: OntologyExport): Promise<{ valid: boolean; errors?: any }> {
+  async validateOntology(data: OntologyExport): Promise<{ valid: boolean; errors?: Array<{ path: string; message: string; code?: string }> }> {
     const response = await axios.post(`${API_BASE}/ontology/validate`, data)
     return response.data
   },

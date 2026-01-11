@@ -19,7 +19,7 @@ import {
   Alert,
   Divider,
 } from '@mui/material'
-import { ClaimExtractionConfig, ExtractionStrategy } from '../../models/types'
+import { ClaimExtractionConfig, ExtractionStrategy } from '@models/types'
 
 interface ClaimsExtractionDialogProps {
   open: boolean

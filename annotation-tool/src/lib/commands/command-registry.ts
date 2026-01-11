@@ -40,7 +40,7 @@ export interface Command {
   when?: WhenClause
 
   /** Command execution function */
-  execute: (args?: any) => void | Promise<void>
+  execute: (args?: unknown) => void | Promise<void>
 
   /** Optional function to check if command can execute */
   canExecute?: () => boolean
@@ -112,7 +112,7 @@ export class CommandRegistry {
    * await commandRegistry.execute('annotation.addKeyframe', { frame: 30 })
    * ```
    */
-  async execute(commandId: string, args?: any): Promise<void> {
+  async execute(commandId: string, args?: unknown): Promise<void> {
     const command = this.commands.get(commandId)
 
     if (!command) {

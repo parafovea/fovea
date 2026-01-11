@@ -14,8 +14,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
-import { Claim, RelationType } from '../../models/types'
-import { server } from '../../../test/setup'
+import { Claim, RelationType } from '@models/types'
+import { server } from '@test/setup'
 
 /**
  * Creates a fresh QueryClient for each test.

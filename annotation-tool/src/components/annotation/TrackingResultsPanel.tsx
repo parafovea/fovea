@@ -22,7 +22,7 @@ import {
   Cancel as RejectIcon,
   Visibility as PreviewIcon,
 } from '@mui/icons-material'
-import { TrackingResult } from '../../models/types.js'
+import { TrackingResult } from '@models/types'
 
 /**
  * @interface TrackingResultsPanelProps

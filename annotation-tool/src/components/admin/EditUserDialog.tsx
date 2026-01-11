@@ -23,9 +23,9 @@ import {
   AccordionDetails,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { useUpdateUser, useDeleteUser, UserWithStats } from '../../store/queries/admin/useUsers.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import ConfirmDialog from '../shared/ConfirmDialog.js'
+import { useUpdateUser, useDeleteUser, UserWithStats } from '@store/queries/admin/useUsers'
+import { useAuthStore } from '@store/zustand/authStore'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 /**
  * Props for EditUserDialog component.

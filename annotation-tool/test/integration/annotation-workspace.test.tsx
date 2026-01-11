@@ -10,10 +10,10 @@ import { renderWithProviders } from '../utils/test-utils'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { server } from '../setup'
 import { http, HttpResponse } from 'msw'
-import AnnotationWorkspace from '../../src/components/AnnotationWorkspace'
-import { useAnnotationUiStore } from '../../src/store/zustand/annotationUiStore'
-import { useVideoUiStore } from '../../src/store/zustand/videoUiStore'
-import type { Annotation, VideoMetadata, Persona, PersonaOntology } from '../../src/models/types'
+import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
+import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
+import { useVideoUiStore } from '@store/zustand/videoUiStore'
+import type { Annotation, VideoMetadata, Persona, PersonaOntology } from '@models/types'
 
 // Mock HTMLCanvasElement getContext for TimelineRenderer
 HTMLCanvasElement.prototype.getContext = vi.fn((contextType: string) => {

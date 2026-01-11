@@ -7,7 +7,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import AdminPanel from './AdminPanel.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 // Mock child components
 vi.mock('./UserManagementPage.js', () => ({

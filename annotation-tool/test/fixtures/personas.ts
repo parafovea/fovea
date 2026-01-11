@@ -1,4 +1,4 @@
-import { Persona, EntityType, EventType, RoleType, RelationType } from '../../src/models/types.js'
+import { Persona, EntityType, EventType, RoleType, RelationType } from '@models/types.js'
 
 /**
  * Factory function to create test persona objects.

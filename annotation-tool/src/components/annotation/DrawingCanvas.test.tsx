@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import DrawingCanvas from './DrawingCanvas'
-import type { DetectionResponse } from '../../api/client'
+import type { DetectionResponse } from '@api/client'
 
 /**
  * Mock InteractiveBoundingBox component

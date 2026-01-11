@@ -11,7 +11,7 @@ import {
   BoundingBox,
   BoundingBoxSequence,
   InterpolationSegment,
-} from '../models/types.js'
+} from '@models/types'
 
 /**
  * Convert tracking result to bounding box sequence.

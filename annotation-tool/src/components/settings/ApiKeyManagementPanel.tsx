@@ -28,10 +28,10 @@ import {
   ToggleOn as ToggleOnIcon,
   ToggleOff as ToggleOffIcon,
 } from '@mui/icons-material'
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '../../store/queries/useApiKeys.js'
-import ApiKeyDialog from './ApiKeyDialog.js'
-import ConfirmDialog from '../shared/ConfirmDialog.js'
+import { useAuthStore } from '@store/zustand/authStore'
+import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '@store/queries/useApiKeys'
+import ApiKeyDialog from './ApiKeyDialog'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 /**
  * API key management panel.

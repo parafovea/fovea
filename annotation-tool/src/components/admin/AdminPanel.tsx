@@ -19,9 +19,9 @@ import {
   Lock as LockIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material'
-import { useAuthStore } from '../../store/zustand/authStore.js'
-import UserManagementPage from './UserManagementPage.js'
-import SessionManagementPage from './SessionManagementPage.js'
+import { useAuthStore } from '@store/zustand/authStore'
+import UserManagementPage from './UserManagementPage'
+import SessionManagementPage from './SessionManagementPage'
 
 /**
  * Tab panel component.

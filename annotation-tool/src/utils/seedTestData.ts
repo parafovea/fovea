@@ -7,8 +7,8 @@
  * IMPORTANT: This should only be used in development with VITE_ENABLE_TEST_DATA=true
  */
 
-import { fetchWorldState, saveWorldState, WorldState } from '../store/queries/useWorld'
-import { Entity } from '../models/types'
+import { fetchWorldState, saveWorldState, WorldState } from '@store/queries/useWorld'
+import { Entity } from '@models/types'
 import { generateId } from './uuid'
 
 /**

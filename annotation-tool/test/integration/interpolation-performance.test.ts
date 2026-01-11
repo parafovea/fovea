@@ -8,8 +8,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   BoundingBoxInterpolator,
   LazyBoundingBoxSequence,
-} from '../../src/utils/interpolation.js'
-import { BoundingBox, BoundingBoxSequence, InterpolationSegment } from '../../src/models/types.js'
+} from '@utils/interpolation.js'
+import { BoundingBox, BoundingBoxSequence, InterpolationSegment } from '@models/types.js'
 
 describe('Interpolation Performance Benchmarks', () => {
   let interpolator: BoundingBoxInterpolator

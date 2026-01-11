@@ -18,9 +18,9 @@ import {
   Search as SearchIcon,
   Add as AddIcon,
 } from '@mui/icons-material'
-import { usePersonas } from '../../store/queries'
-import { useAnnotationUiStore } from '../../store/zustand'
-import { Persona } from '../../models/types'
+import { usePersonas } from '@store/queries'
+import { useAnnotationUiStore } from '@store/zustand'
+import { Persona } from '@models/types'
 
 interface PersonaBrowserProps {
   onSelectPersona: (personaId: string) => void

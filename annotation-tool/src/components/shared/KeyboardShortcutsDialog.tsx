@@ -28,8 +28,8 @@ import {
   Close as CloseIcon,
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material'
-import { commandRegistry, Command } from '../../lib/commands/command-registry.js'
-import { formatKeybinding } from '../../lib/commands/commands.js'
+import { commandRegistry, Command } from '@lib/commands/command-registry'
+import { formatKeybinding } from '@lib/commands/commands'
 
 interface KeyboardShortcutsDialogProps {
   open: boolean

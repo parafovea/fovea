@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useCommands, useCommandContext } from '../../hooks/useCommands.js'
+import { useCommands, useCommandContext } from '@hooks/commands'
 import {
   Box,
   Typography,
@@ -38,8 +38,8 @@ import {
   useDeleteTime,
   useDeleteEntityCollection,
   useDeleteEventCollection,
-} from '../../store/queries'
-import { Entity, LocationPoint, LocationExtent, EntityCollection, EventCollection } from '../../models/types'
+} from '@store/queries'
+import { Entity, Event, Time, TimeInstant, TimeInterval, LocationPoint, LocationExtent, EntityCollection, EventCollection, GlossItem } from '@models/types'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
@@ -52,6 +52,9 @@ interface TabPanelProps {
   index: number
   value: number
 }
+
+// Union type for all workspace items
+type WorkspaceItem = Entity | Event | Time | EntityCollection | EventCollection
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props
@@ -164,26 +167,27 @@ export default function ObjectWorkspace() {
     }
   }
 
-  const filterByWikidata = (item: any) => {
+  const filterByWikidata = (item: { wikidataId?: string }) => {
     if (wikidataFilter === 'all') return true
     if (wikidataFilter === 'wikidata') return !!item.wikidataId
     if (wikidataFilter === 'manual') return !item.wikidataId
     return true
   }
-  
-  const searchMatches = (item: any, term: string) => {
+
+  const searchMatches = (item: { id?: string; name?: string; label?: string; wikidataId?: string; description?: GlossItem[] | string }, term: string) => {
     const lowerTerm = term.toLowerCase()
 
     // Extract description text from GlossItem array or plain string
     let descriptionText = ''
     if (Array.isArray(item.description)) {
-      descriptionText = item.description.map((d: any) => d.content || '').join(' ')
+      descriptionText = item.description.map((d: GlossItem) => d.content || '').join(' ')
     } else if (typeof item.description === 'string') {
       descriptionText = item.description
     }
 
     return (
       item.name?.toLowerCase().includes(lowerTerm) ||
+      item.label?.toLowerCase().includes(lowerTerm) ||
       item.id?.toLowerCase().includes(lowerTerm) ||
       item.wikidataId?.toLowerCase().includes(lowerTerm) ||
       descriptionText.toLowerCase().includes(lowerTerm)
@@ -198,7 +202,7 @@ export default function ObjectWorkspace() {
     searchMatches(e, searchTerm) && filterByWikidata(e)
   )
   // Locations shown separately for location-specific view
-  const filteredLocations = locations.filter((l: any) =>
+  const filteredLocations = locations.filter(l =>
     searchMatches(l, searchTerm) && filterByWikidata(l)
   )
   const filteredTimes = times.filter(t =>
@@ -232,7 +236,7 @@ export default function ObjectWorkspace() {
 
     // Fallback: Format timestamp/interval
     if (time.type === 'instant') {
-      const instant = time as any
+      const instant = time as TimeInstant
       if (instant.timestamp) {
         const date = new Date(instant.timestamp)
         // Check if it's a valid date
@@ -255,7 +259,7 @@ export default function ObjectWorkspace() {
       }
       return 'Instant'
     } else {
-      const interval = time as any
+      const interval = time as TimeInterval
       if (interval.startTime && interval.endTime) {
         const start = new Date(interval.startTime)
         const end = new Date(interval.endTime)
@@ -294,7 +298,7 @@ export default function ObjectWorkspace() {
     const parts: string[] = []
     
     if (time.type === 'instant') {
-      const instant = time as any
+      const instant = time as TimeInstant
       if (instant.vagueness) {
         if (instant.vagueness.type === 'approximate') parts.push('Approximate')
         if (instant.vagueness.type === 'bounded') parts.push('Bounded')
@@ -315,7 +319,7 @@ export default function ObjectWorkspace() {
   }
   
   // Get the currently visible list items based on tab
-  const getCurrentItems = () => {
+  const getCurrentItems = (): WorkspaceItem[] => {
     switch(tabValue) {
       case 0: return filteredEntities
       case 1: return filteredEvents
@@ -345,14 +349,14 @@ export default function ObjectWorkspace() {
     'object.edit': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
-        const item = items[selectedItemIndex] as any
+        const item = items[selectedItemIndex]
         switch(tabValue) {
-          case 0: handleEditEntity(item); break
-          case 1: handleEditEvent(item); break
-          case 2: handleEditLocation(item); break
-          case 3: handleEditTime(item); break
+          case 0: handleEditEntity(item as Entity); break
+          case 1: handleEditEvent(item as Event); break
+          case 2: handleEditLocation(item as LocationPoint | LocationExtent); break
+          case 3: handleEditTime(item as Time); break
           case 4:
-            setSelectedCollection(item)
+            setSelectedCollection(item as EntityCollection | EventCollection)
             setSelectedCollectionType('entityIds' in item ? 'entity' : 'event')
             setCollectionEditorOpen(true)
             break
@@ -362,7 +366,7 @@ export default function ObjectWorkspace() {
     'object.delete': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
-        const item = items[selectedItemIndex] as any
+        const item = items[selectedItemIndex]
         switch(tabValue) {
           case 0: deleteEntityMutate(item.id); break
           case 1: deleteEventMutate(item.id); break

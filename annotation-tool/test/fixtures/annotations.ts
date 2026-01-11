@@ -1,4 +1,4 @@
-import { Annotation, BoundingBox, InterpolationType } from '../../src/models/types.js'
+import { Annotation, BoundingBox, InterpolationType } from '@models/types.js'
 
 /**
  * Helper to calculate metadata for a bounding box sequence.

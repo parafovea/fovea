@@ -7,8 +7,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProfileTab from './ProfileTab.js'
 import { http, HttpResponse } from 'msw'
-import { server } from '../../../test/setup.js'
-import { useAuthStore } from '../../store/zustand/authStore.js'
+import { server } from '@test/setup.js'
+import { useAuthStore } from '@store/zustand/authStore.js'
 
 describe('ProfileTab', () => {
   const mockUser = {

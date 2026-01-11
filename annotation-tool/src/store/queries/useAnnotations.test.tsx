@@ -13,7 +13,7 @@ import {
   useDeleteAnnotation,
   useSaveAnnotations,
 } from './useAnnotations'
-import { server } from '../../../test/setup'
+import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
 /**

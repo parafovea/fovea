@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '../../../test/utils/test-utils.js'
+import { renderWithProviders } from '@test/utils/test-utils.js'
 import UserSettingsDialog from './UserSettingsDialog.js'
 
 describe('UserSettingsDialog', () => {
