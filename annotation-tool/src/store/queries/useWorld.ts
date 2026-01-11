@@ -44,6 +44,26 @@ export const worldKeys = {
   times: () => [...worldKeys.all, 'times'] as const,
   collections: () => [...worldKeys.all, 'collections'] as const,
   relations: () => [...worldKeys.all, 'relations'] as const,
+  entityDeletionPreview: (entityId: string) => [...worldKeys.all, 'entity-deletion-preview', entityId] as const,
+  eventDeletionPreview: (eventId: string) => [...worldKeys.all, 'event-deletion-preview', eventId] as const,
+  timeDeletionPreview: (timeId: string) => [...worldKeys.all, 'time-deletion-preview', timeId] as const,
+}
+
+/** Response type for world object deletion preview API */
+export interface WorldObjectDeletionPreview {
+  glossReferences: number
+  relationCount: number
+  collectionMemberships: number
+  annotationCount: number
+}
+
+/** Response type for world object deletion result */
+export interface WorldObjectDeletionResult {
+  message: string
+  glossReferencesConverted: number
+  relationsRemoved: number
+  collectionMembershipsRemoved: number
+  annotationsDeleted: number
 }
 
 /**
@@ -793,6 +813,201 @@ export function useSetWorldData() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(worldKeys.state(), data)
+    },
+  })
+}
+
+// ============= World Object Deletion Preview and Graceful Delete Hooks =============
+
+/**
+ * Fetch deletion preview for a world entity.
+ */
+async function fetchEntityDeletionPreview(entityId: string): Promise<WorldObjectDeletionPreview> {
+  const response = await fetch(`/api/world/entities/${entityId}/deletion-preview`, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch entity deletion preview')
+  }
+  return response.json()
+}
+
+/**
+ * Fetch deletion preview for a world event.
+ */
+async function fetchEventDeletionPreview(eventId: string): Promise<WorldObjectDeletionPreview> {
+  const response = await fetch(`/api/world/events/${eventId}/deletion-preview`, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch event deletion preview')
+  }
+  return response.json()
+}
+
+/**
+ * Fetch deletion preview for a world time.
+ */
+async function fetchTimeDeletionPreview(timeId: string): Promise<WorldObjectDeletionPreview> {
+  const response = await fetch(`/api/world/times/${timeId}/deletion-preview`, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch time deletion preview')
+  }
+  return response.json()
+}
+
+/**
+ * Hook to fetch deletion preview for a world entity.
+ * Shows counts of gloss references, relations, collection memberships,
+ * and annotations that will be affected when the entity is deleted.
+ *
+ * @param entityId - The entity ID
+ * @param enabled - Whether to enable the query (default: false)
+ */
+export function useEntityDeletionPreview(entityId: string | null | undefined, enabled = false) {
+  return useQuery({
+    queryKey: worldKeys.entityDeletionPreview(entityId ?? ''),
+    queryFn: () => fetchEntityDeletionPreview(entityId!),
+    enabled: !!entityId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch deletion preview for a world event.
+ */
+export function useEventDeletionPreview(eventId: string | null | undefined, enabled = false) {
+  return useQuery({
+    queryKey: worldKeys.eventDeletionPreview(eventId ?? ''),
+    queryFn: () => fetchEventDeletionPreview(eventId!),
+    enabled: !!eventId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch deletion preview for a world time.
+ */
+export function useTimeDeletionPreview(timeId: string | null | undefined, enabled = false) {
+  return useQuery({
+    queryKey: worldKeys.timeDeletionPreview(timeId ?? ''),
+    queryFn: () => fetchTimeDeletionPreview(timeId!),
+    enabled: !!timeId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Delete a world entity with graceful cleanup.
+ */
+async function deleteEntityGracefully(entityId: string): Promise<WorldObjectDeletionResult> {
+  const response = await fetch(`/api/world/entities/${entityId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete entity')
+  }
+  return response.json()
+}
+
+/**
+ * Delete a world event with graceful cleanup.
+ */
+async function deleteEventGracefully(eventId: string): Promise<WorldObjectDeletionResult> {
+  const response = await fetch(`/api/world/events/${eventId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete event')
+  }
+  return response.json()
+}
+
+/**
+ * Delete a world time with graceful cleanup.
+ */
+async function deleteTimeGracefully(timeId: string): Promise<WorldObjectDeletionResult> {
+  const response = await fetch(`/api/world/times/${timeId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete time')
+  }
+  return response.json()
+}
+
+/**
+ * Hook to delete a world entity with graceful cleanup.
+ * References in persona ontology glosses are converted to plain text.
+ * Relations and collection memberships are removed.
+ * Object annotations are deleted.
+ */
+export function useDeleteEntityGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (entityId: string) => {
+      const result = await deleteEntityGracefully(entityId)
+      return { entityId, result }
+    },
+    onSuccess: ({ entityId }) => {
+      // Invalidate world state to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
+      // Remove the deletion preview from cache
+      queryClient.removeQueries({ queryKey: worldKeys.entityDeletionPreview(entityId) })
+    },
+  })
+}
+
+/**
+ * Hook to delete a world event with graceful cleanup.
+ * References in persona ontology glosses are converted to plain text.
+ * Relations and collection memberships are removed.
+ * Object annotations are deleted.
+ */
+export function useDeleteEventGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const result = await deleteEventGracefully(eventId)
+      return { eventId, result }
+    },
+    onSuccess: ({ eventId }) => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
+      queryClient.removeQueries({ queryKey: worldKeys.eventDeletionPreview(eventId) })
+    },
+  })
+}
+
+/**
+ * Hook to delete a world time with graceful cleanup.
+ * References in persona ontology glosses are converted to plain text.
+ * Relations and collection memberships are removed.
+ * Object annotations are deleted.
+ */
+export function useDeleteTimeGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (timeId: string) => {
+      const result = await deleteTimeGracefully(timeId)
+      return { timeId, result }
+    },
+    onSuccess: ({ timeId }) => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
+      queryClient.removeQueries({ queryKey: worldKeys.timeDeletionPreview(timeId) })
     },
   })
 }

@@ -113,8 +113,17 @@ export {
   useAddEntityTypeAssignment,
   useAddEventInterpretation,
   useSetWorldData,
+  // World object deletion preview and graceful delete hooks
+  useEntityDeletionPreview,
+  useEventDeletionPreview,
+  useTimeDeletionPreview,
+  useDeleteEntityGracefully,
+  useDeleteEventGracefully,
+  useDeleteTimeGracefully,
   worldKeys,
   type WorldState,
+  type WorldObjectDeletionPreview,
+  type WorldObjectDeletionResult,
 } from './useWorld'
 
 // Personas
@@ -125,6 +134,7 @@ export {
   useCreatePersona,
   useUpdatePersona,
   useDeletePersona,
+  usePersonaDeletionPreview,
   useSavePersonaOntology,
   useAddEntityToPersona,
   useUpdateEntityInPersona,
@@ -146,7 +156,19 @@ export {
   useInvalidatePersonas,
   useSetPersonas,
   useSetPersonaOntology,
+  // Type deletion preview and graceful delete hooks
+  useEntityTypeDeletionPreview,
+  useRoleTypeDeletionPreview,
+  useEventTypeDeletionPreview,
+  useRelationTypeDeletionPreview,
+  useDeleteEntityTypeGracefully,
+  useDeleteRoleTypeGracefully,
+  useDeleteEventTypeGracefully,
+  useDeleteRelationTypeGracefully,
   personaKeys,
+  type PersonaDeletionPreview,
+  type TypeDeletionPreview,
+  type TypeDeletionResult,
 } from './usePersonas'
 
 // Admin

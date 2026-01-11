@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Box,
   Paper,
@@ -32,16 +32,18 @@ import {
   useUpdatePersona,
   useDeletePersona,
   useCopyPersona,
+  usePersonaDeletionPreview,
 } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 import { Persona } from '@models/types'
+import ConfirmDialog from '@components/shared/ConfirmDialog'
 
 export default function PersonaManager() {
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
   const { mutate: createPersonaMutation } = useCreatePersona()
   const { mutate: updatePersonaMutation } = useUpdatePersona()
-  const { mutate: deletePersonaMutation } = useDeletePersona()
+  const deletePersonaMutation = useDeletePersona()
   const { mutate: copyPersonaMutation } = useCopyPersona()
 
   // Zustand UI state
@@ -60,12 +62,20 @@ export default function PersonaManager() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
   const [createdPersonaId, setCreatedPersonaId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [personaToDelete, setPersonaToDelete] = useState<Persona | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     informationNeed: '',
     details: '',
   })
+
+  // Fetch deletion preview when delete dialog is open
+  const { data: deletionPreview, isFetching: isLoadingPreview } = usePersonaDeletionPreview(
+    personaToDelete?.id,
+    deleteDialogOpen
+  )
 
   // Auto-save persona edits on changes (debounced 1 second, matching ontology auto-save)
   useEffect(() => {
@@ -173,7 +183,7 @@ export default function PersonaManager() {
   const handleCancelCreate = () => {
     // Delete auto-created persona if user cancels
     if (createdPersonaId) {
-      deletePersonaMutation(createdPersonaId)
+      deletePersonaMutation.mutate(createdPersonaId)
     }
     setCreatedPersonaId(null)
     setCreateDialogOpen(false)
@@ -248,10 +258,53 @@ export default function PersonaManager() {
     }
   }
 
-  const handleDeletePersona = (personaId: string) => {
-    if (personas.length > 1 && window.confirm('Are you sure you want to delete this persona and all its ontology data?')) {
-      deletePersonaMutation(personaId)
+  const handleDeleteClick = useCallback((persona: Persona) => {
+    setPersonaToDelete(persona)
+    setDeleteDialogOpen(true)
+    handleMenuClose()
+  }, [])
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (personaToDelete) {
+      await deletePersonaMutation.mutateAsync(personaToDelete.id)
+      setDeleteDialogOpen(false)
+      setPersonaToDelete(null)
     }
+  }, [personaToDelete, deletePersonaMutation])
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteDialogOpen(false)
+    setPersonaToDelete(null)
+  }, [])
+
+  // Build confirmation message with affected items count
+  const getDeleteMessage = () => {
+    if (!personaToDelete) return ''
+
+    const parts = [`Are you sure you want to delete the persona "${personaToDelete.name}"?`]
+
+    if (deletionPreview) {
+      const affectedItems: string[] = []
+      if (deletionPreview.typeCount > 0) {
+        affectedItems.push(`${deletionPreview.typeCount} ontology type${deletionPreview.typeCount !== 1 ? 's' : ''}`)
+      }
+      if (deletionPreview.annotationCount > 0) {
+        affectedItems.push(`${deletionPreview.annotationCount} annotation${deletionPreview.annotationCount !== 1 ? 's' : ''}`)
+      }
+      if (deletionPreview.summaryCount > 0) {
+        affectedItems.push(`${deletionPreview.summaryCount} video summar${deletionPreview.summaryCount !== 1 ? 'ies' : 'y'}`)
+      }
+      if (deletionPreview.worldAssignmentCount > 0) {
+        affectedItems.push(`${deletionPreview.worldAssignmentCount} world object assignment${deletionPreview.worldAssignmentCount !== 1 ? 's' : ''}`)
+      }
+
+      if (affectedItems.length > 0) {
+        parts.push(`\n\nThis will also delete: ${affectedItems.join(', ')}.`)
+      }
+    }
+
+    parts.push('\n\nThis action cannot be undone.')
+    return parts.join('')
   }
 
   // Get ontology stats for active persona from activeOntology
@@ -357,9 +410,8 @@ export default function PersonaManager() {
                     size="small"
                     onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation()
-                      handleDeletePersona(persona.id)
+                      handleDeleteClick(persona)
                     }}
-                    disabled={personas.length <= 1}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -475,6 +527,17 @@ export default function PersonaManager() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Persona"
+        message={getDeleteMessage()}
+        confirmText="Delete"
+        confirmColor="error"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        loading={deletePersonaMutation.isPending || isLoadingPreview}
+      />
     </Box>
   )
 }

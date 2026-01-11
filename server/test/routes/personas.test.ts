@@ -31,6 +31,8 @@ describe('Personas API', () => {
     await prisma.videoSummary.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
+    await prisma.worldState.deleteMany()
+    await prisma.video.deleteMany()
     await prisma.user.deleteMany()
 
     // Create test user
@@ -455,6 +457,480 @@ describe('Personas API', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+
+    it('cascades deletion to associated video summaries', async () => {
+      // Create video first
+      const video = await prisma.video.create({
+        data: {
+          filename: 'test-video.mp4',
+          originalFilename: 'test-video.mp4',
+          size: 1000,
+          mimeType: 'video/mp4',
+          duration: 60,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          totalFrames: 1800,
+          uploadedBy: testUserId
+        }
+      })
+
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create video summary linked to persona
+      await prisma.videoSummary.create({
+        data: {
+          videoId: video.id,
+          personaId: persona.id,
+          summary: []
+        }
+      })
+
+      // Delete persona
+      await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Verify video summary was deleted
+      const summary = await prisma.videoSummary.findFirst({
+        where: { personaId: persona.id }
+      })
+      expect(summary).toBeNull()
+    })
+
+    it('cascades deletion to associated annotations', async () => {
+      // Create video first
+      const video = await prisma.video.create({
+        data: {
+          filename: 'test-video.mp4',
+          originalFilename: 'test-video.mp4',
+          size: 1000,
+          mimeType: 'video/mp4',
+          duration: 60,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          totalFrames: 1800,
+          uploadedBy: testUserId
+        }
+      })
+
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create annotation with personaId
+      await prisma.annotation.create({
+        data: {
+          videoId: video.id,
+          personaId: persona.id,
+          type: 'type',
+          label: 'entity-type-1',
+          frames: [{ frame: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+        }
+      })
+
+      // Delete persona
+      await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Verify annotation was deleted
+      const annotation = await prisma.annotation.findFirst({
+        where: { personaId: persona.id }
+      })
+      expect(annotation).toBeNull()
+    })
+
+    it('cleans up Entity.typeAssignments in WorldState', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create world state with entity having type assignment for this persona
+      await prisma.worldState.create({
+        data: {
+          userId: testUserId,
+          entities: [
+            {
+              id: 'entity-1',
+              name: 'Test Entity',
+              description: [],
+              typeAssignments: [
+                { personaId: persona.id, entityTypeId: 'type-1' },
+                { personaId: 'other-persona', entityTypeId: 'type-2' }
+              ]
+            }
+          ],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        }
+      })
+
+      // Delete persona
+      await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Verify type assignment was cleaned up
+      const worldState = await prisma.worldState.findUnique({
+        where: { userId: testUserId }
+      })
+      const entities = worldState?.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>
+      const entity = entities[0]
+      expect(entity.typeAssignments).toHaveLength(1)
+      expect(entity.typeAssignments![0].personaId).toBe('other-persona')
+    })
+
+    it('cleans up Event.personaInterpretations in WorldState', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create world state with event having persona interpretation
+      await prisma.worldState.create({
+        data: {
+          userId: testUserId,
+          entities: [],
+          events: [
+            {
+              id: 'event-1',
+              name: 'Test Event',
+              description: [],
+              personaInterpretations: [
+                { personaId: persona.id, eventTypeId: 'event-type-1', participants: [] },
+                { personaId: 'other-persona', eventTypeId: 'event-type-2', participants: [] }
+              ]
+            }
+          ],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        }
+      })
+
+      // Delete persona
+      await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Verify persona interpretation was cleaned up
+      const worldState = await prisma.worldState.findUnique({
+        where: { userId: testUserId }
+      })
+      const events = worldState?.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>
+      const event = events[0]
+      expect(event.personaInterpretations).toHaveLength(1)
+      expect(event.personaInterpretations![0].personaId).toBe('other-persona')
+    })
+
+    it('returns 401 without authentication', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`
+        // No session_token
+      })
+
+      expect(response.statusCode).toBe(401)
+    })
+
+    it('returns 404 when deleting another user\'s persona', async () => {
+      // Create another user
+      const anotherUser = await prisma.user.create({
+        data: {
+          username: 'anotheruser',
+          email: 'another@example.com',
+          passwordHash: await hashPassword('testpass123'),
+          displayName: 'Another User',
+          isAdmin: false
+        }
+      })
+
+      // Create persona for another user
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Another User Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: anotherUser.id
+        }
+      })
+
+      // Try to delete with testUser's session
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/personas/${persona.id}`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Should get 403 or 404 (implementation returns 403 for forbidden)
+      expect(response.statusCode).toBe(403)
+    })
+  })
+
+  describe('GET /api/personas/:id/deletion-preview', () => {
+    it('returns correct typeCount from ontology', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId,
+          ontology: {
+            create: {
+              entityTypes: [{ id: 'e1', name: 'Entity1' }],
+              roleTypes: [{ id: 'r1', name: 'Role1' }, { id: 'r2', name: 'Role2' }],
+              eventTypes: [{ id: 'ev1', name: 'Event1' }],
+              relationTypes: []
+            }
+          }
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${persona.id}/deletion-preview`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(200)
+      const preview = response.json()
+      expect(preview.typeCount).toBe(4) // 1 entity + 2 roles + 1 event
+    })
+
+    it('returns correct annotationCount', async () => {
+      const video = await prisma.video.create({
+        data: {
+          filename: 'test.mp4',
+          originalFilename: 'test.mp4',
+          size: 1000,
+          mimeType: 'video/mp4',
+          duration: 60,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          totalFrames: 1800,
+          uploadedBy: testUserId
+        }
+      })
+
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create 3 annotations
+      await prisma.annotation.createMany({
+        data: [
+          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test1', frames: [] },
+          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test2', frames: [] },
+          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test3', frames: [] }
+        ]
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${persona.id}/deletion-preview`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().annotationCount).toBe(3)
+    })
+
+    it('returns correct summaryCount', async () => {
+      const video1 = await prisma.video.create({
+        data: {
+          filename: 'test1.mp4',
+          originalFilename: 'test1.mp4',
+          size: 1000,
+          mimeType: 'video/mp4',
+          duration: 60,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          totalFrames: 1800,
+          uploadedBy: testUserId
+        }
+      })
+
+      const video2 = await prisma.video.create({
+        data: {
+          filename: 'test2.mp4',
+          originalFilename: 'test2.mp4',
+          size: 1000,
+          mimeType: 'video/mp4',
+          duration: 60,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          totalFrames: 1800,
+          uploadedBy: testUserId
+        }
+      })
+
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create 2 video summaries
+      await prisma.videoSummary.createMany({
+        data: [
+          { videoId: video1.id, personaId: persona.id, summary: [] },
+          { videoId: video2.id, personaId: persona.id, summary: [] }
+        ]
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${persona.id}/deletion-preview`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().summaryCount).toBe(2)
+    })
+
+    it('returns correct worldAssignmentCount', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      // Create world state with assignments
+      await prisma.worldState.create({
+        data: {
+          userId: testUserId,
+          entities: [
+            {
+              id: 'entity-1',
+              typeAssignments: [
+                { personaId: persona.id, entityTypeId: 'type-1' },
+                { personaId: persona.id, entityTypeId: 'type-2' }
+              ]
+            }
+          ],
+          events: [
+            {
+              id: 'event-1',
+              personaInterpretations: [
+                { personaId: persona.id, eventTypeId: 'event-type-1' }
+              ]
+            }
+          ],
+          times: [],
+          entityCollections: [
+            {
+              id: 'collection-1',
+              typeAssignments: [
+                { personaId: persona.id, entityTypeId: 'type-3' }
+              ]
+            }
+          ],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${persona.id}/deletion-preview`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().worldAssignmentCount).toBe(4) // 2 + 1 + 1
+    })
+
+    it('returns 404 for non-existent persona', async () => {
+      const fakeId = '00000000-0000-0000-0000-000000000000'
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${fakeId}/deletion-preview`,
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+
+    it('returns 401 without authentication', async () => {
+      const persona = await prisma.persona.create({
+        data: {
+          name: 'Test Persona',
+          role: 'Test Role',
+          informationNeed: 'Test Need',
+          userId: testUserId
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/personas/${persona.id}/deletion-preview`
+        // No session_token
+      })
+
+      expect(response.statusCode).toBe(401)
     })
   })
 })
