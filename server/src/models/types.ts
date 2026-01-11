@@ -9,10 +9,11 @@ export interface Persona {
 }
 
 export interface GlossItem {
-  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef'
+  type: 'text' | 'typeRef' | 'objectRef' | 'annotationRef' | 'claimRef'
   content: string
   refType?: 'entity' | 'role' | 'event' | 'relation' | 'entity-object' | 'event-object' | 'time-object' | 'location-object' | 'annotation'
-  refPersonaId?: string
+  refPersonaId?: string | null
+  refClaimId?: string
 }
 
 export interface TypeConstraint {
