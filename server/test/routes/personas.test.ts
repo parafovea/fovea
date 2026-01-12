@@ -463,16 +463,11 @@ describe('Personas API', () => {
       // Create video first
       const video = await prisma.video.create({
         data: {
-          filename: 'test-video.mp4',
-          originalFilename: 'test-video.mp4',
-          size: 1000,
-          mimeType: 'video/mp4',
+          filename: `test-video-summary-${Date.now()}.mp4`,
+          path: '/videos/test-video-summary.mp4',
           duration: 60,
-          width: 1920,
-          height: 1080,
           frameRate: 30,
-          totalFrames: 1800,
-          uploadedBy: testUserId
+          resolution: '1920x1080'
         }
       })
 
@@ -512,16 +507,11 @@ describe('Personas API', () => {
       // Create video first
       const video = await prisma.video.create({
         data: {
-          filename: 'test-video.mp4',
-          originalFilename: 'test-video.mp4',
-          size: 1000,
-          mimeType: 'video/mp4',
+          filename: `test-video-${Date.now()}.mp4`,
+          path: '/videos/test-video.mp4',
           duration: 60,
-          width: 1920,
-          height: 1080,
           frameRate: 30,
-          totalFrames: 1800,
-          uploadedBy: testUserId
+          resolution: '1920x1080'
         }
       })
 
@@ -747,16 +737,11 @@ describe('Personas API', () => {
     it('returns correct annotationCount', async () => {
       const video = await prisma.video.create({
         data: {
-          filename: 'test.mp4',
-          originalFilename: 'test.mp4',
-          size: 1000,
-          mimeType: 'video/mp4',
+          filename: `test-annot-${Date.now()}.mp4`,
+          path: '/videos/test-annot.mp4',
           duration: 60,
-          width: 1920,
-          height: 1080,
           frameRate: 30,
-          totalFrames: 1800,
-          uploadedBy: testUserId
+          resolution: '1920x1080'
         }
       })
 
@@ -791,31 +776,21 @@ describe('Personas API', () => {
     it('returns correct summaryCount', async () => {
       const video1 = await prisma.video.create({
         data: {
-          filename: 'test1.mp4',
-          originalFilename: 'test1.mp4',
-          size: 1000,
-          mimeType: 'video/mp4',
+          filename: `test1-${Date.now()}.mp4`,
+          path: '/videos/test1.mp4',
           duration: 60,
-          width: 1920,
-          height: 1080,
           frameRate: 30,
-          totalFrames: 1800,
-          uploadedBy: testUserId
+          resolution: '1920x1080'
         }
       })
 
       const video2 = await prisma.video.create({
         data: {
-          filename: 'test2.mp4',
-          originalFilename: 'test2.mp4',
-          size: 1000,
-          mimeType: 'video/mp4',
+          filename: `test2-${Date.now()}.mp4`,
+          path: '/videos/test2.mp4',
           duration: 60,
-          width: 1920,
-          height: 1080,
           frameRate: 30,
-          totalFrames: 1800,
-          uploadedBy: testUserId
+          resolution: '1920x1080'
         }
       })
 
