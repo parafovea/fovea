@@ -113,25 +113,42 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
     if (!personaId) return
 
     const now = new Date().toISOString()
-    const eventData: EventType = {
-      id: event?.id || generateId(),
-      name,
-      gloss,
-      roles,
-      examples,
-      wikidataId: wikidataId || undefined,
-      wikidataUrl: wikidataUrl || undefined,
-      importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
-      importedAt: wikidataId ? (importedAt || now) : undefined,
-      createdAt: event?.createdAt || now,
-      updatedAt: now,
-    }
 
     if (event) {
+      // Editing existing event type
+      const eventData: EventType = {
+        ...event,
+        name,
+        gloss,
+        roles,
+        examples,
+        wikidataId: wikidataId || undefined,
+        wikidataUrl: wikidataUrl || undefined,
+        importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+        importedAt: wikidataId ? (importedAt || now) : undefined,
+        updatedAt: now,
+      }
       await updateEvent({ personaId, event: eventData })
     } else {
+      // Creating new event types for selected personas
+      // Generate a shared ID if creating for multiple personas
+      const sharedTypeId = targetPersonaIds.length > 1 ? generateId() : undefined
+
       await Promise.all(targetPersonaIds.map(async (targetId) => {
-        const newEventData = { ...eventData, id: generateId() }
+        const newEventData: EventType = {
+          id: generateId(),
+          sharedTypeId,
+          name,
+          gloss,
+          roles,
+          examples,
+          wikidataId: wikidataId || undefined,
+          wikidataUrl: wikidataUrl || undefined,
+          importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+          importedAt: wikidataId ? now : undefined,
+          createdAt: now,
+          updatedAt: now,
+        }
         await addEvent({ personaId: targetId, event: newEventData })
       }))
     }

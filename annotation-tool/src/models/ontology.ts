@@ -9,6 +9,8 @@ import type { GlossItem, TypeConstraint } from './gloss'
 export interface EntityType {
   /** Unique identifier for the entity type */
   id: string
+  /** Shared identifier linking equivalent types across personas */
+  sharedTypeId?: string
   /** Display name for the entity type */
   name: string
   /** Rich text definition/description of the entity type */
@@ -41,6 +43,8 @@ export interface EntityType {
 export interface RoleType {
   /** Unique identifier for the role type */
   id: string
+  /** Shared identifier linking equivalent types across personas */
+  sharedTypeId?: string
   /** Display name for the role type */
   name: string
   /** Rich text definition/description of the role type */
@@ -94,6 +98,8 @@ export interface EventRole {
 export interface EventType {
   /** Unique identifier for the event type */
   id: string
+  /** Shared identifier linking equivalent types across personas */
+  sharedTypeId?: string
   /** Display name for the event type */
   name: string
   /** Rich text definition/description of the event type */
@@ -128,6 +134,8 @@ export interface EventType {
 export interface RelationType {
   /** Unique identifier for the relation type */
   id: string
+  /** Shared identifier linking equivalent types across personas */
+  sharedTypeId?: string
   /** Display name for the relation type */
   name: string
   /** Rich text definition/description of the relation */

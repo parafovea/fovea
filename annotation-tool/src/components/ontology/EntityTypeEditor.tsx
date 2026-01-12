@@ -65,6 +65,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       setGloss(entity.gloss)
       setExamples(entity.examples || [])
       setMode('manual')
+      // When editing, always use the current persona only
       setTargetPersonaIds([personaId || ''])
       setWikidataId(entity.wikidataId || '')
       setWikidataUrl(entity.wikidataUrl || '')
@@ -76,7 +77,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       setMode('manual')
       setSourcePersonaId('')
       setSourceEntityId('')
-      setTargetPersonaIds([personaId || ''])
+      // Don't reset targetPersonaIds when creating - preserve user's persona selections
+      // Only initialize if empty (first open)
+      if (targetPersonaIds.length === 0 || (targetPersonaIds.length === 1 && targetPersonaIds[0] === '')) {
+        setTargetPersonaIds([personaId || ''])
+      }
       setWikidataId('')
       setWikidataUrl('')
       setImportedAt('')
@@ -119,9 +124,13 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       }
     } else {
       // Creating new entity types for selected personas
+      // Generate a shared ID if creating for multiple personas
+      const sharedTypeId = targetPersonaIds.length > 1 ? generateId() : undefined
+
       await Promise.all(targetPersonaIds.map(async (targetId) => {
         const entityData: EntityType = {
           id: generateId(),
+          sharedTypeId,
           name,
           gloss,
           examples,

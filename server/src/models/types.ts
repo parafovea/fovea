@@ -23,6 +23,7 @@ export interface TypeConstraint {
 
 export interface EntityType {
   id: string
+  sharedTypeId?: string
   name: string
   gloss: GlossItem[]
   constraints?: TypeConstraint[]
@@ -33,6 +34,7 @@ export interface EntityType {
 
 export interface RoleType {
   id: string
+  sharedTypeId?: string
   name: string
   gloss: GlossItem[]
   allowedFillerTypes: ('entity' | 'event')[]
@@ -52,6 +54,7 @@ export interface EventRole {
 
 export interface EventType {
   id: string
+  sharedTypeId?: string
   name: string
   gloss: GlossItem[]
   roles: EventRole[]
@@ -217,6 +220,7 @@ export interface TimeSpan {
 
 export interface RelationType {
   id: string
+  sharedTypeId?: string
   name: string
   gloss: GlossItem[]
   sourceTypes: ('entity' | 'role' | 'event' | 'time')[]

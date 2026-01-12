@@ -107,25 +107,42 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
     if (!personaId) return
 
     const now = new Date().toISOString()
-    const roleData: RoleType = {
-      id: role?.id || generateId(),
-      name,
-      gloss,
-      allowedFillerTypes,
-      examples,
-      wikidataId: wikidataId || undefined,
-      wikidataUrl: wikidataUrl || undefined,
-      importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
-      importedAt: wikidataId ? (importedAt || now) : undefined,
-      createdAt: role?.createdAt || now,
-      updatedAt: now,
-    }
 
     if (role) {
+      // Editing existing role type
+      const roleData: RoleType = {
+        ...role,
+        name,
+        gloss,
+        allowedFillerTypes,
+        examples,
+        wikidataId: wikidataId || undefined,
+        wikidataUrl: wikidataUrl || undefined,
+        importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+        importedAt: wikidataId ? (importedAt || now) : undefined,
+        updatedAt: now,
+      }
       await updateRole({ personaId, role: roleData })
     } else {
+      // Creating new role types for selected personas
+      // Generate a shared ID if creating for multiple personas
+      const sharedTypeId = targetPersonaIds.length > 1 ? generateId() : undefined
+
       await Promise.all(targetPersonaIds.map(async (targetId) => {
-        const newRoleData = { ...roleData, id: generateId() }
+        const newRoleData: RoleType = {
+          id: generateId(),
+          sharedTypeId,
+          name,
+          gloss,
+          allowedFillerTypes,
+          examples,
+          wikidataId: wikidataId || undefined,
+          wikidataUrl: wikidataUrl || undefined,
+          importedFrom: mode === 'wikidata' ? 'wikidata' : mode === 'copy' ? 'persona' : undefined,
+          importedAt: wikidataId ? now : undefined,
+          createdAt: now,
+          updatedAt: now,
+        }
         await addRole({ personaId: targetId, role: newRoleData })
       }))
     }
