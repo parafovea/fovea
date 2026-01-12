@@ -104,6 +104,7 @@ export const BoundingBoxSequenceSchema = z.object({
  */
 export const EntityTypeSchema = z.object({
   id: z.string(),
+  sharedTypeId: z.string().optional(),
   name: z.string().min(1),
   gloss: z.array(GlossItemSchema),
   constraints: z.array(TypeConstraintSchema).optional(),
@@ -128,6 +129,7 @@ export const EventRoleSchema = z.object({
  */
 export const EventTypeSchema = z.object({
   id: z.string(),
+  sharedTypeId: z.string().optional(),
   name: z.string().min(1),
   gloss: z.array(GlossItemSchema),
   roles: z.array(EventRoleSchema),
@@ -142,6 +144,7 @@ export const EventTypeSchema = z.object({
  */
 export const RoleTypeSchema = z.object({
   id: z.string(),
+  sharedTypeId: z.string().optional(),
   name: z.string().min(1),
   gloss: z.array(GlossItemSchema),
   allowedFillerTypes: z.array(z.enum(['entity', 'event'])),
@@ -156,6 +159,7 @@ export const RoleTypeSchema = z.object({
  */
 export const RelationTypeSchema = z.object({
   id: z.string(),
+  sharedTypeId: z.string().optional(),
   name: z.string().min(1),
   gloss: z.array(GlossItemSchema),
   sourceTypes: z.array(z.enum(['entity', 'role', 'event', 'time'])),

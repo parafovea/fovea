@@ -88,17 +88,46 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
   const handleAddTypeAssignment = () => {
     if (selectedPersonaId && selectedEntityTypeId) {
-      const newAssignment: EntityTypeAssignment = {
-        personaId: selectedPersonaId,
-        entityTypeId: selectedEntityTypeId,
-        confidence: assignmentConfidence,
-        justification: assignmentJustification || undefined,
+      // Get the selected type to check for sharedTypeId or wikidataId
+      const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
+      const selectedType = selectedOntology?.entities.find(e => e.id === selectedEntityTypeId)
+
+      const assignments: EntityTypeAssignment[] = []
+
+      // Check for sharedTypeId or wikidataId to find linked types across personas
+      const sharedId = selectedType?.sharedTypeId || selectedType?.wikidataId
+
+      if (sharedId) {
+        // Find all types with matching sharedTypeId or wikidataId across all personas
+        for (const ontology of personaOntologies) {
+          const matchingType = ontology.entities.find(e =>
+            e.sharedTypeId === sharedId ||
+            (selectedType?.wikidataId && e.wikidataId === selectedType.wikidataId)
+          )
+          if (matchingType) {
+            assignments.push({
+              personaId: ontology.personaId,
+              entityTypeId: matchingType.id,
+              confidence: assignmentConfidence,
+              justification: assignmentJustification || undefined,
+            })
+          }
+        }
+      } else {
+        // No sharedTypeId, just add single assignment
+        assignments.push({
+          personaId: selectedPersonaId,
+          entityTypeId: selectedEntityTypeId,
+          confidence: assignmentConfidence,
+          justification: assignmentJustification || undefined,
+        })
       }
-      
-      // Remove any existing assignment for this persona
-      const filtered = typeAssignments.filter(a => a.personaId !== selectedPersonaId)
-      setTypeAssignments([...filtered, newAssignment])
-      
+
+      // Remove existing assignments for all personas being updated
+      const personaIdsToReplace = new Set(assignments.map(a => a.personaId))
+      const filtered = typeAssignments.filter(a => !personaIdsToReplace.has(a.personaId))
+      setTypeAssignments([...filtered, ...assignments])
+
       // Reset form
       setSelectedEntityTypeId('')
       setAssignmentConfidence(1.0)

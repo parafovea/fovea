@@ -36,6 +36,7 @@ export interface EntityType {
   id: string
   name: string
   definition: string
+  sharedTypeId?: string
 }
 
 export interface EventType {
@@ -475,8 +476,39 @@ export class DatabaseHelper {
       name: entityType.name,
       definition: Array.isArray(entityType.gloss)
         ? entityType.gloss.find((g: any) => g.type === 'text')?.content || ''
-        : entityType.gloss
+        : entityType.gloss,
+      sharedTypeId: entityType.sharedTypeId
     } : null
+  }
+
+  /**
+   * Get all entity types for a persona.
+   * @param personaId - ID of persona
+   */
+  async getEntityTypes(personaId: string): Promise<EntityType[]> {
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    if (!getResponse.ok) {
+      return []
+    }
+    const ontology = await getResponse.json()
+    return (ontology.entities || []).map((entityType: any) => ({
+      id: entityType.id,
+      name: entityType.name,
+      definition: Array.isArray(entityType.gloss)
+        ? entityType.gloss.find((g: any) => g.type === 'text')?.content || ''
+        : entityType.gloss,
+      sharedTypeId: entityType.sharedTypeId
+    }))
+  }
+
+  /**
+   * Get entity type by name for a persona.
+   * @param personaId - ID of persona
+   * @param name - Name of entity type
+   */
+  async getEntityTypeByName(personaId: string, name: string): Promise<EntityType | null> {
+    const entityTypes = await this.getEntityTypes(personaId)
+    return entityTypes.find(e => e.name === name) || null
   }
 
   /**

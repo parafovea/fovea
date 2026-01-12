@@ -15,6 +15,7 @@ import {
   Tabs,
   Tab,
   FormControl,
+  FormGroup,
   InputLabel,
   Select,
   MenuItem,
@@ -33,6 +34,7 @@ import {
 } from '@mui/icons-material'
 import { generateId } from '@utils/uuid'
 import {
+  usePersonas,
   usePersonaOntology,
   useAddRelationTypeToPersona,
   useUpdateRelationTypeInPersona,
@@ -56,6 +58,7 @@ export default function RelationTypeEditor({
   personaId,
 }: RelationTypeEditorProps) {
   // TanStack Query hooks
+  const { data: personas = [] } = usePersonas()
   const { data: ontology } = usePersonaOntology(personaId)
   const { mutateAsync: addRelationTypeMutation } = useAddRelationTypeToPersona()
   const { mutateAsync: updateRelationTypeMutation } = useUpdateRelationTypeInPersona()
@@ -63,6 +66,7 @@ export default function RelationTypeEditor({
   const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
 
   const [tabValue, setTabValue] = useState(0)
+  const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([])
   const [sourceTypes, setSourceTypes] = useState<('entity' | 'role' | 'event' | 'time' | 'claim')[]>([])
@@ -88,6 +92,8 @@ export default function RelationTypeEditor({
       setTransitive(relationType.transitive || false)
       setExamples(relationType.examples || [])
       setTabValue(0) // Start on definition tab when editing
+      // When editing, always use the current persona only
+      setTargetPersonaIds([personaId || ''])
     } else {
       setName('')
       setGloss([])
@@ -97,11 +103,16 @@ export default function RelationTypeEditor({
       setTransitive(false)
       setExamples([])
       setTabValue(0)
+      // Don't reset targetPersonaIds when creating - preserve user's persona selections
+      // Only initialize if empty (first open)
+      if (targetPersonaIds.length === 0 || (targetPersonaIds.length === 1 && targetPersonaIds[0] === '')) {
+        setTargetPersonaIds([personaId || ''])
+      }
     }
     setExampleInput('')
     setSourceId('')
     setTargetId('')
-  }, [relationType])
+  }, [relationType, personaId])
 
   const handleSave = async () => {
     if (!personaId) return
@@ -110,23 +121,43 @@ export default function RelationTypeEditor({
     if (!name.trim() || !gloss.some(g => g.content.trim())) return
     if (sourceTypes.length === 0 || targetTypes.length === 0) return
 
-    const relationTypeData: RelationType = {
-      id: relationType?.id || generateId(),
-      name,
-      gloss,
-      sourceTypes,
-      targetTypes,
-      symmetric,
-      transitive,
-      examples,
-      createdAt: relationType?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
+    const now = new Date().toISOString()
 
     if (relationType) {
+      // Editing existing relation type
+      const relationTypeData: RelationType = {
+        ...relationType,
+        name,
+        gloss,
+        sourceTypes,
+        targetTypes,
+        symmetric,
+        transitive,
+        examples,
+        updatedAt: now,
+      }
       await updateRelationTypeMutation({ personaId, relationType: relationTypeData })
     } else {
-      await addRelationTypeMutation({ personaId, relationType: relationTypeData })
+      // Creating new relation types for selected personas
+      // Generate a shared ID if creating for multiple personas
+      const sharedTypeId = targetPersonaIds.length > 1 ? generateId() : undefined
+
+      await Promise.all(targetPersonaIds.map(async (targetId) => {
+        const relationTypeData: RelationType = {
+          id: generateId(),
+          sharedTypeId,
+          name,
+          gloss,
+          sourceTypes,
+          targetTypes,
+          symmetric,
+          transitive,
+          examples,
+          createdAt: now,
+          updatedAt: now,
+        }
+        await addRelationTypeMutation({ personaId: targetId, relationType: relationTypeData })
+      }))
     }
 
     onClose()
@@ -523,6 +554,36 @@ export default function RelationTypeEditor({
                 ))}
               </List>
             )}
+          </Box>
+        )}
+
+        {/* Persona selection for new relation types */}
+        {!relationType && personas.length > 1 && (
+          <Box sx={{ mt: 2 }}>
+            <Divider sx={{ mb: 2 }} />
+            <Typography variant="subtitle2" gutterBottom>
+              Add to Personas
+            </Typography>
+            <FormGroup>
+              {personas.map(persona => (
+                <FormControlLabel
+                  key={persona.id}
+                  control={
+                    <Checkbox
+                      checked={targetPersonaIds.includes(persona.id)}
+                      onChange={() => {
+                        setTargetPersonaIds(
+                          targetPersonaIds.includes(persona.id)
+                            ? targetPersonaIds.filter(id => id !== persona.id)
+                            : [...targetPersonaIds, persona.id]
+                        )
+                      }}
+                    />
+                  }
+                  label={persona.name}
+                />
+              ))}
+            </FormGroup>
           </Box>
         )}
       </DialogContent>
