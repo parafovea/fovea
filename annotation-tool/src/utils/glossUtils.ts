@@ -31,6 +31,9 @@ export function glossToText(
             case 'event':
               typeObj = activeOntology.events.find((e) => e.id === item.content)
               break
+            case 'relation':
+              typeObj = activeOntology.relationTypes.find((r) => r.id === item.content)
+              break
           }
         }
         return typeObj ? typeObj.name : item.content

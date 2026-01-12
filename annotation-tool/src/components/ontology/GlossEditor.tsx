@@ -29,7 +29,7 @@ interface GlossEditorProps {
 interface TypeOption {
   id: string
   name: string
-  type: 'entity' | 'role' | 'event'
+  type: 'entity' | 'role' | 'event' | 'relation'
   personaId?: string | null
 }
 
@@ -72,7 +72,7 @@ export default function GlossEditor({
   const inputRef = useRef<HTMLInputElement>(null)
   const [cursorPosition, setCursorPosition] = useState(0)
 
-  // Get all available types (excluding relations as per requirement)
+  // Get all available types
   const allTypes: TypeOption[] = useMemo(() => [
     ...((!availableTypes || availableTypes.includes('entity')) ?
       (activeOntology?.entities.map(e => ({ id: e.id, name: e.name, type: 'entity' as const, personaId })) || []) : []),
@@ -80,6 +80,8 @@ export default function GlossEditor({
       (activeOntology?.roles.map(r => ({ id: r.id, name: r.name, type: 'role' as const, personaId })) || []) : []),
     ...((!availableTypes || availableTypes.includes('event')) ?
       (activeOntology?.events.map(e => ({ id: e.id, name: e.name, type: 'event' as const, personaId })) || []) : []),
+    ...((!availableTypes || availableTypes.includes('relation')) ?
+      (activeOntology?.relationTypes.map(r => ({ id: r.id, name: r.name, type: 'relation' as const, personaId })) || []) : []),
   ], [availableTypes, activeOntology, personaId])
 
   // Get all available objects
@@ -156,6 +158,7 @@ export default function GlossEditor({
     entity: filteredTypes.filter(t => t.type === 'entity'),
     role: filteredTypes.filter(t => t.type === 'role'),
     event: filteredTypes.filter(t => t.type === 'event'),
+    relation: filteredTypes.filter(t => t.type === 'relation'),
   }
 
   // Group filtered objects by type
@@ -457,8 +460,8 @@ export default function GlossEditor({
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (!showAutocomplete) return
     
-    const allFilteredItems = autocompleteMode === 'types' 
-      ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event]
+    const allFilteredItems = autocompleteMode === 'types'
+      ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event, ...groupedTypes.relation]
       : autocompleteMode === 'objects'
       ? [...groupedObjects.entities, ...groupedObjects.locations, ...groupedObjects.events, ...groupedObjects.times]
       : filteredAnnotations
@@ -627,7 +630,31 @@ export default function GlossEditor({
                       })}
                     </>
                   )}
-                  
+
+                  {groupedTypes.relation.length > 0 && (
+                    <>
+                      <ListSubheader>Relation Types</ListSubheader>
+                      {groupedTypes.relation.map((type, idx) => {
+                        const globalIdx = groupedTypes.entity.length + groupedTypes.role.length + groupedTypes.event.length + idx
+                        return (
+                          <ListItem
+                            key={type.id}
+                            onClick={() => insertReference(type)}
+                            sx={{
+                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: 'action.hover',
+                              }
+                            }}
+                          >
+                            <ListItemText primary={type.name} />
+                          </ListItem>
+                        )
+                      })}
+                    </>
+                  )}
+
                   {filteredTypes.length === 0 && (
                     <ListItem>
                       <ListItemText 
