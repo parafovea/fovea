@@ -1028,6 +1028,21 @@ export const handlers = [
     })
   }),
 
+  // Persona deletion preview
+  http.get('*/api/personas/:personaId/deletion-preview', () => {
+    return HttpResponse.json({
+      typeCount: 3,
+      annotationCount: 5,
+      summaryCount: 2,
+      worldAssignmentCount: 1,
+    })
+  }),
+
+  // Persona deletion
+  http.delete('*/api/personas/:personaId', () => {
+    return HttpResponse.json({ message: 'Persona deleted successfully' })
+  }),
+
   // Video summaries endpoints (relative URLs)
   http.get('/api/videos/:videoId/summaries', () => {
     return HttpResponse.json([
@@ -1875,6 +1890,183 @@ export const handlers = [
         },
       ],
       total: 1,
+    })
+  }),
+
+  // =============================================================================
+  // TYPE DELETION PREVIEW AND GRACEFUL DELETE ENDPOINTS
+  // =============================================================================
+
+  /**
+   * Entity type deletion preview.
+   */
+  http.get('*/api/personas/:personaId/ontology/entities/:typeId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 2,
+      annotationCount: 5,
+      worldAssignmentCount: 3,
+    })
+  }),
+
+  /**
+   * Entity type graceful delete.
+   */
+  http.delete('*/api/personas/:personaId/ontology/entities/:typeId', () => {
+    return HttpResponse.json({
+      message: 'Entity type deleted successfully',
+      glossReferencesConverted: 2,
+      annotationsDeleted: 5,
+      worldAssignmentsRemoved: 3,
+    })
+  }),
+
+  /**
+   * Role type deletion preview.
+   */
+  http.get('*/api/personas/:personaId/ontology/roles/:typeId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 1,
+      annotationCount: 0,
+      worldAssignmentCount: 0,
+      eventTypeRoleCount: 4,
+    })
+  }),
+
+  /**
+   * Role type graceful delete.
+   */
+  http.delete('*/api/personas/:personaId/ontology/roles/:typeId', () => {
+    return HttpResponse.json({
+      message: 'Role type deleted successfully',
+      glossReferencesConverted: 1,
+      annotationsDeleted: 0,
+      worldAssignmentsRemoved: 0,
+      eventTypeRolesRemoved: 4,
+    })
+  }),
+
+  /**
+   * Event type deletion preview.
+   */
+  http.get('*/api/personas/:personaId/ontology/events/:typeId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 3,
+      annotationCount: 10,
+      worldAssignmentCount: 2,
+    })
+  }),
+
+  /**
+   * Event type graceful delete.
+   */
+  http.delete('*/api/personas/:personaId/ontology/events/:typeId', () => {
+    return HttpResponse.json({
+      message: 'Event type deleted successfully',
+      glossReferencesConverted: 3,
+      annotationsDeleted: 10,
+      worldAssignmentsRemoved: 2,
+    })
+  }),
+
+  /**
+   * Relation type deletion preview.
+   */
+  http.get('*/api/personas/:personaId/ontology/relation-types/:typeId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 0,
+      annotationCount: 0,
+      worldAssignmentCount: 0,
+    })
+  }),
+
+  /**
+   * Relation type graceful delete.
+   */
+  http.delete('*/api/personas/:personaId/ontology/relation-types/:typeId', () => {
+    return HttpResponse.json({
+      message: 'Relation type deleted successfully',
+      glossReferencesConverted: 0,
+      annotationsDeleted: 0,
+      worldAssignmentsRemoved: 0,
+    })
+  }),
+
+  // =============================================================================
+  // WORLD OBJECT DELETION PREVIEW AND GRACEFUL DELETE ENDPOINTS
+  // =============================================================================
+
+  /**
+   * World entity deletion preview.
+   */
+  http.get('*/api/world/entities/:entityId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 5,
+      relationCount: 3,
+      collectionMemberships: 1,
+      annotationCount: 8,
+    })
+  }),
+
+  /**
+   * World entity graceful delete.
+   */
+  http.delete('*/api/world/entities/:entityId', () => {
+    return HttpResponse.json({
+      message: 'Entity deleted successfully',
+      glossReferencesConverted: 5,
+      relationsRemoved: 3,
+      collectionMembershipsRemoved: 1,
+      annotationsDeleted: 8,
+    })
+  }),
+
+  /**
+   * World event deletion preview.
+   */
+  http.get('*/api/world/events/:eventId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 2,
+      relationCount: 1,
+      collectionMemberships: 0,
+      annotationCount: 4,
+    })
+  }),
+
+  /**
+   * World event graceful delete.
+   */
+  http.delete('*/api/world/events/:eventId', () => {
+    return HttpResponse.json({
+      message: 'Event deleted successfully',
+      glossReferencesConverted: 2,
+      relationsRemoved: 1,
+      collectionMembershipsRemoved: 0,
+      annotationsDeleted: 4,
+    })
+  }),
+
+  /**
+   * World time deletion preview.
+   */
+  http.get('*/api/world/times/:timeId/deletion-preview', () => {
+    return HttpResponse.json({
+      glossReferences: 1,
+      relationCount: 2,
+      collectionMemberships: 1,
+      annotationCount: 3,
+    })
+  }),
+
+  /**
+   * World time graceful delete.
+   */
+  http.delete('*/api/world/times/:timeId', () => {
+    return HttpResponse.json({
+      message: 'Time deleted successfully',
+      glossReferencesConverted: 1,
+      relationsRemoved: 2,
+      collectionMembershipsRemoved: 1,
+      annotationsDeleted: 3,
     })
   }),
 ]

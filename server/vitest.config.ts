@@ -1,10 +1,22 @@
 import { defineConfig } from 'vitest/config'
+import path from 'path'
 
 /**
  * Vitest configuration for the backend server.
  * Tests run in Node.js environment with coverage reporting.
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@models': path.resolve(__dirname, './src/models'),
+      '@lib': path.resolve(__dirname, './src/lib'),
+      '@middleware': path.resolve(__dirname, './src/middleware'),
+      '@routes': path.resolve(__dirname, './src/routes'),
+      '@services': path.resolve(__dirname, './src/services'),
+      '@queues': path.resolve(__dirname, './src/queues'),
+      '@repositories': path.resolve(__dirname, './src/repositories'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',

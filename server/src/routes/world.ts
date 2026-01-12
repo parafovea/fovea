@@ -1,7 +1,19 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { optionalAuth, requireAdmin } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
+import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
+import { NotFoundError, UnauthorizedError, InternalError } from '@lib/errors.js'
+import { convertObjectRefsToText, countObjectRefsInGlosses } from '@lib/reference-cleanup.js'
+import {
+  asEntityTypes,
+  asRoleTypes,
+  asEventTypes,
+  asRelationTypes,
+  asEntities,
+  asEvents,
+  asTimes,
+  asWorldRelations,
+  asWorldCollections,
+} from '@lib/prisma-json.js'
 
 /**
  * Request body for world state update endpoint.
@@ -303,6 +315,763 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       userId
     })
   })
+
+  // ==========================================================================
+  // World Object Deletion Endpoints with Reference Cleanup
+  // ==========================================================================
+
+  /**
+   * Helper to get user ID from request or default user.
+   */
+  async function getUserId(request: { user?: { id: string } }): Promise<string> {
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+
+    if (request.user) {
+      return request.user.id
+    } else if (mode === 'single-user') {
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+      })
+      if (!defaultUser) {
+        throw new InternalError('Default user not found in single-user mode')
+      }
+      return defaultUser.id
+    } else {
+      throw new UnauthorizedError('Authentication required')
+    }
+  }
+
+  /**
+   * Get deletion preview for a world entity.
+   *
+   * @route GET /api/world/entities/:entityId/deletion-preview
+   */
+  fastify.get<{ Params: { entityId: string } }>(
+    '/api/world/entities/:entityId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for a world entity',
+        tags: ['world'],
+        params: Type.Object({
+          entityId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            relationCount: Type.Number(),
+            collectionMemberships: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { entityId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const entities = asEntities(worldState.entities)
+      const targetEntity = entities.find(e => e.id === entityId)
+      if (!targetEntity) {
+        throw new NotFoundError('Entity', entityId)
+      }
+
+      // Count gloss references in all personas' ontologies
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        glossReferences += countObjectRefsInGlosses(entityTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, entityId, 'entity-object')
+      }
+
+      // Count annotations linking to this entity
+      // Note: Annotations use JSON frames field, need raw query or scan
+      // For simplicity, count annotations that might reference this entity
+      const annotationCount = 0 // Would need to scan frames JSON field
+
+      // Count relations referencing this entity
+      const relations = asWorldRelations(worldState.relations)
+      const relationCount = relations.filter(
+        r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
+             (r.targetType === 'entity' && r.targetId === entityId)
+      ).length
+
+      // Count collection memberships
+      const entityCollections = asWorldCollections(worldState.entityCollections)
+      let collectionMemberships = 0
+      for (const collection of entityCollections) {
+        if (collection.members?.includes(entityId)) {
+          collectionMemberships++
+        }
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount,
+        relationCount,
+        collectionMemberships
+      })
+    }
+  )
+
+  /**
+   * Delete a world entity with reference cleanup.
+   *
+   * @route DELETE /api/world/entities/:entityId
+   */
+  fastify.delete<{ Params: { entityId: string } }>(
+    '/api/world/entities/:entityId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete a world entity with reference cleanup',
+        tags: ['world'],
+        params: Type.Object({
+          entityId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              relations: Type.Number(),
+              collectionMemberships: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { entityId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const entities = asEntities(worldState.entities)
+      const targetEntity = entities.find(e => e.id === entityId)
+      if (!targetEntity) {
+        throw new NotFoundError('Entity', entityId)
+      }
+
+      const entityName = targetEntity.name || entityId
+
+      // Remove entity from list
+      const updatedEntities = entities.filter(e => e.id !== entityId)
+
+      // Remove relations referencing this entity
+      const relations = asWorldRelations(worldState.relations)
+      const relationsRemoved = relations.filter(
+        r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
+             (r.targetType === 'entity' && r.targetId === entityId)
+      ).length
+      const updatedRelations = relations.filter(
+        r => !((r.sourceType === 'entity' && r.sourceId === entityId) ||
+               (r.targetType === 'entity' && r.targetId === entityId))
+      )
+
+      // Remove from collections
+      const entityCollections = asWorldCollections(worldState.entityCollections)
+      let collectionMemberships = 0
+      const updatedEntityCollections = entityCollections.map(collection => {
+        if (collection.members?.includes(entityId)) {
+          collectionMemberships++
+          return {
+            ...collection,
+            members: collection.members.filter(id => id !== entityId)
+          }
+        }
+        return collection
+      })
+
+      // Update world state
+      await fastify.prisma.worldState.update({
+        where: { userId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entities: updatedEntities as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relations: updatedRelations as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entityCollections: updatedEntityCollections as any
+        }
+      })
+
+      // Convert objectRefs in glosses
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        // Count references
+        glossReferences += countObjectRefsInGlosses(entityTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, entityId, 'entity-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, entityId, 'entity-object')
+
+        // Convert references to text
+        const cleanedEntityTypes = entityTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, entityId, 'entity-object', entityName) : type.gloss
+        }))
+        const cleanedRoleTypes = roleTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, entityId, 'entity-object', entityName) : type.gloss
+        }))
+        const cleanedEventTypes = eventTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, entityId, 'entity-object', entityName) : type.gloss
+        }))
+        const cleanedRelationTypes = relationTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, entityId, 'entity-object', entityName) : type.gloss
+        }))
+
+        // Update ontology
+        await fastify.prisma.ontology.update({
+          where: { personaId: persona.id },
+          data: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            entityTypes: cleanedEntityTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            roleTypes: cleanedRoleTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            eventTypes: cleanedEventTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            relationTypes: cleanedRelationTypes as any
+          }
+        })
+      }
+
+      return reply.send({
+        message: `Entity "${entityName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          relations: relationsRemoved,
+          collectionMemberships
+        }
+      })
+    }
+  )
+
+  /**
+   * Get deletion preview for a world event.
+   *
+   * @route GET /api/world/events/:eventId/deletion-preview
+   */
+  fastify.get<{ Params: { eventId: string } }>(
+    '/api/world/events/:eventId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for a world event',
+        tags: ['world'],
+        params: Type.Object({
+          eventId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            relationCount: Type.Number(),
+            collectionMemberships: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { eventId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const events = asEvents(worldState.events)
+      const targetEvent = events.find(e => e.id === eventId)
+      if (!targetEvent) {
+        throw new NotFoundError('Event', eventId)
+      }
+
+      // Count gloss references
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        glossReferences += countObjectRefsInGlosses(entityTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, eventId, 'event-object')
+      }
+
+      // Count relations
+      const relations = asWorldRelations(worldState.relations)
+      const relationCount = relations.filter(
+        r => (r.sourceType === 'event' && r.sourceId === eventId) ||
+             (r.targetType === 'event' && r.targetId === eventId)
+      ).length
+
+      // Count collection memberships
+      const eventCollections = asWorldCollections(worldState.eventCollections)
+      let collectionMemberships = 0
+      for (const collection of eventCollections) {
+        if (collection.members?.includes(eventId)) {
+          collectionMemberships++
+        }
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount: 0,
+        relationCount,
+        collectionMemberships
+      })
+    }
+  )
+
+  /**
+   * Delete a world event with reference cleanup.
+   *
+   * @route DELETE /api/world/events/:eventId
+   */
+  fastify.delete<{ Params: { eventId: string } }>(
+    '/api/world/events/:eventId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete a world event with reference cleanup',
+        tags: ['world'],
+        params: Type.Object({
+          eventId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              relations: Type.Number(),
+              collectionMemberships: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { eventId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const events = asEvents(worldState.events)
+      const targetEvent = events.find(e => e.id === eventId)
+      if (!targetEvent) {
+        throw new NotFoundError('Event', eventId)
+      }
+
+      const eventName = targetEvent.name || eventId
+
+      // Remove event
+      const updatedEvents = events.filter(e => e.id !== eventId)
+
+      // Remove relations
+      const relations = asWorldRelations(worldState.relations)
+      const relationsRemoved = relations.filter(
+        r => (r.sourceType === 'event' && r.sourceId === eventId) ||
+             (r.targetType === 'event' && r.targetId === eventId)
+      ).length
+      const updatedRelations = relations.filter(
+        r => !((r.sourceType === 'event' && r.sourceId === eventId) ||
+               (r.targetType === 'event' && r.targetId === eventId))
+      )
+
+      // Remove from collections
+      const eventCollections = asWorldCollections(worldState.eventCollections)
+      let collectionMemberships = 0
+      const updatedEventCollections = eventCollections.map(collection => {
+        if (collection.members?.includes(eventId)) {
+          collectionMemberships++
+          return {
+            ...collection,
+            members: collection.members.filter(id => id !== eventId)
+          }
+        }
+        return collection
+      })
+
+      // Update world state
+      await fastify.prisma.worldState.update({
+        where: { userId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          events: updatedEvents as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relations: updatedRelations as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventCollections: updatedEventCollections as any
+        }
+      })
+
+      // Convert objectRefs in glosses
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        glossReferences += countObjectRefsInGlosses(entityTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, eventId, 'event-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, eventId, 'event-object')
+
+        const cleanedEntityTypes = entityTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, eventId, 'event-object', eventName) : type.gloss
+        }))
+        const cleanedRoleTypes = roleTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, eventId, 'event-object', eventName) : type.gloss
+        }))
+        const cleanedEventTypes = eventTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, eventId, 'event-object', eventName) : type.gloss
+        }))
+        const cleanedRelationTypes = relationTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, eventId, 'event-object', eventName) : type.gloss
+        }))
+
+        await fastify.prisma.ontology.update({
+          where: { personaId: persona.id },
+          data: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            entityTypes: cleanedEntityTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            roleTypes: cleanedRoleTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            eventTypes: cleanedEventTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            relationTypes: cleanedRelationTypes as any
+          }
+        })
+      }
+
+      return reply.send({
+        message: `Event "${eventName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          relations: relationsRemoved,
+          collectionMemberships
+        }
+      })
+    }
+  )
+
+  /**
+   * Get deletion preview for a world time.
+   *
+   * @route GET /api/world/times/:timeId/deletion-preview
+   */
+  fastify.get<{ Params: { timeId: string } }>(
+    '/api/world/times/:timeId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for a world time',
+        tags: ['world'],
+        params: Type.Object({
+          timeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            relationCount: Type.Number(),
+            collectionMemberships: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { timeId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const times = asTimes(worldState.times)
+      const targetTime = times.find(t => t.id === timeId)
+      if (!targetTime) {
+        throw new NotFoundError('Time', timeId)
+      }
+
+      // Count gloss references
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        glossReferences += countObjectRefsInGlosses(entityTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, timeId, 'time-object')
+      }
+
+      // Count relations
+      const relations = asWorldRelations(worldState.relations)
+      const relationCount = relations.filter(
+        r => (r.sourceType === 'time' && r.sourceId === timeId) ||
+             (r.targetType === 'time' && r.targetId === timeId)
+      ).length
+
+      // Count collection memberships
+      const timeCollections = asWorldCollections(worldState.timeCollections)
+      let collectionMemberships = 0
+      for (const collection of timeCollections) {
+        if (collection.members?.includes(timeId)) {
+          collectionMemberships++
+        }
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount: 0,
+        relationCount,
+        collectionMemberships
+      })
+    }
+  )
+
+  /**
+   * Delete a world time with reference cleanup.
+   *
+   * @route DELETE /api/world/times/:timeId
+   */
+  fastify.delete<{ Params: { timeId: string } }>(
+    '/api/world/times/:timeId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete a world time with reference cleanup',
+        tags: ['world'],
+        params: Type.Object({
+          timeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              relations: Type.Number(),
+              collectionMemberships: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { timeId } = request.params
+      const userId = await getUserId(request)
+
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId }
+      })
+
+      if (!worldState) {
+        throw new NotFoundError('World state', userId)
+      }
+
+      const times = asTimes(worldState.times)
+      const targetTime = times.find(t => t.id === timeId)
+      if (!targetTime) {
+        throw new NotFoundError('Time', timeId)
+      }
+
+      // Time objects don't have a name/label, use id for reference cleanup
+      const timeName = timeId
+
+      // Remove time
+      const updatedTimes = times.filter(t => t.id !== timeId)
+
+      // Remove relations
+      const relations = asWorldRelations(worldState.relations)
+      const relationsRemoved = relations.filter(
+        r => (r.sourceType === 'time' && r.sourceId === timeId) ||
+             (r.targetType === 'time' && r.targetId === timeId)
+      ).length
+      const updatedRelations = relations.filter(
+        r => !((r.sourceType === 'time' && r.sourceId === timeId) ||
+               (r.targetType === 'time' && r.targetId === timeId))
+      )
+
+      // Remove from collections
+      const timeCollections = asWorldCollections(worldState.timeCollections)
+      let collectionMemberships = 0
+      const updatedTimeCollections = timeCollections.map(collection => {
+        if (collection.members?.includes(timeId)) {
+          collectionMemberships++
+          return {
+            ...collection,
+            members: collection.members.filter(id => id !== timeId)
+          }
+        }
+        return collection
+      })
+
+      // Update world state
+      await fastify.prisma.worldState.update({
+        where: { userId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          times: updatedTimes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relations: updatedRelations as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          timeCollections: updatedTimeCollections as any
+        }
+      })
+
+      // Convert objectRefs in glosses
+      let glossReferences = 0
+      const personas = await fastify.prisma.persona.findMany({
+        where: { userId },
+        include: { ontology: true }
+      })
+
+      for (const persona of personas) {
+        if (!persona.ontology) continue
+
+        const entityTypes = asEntityTypes(persona.ontology.entityTypes)
+        const roleTypes = asRoleTypes(persona.ontology.roleTypes)
+        const eventTypes = asEventTypes(persona.ontology.eventTypes)
+        const relationTypes = asRelationTypes(persona.ontology.relationTypes)
+
+        glossReferences += countObjectRefsInGlosses(entityTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(roleTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(eventTypes, timeId, 'time-object')
+        glossReferences += countObjectRefsInGlosses(relationTypes, timeId, 'time-object')
+
+        const cleanedEntityTypes = entityTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, timeId, 'time-object', timeName) : type.gloss
+        }))
+        const cleanedRoleTypes = roleTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, timeId, 'time-object', timeName) : type.gloss
+        }))
+        const cleanedEventTypes = eventTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, timeId, 'time-object', timeName) : type.gloss
+        }))
+        const cleanedRelationTypes = relationTypes.map(type => ({
+          ...type,
+          gloss: type.gloss ? convertObjectRefsToText(type.gloss, timeId, 'time-object', timeName) : type.gloss
+        }))
+
+        await fastify.prisma.ontology.update({
+          where: { personaId: persona.id },
+          data: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            entityTypes: cleanedEntityTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            roleTypes: cleanedRoleTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            eventTypes: cleanedEventTypes as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            relationTypes: cleanedRelationTypes as any
+          }
+        })
+      }
+
+      return reply.send({
+        message: `Time "${timeName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          relations: relationsRemoved,
+          collectionMemberships
+        }
+      })
+    }
+  )
 }
 
 export default worldRoute

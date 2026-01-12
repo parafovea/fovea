@@ -1,8 +1,21 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requireAuth, optionalAuth } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '../lib/errors.js'
+import { requireAuth, optionalAuth } from '@middleware/auth.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '@lib/errors.js'
+import {
+  updateGlossesInTypes,
+  countTypeRefsInGlosses,
+  removeTypeAssignmentsFromEntities,
+  removeEventInterpretationsFromEvents,
+  countTypeAssignments,
+  countEventInterpretations,
+} from '@lib/reference-cleanup.js'
+import {
+  asTypesWithGloss,
+  asEntities,
+  asEvents,
+} from '@lib/prisma-json.js'
 
 /**
  * Request body for ontology update endpoint.
@@ -303,8 +316,115 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * Get deletion preview for a persona.
+   * Returns counts of items that will be affected when the persona is deleted.
+   * Used to show a warning to the user before deletion.
+   *
+   * @route GET /api/personas/:id/deletion-preview
+   * @param request.params.id - Persona UUID
+   * @returns Counts of affected items
+   */
+  fastify.get<{ Params: { id: string } }>('/api/personas/:id/deletion-preview', {
+    onRequest: [requireAuth],
+    schema: {
+      description: 'Get deletion preview for a persona',
+      tags: ['personas'],
+      params: Type.Object({
+        id: Type.String({ format: 'uuid' })
+      }),
+      response: {
+        200: Type.Object({
+          typeCount: Type.Number(),
+          annotationCount: Type.Number(),
+          summaryCount: Type.Number(),
+          worldAssignmentCount: Type.Number()
+        }),
+        403: Type.Object({
+          error: Type.String()
+        }),
+        404: Type.Object({
+          error: Type.String()
+        })
+      }
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+
+    // Verify persona exists and user owns it
+    const persona = await fastify.prisma.persona.findUnique({
+      where: { id },
+      include: { ontology: true }
+    })
+
+    if (!persona) {
+      throw new NotFoundError('Persona', id)
+    }
+
+    if (persona.userId !== request.user!.id) {
+      throw new ForbiddenError('Cannot access another user\'s persona')
+    }
+
+    // Count types in ontology
+    const entityTypes = (persona.ontology?.entityTypes as unknown[]) || []
+    const roleTypes = (persona.ontology?.roleTypes as unknown[]) || []
+    const eventTypes = (persona.ontology?.eventTypes as unknown[]) || []
+    const relationTypes = (persona.ontology?.relationTypes as unknown[]) || []
+    const typeCount = entityTypes.length + roleTypes.length + eventTypes.length + relationTypes.length
+
+    // Count annotations with this personaId
+    const annotationCount = await fastify.prisma.annotation.count({
+      where: { personaId: id }
+    })
+
+    // Count video summaries for this persona
+    const summaryCount = await fastify.prisma.videoSummary.count({
+      where: { personaId: id }
+    })
+
+    // Count world state assignments for this persona
+    let worldAssignmentCount = 0
+    const worldState = await fastify.prisma.worldState.findUnique({
+      where: { userId: persona.userId }
+    })
+
+    if (worldState) {
+      // Count Entity.typeAssignments with this personaId
+      const entities = (worldState.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>) || []
+      for (const entity of entities) {
+        worldAssignmentCount += (entity.typeAssignments || []).filter(a => a.personaId === id).length
+      }
+
+      // Count Event.personaInterpretations with this personaId
+      const events = (worldState.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>) || []
+      for (const event of events) {
+        worldAssignmentCount += (event.personaInterpretations || []).filter(i => i.personaId === id).length
+      }
+
+      // Count EntityCollection.typeAssignments with this personaId
+      const entityCollections = (worldState.entityCollections as Array<{ typeAssignments?: Array<{ personaId: string }> }>) || []
+      for (const collection of entityCollections) {
+        worldAssignmentCount += (collection.typeAssignments || []).filter(a => a.personaId === id).length
+      }
+
+      // Count EventCollection.typeAssignments with this personaId
+      const eventCollections = (worldState.eventCollections as Array<{ typeAssignments?: Array<{ personaId: string }> }>) || []
+      for (const collection of eventCollections) {
+        worldAssignmentCount += (collection.typeAssignments || []).filter(a => a.personaId === id).length
+      }
+    }
+
+    return reply.send({
+      typeCount,
+      annotationCount,
+      summaryCount,
+      worldAssignmentCount
+    })
+  })
+
+  /**
    * Delete a persona.
    * Deletes the persona and its associated ontology (cascade).
+   * Also cleans up orphaned type assignments in world state.
    * Requires authentication and ownership verification.
    *
    * @route DELETE /api/personas/:id
@@ -345,6 +465,70 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     if (existingPersona.userId !== request.user!.id) {
       throw new ForbiddenError('Cannot delete another user\'s persona')
+    }
+
+    // Clean up world state: remove type assignments and interpretations for this persona
+    const worldState = await fastify.prisma.worldState.findUnique({
+      where: { userId: existingPersona.userId }
+    })
+
+    if (worldState) {
+      // Helper type definitions for world state items
+      interface EntityWithAssignments {
+        typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
+        [key: string]: unknown
+      }
+      interface EventWithInterpretations {
+        personaInterpretations?: Array<{ personaId: string; [key: string]: unknown }>
+        [key: string]: unknown
+      }
+      interface CollectionWithAssignments {
+        typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
+        [key: string]: unknown
+      }
+
+      // Clean Entity.typeAssignments
+      const entities = (worldState.entities as EntityWithAssignments[]) || []
+      const cleanedEntities = entities.map(entity => ({
+        ...entity,
+        typeAssignments: (entity.typeAssignments || []).filter(a => a.personaId !== id)
+      }))
+
+      // Clean Event.personaInterpretations
+      const events = (worldState.events as EventWithInterpretations[]) || []
+      const cleanedEvents = events.map(event => ({
+        ...event,
+        personaInterpretations: (event.personaInterpretations || []).filter(i => i.personaId !== id)
+      }))
+
+      // Clean EntityCollection.typeAssignments
+      const entityCollections = (worldState.entityCollections as CollectionWithAssignments[]) || []
+      const cleanedEntityCollections = entityCollections.map(collection => ({
+        ...collection,
+        typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
+      }))
+
+      // Clean EventCollection.typeAssignments
+      const eventCollections = (worldState.eventCollections as CollectionWithAssignments[]) || []
+      const cleanedEventCollections = eventCollections.map(collection => ({
+        ...collection,
+        typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
+      }))
+
+      // Update world state with cleaned data
+      await fastify.prisma.worldState.update({
+        where: { userId: existingPersona.userId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entities: cleanedEntities as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          events: cleanedEvents as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entityCollections: cleanedEntityCollections as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          eventCollections: cleanedEventCollections as any
+        }
+      })
     }
 
     try {
@@ -486,6 +670,812 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       updatedAt: updatedOntology.updatedAt.toISOString()
     })
   })
+
+  // ==========================================================================
+  // Type Deletion Endpoints with Reference Cleanup
+  // ==========================================================================
+
+  /**
+   * Get deletion preview for an entity type.
+   * Returns counts of items that will be affected.
+   *
+   * @route GET /api/personas/:personaId/ontology/entities/:typeId/deletion-preview
+   */
+  fastify.get<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/entities/:typeId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for an entity type',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            worldAssignmentCount: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot access another user\'s persona')
+      }
+
+      // Check if type exists
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const targetType = entityTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Entity type', typeId)
+      }
+
+      // Count gloss references across all types
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes.filter(t => t.id !== typeId), typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'entity')
+
+      // Count annotations with this typeId
+      const annotationCount = await fastify.prisma.annotation.count({
+        where: {
+          personaId,
+          type: 'entity',
+          label: typeId
+        }
+      })
+
+      // Count world state type assignments
+      let worldAssignmentCount = 0
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId: persona.userId }
+      })
+
+      if (worldState) {
+        const entities = asEntities(worldState.entities)
+        worldAssignmentCount = countTypeAssignments(entities, typeId, personaId)
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount,
+        worldAssignmentCount
+      })
+    }
+  )
+
+  /**
+   * Delete an entity type with reference cleanup.
+   * Converts typeRef items in glosses to plain text and clears related annotations/assignments.
+   *
+   * @route DELETE /api/personas/:personaId/ontology/entities/:typeId
+   */
+  fastify.delete<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/entities/:typeId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete an entity type with reference cleanup',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              annotations: Type.Number(),
+              worldAssignments: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot modify another user\'s persona')
+      }
+
+      // Find and remove the type
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const targetType = entityTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Entity type', typeId)
+      }
+
+      const typeName = targetType.name
+      const updatedEntityTypes = entityTypes.filter(t => t.id !== typeId)
+
+      // Convert typeRefs in glosses across all types
+      let glossReferences = 0
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      // Count before updating
+      glossReferences += countTypeRefsInGlosses(updatedEntityTypes, typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'entity')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'entity')
+
+      // Update glosses
+      const cleanedEntityTypes = updateGlossesInTypes(updatedEntityTypes, typeId, personaId, 'entity', typeName)
+      const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'entity', typeName)
+      const cleanedEventTypes = updateGlossesInTypes(eventTypes, typeId, personaId, 'entity', typeName)
+      const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'entity', typeName)
+
+      // Delete annotations with this type
+      const deleteResult = await fastify.prisma.annotation.deleteMany({
+        where: {
+          personaId,
+          type: 'entity',
+          label: typeId
+        }
+      })
+
+      // Clean up world state type assignments
+      let worldAssignments = 0
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId: persona.userId }
+      })
+
+      if (worldState) {
+        const entities = asEntities(worldState.entities)
+        worldAssignments = countTypeAssignments(entities, typeId, personaId)
+        const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
+
+        await fastify.prisma.worldState.update({
+          where: { userId: persona.userId },
+          data: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            entities: cleanedEntities as any
+          }
+        })
+      }
+
+      // Update ontology
+      await fastify.prisma.ontology.update({
+        where: { personaId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entityTypes: cleanedEntityTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          roleTypes: cleanedRoleTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventTypes: cleanedEventTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relationTypes: cleanedRelationTypes as any
+        }
+      })
+
+      return reply.send({
+        message: `Entity type "${typeName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          annotations: deleteResult.count,
+          worldAssignments
+        }
+      })
+    }
+  )
+
+  /**
+   * Get deletion preview for a role type.
+   */
+  fastify.get<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/roles/:typeId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for a role type',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            eventRoleReferences: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot access another user\'s persona')
+      }
+
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const targetType = roleTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Role type', typeId)
+      }
+
+      // Count gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const eventTypesForGloss = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(roleTypes.filter(t => t.id !== typeId), typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(eventTypesForGloss, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'role')
+
+      // Count annotations with this role type
+      const annotationCount = await fastify.prisma.annotation.count({
+        where: {
+          personaId,
+          type: 'role',
+          label: typeId
+        }
+      })
+
+      // Count event types that use this role - need full EventType for roles property
+      const eventTypesRaw = persona.ontology.eventTypes
+      let eventRoleReferences = 0
+      if (Array.isArray(eventTypesRaw)) {
+        for (const eventType of eventTypesRaw) {
+          if (eventType && typeof eventType === 'object' && 'roles' in eventType) {
+            const roles = (eventType as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              eventRoleReferences += roles.filter(r => r.roleTypeId === typeId).length
+            }
+          }
+        }
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount,
+        eventRoleReferences
+      })
+    }
+  )
+
+  /**
+   * Delete a role type with reference cleanup.
+   */
+  fastify.delete<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/roles/:typeId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete a role type with reference cleanup',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              annotations: Type.Number(),
+              eventRoleReferences: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot modify another user\'s persona')
+      }
+
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const targetType = roleTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Role type', typeId)
+      }
+
+      const typeName = targetType.name
+      const updatedRoleTypes = roleTypes.filter(t => t.id !== typeId)
+
+      // Count and update gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const eventTypesForGloss = asTypesWithGloss(persona.ontology.eventTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(updatedRoleTypes, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(eventTypesForGloss, typeId, personaId, 'role')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'role')
+
+      const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'role', typeName)
+      const cleanedRoleTypes = updateGlossesInTypes(updatedRoleTypes, typeId, personaId, 'role', typeName)
+      const cleanedEventTypesGloss = updateGlossesInTypes(eventTypesForGloss, typeId, personaId, 'role', typeName)
+      const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'role', typeName)
+
+      // Remove role from event type role slots - need full EventType for roles property
+      const eventTypesRaw = persona.ontology.eventTypes
+      let eventRoleReferences = 0
+      let cleanedEventTypes = cleanedEventTypesGloss
+      if (Array.isArray(eventTypesRaw)) {
+        for (const eventType of eventTypesRaw) {
+          if (eventType && typeof eventType === 'object' && 'roles' in eventType) {
+            const roles = (eventType as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              eventRoleReferences += roles.filter(r => r.roleTypeId === typeId).length
+            }
+          }
+        }
+        // Update cleanedEventTypes to also remove role references
+        cleanedEventTypes = cleanedEventTypesGloss.map(et => {
+          const rawEvent = eventTypesRaw.find(raw =>
+            raw && typeof raw === 'object' && 'id' in raw && (raw as { id: string }).id === et.id
+          )
+          if (rawEvent && typeof rawEvent === 'object' && 'roles' in rawEvent) {
+            const roles = (rawEvent as { roles?: Array<{ roleTypeId: string }> }).roles
+            if (roles) {
+              return { ...et, roles: roles.filter(r => r.roleTypeId !== typeId) }
+            }
+          }
+          return et
+        })
+      }
+
+      // Delete annotations
+      const deleteResult = await fastify.prisma.annotation.deleteMany({
+        where: {
+          personaId,
+          type: 'role',
+          label: typeId
+        }
+      })
+
+      // Update ontology
+      await fastify.prisma.ontology.update({
+        where: { personaId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entityTypes: cleanedEntityTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          roleTypes: cleanedRoleTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventTypes: cleanedEventTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relationTypes: cleanedRelationTypes as any
+        }
+      })
+
+      return reply.send({
+        message: `Role type "${typeName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          annotations: deleteResult.count,
+          eventRoleReferences
+        }
+      })
+    }
+  )
+
+  /**
+   * Get deletion preview for an event type.
+   */
+  fastify.get<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/events/:typeId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for an event type',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            annotationCount: Type.Number(),
+            worldInterpretationCount: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot access another user\'s persona')
+      }
+
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const targetType = eventTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Event type', typeId)
+      }
+
+      // Count gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(eventTypes.filter(t => t.id !== typeId), typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'event')
+
+      // Count annotations
+      const annotationCount = await fastify.prisma.annotation.count({
+        where: {
+          personaId,
+          type: 'event',
+          label: typeId
+        }
+      })
+
+      // Count world state event interpretations
+      let worldInterpretationCount = 0
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId: persona.userId }
+      })
+
+      if (worldState) {
+        const events = asEvents(worldState.events)
+        worldInterpretationCount = countEventInterpretations(events, typeId, personaId)
+      }
+
+      return reply.send({
+        glossReferences,
+        annotationCount,
+        worldInterpretationCount
+      })
+    }
+  )
+
+  /**
+   * Delete an event type with reference cleanup.
+   */
+  fastify.delete<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/events/:typeId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete an event type with reference cleanup',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number(),
+              annotations: Type.Number(),
+              worldInterpretations: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot modify another user\'s persona')
+      }
+
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+      const targetType = eventTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Event type', typeId)
+      }
+
+      const typeName = targetType.name
+      const updatedEventTypes = eventTypes.filter(t => t.id !== typeId)
+
+      // Count and update gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(updatedEventTypes, typeId, personaId, 'event')
+      glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'event')
+
+      const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'event', typeName)
+      const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'event', typeName)
+      const cleanedEventTypes = updateGlossesInTypes(updatedEventTypes, typeId, personaId, 'event', typeName)
+      const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'event', typeName)
+
+      // Delete annotations
+      const deleteResult = await fastify.prisma.annotation.deleteMany({
+        where: {
+          personaId,
+          type: 'event',
+          label: typeId
+        }
+      })
+
+      // Clean up world state event interpretations
+      let worldInterpretations = 0
+      const worldState = await fastify.prisma.worldState.findUnique({
+        where: { userId: persona.userId }
+      })
+
+      if (worldState) {
+        const events = asEvents(worldState.events)
+        worldInterpretations = countEventInterpretations(events, typeId, personaId)
+        const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
+
+        await fastify.prisma.worldState.update({
+          where: { userId: persona.userId },
+          data: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            events: cleanedEvents as any
+          }
+        })
+      }
+
+      // Update ontology
+      await fastify.prisma.ontology.update({
+        where: { personaId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entityTypes: cleanedEntityTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          roleTypes: cleanedRoleTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventTypes: cleanedEventTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relationTypes: cleanedRelationTypes as any
+        }
+      })
+
+      return reply.send({
+        message: `Event type "${typeName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences,
+          annotations: deleteResult.count,
+          worldInterpretations
+        }
+      })
+    }
+  )
+
+  /**
+   * Get deletion preview for a relation type.
+   */
+  fastify.get<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/relation-types/:typeId/deletion-preview',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Get deletion preview for a relation type',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            glossReferences: Type.Number(),
+            relationInstanceCount: Type.Number()
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot access another user\'s persona')
+      }
+
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+      const targetType = relationTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Relation type', typeId)
+      }
+
+      // Count gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(relationTypes.filter(t => t.id !== typeId), typeId, personaId, 'relation')
+
+      // Note: Relation instances would need to be stored somewhere to count them
+      // For now, we return 0 as they're handled client-side
+      const relationInstanceCount = 0
+
+      return reply.send({
+        glossReferences,
+        relationInstanceCount
+      })
+    }
+  )
+
+  /**
+   * Delete a relation type with reference cleanup.
+   */
+  fastify.delete<{ Params: { personaId: string; typeId: string } }>(
+    '/api/personas/:personaId/ontology/relation-types/:typeId',
+    {
+      onRequest: [requireAuth],
+      schema: {
+        description: 'Delete a relation type with reference cleanup',
+        tags: ['personas', 'ontology'],
+        params: Type.Object({
+          personaId: Type.String({ format: 'uuid' }),
+          typeId: Type.String()
+        }),
+        response: {
+          200: Type.Object({
+            message: Type.String(),
+            cleanedUp: Type.Object({
+              glossReferences: Type.Number()
+            })
+          }),
+          404: Type.Object({ error: Type.String() })
+        }
+      }
+    },
+    async (request, reply) => {
+      const { personaId, typeId } = request.params
+
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        include: { ontology: true }
+      })
+
+      if (!persona || !persona.ontology) {
+        throw new NotFoundError('Persona or ontology', personaId)
+      }
+
+      if (persona.userId !== request.user!.id) {
+        throw new ForbiddenError('Cannot modify another user\'s persona')
+      }
+
+      const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
+      const targetType = relationTypes.find(t => t.id === typeId)
+      if (!targetType) {
+        throw new NotFoundError('Relation type', typeId)
+      }
+
+      const typeName = targetType.name
+      const updatedRelationTypes = relationTypes.filter(t => t.id !== typeId)
+
+      // Count and update gloss references
+      const entityTypes = asTypesWithGloss(persona.ontology.entityTypes)
+      const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
+      const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
+
+      let glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(updatedRelationTypes, typeId, personaId, 'relation')
+
+      const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'relation', typeName)
+      const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'relation', typeName)
+      const cleanedEventTypes = updateGlossesInTypes(eventTypes, typeId, personaId, 'relation', typeName)
+      const cleanedRelationTypes = updateGlossesInTypes(updatedRelationTypes, typeId, personaId, 'relation', typeName)
+
+      // Update ontology
+      await fastify.prisma.ontology.update({
+        where: { personaId },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          entityTypes: cleanedEntityTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          roleTypes: cleanedRoleTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventTypes: cleanedEventTypes as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          relationTypes: cleanedRelationTypes as any
+        }
+      })
+
+      return reply.send({
+        message: `Relation type "${typeName}" deleted successfully`,
+        cleanedUp: {
+          glossReferences
+        }
+      })
+    }
+  )
 }
 
 export default personasRoute

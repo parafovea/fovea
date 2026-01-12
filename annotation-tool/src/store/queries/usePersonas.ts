@@ -26,6 +26,34 @@ export const personaKeys = {
   detail: (id: string) => [...personaKeys.all, 'detail', id] as const,
   ontology: (personaId: string) => [...personaKeys.all, 'ontology', personaId] as const,
   allOntologies: () => [...personaKeys.all, 'all-ontologies'] as const,
+  deletionPreview: (personaId: string) => [...personaKeys.all, 'deletion-preview', personaId] as const,
+  typeDeletionPreview: (personaId: string, typeCategory: string, typeId: string) =>
+    [...personaKeys.all, 'type-deletion-preview', personaId, typeCategory, typeId] as const,
+}
+
+/** Response type for deletion preview API */
+export interface PersonaDeletionPreview {
+  typeCount: number
+  annotationCount: number
+  summaryCount: number
+  worldAssignmentCount: number
+}
+
+/** Response type for type deletion preview API */
+export interface TypeDeletionPreview {
+  glossReferences: number
+  annotationCount: number
+  worldAssignmentCount: number
+  eventTypeRoleCount?: number // Only for role types
+}
+
+/** Response type for type deletion result */
+export interface TypeDeletionResult {
+  message: string
+  glossReferencesConverted: number
+  annotationsDeleted: number
+  worldAssignmentsRemoved: number
+  eventTypeRolesRemoved?: number // Only for role types
 }
 
 // ============================================================
@@ -262,7 +290,48 @@ export function useDeletePersona() {
       )
       // Remove ontology from cache
       queryClient.removeQueries({ queryKey: personaKeys.ontology(personaId) })
+      // Remove deletion preview from cache
+      queryClient.removeQueries({ queryKey: personaKeys.deletionPreview(personaId) })
     },
+  })
+}
+
+/**
+ * Fetch deletion preview for a persona.
+ * Returns counts of items that will be affected when the persona is deleted.
+ */
+async function fetchPersonaDeletionPreview(personaId: string): Promise<PersonaDeletionPreview> {
+  const response = await fetch(`/api/personas/${personaId}/deletion-preview`, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch deletion preview')
+  }
+  return response.json()
+}
+
+/**
+ * Hook to fetch deletion preview for a persona.
+ * Shows counts of types, annotations, summaries, and world assignments
+ * that will be affected when the persona is deleted.
+ *
+ * @param personaId - The persona ID to get deletion preview for
+ * @param enabled - Whether to enable the query (default: false, fetch on demand)
+ * @returns TanStack Query result with deletion preview data
+ *
+ * @example
+ * ```tsx
+ * const { data: preview, refetch } = usePersonaDeletionPreview(personaId)
+ * // Call refetch() when delete button is clicked to get fresh preview
+ * ```
+ */
+export function usePersonaDeletionPreview(personaId: string | null | undefined, enabled = false) {
+  return useQuery({
+    queryKey: personaKeys.deletionPreview(personaId ?? ''),
+    queryFn: () => fetchPersonaDeletionPreview(personaId!),
+    enabled: !!personaId && enabled,
+    staleTime: 30 * 1000, // 30 seconds - preview can be slightly stale
   })
 }
 
@@ -1132,4 +1201,253 @@ export function useSetPersonaOntology() {
   return (personaId: string, ontology: PersonaOntology) => {
     queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
   }
+}
+
+// ============================================================
+// Type Deletion Preview and Graceful Delete Hooks
+// ============================================================
+
+type TypeCategory = 'entities' | 'roles' | 'events' | 'relation-types'
+
+/**
+ * Fetch deletion preview for an ontology type.
+ * Returns counts of items that will be affected when the type is deleted.
+ */
+async function fetchTypeDeletionPreview(
+  personaId: string,
+  typeCategory: TypeCategory,
+  typeId: string
+): Promise<TypeDeletionPreview> {
+  const response = await fetch(
+    `/api/personas/${personaId}/ontology/${typeCategory}/${typeId}/deletion-preview`,
+    { credentials: 'include' }
+  )
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch type deletion preview')
+  }
+  return response.json()
+}
+
+/**
+ * Hook to fetch deletion preview for an entity type.
+ * Shows counts of gloss references, annotations, and world assignments
+ * that will be affected when the entity type is deleted.
+ *
+ * @param personaId - The persona ID
+ * @param entityId - The entity type ID
+ * @param enabled - Whether to enable the query (default: false)
+ */
+export function useEntityTypeDeletionPreview(
+  personaId: string | null | undefined,
+  entityId: string | null | undefined,
+  enabled = false
+) {
+  return useQuery({
+    queryKey: personaKeys.typeDeletionPreview(personaId ?? '', 'entities', entityId ?? ''),
+    queryFn: () => fetchTypeDeletionPreview(personaId!, 'entities', entityId!),
+    enabled: !!personaId && !!entityId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch deletion preview for a role type.
+ */
+export function useRoleTypeDeletionPreview(
+  personaId: string | null | undefined,
+  roleId: string | null | undefined,
+  enabled = false
+) {
+  return useQuery({
+    queryKey: personaKeys.typeDeletionPreview(personaId ?? '', 'roles', roleId ?? ''),
+    queryFn: () => fetchTypeDeletionPreview(personaId!, 'roles', roleId!),
+    enabled: !!personaId && !!roleId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch deletion preview for an event type.
+ */
+export function useEventTypeDeletionPreview(
+  personaId: string | null | undefined,
+  eventId: string | null | undefined,
+  enabled = false
+) {
+  return useQuery({
+    queryKey: personaKeys.typeDeletionPreview(personaId ?? '', 'events', eventId ?? ''),
+    queryFn: () => fetchTypeDeletionPreview(personaId!, 'events', eventId!),
+    enabled: !!personaId && !!eventId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch deletion preview for a relation type.
+ */
+export function useRelationTypeDeletionPreview(
+  personaId: string | null | undefined,
+  relationTypeId: string | null | undefined,
+  enabled = false
+) {
+  return useQuery({
+    queryKey: personaKeys.typeDeletionPreview(personaId ?? '', 'relation-types', relationTypeId ?? ''),
+    queryFn: () => fetchTypeDeletionPreview(personaId!, 'relation-types', relationTypeId!),
+    enabled: !!personaId && !!relationTypeId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Delete an ontology type with graceful cleanup.
+ * Converts references in glosses to plain text instead of cascading.
+ */
+async function deleteTypeGracefully(
+  personaId: string,
+  typeCategory: TypeCategory,
+  typeId: string
+): Promise<TypeDeletionResult> {
+  const response = await fetch(
+    `/api/personas/${personaId}/ontology/${typeCategory}/${typeId}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+    }
+  )
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete type')
+  }
+  return response.json()
+}
+
+/**
+ * Hook to delete an entity type with graceful cleanup.
+ * References in other type glosses are converted to plain text.
+ * Type annotations and world assignments are removed.
+ */
+export function useDeleteEntityTypeGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ personaId, entityId }: { personaId: string; entityId: string }) => {
+      const result = await deleteTypeGracefully(personaId, 'entities', entityId)
+      return { personaId, entityId, result }
+    },
+    onSuccess: ({ personaId, entityId }) => {
+      // Update the ontology cache to remove the deleted entity
+      queryClient.setQueryData<PersonaOntology>(personaKeys.ontology(personaId), (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          entities: old.entities.filter(e => e.id !== entityId),
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      // Invalidate all ontologies since glosses may have been modified
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // Remove the deletion preview from cache
+      queryClient.removeQueries({
+        queryKey: personaKeys.typeDeletionPreview(personaId, 'entities', entityId),
+      })
+    },
+  })
+}
+
+/**
+ * Hook to delete a role type with graceful cleanup.
+ * References in other type glosses are converted to plain text.
+ * Role references in event types are removed.
+ */
+export function useDeleteRoleTypeGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ personaId, roleId }: { personaId: string; roleId: string }) => {
+      const result = await deleteTypeGracefully(personaId, 'roles', roleId)
+      return { personaId, roleId, result }
+    },
+    onSuccess: ({ personaId, roleId }) => {
+      queryClient.setQueryData<PersonaOntology>(personaKeys.ontology(personaId), (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          roles: old.roles.filter(r => r.id !== roleId),
+          // Also remove role references from event types
+          events: old.events.map(event => ({
+            ...event,
+            roles: event.roles?.filter(role => role.roleTypeId !== roleId) ?? [],
+          })),
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.removeQueries({
+        queryKey: personaKeys.typeDeletionPreview(personaId, 'roles', roleId),
+      })
+    },
+  })
+}
+
+/**
+ * Hook to delete an event type with graceful cleanup.
+ * References in other type glosses are converted to plain text.
+ * Event interpretations in world objects are removed.
+ */
+export function useDeleteEventTypeGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ personaId, eventId }: { personaId: string; eventId: string }) => {
+      const result = await deleteTypeGracefully(personaId, 'events', eventId)
+      return { personaId, eventId, result }
+    },
+    onSuccess: ({ personaId, eventId }) => {
+      queryClient.setQueryData<PersonaOntology>(personaKeys.ontology(personaId), (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          events: old.events.filter(e => e.id !== eventId),
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.removeQueries({
+        queryKey: personaKeys.typeDeletionPreview(personaId, 'events', eventId),
+      })
+    },
+  })
+}
+
+/**
+ * Hook to delete a relation type with graceful cleanup.
+ * References in other type glosses are converted to plain text.
+ * Relations using this type are deleted.
+ */
+export function useDeleteRelationTypeGracefully() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ personaId, relationTypeId }: { personaId: string; relationTypeId: string }) => {
+      const result = await deleteTypeGracefully(personaId, 'relation-types', relationTypeId)
+      return { personaId, relationTypeId, result }
+    },
+    onSuccess: ({ personaId, relationTypeId }) => {
+      queryClient.setQueryData<PersonaOntology>(personaKeys.ontology(personaId), (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          relationTypes: old.relationTypes.filter(r => r.id !== relationTypeId),
+          // Also remove relations using this type
+          relations: old.relations.filter(r => r.relationTypeId !== relationTypeId),
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.removeQueries({
+        queryKey: personaKeys.typeDeletionPreview(personaId, 'relation-types', relationTypeId),
+      })
+    },
+  })
 }
