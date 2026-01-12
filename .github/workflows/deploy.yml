@@ -84,8 +84,8 @@ jobs:
             --exclude node_modules \
             --exclude .git \
             --exclude .env \
-            --exclude data \
-            --exclude videos \
+            --exclude /data \
+            --exclude /videos \
             --exclude dist \
             --exclude build \
             --exclude .docusaurus \
