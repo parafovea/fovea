@@ -1641,58 +1641,61 @@ export const handlers = [
   // =============================================================================
 
   /**
-   * Export annotations endpoint.
-   * Returns JSONL format with annotation data.
+   * Export all data endpoint.
+   * Returns JSONL format with all user data (personas, ontologies, world state, summaries, claims, annotations).
    */
   http.get('http://localhost:3001/api/export', () => {
-    const exportLine = {
-      type: 'annotation',
-      data: {
-        id: 'annotation-1',
-        videoId: 'video-1',
-        annotationType: 'type',
-        personaId: 'persona-1',
-        typeId: 'entity-type-1',
-        typeCategory: 'entity',
-        boundingBoxSequence: {
-          boxes: [
-            { x: 100, y: 100, width: 200, height: 150, frameNumber: 0, isKeyframe: true },
-            { x: 120, y: 110, width: 200, height: 150, frameNumber: 100, isKeyframe: true },
-          ],
-          interpolationSegments: [{ startFrame: 0, endFrame: 100, type: 'linear' }],
-          visibilityRanges: [{ startFrame: 0, endFrame: 100, visible: true }],
-          totalFrames: 101,
-          keyframeCount: 2,
-          interpolatedFrameCount: 0,
-        },
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-01T00:00:00Z',
-      },
-    }
-    return new HttpResponse(JSON.stringify(exportLine) + '\n', {
+    const lines = [
+      { type: 'persona', data: { id: 'persona-1', name: 'Test', role: 'Analyst', informationNeed: 'Testing', createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
+      { type: 'ontology', data: { personaId: 'persona-1', entityTypes: [], eventTypes: [], roleTypes: [], relationTypes: [] } },
+      { type: 'annotation', data: { id: 'annotation-1', videoId: 'video-1', annotationType: 'type', personaId: 'persona-1', typeId: 'entity-type-1', typeCategory: 'entity', boundingBoxSequence: { boxes: [{ x: 100, y: 100, width: 200, height: 150, frameNumber: 0, isKeyframe: true }], interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 }, createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
+    ]
+    const content = lines.map(l => JSON.stringify(l)).join('\n') + '\n'
+    return new HttpResponse(content, {
       headers: {
         'Content-Type': 'application/x-ndjson',
-        'Content-Disposition': 'attachment; filename="annotations.jsonl"',
-        'X-Export-Size': '0.01MB',
+        'Content-Disposition': 'attachment; filename="fovea-export.jsonl"',
+        'X-Export-Personas': '1',
+        'X-Export-Ontologies': '1',
+        'X-Export-Entities': '0',
+        'X-Export-Events': '0',
+        'X-Export-Times': '0',
+        'X-Export-Summaries': '0',
+        'X-Export-Claims': '0',
+        'X-Export-ClaimRelations': '0',
         'X-Export-Annotations': '1',
-        'X-Export-Sequences': '1',
-        'X-Export-Keyframes': '2',
-        'X-Export-Interpolated-Frames': '0',
       },
     })
   }),
 
   /**
    * Export statistics endpoint.
+   * Returns comprehensive counts for all data types.
    */
   http.get('http://localhost:3001/api/export/stats', () => {
     return HttpResponse.json({
-      totalSize: 1024,
-      totalSizeMB: '0.00MB',
+      personaCount: 1,
+      ontologyCount: 1,
+      entityTypeCount: 1,
+      eventTypeCount: 0,
+      roleTypeCount: 0,
+      relationTypeCount: 0,
+      entityCount: 0,
+      eventCount: 0,
+      timeCount: 0,
+      entityCollectionCount: 0,
+      eventCollectionCount: 0,
+      timeCollectionCount: 0,
+      worldRelationCount: 0,
+      summaryCount: 0,
+      claimCount: 0,
+      claimRelationCount: 0,
       annotationCount: 1,
       sequenceCount: 1,
       keyframeCount: 2,
       interpolatedFrameCount: 0,
+      totalSize: 1024,
+      totalSizeMB: '0.00MB',
     })
   }),
 
@@ -1774,29 +1777,6 @@ export const handlers = [
         'X-Export-Summaries': '1',
         'X-Export-Claims': '0',
         'X-Export-ClaimRelations': '0',
-      },
-    })
-  }),
-
-  /**
-   * Export all data endpoint.
-   */
-  http.get('http://localhost:3001/api/export/all', () => {
-    const lines = [
-      { type: 'persona', data: { id: 'persona-1', name: 'Test', role: 'Analyst', informationNeed: 'Testing', createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
-      { type: 'ontology', data: { personaId: 'persona-1', entityTypes: [], eventTypes: [], roleTypes: [], relationTypes: [] } },
-      { type: 'annotation', data: { id: 'annotation-1', videoId: 'video-1', annotationType: 'type', boundingBoxSequence: { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 }, createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' } },
-    ]
-    const content = lines.map(l => JSON.stringify(l)).join('\n') + '\n'
-    return new HttpResponse(content, {
-      headers: {
-        'Content-Type': 'application/x-ndjson',
-        'Content-Disposition': 'attachment; filename="fovea-export.jsonl"',
-        'X-Export-Personas': '1',
-        'X-Export-Ontologies': '1',
-        'X-Export-Summaries': '0',
-        'X-Export-Claims': '0',
-        'X-Export-Annotations': '1',
       },
     })
   }),

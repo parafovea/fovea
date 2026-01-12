@@ -270,7 +270,7 @@ test.describe('Export/Import Flow', () => {
       })
 
       // Export data via API (to avoid UI complexity)
-      const exportResponse = await page.request.get('http://localhost:3001/api/export/all')
+      const exportResponse = await page.request.get('http://localhost:3001/api/export')
       expect(exportResponse.ok()).toBeTruthy()
 
       const exportedContent = await exportResponse.text()

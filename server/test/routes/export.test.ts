@@ -472,7 +472,7 @@ describe('Export API', () => {
     })
   })
 
-  describe('GET /api/export/all', () => {
+  describe('GET /api/export (full export)', () => {
     it('exports all data types in correct order', async () => {
       // Create summary
       const summary = await prisma.videoSummary.create({
@@ -506,7 +506,7 @@ describe('Export API', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
@@ -544,7 +544,7 @@ describe('Export API', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
@@ -596,7 +596,7 @@ describe('Export API', () => {
       // Export data
       const exportResponse = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
