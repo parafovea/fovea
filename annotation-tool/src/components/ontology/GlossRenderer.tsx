@@ -1,5 +1,5 @@
 import { Box, Chip } from '@mui/material'
-import { GlossItem, TimeInstant, EntityType, RoleType, EventType, Entity, Event, Time, Location } from '@models/types'
+import { GlossItem, TimeInstant, EntityType, RoleType, EventType, RelationType, Entity, Event, Time, Location } from '@models/types'
 import { usePersonaOntology, useWorld } from '@store/queries'
 
 interface GlossRendererProps {
@@ -28,7 +28,7 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
 
     // Look up type reference
     if (item.type === 'typeRef') {
-      let typeObj: EntityType | RoleType | EventType | undefined = undefined
+      let typeObj: EntityType | RoleType | EventType | RelationType | undefined = undefined
 
       if (activeOntology) {
         switch (item.refType) {
@@ -40,6 +40,9 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
             break
           case 'event':
             typeObj = activeOntology.events.find(e => e.id === item.content)
+            break
+          case 'relation':
+            typeObj = activeOntology.relationTypes.find(r => r.id === item.content)
             break
         }
       }
