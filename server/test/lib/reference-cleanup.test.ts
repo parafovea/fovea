@@ -327,9 +327,9 @@ describe('Reference Cleanup Utilities', () => {
           id: 'entity-1',
           name: 'John',
           typeAssignments: [
-            { personaId: 'persona-1', typeId: 'type-1' },
-            { personaId: 'persona-1', typeId: 'type-2' },
-            { personaId: 'persona-2', typeId: 'type-1' },
+            { personaId: 'persona-1', entityTypeId: 'type-1' },
+            { personaId: 'persona-1', entityTypeId: 'type-2' },
+            { personaId: 'persona-2', entityTypeId: 'type-1' },
           ],
         },
       ]
@@ -337,8 +337,8 @@ describe('Reference Cleanup Utilities', () => {
       const result = removeTypeAssignmentsFromEntities(entities, 'type-1', 'persona-1')
 
       expect(result[0].typeAssignments).toEqual([
-        { personaId: 'persona-1', typeId: 'type-2' },
-        { personaId: 'persona-2', typeId: 'type-1' },
+        { personaId: 'persona-1', entityTypeId: 'type-2' },
+        { personaId: 'persona-2', entityTypeId: 'type-1' },
       ])
     })
 
@@ -358,7 +358,7 @@ describe('Reference Cleanup Utilities', () => {
           id: 'entity-1',
           name: 'John',
           typeAssignments: [
-            { personaId: 'persona-2', typeId: 'type-1' },
+            { personaId: 'persona-2', entityTypeId: 'type-1' },
           ],
         },
       ]
@@ -409,15 +409,15 @@ describe('Reference Cleanup Utilities', () => {
           id: 'entity-1',
           name: 'John',
           typeAssignments: [
-            { personaId: 'persona-1', typeId: 'type-1' },
+            { personaId: 'persona-1', entityTypeId: 'type-1' },
           ],
         },
         {
           id: 'entity-2',
           name: 'Jane',
           typeAssignments: [
-            { personaId: 'persona-1', typeId: 'type-1' },
-            { personaId: 'persona-2', typeId: 'type-1' },
+            { personaId: 'persona-1', entityTypeId: 'type-1' },
+            { personaId: 'persona-2', entityTypeId: 'type-1' },
           ],
         },
       ]
@@ -433,7 +433,7 @@ describe('Reference Cleanup Utilities', () => {
           id: 'entity-1',
           name: 'John',
           typeAssignments: [
-            { personaId: 'persona-2', typeId: 'type-1' },
+            { personaId: 'persona-2', entityTypeId: 'type-1' },
           ],
         },
       ]
