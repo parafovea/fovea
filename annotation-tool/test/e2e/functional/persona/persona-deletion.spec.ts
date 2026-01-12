@@ -216,7 +216,7 @@ test.describe('Persona Deletion', () => {
     }
   })
 
-  test('can delete persona from PersonaManager menu', async ({ page, db, testUser, workerSessionToken }) => {
+  test('can delete persona from ontology workspace via Edit Persona', async ({ page, db, testUser, workerSessionToken }) => {
     // Create a persona to delete
     const persona = await db.createPersona({
       name: 'Manager Delete Test',
@@ -235,22 +235,21 @@ test.describe('Persona Deletion', () => {
     // Wait for ontology workspace to load (tabs should be visible)
     await page.waitForSelector('[role="tab"]', { timeout: 10000 })
 
-    // Find the persona manager dropdown button (shows current persona name)
-    const personaSelector = page.getByRole('button', { name: /Manager Delete Test/i })
-    await expect(personaSelector).toBeVisible({ timeout: 5000 })
+    // Verify the persona name is displayed in the header
+    const personaName = page.getByRole('heading', { name: /Manager Delete Test/i })
+    await expect(personaName).toBeVisible({ timeout: 5000 })
 
-    // Click to open menu
-    await personaSelector.click()
+    // Go back to persona browser to delete from there
+    const backButton = page.getByRole('button', { name: /back to persona browser/i })
+    await backButton.click()
 
-    // Wait for menu
-    const menu = page.locator('[role="menu"]')
-    await expect(menu).toBeVisible({ timeout: 5000 })
+    // Wait for persona browser to load
+    await page.waitForSelector(`[data-persona-id="${persona.id}"]`, { timeout: 10000 })
 
-    // Find delete button in menu
-    const deleteButtons = menu.getByRole('button', { name: /delete persona/i })
-    const firstDeleteButton = deleteButtons.first()
-    await expect(firstDeleteButton).toBeVisible()
-    await firstDeleteButton.click()
+    // Find delete button on the persona card
+    const personaCard = page.locator(`[data-persona-id="${persona.id}"]`)
+    const deleteButton = personaCard.getByRole('button', { name: /delete persona/i })
+    await deleteButton.click()
 
     // Confirmation dialog should appear
     const dialog = page.locator('[role="dialog"]')
