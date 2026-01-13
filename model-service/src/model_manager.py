@@ -308,11 +308,12 @@ class ModelManager:
         }
 
     def get_available_vram(self) -> int:
-        """
-        Get available GPU memory in bytes.
+        """Get available GPU memory in bytes.
 
-        Returns:
-            Available VRAM in bytes
+        Returns
+        -------
+        int
+            Available VRAM in bytes.
         """
         if not torch.cuda.is_available():
             return 0
@@ -323,11 +324,12 @@ class ModelManager:
         return total - allocated
 
     def get_total_vram(self) -> int:
-        """
-        Get total GPU memory in bytes.
+        """Get total GPU memory in bytes.
 
-        Returns:
-            Total VRAM in bytes
+        Returns
+        -------
+        int
+            Total VRAM in bytes.
         """
         if not torch.cuda.is_available():
             return 0
@@ -336,11 +338,12 @@ class ModelManager:
         return torch.cuda.get_device_properties(device).total_memory
 
     def get_memory_usage_percentage(self) -> float:
-        """
-        Get current GPU memory usage as percentage.
+        """Get current GPU memory usage as percentage.
 
-        Returns:
-            Memory usage percentage (0.0 to 1.0)
+        Returns
+        -------
+        float
+            Memory usage percentage (0.0 to 1.0).
         """
         total = self.get_total_vram()
         if total == 0:
@@ -350,24 +353,28 @@ class ModelManager:
         return allocated / total
 
     def check_memory_available(self, required_bytes: int) -> bool:
-        """
-        Check if sufficient memory is available for model loading.
+        """Check if sufficient memory is available for model loading.
 
-        Args:
-            required_bytes: Required memory in bytes
+        Parameters
+        ----------
+        required_bytes : int
+            Required memory in bytes.
 
-        Returns:
-            True if sufficient memory is available
+        Returns
+        -------
+        bool
+            True if sufficient memory is available.
         """
         available = self.get_available_vram()
         return available >= required_bytes
 
     def get_lru_model(self) -> str | None:
-        """
-        Get least recently used model identifier.
+        """Get least recently used model identifier.
 
-        Returns:
-            Task name of LRU model, or None if no models loaded
+        Returns
+        -------
+        str | None
+            Task name of LRU model, or None if no models loaded.
         """
         if not self.loaded_models:
             return None
@@ -375,11 +382,12 @@ class ModelManager:
 
     @tracer.start_as_current_span("evict_lru_model")
     async def evict_lru_model(self) -> str | None:
-        """
-        Evict the least recently used model from memory.
+        """Evict the least recently used model from memory.
 
-        Returns:
-            Task name of evicted model, or None if no models to evict
+        Returns
+        -------
+        str | None
+            Task name of evicted model, or None if no models to evict.
         """
         lru_task = self.get_lru_model()
         if lru_task is None:
@@ -392,11 +400,12 @@ class ModelManager:
 
     @tracer.start_as_current_span("unload_model")
     async def unload_model(self, task_type: str) -> None:
-        """
-        Unload a model from memory.
+        """Unload a model from memory.
 
-        Args:
-            task_type: Task type of model to unload
+        Parameters
+        ----------
+        task_type : str
+            Task type of model to unload.
         """
         if task_type not in self.loaded_models:
             logger.warning(f"Model {task_type} not loaded")
@@ -414,21 +423,27 @@ class ModelManager:
 
     @tracer.start_as_current_span("load_model")
     async def load_model(self, task_type: str) -> Any:
-        """
-        Load a model for the specified task type.
+        """Load a model for the specified task type.
 
-        This method loads the selected model for the task, handling memory
-        management and eviction if necessary.
+        Loads the selected model for the task, handling memory management
+        and eviction if necessary.
 
-        Args:
-            task_type: Task type to load model for
+        Parameters
+        ----------
+        task_type : str
+            Task type to load model for.
 
-        Returns:
-            Loaded model object
+        Returns
+        -------
+        Any
+            Loaded model object.
 
-        Raises:
-            ValueError: If task type is invalid or model cannot be loaded
-            RuntimeError: If insufficient memory after eviction attempts
+        Raises
+        ------
+        ValueError
+            If task type is invalid or model cannot be loaded.
+        RuntimeError
+            If insufficient memory after eviction attempts.
         """
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
@@ -565,14 +580,17 @@ class ModelManager:
         }
 
     async def get_model(self, task_type: str) -> Any:
-        """
-        Get model for task type, loading if necessary.
+        """Get model for task type, loading if necessary.
 
-        Args:
-            task_type: Task type to get model for
+        Parameters
+        ----------
+        task_type : str
+            Task type to get model for.
 
-        Returns:
-            Loaded model object
+        Returns
+        -------
+        Any
+            Loaded model object.
         """
         if task_type in self.loaded_models:
             self.loaded_models.move_to_end(task_type)
@@ -581,11 +599,12 @@ class ModelManager:
         return await self.load_model(task_type)
 
     def get_loaded_models(self) -> dict[str, dict[str, Any]]:
-        """
-        Get information about currently loaded models.
+        """Get information about currently loaded models.
 
-        Returns:
-            Dictionary mapping task types to model information
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Dictionary mapping task types to model information.
         """
         result = {}
         for task_type in self.loaded_models:
@@ -597,30 +616,37 @@ class ModelManager:
         return result
 
     def get_model_config(self, task_type: str) -> TaskConfig | None:
-        """
-        Get configuration for a task type.
+        """Get configuration for a task type.
 
-        Args:
-            task_type: Task type to get configuration for
+        Parameters
+        ----------
+        task_type : str
+            Task type to get configuration for.
 
-        Returns:
-            Task configuration, or None if task type is invalid
+        Returns
+        -------
+        TaskConfig | None
+            Task configuration, or None if task type is invalid.
         """
         return self.tasks.get(task_type)
 
     async def set_selected_model(self, task_type: str, model_name: str) -> None:
-        """
-        Change the selected model for a task type.
+        """Change the selected model for a task type.
 
         If the task's model is currently loaded, it will be unloaded and the
         new model will be loaded.
 
-        Args:
-            task_type: Task type to update
-            model_name: Name of model option to select
+        Parameters
+        ----------
+        task_type : str
+            Task type to update.
+        model_name : str
+            Name of model option to select.
 
-        Raises:
-            ValueError: If task type or model name is invalid
+        Raises
+        ------
+        ValueError
+            If task type or model name is invalid.
         """
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
@@ -650,10 +676,7 @@ class ModelManager:
         dict[str, Any]
             Dictionary with validation results including CPU/GPU memory info.
         """
-        if self.cpu_only_mode:
-            total_memory = self.get_total_ram()
-        else:
-            total_memory = self.get_total_vram()
+        total_memory = self.get_total_ram() if self.cpu_only_mode else self.get_total_vram()
 
         total_required = 0
         model_requirements = {}

@@ -7,19 +7,21 @@ from typing import Any
 
 
 def create_persona(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Factory function to create test persona objects.
+    """Create test persona objects.
 
-    Args:
-        overrides: Partial persona properties to override defaults
+    Parameters
+    ----------
+    overrides : dict[str, Any] | None, default=None
+        Partial persona properties to override defaults.
 
-    Returns:
-        A complete persona dictionary for testing
+    Returns
+    -------
+    dict[str, Any]
+        A complete persona dictionary for testing.
 
-    Example:
-        ```python
-        persona = create_persona({"name": "Baseball Scout"})
-        ```
+    Examples
+    --------
+    >>> persona = create_persona({"name": "Baseball Scout"})
     """
     persona = {
         "id": "test-persona-1",
@@ -37,19 +39,21 @@ def create_persona(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def create_entity_type(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Factory function to create test entity type objects.
+    """Create test entity type objects.
 
-    Args:
-        overrides: Partial entity type properties to override defaults
+    Parameters
+    ----------
+    overrides : dict[str, Any] | None, default=None
+        Partial entity type properties to override defaults.
 
-    Returns:
-        A complete entity type dictionary for testing
+    Returns
+    -------
+    dict[str, Any]
+        A complete entity type dictionary for testing.
 
-    Example:
-        ```python
-        entity_type = create_entity_type({"name": "Player"})
-        ```
+    Examples
+    --------
+    >>> entity_type = create_entity_type({"name": "Player"})
     """
     entity_type = {
         "id": "test-entity-type-1",
@@ -67,19 +71,21 @@ def create_entity_type(overrides: dict[str, Any] | None = None) -> dict[str, Any
 
 
 def create_event_type(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Factory function to create test event type objects.
+    """Create test event type objects.
 
-    Args:
-        overrides: Partial event type properties to override defaults
+    Parameters
+    ----------
+    overrides : dict[str, Any] | None, default=None
+        Partial event type properties to override defaults.
 
-    Returns:
-        A complete event type dictionary for testing
+    Returns
+    -------
+    dict[str, Any]
+        A complete event type dictionary for testing.
 
-    Example:
-        ```python
-        event_type = create_event_type({"name": "Home Run"})
-        ```
+    Examples
+    --------
+    >>> event_type = create_event_type({"name": "Home Run"})
     """
     event_type = {
         "id": "test-event-type-1",
@@ -101,24 +107,28 @@ def create_ontology(
     entity_types: list[dict[str, Any]] | None = None,
     event_types: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """
-    Factory function to create test ontology objects.
+    """Create test ontology objects.
 
-    Args:
-        persona_id: Persona ID for the ontology
-        entity_types: List of entity types (uses default if None)
-        event_types: List of event types (uses default if None)
+    Parameters
+    ----------
+    persona_id : str, default="test-persona-1"
+        Persona ID for the ontology.
+    entity_types : list[dict[str, Any]] | None, default=None
+        List of entity types (uses default if None).
+    event_types : list[dict[str, Any]] | None, default=None
+        List of event types (uses default if None).
 
-    Returns:
-        A complete ontology dictionary for testing
+    Returns
+    -------
+    dict[str, Any]
+        A complete ontology dictionary for testing.
 
-    Example:
-        ```python
-        ontology = create_ontology(
-            persona_id="baseball-scout",
-            entity_types=[create_entity_type({"name": "Pitcher"})]
-        )
-        ```
+    Examples
+    --------
+    >>> ontology = create_ontology(
+    ...     persona_id="baseball-scout",
+    ...     entity_types=[create_entity_type({"name": "Pitcher"})]
+    ... )
     """
     return {
         "id": "test-ontology-1",
@@ -133,16 +143,16 @@ def create_ontology(
 
 
 def create_baseball_scout_persona() -> dict[str, Any]:
-    """
-    Creates a baseball scout persona for domain-specific testing.
+    """Create a baseball scout persona for domain-specific testing.
 
-    Returns:
-        Persona configured for baseball scouting
+    Returns
+    -------
+    dict[str, Any]
+        Persona configured for baseball scouting.
 
-    Example:
-        ```python
-        scout_persona = create_baseball_scout_persona()
-        ```
+    Examples
+    --------
+    >>> scout_persona = create_baseball_scout_persona()
     """
     return create_persona(
         {
@@ -155,16 +165,16 @@ def create_baseball_scout_persona() -> dict[str, Any]:
 
 
 def create_wildlife_researcher_persona() -> dict[str, Any]:
-    """
-    Creates a wildlife researcher persona for domain-specific testing.
+    """Create a wildlife researcher persona for domain-specific testing.
 
-    Returns:
-        Persona configured for wildlife research
+    Returns
+    -------
+    dict[str, Any]
+        Persona configured for wildlife research.
 
-    Example:
-        ```python
-        researcher_persona = create_wildlife_researcher_persona()
-        ```
+    Examples
+    --------
+    >>> researcher_persona = create_wildlife_researcher_persona()
     """
     return create_persona(
         {
