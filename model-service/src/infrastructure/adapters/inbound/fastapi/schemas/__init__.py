@@ -21,4 +21,24 @@ common
     Shared schemas and base classes.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
+    ConfidenceScore,
+    MutableStrictModel,
+    NonEmptyStr,
+    NonNegativeInt,
+    NormalizedCoordinate,
+    PositiveInt,
+    ProcessingTime,
+    StrictBaseModel,
+)
+
+__all__ = [
+    "ConfidenceScore",
+    "MutableStrictModel",
+    "NonEmptyStr",
+    "NonNegativeInt",
+    "NormalizedCoordinate",
+    "PositiveInt",
+    "ProcessingTime",
+    "StrictBaseModel",
+]
