@@ -27,11 +27,15 @@ class ModelConfig:
     model_id : str
         Hugging Face model identifier or external API model name.
     framework : str
-        Inference framework (sglang, vllm, pytorch, external_api).
+        Inference framework (sglang, vllm, pytorch, onnx, external_api).
     vram_gb : float
-        VRAM requirement in GB (0 for external APIs).
+        VRAM requirement in GB (0 for external APIs or CPU-only models).
+    cpu_memory_gb : float
+        RAM requirement in GB for CPU inference.
+    cpu_compatible : bool
+        Whether model can run on CPU without GPU.
     quantization : str | None
-        Quantization method (4bit, 8bit, awq, etc).
+        Quantization method (4bit, 8bit, awq, int8, int4, etc).
     speed : str
         Speed category (fast, medium, slow).
     description : str
@@ -57,6 +61,8 @@ class ModelConfig:
         self.model_id: str = config_dict["model_id"]
         self.framework: str = config_dict["framework"]
         self.vram_gb: float = config_dict.get("vram_gb", 0)
+        self.cpu_memory_gb: float = config_dict.get("cpu_memory_gb", 0)
+        self.cpu_compatible: bool = config_dict.get("cpu_compatible", False)
         self.quantization: str | None = config_dict.get("quantization")
         self.speed: str = config_dict.get("speed", "medium")
         self.description: str = config_dict.get("description", "")
@@ -75,6 +81,17 @@ class ModelConfig:
             VRAM requirement in bytes.
         """
         return int(self.vram_gb * 1024 * 1024 * 1024)
+
+    @property
+    def cpu_memory_bytes(self) -> int:
+        """Convert CPU memory requirement from GB to bytes.
+
+        Returns
+        -------
+        int
+            CPU memory requirement in bytes.
+        """
+        return int(self.cpu_memory_gb * 1024 * 1024 * 1024)
 
 
 class TaskConfig:
@@ -188,7 +205,11 @@ class ModelManager:
         self.model_load_times: dict[str, float] = {}
         self.model_memory_usage: dict[str, int] = {}
 
+        self.device = self._detect_device()
+        self.cpu_only_mode = self.device == "cpu"
+
         logger.info(f"ModelManager initialized with config from {config_path}")
+        logger.info(f"Device: {self.device}, CPU-only mode: {self.cpu_only_mode}")
 
     def _load_config(self) -> dict[str, Any]:
         """Load configuration from YAML file.
@@ -219,6 +240,72 @@ class ModelManager:
         self.inference_config = InferenceConfig(config["inference"])
 
         return config
+
+    def _detect_device(self) -> str:
+        """Detect available compute device.
+
+        Returns
+        -------
+        str
+            'cuda' if NVIDIA GPU available, 'mps' if Apple Silicon, else 'cpu'.
+        """
+        if torch.cuda.is_available():
+            return "cuda"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
+
+    def get_available_ram(self) -> int:
+        """Get available system RAM in bytes.
+
+        Returns
+        -------
+        int
+            Available RAM in bytes.
+        """
+        import psutil
+
+        return psutil.virtual_memory().available
+
+    def get_total_ram(self) -> int:
+        """Get total system RAM in bytes.
+
+        Returns
+        -------
+        int
+            Total RAM in bytes.
+        """
+        import psutil
+
+        return psutil.virtual_memory().total
+
+    def get_cpu_compatible_models(self, task_type: str) -> dict[str, ModelConfig]:
+        """Get models that can run on CPU for a task type.
+
+        Parameters
+        ----------
+        task_type : str
+            Task type to get models for.
+
+        Returns
+        -------
+        dict[str, ModelConfig]
+            Dictionary of CPU-compatible model options.
+
+        Raises
+        ------
+        ValueError
+            If task type is invalid.
+        """
+        if task_type not in self.tasks:
+            raise ValueError(f"Invalid task type: {task_type}")
+
+        task = self.tasks[task_type]
+        return {
+            name: config
+            for name, config in task.options.items()
+            if config.cpu_compatible
+        }
 
     def get_available_vram(self) -> int:
         """
@@ -554,35 +641,61 @@ class ModelManager:
             await self.load_model(task_type)
 
     def validate_memory_budget(self) -> dict[str, Any]:
-        """
-        Validate that all selected models can fit in available memory.
+        """Validate that all selected models can fit in available memory.
 
-        Returns:
-            Dictionary with validation results
+        Uses RAM for CPU mode, VRAM for GPU mode.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary with validation results including CPU/GPU memory info.
         """
-        total_vram = self.get_total_vram()
+        if self.cpu_only_mode:
+            total_memory = self.get_total_ram()
+        else:
+            total_memory = self.get_total_vram()
+
         total_required = 0
         model_requirements = {}
 
         for task_type, task_config in self.tasks.items():
             model_config = task_config.get_selected_config()
+
+            if self.cpu_only_mode and not model_config.cpu_compatible:
+                continue
+
+            if self.cpu_only_mode:
+                memory_gb = model_config.cpu_memory_gb
+                memory_bytes = model_config.cpu_memory_bytes
+            else:
+                memory_gb = model_config.vram_gb
+                memory_bytes = model_config.vram_bytes
+
             model_requirements[task_type] = {
                 "model_id": model_config.model_id,
-                "vram_gb": model_config.vram_gb,
+                "memory_gb": memory_gb,
+                "cpu_compatible": model_config.cpu_compatible,
             }
-            total_required += model_config.vram_bytes
+            total_required += memory_bytes
 
         threshold = self.inference_config.offload_threshold
-        max_allowed = int(total_vram * threshold)
+        max_allowed = int(total_memory * threshold)
 
-        return {
+        result: dict[str, Any] = {
             "valid": total_required <= max_allowed,
-            "total_vram_gb": total_vram / 1024**3,
+            "total_vram_gb": total_memory / 1024**3 if not self.cpu_only_mode else 0,
             "total_required_gb": total_required / 1024**3,
             "threshold": threshold,
             "max_allowed_gb": max_allowed / 1024**3,
             "model_requirements": model_requirements,
+            "cpu_only_mode": self.cpu_only_mode,
+            "device": self.device,
         }
+
+        if self.cpu_only_mode:
+            result["total_ram_gb"] = total_memory / 1024**3
+
+        return result
 
     async def warmup_models(self) -> None:
         """Load all selected models if warmup_on_startup is enabled."""

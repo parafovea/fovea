@@ -35,6 +35,7 @@ dependencies = [
     "tenacity>=8.5.0",
     "aiohttp>=3.9.0",
     "aiofiles>=23.2.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -84,6 +85,12 @@ docs = [
     "sphinx-rtd-theme>=2.0.0",
     "sphinx-autodoc-typehints>=1.25.0",
     "pydoc-markdown>=4.8.0",
+]
+cpu = [
+    "onnxruntime>=1.18.0",
+    "onnx>=1.15.0",
+    "ctranslate2>=4.0.0",
+    "faster-whisper>=1.1.0",
 ]
 
 [tool.ruff]
@@ -196,4 +203,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["psutil", "psutil.*", "onnxruntime", "onnxruntime.*", "onnx", "onnx.*", "ctranslate2", "ctranslate2.*"]
 ignore_missing_imports = true

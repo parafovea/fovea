@@ -1,0 +1,320 @@
+# CPU-Only Model Configuration
+# Optimized for resource-constrained deployments without GPU (e.g., t3.xlarge with 16GB RAM)
+# All selected models are CPU-compatible with efficient memory usage
+
+models:
+  video_summarization:
+    selected: "moondream-2b"
+    options:
+      # CPU-compatible VLMs
+      smolvlm-2-2b:
+        model_id: "HuggingFaceTB/SmolVLM-Instruct"
+        quantization: "none"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 5
+        cpu_compatible: true
+        speed: "fast"
+        description: "SmolVLM 2.2B, 3-4x faster than Qwen2-VL, low tokens/image"
+      moondream-2b:
+        model_id: "vikhyat/moondream2"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 4
+        cpu_compatible: true
+        speed: "moderate"
+        description: "CPU-optimized 2B VLM, ~10s/frame, runs well on CPU/MPS"
+      smolvlm-500m:
+        model_id: "HuggingFaceTB/SmolVLM-500M-Instruct"
+        quantization: "none"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "SmolVLM 500M, ultra-compact for edge, under 1GB at int8"
+      moondream-0-5b:
+        model_id: "vikhyat/moondream-0.5b"
+        quantization: "int4"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Tiny 500M VLM, 816MB at int4, for edge devices"
+      # External APIs (always CPU-compatible)
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, vision capable, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, multimodal, API-based"
+
+  ontology_augmentation:
+    selected: "qwen2-5-1-5b-cpu"
+    options:
+      # CPU-compatible LLMs
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for ontology, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
+      # External APIs (always CPU-compatible)
+      claude-sonnet-4-5:
+        model_id: "claude-sonnet-4-5"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
+      gpt-4o:
+        model_id: "gpt-4o"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-4 Omni, text-only, API-based"
+      gemini-2-5-flash:
+        model_id: "gemini-2.5-flash"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Google Gemini 2.5 Flash, text-only, API-based"
+
+  object_detection:
+    selected: "yolo-world-s-onnx"
+    options:
+      yolo-world-v2:
+        model_id: "yolov8l-worldv2.pt"
+        framework: "pytorch"
+        vram_gb: 2
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "real_time"
+        fps: 52
+        description: "Speed and accuracy balance, image prompts"
+      # CPU-optimized detection with ONNX
+      yolo-world-s-onnx:
+        model_id: "yolov8s-worldv2"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "fast"
+        fps: 10
+        description: "YOLO-World small, ONNX for CPU, ~100ms/image"
+      florence-2-base-onnx:
+        model_id: "onnx-community/Florence-2-base"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        fps: 5
+        description: "Florence-2 ONNX, ~200ms/image on CPU"
+      grounding-dino-tiny-onnx:
+        model_id: "onnx-community/grounding-dino-tiny-ONNX"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        fps: 8
+        description: "GroundingDINO tiny ONNX, open-vocab detection on CPU"
+
+  video_tracking:
+    selected: "yolo11n-seg"
+    options:
+      yolo11n-seg:
+        model_id: "ultralytics/yolo11n-seg"
+        framework: "ultralytics"
+        vram_gb: 1
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Nano segmentation, ~50ms/frame on CPU"
+
+  audio_transcription:
+    selected: "faster-whisper-medium-cpu"
+    options:
+      faster-whisper-large-v3:
+        model_id: "Systran/faster-whisper-large-v3"
+        framework: "faster_whisper"
+        vram_gb: 3
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "fast"
+        description: "CTranslate2 optimized, 4x faster than default Whisper"
+      # CPU-optimized audio with CTranslate2
+      faster-whisper-medium-cpu:
+        model_id: "Systran/faster-whisper-medium"
+        framework: "faster_whisper"
+        quantization: "int8"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "1:1 realtime on 4 vCPU, CTranslate2 int8"
+      faster-whisper-small-cpu:
+        model_id: "Systran/faster-whisper-small"
+        framework: "faster_whisper"
+        quantization: "int8"
+        vram_gb: 0
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "fast"
+        description: "3x realtime on 4 vCPU, CTranslate2 int8"
+      # External APIs (always CPU-compatible)
+      assemblyai-universal:
+        model_id: "best"
+        framework: "external_api"
+        provider: "assemblyai"
+        api_endpoint: "https://api.assemblyai.com/v2"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "AssemblyAI Universal-2, speaker diarization, sentiment"
+      deepgram-nova-3:
+        model_id: "nova-3"
+        framework: "external_api"
+        provider: "deepgram"
+        api_endpoint: "https://api.deepgram.com/v1"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Deepgram Nova-3, streaming capable, highest accuracy"
+
+  claim_extraction:
+    selected: "qwen2-5-1-5b-cpu"
+    options:
+      # CPU-compatible LLMs for claim extraction
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for claim extraction, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
+
+  claim_synthesis:
+    selected: "qwen2-5-1-5b-cpu"
+    options:
+      # CPU-compatible LLMs for claim synthesis
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for claim synthesis, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
+
+  speaker_diarization:
+    selected: "pyannote-3-1"
+    options:
+      pyannote-3-1:
+        model_id: "pyannote/speaker-diarization-3.1"
+        framework: "pyannote"
+        vram_gb: 2
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "medium"
+        description: "Pyannote Audio 3.1, speaker segmentation and clustering"
+
+  voice_activity_detection:
+    selected: "silero-vad"
+    options:
+      silero-vad:
+        model_id: "silero_vad"
+        framework: "pytorch"
+        vram_gb: 0.1
+        cpu_memory_gb: 0.1
+        cpu_compatible: true
+        speed: "real_time"
+        description: "Silero VAD v5, CPU-native, lightweight speech detection"
+
+inference:
+  max_memory_per_model: "auto"
+  offload_threshold: 0.85
+  warmup_on_startup: false  # Disabled for CPU to save startup time
+  default_batch_size: 1
+  max_batch_size: 4  # Lower for CPU
