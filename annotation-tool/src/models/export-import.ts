@@ -118,10 +118,48 @@ export interface ExportOptions {
 /**
  * @interface ExportStats
  * @description Statistics about an export operation.
+ * Contains counts for all data types that will be exported.
  */
 export interface ExportStats {
-  /** Total size in bytes */
-  totalSize: number
+  // Personas & Ontologies
+  /** Number of personas */
+  personaCount: number
+  /** Number of ontologies */
+  ontologyCount: number
+  /** Total entity types across all ontologies */
+  entityTypeCount: number
+  /** Total event types across all ontologies */
+  eventTypeCount: number
+  /** Total role types across all ontologies */
+  roleTypeCount: number
+  /** Total relation types across all ontologies */
+  relationTypeCount: number
+
+  // World State
+  /** Number of entities in world state */
+  entityCount: number
+  /** Number of events in world state */
+  eventCount: number
+  /** Number of times in world state */
+  timeCount: number
+  /** Number of entity collections */
+  entityCollectionCount: number
+  /** Number of event collections */
+  eventCollectionCount: number
+  /** Number of time collections */
+  timeCollectionCount: number
+  /** Number of world state relations */
+  worldRelationCount: number
+
+  // Summaries & Claims
+  /** Number of video summaries */
+  summaryCount: number
+  /** Number of claims */
+  claimCount: number
+  /** Number of claim relations */
+  claimRelationCount: number
+
+  // Annotations
   /** Number of annotations exported */
   annotationCount: number
   /** Number of bounding box sequences exported */
@@ -130,6 +168,14 @@ export interface ExportStats {
   keyframeCount: number
   /** Total number of interpolated frames exported */
   interpolatedFrameCount: number
+
+  // Total
+  /** Total estimated size in bytes */
+  totalSize: number
+  /** Total size formatted as MB */
+  totalSizeMB: string
+  /** Optional warning message */
+  warning?: string
 }
 
 /**

@@ -12,30 +12,30 @@ const ValidationErrorSchema = Type.Object({
 
 /**
  * Fastify plugin for export-related routes.
- * Provides endpoints for exporting annotations with bounding box sequences.
+ * Provides endpoints for exporting all user data.
  *
  * Routes:
- * - GET /api/export - Export annotations in JSON Lines format
+ * - GET /api/export - Export all user data in JSON Lines format
  */
 const exportRoute: FastifyPluginAsync = async (fastify) => {
   const exporter = new AnnotationExporter()
 
   /**
-   * Export annotations with bounding box sequences.
-   * Supports filtering by persona, video, and annotation type.
-   * Optionally includes fully interpolated frames or keyframes-only.
+   * Export all user data including personas, ontologies, world state,
+   * summaries, claims, and annotations.
+   * Exports in dependency order to ensure proper import.
    *
    * @route GET /api/export
    * @queryparam format - Export format (default: jsonl)
-   * @queryparam includeInterpolated - Include all interpolated frames (default: false)
-   * @queryparam personaIds - Comma-separated list of persona IDs to filter
-   * @queryparam videoIds - Comma-separated list of video IDs to filter
+   * @queryparam includeInterpolated - Include all interpolated frames for annotations (default: false)
+   * @queryparam personaIds - Comma-separated list of persona IDs to filter annotations
+   * @queryparam videoIds - Comma-separated list of video IDs to filter annotations
    * @queryparam annotationTypes - Comma-separated list of annotation types (type, object)
-   * @returns JSON Lines file with annotations
+   * @returns JSON Lines file with all user data
    */
   fastify.get('/api/export', {
     schema: {
-      description: 'Export annotations with bounding box sequences',
+      description: 'Export all user data',
       tags: ['export'],
       querystring: Type.Object({
         format: Type.Optional(Type.Union([
@@ -71,54 +71,90 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       annotationTypes?: string
     }
 
-    // Parse filter parameters
+    // Parse filter parameters for annotations
     const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : undefined
     const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
     const annotationTypeArray = annotationTypes
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
       : undefined
 
-    // Build Prisma query filters
-    const where: {
+    const lines: string[] = []
+
+    // 1. Export personas with ontologies
+    const personas = await fastify.prisma.persona.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const ontologies = await fastify.prisma.ontology.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    if (personas.length > 0) {
+      lines.push(exporter.exportPersonasWithOntologies(personas, ontologies))
+    }
+
+    // 2. Export world state
+    const worldState = await fastify.prisma.worldState.findFirst()
+    if (worldState) {
+      const worldLines = exporter.exportWorldState(worldState)
+      if (worldLines) {
+        lines.push(worldLines)
+      }
+    }
+
+    // 3. Export summaries with claims
+    const summaries = await fastify.prisma.videoSummary.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const summaryIds = summaries.map(s => s.id)
+    const claims = summaryIds.length > 0 ? await fastify.prisma.claim.findMany({
+      where: { summaryId: { in: summaryIds } },
+      orderBy: { createdAt: 'asc' }
+    }) : []
+    const claimIds = claims.map(c => c.id)
+    const claimRelations = claimIds.length > 0 ? await fastify.prisma.claimRelation.findMany({
+      where: {
+        OR: [
+          { sourceClaimId: { in: claimIds } },
+          { targetClaimId: { in: claimIds } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    }) : []
+    if (summaries.length > 0 || claims.length > 0) {
+      lines.push(exporter.exportSummariesWithClaims(summaries, claims, claimRelations))
+    }
+
+    // 4. Export annotations with optional filtering
+    const annotationWhere: {
       personaId?: { in: string[] }
       videoId?: { in: string[] }
     } = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
-      where.personaId = { in: personaIdArray }
+      annotationWhere.personaId = { in: personaIdArray }
     }
-
     if (videoIdArray && videoIdArray.length > 0) {
-      where.videoId = { in: videoIdArray }
+      annotationWhere.videoId = { in: videoIdArray }
     }
 
-    if (annotationTypeArray && annotationTypeArray.length > 0) {
-      // Need to filter by annotation type from frames JSON
-      // This is more complex with Prisma, so we'll filter after fetching
-    }
-
-    // Fetch annotations from database
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where,
+      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
       orderBy: { createdAt: 'asc' }
     })
 
-    // Convert to export format, filtering out any null results from malformed data
-    let annotations = prismaAnnotations
+    let convertedAnnotations = prismaAnnotations
       .map(a => exporter.convertPrismaAnnotation(a))
       .filter((a): a is NonNullable<typeof a> => a !== null)
 
     // Filter by annotation type if specified
     if (annotationTypeArray && annotationTypeArray.length > 0) {
-      annotations = annotations.filter(a =>
+      convertedAnnotations = convertedAnnotations.filter(a =>
         annotationTypeArray.includes(a.annotationType)
       )
     }
 
     // Validate all sequences before export
     const validationErrors: Array<{ annotationId: string; errors: string[] }> = []
-
-    for (const annotation of annotations) {
+    for (const annotation of convertedAnnotations) {
       const validation = exporter.validateSequence(annotation.boundingBoxSequence)
       if (!validation.valid) {
         validationErrors.push({
@@ -138,67 +174,58 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    // Get export statistics
-    const stats = exporter.getExportStats(annotations, includeInterpolated)
-
-    // Export annotations
-    const exportData = exporter.exportAnnotations(annotations, {
-      includeInterpolated,
-      personaIds: personaIdArray,
-      videoIds: videoIdArray,
-      annotationTypes: annotationTypeArray
-    })
-
-    // Calculate size in MB
-    const sizeInMB = (stats.totalSize / (1024 * 1024)).toFixed(2)
-
-    // Set response headers with export statistics
-    reply.header('X-Export-Size', `${sizeInMB}MB`)
-    reply.header('X-Export-Annotations', stats.annotationCount.toString())
-    reply.header('X-Export-Sequences', stats.sequenceCount.toString())
-    reply.header('X-Export-Keyframes', stats.keyframeCount.toString())
-    reply.header('X-Export-Interpolated-Frames', stats.interpolatedFrameCount.toString())
-
-    // Add warning if export is large
-    if (stats.totalSize > 100 * 1024 * 1024) {
-      reply.header(
-        'X-Export-Warning',
-        'Large export. Consider filtering by persona or video.'
-      )
+    if (convertedAnnotations.length > 0) {
+      lines.push(exporter.exportAnnotations(convertedAnnotations, { includeInterpolated }))
     }
+
+    const exportData = lines.filter(Boolean).join('\n')
+
+    // Get world state counts for headers
+    const worldCounts = worldState ? {
+      entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
+      events: Array.isArray(worldState.events) ? (worldState.events as unknown[]).length : 0,
+      times: Array.isArray(worldState.times) ? (worldState.times as unknown[]).length : 0,
+    } : { entities: 0, events: 0, times: 0 }
+
+    // Set headers with export stats
+    reply.header('X-Export-Personas', personas.length.toString())
+    reply.header('X-Export-Ontologies', ontologies.length.toString())
+    reply.header('X-Export-Entities', worldCounts.entities.toString())
+    reply.header('X-Export-Events', worldCounts.events.toString())
+    reply.header('X-Export-Times', worldCounts.times.toString())
+    reply.header('X-Export-Summaries', summaries.length.toString())
+    reply.header('X-Export-Claims', claims.length.toString())
+    reply.header('X-Export-ClaimRelations', claimRelations.length.toString())
+    reply.header('X-Export-Annotations', convertedAnnotations.length.toString())
 
     // Set content type and disposition
     if (format === 'jsonl') {
       reply.header('Content-Type', 'application/x-ndjson')
-      reply.header('Content-Disposition', 'attachment; filename="annotations.jsonl"')
+      reply.header('Content-Disposition', 'attachment; filename="fovea-export.jsonl"')
+      return reply.send(exportData)
     } else {
-      // For JSON format, wrap in array
       reply.header('Content-Type', 'application/json')
-      reply.header('Content-Disposition', 'attachment; filename="annotations.json"')
-
-      // Convert JSON Lines to JSON array
-      const lines = exportData.split('\n').filter(Boolean)
-      const jsonArray = lines.map(line => JSON.parse(line))
+      reply.header('Content-Disposition', 'attachment; filename="fovea-export.json"')
+      const jsonLines = exportData.split('\n').filter(Boolean)
+      const jsonArray = jsonLines.map(line => JSON.parse(line))
       return reply.send(JSON.stringify(jsonArray, null, 2))
     }
-
-    return reply.send(exportData)
   })
 
   /**
    * Get export statistics without performing the export.
-   * Useful for estimating export size before downloading.
+   * Returns counts for all data types that will be exported.
    *
    * @route GET /api/export/stats
    * @queryparam includeInterpolated - Include all interpolated frames (default: false)
-   * @queryparam personaIds - Comma-separated list of persona IDs to filter
-   * @queryparam videoIds - Comma-separated list of video IDs to filter
+   * @queryparam personaIds - Comma-separated list of persona IDs to filter annotations
+   * @queryparam videoIds - Comma-separated list of video IDs to filter annotations
    * @queryparam annotationTypes - Comma-separated list of annotation types (type, object)
-   * @returns Export statistics
+   * @returns Export statistics for all data types
    */
   fastify.get('/api/export/stats', {
     schema: {
-      description: 'Get export statistics without performing export',
+      description: 'Get export statistics for all data types',
       tags: ['export'],
       querystring: Type.Object({
         includeInterpolated: Type.Optional(Type.Boolean()),
@@ -208,12 +235,33 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       }),
       response: {
         200: Type.Object({
-          totalSize: Type.Number(),
-          totalSizeMB: Type.String(),
+          // Personas & Ontologies
+          personaCount: Type.Number(),
+          ontologyCount: Type.Number(),
+          entityTypeCount: Type.Number(),
+          eventTypeCount: Type.Number(),
+          roleTypeCount: Type.Number(),
+          relationTypeCount: Type.Number(),
+          // World State
+          entityCount: Type.Number(),
+          eventCount: Type.Number(),
+          timeCount: Type.Number(),
+          entityCollectionCount: Type.Number(),
+          eventCollectionCount: Type.Number(),
+          timeCollectionCount: Type.Number(),
+          worldRelationCount: Type.Number(),
+          // Summaries & Claims
+          summaryCount: Type.Number(),
+          claimCount: Type.Number(),
+          claimRelationCount: Type.Number(),
+          // Annotations
           annotationCount: Type.Number(),
           sequenceCount: Type.Number(),
           keyframeCount: Type.Number(),
           interpolatedFrameCount: Type.Number(),
+          // Total
+          totalSize: Type.Number(),
+          totalSizeMB: Type.String(),
           warning: Type.Optional(Type.String())
         })
       }
@@ -231,72 +279,142 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       annotationTypes?: string
     }
 
-    // Parse filter parameters
+    // Parse filter parameters for annotations
     const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : undefined
     const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
     const annotationTypeArray = annotationTypes
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
       : undefined
 
-    // Build Prisma query filters
-    const where: {
+    // 1. Count personas and ontologies
+    const personas = await fastify.prisma.persona.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+    const ontologies = await fastify.prisma.ontology.findMany({
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Count ontology types
+    let entityTypeCount = 0
+    let eventTypeCount = 0
+    let roleTypeCount = 0
+    let relationTypeCount = 0
+    for (const ontology of ontologies) {
+      entityTypeCount += Array.isArray(ontology.entityTypes) ? (ontology.entityTypes as unknown[]).length : 0
+      eventTypeCount += Array.isArray(ontology.eventTypes) ? (ontology.eventTypes as unknown[]).length : 0
+      roleTypeCount += Array.isArray(ontology.roleTypes) ? (ontology.roleTypes as unknown[]).length : 0
+      relationTypeCount += Array.isArray(ontology.relationTypes) ? (ontology.relationTypes as unknown[]).length : 0
+    }
+
+    // 2. Count world state objects
+    const worldState = await fastify.prisma.worldState.findFirst()
+    const worldCounts = worldState ? {
+      entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
+      events: Array.isArray(worldState.events) ? (worldState.events as unknown[]).length : 0,
+      times: Array.isArray(worldState.times) ? (worldState.times as unknown[]).length : 0,
+      entityCollections: Array.isArray(worldState.entityCollections) ? (worldState.entityCollections as unknown[]).length : 0,
+      eventCollections: Array.isArray(worldState.eventCollections) ? (worldState.eventCollections as unknown[]).length : 0,
+      timeCollections: Array.isArray(worldState.timeCollections) ? (worldState.timeCollections as unknown[]).length : 0,
+      relations: Array.isArray(worldState.relations) ? (worldState.relations as unknown[]).length : 0,
+    } : { entities: 0, events: 0, times: 0, entityCollections: 0, eventCollections: 0, timeCollections: 0, relations: 0 }
+
+    // 3. Count summaries and claims
+    const summaryCount = await fastify.prisma.videoSummary.count()
+    const claimCount = await fastify.prisma.claim.count()
+    const claimRelationCount = await fastify.prisma.claimRelation.count()
+
+    // 4. Count and analyze annotations (with optional filtering)
+    const annotationWhere: {
       personaId?: { in: string[] }
       videoId?: { in: string[] }
     } = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
-      where.personaId = { in: personaIdArray }
+      annotationWhere.personaId = { in: personaIdArray }
     }
-
     if (videoIdArray && videoIdArray.length > 0) {
-      where.videoId = { in: videoIdArray }
+      annotationWhere.videoId = { in: videoIdArray }
     }
 
-    // Fetch annotations from database
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where,
+      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
       orderBy: { createdAt: 'asc' }
     })
 
-    // Convert to export format, filtering out any null results from malformed data
     let annotations = prismaAnnotations
       .map(a => exporter.convertPrismaAnnotation(a))
       .filter((a): a is NonNullable<typeof a> => a !== null)
 
-    // Filter by annotation type if specified
     if (annotationTypeArray && annotationTypeArray.length > 0) {
       annotations = annotations.filter(a =>
         annotationTypeArray.includes(a.annotationType)
       )
     }
 
-    // Get export statistics
-    const stats = exporter.getExportStats(annotations, includeInterpolated)
+    // Get annotation export statistics
+    const annotationStats = exporter.getExportStats(annotations, includeInterpolated)
 
-    // Calculate size in MB
-    const sizeInMB = (stats.totalSize / (1024 * 1024)).toFixed(2)
+    // Estimate total size (rough estimate: 200 bytes per object on average)
+    const baseObjectCount = personas.length + ontologies.length +
+      worldCounts.entities + worldCounts.events + worldCounts.times +
+      worldCounts.entityCollections + worldCounts.eventCollections + worldCounts.timeCollections +
+      worldCounts.relations + summaryCount + claimCount + claimRelationCount
+    const estimatedBaseSize = baseObjectCount * 200
+    const totalSize = estimatedBaseSize + annotationStats.totalSize
 
-    // Prepare response
+    const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2)
+
     const response: {
-      totalSize: number
-      totalSizeMB: string
+      personaCount: number
+      ontologyCount: number
+      entityTypeCount: number
+      eventTypeCount: number
+      roleTypeCount: number
+      relationTypeCount: number
+      entityCount: number
+      eventCount: number
+      timeCount: number
+      entityCollectionCount: number
+      eventCollectionCount: number
+      timeCollectionCount: number
+      worldRelationCount: number
+      summaryCount: number
+      claimCount: number
+      claimRelationCount: number
       annotationCount: number
       sequenceCount: number
       keyframeCount: number
       interpolatedFrameCount: number
+      totalSize: number
+      totalSizeMB: string
       warning?: string
     } = {
-      totalSize: stats.totalSize,
-      totalSizeMB: `${sizeInMB}MB`,
-      annotationCount: stats.annotationCount,
-      sequenceCount: stats.sequenceCount,
-      keyframeCount: stats.keyframeCount,
-      interpolatedFrameCount: stats.interpolatedFrameCount
+      personaCount: personas.length,
+      ontologyCount: ontologies.length,
+      entityTypeCount,
+      eventTypeCount,
+      roleTypeCount,
+      relationTypeCount,
+      entityCount: worldCounts.entities,
+      eventCount: worldCounts.events,
+      timeCount: worldCounts.times,
+      entityCollectionCount: worldCounts.entityCollections,
+      eventCollectionCount: worldCounts.eventCollections,
+      timeCollectionCount: worldCounts.timeCollections,
+      worldRelationCount: worldCounts.relations,
+      summaryCount,
+      claimCount,
+      claimRelationCount,
+      annotationCount: annotationStats.annotationCount,
+      sequenceCount: annotationStats.sequenceCount,
+      keyframeCount: annotationStats.keyframeCount,
+      interpolatedFrameCount: annotationStats.interpolatedFrameCount,
+      totalSize,
+      totalSizeMB: `${sizeInMB}MB`
     }
 
-    // Add warning if export is large
-    if (stats.totalSize > 100 * 1024 * 1024) {
-      response.warning = 'Large export. Consider filtering by persona or video.'
+    if (totalSize > 100 * 1024 * 1024) {
+      response.warning = 'Large export. Consider filtering annotations by persona or video.'
     }
 
     return reply.send(response)
@@ -505,118 +623,6 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       reply.header('Content-Disposition', 'attachment; filename="summaries.json"')
       const lines = exportData.split('\n').filter(Boolean)
       const jsonArray = lines.map(line => JSON.parse(line))
-      return reply.send(JSON.stringify(jsonArray, null, 2))
-    }
-  })
-
-  /**
-   * Export all user data.
-   * Exports in dependency order: personas -> ontologies -> world state -> summaries -> claims -> annotations
-   *
-   * @route GET /api/export/all
-   * @queryparam format - Export format (default: jsonl)
-   * @queryparam includeInterpolated - Include all interpolated frames (default: false)
-   * @returns JSON Lines file with all data
-   */
-  fastify.get('/api/export/all', {
-    schema: {
-      description: 'Export all user data',
-      tags: ['export'],
-      querystring: Type.Object({
-        format: Type.Optional(Type.Union([
-          Type.Literal('jsonl'),
-          Type.Literal('json')
-        ])),
-        includeInterpolated: Type.Optional(Type.Boolean())
-      }),
-      response: {
-        200: Type.String()
-      }
-    }
-  }, async (request, reply) => {
-    const {
-      format = 'jsonl',
-      includeInterpolated = false
-    } = request.query as {
-      format?: 'jsonl' | 'json'
-      includeInterpolated?: boolean
-    }
-
-    const lines: string[] = []
-
-    // 1. Export personas with ontologies
-    const personas = await fastify.prisma.persona.findMany({
-      orderBy: { createdAt: 'asc' }
-    })
-    const ontologies = await fastify.prisma.ontology.findMany({
-      orderBy: { createdAt: 'asc' }
-    })
-    if (personas.length > 0) {
-      lines.push(exporter.exportPersonasWithOntologies(personas, ontologies))
-    }
-
-    // 2. Export world state
-    const worldState = await fastify.prisma.worldState.findFirst()
-    if (worldState) {
-      const worldLines = exporter.exportWorldState(worldState)
-      if (worldLines) {
-        lines.push(worldLines)
-      }
-    }
-
-    // 3. Export summaries with claims
-    const summaries = await fastify.prisma.videoSummary.findMany({
-      orderBy: { createdAt: 'asc' }
-    })
-    const summaryIds = summaries.map(s => s.id)
-    const claims = await fastify.prisma.claim.findMany({
-      where: { summaryId: { in: summaryIds } },
-      orderBy: { createdAt: 'asc' }
-    })
-    const claimIds = claims.map(c => c.id)
-    const claimRelations = await fastify.prisma.claimRelation.findMany({
-      where: {
-        OR: [
-          { sourceClaimId: { in: claimIds } },
-          { targetClaimId: { in: claimIds } }
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
-    })
-    if (summaries.length > 0 || claims.length > 0) {
-      lines.push(exporter.exportSummariesWithClaims(summaries, claims, claimRelations))
-    }
-
-    // 4. Export annotations
-    const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      orderBy: { createdAt: 'asc' }
-    })
-    const convertedAnnotations = prismaAnnotations
-      .map(a => exporter.convertPrismaAnnotation(a))
-      .filter((a): a is NonNullable<typeof a> => a !== null)
-    if (convertedAnnotations.length > 0) {
-      lines.push(exporter.exportAnnotations(convertedAnnotations, { includeInterpolated }))
-    }
-
-    const exportData = lines.filter(Boolean).join('\n')
-
-    // Set headers with export stats
-    reply.header('X-Export-Personas', personas.length.toString())
-    reply.header('X-Export-Ontologies', ontologies.length.toString())
-    reply.header('X-Export-Summaries', summaries.length.toString())
-    reply.header('X-Export-Claims', claims.length.toString())
-    reply.header('X-Export-Annotations', convertedAnnotations.length.toString())
-
-    // Set content type and disposition
-    if (format === 'jsonl') {
-      reply.header('Content-Type', 'application/x-ndjson')
-      reply.header('Content-Disposition', 'attachment; filename="fovea-export.jsonl"')
-      return reply.send(exportData)
-    } else {
-      reply.header('Content-Type', 'application/json')
-      reply.header('Content-Disposition', 'attachment; filename="fovea-export.json"')
-      const jsonLines = exportData.split('\n').filter(Boolean)
-      const jsonArray = jsonLines.map(line => JSON.parse(line))
       return reply.send(JSON.stringify(jsonArray, null, 2))
     }
   })

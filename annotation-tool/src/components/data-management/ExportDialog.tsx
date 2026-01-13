@@ -36,9 +36,27 @@ interface ExportDialogProps {
 }
 
 /**
- * ExportDialog component for exporting annotations with bounding box sequences.
- * Provides options for keyframes-only vs. fully interpolated export,
- * filtering by persona and video, and displays size estimation.
+ * Helper to check if any data exists in export stats.
+ */
+function hasAnyData(stats: ExportStats | null): boolean {
+  if (!stats) return false
+  return (
+    stats.personaCount > 0 ||
+    stats.ontologyCount > 0 ||
+    stats.entityCount > 0 ||
+    stats.eventCount > 0 ||
+    stats.timeCount > 0 ||
+    stats.summaryCount > 0 ||
+    stats.claimCount > 0 ||
+    stats.annotationCount > 0
+  )
+}
+
+/**
+ * ExportDialog component for exporting all user data.
+ * Exports personas, ontologies, world state, summaries, claims, and annotations.
+ * Provides options for keyframes-only vs. fully interpolated export for annotations,
+ * and filtering by persona and video for annotations.
  *
  * @param props - Component props
  * @returns Export dialog component
@@ -175,7 +193,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>Export Annotations</DialogTitle>
+      <DialogTitle>Export All Data</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
           {/* Export Mode */}
@@ -229,11 +247,11 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
           <Divider />
 
-          {/* Filter by Persona */}
+          {/* Filter Annotations by Persona */}
           <Box>
-            <FormLabel component="legend">Filter by Persona (optional)</FormLabel>
+            <FormLabel component="legend">Filter Annotations by Persona (optional)</FormLabel>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Leave empty to export all personas
+              Leave empty to export all annotations. Other data types are always fully exported.
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {personas.map(persona => (
@@ -248,11 +266,11 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             </Box>
           </Box>
 
-          {/* Filter by Video */}
+          {/* Filter Annotations by Video */}
           <Box>
-            <FormLabel component="legend">Filter by Video (optional)</FormLabel>
+            <FormLabel component="legend">Filter Annotations by Video (optional)</FormLabel>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Leave empty to export all videos
+              Leave empty to export annotations for all videos
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {videos.map((video: VideoMetadata) => (
@@ -267,9 +285,9 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             </Box>
           </Box>
 
-          {/* Filter by Annotation Type */}
+          {/* Filter Annotations by Type */}
           <Box>
-            <FormLabel component="legend">Filter by Annotation Type (optional)</FormLabel>
+            <FormLabel component="legend">Filter Annotations by Type (optional)</FormLabel>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
               Leave empty to export all annotation types
             </Typography>
@@ -307,45 +325,129 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             )}
 
             {!isLoadingStats && exportStats && (
-              <List dense>
-                <ListItem>
-                  <ListItemText
-                    primary="Annotations"
-                    secondary={exportStats.annotationCount.toLocaleString()}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="Sequences"
-                    secondary={exportStats.sequenceCount.toLocaleString()}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="Keyframes"
-                    secondary={exportStats.keyframeCount.toLocaleString()}
-                  />
-                </ListItem>
-                {includeInterpolated && (
-                  <ListItem>
-                    <ListItemText
-                      primary="Interpolated Frames"
-                      secondary={exportStats.interpolatedFrameCount.toLocaleString()}
-                    />
-                  </ListItem>
-                )}
-                <ListItem>
-                  <ListItemText
-                    primary="Estimated File Size"
-                    secondary={formatBytes(exportStats.totalSize)}
-                  />
-                </ListItem>
-              </List>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Personas & Ontologies */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    Personas & Ontologies
+                  </Typography>
+                  <List dense disablePadding>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Personas"
+                        secondary={exportStats.personaCount.toLocaleString()}
+                      />
+                    </ListItem>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Ontology Types"
+                        secondary={`${exportStats.entityTypeCount} entity, ${exportStats.eventTypeCount} event, ${exportStats.roleTypeCount} role, ${exportStats.relationTypeCount} relation`}
+                      />
+                    </ListItem>
+                  </List>
+                </Box>
+
+                {/* World State */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    World State
+                  </Typography>
+                  <List dense disablePadding>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Objects"
+                        secondary={`${exportStats.entityCount} entities, ${exportStats.eventCount} events, ${exportStats.timeCount} times`}
+                      />
+                    </ListItem>
+                    {(exportStats.entityCollectionCount > 0 || exportStats.eventCollectionCount > 0 || exportStats.timeCollectionCount > 0) && (
+                      <ListItem sx={{ py: 0 }}>
+                        <ListItemText
+                          primary="Collections"
+                          secondary={`${exportStats.entityCollectionCount} entity, ${exportStats.eventCollectionCount} event, ${exportStats.timeCollectionCount} time`}
+                        />
+                      </ListItem>
+                    )}
+                    {exportStats.worldRelationCount > 0 && (
+                      <ListItem sx={{ py: 0 }}>
+                        <ListItemText
+                          primary="Relations"
+                          secondary={exportStats.worldRelationCount.toLocaleString()}
+                        />
+                      </ListItem>
+                    )}
+                  </List>
+                </Box>
+
+                {/* Summaries & Claims */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    Summaries & Claims
+                  </Typography>
+                  <List dense disablePadding>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Summaries"
+                        secondary={exportStats.summaryCount.toLocaleString()}
+                      />
+                    </ListItem>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Claims"
+                        secondary={exportStats.claimCount.toLocaleString()}
+                      />
+                    </ListItem>
+                    {exportStats.claimRelationCount > 0 && (
+                      <ListItem sx={{ py: 0 }}>
+                        <ListItemText
+                          primary="Claim Relations"
+                          secondary={exportStats.claimRelationCount.toLocaleString()}
+                        />
+                      </ListItem>
+                    )}
+                  </List>
+                </Box>
+
+                {/* Annotations */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    Annotations
+                  </Typography>
+                  <List dense disablePadding>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Annotations"
+                        secondary={exportStats.annotationCount.toLocaleString()}
+                      />
+                    </ListItem>
+                    <ListItem sx={{ py: 0 }}>
+                      <ListItemText
+                        primary="Keyframes"
+                        secondary={exportStats.keyframeCount.toLocaleString()}
+                      />
+                    </ListItem>
+                    {includeInterpolated && (
+                      <ListItem sx={{ py: 0 }}>
+                        <ListItemText
+                          primary="Interpolated Frames"
+                          secondary={exportStats.interpolatedFrameCount.toLocaleString()}
+                        />
+                      </ListItem>
+                    )}
+                  </List>
+                </Box>
+
+                {/* Total Size */}
+                <Box sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                  <Typography variant="body2">
+                    <strong>Estimated File Size:</strong> {formatBytes(exportStats.totalSize)}
+                  </Typography>
+                </Box>
+              </Box>
             )}
 
-            {!isLoadingStats && exportStats && exportStats.annotationCount === 0 && (
+            {!isLoadingStats && exportStats && !hasAnyData(exportStats) && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                No annotations match the selected filters.
+                No data to export.
               </Alert>
             )}
           </Box>
@@ -361,7 +463,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
           {isExporting && (
             <Box>
               <Typography variant="body2" gutterBottom>
-                Exporting annotations...
+                Exporting data...
               </Typography>
               <LinearProgress />
             </Box>
@@ -375,7 +477,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         <Button
           onClick={handleExport}
           variant="contained"
-          disabled={isExporting || isLoadingStats || (exportStats?.annotationCount === 0)}
+          disabled={isExporting || isLoadingStats || !hasAnyData(exportStats)}
         >
           {isExporting ? 'Exporting...' : 'Export'}
         </Button>

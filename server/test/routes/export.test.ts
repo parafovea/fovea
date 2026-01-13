@@ -95,7 +95,7 @@ describe('Export API', () => {
   })
 
   describe('GET /api/export', () => {
-    it('exports empty JSONL when no annotations exist', async () => {
+    it('exports all data types including personas and ontologies', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/export',
@@ -104,7 +104,13 @@ describe('Export API', () => {
 
       expect(response.statusCode).toBe(200)
       expect(response.headers['content-type']).toContain('application/x-ndjson')
-      expect(response.body.trim()).toBe('')
+
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const types = lines.map(l => JSON.parse(l).type)
+
+      // Should include persona and ontology even without annotations
+      expect(types).toContain('persona')
+      expect(types).toContain('ontology')
     })
 
     it('exports annotations with correct format', async () => {
@@ -134,10 +140,11 @@ describe('Export API', () => {
 
       expect(response.statusCode).toBe(200)
 
-      const lines = response.body.trim().split('\n')
-      expect(lines.length).toBe(1)
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines.filter(l => JSON.parse(l).type === 'annotation')
+      expect(annotationLines.length).toBe(1)
 
-      const exportLine = JSON.parse(lines[0])
+      const exportLine = JSON.parse(annotationLines[0])
       expect(exportLine.type).toBe('annotation')
       expect(exportLine.data.videoId).toBe(testVideoId)
       expect(exportLine.data.annotationType).toBe('type')
@@ -187,17 +194,18 @@ describe('Export API', () => {
 
       expect(response.statusCode).toBe(200)
 
-      const lines = response.body.trim().split('\n')
-      expect(lines.length).toBe(2)
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines.filter(l => JSON.parse(l).type === 'annotation')
+      expect(annotationLines.length).toBe(2)
 
-      lines.forEach(line => {
+      annotationLines.forEach(line => {
         const parsed = JSON.parse(line)
         expect(parsed.type).toBe('annotation')
         expect(parsed.data).toBeDefined()
       })
     })
 
-    it('filters by personaIds', async () => {
+    it('filters annotations by personaIds', async () => {
       // Create persona 2
       const persona2 = await prisma.persona.create({
         data: {
@@ -238,13 +246,14 @@ describe('Export API', () => {
       expect(response.statusCode).toBe(200)
 
       const lines = response.body.trim().split('\n').filter(l => l)
-      expect(lines.length).toBe(1)
+      const annotationLines = lines.filter(l => JSON.parse(l).type === 'annotation')
+      expect(annotationLines.length).toBe(1)
 
-      const exportLine = JSON.parse(lines[0])
+      const exportLine = JSON.parse(annotationLines[0])
       expect(exportLine.data.personaId).toBe(testPersonaId)
     })
 
-    it('filters by videoIds', async () => {
+    it('filters annotations by videoIds', async () => {
       // Create video 2
       const video2 = await prisma.video.create({
         data: {
@@ -284,13 +293,14 @@ describe('Export API', () => {
       expect(response.statusCode).toBe(200)
 
       const lines = response.body.trim().split('\n').filter(l => l)
-      expect(lines.length).toBe(1)
+      const annotationLines = lines.filter(l => JSON.parse(l).type === 'annotation')
+      expect(annotationLines.length).toBe(1)
 
-      const exportLine = JSON.parse(lines[0])
+      const exportLine = JSON.parse(annotationLines[0])
       expect(exportLine.data.videoId).toBe(testVideoId)
     })
 
-    it('returns empty export for no annotations', async () => {
+    it('includes personas and ontologies even without annotations', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/export',
@@ -298,12 +308,18 @@ describe('Export API', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(response.body.trim()).toBe('')
+
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const types = lines.map(l => JSON.parse(l).type)
+
+      expect(types).toContain('persona')
+      expect(types).toContain('ontology')
+      expect(types).not.toContain('annotation')
     })
   })
 
   describe('GET /api/export/stats', () => {
-    it('returns zero stats for empty database', async () => {
+    it('returns stats for all data types', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/export/stats',
@@ -313,6 +329,10 @@ describe('Export API', () => {
       expect(response.statusCode).toBe(200)
 
       const stats = response.json()
+      // Should have persona and ontology counts from beforeEach setup
+      expect(stats.personaCount).toBe(1)
+      expect(stats.ontologyCount).toBe(1)
+      // Annotation counts should be zero
       expect(stats.annotationCount).toBe(0)
       expect(stats.sequenceCount).toBe(0)
       expect(stats.keyframeCount).toBe(0)
@@ -349,6 +369,8 @@ describe('Export API', () => {
       expect(response.statusCode).toBe(200)
 
       const stats = response.json()
+      expect(stats.personaCount).toBe(1)
+      expect(stats.ontologyCount).toBe(1)
       expect(stats.annotationCount).toBe(1)
       expect(stats.sequenceCount).toBe(1)
       expect(stats.keyframeCount).toBe(2)
@@ -472,7 +494,7 @@ describe('Export API', () => {
     })
   })
 
-  describe('GET /api/export/all', () => {
+  describe('GET /api/export (full export)', () => {
     it('exports all data types in correct order', async () => {
       // Create summary
       const summary = await prisma.videoSummary.create({
@@ -506,7 +528,7 @@ describe('Export API', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
@@ -544,7 +566,7 @@ describe('Export API', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
@@ -585,7 +607,7 @@ describe('Export API', () => {
           frames: {
             boxes: [{ x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true }],
             interpolationSegments: [],
-            visibilityRanges: [],
+            visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
             totalFrames: 1,
             keyframeCount: 1,
             interpolatedFrameCount: 0
@@ -596,7 +618,7 @@ describe('Export API', () => {
       // Export data
       const exportResponse = await app.inject({
         method: 'GET',
-        url: '/api/export/all',
+        url: '/api/export',
         cookies: { session_token: testSessionToken }
       })
 
@@ -611,6 +633,13 @@ describe('Export API', () => {
         expect(parsed.type).toBeDefined()
         expect(parsed.data).toBeDefined()
       })
+
+      // Verify all expected types are in the export
+      const types = lines.map(l => JSON.parse(l).type)
+      expect(types).toContain('persona')
+      expect(types).toContain('ontology')
+      expect(types).toContain('summary')
+      expect(types).toContain('annotation')
     })
   })
 })
