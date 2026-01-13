@@ -16,12 +16,19 @@ fake_external_api
     Fake external API client for testing API integrations.
 """
 
-from test.fakes.fake_model_manager import FakeModelManager, FakeModelManagerConfig
+from test.fakes.fake_model_manager import (
+    FakeModelConfig,
+    FakeModelManager,
+    FakeModelManagerConfig,
+    FakeTaskConfig,
+)
 from test.fakes.fake_vlm import FakeVLMConfig, FakeVLMLoader
 
 __all__ = [
+    "FakeModelConfig",
     "FakeModelManager",
     "FakeModelManagerConfig",
+    "FakeTaskConfig",
     "FakeVLMConfig",
     "FakeVLMLoader",
 ]
