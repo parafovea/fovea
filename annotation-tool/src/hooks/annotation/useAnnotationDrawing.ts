@@ -95,8 +95,8 @@ interface UseAnnotationDrawingReturn {
 export function useAnnotationDrawing({
   videoId,
   currentTime,
-  videoWidth,
-  videoHeight,
+  videoWidth: _videoWidth,
+  videoHeight: _videoHeight,
   videoFps = 30,
 }: UseAnnotationDrawingParams): UseAnnotationDrawingReturn {
   const [isDrawing, setIsDrawing] = useState(false)
@@ -141,8 +141,10 @@ export function useAnnotationDrawing({
 
   /**
    * Convert mouse event coordinates to video coordinate space.
-   * Transforms screen pixel coordinates to video frame coordinates accounting for
-   * SVG viewBox scaling and viewport positioning.
+   * Uses SVG's native coordinate transformation matrix to correctly handle
+   * viewBox scaling and preserveAspectRatio (letterboxing/pillarboxing).
+   * Falls back to simple ratio calculation in test environments (jsdom) where
+   * SVG methods aren't fully implemented.
    *
    * @param e - Mouse event from SVG element
    * @param svgRef - Reference to SVG element
@@ -150,15 +152,35 @@ export function useAnnotationDrawing({
    */
   const getRelativeCoordinates = useCallback(
     (e: React.MouseEvent<SVGSVGElement>, svgRef: RefObject<SVGSVGElement>) => {
-      if (!svgRef.current) return { x: 0, y: 0 }
+      const svg = svgRef.current
+      if (!svg) return { x: 0, y: 0 }
 
-      const rect = svgRef.current.getBoundingClientRect()
-      return {
-        x: ((e.clientX - rect.left) / rect.width) * videoWidth,
-        y: ((e.clientY - rect.top) / rect.height) * videoHeight,
+      // Use SVG's native coordinate transformation matrix when available
+      // This correctly handles viewBox and preserveAspectRatio="xMidYMid meet"
+      if (typeof svg.createSVGPoint === 'function' && typeof svg.getScreenCTM === 'function') {
+        const ctm = svg.getScreenCTM()
+        if (ctm) {
+          const pt = svg.createSVGPoint()
+          pt.x = e.clientX
+          pt.y = e.clientY
+          const svgPoint = pt.matrixTransform(ctm.inverse())
+          return { x: svgPoint.x, y: svgPoint.y }
+        }
       }
+
+      // Fallback for test environments (jsdom) where SVG methods aren't available
+      const rect = svg.getBoundingClientRect()
+      const viewBox = typeof svg.getAttribute === 'function' ? svg.getAttribute('viewBox') : null
+      if (viewBox) {
+        const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number)
+        return {
+          x: ((e.clientX - rect.left) / rect.width) * vbWidth,
+          y: ((e.clientY - rect.top) / rect.height) * vbHeight,
+        }
+      }
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top }
     },
-    [videoWidth, videoHeight]
+    []
   )
 
   /**

@@ -38,6 +38,10 @@ interface InteractiveBoundingBoxProps {
   mode: 'keyframe' | 'interpolated' | 'ghost'
   /** Optional callback fired when bounding box is updated */
   onUpdate?: (box: Partial<BoundingBox>) => void
+  /** Resolved type name from ontology (for type annotations) */
+  typeName?: string
+  /** Resolved linked object with name (for object annotations) */
+  linkedObject?: { name: string }
 }
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
@@ -76,6 +80,8 @@ export default function InteractiveBoundingBox({
   onSelect,
   mode,
   onUpdate,
+  typeName,
+  linkedObject,
 }: InteractiveBoundingBoxProps) {
   // TanStack Query mutations for annotation operations
   const addKeyframe = useAddKeyframe()
@@ -156,24 +162,26 @@ export default function InteractiveBoundingBox({
   const strokeColor = getStrokeColor()
 
   // Get visual style based on mode
+  // Type annotations use thinner stroke (2px), object annotations use thicker stroke (4px)
   const getVisualStyle = () => {
+    const baseStroke = annotation.annotationType === 'type' ? 2 : 4
     switch (mode) {
       case 'keyframe':
         return {
           opacity: isActive || hovering ? 1.0 : 0.8,
-          strokeWidth: 4,
+          strokeWidth: baseStroke,
           strokeDasharray: undefined,
         }
       case 'interpolated':
         return {
           opacity: 0.6,
-          strokeWidth: 3,
+          strokeWidth: baseStroke * 0.75,
           strokeDasharray: undefined,
         }
       case 'ghost':
         return {
           opacity: 0.5,
-          strokeWidth: 3,
+          strokeWidth: baseStroke * 0.75,
           strokeDasharray: '5,5',
         }
     }
@@ -230,7 +238,9 @@ export default function InteractiveBoundingBox({
     }
   }, [annotation.id])
 
-  // Get relative coordinates within the SVG
+  // Get relative coordinates within the SVG using native matrix transformation
+  // This correctly handles viewBox and preserveAspectRatio (letterboxing/pillarboxing)
+  // Falls back to simple ratio calculation in test environments (jsdom)
   const getRelativeCoordinates = (e: React.MouseEvent): { x: number; y: number } => {
     // Get the SVG element - look for parent SVG
     let svg: SVGSVGElement | null = svgRef.current
@@ -242,9 +252,22 @@ export default function InteractiveBoundingBox({
       svg = element as SVGSVGElement
       svgRef.current = svg
     }
-    
+
     if (!svg) return { x: 0, y: 0 }
-    
+
+    // Use SVG's native coordinate transformation matrix when available
+    if (typeof svg.createSVGPoint === 'function' && typeof svg.getScreenCTM === 'function') {
+      const ctm = svg.getScreenCTM()
+      if (ctm) {
+        const pt = svg.createSVGPoint()
+        pt.x = e.clientX
+        pt.y = e.clientY
+        const svgPoint = pt.matrixTransform(ctm.inverse())
+        return { x: svgPoint.x, y: svgPoint.y }
+      }
+    }
+
+    // Fallback for test environments (jsdom) where SVG methods aren't available
     const rect = svg.getBoundingClientRect()
     return {
       x: ((e.clientX - rect.left) / rect.width) * videoWidth,
@@ -259,9 +282,29 @@ export default function InteractiveBoundingBox({
     const svg = svgRef.current
     if (!svg) return
 
-    const rect = svg.getBoundingClientRect()
-    const currentX = ((e.clientX - rect.left) / rect.width) * videoWidth
-    const currentY = ((e.clientY - rect.top) / rect.height) * videoHeight
+    // Calculate current coordinates using SVG matrix transformation when available
+    // Falls back to simple ratio calculation in test environments (jsdom)
+    let currentX: number
+    let currentY: number
+
+    if (typeof svg.createSVGPoint === 'function' && typeof svg.getScreenCTM === 'function') {
+      const ctm = svg.getScreenCTM()
+      if (ctm) {
+        const pt = svg.createSVGPoint()
+        pt.x = e.clientX
+        pt.y = e.clientY
+        const svgPoint = pt.matrixTransform(ctm.inverse())
+        currentX = svgPoint.x
+        currentY = svgPoint.y
+      } else {
+        return
+      }
+    } else {
+      // Fallback for test environments
+      const rect = svg.getBoundingClientRect()
+      currentX = ((e.clientX - rect.left) / rect.width) * videoWidth
+      currentY = ((e.clientY - rect.top) / rect.height) * videoHeight
+    }
 
     const deltaX = currentX - dragStart.x
     const deltaY = currentY - dragStart.y
@@ -508,12 +551,15 @@ export default function InteractiveBoundingBox({
           <div style={{ width: 'fit-content', display: 'flex', justifyContent: 'flex-start' }}>
             <Chip
               label={
-                isTypeAnnotation(annotation) ? annotation.typeCategory :
-                isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'Entity' :
-                isObjectAnnotation(annotation) && annotation.linkedEventId ? 'Event' :
-                isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'Location' :
-                isObjectAnnotation(annotation) && annotation.linkedCollectionId ? 'Collection' :
-                'Annotation'
+                // For type annotations: show actual type name, fallback to category
+                isTypeAnnotation(annotation) ? (typeName || annotation.typeCategory) :
+                // For object annotations: show object name, fallback to generic
+                linkedObject?.name ||
+                (isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'Entity' :
+                 isObjectAnnotation(annotation) && annotation.linkedEventId ? 'Event' :
+                 isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'Location' :
+                 isObjectAnnotation(annotation) && annotation.linkedCollectionId ? 'Collection' :
+                 'Annotation')
               }
               size="small"
               color={

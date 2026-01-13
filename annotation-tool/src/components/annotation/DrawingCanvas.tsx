@@ -27,8 +27,8 @@ interface DrawingCanvasProps {
   videoHeight: number
   /** Video frame rate (defaults to 30) */
   videoFps?: number
-  /** Annotations to display */
-  annotations: Annotation[]
+  /** Annotations to display (may be enriched with typeName and linkedObject) */
+  annotations: (Annotation & { typeName?: string; linkedObject?: { name: string } })[]
   /** Currently selected annotation */
   selectedAnnotation: Annotation | null
   /** Optional AI detection results to display as read-only overlays */
@@ -168,6 +168,8 @@ export default function DrawingCanvas({
                 isActive={selectedAnnotation?.id === ann.id}
                 onSelect={() => onAnnotationSelect(ann)}
                 mode={mode}
+                typeName={ann.typeName}
+                linkedObject={ann.linkedObject}
               />
             </g>
           )

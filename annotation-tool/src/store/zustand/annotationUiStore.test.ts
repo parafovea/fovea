@@ -103,7 +103,7 @@ describe('AnnotationUiStore', () => {
       expect(useAnnotationUiStore.getState().temporaryTime).toBe(null)
     })
 
-    it('should reset drawing state', () => {
+    it('should reset transient drawing state but preserve selection state', () => {
       const { setIsDrawing, setDrawingMode, setTemporaryBox, resetDrawingState } =
         useAnnotationUiStore.getState()
 
@@ -116,9 +116,11 @@ describe('AnnotationUiStore', () => {
       resetDrawingState()
 
       const state = useAnnotationUiStore.getState()
+      // Transient state should be reset
       expect(state.isDrawing).toBe(false)
-      expect(state.drawingMode).toBe(null)
       expect(state.temporaryBox).toBe(null)
+      // Selection state (drawingMode) should be preserved for consecutive annotations
+      expect(state.drawingMode).toBe('entity')
     })
   })
 
