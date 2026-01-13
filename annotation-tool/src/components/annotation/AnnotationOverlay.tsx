@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAnnotationUiStore } from '@store/zustand'
-import { useAnnotations } from '@store/queries'
+import { useAnnotations, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useEntities, useEvents, useEntityCollections, useEventCollections } from '@store/queries/useWorld'
 import DrawingCanvas from './DrawingCanvas'
 import type { DetectionResponse } from '@api/client'
@@ -24,6 +24,8 @@ type EnrichedAnnotation = Annotation & {
   linkedObject?: Entity | Event | EntityCollection | EventCollection
   /** Type of the linked object */
   linkedType?: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection'
+  /** Resolved type name from ontology (for type annotations) */
+  typeName?: string
 }
 
 /**
@@ -97,6 +99,11 @@ export default function AnnotationOverlay({
   const entityCollections = useEntityCollections()
   const eventCollections = useEventCollections()
 
+  // TanStack Query for persona ontologies (to look up type names)
+  const { data: personas = [] } = usePersonas()
+  const personaIds = useMemo(() => personas.map(p => p.id), [personas])
+  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
+
   // Create lookup maps for O(1) entity/event/collection lookups
   // This is much faster than O(n) .find() calls per annotation
   const entityMap = useMemo(
@@ -115,6 +122,24 @@ export default function AnnotationOverlay({
     () => new Map(eventCollections.map(c => [c.id, c])),
     [eventCollections]
   )
+
+  // Create lookup map for type names from ontologies
+  // Maps typeId -> typeName for O(1) lookups
+  const typeNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const ontology of personaOntologies) {
+      for (const entity of ontology.entities) {
+        map.set(entity.id, entity.name)
+      }
+      for (const role of ontology.roles) {
+        map.set(role.id, role.name)
+      }
+      for (const event of ontology.events) {
+        map.set(event.id, event.name)
+      }
+    }
+    return map
+  }, [personaOntologies])
 
   /**
    * Compute annotations with linked object information for display.
@@ -137,6 +162,14 @@ export default function AnnotationOverlay({
     }).map((ann): EnrichedAnnotation => {
       // Start with base annotation
       const enriched: EnrichedAnnotation = { ...ann }
+
+      // Enrich type annotations with type name from ontology
+      if (ann.annotationType === 'type') {
+        const typeName = typeNameMap.get(ann.typeId)
+        if (typeName) {
+          enriched.typeName = typeName
+        }
+      }
 
       // Get linked object info (only for object annotations)
       // Using O(1) Map lookups instead of O(n) .find() calls
@@ -173,7 +206,7 @@ export default function AnnotationOverlay({
 
       return enriched
     })
-  }, [annotations, currentTime, entityMap, eventMap, entityCollectionMap, eventCollectionMap, selectedAnnotation])
+  }, [annotations, currentTime, entityMap, eventMap, entityCollectionMap, eventCollectionMap, typeNameMap, selectedAnnotation])
 
   return (
     <DrawingCanvas

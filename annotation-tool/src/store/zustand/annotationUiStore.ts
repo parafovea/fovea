@@ -335,9 +335,10 @@ export const useAnnotationUiStore = create<AnnotationUiState>()(
       resetDrawingState: () =>
         set({
           isDrawing: false,
-          drawingMode: null,
           temporaryBox: null,
           temporaryTime: null,
+          // Preserve drawingMode, selectedTypeId, selectedPersonaId, linkTargetId, linkTargetType
+          // to allow drawing multiple consecutive annotations without reselecting
         }, false, 'resetDrawingState'),
 
       resetSelectionState: () =>

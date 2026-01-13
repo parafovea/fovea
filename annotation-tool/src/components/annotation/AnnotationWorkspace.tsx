@@ -240,6 +240,15 @@ export default function AnnotationWorkspace() {
     return 'Object Annotation'
   }, [worldEntities, worldEvents, worldTimes])
 
+  // Helper function to get object kind for consistent color coding
+  const getObjectKind = useCallback((annotation: ObjectAnnotation): string => {
+    if (annotation.linkedEntityId) return 'entity'
+    if (annotation.linkedEventId) return 'event'
+    if (annotation.linkedLocationId) return 'location'
+    if (annotation.linkedCollectionId) return 'collection'
+    return 'object'
+  }, [])
+
   // Keyframe control callbacks
   const handleAddKeyframe = useCallback(() => {
     if (!selectedAnnotation) return
@@ -932,11 +941,27 @@ export default function AnnotationWorkspace() {
                               </Typography>
                             </>
                           )}
-                          {annotation.annotationType === 'object' && (
-                            <Typography variant="body2" noWrap>
-                              {getObjectName(annotation as ObjectAnnotation)}
-                            </Typography>
-                          )}
+                          {annotation.annotationType === 'object' && (() => {
+                            const objAnn = annotation as ObjectAnnotation
+                            return (
+                              <>
+                                <Chip
+                                  label={getObjectKind(objAnn)}
+                                  size="small"
+                                  color={
+                                    objAnn.linkedEntityId ? 'success' :
+                                    objAnn.linkedEventId ? 'warning' :
+                                    objAnn.linkedLocationId ? 'secondary' :
+                                    'error'  // collections
+                                  }
+                                  sx={{ height: 20, fontSize: '0.75rem' }}
+                                />
+                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                                  {getObjectName(objAnn)}
+                                </Typography>
+                              </>
+                            )
+                          })()}
                         </Box>
                       }
                       secondary={

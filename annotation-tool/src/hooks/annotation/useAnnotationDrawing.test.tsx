@@ -49,9 +49,9 @@ function setupStoreState(state: {
 }
 
 /**
- * Creates mock SVG element with getBoundingClientRect
+ * Creates mock SVG element with getBoundingClientRect and getAttribute
  */
-function createMockSvgRef(width = 800, height = 600): RefObject<SVGSVGElement> {
+function createMockSvgRef(width = 800, height = 600, videoWidth = 1920, videoHeight = 1080): RefObject<SVGSVGElement> {
   const mockElement = {
     getBoundingClientRect: vi.fn(() => ({
       left: 100,
@@ -64,6 +64,12 @@ function createMockSvgRef(width = 800, height = 600): RefObject<SVGSVGElement> {
       y: 50,
       toJSON: () => ({}),
     })),
+    getAttribute: vi.fn((attr: string) => {
+      if (attr === 'viewBox') {
+        return `0 0 ${videoWidth} ${videoHeight}`
+      }
+      return null
+    }),
   } as unknown as SVGSVGElement
 
   return { current: mockElement }
@@ -456,7 +462,8 @@ describe('useAnnotationDrawing', () => {
       // Check Zustand store state was reset
       const state = useAnnotationUiStore.getState()
       expect(state.temporaryBox).toBeNull()
-      expect(state.drawingMode).toBeNull()
+      // drawingMode is preserved for consecutive annotations (Bug #59 fix)
+      expect(state.drawingMode).toBe('entity')
     })
 
     it('should not create annotation with box too small', () => {
