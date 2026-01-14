@@ -56,7 +56,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
-  const [alternateNames, setAlternateNames] = useState<string[]>([])
+  const [alternateNamesInput, setAlternateNamesInput] = useState('')
   const [typeAssignments, setTypeAssignments] = useState<EntityTypeAssignment[]>([])
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [wikidataId, setWikidataId] = useState<string>('')
@@ -72,14 +72,14 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     if (entity) {
       setName(entity.name)
       setDescription(entity.description)
-      setAlternateNames(entity.metadata?.alternateNames || [])
+      setAlternateNamesInput(entity.metadata?.alternateNames?.join(', ') || '')
       setTypeAssignments(entity.typeAssignments || [])
       setWikidataId(entity.wikidataId || '')
       setWikidataUrl(entity.wikidataUrl || '')
     } else {
       setName('')
       setDescription([{ type: 'text', content: '' }])
-      setAlternateNames([])
+      setAlternateNamesInput('')
       setTypeAssignments([])
       setWikidataId('')
       setWikidataUrl('')
@@ -141,6 +141,12 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
   const handleSave = () => {
     const now = new Date().toISOString()
+    // Parse alternate names from comma-separated input
+    const alternateNames = alternateNamesInput
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+
     const entityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
       description,
@@ -150,7 +156,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
       importedFrom: wikidataId ? (entity?.importedFrom || 'wikidata') : undefined,
       importedAt: wikidataId ? (entity?.importedAt || now) : undefined,
       metadata: {
-        alternateNames: alternateNames.filter(Boolean),
+        alternateNames,
         externalIds: {},
         properties: {},
       },
@@ -251,8 +257,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
           <TextField
             label="Alternate Names"
-            value={alternateNames.join(', ')}
-            onChange={(e) => setAlternateNames(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            value={alternateNamesInput}
+            onChange={(e) => setAlternateNamesInput(e.target.value)}
             fullWidth
             helperText="Other names for this entity (comma-separated)"
           />
