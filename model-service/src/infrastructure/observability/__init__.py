@@ -7,8 +7,20 @@ Modules
 -------
 telemetry
     OpenTelemetry setup and instrumentation.
-logging
-    Logging configuration and formatters.
 """
 
-__all__: list[str] = []
+from src.infrastructure.observability.telemetry import (
+    configure_observability,
+    instrument_app,
+    meter,
+    model_inference_counter,
+    model_inference_duration,
+)
+
+__all__ = [
+    "configure_observability",
+    "instrument_app",
+    "meter",
+    "model_inference_counter",
+    "model_inference_duration",
+]

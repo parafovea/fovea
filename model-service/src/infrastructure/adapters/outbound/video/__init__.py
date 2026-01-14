@@ -5,12 +5,32 @@ implement the IVideoProcessor outbound port interface.
 
 Modules
 -------
-opencv_processor
-    OpenCV-based video processing adapter.
-ffmpeg_processor
-    FFmpeg-based audio/thumbnail extraction adapter.
-video_downloader
+processor
+    OpenCV/FFmpeg-based video processing adapter.
+downloader
     Video downloader for S3/HTTP URLs.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.outbound.video.downloader import (
+    download_video,
+    is_remote_url,
+)
+from src.infrastructure.adapters.outbound.video.processor import (
+    VideoInfo,
+    VideoProcessingError,
+    extract_audio,
+    extract_frames,
+    extract_frames_at_timestamps,
+    get_video_info,
+)
+
+__all__ = [
+    "VideoInfo",
+    "VideoProcessingError",
+    "download_video",
+    "extract_audio",
+    "extract_frames",
+    "extract_frames_at_timestamps",
+    "get_video_info",
+    "is_remote_url",
+]

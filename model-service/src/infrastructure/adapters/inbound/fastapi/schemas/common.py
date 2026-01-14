@@ -4,7 +4,7 @@ This module provides strict base model classes and common field types
 for API request/response validation.
 """
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,3 +78,65 @@ ProcessingTime = Annotated[
     float,
     Field(ge=0.0, description="Processing time in seconds"),
 ]
+
+
+class ErrorResponse(StrictBaseModel):
+    """Error response model for API errors.
+
+    Attributes
+    ----------
+    error : str
+        Error type.
+    message : str
+        Human-readable error message.
+    details : dict[str, Any] | None
+        Additional error details.
+    """
+
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Human-readable error message")
+    details: dict[str, Any] | None = Field(default=None, description="Additional error details")
+
+
+class ThumbnailGenerateRequest(StrictBaseModel):
+    """Request model for thumbnail generation endpoint.
+
+    Attributes
+    ----------
+    video_id : str
+        Unique identifier for the video.
+    video_path : str
+        Path to video file.
+    timestamp : float
+        Timestamp to extract (seconds).
+    size : str
+        Thumbnail size preset.
+    """
+
+    video_id: NonEmptyStr = Field(..., description="Unique identifier for the video")
+    video_path: NonEmptyStr = Field(..., description="Path to video file")
+    timestamp: float = Field(default=1.0, ge=0.0, description="Timestamp to extract (seconds)")
+    size: Literal["small", "medium", "large"] = Field(
+        default="medium", description="Thumbnail size preset"
+    )
+
+
+class ThumbnailGenerateResponse(StrictBaseModel):
+    """Response model for thumbnail generation endpoint.
+
+    Attributes
+    ----------
+    video_id : str
+        Video identifier.
+    thumbnail_path : str
+        Path to generated thumbnail.
+    timestamp : float
+        Timestamp used for extraction.
+    size : str
+        Size preset used.
+    """
+
+    video_id: NonEmptyStr = Field(..., description="Video identifier")
+    thumbnail_path: NonEmptyStr = Field(..., description="Path to generated thumbnail")
+    timestamp: float = Field(..., ge=0.0, description="Timestamp used for extraction")
+    size: str = Field(..., description="Size preset used")

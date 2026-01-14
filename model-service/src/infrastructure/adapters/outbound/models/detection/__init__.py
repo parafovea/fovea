@@ -5,22 +5,34 @@ implement the IDetectionModel outbound port interface.
 
 Modules
 -------
-base
-    Base adapter class and common utilities.
-yolo_world
-    YOLO-World model adapter.
-grounding_dino
-    GroundingDINO model adapter.
-owlv2
-    OWLv2 model adapter.
-florence2
-    Florence-2 model adapter.
-yolo_world_onnx
-    YOLO-World ONNX adapter (CPU-compatible).
-florence_onnx
-    Florence-2 ONNX adapter (CPU-compatible).
-factory
-    Detection loader factory for model instantiation.
+loader
+    Detection loader implementations and factory.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.outbound.models.detection.loader import (
+    BoundingBox,
+    Detection,
+    DetectionConfig,
+    DetectionFramework,
+    DetectionModelLoader,
+    DetectionResult,
+    Florence2Loader,
+    GroundingDINOLoader,
+    OWLv2Loader,
+    YOLOWorldLoader,
+    create_detection_loader,
+)
+
+__all__ = [
+    "BoundingBox",
+    "Detection",
+    "DetectionConfig",
+    "DetectionFramework",
+    "DetectionModelLoader",
+    "DetectionResult",
+    "Florence2Loader",
+    "GroundingDINOLoader",
+    "OWLv2Loader",
+    "YOLOWorldLoader",
+    "create_detection_loader",
+]

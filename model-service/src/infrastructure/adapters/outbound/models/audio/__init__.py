@@ -5,18 +5,44 @@ implement the IAudioTranscriber and IDiarizer outbound port interfaces.
 
 Modules
 -------
-base
-    Base adapter class and common utilities.
-whisper
-    OpenAI Whisper model adapter.
-faster_whisper
-    faster-whisper CTranslate2 adapter (CPU-compatible).
-pyannote
-    Pyannote speaker diarization adapter.
-silero_vad
-    Silero VAD adapter (CPU-native).
-factory
-    Audio loader factory for model instantiation.
+loader
+    Audio loader implementations and factory.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.outbound.models.audio.loader import (
+    AudioFramework,
+    AudioTranscriptionLoader,
+    DiarizationConfig,
+    DiarizationResult,
+    FasterWhisperLoader,
+    PyannoteLoader,
+    SileroVADLoader,
+    SpeakerSegment,
+    TranscriptionConfig,
+    TranscriptionResult,
+    TranscriptionSegment,
+    VADConfig,
+    VADResult,
+    VADSegment,
+    WhisperLoader,
+    create_transcription_loader,
+)
+
+__all__ = [
+    "AudioFramework",
+    "AudioTranscriptionLoader",
+    "DiarizationConfig",
+    "DiarizationResult",
+    "FasterWhisperLoader",
+    "PyannoteLoader",
+    "SileroVADLoader",
+    "SpeakerSegment",
+    "TranscriptionConfig",
+    "TranscriptionResult",
+    "TranscriptionSegment",
+    "VADConfig",
+    "VADResult",
+    "VADSegment",
+    "WhisperLoader",
+    "create_transcription_loader",
+]

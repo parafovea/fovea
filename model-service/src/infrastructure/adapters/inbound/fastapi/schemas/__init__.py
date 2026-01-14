@@ -15,14 +15,22 @@ ontology
     Schemas for ontology endpoints.
 claims
     Schemas for claim extraction/synthesis endpoints.
-models
-    Schemas for model management endpoints.
 common
     Shared schemas and base classes.
 """
 
+from src.infrastructure.adapters.inbound.fastapi.schemas.claims import (
+    ClaimExtractionRequest,
+    ClaimExtractionResponse,
+    ClaimRelationship,
+    ClaimSource,
+    ExtractedClaim,
+    SummarySynthesisRequest,
+    SummarySynthesisResponse,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     ConfidenceScore,
+    ErrorResponse,
     MutableStrictModel,
     NonEmptyStr,
     NonNegativeInt,
@@ -30,10 +38,37 @@ from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     PositiveInt,
     ProcessingTime,
     StrictBaseModel,
+    ThumbnailGenerateRequest,
+    ThumbnailGenerateResponse,
+)
+from src.infrastructure.adapters.inbound.fastapi.schemas.detection import (
+    BoundingBox,
+    Detection,
+    DetectionRequest,
+    DetectionResponse,
+    FrameDetections,
+)
+from src.infrastructure.adapters.inbound.fastapi.schemas.ontology import (
+    AugmentRequest,
+    AugmentResponse,
+    OntologyType,
+)
+from src.infrastructure.adapters.inbound.fastapi.schemas.summarization import (
+    KeyFrame,
+    SummarizeRequest,
+    SummarizeResponse,
+)
+from src.infrastructure.adapters.inbound.fastapi.schemas.tracking import (
+    TrackingFrameResult,
+    TrackingMaskData,
+    TrackingRequest,
+    TrackingResponse,
 )
 
 __all__ = [
+    # Common
     "ConfidenceScore",
+    "ErrorResponse",
     "MutableStrictModel",
     "NonEmptyStr",
     "NonNegativeInt",
@@ -41,4 +76,33 @@ __all__ = [
     "PositiveInt",
     "ProcessingTime",
     "StrictBaseModel",
+    "ThumbnailGenerateRequest",
+    "ThumbnailGenerateResponse",
+    # Summarization
+    "KeyFrame",
+    "SummarizeRequest",
+    "SummarizeResponse",
+    # Detection
+    "BoundingBox",
+    "Detection",
+    "DetectionRequest",
+    "DetectionResponse",
+    "FrameDetections",
+    # Tracking
+    "TrackingFrameResult",
+    "TrackingMaskData",
+    "TrackingRequest",
+    "TrackingResponse",
+    # Ontology
+    "AugmentRequest",
+    "AugmentResponse",
+    "OntologyType",
+    # Claims
+    "ClaimExtractionRequest",
+    "ClaimExtractionResponse",
+    "ClaimRelationship",
+    "ClaimSource",
+    "ExtractedClaim",
+    "SummarySynthesisRequest",
+    "SummarySynthesisResponse",
 ]

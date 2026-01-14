@@ -5,18 +5,34 @@ implement the ITrackingModel outbound port interface.
 
 Modules
 -------
-base
-    Base adapter class and common utilities.
-samurai
-    SAMURAI model adapter.
-sam2long
-    SAM2Long model adapter.
-sam2
-    SAM2 model adapter.
-yolo11_seg
-    YOLO11 segmentation adapter (CPU-compatible).
-factory
-    Tracking loader factory for model instantiation.
+loader
+    Tracking loader implementations and factory.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.outbound.models.tracking.loader import (
+    SAM2Loader,
+    SAM2LongLoader,
+    SAMURAILoader,
+    TrackingConfig,
+    TrackingFrame,
+    TrackingFramework,
+    TrackingMask,
+    TrackingModelLoader,
+    TrackingResult,
+    YOLO11SegLoader,
+    create_tracking_loader,
+)
+
+__all__ = [
+    "SAM2Loader",
+    "SAM2LongLoader",
+    "SAMURAILoader",
+    "TrackingConfig",
+    "TrackingFrame",
+    "TrackingFramework",
+    "TrackingMask",
+    "TrackingModelLoader",
+    "TrackingResult",
+    "YOLO11SegLoader",
+    "create_tracking_loader",
+]
