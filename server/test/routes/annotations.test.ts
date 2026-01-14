@@ -280,6 +280,63 @@ describe('Annotations API', () => {
     })
   })
 
+  describe('Auth middleware', () => {
+    it('allows GET requests without authentication (single-user mode)', async () => {
+      // Create annotation first
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: null,
+          type: 'object',
+          label: 'test-entity',
+          frames: { boxes: [] }
+        }
+      })
+
+      // Request without session token
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/annotations/${testVideoId}`
+        // No cookies
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toHaveLength(1)
+    })
+
+    it('allows POST requests without authentication (single-user mode)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/annotations',
+        // No cookies
+        payload: {
+          videoId: testVideoId,
+          type: 'object',
+          label: 'entity-1',
+          frames: [{ frameNumber: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+        }
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    it('properly parses session cookie when provided', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/annotations',
+        cookies: { session_token: testSessionToken },
+        payload: {
+          videoId: testVideoId,
+          type: 'object',
+          label: 'entity-1',
+          frames: [{ frameNumber: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+        }
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+  })
+
   describe('DELETE /api/annotations/:videoId/:id', () => {
     it('deletes annotation', async () => {
       const annotation = await prisma.annotation.create({

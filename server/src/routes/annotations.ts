@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { NotFoundError } from '../lib/errors.js'
+import { optionalAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schema for Annotation response.
@@ -38,6 +39,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Array of annotations
    */
   fastify.get('/api/annotations/:videoId', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Get annotations for a specific video',
       tags: ['annotations'],
@@ -78,6 +80,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Created annotation
    */
   fastify.post('/api/annotations', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Create a new annotation',
       tags: ['annotations'],
@@ -140,6 +143,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Updated annotation
    */
   fastify.put('/api/annotations/:id', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Update an annotation',
       tags: ['annotations'],
@@ -210,6 +214,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
    * @param id - Annotation ID
    */
   fastify.delete('/api/annotations/:videoId/:id', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Delete an annotation',
       tags: ['annotations'],
