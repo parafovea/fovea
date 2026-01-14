@@ -308,18 +308,18 @@ export default function VideoBrowser() {
       }
     },
     'navigate.left': () => {
-      setSelectedVideoIndex(prev => Math.max(0, prev - 1))
+      setSelectedVideoIndex(Math.max(0, selectedVideoIndex - 1))
     },
     'navigate.right': () => {
-      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + 1))
+      setSelectedVideoIndex(Math.min(filteredVideos.length - 1, selectedVideoIndex + 1))
     },
     'navigate.up': () => {
       const cols = getGridColumns()
-      setSelectedVideoIndex(prev => Math.max(0, prev - cols))
+      setSelectedVideoIndex(Math.max(0, selectedVideoIndex - cols))
     },
     'navigate.down': () => {
       const cols = getGridColumns()
-      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + cols))
+      setSelectedVideoIndex(Math.min(filteredVideos.length - 1, selectedVideoIndex + cols))
     },
   }, {
     context: 'videoBrowser',
