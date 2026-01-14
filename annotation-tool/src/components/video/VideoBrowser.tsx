@@ -69,6 +69,10 @@ export default function VideoBrowser() {
   // Zustand for UI state
   const searchTerm = useVideoUiStore((state) => state.searchTerm)
   const setSearchTerm = useVideoUiStore((state) => state.setSearchTerm)
+  const selectedVideoIndex = useVideoUiStore((state) => state.selectedVideoIndex)
+  const setSelectedVideoIndex = useVideoUiStore((state) => state.setSelectedVideoIndex)
+  const scrollPosition = useVideoUiStore((state) => state.scrollPosition)
+  const setScrollPosition = useVideoUiStore((state) => state.setScrollPosition)
   const activeSummaryJobs = useVideoUiStore((state) => state.activeSummaryJobs)
   const videoSummaries = useVideoUiStore((state) => state.videoSummaries)
   const setActiveSummaryJob = useVideoUiStore((state) => state.setActiveSummaryJob)
@@ -80,7 +84,6 @@ export default function VideoBrowser() {
   const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
 
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm)
-  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
   const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
   const [isBatchSummarizing, setIsBatchSummarizing] = useState(false)
   const { videoSources: allowExternalVideoLinks } = useExternalLinksConfig()
@@ -327,7 +330,28 @@ export default function VideoBrowser() {
   // Reset selection when search changes
   useEffect(() => {
     setSelectedVideoIndex(0)
-  }, [searchTerm])
+  }, [searchTerm, setSelectedVideoIndex])
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure the DOM is ready
+    requestAnimationFrame(() => {
+      if (scrollPosition > 0) {
+        window.scrollTo(0, scrollPosition)
+      }
+    })
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save scroll position on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollPosition(window.scrollY)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [setScrollPosition])
 
   /**
    * Selects a video card for keyboard navigation.
