@@ -71,6 +71,9 @@ export default function GlossEditor({
   const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations'>('types')
   const inputRef = useRef<HTMLInputElement>(null)
   const [cursorPosition, setCursorPosition] = useState(0)
+  // Track the last gloss prop we received to detect external changes
+  // Initialize with undefined to trigger initial sync
+  const lastGlossPropRef = useRef<GlossItem[] | undefined>(undefined)
 
   // Get all available types
   const allTypes: TypeOption[] = useMemo(() => [
@@ -383,10 +386,20 @@ export default function GlossEditor({
     return items
   }
 
-  // Initialize input value from gloss
+  // Initialize input value from gloss - only when gloss prop changes externally
   useEffect(() => {
-    setInputValue(glossToString(gloss))
-  }, [gloss, glossToString]) // Re-run when gloss or glossToString changes
+    // Check if gloss prop changed from what we last received
+    const glossPropChanged = JSON.stringify(gloss) !== JSON.stringify(lastGlossPropRef.current)
+
+    if (glossPropChanged) {
+      // Update input value from gloss prop
+      setInputValue(glossToString(gloss))
+      lastGlossPropRef.current = gloss
+    }
+    // Note: We only depend on gloss, not glossToString, to avoid resetting
+    // when external data (types/objects) loads and changes glossToString
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gloss])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -440,7 +453,7 @@ export default function GlossEditor({
     
     const newValue = `${beforeText}${char}\`${item.name}\` ${afterText}`
     setInputValue(newValue)
-    
+
     const newGloss = stringToGloss(newValue)
     onChange(newGloss)
     
