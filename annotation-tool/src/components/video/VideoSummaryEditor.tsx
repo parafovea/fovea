@@ -10,8 +10,11 @@ import {
   Button,
   Badge,
   Stack,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material'
-import { Save as SaveIcon, Add as AddIcon } from '@mui/icons-material'
+import { Save as SaveIcon, Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import {
   usePersonaOntology,
   useVideoSummary,
@@ -29,6 +32,7 @@ import {
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useQueryClient } from '@tanstack/react-query'
 import GlossEditor from '@components/ontology/GlossEditor'
+import { GlossRenderer } from '@components/ontology/GlossRenderer'
 import ClaimsViewer from '@components/claims/ClaimsViewer'
 import ClaimEditor from '@components/claims/ClaimEditor'
 import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
@@ -73,6 +77,7 @@ export default function VideoSummaryEditor({
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [hasChanges, setHasChanges] = useState(false)
   const [activeTab, setActiveTab] = useState(0) // 0 = Summary, 1 = Claims
+  const [summaryPreviewExpanded, setSummaryPreviewExpanded] = useState(true)
   const [extractDialogOpen, setExtractDialogOpen] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
   const [editingClaim, setEditingClaim] = useState<Claim | undefined>(undefined)
@@ -359,6 +364,23 @@ export default function VideoSummaryEditor({
           {/* Claims Tab */}
           {activeTab === 1 && (
             <>
+              {/* Summary Preview Accordion */}
+              {localSummary.length > 0 && (
+                <Accordion
+                  expanded={summaryPreviewExpanded}
+                  onChange={() => setSummaryPreviewExpanded(!summaryPreviewExpanded)}
+                  sx={{ mb: 2 }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="subtitle2">Summary Preview</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Paper variant="outlined" sx={{ p: 2, maxHeight: 200, overflow: 'auto' }}>
+                      <GlossRenderer gloss={localSummary} personaId={personaId} />
+                    </Paper>
+                  </AccordionDetails>
+                </Accordion>
+              )}
               {extractionError && (
                 <Alert severity="error" sx={{ mb: 2 }} onClose={() => clearExtractionState()}>
                   {extractionError}
