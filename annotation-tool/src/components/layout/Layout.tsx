@@ -16,6 +16,7 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
+  Chip,
 } from '@mui/material'
 import logo from '@/assets/fovea-logo.svg'
 import {
@@ -27,10 +28,12 @@ import {
   Upload as ImportIcon,
   Menu as MenuIcon,
   Keyboard as KeyboardIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
@@ -76,6 +79,8 @@ export default function Layout() {
 
   // Zustand stores
   const lastAnnotation = useVideoUiStore((state) => state.lastAnnotation)
+  const hasDraftClaim = useClaimsUiStore((state) => state.hasDraftClaim)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
 
   // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
   const unsavedChanges = false
@@ -138,6 +143,12 @@ export default function Layout() {
   const handleExport = useCallback(() => {
     exportDialog.openDialog()
   }, [exportDialog])
+
+  const handleDraftClaimClick = useCallback(() => {
+    if (draftClaim?.returnPath) {
+      navigate(draftClaim.returnPath)
+    }
+  }, [draftClaim?.returnPath, navigate])
 
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false })
@@ -254,6 +265,17 @@ export default function Layout() {
             <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes
             </Typography>
+          )}
+          {hasDraftClaim && (
+            <Tooltip title="Click to return and continue editing your draft claim">
+              <Chip
+                icon={<EditIcon />}
+                label="Draft Claim"
+                color="warning"
+                onClick={handleDraftClaimClick}
+                sx={{ mr: 2, cursor: 'pointer' }}
+              />
+            </Tooltip>
           )}
           <Tooltip title="Save (Cmd/Ctrl+S)">
             <span>

@@ -69,6 +69,8 @@ export default function VideoSummaryEditor({
   const updateExtractionProgress = useClaimsUiStore((state) => state.updateExtractionProgress)
   const setExtractionError = useClaimsUiStore((state) => state.setExtractionError)
   const clearExtractionState = useClaimsUiStore((state) => state.clearExtractionState)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
+  const clearDraftClaim = useClaimsUiStore((state) => state.clearDraftClaim)
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [hasChanges, setHasChanges] = useState(false)
@@ -79,6 +81,23 @@ export default function VideoSummaryEditor({
   const [parentClaimId, setParentClaimId] = useState<string | undefined>(undefined)
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
+
+  // Restore draft claim if returning from workspace toggle
+  useEffect(() => {
+    if (draftClaim && !draftRestored && draftClaim.videoId === videoId && draftClaim.personaId === personaId) {
+      // Switch to Claims tab and open editor with draft
+      setActiveTab(1)
+      setParentClaimId(draftClaim.parentClaimId)
+      // If editing, find the existing claim; otherwise create new
+      if (draftClaim.editingClaimId) {
+        // We'll let the ClaimEditor handle loading the claim
+        // For now, just open the editor - the draft will provide initial values
+      }
+      setEditorDialogOpen(true)
+      setDraftRestored(true)
+    }
+  }, [draftClaim, draftRestored, videoId, personaId])
 
   // TanStack Query hooks for claims
   const summaryId = currentSummary?.id
@@ -387,6 +406,10 @@ export default function VideoSummaryEditor({
           setEditorDialogOpen(false)
           setEditingClaim(undefined)
           setParentClaimId(undefined)
+          // Clear draft when editor is closed (saved or cancelled)
+          if (draftClaim) {
+            clearDraftClaim()
+          }
         }}
         onSave={handleSaveClaim}
         claim={editingClaim}
@@ -394,6 +417,7 @@ export default function VideoSummaryEditor({
         personaId={personaId}
         videoId={videoId}
         parentClaimId={parentClaimId}
+        draft={draftClaim || undefined}
       />
 
       <ClaimsExtractionDialog

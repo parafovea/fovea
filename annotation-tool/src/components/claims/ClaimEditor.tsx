@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Dialog,
   DialogTitle,
@@ -16,10 +17,12 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Tooltip,
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
+import { useClaimsUiStore, DraftClaim } from '@store/zustand/claimsUiStore'
 
 interface ClaimEditorProps {
   open: boolean
@@ -30,6 +33,7 @@ interface ClaimEditorProps {
   personaId?: string
   videoId?: string
   parentClaimId?: string // For creating subclaims
+  draft?: DraftClaim // Draft from workspace toggle
 }
 
 export default function ClaimEditor({
@@ -41,7 +45,12 @@ export default function ClaimEditor({
   personaId,
   videoId,
   parentClaimId,
+  draft,
 }: ClaimEditorProps) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const saveDraftClaim = useClaimsUiStore((state) => state.saveDraftClaim)
+
   // Core content
   const [gloss, setGloss] = useState<GlossItem[]>([])
   const [confidence, setConfidence] = useState(0.9)
@@ -56,10 +65,20 @@ export default function ClaimEditor({
   const [claimTimeId, setClaimTimeId] = useState<string>('')
   const [claimLocationId, setClaimLocationId] = useState<string>('')
 
-  // Initialize form when dialog opens or claim changes
+  // Initialize form when dialog opens or claim/draft changes
   useEffect(() => {
     if (open) {
-      if (claim) {
+      if (draft) {
+        // Restore from draft (workspace toggle)
+        setGloss(draft.gloss)
+        setConfidence(draft.confidence)
+        setClaimerType(draft.claimerType)
+        setClaimerGloss(draft.claimerGloss)
+        setClaimRelation(draft.claimRelation)
+        setClaimEventId(draft.claimEventId)
+        setClaimTimeId(draft.claimTimeId)
+        setClaimLocationId(draft.claimLocationId)
+      } else if (claim) {
         // Edit mode
         setGloss(claim.gloss || [])
         setConfidence(claim.confidence ?? 0.9)
@@ -81,7 +100,63 @@ export default function ClaimEditor({
         setClaimLocationId('')
       }
     }
-  }, [open, claim])
+  }, [open, claim, draft])
+
+  // Save draft and navigate to workspace
+  const handleWorkspaceToggle = useCallback((targetPath: string) => {
+    const newDraft: DraftClaim = {
+      gloss,
+      confidence,
+      claimerType,
+      claimerGloss,
+      claimRelation,
+      claimEventId,
+      claimTimeId,
+      claimLocationId,
+      summaryId,
+      personaId,
+      videoId,
+      parentClaimId,
+      editingClaimId: claim?.id,
+      returnPath: location.pathname,
+    }
+    saveDraftClaim(newDraft)
+    onClose()
+    navigate(targetPath)
+  }, [
+    gloss, confidence, claimerType, claimerGloss, claimRelation,
+    claimEventId, claimTimeId, claimLocationId, summaryId, personaId,
+    videoId, parentClaimId, claim?.id, location.pathname,
+    saveDraftClaim, onClose, navigate
+  ])
+
+  // Keyboard handler for workspace toggle (w = World Builder, o = Ontology)
+  useEffect(() => {
+    if (!open) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input field
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return
+      }
+
+      if (e.key.toLowerCase() === 'w') {
+        e.preventDefault()
+        handleWorkspaceToggle('/objects')
+      } else if (e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        handleWorkspaceToggle('/ontology')
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open, handleWorkspaceToggle])
 
   const handleSave = () => {
     // Convert gloss to plain text for the text field
@@ -141,7 +216,14 @@ export default function ClaimEditor({
       }}
     >
       <DialogTitle>
-        {claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}</span>
+          <Tooltip title="Press 'w' for World Builder, 'o' for Ontology (draft is saved)">
+            <Typography variant="caption" color="text.secondary" sx={{ cursor: 'help' }}>
+              w/o to switch workspaces
+            </Typography>
+          </Tooltip>
+        </Box>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
