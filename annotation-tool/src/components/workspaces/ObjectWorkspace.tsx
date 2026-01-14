@@ -217,14 +217,14 @@ export default function ObjectWorkspace() {
   const filteredAllCollections = [...filteredEntityCollections, ...filteredEventCollections]
 
   const getEntityTypeNames = (entity: typeof entities[0]) => {
-    // Show number of type assignments
-    const count = entity.typeAssignments.length
+    // Show number of type assignments - handle undefined from API
+    const count = entity.typeAssignments?.length ?? 0
     return count > 0 ? `${count} type${count > 1 ? 's' : ''}` : 'Untyped'
   }
 
   const getEventTypeNames = (event: typeof events[0]) => {
-    // Show number of persona interpretations
-    const count = event.personaInterpretations.length
+    // Show number of persona interpretations - handle undefined from API
+    const count = event.personaInterpretations?.length ?? 0
     return count > 0 ? `${count} interpretation${count > 1 ? 's' : ''}` : 'No interpretations'
   }
   
