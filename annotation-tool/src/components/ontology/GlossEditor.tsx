@@ -13,7 +13,7 @@ import {
   Chip,
 } from '@mui/material'
 import { usePersonaOntology, useWorld, useAnnotations } from '@store/queries'
-import { GlossItem, TimeInstant, getAnnotationTimeBounds } from '@models/types'
+import { GlossItem, TimeInstant, getAnnotationTimeBounds, Claim } from '@models/types'
 
 interface GlossEditorProps {
   gloss: GlossItem[]
@@ -23,6 +23,8 @@ interface GlossEditorProps {
   disabled?: boolean
   videoId?: string | null  // For annotation references
   includeAnnotations?: boolean  // Whether to allow ^ references
+  includeClaims?: boolean  // Whether to allow $ references
+  claims?: Claim[]  // Available claims for $ references
   label?: string  // Optional label for the editor (defaults to 'Gloss Definition')
 }
 
@@ -45,14 +47,22 @@ interface AnnotationOption {
   type: 'annotation'
 }
 
-export default function GlossEditor({ 
-  gloss, 
-  onChange, 
-  availableTypes, 
-  personaId, 
-  disabled = false, 
+interface ClaimOption {
+  id: string
+  name: string
+  type: 'claim'
+}
+
+export default function GlossEditor({
+  gloss,
+  onChange,
+  availableTypes,
+  personaId,
+  disabled = false,
   videoId = null,
   includeAnnotations = false,
+  includeClaims = false,
+  claims = [],
   label = 'Gloss Definition'
 }: GlossEditorProps) {
   // TanStack Query hooks for data fetching
@@ -68,7 +78,7 @@ export default function GlossEditor({
   const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
-  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations'>('types')
+  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations' | 'claims'>('types')
   const inputRef = useRef<HTMLInputElement>(null)
   const [cursorPosition, setCursorPosition] = useState(0)
 
@@ -138,8 +148,22 @@ export default function GlossEditor({
     }
   }) : [], [includeAnnotations, annotations, entities, events, allTypes])
 
+  // Get all available claims (if enabled)
+  const allClaims: ClaimOption[] = useMemo(() => includeClaims ? claims.map(claim => {
+    // Get a display name from the claim's gloss content
+    const glossText = claim.gloss
+      .map(item => item.type === 'text' ? item.content : `[${item.type}]`)
+      .join('')
+      .slice(0, 50) // Truncate long claims
+    return {
+      id: claim.id,
+      name: glossText || 'Claim',
+      type: 'claim' as const
+    }
+  }) : [], [includeClaims, claims])
+
   // Filter types based on search query
-  const filteredTypes = searchQuery 
+  const filteredTypes = searchQuery
     ? allTypes.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : allTypes
 
@@ -152,6 +176,11 @@ export default function GlossEditor({
   const filteredAnnotations = searchQuery
     ? allAnnotations.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : allAnnotations
+
+  // Filter claims based on search query
+  const filteredClaims = searchQuery
+    ? allClaims.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allClaims
 
   // Group filtered types by type
   const groupedTypes = {
@@ -183,10 +212,13 @@ export default function GlossEditor({
       } else if (item.type === 'annotationRef') {
         const ann = allAnnotations.find(a => a.id === item.content)
         return ann ? `^\`${ann.name}\`` : `^[${item.content}]`
+      } else if (item.type === 'claimRef') {
+        const claim = allClaims.find(c => c.id === item.content)
+        return claim ? `$\`${claim.name}\`` : `$[${item.content}]`
       }
       return ''
     }).join('')
-  }, [allTypes, allObjects, allAnnotations])
+  }, [allTypes, allObjects, allAnnotations, allClaims])
 
   // Parse string to gloss items
   const stringToGloss = (text: string): GlossItem[] => {
@@ -369,6 +401,42 @@ export default function GlossEditor({
             i++
           }
         }
+      } else if (text[i] === '$' && includeClaims) {
+        // Handle claim reference
+        if (currentText) {
+          items.push({ type: 'text', content: currentText })
+          currentText = ''
+        }
+
+        // Check if it's a backtick-delimited reference
+        if (text[i + 1] === '`') {
+          const endBacktick = text.indexOf('`', i + 2)
+          if (endBacktick !== -1) {
+            const claimName = text.slice(i + 2, endBacktick)
+            const claim = allClaims.find(c => c.name === claimName)
+
+            if (claim) {
+              items.push({
+                type: 'claimRef',
+                content: claim.id,
+                refType: 'claim'
+              })
+              i = endBacktick + 1
+            } else {
+              // No match, treat as text
+              currentText += text.slice(i, endBacktick + 1)
+              i = endBacktick + 1
+            }
+          } else {
+            // No closing backtick, treat as text
+            currentText += '$`'
+            i += 2
+          }
+        } else {
+          // No backtick, treat as text
+          currentText += '$'
+          i++
+        }
       } else {
         currentText += text[i]
         i++
@@ -414,9 +482,16 @@ export default function GlossEditor({
       setAutocompleteAnchor(e.target)
       setSearchQuery('')
       setSelectedIndex(0)
+    } else if (lastChar === '$' && includeClaims) {
+      setShowAutocomplete(true)
+      setAutocompleteMode('claims')
+      setAutocompleteAnchor(e.target)
+      setSearchQuery('')
+      setSelectedIndex(0)
     } else if (showAutocomplete) {
       // Update search query if autocomplete is open
-      const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
+      const charMap = { types: '#', objects: '@', annotations: '^', claims: '$' }
+      const char = charMap[autocompleteMode]
       const charIndex = value.lastIndexOf(char, cursorPos - 1)
       if (charIndex !== -1) {
         const query = value.slice(charIndex + 1, cursorPos)
@@ -432,8 +507,9 @@ export default function GlossEditor({
     onChange(newGloss)
   }
 
-  const insertReference = (item: TypeOption | ObjectOption | AnnotationOption) => {
-    const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
+  const insertReference = (item: TypeOption | ObjectOption | AnnotationOption | ClaimOption) => {
+    const charMap = { types: '#', objects: '@', annotations: '^', claims: '$' }
+    const char = charMap[autocompleteMode]
     const beforeChar = inputValue.lastIndexOf(char, cursorPosition - 1)
     const beforeText = inputValue.slice(0, beforeChar)
     const afterText = inputValue.slice(cursorPosition)
@@ -464,6 +540,8 @@ export default function GlossEditor({
       ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event, ...groupedTypes.relation]
       : autocompleteMode === 'objects'
       ? [...groupedObjects.entities, ...groupedObjects.locations, ...groupedObjects.events, ...groupedObjects.times]
+      : autocompleteMode === 'claims'
+      ? filteredClaims
       : filteredAnnotations
     
     if (e.key === 'ArrowDown') {
@@ -514,6 +592,19 @@ export default function GlossEditor({
             size="small"
             color="secondary"
             variant="filled"
+            sx={{ mx: 0.5, verticalAlign: 'middle' }}
+          />
+        )
+      } else if (item.type === 'claimRef') {
+        const claim = allClaims.find(c => c.id === item.content)
+        const displayName = claim ? claim.name : item.content
+        return (
+          <Chip
+            key={index}
+            label={displayName}
+            size="small"
+            color="success"
+            variant="outlined"
             sx={{ mx: 0.5, verticalAlign: 'middle' }}
           />
         )
@@ -795,8 +886,39 @@ export default function GlossEditor({
                     </>
                   ) : (
                     <ListItem>
-                      <ListItemText 
-                        primary="No annotations found" 
+                      <ListItemText
+                        primary="No annotations found"
+                        secondary="Type to search or ESC to close"
+                      />
+                    </ListItem>
+                  )}
+                </>
+              ) : autocompleteMode === 'claims' ? (
+                // Claims mode
+                <>
+                  {filteredClaims.length > 0 ? (
+                    <>
+                      <ListSubheader>Claims</ListSubheader>
+                      {filteredClaims.map((claim, idx) => (
+                        <ListItem
+                          key={claim.id}
+                          onClick={() => insertReference(claim)}
+                          sx={{
+                            backgroundColor: selectedIndex === idx ? 'action.selected' : undefined,
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: 'action.hover',
+                            }
+                          }}
+                        >
+                          <ListItemText primary={claim.name} />
+                        </ListItem>
+                      ))}
+                    </>
+                  ) : (
+                    <ListItem>
+                      <ListItemText
+                        primary="No claims found"
                         secondary="Type to search or ESC to close"
                       />
                     </ListItem>
@@ -824,7 +946,7 @@ export default function GlossEditor({
       </Paper>
 
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        Tip: Type # for types or @ for objects. References are wrapped in backticks (e.g., @`John Smith`). Use arrow keys to navigate suggestions.
+        Tip: Type # for types, @ for objects{includeClaims ? ', $ for claims' : ''}. References are wrapped in backticks (e.g., @`John Smith`). Use arrow keys to navigate suggestions.
       </Typography>
     </Box>
   )
