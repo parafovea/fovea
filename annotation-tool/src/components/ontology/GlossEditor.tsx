@@ -472,7 +472,7 @@ export default function GlossEditor({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIndex((prev) => (prev - 1 + allFilteredItems.length) % allFilteredItems.length)
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault()
       if (allFilteredItems[selectedIndex]) {
         insertReference(allFilteredItems[selectedIndex])
