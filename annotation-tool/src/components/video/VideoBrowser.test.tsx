@@ -465,6 +465,10 @@ describe('VideoBrowser', () => {
             },
             cudaAvailable: true,
           })
+        }),
+        // Return 404 for summaries to simulate videos without summaries
+        http.get('/api/videos/:videoId/summaries/:personaId', () => {
+          return new HttpResponse(null, { status: 404 })
         })
       )
 

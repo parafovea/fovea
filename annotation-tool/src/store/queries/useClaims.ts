@@ -36,7 +36,8 @@ async function fetchClaims(
   summaryType: 'video' | 'collection' = 'video'
 ): Promise<Claim[]> {
   const response = await fetch(
-    `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`
+    `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`,
+    { credentials: 'include' }
   )
   if (!response.ok) {
     throw new Error('Failed to fetch claims')
@@ -54,6 +55,7 @@ async function createClaim(
   const response = await fetch(`/api/summaries/${summaryId}/claims`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(claim),
   })
   if (!response.ok) {
@@ -74,6 +76,7 @@ async function updateClaim(
   const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(updates),
   })
   if (!response.ok) {
@@ -89,6 +92,7 @@ async function updateClaim(
 async function deleteClaim(summaryId: string, claimId: string): Promise<void> {
   const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}`, {
     method: 'DELETE',
+    credentials: 'include',
   })
   if (!response.ok) {
     throw new Error('Failed to delete claim')
@@ -105,6 +109,7 @@ async function extractClaims(
   const response = await fetch(`/api/summaries/${summaryId}/claims/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(config),
   })
   if (!response.ok) {
@@ -117,7 +122,7 @@ async function extractClaims(
  * Check extraction job status
  */
 async function checkExtractionJob(jobId: string): Promise<ClaimExtractionJobStatus> {
-  const response = await fetch(`/api/jobs/claims/${jobId}`)
+  const response = await fetch(`/api/jobs/claims/${jobId}`, { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to check job status')
   }
@@ -131,7 +136,9 @@ async function fetchClaimRelations(
   summaryId: string,
   claimId: string
 ): Promise<ClaimRelationsResponse> {
-  const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}/relations`)
+  const response = await fetch(`/api/summaries/${summaryId}/claims/${claimId}/relations`, {
+    credentials: 'include',
+  })
   if (!response.ok) {
     throw new Error('Failed to fetch claim relations')
   }
@@ -158,6 +165,7 @@ async function createClaimRelation(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(relation),
     }
   )
@@ -179,6 +187,7 @@ async function deleteClaimRelation(
     `/api/summaries/${summaryId}/claims/relations/${relationId}`,
     {
       method: 'DELETE',
+      credentials: 'include',
     }
   )
   if (!response.ok) {
