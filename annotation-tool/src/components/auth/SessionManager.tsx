@@ -43,7 +43,8 @@ export function SessionManager(): JSX.Element | null {
   const navigate = useNavigate()
   const mode = useAuthStore((state) => state.mode)
   const logoutSuccess = useAuthStore((state) => state.logoutSuccess)
-  const { expiresAt, showWarning, checkSession } = useSessionHeartbeat()
+  const isMultiUser = mode === 'multi-user'
+  const { expiresAt, showWarning, checkSession } = useSessionHeartbeat(isMultiUser)
   useEmergencySave() // Sets up event listener
 
   const handleExtend = useCallback(() => {

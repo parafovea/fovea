@@ -36,12 +36,13 @@ const WARNING_THRESHOLD_MS = 5 * 60 * 1000
  * Checks session status every 5 minutes and sets showWarning
  * when the session is within 5 minutes of expiring.
  *
+ * @param enabled - Whether the heartbeat is enabled (default: true)
  * @returns Session heartbeat state including expiry time and warning flags
  *
  * @example
  * ```typescript
  * function SessionMonitor() {
- *   const { expiresAt, showWarning, isExpired } = useSessionHeartbeat()
+ *   const { expiresAt, showWarning, isExpired } = useSessionHeartbeat(isMultiUserMode)
  *
  *   if (isExpired) {
  *     return <RedirectToLogin />
@@ -51,7 +52,7 @@ const WARNING_THRESHOLD_MS = 5 * 60 * 1000
  * }
  * ```
  */
-export function useSessionHeartbeat(): SessionHeartbeatState {
+export function useSessionHeartbeat(enabled = true): SessionHeartbeatState {
   const [expiresAt, setExpiresAt] = useState<Date | null>(null)
   const [showWarning, setShowWarning] = useState(false)
   const [isExpired, setIsExpired] = useState(false)
@@ -84,6 +85,8 @@ export function useSessionHeartbeat(): SessionHeartbeatState {
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
+
     // Initial check
     checkSession()
 
@@ -91,7 +94,7 @@ export function useSessionHeartbeat(): SessionHeartbeatState {
     const interval = setInterval(checkSession, CHECK_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [checkSession])
+  }, [enabled, checkSession])
 
   return { expiresAt, showWarning, isExpired, checkSession }
 }
