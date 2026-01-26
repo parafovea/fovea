@@ -13,6 +13,7 @@ import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 import { AppError } from './lib/errors.js'
+import { recordApiError } from './lib/errorMetrics.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -175,13 +176,26 @@ export async function buildApp() {
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
   app.setErrorHandler((error, request, reply) => {
+    const route = request.routeOptions?.url || request.url
+    const method = request.method
+
     // Handle known AppError instances
     if (error instanceof AppError) {
+      // Record error metrics for AppError
+      recordApiError(
+        method,
+        route,
+        error.statusCode,
+        error.code,
+        error.statusCode >= 500 ? 'error' : 'warning'
+      )
       return reply.code(error.statusCode).send(error.toJSON())
     }
 
     // Handle Fastify validation errors (schema validation failures)
     if (error.validation) {
+      // Record validation error metrics
+      recordApiError(method, route, 400, 'VALIDATION_ERROR', 'warning')
       return reply.code(400).send({
         error: 'VALIDATION_ERROR',
         message: error.message,
@@ -197,6 +211,9 @@ export async function buildApp() {
       params: request.params,
       query: request.query
     }, 'Unexpected error occurred')
+
+    // Record internal error metrics
+    recordApiError(method, route, 500, 'INTERNAL_ERROR', 'critical')
 
     // Return safe generic error response (don't leak implementation details)
     return reply.code(500).send({
@@ -275,6 +292,9 @@ export async function buildApp() {
 
   const importRoute = await import('./routes/import.js')
   await app.register(importRoute.default)
+
+  const telemetryRoute = await import('./routes/telemetry.js')
+  await app.register(telemetryRoute.default)
 
   return app
 }
