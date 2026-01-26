@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Paper,
-  Typography,
   CircularProgress,
   Alert,
   Tabs,
@@ -11,7 +10,7 @@ import {
   Badge,
   Stack,
 } from '@mui/material'
-import { Save as SaveIcon, Add as AddIcon } from '@mui/icons-material'
+import { Add as AddIcon } from '@mui/icons-material'
 import {
   usePersonaOntology,
   useVideoSummary,
@@ -34,7 +33,7 @@ import ClaimEditor from '@components/claims/ClaimEditor'
 import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from '@components/claims/ClaimSpanHighlighter'
 import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan } from '@models/types'
-import { debounce } from 'lodash'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface VideoSummaryEditorProps {
   videoId: string
@@ -56,7 +55,6 @@ export default function VideoSummaryEditor({
     error: queryError,
   } = useVideoSummary(videoId, personaId)
   const saveSummaryMutation = useSaveSummary()
-  const saving = saveSummaryMutation.isPending
   const error = queryError?.message || saveSummaryMutation.error?.message || null
 
   // Claims UI state from Zustand
@@ -71,7 +69,6 @@ export default function VideoSummaryEditor({
   const clearExtractionState = useClaimsUiStore((state) => state.clearExtractionState)
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
-  const [hasChanges, setHasChanges] = useState(false)
   const [activeTab, setActiveTab] = useState(0) // 0 = Summary, 1 = Claims
   const [extractDialogOpen, setExtractDialogOpen] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
@@ -109,7 +106,7 @@ export default function VideoSummaryEditor({
         : (currentSummary.summary || [])
       setLocalSummary(summaryData)
       setSummaryCreationError(null)
-    } else if (!loading && videoId && personaId && !saveSummaryMutation.isPending) {
+    } else if (!loading && !queryError && videoId && personaId && !saveSummaryMutation.isPending) {
       // No existing summary - create empty one immediately so claims can be added
       // Only include required fields - optional fields should be omitted, not null
       const emptySummary = {
@@ -128,7 +125,7 @@ export default function VideoSummaryEditor({
         },
       })
     }
-  }, [videoId, personaId, currentSummary, loading, saveSummaryMutation])
+  }, [videoId, personaId, currentSummary, loading, queryError, saveSummaryMutation])
 
   // Handle extraction job status updates from TanStack Query
   useEffect(() => {
@@ -146,38 +143,36 @@ export default function VideoSummaryEditor({
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
 
-  // Debounced save function - use ref to keep stable reference
-  const debouncedSaveRef = useRef(
-    debounce(async (summary: GlossItem[], summaryData: typeof currentSummary, saveFn: typeof saveSummaryMutation.mutate) => {
-      if (!summaryData) {
-        // Create new summary - only required fields
-        saveFn({ videoId, personaId, summary }, {
-          onSuccess: () => setHasChanges(false),
+  // Auto-save summary using useAutoSave hook
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: localSummary,
+    isEnabled: !!videoId && !!personaId && !loading,
+    onSave: async (summary) => {
+      if (!currentSummary) {
+        await saveSummaryMutation.mutateAsync({
+          videoId,
+          personaId,
+          summary,
         })
       } else {
-        // Update existing summary - spread only defined optional fields
-        saveFn({
-          videoId: summaryData.videoId,
-          personaId: summaryData.personaId,
+        await saveSummaryMutation.mutateAsync({
+          videoId: currentSummary.videoId,
+          personaId: currentSummary.personaId,
           summary,
-          ...(summaryData.visualAnalysis && { visualAnalysis: summaryData.visualAnalysis }),
-          ...(summaryData.audioTranscript && { audioTranscript: summaryData.audioTranscript }),
-          ...(summaryData.keyFrames && { keyFrames: summaryData.keyFrames }),
-          ...(summaryData.confidence != null && { confidence: summaryData.confidence }),
-        }, {
-          onSuccess: () => setHasChanges(false),
+          ...(currentSummary.visualAnalysis && { visualAnalysis: currentSummary.visualAnalysis }),
+          ...(currentSummary.audioTranscript && { audioTranscript: currentSummary.audioTranscript }),
+          ...(currentSummary.keyFrames && { keyFrames: currentSummary.keyFrames }),
+          ...(currentSummary.confidence != null && { confidence: currentSummary.confidence }),
         })
       }
-    }, 1000) // Save after 1 second of no changes
-  )
-  const debouncedSave = debouncedSaveRef.current
+    },
+    entityType: 'summary',
+    entityId: currentSummary?.id || `${videoId}-${personaId}`,
+  })
 
   const handleSummaryChange = (summary: GlossItem[]) => {
     setLocalSummary(summary)
-    setHasChanges(true)
-
-    // Trigger debounced save
-    debouncedSave(summary, currentSummary, saveSummaryMutation.mutate)
+    // useAutoSave handles the debounced save automatically
   }
 
   // Claims handlers
@@ -282,24 +277,14 @@ export default function VideoSummaryEditor({
       {/* Header with save status */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {saving && (
-            <>
-              <CircularProgress size={16} />
-              <Typography variant="caption" color="text.secondary">
-                Saving...
-              </Typography>
-            </>
-          )}
-          {!saving && hasChanges && activeTab === 0 && (
-            <Typography variant="caption" color="text.secondary">
-              Unsaved changes
-            </Typography>
-          )}
-          {!saving && !hasChanges && currentSummary && activeTab === 0 && (
-            <Typography variant="caption" color="success.main">
-              <SaveIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-              Saved
-            </Typography>
+          {activeTab === 0 && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
           )}
         </Box>
 
