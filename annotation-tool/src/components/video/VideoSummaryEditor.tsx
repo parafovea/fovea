@@ -97,6 +97,9 @@ export default function VideoSummaryEditor({
   // Fetch persona ontology via TanStack Query (auto-fetches when personaId changes)
   usePersonaOntology(personaId)
 
+  // Track summary creation state
+  const [summaryCreationError, setSummaryCreationError] = useState<string | null>(null)
+
   // Load summary when component mounts or when video/persona changes
   useEffect(() => {
     if (currentSummary) {
@@ -105,7 +108,8 @@ export default function VideoSummaryEditor({
         ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
         : (currentSummary.summary || [])
       setLocalSummary(summaryData)
-    } else if (!loading && videoId && personaId) {
+      setSummaryCreationError(null)
+    } else if (!loading && videoId && personaId && !saveSummaryMutation.isPending) {
       // No existing summary - create empty one immediately so claims can be added
       // Only include required fields - optional fields should be omitted, not null
       const emptySummary = {
@@ -116,6 +120,11 @@ export default function VideoSummaryEditor({
       saveSummaryMutation.mutate(emptySummary, {
         onSuccess: () => {
           setLocalSummary([])
+          setSummaryCreationError(null)
+        },
+        onError: (err) => {
+          console.error('Failed to create summary:', err)
+          setSummaryCreationError(`Failed to create summary: ${err.message}. Claims cannot be saved without a summary.`)
         },
       })
     }
@@ -263,6 +272,13 @@ export default function VideoSummaryEditor({
 
   return (
     <Box>
+      {/* Summary creation error - shown inline since it doesn't block the UI */}
+      {summaryCreationError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {summaryCreationError}
+        </Alert>
+      )}
+
       {/* Header with save status */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
