@@ -15,7 +15,7 @@ import {
   ClaimSynthesisJobData
 } from '../queues/setup.js'
 import { NotFoundError, ValidationError, ErrorResponseSchema } from '../lib/errors.js'
-import { optionalAuth } from '../middleware/auth.js'
+import { requireAuth } from '../middleware/auth.js'
 
 /**
  * Gloss item schema
@@ -242,7 +242,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/claims',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Retrieve all claims for a summary',
         tags: ['claims'],
@@ -318,7 +318,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { summaryId: string; claimId: string } }>(
     '/api/summaries/:summaryId/claims/:claimId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Get specific claim with subclaims',
         tags: ['claims'],
@@ -373,7 +373,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/claims',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Create a new manual claim',
         tags: ['claims'],
@@ -470,7 +470,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/claims/:claimId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Update an existing claim',
         tags: ['claims'],
@@ -545,7 +545,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { summaryId: string; claimId: string } }>(
     '/api/summaries/:summaryId/claims/:claimId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Delete claim and all subclaims',
         tags: ['claims'],
@@ -597,7 +597,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/claims/generate',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Queue claim extraction job',
         tags: ['claims'],
@@ -673,7 +673,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { jobId: string } }>(
     '/api/jobs/claims/:jobId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Check claim extraction job status',
         tags: ['claims'],
@@ -757,7 +757,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/synthesize',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Queue claim synthesis job to generate summary from claims',
         tags: ['claims', 'synthesis'],
@@ -847,7 +847,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { jobId: string } }>(
     '/api/jobs/synthesis/:jobId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Check claim synthesis job status',
         tags: ['claims', 'synthesis'],
@@ -960,7 +960,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/summaries/:summaryId/claims/:claimId/relations',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Create a relation between claims',
         tags: ['claims'],
@@ -1062,7 +1062,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { summaryId: string; claimId: string } }>(
     '/api/summaries/:summaryId/claims/:claimId/relations',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Get all relations for a claim',
         tags: ['claims'],
@@ -1116,7 +1116,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { summaryId: string; relationId: string } }>(
     '/api/summaries/:summaryId/claims/relations/:relationId',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Delete a claim relation',
         tags: ['claims'],
@@ -1169,7 +1169,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/videos/:videoId/personas/:personaId/claims',
     {
-      onRequest: [optionalAuth],
+      onRequest: [requireAuth],
       schema: {
         description: 'Create claim for video + persona (auto-creates summary if needed)',
         tags: ['claims'],
