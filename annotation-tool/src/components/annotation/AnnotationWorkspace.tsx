@@ -76,6 +76,7 @@ import { useDetectObjects } from '@store/queries/useDetection'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { TimelineComponent } from './TimelineComponent'
 import { useCommands, useCommandContext } from '@hooks/commands'
+import { useAutoSave, SaveStatusIndicator } from '@hooks/data'
 
 const DRAWER_WIDTH = 300
 
@@ -194,16 +195,16 @@ export default function AnnotationWorkspace() {
     },
   })
 
-  // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
-  useEffect(() => {
-    if (!videoId || !videoAnnotations || videoAnnotations.length === 0) return
-
-    const timeoutId = setTimeout(() => {
-      saveAnnotationsMutation({ videoId, annotations: videoAnnotations })
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [videoId, videoAnnotations, saveAnnotationsMutation])
+  // Auto-save annotations to database using useAutoSave hook
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: videoAnnotations,
+    isEnabled: !!videoId && videoAnnotations.length > 0,
+    onSave: async (annotations) => {
+      saveAnnotationsMutation({ videoId: videoId!, annotations })
+    },
+    entityType: 'annotation',
+    entityId: videoId,
+  })
 
   // Helper function to get type name from typeId (for displaying human-readable names)
   const getTypeName = useCallback((annotation: TypeAnnotation): string => {
@@ -631,6 +632,18 @@ export default function AnnotationWorkspace() {
                   </Tooltip>
                 )
               )}
+
+              {/* Auto-save status indicator */}
+              <Box sx={{ ml: 'auto' }}>
+                <SaveStatusIndicator
+                  status={saveStatus}
+                  lastSavedAt={lastSavedAt}
+                  errorMessage={errorMessage}
+                  retryCount={retryCount}
+                  onRetry={forceSave}
+                  compact
+                />
+              </Box>
             </Stack>
           </Stack>
         </Paper>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -7,10 +7,10 @@ import {
   TextField,
   Button,
   Box,
-  CircularProgress,
 } from '@mui/material'
 import { useCreatePersona, useUpdatePersona, useDeletePersona } from '@store/queries'
 import { Persona } from '@models/types'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface PersonaEditorProps {
   open: boolean
@@ -20,8 +20,8 @@ interface PersonaEditorProps {
 
 export default function PersonaEditor({ open, onClose, persona }: PersonaEditorProps) {
   // TanStack Query mutations
-  const { mutate: createPersonaMutation, isPending: isCreating } = useCreatePersona()
-  const { mutate: updatePersonaMutation, isPending: isUpdating } = useUpdatePersona()
+  const { mutate: createPersonaMutation } = useCreatePersona()
+  const { mutate: updatePersonaMutation } = useUpdatePersona()
   const { mutate: deletePersonaMutation } = useDeletePersona()
 
   const [name, setName] = useState('')
@@ -31,16 +31,13 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
 
   // Track auto-created persona for cleanup on cancel
   const [autoCreatedPersonaId, setAutoCreatedPersonaId] = useState<string | null>(null)
-  const [hasAutoSaved, setHasAutoSaved] = useState(false)
+  const autoCreatedIdRef = useRef<string | null>(null)
 
   // Ref to track if we're in create mode (no existing persona)
   const isCreateMode = !persona
 
-  // Debounce timer ref
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Check if form is valid
-  const isFormValid = name.trim() && role.trim() && informationNeed.trim()
+  // Check if form is valid (name only for initial save, to allow incremental editing)
+  const isFormValid = name.trim().length > 0
 
   // Reset state when dialog opens/closes or persona changes
   useEffect(() => {
@@ -51,97 +48,88 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
         setInformationNeed(persona.informationNeed)
         setDetails(persona.details || '')
         setAutoCreatedPersonaId(null)
-        setHasAutoSaved(false)
+        autoCreatedIdRef.current = null
       } else {
         setName('')
         setRole('')
         setInformationNeed('')
         setDetails('')
         setAutoCreatedPersonaId(null)
-        setHasAutoSaved(false)
+        autoCreatedIdRef.current = null
       }
     }
   }, [persona, open])
 
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
+  // Build persona data object for saving
+  const personaData = {
+    name: name.trim(),
+    role: role.trim(),
+    informationNeed: informationNeed.trim(),
+    details: details.trim(),
+  }
+
+  // Auto-save using useAutoSave hook
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: personaData,
+    isEnabled: open && isFormValid,
+    onSave: async (data) => {
+      if (autoCreatedIdRef.current) {
+        // Update existing auto-created persona
+        await new Promise<void>((resolve, reject) => {
+          updatePersonaMutation({
+            id: autoCreatedIdRef.current!,
+            ...data,
+            details: data.details || '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, {
+            onSuccess: () => resolve(),
+            onError: (err) => reject(err),
+          })
+        })
+      } else if (isCreateMode) {
+        // Create new persona (first auto-save)
+        await new Promise<void>((resolve, reject) => {
+          createPersonaMutation({
+            persona: data,
+            ontology: {
+              entities: [],
+              roles: [],
+              events: [],
+              relationTypes: [],
+              relations: [],
+            },
+          }, {
+            onSuccess: (result) => {
+              setAutoCreatedPersonaId(result.persona.id)
+              autoCreatedIdRef.current = result.persona.id
+              resolve()
+            },
+            onError: (err) => reject(err),
+          })
+        })
+      } else if (persona) {
+        // Update existing persona (edit mode)
+        await new Promise<void>((resolve, reject) => {
+          updatePersonaMutation({
+            id: persona.id,
+            ...data,
+            details: data.details || '',
+            createdAt: persona.createdAt,
+            updatedAt: new Date().toISOString(),
+          }, {
+            onSuccess: () => resolve(),
+            onError: (err) => reject(err),
+          })
+        })
       }
-    }
-  }, [])
+    },
+    entityType: 'persona',
+    entityId: persona?.id || autoCreatedPersonaId || 'new',
+  })
 
-  // Auto-save function
-  const performAutoSave = useCallback(() => {
-    if (!isFormValid) return
-
-    const personaData = {
-      name: name.trim(),
-      role: role.trim(),
-      informationNeed: informationNeed.trim(),
-      details: details.trim(),
-    }
-
-    if (autoCreatedPersonaId) {
-      // Update existing auto-created persona
-      updatePersonaMutation({
-        id: autoCreatedPersonaId,
-        ...personaData,
-        details: personaData.details || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-    } else if (isCreateMode) {
-      // Create new persona (first auto-save)
-      createPersonaMutation({
-        persona: personaData,
-        ontology: {
-          entities: [],
-          roles: [],
-          events: [],
-          relationTypes: [],
-          relations: [],
-        },
-      }, {
-        onSuccess: (result) => {
-          setAutoCreatedPersonaId(result.persona.id)
-          setHasAutoSaved(true)
-        }
-      })
-    } else if (persona) {
-      // Update existing persona (edit mode)
-      updatePersonaMutation({
-        id: persona.id,
-        ...personaData,
-        details: personaData.details || '',
-        createdAt: persona.createdAt,
-        updatedAt: new Date().toISOString(),
-      })
-      setHasAutoSaved(true)
-    }
-  }, [name, role, informationNeed, details, isFormValid, autoCreatedPersonaId, isCreateMode, persona, createPersonaMutation, updatePersonaMutation])
-
-  // Auto-save with debounce when form fields change
-  useEffect(() => {
-    if (!open || !isFormValid) return
-
-    // Clear existing debounce
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-    }
-
-    // Set new debounce (1 second)
-    debounceRef.current = setTimeout(() => {
-      performAutoSave()
-    }, 1000)
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-      }
-    }
-  }, [open, name, role, informationNeed, details, isFormValid, performAutoSave])
+  // Check if we have saved at least once (for create mode button state)
+  const hasAutoSaved = !!autoCreatedPersonaId || (saveStatus === 'saved' && !!persona)
 
   const handleCancel = () => {
     // If we auto-created a persona, delete it on cancel
@@ -155,8 +143,6 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
     // Persona already saved via auto-save, just close
     onClose()
   }
-
-  const isSaving = isCreating || isUpdating
 
   return (
     <Dialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
@@ -176,7 +162,6 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
             value={role}
             onChange={(e) => setRole(e.target.value)}
             fullWidth
-            required
             helperText="The persona's professional role or title"
           />
           <TextField
@@ -184,7 +169,6 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
             value={informationNeed}
             onChange={(e) => setInformationNeed(e.target.value)}
             fullWidth
-            required
             multiline
             rows={3}
             helperText="What information is this persona looking for?"
@@ -201,8 +185,16 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
         </Box>
       </DialogContent>
       <DialogActions>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', ml: 1 }}>
+          <SaveStatusIndicator
+            status={saveStatus}
+            lastSavedAt={lastSavedAt}
+            errorMessage={errorMessage}
+            retryCount={retryCount}
+            onRetry={forceSave}
+          />
+        </Box>
         <Button onClick={handleCancel}>Cancel</Button>
-        {isSaving && <CircularProgress size={20} sx={{ mx: 1 }} />}
         <Button
           onClick={handleDone}
           variant="contained"
