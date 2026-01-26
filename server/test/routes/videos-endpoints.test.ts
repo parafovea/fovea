@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import { createUserWithPassword } from '../fixtures/users.js'
 
 /**
  * Route registration smoke tests for video endpoints.
@@ -18,13 +19,35 @@ import { PrismaClient } from '@prisma/client'
 describe('Videos API - Route Registration', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
+  let adminSessionToken: string
 
   beforeAll(async () => {
     app = await buildApp()
     prisma = app.prisma
+
+    // Create admin user for authenticated endpoints
+    const adminUser = await createUserWithPassword('admin123', {
+      id: 'video-test-admin',
+      username: 'videotestadmin',
+      isAdmin: true,
+    })
+    await prisma.user.create({ data: adminUser })
+
+    // Login as admin
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: 'videotestadmin',
+        password: 'admin123',
+      },
+    })
+    const cookies = loginResponse.cookies
+    adminSessionToken = cookies.find((c) => c.name === 'session_token')!.value
   })
 
   afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: 'video-test-admin' } })
     await app.close()
   })
 
@@ -227,10 +250,22 @@ describe('Videos API - Route Registration', () => {
   })
 
   describe('POST /api/videos/sync', () => {
-    it('returns sync statistics with correct schema', async () => {
+    it('returns 401 without authentication', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/videos/sync',
+      })
+
+      expect(response.statusCode).toBe(401)
+    })
+
+    it('returns sync statistics with correct schema when authenticated as admin', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/videos/sync',
+        cookies: {
+          session_token: adminSessionToken,
+        },
       })
 
       expect(response.statusCode).toBe(200)
@@ -243,17 +278,6 @@ describe('Videos API - Route Registration', () => {
       expect(typeof result.updated).toBe('number')
       expect(typeof result.errors).toBe('number')
       expect(typeof result.total).toBe('number')
-    })
-
-    it('calls syncVideosFromStorage correctly', async () => {
-      // The sync will execute with current storage config
-      // Just verify the endpoint is accessible and returns correct structure
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/videos/sync',
-      })
-
-      expect(response.statusCode).toBe(200)
     })
   })
 
@@ -381,7 +405,7 @@ describe('Videos API - Route Registration', () => {
         { method: 'GET', url: '/api/videos/integration-test/stream', expectedCodes: [200, 404, 500] },
         { method: 'GET', url: '/api/videos/integration-test/thumbnail', expectedCodes: [200, 404, 500] },
         { method: 'GET', url: '/api/videos/integration-test/url', expectedCodes: [200] },
-        { method: 'POST', url: '/api/videos/sync', expectedCodes: [200] },
+        { method: 'POST', url: '/api/videos/sync', expectedCodes: [401] }, // Requires admin auth
       ]
 
       for (const route of routes) {
