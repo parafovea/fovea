@@ -317,16 +317,35 @@ function sendErrorReport(report: ErrorReport, useKeepalive = false): void {
 
 /**
  * Generate a session ID for error correlation.
+ * Uses crypto.randomUUID() for secure randomness.
  */
 function generateSessionId(): string {
-  return `sess-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `sess-${crypto.randomUUID()}`
+  }
+  // Fallback for environments without crypto.randomUUID
+  return `sess-${Date.now().toString(36)}-${generateSecureRandom()}`
 }
 
 /**
  * Generate a correlation ID for individual errors.
+ * Uses crypto.getRandomValues() for secure randomness.
  */
 function generateCorrelationId(): string {
-  return `err-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`
+  return `err-${Date.now().toString(36)}-${generateSecureRandom()}`
+}
+
+/**
+ * Generate a secure random string using crypto API.
+ */
+function generateSecureRandom(): string {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint32Array(2)
+    crypto.getRandomValues(array)
+    return array[0].toString(36) + array[1].toString(36)
+  }
+  // Last resort fallback - should rarely be hit in modern browsers
+  return Math.random().toString(36).substring(2, 11)
 }
 
 /**
