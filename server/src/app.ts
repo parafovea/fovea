@@ -12,7 +12,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
-import { AppError } from './lib/errors.js'
+import { AppError, TooManyRequestsError } from './lib/errors.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
 /**
@@ -189,6 +189,12 @@ export async function buildApp() {
         error.code,
         error.statusCode >= 500 ? 'error' : 'warning'
       )
+
+      // Add Retry-After header for rate limiting errors
+      if (error instanceof TooManyRequestsError) {
+        reply.header('Retry-After', error.retryAfterSeconds.toString())
+      }
+
       return reply.code(error.statusCode).send(error.toJSON())
     }
 
