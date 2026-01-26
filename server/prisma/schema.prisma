@@ -50,12 +50,25 @@ model Session {
   expiresAt DateTime
   ipAddress String?
   userAgent String?
+  lastActivityAt DateTime @default(now())
 
   createdAt DateTime @default(now())
 
   @@index([token])
   @@index([userId, expiresAt])
   @@map("sessions")
+}
+
+/// LoginAttempt tracks failed login attempts for lockout mechanism
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  username  String
+  ipAddress String?
+  success   Boolean
+  failedAt  DateTime @default(now())
+
+  @@index([username, failedAt])
+  @@map("login_attempts")
 }
 
 /// ApiKey stores encrypted API keys for external services (user-level or admin-level)
