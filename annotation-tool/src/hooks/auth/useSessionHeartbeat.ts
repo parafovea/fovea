@@ -31,6 +31,9 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000
 /** Warning threshold before expiry (5 minutes) */
 const WARNING_THRESHOLD_MS = 5 * 60 * 1000
 
+/** Delay before first check to allow page load to complete (3 seconds) */
+const INITIAL_CHECK_DELAY_MS = 3 * 1000
+
 /**
  * Monitors session validity and provides expiry warnings.
  * Checks session status every 5 minutes and sets showWarning
@@ -87,13 +90,17 @@ export function useSessionHeartbeat(enabled = true): SessionHeartbeatState {
   useEffect(() => {
     if (!enabled) return
 
-    // Initial check
-    checkSession()
+    // Delay initial check to allow page load to complete.
+    // This prevents the heartbeat API call from blocking networkidle during E2E tests.
+    const initialTimeout = setTimeout(checkSession, INITIAL_CHECK_DELAY_MS)
 
-    // Check every 5 minutes
+    // Check every 5 minutes after the initial delayed check
     const interval = setInterval(checkSession, CHECK_INTERVAL_MS)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(initialTimeout)
+      clearInterval(interval)
+    }
   }, [enabled, checkSession])
 
   return { expiresAt, showWarning, isExpired, checkSession }
