@@ -45,6 +45,8 @@ interface AnnotationOverlayProps {
   videoFps?: number
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
+  /** Optional callback when annotation edit is complete (drag/resize finished) */
+  onAnnotationEditComplete?: () => void
 }
 
 /**
@@ -73,6 +75,7 @@ export default function AnnotationOverlay({
   videoHeight,
   videoFps = 30,
   detectionResults,
+  onAnnotationEditComplete,
 }: AnnotationOverlayProps) {
   const { videoId } = useParams()
 
@@ -219,6 +222,7 @@ export default function AnnotationOverlay({
       selectedAnnotation={selectedAnnotation}
       detectionResults={detectionResults}
       onAnnotationSelect={setSelectedAnnotation}
+      onAnnotationEditComplete={onAnnotationEditComplete}
     />
   )
 }

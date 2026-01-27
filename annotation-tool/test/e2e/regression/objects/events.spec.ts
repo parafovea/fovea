@@ -31,27 +31,23 @@ test.describe('Event Management', () => {
     await objectWorkspace.selectTab('events')
 
     // Click add button
-    const addFab = page.locator('button[aria-label*="add" i], button:has-text("add")').first()
-    await addFab.click()
-    await page.waitForTimeout(500)
+    await objectWorkspace.addFab.click()
+    await page.waitForTimeout(300)
 
     const dialog = page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Try to save without name
-    const saveButton = dialog.getByRole('button', { name: /save|create/i })
-    const isDisabled = await saveButton.isDisabled().catch(() => true)
-    if (!isDisabled) {
-      await saveButton.click()
-      await page.waitForTimeout(300)
-    }
+    // The "Done" button should be disabled when name is empty (validation via disabled state)
+    const doneButton = dialog.getByRole('button', { name: /done/i })
+    await expect(doneButton).toBeDisabled()
 
-    // Dialog should still be visible (validation error)
+    // Dialog should still be visible (cannot submit without name)
     await expect(dialog).toBeVisible()
 
-    // Close dialog
-    const cancelButton = dialog.getByRole('button', { name: /cancel|close/i })
+    // Close dialog via Cancel button
+    const cancelButton = dialog.getByRole('button', { name: /cancel/i })
     await cancelButton.click()
+    await page.waitForTimeout(300)
   })
 
   test('edits event details', async ({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react'
 import {
   Box,
   Paper,
@@ -32,8 +32,9 @@ import ClaimsViewer from '@components/claims/ClaimsViewer'
 import ClaimEditor from '@components/claims/ClaimEditor'
 import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from '@components/claims/ClaimSpanHighlighter'
+import { SaveStatusIndicator } from '@components/shared/SaveStatusIndicator'
+import { useAutoSave } from '@hooks/data/useAutoSave'
 import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan } from '@models/types'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface VideoSummaryEditorProps {
   videoId: string
@@ -41,11 +42,15 @@ interface VideoSummaryEditorProps {
   disabled?: boolean
 }
 
-export default function VideoSummaryEditor({
+export interface VideoSummaryEditorRef {
+  forceSave: () => Promise<void>
+}
+
+const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorProps>(function VideoSummaryEditor({
   videoId,
   personaId,
   disabled = false,
-}: VideoSummaryEditorProps) {
+}, ref) {
   const queryClient = useQueryClient()
 
   // TanStack Query for video summary
@@ -77,6 +82,10 @@ export default function VideoSummaryEditor({
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
 
+  // Track which video/persona combo we've initialized local state for
+  // This prevents re-syncing localSummary when currentSummary updates after autosave
+  const initializedForRef = useRef<string | null>(null)
+
   // TanStack Query hooks for claims
   const summaryId = currentSummary?.id
   const { data: claims = [], isLoading: claimsLoading } = useClaims(
@@ -94,21 +103,88 @@ export default function VideoSummaryEditor({
   // Fetch persona ontology via TanStack Query (auto-fetches when personaId changes)
   usePersonaOntology(personaId)
 
-  // Track summary creation state
-  const [summaryCreationError, setSummaryCreationError] = useState<string | null>(null)
+  // Autosave callback - memoized to prevent useAutoSave from re-triggering
+  const handleAutoSave = useCallback(async (summary: GlossItem[]) => {
+    if (!currentSummary) {
+      // Create new summary - only required fields
+      await saveSummaryMutation.mutateAsync({ videoId, personaId, summary })
+    } else {
+      // Update existing summary - spread only defined optional fields
+      await saveSummaryMutation.mutateAsync({
+        videoId: currentSummary.videoId,
+        personaId: currentSummary.personaId,
+        summary,
+        ...(currentSummary.visualAnalysis && { visualAnalysis: currentSummary.visualAnalysis }),
+        ...(currentSummary.audioTranscript && { audioTranscript: currentSummary.audioTranscript }),
+        ...(currentSummary.keyFrames && { keyFrames: currentSummary.keyFrames }),
+        ...(currentSummary.confidence != null && { confidence: currentSummary.confidence }),
+      })
+    }
+  }, [videoId, personaId, currentSummary, saveSummaryMutation])
 
-  // Load summary when component mounts or when video/persona changes
+  // Use autosave hook for summary persistence
+  // Note: isEnabled doesn't need the ref check - the ref is only for preventing
+  // re-syncing localSummary from server data, not for controlling autosave
+  const {
+    saveStatus,
+    lastSavedAt,
+    errorMessage: saveErrorMessage,
+    retryCount,
+    forceSave,
+  } = useAutoSave({
+    data: localSummary,
+    isEnabled: !!videoId && !!personaId && !!summaryId,
+    onSave: handleAutoSave,
+    entityType: 'summary',
+    entityId: `${videoId}-${personaId}`,
+  })
+
+  // Expose forceSave to parent components via ref
+  useImperativeHandle(ref, () => ({
+    forceSave,
+  }), [forceSave])
+
+  // Track if we've already tried to create an empty summary for this video/persona
+  const creatingEmptySummaryRef = useRef<string | null>(null)
+
+  // Load summary when video/persona changes - only sync on actual changes, not after autosave
+  // IMPORTANT: This effect should NOT have saveSummaryMutation in deps to avoid re-running
+  // when mutation state changes (isPending, etc.)
   useEffect(() => {
-    if (currentSummary) {
+    const key = `${videoId}-${personaId}`
+
+    // Only sync localSummary when video/persona actually changes
+    if (initializedForRef.current !== key && currentSummary) {
       // Parse summary if it's a string (from API), or use directly if already array
       const summaryData = typeof currentSummary.summary === 'string'
         ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
         : (currentSummary.summary || [])
       setLocalSummary(summaryData)
-      setSummaryCreationError(null)
-    } else if (!loading && !queryError && videoId && personaId && !saveSummaryMutation.isPending) {
-      // No existing summary - create empty one immediately so claims can be added
-      // Only include required fields - optional fields should be omitted, not null
+      initializedForRef.current = key
+    }
+  }, [videoId, personaId, currentSummary])
+
+  // Separate effect for creating empty summary when none exists
+  // This is separate to avoid the mutation object in deps causing re-runs
+  useEffect(() => {
+    const key = `${videoId}-${personaId}`
+
+    // Only create empty summary if:
+    // 1. Not loading
+    // 2. No query error (don't create if we just couldn't fetch existing one)
+    // 3. No current summary
+    // 4. Haven't already initialized for this key
+    // 5. Haven't already started creating for this key
+    if (
+      !loading &&
+      !queryError &&
+      !currentSummary &&
+      videoId &&
+      personaId &&
+      initializedForRef.current !== key &&
+      creatingEmptySummaryRef.current !== key
+    ) {
+      creatingEmptySummaryRef.current = key
       const emptySummary = {
         videoId,
         personaId,
@@ -117,11 +193,11 @@ export default function VideoSummaryEditor({
       saveSummaryMutation.mutate(emptySummary, {
         onSuccess: () => {
           setLocalSummary([])
-          setSummaryCreationError(null)
+          initializedForRef.current = key
         },
-        onError: (err) => {
-          console.error('Failed to create summary:', err)
-          setSummaryCreationError(`Failed to create summary: ${err.message}. Claims cannot be saved without a summary.`)
+        onError: () => {
+          // Reset so we can try again if needed
+          creatingEmptySummaryRef.current = null
         },
       })
     }
@@ -143,36 +219,9 @@ export default function VideoSummaryEditor({
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
 
-  // Auto-save summary using useAutoSave hook
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: localSummary,
-    isEnabled: !!videoId && !!personaId && !loading,
-    onSave: async (summary) => {
-      if (!currentSummary) {
-        await saveSummaryMutation.mutateAsync({
-          videoId,
-          personaId,
-          summary,
-        })
-      } else {
-        await saveSummaryMutation.mutateAsync({
-          videoId: currentSummary.videoId,
-          personaId: currentSummary.personaId,
-          summary,
-          ...(currentSummary.visualAnalysis && { visualAnalysis: currentSummary.visualAnalysis }),
-          ...(currentSummary.audioTranscript && { audioTranscript: currentSummary.audioTranscript }),
-          ...(currentSummary.keyFrames && { keyFrames: currentSummary.keyFrames }),
-          ...(currentSummary.confidence != null && { confidence: currentSummary.confidence }),
-        })
-      }
-    },
-    entityType: 'summary',
-    entityId: currentSummary?.id || `${videoId}-${personaId}`,
-  })
-
+  // Simple handler - useAutoSave handles the debounced saving
   const handleSummaryChange = (summary: GlossItem[]) => {
     setLocalSummary(summary)
-    // useAutoSave handles the debounced save automatically
   }
 
   // Claims handlers
@@ -267,13 +316,6 @@ export default function VideoSummaryEditor({
 
   return (
     <Box>
-      {/* Summary creation error - shown inline since it doesn't block the UI */}
-      {summaryCreationError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {summaryCreationError}
-        </Alert>
-      )}
-
       {/* Header with save status */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -281,7 +323,7 @@ export default function VideoSummaryEditor({
             <SaveStatusIndicator
               status={saveStatus}
               lastSavedAt={lastSavedAt}
-              errorMessage={errorMessage}
+              errorMessage={saveErrorMessage}
               retryCount={retryCount}
               onRetry={forceSave}
             />
@@ -407,4 +449,6 @@ export default function VideoSummaryEditor({
       />
     </Box>
   )
-}
+})
+
+export default VideoSummaryEditor

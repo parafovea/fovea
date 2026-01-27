@@ -98,7 +98,10 @@ export function SaveStatusIndicator({
 
   if (compact) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Box
+        data-testid={`save-status-${status}`}
+        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+      >
         {status === 'saving' && <CircularProgress size={14} />}
         {status === 'saved' && (
           <CheckIcon sx={{ fontSize: 14, color: 'success.main' }} />
@@ -118,7 +121,10 @@ export function SaveStatusIndicator({
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box
+      data-testid={`save-status-${status}`}
+      sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+    >
       {status === 'saving' && (
         <>
           <CircularProgress size={16} />

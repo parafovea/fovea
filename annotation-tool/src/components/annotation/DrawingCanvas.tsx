@@ -35,6 +35,8 @@ interface DrawingCanvasProps {
   detectionResults?: DetectionResponse | null
   /** Callback when annotation is selected */
   onAnnotationSelect: (annotation: Annotation) => void
+  /** Optional callback when annotation edit is complete (drag/resize finished) */
+  onAnnotationEditComplete?: () => void
 }
 
 /**
@@ -70,6 +72,7 @@ export default function DrawingCanvas({
   selectedAnnotation,
   detectionResults,
   onAnnotationSelect,
+  onAnnotationEditComplete,
 }: DrawingCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -167,6 +170,7 @@ export default function DrawingCanvas({
                 videoHeight={videoHeight}
                 isActive={selectedAnnotation?.id === ann.id}
                 onSelect={() => onAnnotationSelect(ann)}
+                onEditComplete={onAnnotationEditComplete}
                 mode={mode}
                 typeName={ann.typeName}
                 linkedObject={ann.linkedObject}

@@ -38,6 +38,8 @@ interface InteractiveBoundingBoxProps {
   mode: 'keyframe' | 'interpolated' | 'ghost'
   /** Optional callback fired when bounding box is updated */
   onUpdate?: (box: Partial<BoundingBox>) => void
+  /** Optional callback fired when edit is complete (drag/resize finished) */
+  onEditComplete?: () => void
   /** Resolved type name from ontology (for type annotations) */
   typeName?: string
   /** Resolved linked object with name (for object annotations) */
@@ -80,6 +82,7 @@ export default function InteractiveBoundingBox({
   onSelect,
   mode,
   onUpdate,
+  onEditComplete,
   typeName,
   linkedObject,
 }: InteractiveBoundingBoxProps) {
@@ -217,6 +220,10 @@ export default function InteractiveBoundingBox({
         frameNumber: currentFrame,
         box: currentBox,
       })
+      // Save immediately after adding keyframe
+      if (onEditComplete) {
+        onEditComplete()
+      }
       return
     }
 
@@ -384,9 +391,14 @@ export default function InteractiveBoundingBox({
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
+    const wasEditing = interactionMode !== 'none'
     setInteractionMode('none')
     setActiveHandle(null)
-  }, [])
+    // Notify parent that edit is complete so it can save immediately
+    if (wasEditing && onEditComplete) {
+      onEditComplete()
+    }
+  }, [interactionMode, onEditComplete])
 
   // Add/remove event listeners
   useEffect(() => {

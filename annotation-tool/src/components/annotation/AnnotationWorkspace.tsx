@@ -251,7 +251,7 @@ export default function AnnotationWorkspace() {
   }, [])
 
   // Keyframe control callbacks
-  const handleAddKeyframe = useCallback(() => {
+  const handleAddKeyframe = useCallback(async () => {
     if (!selectedAnnotation) return
 
     // Get current box from annotation sequence (interpolated or existing)
@@ -296,9 +296,11 @@ export default function AnnotationWorkspace() {
       box: currentBox,
       fps: currentVideo?.fps || 30,
     })
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, forceSave])
 
-  const handleDeleteKeyframe = useCallback(() => {
+  const handleDeleteKeyframe = useCallback(async () => {
     if (!selectedAnnotation) return
 
     removeKeyframe({
@@ -307,9 +309,11 @@ export default function AnnotationWorkspace() {
       frameNumber: currentFrame,
       fps: currentVideo?.fps || 30,
     })
-  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe, forceSave])
 
-  const handleCopyPreviousFrame = useCallback(() => {
+  const handleCopyPreviousFrame = useCallback(async () => {
     if (!selectedAnnotation) return
 
     const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
@@ -341,10 +345,12 @@ export default function AnnotationWorkspace() {
         fps: currentVideo?.fps || 30,
       })
     }
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe, forceSave])
 
   const handleUpdateInterpolationSegment = useCallback(
-    (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
+    async (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
       updateInterpolationSegmentHook({
@@ -354,8 +360,10 @@ export default function AnnotationWorkspace() {
         interpolationType: type,
         controlPoints,
       })
+      // Save immediately after interpolation change
+      await forceSave()
     },
-    [selectedAnnotation, updateInterpolationSegmentHook]
+    [selectedAnnotation, updateInterpolationSegmentHook, forceSave]
   )
 
   // Track this as the last annotation when we load the component
@@ -664,6 +672,7 @@ export default function AnnotationWorkspace() {
               videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
               videoFps={currentVideo.fps || 30}
               detectionResults={detectionResults}
+              onAnnotationEditComplete={forceSave}
             />
           )}
         </VideoPlayer>

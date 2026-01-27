@@ -22,6 +22,74 @@ describe('SaveStatusIndicator', () => {
     })
   })
 
+  describe('data-testid attributes', () => {
+    it('renders with data-testid for saving status', () => {
+      render(
+        <SaveStatusIndicator
+          status="saving"
+          lastSavedAt={null}
+          errorMessage={null}
+          retryCount={0}
+        />
+      )
+
+      expect(screen.getByTestId('save-status-saving')).toBeInTheDocument()
+    })
+
+    it('renders with data-testid for saved status', () => {
+      render(
+        <SaveStatusIndicator
+          status="saved"
+          lastSavedAt={new Date()}
+          errorMessage={null}
+          retryCount={0}
+        />
+      )
+
+      expect(screen.getByTestId('save-status-saved')).toBeInTheDocument()
+    })
+
+    it('renders with data-testid for error status', () => {
+      render(
+        <SaveStatusIndicator
+          status="error"
+          lastSavedAt={null}
+          errorMessage="Network error"
+          retryCount={0}
+        />
+      )
+
+      expect(screen.getByTestId('save-status-error')).toBeInTheDocument()
+    })
+
+    it('renders with data-testid for retrying status', () => {
+      render(
+        <SaveStatusIndicator
+          status="retrying"
+          lastSavedAt={null}
+          errorMessage={null}
+          retryCount={1}
+        />
+      )
+
+      expect(screen.getByTestId('save-status-retrying')).toBeInTheDocument()
+    })
+
+    it('renders with data-testid in compact mode', () => {
+      render(
+        <SaveStatusIndicator
+          status="saved"
+          lastSavedAt={new Date()}
+          errorMessage={null}
+          retryCount={0}
+          compact
+        />
+      )
+
+      expect(screen.getByTestId('save-status-saved')).toBeInTheDocument()
+    })
+  })
+
   describe('saving status', () => {
     it('shows saving indicator and message', () => {
       render(

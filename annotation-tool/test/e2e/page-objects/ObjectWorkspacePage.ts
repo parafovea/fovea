@@ -907,7 +907,7 @@ export class ObjectWorkspacePage extends BasePage {
   }
 
   private async saveForm() {
-    const saveButton = this.page.getByRole('button', { name: /save|create|update/i })
+    const saveButton = this.page.getByRole('button', { name: /save|create|update|done/i })
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 
