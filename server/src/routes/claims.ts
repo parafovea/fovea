@@ -44,8 +44,21 @@ const ClaimTextSpanSchema = Type.Object({
 })
 
 /**
+ * Nullable type helpers for fast-json-stringify compatibility.
+ *
+ * TypeBox's Type.Union([Type.String(), Type.Null()]) generates anyOf in JSON Schema,
+ * but fast-json-stringify requires type: ['string', 'null'] format to properly
+ * serialize null values (otherwise null is coerced to empty string).
+ *
+ * See: https://github.com/fastify/fast-json-stringify/issues/152
+ */
+const NullableString = Type.Unsafe<string | null>({ type: ['string', 'null'] })
+const NullableNumber = Type.Unsafe<number | null>({ type: ['number', 'null'] })
+
+/**
  * Claim schema (recursive for subclaims)
  */
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TypeBox recursive types require any
 const ClaimSchema: any = Type.Recursive(This => Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -53,17 +66,17 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
   summaryType: Type.String(),
   text: Type.String(),
   gloss: Type.Array(GlossItemSchema),
-  parentClaimId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  parentClaimId: Type.Optional(NullableString),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
-  claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
-  claimEventId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  claimTimeId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  claimLocationId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  confidence: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  modelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  extractionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimEventId: Type.Optional(NullableString),
+  claimTimeId: Type.Optional(NullableString),
+  claimLocationId: Type.Optional(NullableString),
+  confidence: Type.Optional(NullableNumber),
+  modelUsed: Type.Optional(NullableString),
+  extractionStrategy: Type.Optional(NullableString),
   audio: Type.Optional(Type.Union([
     Type.Array(Type.Union([Type.Literal('speech'), Type.Literal('non-speech')])),
     Type.Null()
@@ -76,8 +89,8 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
     Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
     Type.Null()
   ])),
-  comment: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  createdBy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  comment: Type.Optional(NullableString),
+  createdBy: Type.Optional(NullableString),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
   subclaims: Type.Optional(Type.Array(This))
@@ -92,7 +105,7 @@ const CreateClaimSchema = Type.Object({
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
   parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
-  claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
   claimEventId: Type.Optional(Type.String({ format: 'uuid' })),
@@ -111,7 +124,7 @@ const CreateClaimSchema = Type.Object({
     Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
     Type.Null()
   ])),
-  comment: Type.Optional(Type.Union([Type.String(), Type.Null()]))
+  comment: Type.Optional(NullableString)
 })
 
 /**
@@ -140,7 +153,7 @@ const UpdateClaimSchema = Type.Object({
     Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
     Type.Null()
   ])),
-  comment: Type.Optional(Type.Union([Type.String(), Type.Null()]))
+  comment: Type.Optional(NullableString)
 })
 
 /**
