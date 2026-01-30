@@ -552,7 +552,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         ...(audio !== undefined && { audio: audio === null ? Prisma.JsonNull : audio }),
         ...(video !== undefined && { video: video === null ? Prisma.JsonNull : video }),
         ...(metadata !== undefined && { metadata: metadata === null ? Prisma.JsonNull : metadata }),
-        ...(comment !== undefined && { comment: comment || undefined })
+        ...(comment !== undefined && { comment })
       }
 
       // Update claim
