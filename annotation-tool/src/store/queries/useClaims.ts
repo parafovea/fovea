@@ -12,6 +12,24 @@ import {
   UpdateClaimRequest,
   ClaimRelation,
 } from '@models/types'
+import { AppError } from '@lib/errors'
+import { logError } from '@services/errorLogging'
+
+/** Parse fetch error response to AppError, preserving server error hierarchy */
+async function parseFetchError(response: Response, fallbackMessage: string): Promise<AppError> {
+  let errorData: { error?: string; message?: string; details?: unknown }
+  try {
+    errorData = await response.json()
+  } catch {
+    const text = await response.text().catch(() => '')
+    errorData = { error: 'FETCH_FAILED', message: text || fallbackMessage }
+  }
+  return new AppError(
+    errorData.error || 'FETCH_FAILED',
+    errorData.message || fallbackMessage,
+    errorData.details
+  )
+}
 
 /** Query key factory for claims */
 export const claimsQueryKeys = {
@@ -35,12 +53,13 @@ async function fetchClaims(
   summaryId: string,
   summaryType: 'video' | 'collection' = 'video'
 ): Promise<Claim[]> {
-  const response = await fetch(
-    `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`,
-    { credentials: 'include' }
-  )
+  if (!summaryId) {
+    throw new AppError('VALIDATION_ERROR', 'Summary ID is required to fetch claims')
+  }
+  const url = `/api/summaries/${summaryId}/claims?summaryType=${summaryType}&includeSubclaims=true`
+  const response = await fetch(url, { credentials: 'include' })
   if (!response.ok) {
-    throw new Error('Failed to fetch claims')
+    throw await parseFetchError(response, 'Failed to fetch claims')
   }
   return response.json()
 }
@@ -59,7 +78,7 @@ async function createClaim(
     body: JSON.stringify(claim),
   })
   if (!response.ok) {
-    throw new Error('Failed to create claim')
+    throw await parseFetchError(response, 'Failed to create claim')
   }
   const { claims } = await response.json()
   return claims
@@ -80,7 +99,7 @@ async function updateClaim(
     body: JSON.stringify(updates),
   })
   if (!response.ok) {
-    throw new Error('Failed to update claim')
+    throw await parseFetchError(response, 'Failed to update claim')
   }
   const { claims } = await response.json()
   return claims
@@ -95,7 +114,7 @@ async function deleteClaim(summaryId: string, claimId: string): Promise<void> {
     credentials: 'include',
   })
   if (!response.ok) {
-    throw new Error('Failed to delete claim')
+    throw await parseFetchError(response, 'Failed to delete claim')
   }
 }
 
@@ -113,7 +132,7 @@ async function extractClaims(
     body: JSON.stringify(config),
   })
   if (!response.ok) {
-    throw new Error('Failed to start claim extraction')
+    throw await parseFetchError(response, 'Failed to start claim extraction')
   }
   return response.json()
 }
@@ -124,7 +143,7 @@ async function extractClaims(
 async function checkExtractionJob(jobId: string): Promise<ClaimExtractionJobStatus> {
   const response = await fetch(`/api/jobs/claims/${jobId}`, { credentials: 'include' })
   if (!response.ok) {
-    throw new Error('Failed to check job status')
+    throw await parseFetchError(response, 'Failed to check job status')
   }
   return response.json()
 }
@@ -140,7 +159,7 @@ async function fetchClaimRelations(
     credentials: 'include',
   })
   if (!response.ok) {
-    throw new Error('Failed to fetch claim relations')
+    throw await parseFetchError(response, 'Failed to fetch claim relations')
   }
   return response.json()
 }
@@ -170,8 +189,7 @@ async function createClaimRelation(
     }
   )
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create relation')
+    throw await parseFetchError(response, 'Failed to create relation')
   }
   return response.json()
 }
@@ -191,7 +209,7 @@ async function deleteClaimRelation(
     }
   )
   if (!response.ok) {
-    throw new Error('Failed to delete relation')
+    throw await parseFetchError(response, 'Failed to delete relation')
   }
 }
 
@@ -202,10 +220,23 @@ async function deleteClaimRelation(
  */
 export function useClaims(summaryId: string | undefined, summaryType: 'video' | 'collection' = 'video') {
   return useQuery({
-    queryKey: claimsQueryKeys.bySummary(summaryId || ''),
-    queryFn: () => fetchClaims(summaryId!, summaryType),
-    enabled: !!summaryId,
+    queryKey: summaryId ? claimsQueryKeys.bySummary(summaryId) : ['claims', 'disabled'],
+    queryFn: async () => {
+      if (!summaryId || summaryId.trim() === '') {
+        throw new AppError('VALIDATION_ERROR', 'Summary ID is required to fetch claims')
+      }
+      return await fetchClaims(summaryId, summaryType)
+    },
+    enabled: !!summaryId && summaryId.trim() !== '',
     staleTime: 30000, // 30 seconds
+    retry: (failureCount, error) => {
+      // Don't retry validation errors (missing summaryId)
+      if (error instanceof AppError && error.code === 'VALIDATION_ERROR') {
+        return false
+      }
+      // Retry up to 2 times for network errors
+      return failureCount < 2
+    },
   })
 }
 
@@ -257,6 +288,14 @@ export function useCreateClaim() {
       // Update cache with returned claims
       queryClient.setQueryData(claimsQueryKeys.bySummary(summaryId), claims)
     },
+    onError: (error, variables) => {
+      logError(error as Error, undefined, {
+        component: 'useCreateClaim',
+        summaryId: variables.summaryId,
+        claimText: variables.claim.text?.substring(0, 100), // First 100 chars for context
+        parentClaimId: variables.claim.parentClaimId,
+      })
+    },
   })
 }
 
@@ -279,6 +318,14 @@ export function useUpdateClaim() {
     onSuccess: (claims, { summaryId }) => {
       queryClient.setQueryData(claimsQueryKeys.bySummary(summaryId), claims)
     },
+    onError: (error, variables) => {
+      logError(error as Error, undefined, {
+        component: 'useUpdateClaim',
+        summaryId: variables.summaryId,
+        claimId: variables.claimId,
+        claimText: variables.updates.text?.substring(0, 100), // First 100 chars for context
+      })
+    },
   })
 }
 
@@ -300,6 +347,13 @@ export function useDeleteClaim() {
       // Invalidate to refetch fresh data
       queryClient.invalidateQueries({ queryKey: claimsQueryKeys.bySummary(summaryId) })
     },
+    onError: (error, variables) => {
+      logError(error as Error, undefined, {
+        component: 'useDeleteClaim',
+        summaryId: variables.summaryId,
+        claimId: variables.claimId,
+      })
+    },
   })
 }
 
@@ -315,6 +369,14 @@ export function useExtractClaims() {
       summaryId: string
       config: ClaimExtractionConfig
     }) => extractClaims(summaryId, config),
+    onError: (error, variables) => {
+      logError(error as Error, undefined, {
+        component: 'useExtractClaims',
+        summaryId: variables.summaryId,
+        extractionStrategy: variables.config.extractionStrategy,
+        maxClaims: variables.config.maxClaimsPerSummary,
+      })
+    },
   })
 }
 

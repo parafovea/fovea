@@ -40,6 +40,8 @@ export interface VideoSummary {
   processingTimeVisual?: number | null
   /** Processing time for audio-visual fusion in seconds. */
   processingTimeFusion?: number | null
+  /** Optional comment about this summary */
+  comment?: string | null
 }
 
 /**
@@ -64,6 +66,7 @@ export interface SaveSummaryRequest {
   processingTimeAudio?: number
   processingTimeVisual?: number
   processingTimeFusion?: number
+  comment?: string | null
   createdBy?: string
 }
 

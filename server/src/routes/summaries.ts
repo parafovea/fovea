@@ -80,6 +80,7 @@ const VideoSummarySchema = Type.Object({
   processingTimeAudio: Type.Optional(Type.Number()),
   processingTimeVisual: Type.Optional(Type.Number()),
   processingTimeFusion: Type.Optional(Type.Number()),
+  comment: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdBy: Type.Optional(Type.String()),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),

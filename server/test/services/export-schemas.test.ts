@@ -417,6 +417,117 @@ describe('Export Schemas', () => {
       expect(result.success).toBe(true)
     })
 
+    it('validates claim with modality metadata fields', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        audio: ['speech'],
+        video: ['text'],
+        metadata: ['text'],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.audio).toEqual(['speech'])
+        expect(result.data.video).toEqual(['text'])
+        expect(result.data.metadata).toEqual(['text'])
+      }
+    })
+
+    it('validates claim with null modality metadata fields', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        audio: null,
+        video: null,
+        metadata: null,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(true)
+    })
+
+    it('validates claim without modality metadata fields (backward compatibility)', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(true)
+    })
+
+    it('rejects claim with invalid audio enum value in array', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        audio: ['invalid-value'],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects claim with invalid video enum value in array', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        video: ['invalid-value'],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(false)
+    })
+
+    it('validates claim with multiple modality values', () => {
+      const claim = {
+        id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',
+        summaryId: 'd57c8b9f-5b0a-4d6e-9g3e-2b3c4d5e6f7g',
+        summaryType: 'video',
+        text: 'This is a test claim',
+        gloss: [{ type: 'text', content: 'test' }],
+        audio: ['speech', 'non-speech'],
+        video: ['text', 'non-text'],
+        metadata: ['text', 'non-text'],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z'
+      }
+
+      const result = ClaimSchema.safeParse(claim)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.audio).toEqual(['speech', 'non-speech'])
+        expect(result.data.video).toEqual(['text', 'non-text'])
+        expect(result.data.metadata).toEqual(['text', 'non-text'])
+      }
+    })
+
     it('validates claim with collection summaryType', () => {
       const claim = {
         id: 'c47b7a8e-4a9f-4c5e-8f2d-1a2b3c4d5e6f',

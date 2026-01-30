@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import VideoSummaryEditor from './VideoSummaryEditor'
 
@@ -34,6 +35,11 @@ vi.mock('@store/queries', async () => {
       error: null,
     })),
     usePersonaOntology: vi.fn(() => ({ data: null })),
+    useModelConfig: vi.fn(() => ({
+      data: { cudaAvailable: true },
+      isLoading: false,
+      error: null,
+    })),
   }
 })
 
@@ -266,6 +272,276 @@ describe('VideoSummaryEditor', () => {
 
       // Should NOT have tried to create a summary while loading
       expect(mockMutate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Comment Field', () => {
+    it('renders comment field for video summary', async () => {
+      const user = userEvent.setup()
+      const { useVideoSummary } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        comment: 'Test comment',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      // Default tab is Claims; switch to Summary tab to see comment field
+      await user.click(screen.getByRole('tab', { name: /Summary/i }))
+
+      await waitFor(() => {
+        const commentField = screen.getByPlaceholderText(/Enter comment/i)
+        expect(commentField).toBeInTheDocument()
+        expect(commentField).toHaveValue('Test comment')
+      })
+    })
+
+    it('saves comment when summary is saved', async () => {
+      const user = userEvent.setup()
+      const { useVideoSummary, useSaveSummary } = await import('@store/queries')
+      const mockMutateAsync = vi.fn().mockResolvedValue({})
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        comment: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useSaveSummary).mockReturnValue({
+        mutate: vi.fn(),
+        mutateAsync: mockMutateAsync,
+        isPending: false,
+        error: null,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      // Default tab is Claims; switch to Summary tab to see comment field
+      await user.click(screen.getByRole('tab', { name: /Summary/i }))
+
+      const commentField = await screen.findByPlaceholderText(/Enter comment/i)
+      await user.type(commentField, 'New comment')
+
+      // Autosave only triggers when summary changes; type in summary to trigger save
+      const summaryField = screen.getByLabelText(/Video Summary/i)
+      await user.type(summaryField, 'x')
+
+      // Wait for autosave (1s debounce) to trigger with comment included
+      await waitFor(
+        () => {
+          expect(mockMutateAsync).toHaveBeenCalledWith(
+            expect.objectContaining({
+              comment: expect.stringContaining('New comment'),
+            })
+          )
+        },
+        { timeout: 5000 }
+      )
+    })
+  })
+
+  describe('Default Tab', () => {
+    it('defaults to Claims tab (tab 1) when summary exists', async () => {
+      const { useVideoSummary } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        // Claims tab should be active (index 1)
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        expect(claimsTab).toHaveAttribute('aria-selected', 'true')
+      })
+    })
+  })
+
+  describe('CPU-Only Mode', () => {
+    it('disables Extract Claims button in CPU-only mode', async () => {
+      const { useVideoSummary, useModelConfig } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [{ type: 'text', content: 'Test summary' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useModelConfig).mockReturnValue({
+        data: { cudaAvailable: false },
+        isLoading: false,
+        error: null,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        // Switch to Claims tab
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        userEvent.setup().click(claimsTab)
+      })
+
+      await waitFor(() => {
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        expect(extractButton).toBeDisabled()
+      })
+    })
+
+    it('enables Extract Claims button when GPU is available', async () => {
+      const { useVideoSummary, useModelConfig } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [{ type: 'text', content: 'Test summary' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useModelConfig).mockReturnValue({
+        data: { cudaAvailable: true },
+        isLoading: false,
+        error: null,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        userEvent.setup().click(claimsTab)
+      })
+
+      await waitFor(() => {
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        expect(extractButton).not.toBeDisabled()
+      })
+    })
+  })
+
+  describe('Claims Loading Error Handling', () => {
+    it('displays error message when claims fail to load', async () => {
+      const { useVideoSummary } = await import('@store/queries')
+      const { useClaims } = await import('@store/queries/useClaims')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useClaims).mockReturnValue({
+        data: [],
+        isLoading: false,
+        error: new Error('Failed to load claims'),
+        isError: true,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to load claims/i)).toBeInTheDocument()
+      })
     })
   })
 })

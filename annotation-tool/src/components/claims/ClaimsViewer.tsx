@@ -87,14 +87,21 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
 
   const createClaimRelationMutation = useCreateClaimRelation()
 
-  const handleToggle = () => {
+  const handleToggle = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation()
+    }
     if (hasSubclaims) {
       setExpanded(!expanded)
     }
   }
 
   const handleClick = () => {
-    if (onSelect) {
+    // If claim has subclaims, toggle expand/collapse instead of selecting
+    if (hasSubclaims) {
+      setExpanded(!expanded)
+    } else if (onSelect) {
+      // Only call onSelect if there are no subclaims
       onSelect(claim.id, claim.textSpans || [])
     }
   }
@@ -132,10 +139,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
           {/* Expand/Collapse Icon */}
           <IconButton
             size="small"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleToggle()
-            }}
+            onClick={handleToggle}
             disabled={!hasSubclaims}
             sx={{ mt: -0.5 }}
           >

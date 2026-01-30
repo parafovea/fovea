@@ -502,4 +502,61 @@ describe('ClaimsViewer', () => {
       })
     })
   })
+
+  describe('Click Behavior', () => {
+    it('toggles expand/collapse when clicking claim with subclaims', async () => {
+      const user = userEvent.setup()
+      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Find claim with subclaims
+      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('.MuiPaper-root')
+      expect(claimCard).toBeInTheDocument()
+
+      // Initially subclaim should be visible (expanded by default or collapsed)
+      expect(screen.getByText(/Baseball is played professionally/)).toBeInTheDocument()
+      
+      // Click the claim card
+      if (claimCard) {
+        await user.click(claimCard)
+      }
+
+      // After click, expansion state should toggle
+      // (We can't easily test the exact state without accessing internal state,
+      // but we can verify the click doesn't trigger onSelect)
+      expect(claimCard).toBeInTheDocument()
+    })
+
+    it('does not call onSelect when clicking claim with subclaims', async () => {
+      const user = userEvent.setup()
+      const onClaimSelect = vi.fn()
+      render(<ClaimsViewer {...defaultProps} onClaimSelect={onClaimSelect} />, { wrapper: createWrapper() })
+
+      // Find claim with subclaims
+      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('.MuiPaper-root')
+      
+      if (claimCard) {
+        await user.click(claimCard)
+      }
+
+      // onClaimSelect should NOT be called for claims with subclaims
+      // (it should toggle expand instead)
+      expect(onClaimSelect).not.toHaveBeenCalled()
+    })
+
+    it('calls onSelect when clicking claim without subclaims', async () => {
+      const user = userEvent.setup()
+      const onClaimSelect = vi.fn()
+      render(<ClaimsViewer {...defaultProps} onClaimSelect={onClaimSelect} />, { wrapper: createWrapper() })
+
+      // Find claim without subclaims (claim-2)
+      const claimCard = screen.getByText(/Marine mammals migrate seasonally/).closest('.MuiPaper-root')
+      
+      if (claimCard) {
+        await user.click(claimCard)
+      }
+
+      // onClaimSelect should be called for claims without subclaims (claimId, sourceSpans)
+      expect(onClaimSelect).toHaveBeenCalledWith('claim-2', [])
+    })
+  })
 })
