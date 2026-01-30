@@ -439,6 +439,7 @@ export default function VideoBrowser() {
               handleSummaryJobFail={handleSummaryJobFail}
               isCpuOnly={isCpuOnly}
               allowExternalVideoLinks={allowExternalVideoLinks}
+              addVideoSummary={addVideoSummary}
             />
           )
         })}
@@ -506,6 +507,8 @@ interface VideoCardProps {
   isCpuOnly: boolean
   /** Whether external video source links are allowed */
   allowExternalVideoLinks: boolean
+  /** Handler to sync discovered summaries to local state */
+  addVideoSummary: (videoId: string, personaId: string) => void
 }
 
 /**
@@ -531,6 +534,7 @@ function VideoCard({
   handleSummaryJobFail,
   isCpuOnly,
   allowExternalVideoLinks,
+  addVideoSummary,
 }: VideoCardProps) {
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
@@ -541,9 +545,18 @@ function VideoCard({
     video.id,
     activePersonaId || '',
     {
-      enabled: !!activePersonaId && hasSummary,
+      // Always attempt to fetch summary when persona is active - don't rely on local state
+      // This ensures summaries created in other browsers/sessions are discovered
+      enabled: !!activePersonaId,
     }
   )
+
+  // Sync discovered summaries to local state for badge display
+  useEffect(() => {
+    if (summary && activePersonaId && !hasSummary) {
+      addVideoSummary(video.id, activePersonaId)
+    }
+  }, [summary, activePersonaId, hasSummary, video.id, addVideoSummary])
 
   return (
     <Grid item xs={12} sm={6} md={4} lg={3}>

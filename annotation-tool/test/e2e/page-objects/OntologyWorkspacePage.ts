@@ -388,7 +388,7 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   private async saveTypeForm() {
-    const saveButton = this.page.getByRole('button', { name: /save|create/i })
+    const saveButton = this.page.getByRole('button', { name: /save|create|done/i })
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 

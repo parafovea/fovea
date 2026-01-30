@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -28,13 +28,16 @@ import {
   useWorld,
   useAddEntityCollection,
   useUpdateEntityCollection,
+  useDeleteEntityCollection,
   useAddEventCollection,
   useUpdateEventCollection,
+  useDeleteEventCollection,
 } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { EntityCollection, EventCollection, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 /** Entity collection type options */
 type EntityCollectionTypeOption = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
@@ -57,10 +60,12 @@ export default function CollectionEditor({ open, onClose, collection, collection
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
 
-  const { mutate: addEntityCollection } = useAddEntityCollection()
-  const { mutate: updateEntityCollection } = useUpdateEntityCollection()
-  const { mutate: addEventCollection } = useAddEventCollection()
-  const { mutate: updateEventCollection } = useUpdateEventCollection()
+  const { mutateAsync: addEntityCollection } = useAddEntityCollection()
+  const { mutateAsync: updateEntityCollection } = useUpdateEntityCollection()
+  const { mutate: deleteEntityCollection } = useDeleteEntityCollection()
+  const { mutateAsync: addEventCollection } = useAddEventCollection()
+  const { mutateAsync: updateEventCollection } = useUpdateEventCollection()
+  const { mutate: deleteEventCollection } = useDeleteEventCollection()
 
   const [collectionType, setCollectionType] = useState<'entity' | 'event'>(initialType || 'entity')
   const [name, setName] = useState('')
@@ -68,6 +73,82 @@ export default function CollectionEditor({ open, onClose, collection, collection
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [entityCollectionType, setEntityCollectionType] = useState<'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'>('group')
   const [eventCollectionType, setEventCollectionType] = useState<'sequence' | 'iteration' | 'complex' | 'alternative' | 'group'>('sequence')
+
+  // Track auto-created collection ID for cancel cleanup
+  const [autoCreatedCollectionId, setAutoCreatedCollectionId] = useState<string | null>(null)
+  const autoCreatedIdRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state for callbacks
+  useEffect(() => {
+    autoCreatedIdRef.current = autoCreatedCollectionId
+  }, [autoCreatedCollectionId])
+
+  // Auto-save hook for new collections
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: { name, description, selectedMembers, collectionType, entityCollectionType, eventCollectionType },
+    isEnabled: open && !!name && !collection, // Only for new collections, require name
+    onSave: async (collectionData) => {
+      const now = new Date().toISOString()
+
+      if (collectionData.collectionType === 'entity') {
+        const entityCollectionData: Omit<EntityCollection, 'id' | 'createdAt' | 'updatedAt'> = {
+          name: collectionData.name,
+          description: collectionData.description,
+          entityIds: collectionData.selectedMembers,
+          collectionType: collectionData.entityCollectionType,
+          typeAssignments: [],
+          metadata: {},
+        }
+
+        if (autoCreatedIdRef.current) {
+          // Update the auto-created collection
+          await updateEntityCollection({
+            id: autoCreatedIdRef.current,
+            createdAt: now,
+            updatedAt: now,
+            ...entityCollectionData,
+          })
+        } else {
+          // Create new collection and track ID
+          const result = await addEntityCollection(entityCollectionData)
+          // Get the newly created collection ID from the result
+          const newCollection = result.entityCollections[result.entityCollections.length - 1]
+          if (newCollection) {
+            setAutoCreatedCollectionId(newCollection.id)
+          }
+        }
+      } else {
+        const eventCollectionData: Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'> = {
+          name: collectionData.name,
+          description: collectionData.description,
+          eventIds: collectionData.selectedMembers,
+          collectionType: collectionData.eventCollectionType,
+          typeAssignments: [],
+          metadata: {},
+        }
+
+        if (autoCreatedIdRef.current) {
+          // Update the auto-created collection
+          await updateEventCollection({
+            id: autoCreatedIdRef.current,
+            createdAt: now,
+            updatedAt: now,
+            ...eventCollectionData,
+          })
+        } else {
+          // Create new collection and track ID
+          const result = await addEventCollection(eventCollectionData)
+          // Get the newly created collection ID from the result
+          const newCollection = result.eventCollections[result.eventCollections.length - 1]
+          if (newCollection) {
+            setAutoCreatedCollectionId(newCollection.id)
+          }
+        }
+      }
+    },
+    entityType: 'world-object',
+    entityId: collection?.id || autoCreatedIdRef.current || undefined,
+  })
 
   useEffect(() => {
     if (collection) {
@@ -92,9 +173,11 @@ export default function CollectionEditor({ open, onClose, collection, collection
       setEntityCollectionType('group')
       setEventCollectionType('sequence')
     }
-  }, [collection, initialType])
+    // Reset auto-created ID when dialog opens/closes or collection changes
+    setAutoCreatedCollectionId(null)
+  }, [collection, initialType, open])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const now = new Date().toISOString()
 
     if (collectionType === 'entity') {
@@ -108,13 +191,13 @@ export default function CollectionEditor({ open, onClose, collection, collection
       }
 
       if (collection && 'entityIds' in collection) {
-        updateEntityCollection({
+        await updateEntityCollection({
           ...collection,
           ...entityCollectionData,
           updatedAt: now
         })
       } else {
-        addEntityCollection(entityCollectionData)
+        await addEntityCollection(entityCollectionData)
       }
     } else {
       const eventCollectionData: Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -127,16 +210,39 @@ export default function CollectionEditor({ open, onClose, collection, collection
       }
 
       if (collection && 'eventIds' in collection) {
-        updateEventCollection({
+        await updateEventCollection({
           ...collection,
           ...eventCollectionData,
           updatedAt: now
         })
       } else {
-        addEventCollection(eventCollectionData)
+        await addEventCollection(eventCollectionData)
       }
     }
 
+    onClose()
+  }
+
+  // Cancel handler deletes auto-created collection
+  const handleCancel = () => {
+    if (autoCreatedIdRef.current) {
+      if (collectionType === 'entity') {
+        deleteEntityCollection(autoCreatedIdRef.current)
+      } else {
+        deleteEventCollection(autoCreatedIdRef.current)
+      }
+    }
+    setAutoCreatedCollectionId(null)
+    onClose()
+  }
+
+  // Done handler keeps the collection (already saved via autosave)
+  const handleDone = async () => {
+    // Force save any pending changes before closing
+    if (!collection && autoCreatedIdRef.current) {
+      await forceSave()
+    }
+    setAutoCreatedCollectionId(null)
     onClose()
   }
 
@@ -144,7 +250,7 @@ export default function CollectionEditor({ open, onClose, collection, collection
   const selectedMemberObjects = availableMembers.filter(m => selectedMembers.includes(m.id))
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <CollectionIcon color="secondary" />
@@ -298,16 +404,40 @@ export default function CollectionEditor({ open, onClose, collection, collection
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="secondary"
-          disabled={!name || description.length === 0}
-        >
-          {collection ? 'Update' : 'Create'} Collection
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Box>
+          {!collection && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleCancel}>Cancel</Button>
+          {collection ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0}
+            >
+              Update Collection
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDone}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0 || !autoCreatedCollectionId}
+            >
+              Done
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   )

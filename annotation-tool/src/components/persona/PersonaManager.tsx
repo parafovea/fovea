@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Box,
   Paper,
@@ -37,6 +37,7 @@ import {
 import { useAnnotationUiStore } from '@store/zustand'
 import { Persona } from '@models/types'
 import ConfirmDialog from '@components/shared/ConfirmDialog'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 export default function PersonaManager() {
   // TanStack Query hooks
@@ -77,88 +78,112 @@ export default function PersonaManager() {
     deleteDialogOpen
   )
 
-  // Auto-save persona edits on changes (debounced 1 second, matching ontology auto-save)
+  // Track auto-created persona for ref access in callbacks
+  const createdPersonaIdRef = useRef<string | null>(null)
+
+  // Sync ref with state
   useEffect(() => {
-    if (!editingPersona || !editDialogOpen) return
+    createdPersonaIdRef.current = createdPersonaId
+  }, [createdPersonaId])
 
-    // Don't auto-save if form data hasn't changed from current persona
-    if (
-      formData.name === editingPersona.name &&
-      formData.role === editingPersona.role &&
-      formData.informationNeed === editingPersona.informationNeed &&
-      formData.details === editingPersona.details
-    ) {
-      return
-    }
-
-    const timeoutId = setTimeout(() => {
+  // Auto-save for edit dialog using useAutoSave hook
+  const {
+    saveStatus: editSaveStatus,
+    lastSavedAt: editLastSavedAt,
+    errorMessage: editErrorMessage,
+    retryCount: editRetryCount,
+    forceSave: editForceSave,
+  } = useAutoSave({
+    data: formData,
+    isEnabled: editDialogOpen && !!editingPersona && formData.name.trim().length > 0,
+    onSave: async (data) => {
+      if (!editingPersona) return
       const updatedPersona: Persona = {
         ...editingPersona,
-        name: formData.name,
-        role: formData.role,
-        informationNeed: formData.informationNeed,
-        details: formData.details,
+        name: data.name,
+        role: data.role,
+        informationNeed: data.informationNeed,
+        details: data.details,
         updatedAt: new Date().toISOString(),
       }
-      updatePersonaMutation(updatedPersona)
-      // Update editingPersona to reflect saved state
-      setEditingPersona(updatedPersona)
-    }, 1000)
+      await new Promise<void>((resolve, reject) => {
+        updatePersonaMutation(updatedPersona, {
+          onSuccess: () => {
+            setEditingPersona(updatedPersona)
+            resolve()
+          },
+          onError: (err) => reject(err),
+        })
+      })
+    },
+    entityType: 'persona',
+    entityId: editingPersona?.id || 'edit',
+  })
 
-    return () => clearTimeout(timeoutId)
-  }, [formData, editingPersona, editDialogOpen, updatePersonaMutation])
-
-  // Auto-save persona creation on changes (debounced 1 second)
-  useEffect(() => {
-    if (!createDialogOpen) return
-
-    // Don't auto-save if required fields are incomplete
-    if (!formData.name || !formData.role || !formData.informationNeed) return
-
-    const timeoutId = setTimeout(() => {
-      if (createdPersonaId) {
+  // Auto-save for create dialog using useAutoSave hook
+  const {
+    saveStatus: createSaveStatus,
+    lastSavedAt: createLastSavedAt,
+    errorMessage: createErrorMessage,
+    retryCount: createRetryCount,
+    forceSave: createForceSave,
+  } = useAutoSave({
+    data: formData,
+    isEnabled: createDialogOpen && formData.name.trim().length > 0,
+    onSave: async (data) => {
+      if (createdPersonaIdRef.current) {
         // Already created - update existing persona
-        const existingPersona = personas.find(p => p.id === createdPersonaId)
+        const existingPersona = personas.find(p => p.id === createdPersonaIdRef.current)
         if (existingPersona) {
           const updatedPersona: Persona = {
             ...existingPersona,
-            name: formData.name,
-            role: formData.role,
-            informationNeed: formData.informationNeed,
-            details: formData.details,
+            name: data.name,
+            role: data.role,
+            informationNeed: data.informationNeed,
+            details: data.details,
             updatedAt: new Date().toISOString(),
           }
-          updatePersonaMutation(updatedPersona)
+          await new Promise<void>((resolve, reject) => {
+            updatePersonaMutation(updatedPersona, {
+              onSuccess: () => resolve(),
+              onError: (err) => reject(err),
+            })
+          })
         }
       } else {
-        // First save - create new persona using TanStack Query mutation
-        createPersonaMutation(
-          {
-            persona: {
-              name: formData.name,
-              role: formData.role,
-              informationNeed: formData.informationNeed,
-              details: formData.details,
+        // First save - create new persona
+        await new Promise<void>((resolve, reject) => {
+          createPersonaMutation(
+            {
+              persona: {
+                name: data.name,
+                role: data.role,
+                informationNeed: data.informationNeed,
+                details: data.details,
+              },
+              ontology: {
+                entities: [],
+                roles: [],
+                events: [],
+                relationTypes: [],
+                relations: [],
+              },
             },
-            ontology: {
-              entities: [],
-              roles: [],
-              events: [],
-              relationTypes: [],
-              relations: [],
-            },
-          },
-          {
-            onSuccess: (data) => {
-              setCreatedPersonaId(data.persona.id)
-            },
-          }
-        )
+            {
+              onSuccess: (result) => {
+                setCreatedPersonaId(result.persona.id)
+                createdPersonaIdRef.current = result.persona.id
+                resolve()
+              },
+              onError: (err) => reject(err),
+            }
+          )
+        })
       }
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [formData, createDialogOpen, createdPersonaId, personas, createPersonaMutation, updatePersonaMutation])
+    },
+    entityType: 'persona',
+    entityId: createdPersonaId || 'new',
+  })
 
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget)
@@ -176,6 +201,7 @@ export default function PersonaManager() {
       details: '',
     })
     setCreatedPersonaId(null) // Reset for fresh creation
+    createdPersonaIdRef.current = null
     setCreateDialogOpen(true)
     handleMenuClose()
   }
@@ -186,12 +212,14 @@ export default function PersonaManager() {
       deletePersonaMutation.mutate(createdPersonaId)
     }
     setCreatedPersonaId(null)
+    createdPersonaIdRef.current = null
     setCreateDialogOpen(false)
   }
 
   const handleCloseCreate = () => {
     // When closing via Done button, just close (persona already saved)
     setCreatedPersonaId(null)
+    createdPersonaIdRef.current = null
     setCreateDialogOpen(false)
   }
 
@@ -240,22 +268,6 @@ export default function PersonaManager() {
     })
 
     setCreateDialogOpen(false)
-  }
-
-  const handleSaveEdit = () => {
-    if (editingPersona) {
-      const updatedPersona: Persona = {
-        ...editingPersona,
-        name: formData.name,
-        role: formData.role,
-        informationNeed: formData.informationNeed,
-        details: formData.details,
-        updatedAt: new Date().toISOString(),
-      }
-      updatePersonaMutation(updatedPersona)
-      setEditDialogOpen(false)
-      setEditingPersona(null)
-    }
   }
 
   const handleDeleteClick = useCallback((persona: Persona) => {
@@ -443,7 +455,6 @@ export default function PersonaManager() {
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               fullWidth
-              required
               helperText="e.g., 'Tactically-Oriented Analyst', 'Strategic Planner', 'Field Operator'"
             />
             <TextField
@@ -453,7 +464,6 @@ export default function PersonaManager() {
               fullWidth
               multiline
               rows={3}
-              required
               helperText="What specific information does this persona need to extract?"
             />
             <TextField
@@ -468,11 +478,20 @@ export default function PersonaManager() {
           </Box>
         </DialogContent>
         <DialogActions>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', ml: 1 }}>
+            <SaveStatusIndicator
+              status={createSaveStatus}
+              lastSavedAt={createLastSavedAt}
+              errorMessage={createErrorMessage}
+              retryCount={createRetryCount}
+              onRetry={createForceSave}
+            />
+          </Box>
           <Button onClick={handleCancelCreate}>Cancel</Button>
           <Button
             onClick={createdPersonaId ? handleCloseCreate : handleSaveNew}
             variant="contained"
-            disabled={!formData.name || !formData.role || !formData.informationNeed}
+            disabled={!formData.name}
           >
             {createdPersonaId ? 'Done' : 'Create Persona'}
           </Button>
@@ -495,7 +514,6 @@ export default function PersonaManager() {
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               fullWidth
-              required
             />
             <TextField
               label="Information Need"
@@ -504,7 +522,6 @@ export default function PersonaManager() {
               fullWidth
               multiline
               rows={3}
-              required
             />
             <TextField
               label="Additional Details"
@@ -517,14 +534,16 @@ export default function PersonaManager() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleSaveEdit}
-            variant="contained"
-            disabled={!formData.name || !formData.role || !formData.informationNeed}
-          >
-            Save Changes
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', ml: 1 }}>
+            <SaveStatusIndicator
+              status={editSaveStatus}
+              lastSavedAt={editLastSavedAt}
+              errorMessage={editErrorMessage}
+              retryCount={editRetryCount}
+              onRetry={editForceSave}
+            />
+          </Box>
+          <Button onClick={() => setEditDialogOpen(false)}>Done</Button>
         </DialogActions>
       </Dialog>
 

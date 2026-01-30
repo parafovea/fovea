@@ -76,6 +76,7 @@ import { useDetectObjects } from '@store/queries/useDetection'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { TimelineComponent } from './TimelineComponent'
 import { useCommands, useCommandContext } from '@hooks/commands'
+import { useAutoSave, SaveStatusIndicator } from '@hooks/data'
 
 const DRAWER_WIDTH = 300
 
@@ -194,16 +195,16 @@ export default function AnnotationWorkspace() {
     },
   })
 
-  // Auto-save annotations to database (debounced 1 second, matching ontology/world auto-save)
-  useEffect(() => {
-    if (!videoId || !videoAnnotations || videoAnnotations.length === 0) return
-
-    const timeoutId = setTimeout(() => {
-      saveAnnotationsMutation({ videoId, annotations: videoAnnotations })
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [videoId, videoAnnotations, saveAnnotationsMutation])
+  // Auto-save annotations to database using useAutoSave hook
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: videoAnnotations,
+    isEnabled: !!videoId && videoAnnotations.length > 0,
+    onSave: async (annotations) => {
+      saveAnnotationsMutation({ videoId: videoId!, annotations })
+    },
+    entityType: 'annotation',
+    entityId: videoId,
+  })
 
   // Helper function to get type name from typeId (for displaying human-readable names)
   const getTypeName = useCallback((annotation: TypeAnnotation): string => {
@@ -250,7 +251,7 @@ export default function AnnotationWorkspace() {
   }, [])
 
   // Keyframe control callbacks
-  const handleAddKeyframe = useCallback(() => {
+  const handleAddKeyframe = useCallback(async () => {
     if (!selectedAnnotation) return
 
     // Get current box from annotation sequence (interpolated or existing)
@@ -295,9 +296,11 @@ export default function AnnotationWorkspace() {
       box: currentBox,
       fps: currentVideo?.fps || 30,
     })
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, forceSave])
 
-  const handleDeleteKeyframe = useCallback(() => {
+  const handleDeleteKeyframe = useCallback(async () => {
     if (!selectedAnnotation) return
 
     removeKeyframe({
@@ -306,9 +309,11 @@ export default function AnnotationWorkspace() {
       frameNumber: currentFrame,
       fps: currentVideo?.fps || 30,
     })
-  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe, forceSave])
 
-  const handleCopyPreviousFrame = useCallback(() => {
+  const handleCopyPreviousFrame = useCallback(async () => {
     if (!selectedAnnotation) return
 
     const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
@@ -340,10 +345,12 @@ export default function AnnotationWorkspace() {
         fps: currentVideo?.fps || 30,
       })
     }
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe])
+    // Save immediately after keyframe operation
+    await forceSave()
+  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe, forceSave])
 
   const handleUpdateInterpolationSegment = useCallback(
-    (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
+    async (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
       updateInterpolationSegmentHook({
@@ -353,8 +360,10 @@ export default function AnnotationWorkspace() {
         interpolationType: type,
         controlPoints,
       })
+      // Save immediately after interpolation change
+      await forceSave()
     },
-    [selectedAnnotation, updateInterpolationSegmentHook]
+    [selectedAnnotation, updateInterpolationSegmentHook, forceSave]
   )
 
   // Track this as the last annotation when we load the component
@@ -631,6 +640,18 @@ export default function AnnotationWorkspace() {
                   </Tooltip>
                 )
               )}
+
+              {/* Auto-save status indicator */}
+              <Box sx={{ ml: 'auto' }}>
+                <SaveStatusIndicator
+                  status={saveStatus}
+                  lastSavedAt={lastSavedAt}
+                  errorMessage={errorMessage}
+                  retryCount={retryCount}
+                  onRetry={forceSave}
+                  compact
+                />
+              </Box>
             </Stack>
           </Stack>
         </Paper>
@@ -651,6 +672,7 @@ export default function AnnotationWorkspace() {
               videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
               videoFps={currentVideo.fps || 30}
               detectionResults={detectionResults}
+              onAnnotationEditComplete={forceSave}
             />
           )}
         </VideoPlayer>

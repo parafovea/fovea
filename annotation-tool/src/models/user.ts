@@ -39,6 +39,10 @@ export interface Persona {
   details: string
   /** ID of the user who owns this persona (optional) */
   userId?: string
+  /** Whether this persona was system-generated (e.g., Automated persona) */
+  isSystemGenerated?: boolean
+  /** Whether this persona should be hidden from the UI */
+  hidden?: boolean
   /** ISO 8601 timestamp of when the persona was created */
   createdAt: string
   /** ISO 8601 timestamp of the last update */

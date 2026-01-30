@@ -15,7 +15,7 @@ import * as path from 'path'
 
 test.describe('Export/Import Flow', () => {
   test.describe('Export Functionality', () => {
-    test('exports data when clicking Export button', async ({ page, testPersona, testVideo, db }) => {
+    test('exports data when clicking Export button', async ({ page, testPersona, testVideo, testUser, db }) => {
       // Create some data to export
       await db.createEntityType(testPersona.id, {
         name: 'Export Test Entity',
@@ -74,7 +74,7 @@ test.describe('Export/Import Flow', () => {
       }
     })
 
-    test('export stats show before download', async ({ page, testPersona, db }) => {
+    test('export stats show before download', async ({ page, testPersona, testUser, db }) => {
       // Create data
       await db.createEntityType(testPersona.id, {
         name: 'Stats Test Entity',
@@ -108,7 +108,7 @@ test.describe('Export/Import Flow', () => {
       }
     })
 
-    test('exports work without bounding box annotations', async ({ page, testPersona, db }) => {
+    test('exports work without bounding box annotations', async ({ page, testPersona, testUser, db }) => {
       // Create only ontology/world objects, no annotations
       await db.createEntityType(testPersona.id, {
         name: 'No Annotation Entity',
@@ -262,15 +262,19 @@ test.describe('Export/Import Flow', () => {
   })
 
   test.describe('Round-trip: Export -> Import', () => {
-    test('exported data can be re-imported', async ({ page, testPersona, db }) => {
+    test('exported data can be re-imported', async ({ page, testPersona, testUser, db }) => {
       // Create data to export
       await db.createEntityType(testPersona.id, {
         name: 'Round Trip Entity',
         definition: 'Entity for round-trip testing'
       })
 
-      // Export data via API (to avoid UI complexity)
-      const exportResponse = await page.request.get('http://localhost:3001/api/export')
+      // Navigate to app first to ensure browser context is initialized with cookies
+      await page.goto('/')
+
+      // Use page.request which inherits cookies from browser context
+      // This properly sends session_token cookie for authentication
+      const exportResponse = await page.request.get('/api/export')
       expect(exportResponse.ok()).toBeTruthy()
 
       const exportedContent = await exportResponse.text()
