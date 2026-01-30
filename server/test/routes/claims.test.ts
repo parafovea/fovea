@@ -25,7 +25,7 @@ describe('Claims API', () => {
 
   afterAll(async () => {
     await app.close()
-  })
+  }, 30000)
 
   beforeEach(async () => {
     // Clean database in dependency order
