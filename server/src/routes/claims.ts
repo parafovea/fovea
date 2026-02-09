@@ -7,7 +7,7 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import {
   claimExtractionQueue,
   ClaimExtractionJobData,
@@ -44,8 +44,21 @@ const ClaimTextSpanSchema = Type.Object({
 })
 
 /**
+ * Nullable type helpers for fast-json-stringify compatibility.
+ *
+ * TypeBox's Type.Union([Type.String(), Type.Null()]) generates anyOf in JSON Schema,
+ * but fast-json-stringify requires type: ['string', 'null'] format to properly
+ * serialize null values (otherwise null is coerced to empty string).
+ *
+ * See: https://github.com/fastify/fast-json-stringify/issues/152
+ */
+const NullableString = Type.Unsafe<string | null>({ type: ['string', 'null'] })
+const NullableNumber = Type.Unsafe<number | null>({ type: ['number', 'null'] })
+
+/**
  * Claim schema (recursive for subclaims)
  */
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TypeBox recursive types require any
 const ClaimSchema: any = Type.Recursive(This => Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -53,18 +66,31 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
   summaryType: Type.String(),
   text: Type.String(),
   gloss: Type.Array(GlossItemSchema),
-  parentClaimId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  parentClaimId: Type.Optional(NullableString),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
-  claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
-  claimEventId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  claimTimeId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  claimLocationId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  confidence: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-  modelUsed: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  extractionStrategy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  createdBy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimEventId: Type.Optional(NullableString),
+  claimTimeId: Type.Optional(NullableString),
+  claimLocationId: Type.Optional(NullableString),
+  confidence: Type.Optional(NullableNumber),
+  modelUsed: Type.Optional(NullableString),
+  extractionStrategy: Type.Optional(NullableString),
+  audio: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('speech'), Type.Literal('non-speech')])),
+    Type.Null()
+  ])),
+  video: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  metadata: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  comment: Type.Optional(NullableString),
+  createdBy: Type.Optional(NullableString),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
   subclaims: Type.Optional(Type.Array(This))
@@ -79,13 +105,26 @@ const CreateClaimSchema = Type.Object({
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
   parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
-  claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
   claimEventId: Type.Optional(Type.String({ format: 'uuid' })),
   claimTimeId: Type.Optional(Type.String({ format: 'uuid' })),
   claimLocationId: Type.Optional(Type.String({ format: 'uuid' })),
-  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 }))
+  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+  audio: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('speech'), Type.Literal('non-speech')])),
+    Type.Null()
+  ])),
+  video: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  metadata: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  comment: Type.Optional(NullableString)
 })
 
 /**
@@ -101,7 +140,20 @@ const UpdateClaimSchema = Type.Object({
   claimEventId: Type.Optional(Type.String({ format: 'uuid' })),
   claimTimeId: Type.Optional(Type.String({ format: 'uuid' })),
   claimLocationId: Type.Optional(Type.String({ format: 'uuid' })),
-  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 }))
+  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+  audio: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('speech'), Type.Literal('non-speech')])),
+    Type.Null()
+  ])),
+  video: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  metadata: Type.Optional(Type.Union([
+    Type.Array(Type.Union([Type.Literal('text'), Type.Literal('non-text')])),
+    Type.Null()
+  ])),
+  comment: Type.Optional(NullableString)
 })
 
 /**
@@ -392,7 +444,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId } = request.params
-      const { text, gloss, parentClaimId, summaryType, ...rest } = request.body
+      const { text, gloss, parentClaimId, summaryType, audio, video, metadata, comment, ...rest } = request.body
 
       // Verify summary exists
       const summary = summaryType === 'video'
@@ -414,17 +466,24 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Convert null JSON fields to Prisma.JsonNull
+      const claimData: Prisma.ClaimUncheckedCreateInput = {
+        summaryId,
+        summaryType,
+        text,
+        gloss: gloss || [],
+        parentClaimId: parentClaimId || undefined,
+        extractionStrategy: 'manual',
+        audio: audio === null ? Prisma.JsonNull : (audio ?? Prisma.JsonNull),
+        video: video === null ? Prisma.JsonNull : (video ?? Prisma.JsonNull),
+        metadata: metadata === null ? Prisma.JsonNull : (metadata ?? Prisma.JsonNull),
+        comment: comment || undefined,
+        ...rest
+      }
+
       // Create claim
       await fastify.prisma.claim.create({
-        data: {
-          summaryId,
-          summaryType,
-          text,
-          gloss: gloss || [],
-          parentClaimId,
-          extractionStrategy: 'manual',
-          ...rest
-        }
+        data: claimData
       })
 
       // Update denormalized claimsJson
@@ -489,7 +548,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      const updateData = request.body
+      const { audio, video, metadata, comment, ...rest } = request.body
 
       // Verify claim exists and belongs to summary
       const existingClaim = await fastify.prisma.claim.findUnique({
@@ -498,6 +557,15 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!existingClaim || existingClaim.summaryId !== summaryId) {
         throw new NotFoundError('Claim', claimId)
+      }
+
+      // Convert null JSON fields to Prisma.JsonNull
+      const updateData: Prisma.ClaimUpdateInput = {
+        ...rest,
+        ...(audio !== undefined && { audio: audio === null ? Prisma.JsonNull : audio }),
+        ...(video !== undefined && { video: video === null ? Prisma.JsonNull : video }),
+        ...(metadata !== undefined && { metadata: metadata === null ? Prisma.JsonNull : metadata }),
+        ...(comment !== undefined && { comment })
       }
 
       // Update claim
@@ -1202,7 +1270,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { videoId, personaId } = request.params
-      const { text, gloss, parentClaimId, ...rest } = request.body
+      const { text, gloss, parentClaimId, audio, video: videoModality, metadata, comment, ...rest } = request.body
 
       // Verify video exists
       const video = await fastify.prisma.video.findUnique({
@@ -1247,17 +1315,24 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Convert null JSON fields to Prisma.JsonNull
+      const claimData: Prisma.ClaimUncheckedCreateInput = {
+        summaryId: summary.id,
+        summaryType: 'video',
+        text,
+        gloss: gloss || [],
+        parentClaimId: parentClaimId || undefined,
+        extractionStrategy: 'manual',
+        audio: audio === null ? Prisma.JsonNull : (audio ?? Prisma.JsonNull),
+        video: videoModality === null ? Prisma.JsonNull : (videoModality ?? Prisma.JsonNull),
+        metadata: metadata === null ? Prisma.JsonNull : (metadata ?? Prisma.JsonNull),
+        comment: comment || undefined,
+        ...rest
+      }
+
       // Create claim
       const claim = await fastify.prisma.claim.create({
-        data: {
-          summaryId: summary.id,
-          summaryType: 'video',
-          text,
-          gloss: gloss || [],
-          parentClaimId,
-          extractionStrategy: 'manual',
-          ...rest
-        }
+        data: claimData
       })
 
       return reply.status(201).send({

@@ -89,10 +89,18 @@ export default function AnnotationOverlay({
   const { data: allAnnotations = [] } = useAnnotations(videoId)
 
   // Filter annotations by selected persona if one is selected and in type mode
+  // Note: Both type and object annotations should always be visible regardless of toggle state
+  // The toggle only affects which type of annotation can be created, not which are displayed
   const annotations = useMemo(() => {
     if (selectedPersonaId && annotationMode === 'type') {
-      return allAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
+      // When in type mode with persona selected, filter type annotations by persona
+      // but always include all object annotations
+      return allAnnotations.filter(a => 
+        (a.annotationType === 'type' && a.personaId === selectedPersonaId) || 
+        a.annotationType === 'object'
+      )
     }
+    // In object mode or no persona selected, show all annotations
     return allAnnotations
   }, [allAnnotations, selectedPersonaId, annotationMode])
 
