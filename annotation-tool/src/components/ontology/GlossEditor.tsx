@@ -386,7 +386,7 @@ export default function GlossEditor({
   // Initialize input value from gloss
   useEffect(() => {
     setInputValue(glossToString(gloss))
-  }, [gloss, glossToString]) // Re-run when gloss or glossToString changes
+  }, [gloss, glossToString])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value

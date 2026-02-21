@@ -18,12 +18,18 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
+    // Create save promise BEFORE drawing to capture the save response
+    const savePromise = annotationWorkspace.createAnnotationSavePromise()
+
     // Draw a simple bounding box annotation
     await annotationWorkspace.drawSimpleBoundingBox()
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Wait for auto-save to complete (500ms debounce + network time)
-    await page.waitForTimeout(2000)
+    // Wait for the save to complete by awaiting the promise
+    await savePromise
+
+    // Additional buffer to ensure database write is committed
+    await page.waitForTimeout(500)
 
     // Reload page to clear Redux state
     await page.reload()
@@ -55,8 +61,13 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Navigate and create initial annotation
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
+
+    // Create save promise BEFORE drawing
+    const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
     await annotationWorkspace.drawSimpleBoundingBox()
-    await page.waitForTimeout(2000)
+
+    // Wait for initial save to complete
+    await initialSavePromise
 
     // Show timeline and add a keyframe at a different time
     await annotationWorkspace.timeline.show()
@@ -66,11 +77,17 @@ test.describe('Annotation Auto-Save Persistence', () => {
       await annotationWorkspace.video.seekForwardOneFrame()
     }
 
+    // Create save promise BEFORE adding keyframe
+    const keyframeSavePromise = annotationWorkspace.createAnnotationSavePromise()
+
     // Add keyframe
     await annotationWorkspace.timeline.addKeyframe()
 
-    // Wait for auto-save
-    await page.waitForTimeout(2000)
+    // Wait for keyframe save to complete
+    await keyframeSavePromise
+
+    // Additional buffer to ensure database write is committed
+    await page.waitForTimeout(500)
 
     // Reload and verify both keyframes persist
     await page.reload()
@@ -99,8 +116,14 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Navigate and create initial annotation
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
+
+    // Create save promise BEFORE drawing
+    const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
     await annotationWorkspace.drawSimpleBoundingBox()
-    await page.waitForTimeout(2000)
+
+    // Wait for initial save to complete
+    await initialSavePromise
+    await page.waitForTimeout(500)
 
     // Reload page
     await page.reload()
@@ -127,11 +150,15 @@ test.describe('Annotation Auto-Save Persistence', () => {
       await annotationWorkspace.video.seekForwardOneFrame()
     }
 
+    // Create save promise BEFORE adding keyframe
+    const editSavePromise = annotationWorkspace.createAnnotationSavePromise()
+
     // Add a new keyframe (editing the annotation)
     await annotationWorkspace.timeline.addKeyframe()
 
-    // Wait for auto-save of the edit
-    await page.waitForTimeout(2000)
+    // Wait for edit save to complete
+    await editSavePromise
+    await page.waitForTimeout(500)
 
     // Reload again to verify the edit persisted
     await page.reload()
@@ -181,6 +208,13 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await typeSelect.press('Enter')
     await page.waitForTimeout(500)
 
+    // Create save promises BEFORE drawing to capture all save responses
+    // Each annotation will trigger its own save, so we listen for 3
+    const savePromises: Promise<import('@playwright/test').Response>[] = []
+    for (let i = 0; i < 3; i++) {
+      savePromises.push(annotationWorkspace.createAnnotationSavePromise())
+    }
+
     // Create 3 annotations rapidly
     for (let i = 0; i < 3; i++) {
       await annotationWorkspace.drawBoundingBox({
@@ -192,8 +226,11 @@ test.describe('Annotation Auto-Save Persistence', () => {
       await page.waitForTimeout(200)
     }
 
-    // Wait for all auto-saves to complete
-    await page.waitForTimeout(3000)
+    // Wait for all saves to complete
+    await Promise.all(savePromises)
+
+    // Additional buffer to ensure database writes are committed
+    await page.waitForTimeout(500)
 
     // Reload and verify all annotations persist
     await page.reload()

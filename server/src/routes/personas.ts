@@ -103,17 +103,17 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const mode = process.env.FOVEA_MODE || 'multi-user'
 
-    let where: { userId?: string; isSystemGenerated?: boolean } = {}
+    let where: { userId?: string; isSystemGenerated?: boolean; hidden?: boolean } = {}
 
     if (mode === 'single-user') {
-      // Single-user mode: return all personas
-      where = {}
+      // Single-user mode: return all non-hidden personas
+      where = { hidden: false }
     } else if (request.user) {
-      // Multi-user mode with auth: return user's personas
-      where = { userId: request.user.id }
+      // Multi-user mode with auth: return user's non-hidden personas
+      where = { userId: request.user.id, hidden: false }
     } else {
-      // Multi-user mode without auth: return only system personas
-      where = { isSystemGenerated: true }
+      // Multi-user mode without auth: return only non-hidden system personas
+      where = { isSystemGenerated: true, hidden: false }
     }
 
     const personas = await fastify.prisma.persona.findMany({

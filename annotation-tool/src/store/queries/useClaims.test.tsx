@@ -2,7 +2,7 @@
  * Tests for claim hooks.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
@@ -16,6 +16,12 @@ import {
 } from './useClaims'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
+
+// Mock error logging to prevent interference with tests
+vi.mock('@services/errorLogging', () => ({
+  logError: vi.fn(),
+  logWarning: vi.fn(),
+}))
 
 /**
  * Create a wrapper component with QueryClient for testing hooks.
@@ -90,8 +96,16 @@ describe('useClaims hooks', () => {
         wrapper: createWrapper(),
       })
 
-      await waitFor(() => expect(result.current.isError).toBe(true))
+      // Wait for the query to fail
+      await waitFor(
+        () => {
+          expect(result.current.isError).toBe(true)
+        },
+        { timeout: 5000 }
+      )
+      
       expect(result.current.error).toBeTruthy()
+      expect(result.current.error).toBeInstanceOf(Error)
     })
   })
 

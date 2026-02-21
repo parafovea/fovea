@@ -127,3 +127,4 @@ docs/planning/
 # Local working directories
 notes/
 tutorial/
+.claude/

@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { AnnotationExporter } from '../services/export-handler.js'
+import { requireAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schema for validation errors.
@@ -34,6 +35,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with all user data
    */
   fastify.get('/api/export', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export all user data',
       tags: ['export'],
@@ -224,6 +226,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Export statistics for all data types
    */
   fastify.get('/api/export/stats', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Get export statistics for all data types',
       tags: ['export'],
@@ -428,6 +431,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with personas and ontologies
    */
   fastify.get('/api/export/personas', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export personas with their ontologies',
       tags: ['export'],
@@ -479,6 +483,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with world state objects
    */
   fastify.get('/api/export/world', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export world state objects',
       tags: ['export'],
@@ -537,6 +542,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with summaries, claims, and claim relations
    */
   fastify.get('/api/export/summaries', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export video summaries with claims',
       tags: ['export'],

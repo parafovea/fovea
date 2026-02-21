@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -13,7 +13,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Close as CloseIcon } from '@mui/icons-material'
-import VideoSummaryEditor from './VideoSummaryEditor'
+import VideoSummaryEditor, { VideoSummaryEditorRef } from './VideoSummaryEditor'
 import { usePersonas } from '@store/queries'
 
 interface VideoSummaryDialogProps {
@@ -31,6 +31,15 @@ export default function VideoSummaryDialog({
 }: VideoSummaryDialogProps) {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(initialPersonaId)
   const { data: personas = [] } = usePersonas()
+  const editorRef = useRef<VideoSummaryEditorRef>(null)
+
+  // Force save before closing to ensure no data is lost
+  const handleDone = async () => {
+    if (editorRef.current) {
+      await editorRef.current.forceSave()
+    }
+    onClose()
+  }
 
   // Update selected persona when initial persona changes (e.g., when dialog opens)
   useEffect(() => {
@@ -95,6 +104,7 @@ export default function VideoSummaryDialog({
 
         {selectedPersonaId && videoId && (
           <VideoSummaryEditor
+            ref={editorRef}
             videoId={videoId}
             personaId={selectedPersonaId}
             disabled={!selectedPersonaId}
@@ -118,7 +128,7 @@ export default function VideoSummaryDialog({
       </DialogContent>
       
       <DialogActions>
-        <Button onClick={onClose}>
+        <Button onClick={handleDone}>
           Done
         </Button>
       </DialogActions>

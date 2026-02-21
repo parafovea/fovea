@@ -50,12 +50,25 @@ model Session {
   expiresAt DateTime
   ipAddress String?
   userAgent String?
+  lastActivityAt DateTime @default(now())
 
   createdAt DateTime @default(now())
 
   @@index([token])
   @@index([userId, expiresAt])
   @@map("sessions")
+}
+
+/// LoginAttempt tracks failed login attempts for lockout mechanism
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  username  String
+  ipAddress String?
+  success   Boolean
+  failedAt  DateTime @default(now())
+
+  @@index([username, failedAt])
+  @@map("login_attempts")
 }
 
 /// ApiKey stores encrypted API keys for external services (user-level or admin-level)
@@ -243,6 +256,9 @@ model VideoSummary {
   /// Timestamp when claims were last extracted
   claimsExtractedAt DateTime?
 
+  /// Comment/notes field for annotator notes at video level
+  comment         String?  @db.Text
+
   /// Relation to Claim model
   claims          Claim[]
 
@@ -353,6 +369,17 @@ model Claim {
   confidence      Float?   // Model confidence in claim extraction (0.0-1.0)
   modelUsed       String?  // Model that generated this claim (e.g., "llama-4-scout")
   extractionStrategy String? // "sentence-based", "semantic-units", "hierarchical", "manual"
+
+  // Modality metadata - indicates what sources support the claim
+  /// JSON structure: Array of "speech" and/or "non-speech" - claim is based at least in part on audio
+  audio           Json?    // null or ["speech"], ["non-speech"], or ["speech", "non-speech"]
+  /// JSON structure: Array of "text" and/or "non-text" - claim is based at least in part on non-audio video information
+  video           Json?    // null or ["text"], ["non-text"], or ["text", "non-text"]
+  /// JSON structure: Array of "text" and/or "non-text" - claim is based on metadata (text = caption metadata, non-text = other metadata like location from .info.json)
+  metadata        Json?    // null or ["text"], ["non-text"], or ["text", "non-text"]
+
+  // Comment/notes field for annotator notes
+  comment         String?  @db.Text
 
   // Audit fields
   createdBy       String?  // User ID who created/approved this claim
