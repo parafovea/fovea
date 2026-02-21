@@ -136,4 +136,6 @@ export interface VideoSummary {
   updatedAt: string
   /** ID of the user who created this summary */
   createdBy?: string
+  /** Optional comment about this summary */
+  comment?: string | null
 }

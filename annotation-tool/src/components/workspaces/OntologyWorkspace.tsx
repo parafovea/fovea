@@ -244,10 +244,10 @@ export default function OntologyWorkspace() {
     return false
   }
 
-  const filteredEntities = selectedOntology?.entities.filter(filterBySearchTerm) || []
-  const filteredRoles = selectedOntology?.roles.filter(filterBySearchTerm) || []
-  const filteredEvents = selectedOntology?.events.filter(filterBySearchTerm) || []
-  const filteredRelations = selectedOntology?.relationTypes.filter(filterBySearchTerm) || []
+  const filteredEntities = (selectedOntology?.entities ?? []).filter(filterBySearchTerm)
+  const filteredRoles = (selectedOntology?.roles ?? []).filter(filterBySearchTerm)
+  const filteredEvents = (selectedOntology?.events ?? []).filter(filterBySearchTerm)
+  const filteredRelations = (selectedOntology?.relationTypes ?? []).filter(filterBySearchTerm)
 
   const handleSelectPersona = (personaId: string) => {
     setSelectedPersonaId(personaId)

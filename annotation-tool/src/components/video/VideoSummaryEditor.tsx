@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react'
 import {
   Box,
   Paper,
-  Typography,
   CircularProgress,
   Alert,
   Tabs,
@@ -10,12 +9,16 @@ import {
   Button,
   Badge,
   Stack,
+  TextField,
+  Typography,
+  Tooltip,
 } from '@mui/material'
-import { Save as SaveIcon, Add as AddIcon } from '@mui/icons-material'
+import { Add as AddIcon } from '@mui/icons-material'
 import {
   usePersonaOntology,
   useVideoSummary,
   useSaveSummary,
+  useModelConfig,
 } from '@store/queries'
 import {
   useClaims,
@@ -33,8 +36,10 @@ import ClaimsViewer from '@components/claims/ClaimsViewer'
 import ClaimEditor from '@components/claims/ClaimEditor'
 import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from '@components/claims/ClaimSpanHighlighter'
-import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan } from '@models/types'
-import { debounce } from 'lodash'
+import { SaveStatusIndicator } from '@components/shared/SaveStatusIndicator'
+import { useAutoSave } from '@hooks/data/useAutoSave'
+import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan, UpdateClaimRequest } from '@models/types'
+import { logError, logWarning } from '@services/errorLogging'
 
 interface VideoSummaryEditorProps {
   videoId: string
@@ -42,11 +47,15 @@ interface VideoSummaryEditorProps {
   disabled?: boolean
 }
 
-export default function VideoSummaryEditor({
+export interface VideoSummaryEditorRef {
+  forceSave: () => Promise<void>
+}
+
+const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorProps>(function VideoSummaryEditor({
   videoId,
   personaId,
   disabled = false,
-}: VideoSummaryEditorProps) {
+}, ref) {
   const queryClient = useQueryClient()
 
   // TanStack Query for video summary
@@ -56,8 +65,11 @@ export default function VideoSummaryEditor({
     error: queryError,
   } = useVideoSummary(videoId, personaId)
   const saveSummaryMutation = useSaveSummary()
-  const saving = saveSummaryMutation.isPending
   const error = queryError?.message || saveSummaryMutation.error?.message || null
+
+  // Check for CPU-only mode
+  const { data: modelConfig } = useModelConfig()
+  const isCpuOnly = !modelConfig?.cudaAvailable
 
   // Claims UI state from Zustand
   const selectedClaimId = useClaimsUiStore((state) => state.selectedClaimId)
@@ -71,8 +83,8 @@ export default function VideoSummaryEditor({
   const clearExtractionState = useClaimsUiStore((state) => state.clearExtractionState)
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
-  const [hasChanges, setHasChanges] = useState(false)
-  const [activeTab, setActiveTab] = useState(0) // 0 = Summary, 1 = Claims
+  const [localComment, setLocalComment] = useState<string>('')
+  const [activeTab, setActiveTab] = useState(1) // 0 = Summary, 1 = Claims (default to Claims)
   const [extractDialogOpen, setExtractDialogOpen] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
   const [editingClaim, setEditingClaim] = useState<Claim | undefined>(undefined)
@@ -80,12 +92,19 @@ export default function VideoSummaryEditor({
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
 
+  // Track which video/persona combo we've initialized local state for
+  // This prevents re-syncing localSummary when currentSummary updates after autosave
+  const initializedForRef = useRef<string | null>(null)
+
   // TanStack Query hooks for claims
   const summaryId = currentSummary?.id
-  const { data: claims = [], isLoading: claimsLoading } = useClaims(
-    activeTab === 1 ? summaryId : undefined, // Only fetch when on Claims tab
+  const claimsQueryResult = useClaims(
+    summaryId, // Always fetch when summaryId exists
     'video'
   )
+  const claims: Claim[] = (claimsQueryResult.data as Claim[]) || []
+  const claimsLoading = claimsQueryResult.isLoading
+  const claimsError = claimsQueryResult.error
   const createClaimMutation = useCreateClaim()
   const updateClaimMutation = useUpdateClaim()
   const deleteClaimMutation = useDeleteClaim()
@@ -97,29 +116,152 @@ export default function VideoSummaryEditor({
   // Fetch persona ontology via TanStack Query (auto-fetches when personaId changes)
   usePersonaOntology(personaId)
 
-  // Load summary when component mounts or when video/persona changes
+  // Autosave callback - memoized to prevent useAutoSave from re-triggering
+  const handleAutoSave = useCallback(async (summary: GlossItem[]) => {
+    if (!currentSummary) {
+      // Create new summary - only required fields
+      await saveSummaryMutation.mutateAsync({ videoId, personaId, summary, comment: localComment.trim() || null })
+    } else {
+      // Update existing summary - spread only defined optional fields
+      await saveSummaryMutation.mutateAsync({
+        videoId: currentSummary.videoId,
+        personaId: currentSummary.personaId,
+        summary,
+        comment: localComment.trim() || null,
+        ...(currentSummary.visualAnalysis && { visualAnalysis: currentSummary.visualAnalysis }),
+        ...(currentSummary.audioTranscript && { audioTranscript: currentSummary.audioTranscript }),
+        ...(currentSummary.keyFrames && { keyFrames: currentSummary.keyFrames }),
+        ...(currentSummary.confidence != null && { confidence: currentSummary.confidence }),
+      })
+    }
+  }, [videoId, personaId, currentSummary, saveSummaryMutation, localComment])
+
+  // Use autosave hook for summary persistence
+  // Note: isEnabled doesn't need the ref check - the ref is only for preventing
+  // re-syncing localSummary from server data, not for controlling autosave
+  const {
+    saveStatus,
+    lastSavedAt,
+    errorMessage: saveErrorMessage,
+    retryCount,
+    forceSave,
+  } = useAutoSave({
+    data: localSummary,
+    isEnabled: !!videoId && !!personaId && !!summaryId,
+    onSave: handleAutoSave,
+    entityType: 'summary',
+    entityId: `${videoId}-${personaId}`,
+  })
+
+  // Expose forceSave to parent components via ref
+  useImperativeHandle(ref, () => ({
+    forceSave,
+  }), [forceSave])
+
+  // Track if we've already tried to create an empty summary for this video/persona
+  const creatingEmptySummaryRef = useRef<string | null>(null)
+
+  // Ensure Claims tab is selected when summary loads (but not on initial mount if no summary)
+  // Only switch to Claims tab if we have a valid summaryId
   useEffect(() => {
-    if (currentSummary) {
+    if (summaryId && summaryId.trim() !== '' && currentSummary) {
+      setActiveTab(1)
+    }
+  }, [summaryId, currentSummary]) // Only run when summaryId changes and summary exists
+
+  // Log claims loading errors
+  useEffect(() => {
+    if (claimsError) {
+      logError(
+        claimsError instanceof Error ? claimsError : new Error(String(claimsError)),
+        undefined,
+        {
+          component: 'VideoSummaryEditor',
+          action: 'fetchClaims',
+          summaryId,
+          videoId,
+          personaId,
+        }
+      )
+    }
+  }, [claimsError, summaryId, videoId, personaId])
+
+  // Track CPU-only mode detection (only log once per session)
+  const cpuOnlyLoggedRef = useRef(false)
+  useEffect(() => {
+    if (isCpuOnly && modelConfig && !cpuOnlyLoggedRef.current) {
+      logWarning('CPU-only mode detected - Extract Claims disabled', {
+        component: 'VideoSummaryEditor',
+        videoId,
+        personaId,
+        cudaAvailable: modelConfig.cudaAvailable ?? false,
+      })
+      cpuOnlyLoggedRef.current = true
+    }
+    // Reset if GPU becomes available
+    if (!isCpuOnly) {
+      cpuOnlyLoggedRef.current = false
+    }
+  }, [isCpuOnly, videoId, personaId, modelConfig])
+
+  // Load summary when video/persona changes - only sync on actual changes, not after autosave
+  // IMPORTANT: This effect should NOT have saveSummaryMutation in deps to avoid re-running
+  // when mutation state changes (isPending, etc.)
+  useEffect(() => {
+    const key = `${videoId}-${personaId}`
+
+    // Only sync localSummary when video/persona actually changes
+    if (initializedForRef.current !== key && currentSummary) {
       // Parse summary if it's a string (from API), or use directly if already array
       const summaryData = typeof currentSummary.summary === 'string'
         ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
         : (currentSummary.summary || [])
       setLocalSummary(summaryData)
-    } else if (!loading && videoId && personaId) {
-      // No existing summary - create empty one immediately so claims can be added
-      // Only include required fields - optional fields should be omitted, not null
+      setLocalComment(currentSummary.comment || '')
+      initializedForRef.current = key
+    }
+  }, [videoId, personaId, currentSummary])
+
+  // Separate effect for creating empty summary when none exists
+  // This is separate to avoid the mutation object in deps causing re-runs
+  useEffect(() => {
+    const key = `${videoId}-${personaId}`
+
+    // Only create empty summary if:
+    // 1. Not loading
+    // 2. No query error (don't create if we just couldn't fetch existing one)
+    // 3. No current summary
+    // 4. Haven't already initialized for this key
+    // 5. Haven't already started creating for this key
+    if (
+      !loading &&
+      !queryError &&
+      !currentSummary &&
+      videoId &&
+      personaId &&
+      initializedForRef.current !== key &&
+      creatingEmptySummaryRef.current !== key
+    ) {
+      creatingEmptySummaryRef.current = key
       const emptySummary = {
         videoId,
         personaId,
         summary: [] as GlossItem[],
+        comment: null,
       }
       saveSummaryMutation.mutate(emptySummary, {
         onSuccess: () => {
           setLocalSummary([])
+          setLocalComment('')
+          initializedForRef.current = key
+        },
+        onError: () => {
+          // Reset so we can try again if needed
+          creatingEmptySummaryRef.current = null
         },
       })
     }
-  }, [videoId, personaId, currentSummary, loading, saveSummaryMutation])
+  }, [videoId, personaId, currentSummary, loading, queryError, saveSummaryMutation])
 
   // Handle extraction job status updates from TanStack Query
   useEffect(() => {
@@ -137,38 +279,9 @@ export default function VideoSummaryEditor({
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
 
-  // Debounced save function - use ref to keep stable reference
-  const debouncedSaveRef = useRef(
-    debounce(async (summary: GlossItem[], summaryData: typeof currentSummary, saveFn: typeof saveSummaryMutation.mutate) => {
-      if (!summaryData) {
-        // Create new summary - only required fields
-        saveFn({ videoId, personaId, summary }, {
-          onSuccess: () => setHasChanges(false),
-        })
-      } else {
-        // Update existing summary - spread only defined optional fields
-        saveFn({
-          videoId: summaryData.videoId,
-          personaId: summaryData.personaId,
-          summary,
-          ...(summaryData.visualAnalysis && { visualAnalysis: summaryData.visualAnalysis }),
-          ...(summaryData.audioTranscript && { audioTranscript: summaryData.audioTranscript }),
-          ...(summaryData.keyFrames && { keyFrames: summaryData.keyFrames }),
-          ...(summaryData.confidence != null && { confidence: summaryData.confidence }),
-        }, {
-          onSuccess: () => setHasChanges(false),
-        })
-      }
-    }, 1000) // Save after 1 second of no changes
-  )
-  const debouncedSave = debouncedSaveRef.current
-
+  // Simple handler - useAutoSave handles the debounced saving
   const handleSummaryChange = (summary: GlossItem[]) => {
     setLocalSummary(summary)
-    setHasChanges(true)
-
-    // Trigger debounced save
-    debouncedSave(summary, currentSummary, saveSummaryMutation.mutate)
   }
 
   // Claims handlers
@@ -198,8 +311,10 @@ export default function VideoSummaryEditor({
       await updateClaimMutation.mutateAsync({
         summaryId,
         claimId: editingClaim.id,
-        updates: claimData,
+        updates: claimData as UpdateClaimRequest,
       })
+      // Invalidate claims queries to ensure updates appear immediately
+      queryClient.invalidateQueries({ queryKey: claimsQueryKeys.bySummary(summaryId) })
     } else {
       // Create new claim - response includes full claims tree
       await createClaimMutation.mutateAsync({
@@ -212,6 +327,10 @@ export default function VideoSummaryEditor({
           parentClaimId,
         },
       })
+      // Invalidate claims queries to ensure subclaims appear immediately
+      queryClient.invalidateQueries({ queryKey: claimsQueryKeys.bySummary(summaryId) })
+      // Switch to Claims tab to show the new claim
+      setActiveTab(1)
     }
   }
 
@@ -266,38 +385,32 @@ export default function VideoSummaryEditor({
       {/* Header with save status */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {saving && (
-            <>
-              <CircularProgress size={16} />
-              <Typography variant="caption" color="text.secondary">
-                Saving...
-              </Typography>
-            </>
-          )}
-          {!saving && hasChanges && activeTab === 0 && (
-            <Typography variant="caption" color="text.secondary">
-              Unsaved changes
-            </Typography>
-          )}
-          {!saving && !hasChanges && currentSummary && activeTab === 0 && (
-            <Typography variant="caption" color="success.main">
-              <SaveIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-              Saved
-            </Typography>
+          {activeTab === 0 && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={saveErrorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
           )}
         </Box>
 
         {/* Action buttons for Claims tab */}
         {activeTab === 1 && (
           <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              onClick={() => setExtractDialogOpen(true)}
-              disabled={extracting || !summaryId || localSummary.length === 0}
-              size="small"
-            >
-              Extract Claims
-            </Button>
+            <Tooltip title={isCpuOnly ? 'GPU required for claim extraction (CPU-only mode detected)' : ''}>
+              <span>
+                <Button
+                  variant="contained"
+                  onClick={() => setExtractDialogOpen(true)}
+                  disabled={extracting || !summaryId || localSummary.length === 0 || isCpuOnly}
+                  size="small"
+                >
+                  Extract Claims
+                </Button>
+              </span>
+            </Tooltip>
             <Button
               variant="outlined"
               startIcon={<AddIcon />}
@@ -343,15 +456,36 @@ export default function VideoSummaryEditor({
                   />
                 </Box>
               ) : (
-                <GlossEditor
-                  gloss={localSummary}
-                  onChange={handleSummaryChange}
-                  personaId={personaId}
-                  videoId={videoId}
-                  includeAnnotations={true}
-                  disabled={disabled}
-                  label="Video Summary"
-                />
+                <>
+                  <GlossEditor
+                    gloss={localSummary}
+                    onChange={handleSummaryChange}
+                    personaId={personaId}
+                    videoId={videoId}
+                    includeAnnotations={true}
+                    disabled={disabled}
+                    label="Video Summary"
+                  />
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Comment (optional)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                      Add any additional notes or comments about this summary.
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={3}
+                      value={localComment}
+                      onChange={(e) => setLocalComment(e.target.value)}
+                      placeholder="Enter comment..."
+                      variant="outlined"
+                      size="small"
+                      disabled={disabled}
+                    />
+                  </Box>
+                </>
               )}
             </>
           )}
@@ -359,22 +493,36 @@ export default function VideoSummaryEditor({
           {/* Claims Tab */}
           {activeTab === 1 && (
             <>
-              {extractionError && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => clearExtractionState()}>
-                  {extractionError}
+              {!summaryId ? (
+                <Alert severity="info">
+                  Please create or select a summary first to view claims.
                 </Alert>
+              ) : (
+                <>
+                  {extractionError && (
+                    <Alert severity="error" sx={{ mb: 2 }} onClose={() => clearExtractionState()}>
+                      {extractionError}
+                    </Alert>
+                  )}
+                  {claimsError && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      Error loading claims: {claimsError instanceof Error ? claimsError.message : String(claimsError)}
+                    </Alert>
+                  )}
+                  <ClaimsViewer
+                    claims={claims}
+                    summaryId={summaryId}
+                    personaId={personaId}
+                    onEditClaim={handleEditClaim}
+                    onAddClaim={handleAddClaim}
+                    onDeleteClaim={handleDeleteClaim}
+                    selectedClaimId={selectedClaimId}
+                    onClaimSelect={handleClaimSelect}
+                    loading={claimsLoading}
+                    error={claimsError ? (claimsError instanceof Error ? claimsError.message : String(claimsError)) : null}
+                  />
+                </>
               )}
-              <ClaimsViewer
-                claims={claims}
-                summaryId={summaryId || ''}
-                personaId={personaId}
-                onEditClaim={handleEditClaim}
-                onAddClaim={handleAddClaim}
-                onDeleteClaim={handleDeleteClaim}
-                selectedClaimId={selectedClaimId}
-                onClaimSelect={handleClaimSelect}
-                loading={claimsLoading}
-              />
             </>
           )}
         </Box>
@@ -406,4 +554,6 @@ export default function VideoSummaryEditor({
       />
     </Box>
   )
-}
+})
+
+export default VideoSummaryEditor

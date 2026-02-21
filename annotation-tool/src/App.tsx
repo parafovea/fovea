@@ -11,6 +11,7 @@ import LoginPage from './components/auth/LoginPage'
 import RegisterPage from './components/auth/RegisterPage'
 import AdminPanel from './components/admin/AdminPanel'
 import { ErrorBoundary } from '@components/shared/ErrorBoundary'
+import { SessionManager } from '@components/auth/SessionManager'
 import { useAuthStore } from './store/zustand/authStore'
 import { useAnnotationUiStore } from './store/zustand'
 import { usePersonas } from './store/queries'
@@ -185,6 +186,7 @@ function App() {
         </Route>
       </Routes>
       <CommandPalette />
+      <SessionManager />
     </ErrorBoundary>
   )
 }

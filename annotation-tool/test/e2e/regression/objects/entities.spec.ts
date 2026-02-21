@@ -42,18 +42,17 @@ test.describe('Entity Management', () => {
     const dialog = page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Try to save without filling name
-    const saveButton = dialog.getByRole('button', { name: /save|create/i })
+    // The "Done" button should be disabled when name is empty (validation via disabled state)
+    const doneButton = dialog.getByRole('button', { name: /done/i })
+    await expect(doneButton).toBeDisabled()
 
-    // Check if save button is disabled
-    const isDisabled = await saveButton.isDisabled().catch(() => true)
-    if (!isDisabled) {
-      await saveButton.click()
-      await page.waitForTimeout(300)
-    }
-
-    // Dialog should still be visible (validation prevented save)
+    // Dialog should still be visible (cannot submit without name)
     await expect(dialog).toBeVisible()
+
+    // Close dialog via Cancel button
+    const cancelButton = dialog.getByRole('button', { name: /cancel/i })
+    await cancelButton.click()
+    await page.waitForTimeout(300)
   })
 
   test('edits entity details', async ({
