@@ -91,9 +91,9 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       throw new UnauthorizedError('Authentication required')
     }
 
-    // Find or create world state for this user
-    let worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId }
+    // Find or create personal world state for this user (projectId: null)
+    let worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
 
     if (!worldState) {
@@ -190,43 +190,53 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
     const updateData = request.body as WorldStateUpdateBody
 
-    // Upsert world state (create if doesn't exist, update if it does)
-    const worldState = await fastify.prisma.worldState.upsert({
-      where: { userId },
-      create: {
-        userId,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        entities: (updateData.entities || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        events: (updateData.events || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        times: (updateData.times || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        entityCollections: (updateData.entityCollections || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        eventCollections: (updateData.eventCollections || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        timeCollections: (updateData.timeCollections || []) as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        relations: (updateData.relations || []) as any
-      },
-      update: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        entities: updateData.entities !== undefined ? (updateData.entities as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        events: updateData.events !== undefined ? (updateData.events as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        times: updateData.times !== undefined ? (updateData.times as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        relations: updateData.relations !== undefined ? (updateData.relations as any) : undefined
-      }
+    // Find or create personal world state, then update
+    const existing = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
+
+    let worldState
+    if (existing) {
+      worldState = await fastify.prisma.worldState.update({
+        where: { id: existing.id },
+        data: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entities: updateData.entities !== undefined ? (updateData.entities as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          events: updateData.events !== undefined ? (updateData.events as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          times: updateData.times !== undefined ? (updateData.times as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as any) : undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          relations: updateData.relations !== undefined ? (updateData.relations as any) : undefined
+        }
+      })
+    } else {
+      worldState = await fastify.prisma.worldState.create({
+        data: {
+          userId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entities: (updateData.entities || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          events: (updateData.events || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          times: (updateData.times || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          entityCollections: (updateData.entityCollections || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          eventCollections: (updateData.eventCollections || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          timeCollections: (updateData.timeCollections || []) as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+          relations: (updateData.relations || []) as any
+        }
+      })
+    }
 
     return reply.send({
       id: worldState.id,
@@ -286,29 +296,31 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('User', userId)
     }
 
-    // Clear the user's world state by updating with empty arrays
-    await fastify.prisma.worldState.upsert({
-      where: { userId },
-      create: {
-        userId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
-      },
-      update: {
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
-      }
+    // Clear the user's personal world state by updating with empty arrays
+    const existingWorldState = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
+
+    const emptyData = {
+      entities: [],
+      events: [],
+      times: [],
+      entityCollections: [],
+      eventCollections: [],
+      timeCollections: [],
+      relations: []
+    }
+
+    if (existingWorldState) {
+      await fastify.prisma.worldState.update({
+        where: { id: existingWorldState.id },
+        data: emptyData
+      })
+    } else {
+      await fastify.prisma.worldState.create({
+        data: { userId, ...emptyData }
+      })
+    }
 
     return reply.send({
       message: 'World state cleared successfully',
@@ -371,8 +383,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { entityId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -467,8 +479,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { entityId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -513,7 +525,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       // Update world state
       await fastify.prisma.worldState.update({
-        where: { userId },
+        where: { id: worldState.id },
         data: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           entities: updatedEntities as any,
@@ -620,8 +632,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { eventId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -711,8 +723,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { eventId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -757,7 +769,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       // Update world state
       await fastify.prisma.worldState.update({
-        where: { userId },
+        where: { id: worldState.id },
         data: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           events: updatedEvents as any,
@@ -861,8 +873,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { timeId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -952,8 +964,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { timeId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId, projectId: null }
       })
 
       if (!worldState) {
@@ -999,7 +1011,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
       // Update world state
       await fastify.prisma.worldState.update({
-        where: { userId },
+        where: { id: worldState.id },
         data: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           times: updatedTimes as any,

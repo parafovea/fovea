@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
+import { seedPermissions } from './seed-permissions.js'
+
 /**
  * Seeds the database with initial users and system personas.
  * Creates admin user, test user, default user for single-user mode, and Automated persona.
@@ -140,6 +142,10 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   } else {
     console.log('✓ Ontology for Automated persona already exists')
   }
+
+  // Seed role permissions for RBAC
+  const permCount = await seedPermissions(prisma)
+  console.log(`✓ Seeded ${permCount} role permissions`)
 
   console.log('Database seed completed successfully')
 

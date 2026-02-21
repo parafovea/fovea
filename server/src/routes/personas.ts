@@ -383,8 +383,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     // Count world state assignments for this persona
     let worldAssignmentCount = 0
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId: persona.userId }
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: persona.userId, projectId: null }
     })
 
     if (worldState) {
@@ -468,8 +468,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Clean up world state: remove type assignments and interpretations for this persona
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId: existingPersona.userId }
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: existingPersona.userId, projectId: null }
     })
 
     if (worldState) {
@@ -517,7 +517,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Update world state with cleaned data
       await fastify.prisma.worldState.update({
-        where: { userId: existingPersona.userId },
+        where: { id: worldState.id },
         data: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
           entities: cleanedEntities as any,
@@ -747,8 +747,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Count world state type assignments
       let worldAssignmentCount = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -849,8 +849,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Clean up world state type assignments
       let worldAssignments = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -859,7 +859,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
 
         await fastify.prisma.worldState.update({
-          where: { userId: persona.userId },
+          where: { id: worldState.id },
           data: {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             entities: cleanedEntities as any
@@ -1180,8 +1180,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Count world state event interpretations
       let worldInterpretationCount = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -1276,8 +1276,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Clean up world state event interpretations
       let worldInterpretations = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -1286,7 +1286,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
 
         await fastify.prisma.worldState.update({
-          where: { userId: persona.userId },
+          where: { id: worldState.id },
           data: {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             events: cleanedEvents as any

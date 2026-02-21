@@ -591,8 +591,8 @@ describe('Personas API', () => {
       })
 
       // Verify type assignment was cleaned up
-      const worldState = await prisma.worldState.findUnique({
-        where: { userId: testUserId }
+      const worldState = await prisma.worldState.findFirst({
+        where: { userId: testUserId, projectId: null }
       })
       const entities = worldState?.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>
       const entity = entities[0]
@@ -642,8 +642,8 @@ describe('Personas API', () => {
       })
 
       // Verify persona interpretation was cleaned up
-      const worldState = await prisma.worldState.findUnique({
-        where: { userId: testUserId }
+      const worldState = await prisma.worldState.findFirst({
+        where: { userId: testUserId, projectId: null }
       })
       const events = worldState?.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>
       const event = events[0]
