@@ -14,6 +14,9 @@ import {
   recordLoginAttempt,
   recordSessionEvent,
 } from '../lib/authMetrics.js'
+import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import { serializeAbilities } from '../lib/abilities.js'
 
 /**
  * Authentication routes for login, logout, registration.
@@ -474,6 +477,40 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         expiresAt: newExpiresAt.toISOString(),
+      }
+    }
+  )
+
+  /**
+   * Get CASL abilities for the current user.
+   * Returns serialized permission rules for frontend authorization.
+   *
+   * @route GET /api/auth/abilities
+   */
+  fastify.get(
+    '/api/auth/abilities',
+    {
+      onRequest: [requireAuth, buildAbilities],
+      schema: {
+        description: 'Get serialized CASL abilities for current user',
+        tags: ['auth'],
+        response: {
+          200: Type.Object({
+            rules: Type.Array(Type.Any()),
+          }),
+          401: Type.Object({
+            error: Type.String(),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      if (!request.ability) {
+        throw new UnauthorizedError('No abilities defined')
+      }
+
+      return {
+        rules: serializeAbilities(request.ability),
       }
     }
   )

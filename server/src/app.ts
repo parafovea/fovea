@@ -302,5 +302,17 @@ export async function buildApp() {
   const telemetryRoute = await import('./routes/telemetry.js')
   await app.register(telemetryRoute.default)
 
+  const groupsRoute = await import('./routes/groups.js')
+  await app.register(groupsRoute.default)
+
+  const projectsRoute = await import('./routes/projects.js')
+  await app.register(projectsRoute.default)
+
+  const sharingRoute = await import('./routes/sharing.js')
+  await app.register(sharingRoute.default)
+
+  const videoAssignmentsRoute = await import('./routes/video-assignments.js')
+  await app.register(videoAssignmentsRoute.default)
+
   return app
 }
