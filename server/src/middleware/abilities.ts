@@ -16,6 +16,7 @@ import {
   RolePermissionRow,
 } from '../lib/abilities.js'
 import { prisma } from '../lib/prisma.js'
+import { rbacCheckCounter, rbacCheckDuration } from '../metrics.js'
 
 /** In-memory cache for role permissions, invalidated after CACHE_TTL_MS. */
 let cachedPermissions: RolePermissionRow[] | null = null
@@ -121,13 +122,22 @@ export async function buildAbilities(
  */
 export function authorize(action: string, subject: string) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const start = Date.now()
+
     if (!request.ability) {
+      rbacCheckCounter.add(1, { action, resource: subject, result: 'denied', role: 'none' })
+      rbacCheckDuration.record(Date.now() - start, { action, resource: subject })
       reply.code(403).send({ error: 'FORBIDDEN', message: 'No abilities defined' })
       return
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!request.ability.can(action as any, subject as any)) {
+    const allowed = request.ability.can(action as any, subject as any)
+    const role = request.user?.systemRole || 'user'
+    rbacCheckCounter.add(1, { action, resource: subject, result: allowed ? 'allowed' : 'denied', role })
+    rbacCheckDuration.record(Date.now() - start, { action, resource: subject })
+
+    if (!allowed) {
       reply.code(403).send({ error: 'FORBIDDEN', message: `Cannot ${action} ${subject}` })
       return
     }

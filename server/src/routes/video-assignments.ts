@@ -10,6 +10,7 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { NotFoundError, ValidationError, ForbiddenError } from '../lib/errors.js'
+import { videoAssignmentCounter } from '../metrics.js'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 
@@ -317,6 +318,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      videoAssignmentCounter.add(1, { operation: 'assign', source: 'manual' })
       return reply.status(201).send(assignment)
     }
   )
@@ -379,6 +381,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: assignment.id },
       })
 
+      videoAssignmentCounter.add(1, { operation: 'unassign', source: 'manual' })
       return reply.send({ success: true })
     }
   )
@@ -455,6 +458,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      videoAssignmentCounter.add(newVideoIds.length, { operation: 'assign', source: 'manual' })
       return reply.send({ created: newVideoIds.length })
     }
   )
@@ -652,6 +656,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         .filter(v => videoMatchesConditions(v.metadata as Record<string, unknown> | null, conditions))
         .map(v => v.id)
 
+      videoAssignmentCounter.add(1, { operation: 'rule_evaluate', source: 'rule' })
       return reply.send({
         ruleId,
         matchingVideoCount: matchingVideoIds.length,
@@ -737,6 +742,10 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      videoAssignmentCounter.add(1, { operation: 'rule_evaluate', source: 'rule' })
+      if (assignmentsCreated > 0) {
+        videoAssignmentCounter.add(assignmentsCreated, { operation: 'assign', source: 'rule' })
+      }
       return reply.send({
         rulesEvaluated: activeRules.length,
         assignmentsCreated,

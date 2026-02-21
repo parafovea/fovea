@@ -12,6 +12,7 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { groupOperationCounter } from '../metrics.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import {
   NotFoundError,
@@ -250,6 +251,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         })
       })
 
+      groupOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(group)
     },
   )
@@ -410,6 +412,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      groupOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(group)
     },
   )
@@ -461,6 +464,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
       // Memberships cascade-delete via onDelete: Cascade in the schema
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
 
+      groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
     },
   )
@@ -543,6 +547,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      groupOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send(membership)
     },
   )
@@ -649,6 +654,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      groupOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(updated)
     },
   )
@@ -713,6 +719,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: targetMembership.id },
       })
 
+      groupOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ success: true })
     },
   )
@@ -842,6 +849,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         })
       })
 
+      groupOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(group)
     },
   )
@@ -901,6 +909,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      groupOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(group)
     },
   )
@@ -940,6 +949,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
 
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
 
+      groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
     },
   )
@@ -1011,6 +1021,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      groupOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send(membership)
     },
   )

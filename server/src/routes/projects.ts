@@ -9,6 +9,7 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { requireAuth } from '@middleware/auth.js'
+import { projectOperationCounter } from '../metrics.js'
 import { buildAbilities } from '@middleware/abilities.js'
 import {
   NotFoundError,
@@ -205,6 +206,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         return created
       })
 
+      projectOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(project)
     },
   )
@@ -450,6 +452,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      projectOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(updated)
     },
   )
@@ -496,6 +499,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       // and assignments. Delete the project directly.
       await fastify.prisma.project.delete({ where: { id: projectId } })
 
+      projectOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Project deleted successfully' })
     },
   )
@@ -573,6 +577,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      projectOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send({
         id: membership.id,
         userId: membership.userId,
@@ -709,6 +714,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      projectOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send({
         id: updated.id,
         userId: updated.userId,
@@ -776,6 +782,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         where: { userId_projectId: { userId: targetUserId, projectId } },
       })
 
+      projectOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ message: 'Member removed successfully' })
     },
   )

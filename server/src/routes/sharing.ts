@@ -12,6 +12,7 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { requireAuth } from '@middleware/auth.js'
+import { sharingOperationCounter } from '../metrics.js'
 import { buildAbilities } from '@middleware/abilities.js'
 import {
   NotFoundError,
@@ -316,6 +317,11 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      sharingOperationCounter.add(1, {
+        operation: 'share',
+        resourceType,
+        targetType: sharedWithGroupId ? 'group' : 'user',
+      })
       return reply.status(201).send(share)
     },
   )
@@ -470,6 +476,11 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: shareId },
       })
 
+      sharingOperationCounter.add(1, {
+        operation: 'revoke',
+        resourceType: share.resourceType,
+        targetType: share.sharedWithGroupId ? 'group' : 'user',
+      })
       return reply.send({ message: 'Share revoked successfully' })
     },
   )
@@ -710,6 +721,11 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         }
       })
 
+      sharingOperationCounter.add(1, {
+        operation: 'fork',
+        resourceType: share.resourceType,
+        targetType: share.sharedWithGroupId ? 'group' : 'user',
+      })
       return reply.status(201).send({
         resourceType: share.resourceType,
         resourceId: forkedResource.id,
