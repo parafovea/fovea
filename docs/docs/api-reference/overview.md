@@ -88,7 +88,7 @@ Export annotations in JSON Lines format with keyframes or fully interpolated seq
 
 Import annotations from JSON Lines files with conflict resolution.
 
-- [POST /api/import](./export-import.md#import-annotations)
+- [POST /api/import](./export-import.md#import-data)
 - [POST /api/import/preview](./export-import.md#preview-import)
 - [GET /api/import/history](./export-import.md#import-history)
 

@@ -61,6 +61,9 @@ export function useSession(): void {
       } catch (error) {
         console.error('Session check error:', error)
         logoutSuccess()
+      } finally {
+        // Ensure loading is set to false even if something goes wrong
+        setLoading(false)
       }
     }
 

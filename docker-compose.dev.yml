@@ -20,7 +20,8 @@ services:
       - ./annotation-tool/public:/app/public:ro
     environment:
       - NODE_ENV=development
-      - VITE_BACKEND_URL=http://backend:3001  # Use Docker service name for inter-container communication
+      - VITE_BACKEND_URL=http://backend:3001  # Use Docker service name for inter-container communication (for Vite proxy)
+      - VITE_API_URL=  # Empty = use relative URLs that go through Vite proxy
     command: npm run dev -- --host 0.0.0.0 --port 3000
 
   backend:

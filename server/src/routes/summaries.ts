@@ -9,6 +9,7 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError } from '../lib/errors.js'
+import { requireAuth } from '../middleware/auth.js'
 
 /**
  * Job data for video summarization queue.
@@ -79,6 +80,7 @@ const VideoSummarySchema = Type.Object({
   processingTimeAudio: Type.Optional(Type.Number()),
   processingTimeVisual: Type.Optional(Type.Number()),
   processingTimeFusion: Type.Optional(Type.Number()),
+  comment: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdBy: Type.Optional(Type.String()),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
@@ -109,6 +111,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { videoId: string } }>(
     '/api/videos/:videoId/summaries',
     {
+      onRequest: [requireAuth],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -132,6 +135,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { videoId: string; personaId: string } }>(
     '/api/videos/:videoId/summaries/:personaId',
     {
+      onRequest: [requireAuth],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -167,6 +171,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: Static<typeof CreateSummaryRequestSchema> }>(
     '/api/videos/summaries/generate',
     {
+      onRequest: [requireAuth],
       schema: {
         body: CreateSummaryRequestSchema,
         response: {
@@ -246,6 +251,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { jobId: string } }>(
     '/api/jobs/:jobId',
     {
+      onRequest: [requireAuth],
       schema: {
         params: Type.Object({
           jobId: Type.String(),
@@ -297,6 +303,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: Omit<Static<typeof VideoSummarySchema>, 'id' | 'createdAt' | 'updatedAt'> }>(
     '/api/summaries',
     {
+      onRequest: [requireAuth],
       schema: {
         body: Type.Intersect([
           Type.Object({
@@ -406,6 +413,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/videos/:videoId/summaries/:summaryId',
     {
+      onRequest: [requireAuth],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -447,6 +455,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { videoId: string; personaId: string } }>(
     '/api/videos/:videoId/summaries/:personaId',
     {
+      onRequest: [requireAuth],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
