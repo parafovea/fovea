@@ -12,10 +12,36 @@
  */
 
 import { create } from 'zustand'
+import type { GlossItem, ClaimerType } from '@models/types'
+
+export interface DraftClaim {
+  // Form state
+  gloss: GlossItem[]
+  confidence: number
+  claimerType: ClaimerType | null
+  claimerGloss: GlossItem[]
+  claimRelation: GlossItem[]
+  claimEventId: string
+  claimTimeId: string
+  claimLocationId: string
+  audio: ('speech' | 'non-speech')[]
+  video: ('text' | 'non-text')[]
+  metadata: ('text' | 'non-text')[]
+  comment: string
+  // Context for restoration
+  videoId: string
+  personaId: string
+  summaryId: string
+  editingClaimId?: string
+  parentClaimId?: string
+}
 
 export interface ClaimsUiState {
   // Selection state
   selectedClaimId: string | null
+
+  // Draft claim state (for workspace toggle)
+  draftClaim: DraftClaim | null
 
   // Extraction UI state
   extracting: boolean
@@ -25,6 +51,8 @@ export interface ClaimsUiState {
 
   // Actions
   selectClaim: (claimId: string | null) => void
+  saveDraftClaim: (draft: DraftClaim) => void
+  clearDraftClaim: () => void
   startExtraction: (jobId: string) => void
   updateExtractionProgress: (progress: number | null) => void
   setExtractionError: (error: string | null) => void
@@ -34,6 +62,7 @@ export interface ClaimsUiState {
 
 const initialState = {
   selectedClaimId: null,
+  draftClaim: null,
   extracting: false,
   extractionJobId: null,
   extractionProgress: null,
@@ -44,6 +73,9 @@ export const useClaimsUiStore = create<ClaimsUiState>((set) => ({
   ...initialState,
 
   selectClaim: (claimId) => set({ selectedClaimId: claimId }),
+
+  saveDraftClaim: (draft) => set({ draftClaim: draft }),
+  clearDraftClaim: () => set({ draftClaim: null }),
 
   startExtraction: (jobId) =>
     set({
