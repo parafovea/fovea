@@ -122,6 +122,16 @@ export interface Claim {
   /** Strategy used for extraction */
   extractionStrategy?: ExtractionStrategy
 
+  /** Modality metadata - indicates what sources support the claim */
+  /** Array of "speech" and/or "non-speech" - claim is based at least in part on audio */
+  audio?: ('speech' | 'non-speech')[] | null
+  /** Array of "text" and/or "non-text" - claim is based at least in part on non-audio video information */
+  video?: ('text' | 'non-text')[] | null
+  /** Array of "text" (caption metadata) and/or "non-text" (other metadata like location from .info.json) */
+  metadata?: ('text' | 'non-text')[] | null
+  /** Optional comment about this claim */
+  comment?: string | null
+
   /** Relations where this claim is the source */
   sourceClaimRelations?: ClaimRelation[]
   /** Relations where this claim is the target */
@@ -340,6 +350,12 @@ export interface CreateClaimRequest {
   claimLocationId?: string
   /** Confidence score */
   confidence?: number
+  /** Modality metadata */
+  audio?: ('speech' | 'non-speech')[] | null
+  video?: ('text' | 'non-text')[] | null
+  metadata?: ('text' | 'non-text')[] | null
+  /** Optional comment about this claim */
+  comment?: string | null
 }
 
 /**
@@ -368,4 +384,10 @@ export interface UpdateClaimRequest {
   claimLocationId?: string
   /** Updated confidence score */
   confidence?: number
+  /** Updated modality metadata */
+  audio?: ('speech' | 'non-speech')[] | null
+  video?: ('text' | 'non-text')[] | null
+  metadata?: ('text' | 'non-text')[] | null
+  /** Updated comment */
+  comment?: string | null
 }

@@ -27,30 +27,33 @@ test.describe('Summary Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the test persona by name
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').nth(1)
+      const personaOption = page.getByRole('option').filter({ hasText: testPersona.name })
       await personaOption.click()
-      await page.waitForTimeout(500)
     }
 
-    // Navigate to Summary tab (should be default, but ensure it's selected)
-    const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
-    if (await summaryTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await summaryTab.click()
-      await page.waitForTimeout(300)
-    }
+    // Wait for all data to load and component to stabilize
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(2000)
 
-    // Find the summary editor textarea and enter content
+    // Find the summary editor textarea
     const summaryTextarea = dialog.locator('textarea').first()
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
-    await summaryTextarea.clear()
+
+    // Type content - use fill() which is faster
     await summaryTextarea.fill(uniqueSummaryText)
 
-    // Wait for auto-save to complete
-    await page.waitForTimeout(3000)
+    // Verify the text was entered before continuing
+    await expect(summaryTextarea).toHaveValue(uniqueSummaryText, { timeout: 1000 })
+
+    // Wait for debounce (1000ms) plus save to complete
+    await page.waitForTimeout(1500)
+
+    // Wait for any pending network requests
+    await page.waitForLoadState('networkidle')
 
     // Close the dialog
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
@@ -76,11 +79,11 @@ test.describe('Summary Persistence', () => {
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
 
-    // Re-select the same persona - use nth(1) to skip the disabled placeholder
+    // Re-select the same persona by name
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').nth(1)
+      const personaOption2 = page.getByRole('option').filter({ hasText: testPersona.name })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -92,7 +95,7 @@ test.describe('Summary Persistence', () => {
       await page.waitForTimeout(300)
     }
 
-    // Wait for summary to load
+    // Wait for summary data to load from API
     await page.waitForTimeout(1000)
 
     // Verify summary content persisted
@@ -119,26 +122,35 @@ test.describe('Summary Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the test persona by name
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').nth(1)
+      const personaOption = page.getByRole('option').filter({ hasText: testPersona.name })
       await personaOption.click()
       await page.waitForTimeout(500)
     }
 
-    // Enter original summary
+    // Find summary textarea
     const summaryTextarea = dialog.locator('textarea').first()
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
-    await summaryTextarea.clear()
-    await summaryTextarea.fill(originalText)
-    await page.waitForTimeout(2000) // Wait for auto-save
 
-    // Now edit the summary
-    await summaryTextarea.clear()
-    await summaryTextarea.fill(editedText)
-    await page.waitForTimeout(3000) // Wait for auto-save
+    // Type original content character by character
+    await summaryTextarea.click()
+    await summaryTextarea.pressSequentially(originalText, { delay: 10 })
+
+    // Wait for save
+    await page.waitForTimeout(1500)
+    await page.waitForLoadState('networkidle')
+
+    // Clear and type edited content
+    await summaryTextarea.click()
+    await page.keyboard.press('Meta+a')
+    await summaryTextarea.pressSequentially(editedText, { delay: 10 })
+
+    // Wait for save
+    await page.waitForTimeout(1500)
+    await page.waitForLoadState('networkidle')
 
     // Close and reload
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
@@ -157,15 +169,16 @@ test.describe('Summary Persistence', () => {
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
 
-    // Re-select the same persona - use nth(1) to skip the disabled placeholder
+    // Re-select the same persona by name
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').nth(1)
+      const personaOption2 = page.getByRole('option').filter({ hasText: testPersona.name })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
 
+    // Wait for summary data to load from API
     await page.waitForTimeout(1000)
 
     // Verify edited text persists

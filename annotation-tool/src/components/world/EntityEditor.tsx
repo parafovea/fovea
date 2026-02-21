@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -30,12 +30,13 @@ import {
   Inventory2 as ObjectIcon,
   Language as WikidataIcon,
 } from '@mui/icons-material'
-import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Entity, EntityTypeAssignment, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface EntityEditorProps {
   open: boolean
@@ -48,12 +49,13 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const { data: personas = [] } = usePersonas()
   const personaIds = personas.map((p) => p.id)
   const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
-  const { mutate: addEntity } = useAddEntity()
-  const { mutate: updateEntity } = useUpdateEntity()
+  const { mutateAsync: addEntity } = useAddEntity()
+  const { mutateAsync: updateEntity } = useUpdateEntity()
+  const { mutate: deleteEntity } = useDeleteEntity()
 
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
-  
+
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [alternateNames, setAlternateNames] = useState<string[]>([])
@@ -61,12 +63,64 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
-  
+
+  // Track auto-created entity ID for cancel cleanup
+  const [autoCreatedEntityId, setAutoCreatedEntityId] = useState<string | null>(null)
+  const autoCreatedIdRef = useRef<string | null>(null)
+
   // For adding new type assignment
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState<string>('')
   const [assignmentConfidence, setAssignmentConfidence] = useState<number>(1.0)
   const [assignmentJustification, setAssignmentJustification] = useState('')
+
+  // Keep ref in sync with state for callbacks
+  useEffect(() => {
+    autoCreatedIdRef.current = autoCreatedEntityId
+  }, [autoCreatedEntityId])
+
+  // Auto-save hook for new entities
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: { name, description, typeAssignments, wikidataId, wikidataUrl, alternateNames },
+    isEnabled: open && !!name && !entity, // Only for new entities, require name
+    onSave: async (entityData) => {
+      const now = new Date().toISOString()
+      const fullEntityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
+        name: entityData.name,
+        description: entityData.description,
+        typeAssignments: entityData.typeAssignments,
+        wikidataId: entityData.wikidataId || undefined,
+        wikidataUrl: entityData.wikidataUrl || undefined,
+        importedFrom: entityData.wikidataId ? 'wikidata' : undefined,
+        importedAt: entityData.wikidataId ? now : undefined,
+        metadata: {
+          alternateNames: entityData.alternateNames.filter(Boolean),
+          externalIds: {},
+          properties: {},
+        },
+      }
+
+      if (autoCreatedIdRef.current) {
+        // Update the auto-created entity
+        await updateEntity({
+          id: autoCreatedIdRef.current,
+          createdAt: now,
+          updatedAt: now,
+          ...fullEntityData,
+        })
+      } else {
+        // Create new entity and track ID
+        const result = await addEntity(fullEntityData)
+        // Get the newly created entity ID from the result
+        const newEntity = result.entities[result.entities.length - 1]
+        if (newEntity) {
+          setAutoCreatedEntityId(newEntity.id)
+        }
+      }
+    },
+    entityType: 'world-object',
+    entityId: entity?.id || autoCreatedIdRef.current || undefined,
+  })
 
   useEffect(() => {
     if (entity) {
@@ -84,7 +138,9 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
       setWikidataId('')
       setWikidataUrl('')
     }
-  }, [entity])
+    // Reset auto-created ID when dialog opens/closes or entity changes
+    setAutoCreatedEntityId(null)
+  }, [entity, open])
 
   const handleAddTypeAssignment = () => {
     if (selectedPersonaId && selectedEntityTypeId) {
@@ -139,7 +195,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     setTypeAssignments(typeAssignments.filter(a => a.personaId !== personaId))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const now = new Date().toISOString()
     const entityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
       name,
@@ -157,11 +213,30 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     }
 
     if (entity) {
-      updateEntity({ ...entity, ...entityData })
+      await updateEntity({ ...entity, ...entityData })
     } else {
-      addEntity(entityData)
+      await addEntity(entityData)
     }
 
+    onClose()
+  }
+
+  // Cancel handler deletes auto-created entity
+  const handleCancel = () => {
+    if (autoCreatedIdRef.current) {
+      deleteEntity(autoCreatedIdRef.current)
+    }
+    setAutoCreatedEntityId(null)
+    onClose()
+  }
+
+  // Done handler keeps the entity (already saved via autosave)
+  const handleDone = async () => {
+    // Force save any pending changes before closing
+    if (!entity && autoCreatedIdRef.current) {
+      await forceSave()
+    }
+    setAutoCreatedEntityId(null)
     onClose()
   }
 
@@ -181,7 +256,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     : []
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ObjectIcon color="secondary" />
@@ -259,7 +334,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
           {wikidataId && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip 
+              <Chip
                 label={`Wikidata: ${wikidataId}`}
                 size="small"
                 color="secondary"
@@ -293,15 +368,15 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip 
-                            label={getPersonaName(assignment.personaId)} 
-                            size="small" 
+                          <Chip
+                            label={getPersonaName(assignment.personaId)}
+                            size="small"
                             color="primary"
                           />
                           <Typography variant="body2">
                             classifies as
                           </Typography>
-                          <Chip 
+                          <Chip
                             label={getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
                             size="small"
                             variant="outlined"
@@ -326,8 +401,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
                       }
                     />
                     <ListItemSecondaryAction>
-                      <IconButton 
-                        edge="end" 
+                      <IconButton
+                        edge="end"
                         size="small"
                         onClick={() => handleRemoveTypeAssignment(assignment.personaId)}
                       >
@@ -398,8 +473,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
                       value={assignmentJustification}
                       onChange={(e) => setAssignmentJustification(e.target.value)}
                     />
-                    <Button 
-                      variant="outlined" 
+                    <Button
+                      variant="outlined"
                       startIcon={<AddIcon />}
                       onClick={handleAddTypeAssignment}
                       disabled={!selectedEntityTypeId}
@@ -413,16 +488,40 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
-          color="secondary"
-          disabled={!name || description.length === 0}
-        >
-          {entity ? 'Update' : 'Create'} Entity
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Box>
+          {!entity && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleCancel}>Cancel</Button>
+          {entity ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0}
+            >
+              Update Entity
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDone}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0 || !autoCreatedEntityId}
+            >
+              Done
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   )

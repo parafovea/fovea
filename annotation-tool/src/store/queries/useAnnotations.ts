@@ -149,6 +149,10 @@ export function useDeleteAnnotation() {
  * Hook to save multiple annotations at once (batch save).
  * Handles distinguishing between create and update operations.
  *
+ * Uses optimistic updates for immediate UI feedback. If the save fails,
+ * the cache is rolled back to the previous state. After success or failure,
+ * the cache is invalidated to ensure consistency with the server.
+ *
  * @returns Mutation for batch saving annotations
  *
  * @example
@@ -160,11 +164,17 @@ export function useDeleteAnnotation() {
 export function useSaveAnnotations() {
   const queryClient = useQueryClient()
 
+  // Store cachedIds before optimistic update so mutationFn can access them
+  // This ref bridges the gap between onMutate and mutationFn
+  const cachedIdsRef = { current: new Set<string>() }
+
   return useMutation({
-    mutationFn: async ({ videoId, annotations }: { videoId: string; annotations: Annotation[] }) => {
-      // Get currently cached annotations to determine which are new vs existing
-      const cached = queryClient.getQueryData<Annotation[]>(annotationKeys.video(videoId)) ?? []
-      const cachedIds = new Set(cached.map(a => a.id))
+    mutationFn: async ({ videoId, annotations }: {
+      videoId: string
+      annotations: Annotation[]
+    }) => {
+      // Use cachedIds captured before optimistic update
+      const existingIds = cachedIdsRef.current
 
       const results: { created: number; updated: number; errors: string[] } = {
         created: 0,
@@ -174,7 +184,7 @@ export function useSaveAnnotations() {
 
       for (const annotation of annotations) {
         try {
-          const isNew = !cachedIds.has(annotation.id)
+          const isNew = !existingIds.has(annotation.id)
 
           if (isNew) {
             await api.saveAnnotation(annotation)
@@ -192,9 +202,31 @@ export function useSaveAnnotations() {
 
       return { videoId, annotations, results }
     },
-    onSuccess: ({ videoId, annotations }) => {
-      // Update cache with saved annotations
-      queryClient.setQueryData<Annotation[]>(annotationKeys.video(videoId), annotations)
+    onMutate: async ({ videoId, annotations }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: annotationKeys.video(videoId) })
+
+      // Snapshot the previous value for rollback
+      const previous = queryClient.getQueryData<Annotation[]>(annotationKeys.video(videoId))
+
+      // Capture cachedIds before optimistic update so mutationFn can distinguish new vs existing
+      cachedIdsRef.current = new Set((previous ?? []).map(a => a.id))
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(annotationKeys.video(videoId), annotations)
+
+      // Return context with previous value for rollback
+      return { previous, videoId }
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback on failure
+      if (context?.previous) {
+        queryClient.setQueryData(annotationKeys.video(context.videoId), context.previous)
+      }
+    },
+    onSettled: (_data, _error, { videoId }) => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: annotationKeys.video(videoId) })
     },
   })
 }

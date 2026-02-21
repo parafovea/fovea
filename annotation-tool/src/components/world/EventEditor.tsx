@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -35,12 +35,13 @@ import {
   Language as WikidataIcon,
   Edit as EditIcon,
 } from '@mui/icons-material'
-import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useWorld, useAddEvent, useUpdateEvent, useDeleteEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Event, EventInterpretation, GlossItem, Location, TimeInstant, TimeInterval } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface EventEditorProps {
   open: boolean
@@ -65,20 +66,21 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const { data: worldData } = useWorld()
   const entities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
   const times = useMemo(() => worldData?.times ?? [], [worldData?.times])
-  const { mutate: addEvent } = useAddEvent()
-  const { mutate: updateEvent } = useUpdateEvent()
-  
+  const { mutateAsync: addEvent } = useAddEvent()
+  const { mutateAsync: updateEvent } = useUpdateEvent()
+  const { mutate: deleteEvent } = useDeleteEvent()
+
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
   const [selectedTimeId, setSelectedTimeId] = useState<string>('')
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [certainty, setCertainty] = useState<number>(1.0)
-  
+
   // Wikidata import
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
-  
+
   // For persona interpretations
   const [interpretations, setInterpretations] = useState<EventInterpretation[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
@@ -86,6 +88,62 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const [participants, setParticipants] = useState<ParticipantFormData[]>([])
   const [interpretationConfidence, setInterpretationConfidence] = useState<number>(1.0)
   const [interpretationJustification, setInterpretationJustification] = useState('')
+
+  // Track auto-created event ID for cancel cleanup
+  const [autoCreatedEventId, setAutoCreatedEventId] = useState<string | null>(null)
+  const autoCreatedIdRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state for callbacks
+  useEffect(() => {
+    autoCreatedIdRef.current = autoCreatedEventId
+  }, [autoCreatedEventId])
+
+  // Auto-save hook for new events
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: { name, description, interpretations, selectedTimeId, selectedLocationId, certainty, wikidataId, wikidataUrl },
+    isEnabled: open && !!name && !event, // Only for new events, require name
+    onSave: async (eventData) => {
+      const now = new Date().toISOString()
+      const timeToUse = times.find(t => t.id === eventData.selectedTimeId)
+      const locationToUse = entities.find(e => e.id === eventData.selectedLocationId && 'locationType' in e) as Location | undefined
+
+      const fullEventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
+        name: eventData.name,
+        description: eventData.description,
+        personaInterpretations: eventData.interpretations,
+        time: timeToUse,
+        location: locationToUse,
+        wikidataId: eventData.wikidataId || undefined,
+        wikidataUrl: eventData.wikidataUrl || undefined,
+        importedFrom: eventData.wikidataId ? 'wikidata' : undefined,
+        importedAt: eventData.wikidataId ? now : undefined,
+        metadata: {
+          certainty: eventData.certainty,
+          properties: {},
+        },
+      }
+
+      if (autoCreatedIdRef.current) {
+        // Update the auto-created event
+        await updateEvent({
+          id: autoCreatedIdRef.current,
+          createdAt: now,
+          updatedAt: now,
+          ...fullEventData,
+        })
+      } else {
+        // Create new event and track ID
+        const result = await addEvent(fullEventData)
+        // Get the newly created event ID from the result
+        const newEvent = result.events[result.events.length - 1]
+        if (newEvent) {
+          setAutoCreatedEventId(newEvent.id)
+        }
+      }
+    },
+    entityType: 'world-object',
+    entityId: event?.id || autoCreatedIdRef.current || undefined,
+  })
 
   useEffect(() => {
     if (event) {
@@ -107,7 +165,9 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
       setWikidataId('')
       setWikidataUrl('')
     }
-  }, [event, entities])
+    // Reset auto-created ID when dialog opens/closes or event changes
+    setAutoCreatedEventId(null)
+  }, [event, open])
 
   const handleAddParticipant = () => {
     setParticipants([...participants, { entityId: '', roleTypeId: '' }])
@@ -135,11 +195,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
         confidence: interpretationConfidence,
         justification: interpretationJustification || undefined,
       }
-      
+
       // Remove any existing interpretation for this persona
       const filtered = interpretations.filter(i => i.personaId !== selectedPersonaId)
       setInterpretations([...filtered, newInterpretation])
-      
+
       // Reset form
       setSelectedEventTypeId('')
       setParticipants([])
@@ -175,11 +235,30 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     }
 
     if (event) {
-      updateEvent({ ...event, ...eventData })
+      await updateEvent({ ...event, ...eventData })
     } else {
-      addEvent(eventData)
+      await addEvent(eventData)
     }
 
+    onClose()
+  }
+
+  // Cancel handler deletes auto-created event
+  const handleCancel = () => {
+    if (autoCreatedIdRef.current) {
+      deleteEvent(autoCreatedIdRef.current)
+    }
+    setAutoCreatedEventId(null)
+    onClose()
+  }
+
+  // Done handler keeps the event (already saved via autosave)
+  const handleDone = async () => {
+    // Force save any pending changes before closing
+    if (!event && autoCreatedIdRef.current) {
+      await forceSave()
+    }
+    setAutoCreatedEventId(null)
     onClose()
   }
 
@@ -216,7 +295,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const locationEntities = entities.filter(e => 'locationType' in e)
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={handleCancel} maxWidth="lg" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <EventIcon color="secondary" />
@@ -269,7 +348,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
           {/* Show Wikidata chip if imported */}
           {wikidataId && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip 
+              <Chip
                 label={`Wikidata: ${wikidataId}`}
                 size="small"
                 color="secondary"
@@ -369,14 +448,14 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                   <ListItem key={interpretation.personaId} sx={{ flexDirection: 'column', alignItems: 'stretch' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip 
-                          label={getPersonaName(interpretation.personaId)} 
-                          size="small" 
+                        <Chip
+                          label={getPersonaName(interpretation.personaId)}
+                          size="small"
                           color="primary"
                           icon={<PersonIcon />}
                         />
                         <Typography variant="body2">interprets as</Typography>
-                        <Chip 
+                        <Chip
                           label={getEventTypeName(interpretation.personaId, interpretation.eventTypeId)}
                           size="small"
                           variant="outlined"
@@ -384,14 +463,14 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                           sx={{ fontStyle: 'italic' }}
                         />
                       </Box>
-                      <IconButton 
+                      <IconButton
                         size="small"
                         onClick={() => handleRemoveInterpretation(interpretation.personaId)}
                       >
                         <DeleteIcon />
                       </IconButton>
                     </Box>
-                    
+
                     {interpretation.participants.length > 0 && (
                       <Box sx={{ ml: 4, mt: 1 }}>
                         <Typography variant="caption" color="text.secondary">Participants:</Typography>
@@ -491,7 +570,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                                 ))}
                               </Select>
                             </FormControl>
-                            <IconButton 
+                            <IconButton
                               size="small"
                               onClick={() => handleRemoveParticipant(index)}
                             >
@@ -499,7 +578,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                             </IconButton>
                           </Box>
                         ))}
-                        <Button 
+                        <Button
                           size="small"
                           startIcon={<AddIcon />}
                           onClick={handleAddParticipant}
@@ -526,8 +605,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                         onChange={(e) => setInterpretationJustification(e.target.value)}
                       />
 
-                      <Button 
-                        variant="outlined" 
+                      <Button
+                        variant="outlined"
                         startIcon={<AddIcon />}
                         onClick={handleAddInterpretation}
                         disabled={!selectedEventTypeId}
@@ -542,16 +621,40 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
-          color="secondary"
-          disabled={!name || description.length === 0}
-        >
-          {event ? 'Update' : 'Create'} Event
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Box>
+          {!event && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleCancel}>Cancel</Button>
+          {event ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0}
+            >
+              Update Event
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDone}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0 || !autoCreatedEventId}
+            >
+              Done
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   )

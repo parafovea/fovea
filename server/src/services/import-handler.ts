@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
+import { NotFoundError, ValidationError } from '../lib/errors.js'
 import {
   ImportLine,
   ValidationResult,
@@ -112,7 +113,7 @@ export class ImportHandler {
       const parsed = JSON.parse(line)
 
       if (!parsed.type || !parsed.data) {
-        throw new Error('Line must have "type" and "data" fields')
+        throw new ValidationError('Line must have "type" and "data" fields')
       }
 
       return {
@@ -122,7 +123,7 @@ export class ImportHandler {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      throw new Error(`Failed to parse line ${lineNumber}: ${errorMessage}`)
+      throw new ValidationError(`Failed to parse line ${lineNumber}: ${errorMessage}`)
     }
   }
 
@@ -987,7 +988,7 @@ export class ImportHandler {
       const validation = this.validateLine(line)
       if (!validation.valid) {
         if (options.validation.strictMode) {
-          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+          throw new ValidationError(`Validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors })
         }
         result.warnings.push({
           line: line.lineNumber,
@@ -1152,7 +1153,7 @@ export class ImportHandler {
       // Get current world state
       const worldState = await tx.worldState.findUnique({ where: { id: worldStateId } })
       if (!worldState) {
-        throw new Error('World state not found')
+        throw new NotFoundError('World state', worldStateId)
       }
 
       // Determine which array to update
@@ -1262,7 +1263,7 @@ export class ImportHandler {
       const validation = this.validateLine(line)
       if (!validation.valid) {
         if (options.validation.strictMode) {
-          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+          throw new ValidationError(`Validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors })
         }
         result.warnings.push({
           line: line.lineNumber,
@@ -1290,6 +1291,7 @@ export class ImportHandler {
         audioModelUsed: (line.data.audioModelUsed as string) || undefined,
         visualModelUsed: (line.data.visualModelUsed as string) || undefined,
         fusionStrategy: (line.data.fusionStrategy as string) || undefined,
+        comment: (line.data.comment as string) || undefined,
         createdBy: (line.data.createdBy as string) || undefined,
         updatedAt: new Date()
       }
@@ -1316,6 +1318,7 @@ export class ImportHandler {
             audioModelUsed: (line.data.audioModelUsed as string) || undefined,
             visualModelUsed: (line.data.visualModelUsed as string) || undefined,
             fusionStrategy: (line.data.fusionStrategy as string) || undefined,
+            comment: (line.data.comment as string) || undefined,
             createdBy: (line.data.createdBy as string) || undefined,
             createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
           }
@@ -1368,7 +1371,7 @@ export class ImportHandler {
       const validation = this.validateLine(line)
       if (!validation.valid) {
         if (options.validation.strictMode) {
-          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+          throw new ValidationError(`Validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors })
         }
         result.warnings.push({
           line: line.lineNumber,
@@ -1398,6 +1401,16 @@ export class ImportHandler {
         confidence: (line.data.confidence as number) || undefined,
         modelUsed: (line.data.modelUsed as string) || undefined,
         extractionStrategy: (line.data.extractionStrategy as string) || undefined,
+        audio: line.data.audio !== undefined && line.data.audio !== null 
+          ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+          : Prisma.JsonNull,
+        video: line.data.video !== undefined && line.data.video !== null
+          ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+          : Prisma.JsonNull,
+        metadata: line.data.metadata !== undefined && line.data.metadata !== null
+          ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+          : Prisma.JsonNull,
+        comment: (line.data.comment as string) || undefined,
         createdBy: (line.data.createdBy as string) || undefined,
         updatedAt: new Date()
       }
@@ -1426,6 +1439,16 @@ export class ImportHandler {
             confidence: (line.data.confidence as number) || undefined,
             modelUsed: (line.data.modelUsed as string) || undefined,
             extractionStrategy: (line.data.extractionStrategy as string) || undefined,
+            audio: line.data.audio !== undefined && line.data.audio !== null 
+              ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+              : Prisma.JsonNull,
+            video: line.data.video !== undefined && line.data.video !== null
+              ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+              : Prisma.JsonNull,
+            metadata: line.data.metadata !== undefined && line.data.metadata !== null
+              ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+              : Prisma.JsonNull,
+            comment: (line.data.comment as string) || undefined,
             createdBy: (line.data.createdBy as string) || undefined,
             createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
           }
@@ -1478,7 +1501,7 @@ export class ImportHandler {
       const validation = this.validateLine(line)
       if (!validation.valid) {
         if (options.validation.strictMode) {
-          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+          throw new ValidationError(`Validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors })
         }
         result.warnings.push({
           line: line.lineNumber,
@@ -1569,7 +1592,7 @@ export class ImportHandler {
       const validation = this.validateLine(line)
       if (!validation.valid) {
         if (options.validation.strictMode) {
-          throw new Error(`Validation failed: ${validation.errors.join(', ')}`)
+          throw new ValidationError(`Validation failed: ${validation.errors.join(', ')}`, { errors: validation.errors })
         }
         result.warnings.push({
           line: line.lineNumber,
