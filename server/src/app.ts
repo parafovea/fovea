@@ -6,12 +6,12 @@ import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import fastifyCookie from '@fastify/cookie'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
-import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
+import { prisma } from './lib/prisma.js'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
@@ -123,13 +123,6 @@ export async function buildApp() {
   })
   serverAdapter.setBasePath('/admin/queues')
   await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
-
-  // Database connection
-  const prisma = new PrismaClient({
-    log: process.env.NODE_ENV === 'development'
-      ? ['query', 'error', 'warn']
-      : ['error']
-  })
 
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)

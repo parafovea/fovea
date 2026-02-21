@@ -71,9 +71,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status || 500
+        const statusCode = error.response?.status || 503
         const data = error.response?.data as { detail?: string } | undefined
-        const message = data?.detail || error.message
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
         return reply.code(statusCode).send({ error: message })
       }
       throw new InternalError('Internal server error')
@@ -132,9 +132,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status || 500
+        const statusCode = error.response?.status || 503
         const data = error.response?.data as { detail?: string } | undefined
-        const message = data?.detail || error.message
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
         return reply.code(statusCode).send({ error: message })
       }
       throw new InternalError('Internal server error')
@@ -207,9 +207,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status || 500
+        const statusCode = error.response?.status || 503
         const data = error.response?.data as { detail?: string } | undefined
-        const message = data?.detail || error.message
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
         return reply.code(statusCode).send({ error: message })
       }
       throw new InternalError('Internal server error')
@@ -262,9 +262,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status || 500
+        const statusCode = error.response?.status || 503
         const data = error.response?.data as { detail?: string } | undefined
-        const message = data?.detail || error.message
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
         return reply.code(statusCode).send({ error: message })
       }
       throw new InternalError('Internal server error')

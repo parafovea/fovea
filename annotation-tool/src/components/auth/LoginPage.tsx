@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react'
-import { useNavigate, Link as RouterLink } from 'react-router-dom'
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 import {
   Box,
   Paper,
@@ -22,6 +22,7 @@ import { useAuthStore } from '@store/zustand/authStore'
  */
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
   const allowRegistration = useAuthStore(state => state.allowRegistration)
 
@@ -49,7 +50,8 @@ export default function LoginPage() {
 
     try {
       await login(username, password, rememberMe)
-      navigate('/')
+      const from = (location.state as { from?: string })?.from || '/'
+      navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {

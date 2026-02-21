@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { createVideoStorageProvider, loadStorageConfig } from '../../services/videoStorage.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
+import { requireAuth } from '../../middleware/auth.js'
 import { listRoutes } from './list.js'
 import { streamRoutes } from './stream.js'
 import { thumbnailRoutes } from './thumbnail.js'
@@ -29,6 +30,9 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   // Initialize video repository
   const videoRepository = new VideoRepository(fastify.prisma)
+
+  // Require authentication for all video routes
+  fastify.addHook('onRequest', requireAuth)
 
   // Register all sub-route modules
   await fastify.register(listRoutes, { videoRepository })
