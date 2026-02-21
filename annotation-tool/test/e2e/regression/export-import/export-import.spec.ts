@@ -34,7 +34,7 @@ test.describe('Export/Import Visual Regression', () => {
       }
     })
 
-    test('export stats display correctly', async ({ page, testPersona, db }) => {
+    test('export stats display correctly', async ({ page, testPersona, testUser, db }) => {
       // Create some data so stats show non-zero values
       await db.createEntityType(testPersona.id, {
         name: 'Visual Test Entity',
@@ -200,7 +200,7 @@ test.describe('Export/Import Visual Regression', () => {
   })
 
   test.describe('Progress Indicators', () => {
-    test('export progress indicator renders correctly', async ({ page, testPersona, db }) => {
+    test('export progress indicator renders correctly', async ({ page, testPersona, testUser, db }) => {
       // Create data for export
       await db.createEntityType(testPersona.id, {
         name: 'Progress Test Entity',

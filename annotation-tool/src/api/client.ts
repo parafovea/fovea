@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import { GlossItem } from '@models/types'
 import { TranscriptJson } from '@components/video/types'
+import { logError } from '@services/errorLogging'
 
 /**
  * Video summary data structure returned by the API.
@@ -39,6 +40,8 @@ export interface VideoSummary {
   processingTimeVisual?: number | null
   /** Processing time for audio-visual fusion in seconds. */
   processingTimeFusion?: number | null
+  /** Optional comment about this summary */
+  comment?: string | null
 }
 
 /**
@@ -63,6 +66,7 @@ export interface SaveSummaryRequest {
   processingTimeAudio?: number
   processingTimeVisual?: number
   processingTimeFusion?: number
+  comment?: string | null
   createdBy?: string
 }
 
@@ -642,18 +646,38 @@ export class ApiClient {
   private handleError(error: unknown): ApiError {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError<{ message?: string }>
-      return {
+      const apiError: ApiError = {
         message:
           axiosError.response?.data?.message ||
           axiosError.message ||
           'An unknown error occurred',
         statusCode: axiosError.response?.status || 500,
       }
+
+      // Log API errors for metrics tracking
+      logError(new Error(apiError.message), undefined, {
+        component: 'ApiClient',
+        statusCode: apiError.statusCode,
+        url: axiosError.config?.url,
+        method: axiosError.config?.method,
+      })
+
+      return apiError
     }
-    return {
+
+    const genericError: ApiError = {
       message: error instanceof Error ? error.message : 'An unknown error occurred',
       statusCode: 500,
     }
+
+    // Log non-axios errors
+    logError(
+      error instanceof Error ? error : new Error(genericError.message),
+      undefined,
+      { component: 'ApiClient' }
+    )
+
+    return genericError
   }
 }
 

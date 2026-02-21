@@ -518,4 +518,4 @@ docker compose restart backend
 - [Authentication API Reference](../api-reference/authentication.md)
 - [Environment Variables](../reference/environment-variables.md)
 - [Deployment Configuration](./configuration.md)
-- [Security Best Practices](../operations/common-tasks.md#security)
+- [Common Tasks](../operations/common-tasks.md)

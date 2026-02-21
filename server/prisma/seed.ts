@@ -75,15 +75,22 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     personaOwner = admin
   }
 
-  // Create the Automated persona if it doesn't exist
+  // Create or update the Automated persona
   const existingAutomated = await prisma.persona.findFirst({
     where: { name: 'Automated' },
   })
 
   let automatedPersona
   if (existingAutomated) {
-    automatedPersona = existingAutomated
-    console.log('✓ Automated persona already exists:', automatedPersona.name)
+    // Update existing Automated persona to ensure hidden is true
+    automatedPersona = await prisma.persona.update({
+      where: { id: existingAutomated.id },
+      data: {
+        isSystemGenerated: true,
+        hidden: true,
+      },
+    })
+    console.log('✓ Updated Automated persona:', automatedPersona.name)
   } else {
     automatedPersona = await prisma.persona.create({
       data: {
@@ -91,7 +98,7 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
         role: 'Analyst',
         informationNeed: 'Understanding the content and events in this video',
         isSystemGenerated: true,
-        hidden: false,
+        hidden: true,
         userId: personaOwner.id,
       },
     })

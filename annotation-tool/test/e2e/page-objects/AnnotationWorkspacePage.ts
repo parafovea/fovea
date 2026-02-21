@@ -120,7 +120,8 @@ export class AnnotationWorkspacePage extends BasePage {
       await this.page.mouse.up()
     }
 
-    await this.page.waitForTimeout(500)
+    // Wait for annotation to be created via API
+    await this.page.waitForTimeout(1500)
   }
 
   /**
@@ -171,9 +172,12 @@ export class AnnotationWorkspacePage extends BasePage {
 
     // Press Enter to select the highlighted option
     await typeSelect.press('Enter')
-    await this.page.waitForTimeout(500)
+    await this.page.waitForTimeout(1000)  // Wait for type selection to register
 
     await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })
+
+    // Wait for annotation to be created via API
+    await this.page.waitForTimeout(2000)
   }
 
   /**
@@ -233,9 +237,10 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async expectBoundingBoxVisible(): Promise<void> {
     // Check annotation was created by verifying count >= 1
+    // Use 10s timeout to account for network latency in CI environments
     const annotationHeading = this.page.getByRole('heading', { name: /All Annotations/i })
     // Match: (1), (2), (3), etc. but not (0)
-    await expect(annotationHeading).toContainText(/\([1-9]\d*\)/, { timeout: 5000 })
+    await expect(annotationHeading).toContainText(/\([1-9]\d*\)/, { timeout: 10000 })
   }
 
   /**
@@ -282,6 +287,61 @@ export class AnnotationWorkspacePage extends BasePage {
     if (await successIndicator.count() > 0) {
       await expect(successIndicator.first()).toBeVisible({ timeout: 3000 })
     }
+  }
+
+  /**
+   * Create a promise that resolves when an annotation save API call completes.
+   * Call this BEFORE performing actions that trigger saves, then await the returned promise.
+   * @param timeout - Maximum time to wait in milliseconds (default: 15000)
+   * @returns Promise that resolves when save API responds successfully
+   */
+  createAnnotationSavePromise(timeout = 15000): Promise<import('@playwright/test').Response> {
+    return this.page.waitForResponse(
+      (response) => {
+        const url = response.url()
+        const method = response.request().method()
+        const isAnnotationEndpoint = url.includes('/api/annotations')
+        const isSuccessStatus = response.status() === 200 || response.status() === 201
+        const isSaveMethod = method === 'POST' || method === 'PUT'
+        return isAnnotationEndpoint && isSuccessStatus && isSaveMethod
+      },
+      { timeout }
+    )
+  }
+
+  /**
+   * Wait for auto-save to complete by waiting for the annotation API response.
+   * Uses network interception to ensure the save request completes before proceeding.
+   *
+   * NOTE: This method should be called immediately after the action that triggers a save.
+   * For best results, use createAnnotationSavePromise() before the action.
+   *
+   * @param timeout - Maximum time to wait in milliseconds (default: 15000)
+   */
+  async waitForAutoSaveComplete(timeout = 15000): Promise<void> {
+    // Create a promise that resolves when the annotation save API responds
+    // Start listening immediately so we don't miss the response
+    const saveResponsePromise = this.createAnnotationSavePromise(timeout)
+
+    // Wait for debounce timer (1000ms) plus buffer
+    await this.page.waitForTimeout(1500)
+
+    // Now await the response promise
+    try {
+      await saveResponsePromise
+    } catch {
+      // If no response within timeout, check if save was already completed
+      // by verifying the save status indicator shows "saved"
+      const savedIndicator = this.page.locator('[data-testid="save-status-saved"]')
+      const isSaved = await savedIndicator.isVisible().catch(() => false)
+      if (!isSaved) {
+        // Wait a bit more for any in-flight saves
+        await this.page.waitForTimeout(2000)
+      }
+    }
+
+    // Additional buffer to ensure UI state updates
+    await this.page.waitForTimeout(500)
   }
 
   /**

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -38,7 +38,7 @@ import {
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
-import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment, Entity } from '@models/types'
 
@@ -48,6 +48,7 @@ import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import MapLocationPicker from './MapLocationPicker'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 interface LocationEditorProps {
   open: boolean
@@ -73,9 +74,10 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
 
-  const { mutate: addEntity } = useAddEntity()
-  const { mutate: updateEntity } = useUpdateEntity()
-  
+  const { mutateAsync: addEntity } = useAddEntity()
+  const { mutateAsync: updateEntity } = useUpdateEntity()
+  const { mutate: deleteEntity } = useDeleteEntity()
+
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -83,14 +85,14 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   const [typeAssignments, setTypeAssignments] = useState<EntityTypeAssignment[]>([])
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
-  
+
   // Location-specific fields
   const [locationType, setLocationType] = useState<'point' | 'extent'>('point')
   const [coordinateSystem, setCoordinateSystem] = useState<'GPS' | 'cartesian' | 'relative'>('GPS')
-  
+
   // Point coordinates
   const [pointCoordinates, setPointCoordinates] = useState<Coordinate>({})
-  
+
   // Extent boundaries
   const [boundaryPoints, setBoundaryPoints] = useState<Coordinate[]>([])
   const [useBoundingBox, setUseBoundingBox] = useState(false)
@@ -102,13 +104,97 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     minAltitude?: number
     maxAltitude?: number
   }>({})
-  
+
   // For type assignment form
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState<string>('')
-  
+
   // Map interface state
   const [mapOpen, setMapOpen] = useState(false)
+
+  // Track auto-created location ID for cancel cleanup
+  const [autoCreatedLocationId, setAutoCreatedLocationId] = useState<string | null>(null)
+  const autoCreatedIdRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state for callbacks
+  useEffect(() => {
+    autoCreatedIdRef.current = autoCreatedLocationId
+  }, [autoCreatedLocationId])
+
+  // Auto-save hook for new locations
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: {
+      name,
+      description,
+      typeAssignments,
+      wikidataId,
+      wikidataUrl,
+      alternateNames,
+      locationType,
+      coordinateSystem,
+      pointCoordinates,
+      boundaryPoints,
+      useBoundingBox,
+      boundingBox,
+    },
+    isEnabled: open && !!name && !location, // Only for new locations, require name
+    onSave: async (locationData) => {
+      const now = new Date().toISOString()
+      const baseEntity = {
+        name: locationData.name,
+        description: locationData.description,
+        typeAssignments: locationData.typeAssignments,
+        wikidataId: locationData.wikidataId || undefined,
+        wikidataUrl: locationData.wikidataUrl || undefined,
+        importedFrom: locationData.wikidataId ? 'wikidata' : undefined,
+        importedAt: locationData.wikidataId ? now : undefined,
+        metadata: {
+          alternateNames: locationData.alternateNames.filter(Boolean),
+          externalIds: {},
+          properties: {},
+        },
+      }
+
+      let fullLocationData: Omit<LocationPoint | LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
+
+      if (locationData.locationType === 'point') {
+        fullLocationData = {
+          ...baseEntity,
+          locationType: 'point',
+          coordinateSystem: locationData.coordinateSystem,
+          coordinates: locationData.pointCoordinates,
+        } as Omit<LocationPoint, 'id' | 'createdAt' | 'updatedAt'>
+      } else {
+        fullLocationData = {
+          ...baseEntity,
+          locationType: 'extent',
+          coordinateSystem: locationData.coordinateSystem,
+          boundary: locationData.boundaryPoints,
+          boundingBox: locationData.useBoundingBox ? locationData.boundingBox : undefined,
+        } as Omit<LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
+      }
+
+      if (autoCreatedIdRef.current) {
+        // Update the auto-created location
+        await updateEntity({
+          id: autoCreatedIdRef.current,
+          createdAt: now,
+          updatedAt: now,
+          ...fullLocationData,
+        } as Entity)
+      } else {
+        // Create new location and track ID
+        const result = await addEntity(fullLocationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+        // Get the newly created location ID from the result
+        const newLocation = result.entities[result.entities.length - 1]
+        if (newLocation) {
+          setAutoCreatedLocationId(newLocation.id)
+        }
+      }
+    },
+    entityType: 'world-object',
+    entityId: location?.id || autoCreatedIdRef.current || undefined,
+  })
 
   useEffect(() => {
     if (location) {
@@ -120,7 +206,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setWikidataUrl(location.wikidataUrl || '')
       setLocationType(location.locationType)
       setCoordinateSystem(location.coordinateSystem || 'GPS')
-      
+
       if (location.locationType === 'point') {
         const point = location as LocationPoint
         setPointCoordinates(point.coordinates || {})
@@ -147,7 +233,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setWikidataId('')
       setWikidataUrl('')
     }
-  }, [location])
+    // Reset auto-created ID when dialog opens/closes or location changes
+    setAutoCreatedLocationId(null)
+  }, [location, open])
 
   const handleAddBoundaryPoint = () => {
     setBoundaryPoints([...boundaryPoints, {}])
@@ -170,10 +258,10 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         entityTypeId: selectedEntityTypeId,
         confidence: 1.0,
       }
-      
+
       const filtered = typeAssignments.filter(a => a.personaId !== selectedPersonaId)
       setTypeAssignments([...filtered, newAssignment])
-      
+
       setSelectedEntityTypeId('')
     }
   }
@@ -211,7 +299,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     setMapOpen(false)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const now = new Date().toISOString()
     const baseEntity = {
       name,
@@ -248,11 +336,30 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     }
 
     if (location) {
-      updateEntity({ ...location, ...locationData } as Entity)
+      await updateEntity({ ...location, ...locationData } as Entity)
     } else {
-      addEntity(locationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+      await addEntity(locationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
     }
 
+    onClose()
+  }
+
+  // Cancel handler deletes auto-created location
+  const handleCancel = () => {
+    if (autoCreatedIdRef.current) {
+      deleteEntity(autoCreatedIdRef.current)
+    }
+    setAutoCreatedLocationId(null)
+    onClose()
+  }
+
+  // Done handler keeps the location (already saved via autosave)
+  const handleDone = async () => {
+    // Force save any pending changes before closing
+    if (!location && autoCreatedIdRef.current) {
+      await forceSave()
+    }
+    setAutoCreatedLocationId(null)
     onClose()
   }
 
@@ -349,7 +456,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
   return (
     <>
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={handleCancel} maxWidth="lg" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LocationIcon color="secondary" />
@@ -450,7 +557,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
             <Typography variant="subtitle1" gutterBottom>
               Location Geometry
             </Typography>
-            
+
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
               <ToggleButtonGroup
                 value={locationType}
@@ -523,7 +630,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                 <Typography variant="subtitle2" gutterBottom>
                   Region Boundary
                 </Typography>
-                
+
                 {/* Boundary Points */}
                 {!useBoundingBox && (
                   <>
@@ -558,7 +665,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                   >
                     {useBoundingBox ? 'Using Bounding Box' : 'Use Bounding Box Instead'}
                   </Button>
-                  
+
                   {useBoundingBox && coordinateSystem === 'GPS' && (
                     <Grid container spacing={1} sx={{ mt: 1 }}>
                       <Grid item xs={6}>
@@ -567,9 +674,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                           type="number"
                           size="small"
                           value={boundingBox.minLatitude || ''}
-                          onChange={(e) => setBoundingBox({ 
-                            ...boundingBox, 
-                            minLatitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                          onChange={(e) => setBoundingBox({
+                            ...boundingBox,
+                            minLatitude: e.target.value ? parseFloat(e.target.value) : undefined
                           })}
                           fullWidth
                         />
@@ -580,9 +687,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                           type="number"
                           size="small"
                           value={boundingBox.maxLatitude || ''}
-                          onChange={(e) => setBoundingBox({ 
-                            ...boundingBox, 
-                            maxLatitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                          onChange={(e) => setBoundingBox({
+                            ...boundingBox,
+                            maxLatitude: e.target.value ? parseFloat(e.target.value) : undefined
                           })}
                           fullWidth
                         />
@@ -593,9 +700,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                           type="number"
                           size="small"
                           value={boundingBox.minLongitude || ''}
-                          onChange={(e) => setBoundingBox({ 
-                            ...boundingBox, 
-                            minLongitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                          onChange={(e) => setBoundingBox({
+                            ...boundingBox,
+                            minLongitude: e.target.value ? parseFloat(e.target.value) : undefined
                           })}
                           fullWidth
                         />
@@ -606,9 +713,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                           type="number"
                           size="small"
                           value={boundingBox.maxLongitude || ''}
-                          onChange={(e) => setBoundingBox({ 
-                            ...boundingBox, 
-                            maxLongitude: e.target.value ? parseFloat(e.target.value) : undefined 
+                          onChange={(e) => setBoundingBox({
+                            ...boundingBox,
+                            maxLongitude: e.target.value ? parseFloat(e.target.value) : undefined
                           })}
                           fullWidth
                         />
@@ -639,13 +746,13 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip 
-                            label={getPersonaName(assignment.personaId)} 
-                            size="small" 
+                          <Chip
+                            label={getPersonaName(assignment.personaId)}
+                            size="small"
                             color="primary"
                           />
                           <Typography variant="body2">classifies as</Typography>
-                          <Chip 
+                          <Chip
                             label={getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
                             size="small"
                             variant="outlined"
@@ -655,7 +762,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                         </Box>
                       }
                     />
-                    <IconButton 
+                    <IconButton
                       size="small"
                       onClick={() => handleRemoveTypeAssignment(assignment.personaId)}
                     >
@@ -715,19 +822,43 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained"
-          color="secondary"
-          disabled={!name || description.length === 0}
-        >
-          {location ? 'Update' : 'Create'} Location
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Box>
+          {!location && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleCancel}>Cancel</Button>
+          {location ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0}
+            >
+              Update Location
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDone}
+              variant="contained"
+              color="secondary"
+              disabled={!name || description.length === 0 || !autoCreatedLocationId}
+            >
+              Done
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
-    
+
     {/* Map Location Picker */}
     {mapOpen && (
       <MapLocationPicker

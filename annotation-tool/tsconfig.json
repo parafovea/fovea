@@ -27,6 +27,7 @@
       "@utils/*": ["src/utils/*"],
       "@lib/*": ["src/lib/*"],
       "@services/*": ["src/services/*"],
+      "@telemetry/*": ["src/telemetry/*"],
       "@test/*": ["test/*"]
     }
   },

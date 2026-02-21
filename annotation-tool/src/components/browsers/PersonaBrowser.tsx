@@ -49,11 +49,15 @@ export default function PersonaBrowser({
     deleteDialogOpen
   )
 
-  const filteredPersonas = personas.filter(persona =>
-    persona.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    persona.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    persona.informationNeed.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Filter out hidden personas (defense-in-depth, backend also filters)
+  // and apply search term
+  const filteredPersonas = personas
+    .filter(persona => !persona.hidden)
+    .filter(persona =>
+      persona.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      persona.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      persona.informationNeed.toLowerCase().includes(searchTerm.toLowerCase())
+    )
 
   const handlePersonaClick = (persona: Persona) => {
     setSelectedPersonaId(persona.id)

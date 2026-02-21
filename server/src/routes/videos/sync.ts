@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { syncVideosFromStorage } from '../../services/videoSync.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
 import { InternalError } from '../../lib/errors.js'
+import { requireAdmin } from '../../middleware/auth.js'
 
 /**
  * Video synchronization route.
@@ -24,6 +25,7 @@ export const syncRoutes: FastifyPluginAsync<{
    * @returns Sync statistics
    */
   fastify.post('/api/videos/sync', {
+    onRequest: [requireAdmin],
     schema: {
       description: 'Sync videos from storage to database (admin only)',
       tags: ['videos'],

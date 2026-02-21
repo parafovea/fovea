@@ -42,8 +42,8 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
     const dialog = page.locator('[role="dialog"]')
     await expect(dialog).toBeVisible()
 
-    // Verify it's the create entity dialog (use button for specificity)
-    await expect(dialog.getByRole('button', { name: /create entity/i })).toBeVisible()
+    // Verify it's the create entity dialog (check dialog title)
+    await expect(dialog.getByRole('heading', { name: /create entity/i })).toBeVisible()
   })
 
   test('n creates different objects based on active tab', async ({ page, testUser }) => {
@@ -64,7 +64,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
 
     let dialog = page.locator('[role="dialog"]')
     await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /create event/i })).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: /create event/i })).toBeVisible()
 
     // Close dialog
     await page.keyboard.press('Escape')
@@ -80,7 +80,7 @@ test.describe('Keyboard Shortcuts - Object Workspace', () => {
 
     dialog = page.locator('[role="dialog"]')
     await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /create location/i })).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: /create location/i })).toBeVisible()
   })
 
   test('/ focuses search field', async ({ page, testUser }) => {
