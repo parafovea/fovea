@@ -5,6 +5,7 @@ import {
   Typography,
   Box,
   Button,
+  Chip,
   IconButton,
   Drawer,
   List,
@@ -12,6 +13,11 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  type SelectChangeEvent,
   Snackbar,
   Alert,
   CircularProgress,
@@ -22,6 +28,9 @@ import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
   Inventory2 as ObjectIcon,
+  Group as GroupIcon,
+  Folder as FolderIcon,
+  Share as ShareIcon,
   Save as SaveIcon,
   Download as ExportIcon,
   Upload as ImportIcon,
@@ -30,7 +39,9 @@ import {
 } from '@mui/icons-material'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
+import { useMyProjects } from '@store/queries/useProjects'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
+import { useProjectContextStore } from '@store/zustand/projectContextStore'
 import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
@@ -76,6 +87,25 @@ export default function Layout() {
 
   // Zustand stores
   const lastAnnotation = useVideoUiStore((state) => state.lastAnnotation)
+  const activeProjectId = useProjectContextStore(state => state.activeProjectId)
+  const activeProjectRole = useProjectContextStore(state => state.activeProjectRole)
+  const setActiveProject = useProjectContextStore(state => state.setActiveProject)
+  const clearProject = useProjectContextStore(state => state.clearProject)
+
+  // Project context selector data
+  const { data: myProjects = [] } = useMyProjects()
+
+  const handleProjectChange = useCallback((event: SelectChangeEvent<string>) => {
+    const value = event.target.value
+    if (value === '') {
+      clearProject()
+    } else {
+      const project = myProjects.find(p => p.id === value)
+      if (project) {
+        setActiveProject(project.id, project.name, project.myRole ?? 'member')
+      }
+    }
+  }, [myProjects, setActiveProject, clearProject])
 
   // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
   const unsavedChanges = false
@@ -94,6 +124,12 @@ export default function Layout() {
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
     { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+  ]
+
+  const collaborationItems = [
+    { text: 'My Groups', icon: <GroupIcon />, path: '/groups' },
+    { text: 'My Projects', icon: <FolderIcon />, path: '/projects' },
+    { text: 'Shared', icon: <ShareIcon />, path: '/shared' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -250,6 +286,50 @@ export default function Layout() {
               Flexible Ontology Visual Event Analyzer
             </Typography>
           </Box>
+          {/* Project Context Selector */}
+          <FormControl
+            size="small"
+            variant="outlined"
+            sx={{
+              minWidth: 180,
+              mr: 2,
+              '& .MuiOutlinedInput-root': {
+                color: 'inherit',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.7)' },
+              },
+              '& .MuiSvgIcon-root': { color: 'inherit' },
+              '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+            }}
+          >
+            <InputLabel id="project-context-label">Project</InputLabel>
+            <Select
+              labelId="project-context-label"
+              value={activeProjectId ?? ''}
+              label="Project"
+              onChange={handleProjectChange}
+            >
+              <MenuItem value="">Personal Workspace</MenuItem>
+              {myProjects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {activeProjectRole && (
+            <Chip
+              label={activeProjectRole}
+              size="small"
+              sx={{
+                mr: 2,
+                color: 'inherit',
+                borderColor: 'rgba(255,255,255,0.5)',
+              }}
+              variant="outlined"
+            />
+          )}
           {unsavedChanges && (
             <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes
@@ -332,14 +412,33 @@ export default function Layout() {
               }}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText 
-                primary={item.text} 
+              <ListItemText
+                primary={item.text}
                 secondary={item.shortcut}
-                secondaryTypographyProps={{ 
+                secondaryTypographyProps={{
                   variant: 'caption',
                   sx: { opacity: 0.7 }
                 }}
               />
+            </ListItem>
+          ))}
+        </List>
+        <Divider />
+        <List>
+          {collaborationItems.map((item) => (
+            <ListItem
+              key={item.path}
+              component={Link}
+              to={item.path}
+              onClick={() => setDrawerOpen(false)}
+              sx={{
+                textDecoration: 'none',
+                color: 'inherit',
+                backgroundColor: location.pathname.startsWith(item.path) ? 'action.selected' : 'transparent',
+              }}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
             </ListItem>
           ))}
         </List>

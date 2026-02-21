@@ -23,6 +23,22 @@ vi.mock('./SessionManagementPage.js', () => ({
   ),
 }))
 
+vi.mock('./GroupManagementPage.js', () => ({
+  default: () => <div>Group Management Page</div>,
+}))
+
+vi.mock('./ProjectManagementPage.js', () => ({
+  default: () => <div>Project Management Page</div>,
+}))
+
+vi.mock('./VideoAssignmentPage.js', () => ({
+  default: () => <div>Video Assignment Page</div>,
+}))
+
+vi.mock('./PermissionsPage.js', () => ({
+  default: () => <div>Permissions Page</div>,
+}))
+
 vi.mock('./SessionManagementDialog.js', () => ({
   default: ({ open, onClose }: { open: boolean; onClose: () => void }) => (
     open ? (
@@ -74,7 +90,7 @@ describe('AdminPanel', () => {
     expect(screen.getByText('Home Page')).toBeInTheDocument()
   })
 
-  it('renders tabs for Users, Sessions, Settings', () => {
+  it('renders all seven tabs', () => {
     useAuthStore.getState().loginSuccess(mockAdminUser)
 
     render(
@@ -84,6 +100,10 @@ describe('AdminPanel', () => {
     )
 
     expect(screen.getByRole('tab', { name: /users/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /groups/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /projects/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /video access/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /permissions/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /sessions/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /settings/i })).toBeInTheDocument()
   })
@@ -98,6 +118,74 @@ describe('AdminPanel', () => {
     )
 
     expect(screen.getByText('User Management Page')).toBeInTheDocument()
+  })
+
+  it('shows GroupManagementPage when Groups tab clicked', async () => {
+    const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(
+      <MemoryRouter>
+        <AdminPanel />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('tab', { name: /groups/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Group Management Page')).toBeInTheDocument()
+    })
+  })
+
+  it('shows ProjectManagementPage when Projects tab clicked', async () => {
+    const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(
+      <MemoryRouter>
+        <AdminPanel />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('tab', { name: /projects/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Management Page')).toBeInTheDocument()
+    })
+  })
+
+  it('shows VideoAssignmentPage when Video Access tab clicked', async () => {
+    const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(
+      <MemoryRouter>
+        <AdminPanel />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('tab', { name: /video access/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Video Assignment Page')).toBeInTheDocument()
+    })
+  })
+
+  it('shows PermissionsPage when Permissions tab clicked', async () => {
+    const user = userEvent.setup()
+    useAuthStore.getState().loginSuccess(mockAdminUser)
+
+    render(
+      <MemoryRouter>
+        <AdminPanel />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('tab', { name: /permissions/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Permissions Page')).toBeInTheDocument()
+    })
   })
 
   it('shows SessionManagementPage when Sessions tab clicked', async () => {
@@ -147,7 +235,7 @@ describe('AdminPanel', () => {
     expect(screen.queryByText('Admin Panel')).not.toBeInTheDocument()
   })
 
-  it('switches between Sessions and Users tabs', async () => {
+  it('switches between tabs correctly', async () => {
     const user = userEvent.setup()
     useAuthStore.getState().loginSuccess(mockAdminUser)
 
@@ -160,16 +248,20 @@ describe('AdminPanel', () => {
     // Initially on Users tab
     expect(screen.getByText('User Management Page')).toBeInTheDocument()
 
+    // Switch to Groups tab
+    await user.click(screen.getByRole('tab', { name: /groups/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Group Management Page')).toBeInTheDocument()
+    })
+
     // Switch to Sessions tab
     await user.click(screen.getByRole('tab', { name: /sessions/i }))
-
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument()
     })
 
     // Switch back to Users tab
     await user.click(screen.getByRole('tab', { name: /users/i }))
-
     await waitFor(() => {
       expect(screen.getByText('User Management Page')).toBeInTheDocument()
     })

@@ -7,6 +7,11 @@ import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
 import Settings from './pages/Settings'
+import GroupsPage from './pages/GroupsPage'
+import GroupDetailPage from './pages/GroupDetailPage'
+import ProjectsPage from './pages/ProjectsPage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
+import SharedAnnotationsPage from './pages/SharedAnnotationsPage'
 import LoginPage from './components/auth/LoginPage'
 import RegisterPage from './components/auth/RegisterPage'
 import AdminPanel from './components/admin/AdminPanel'
@@ -20,6 +25,9 @@ import { useSession } from './hooks/auth/useSession'
 import { CommandPalette } from '@components/shared/CommandPalette'
 import { initializeCommands, initializeGlobalContext } from './lib/commands/init-commands'
 import { commandRegistry } from './lib/commands/command-registry'
+import { AbilityContext } from './lib/ability'
+import { useAbilityStore } from './store/zustand/abilityStore'
+import { useAbilities } from './store/queries/useAbilities'
 
 /**
  * Loading screen component.
@@ -72,6 +80,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   // Restore session on mount (also fetches config)
   useSession()
+
+  // CASL ability management
+  const ability = useAbilityStore(state => state.ability)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  useAbilities(isAuthenticated)
 
   // Fetch personas via TanStack Query - this triggers initial data loading
   const { data: personas = [] } = usePersonas()
@@ -134,60 +147,102 @@ function App() {
   }, [])
 
   return (
-    <ErrorBoundary context={{ component: 'App' }}>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+    <AbilityContext.Provider value={ability}>
+      <ErrorBoundary context={{ component: 'App' }}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-        {/* Protected routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<VideoBrowser />} />
+          {/* Protected routes */}
           <Route
-            path="annotate/:videoId"
+            path="/"
             element={
-              <ErrorBoundary context={{ route: 'AnnotationWorkspace' }}>
-                <AnnotationWorkspace />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
             }
-          />
-          <Route
-            path="ontology"
-            element={
-              <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
-                <OntologyWorkspace />
-              </ErrorBoundary>
-            }
-          />
-          <Route
-            path="objects"
-            element={
-              <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
-                <ObjectWorkspace />
-              </ErrorBoundary>
-            }
-          />
-          <Route path="settings" element={<Settings />} />
-          <Route
-            path="admin"
-            element={
-              <ErrorBoundary context={{ route: 'AdminPanel' }}>
-                <AdminPanel />
-              </ErrorBoundary>
-            }
-          />
-        </Route>
-      </Routes>
-      <CommandPalette />
-      <SessionManager />
-    </ErrorBoundary>
+          >
+            <Route index element={<VideoBrowser />} />
+            <Route
+              path="annotate/:videoId"
+              element={
+                <ErrorBoundary context={{ route: 'AnnotationWorkspace' }}>
+                  <AnnotationWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="ontology"
+              element={
+                <ErrorBoundary context={{ route: 'OntologyWorkspace' }}>
+                  <OntologyWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="objects"
+              element={
+                <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
+                  <ObjectWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="groups"
+              element={
+                <ErrorBoundary context={{ route: 'GroupsPage' }}>
+                  <GroupsPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="groups/:groupId"
+              element={
+                <ErrorBoundary context={{ route: 'GroupDetailPage' }}>
+                  <GroupDetailPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="projects"
+              element={
+                <ErrorBoundary context={{ route: 'ProjectsPage' }}>
+                  <ProjectsPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="projects/:projectId"
+              element={
+                <ErrorBoundary context={{ route: 'ProjectDetailPage' }}>
+                  <ProjectDetailPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="shared"
+              element={
+                <ErrorBoundary context={{ route: 'SharedAnnotationsPage' }}>
+                  <SharedAnnotationsPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route path="settings" element={<Settings />} />
+            <Route
+              path="admin"
+              element={
+                <ErrorBoundary context={{ route: 'AdminPanel' }}>
+                  <AdminPanel />
+                </ErrorBoundary>
+              }
+            />
+          </Route>
+        </Routes>
+        <CommandPalette />
+        <SessionManager />
+      </ErrorBoundary>
+    </AbilityContext.Provider>
   )
 }
 
