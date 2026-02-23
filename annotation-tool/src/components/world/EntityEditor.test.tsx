@@ -10,6 +10,7 @@ vi.mock('@store/queries', () => ({
   useAllPersonaOntologies: () => ({ data: [] }),
   useAddEntity: () => ({ mutate: vi.fn() }),
   useUpdateEntity: () => ({ mutate: vi.fn() }),
+  useDeleteEntity: () => ({ mutate: vi.fn() }),
   // GlossEditor dependencies
   usePersonaOntology: () => ({ data: null }),
   useWorld: () => ({ data: { entities: [], entityTypes: [] } }),
