@@ -9,7 +9,7 @@ strategies and inference frameworks (SGLang or vLLM).
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import torch
@@ -26,7 +26,7 @@ from transformers import (
 logger = logging.getLogger(__name__)
 
 
-class QuantizationType(str, Enum):
+class QuantizationType(StrEnum):
     """Supported quantization types for model compression."""
 
     NONE = "none"
@@ -35,7 +35,7 @@ class QuantizationType(str, Enum):
     AWQ = "awq"
 
 
-class InferenceFramework(str, Enum):
+class InferenceFramework(StrEnum):
     """Supported inference frameworks for model execution."""
 
     SGLANG = "sglang"
