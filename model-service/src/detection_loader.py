@@ -9,7 +9,7 @@ for detecting objects without pre-defined class vocabularies.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
-class DetectionFramework(str, Enum):
+class DetectionFramework(StrEnum):
     """Supported detection frameworks for model execution."""
 
     PYTORCH = "pytorch"
