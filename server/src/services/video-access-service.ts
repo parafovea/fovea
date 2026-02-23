@@ -64,70 +64,70 @@ export class VideoAccessService {
     }
 
     try {
-    // 2. Get user's group IDs via GroupMembership
-    const groupMemberships = await this.prisma.groupMembership.findMany({
-      where: { userId },
-      select: { groupId: true },
-    })
-    const groupIds = groupMemberships.map(gm => gm.groupId)
-
-    // 3. Get user's project IDs (personal memberships + via group-owned projects)
-    const [directProjects, groupProjects] = await Promise.all([
-      this.prisma.projectMembership.findMany({
+      // 2. Get user's group IDs via GroupMembership
+      const groupMemberships = await this.prisma.groupMembership.findMany({
         where: { userId },
-        select: { projectId: true },
-      }),
-      groupIds.length > 0
-        ? this.prisma.project.findMany({
-            where: { ownerGroupId: { in: groupIds } },
-            select: { id: true },
+        select: { groupId: true },
+      })
+      const groupIds = groupMemberships.map(gm => gm.groupId)
+
+      // 3. Get user's project IDs (personal memberships + via group-owned projects)
+      const [directProjects, groupProjects] = await Promise.all([
+        this.prisma.projectMembership.findMany({
+          where: { userId },
+          select: { projectId: true },
+        }),
+        groupIds.length > 0
+          ? this.prisma.project.findMany({
+              where: { ownerGroupId: { in: groupIds } },
+              select: { id: true },
+            })
+          : Promise.resolve([]),
+      ])
+
+      const projectIds = [
+        ...new Set([
+          ...directProjects.map(p => p.projectId),
+          ...groupProjects.map(p => p.id),
+        ]),
+      ]
+
+      // 4. Get assigned video IDs from projects or direct user assignments
+      const assignments = projectIds.length > 0
+        ? await this.prisma.projectVideoAssignment.findMany({
+            where: {
+              OR: [
+                { projectId: { in: projectIds } },
+                { assignedUserId: userId },
+              ],
+            },
+            select: { videoId: true },
           })
-        : Promise.resolve([]),
-    ])
+        : await this.prisma.projectVideoAssignment.findMany({
+            where: { assignedUserId: userId },
+            select: { videoId: true },
+          })
 
-    const projectIds = [
-      ...new Set([
-        ...directProjects.map(p => p.projectId),
-        ...groupProjects.map(p => p.id),
-      ]),
-    ]
+      const assignedVideoIds = [...new Set(assignments.map(a => a.videoId))]
 
-    // 4. Get assigned video IDs from projects or direct user assignments
-    const assignments = projectIds.length > 0
-      ? await this.prisma.projectVideoAssignment.findMany({
-          where: {
-            OR: [
-              { projectId: { in: projectIds } },
-              { assignedUserId: userId },
-            ],
-          },
-          select: { videoId: true },
-        })
-      : await this.prisma.projectVideoAssignment.findMany({
-          where: { assignedUserId: userId },
-          select: { videoId: true },
-        })
+      // 5. Get "global" video IDs (videos with zero assignments)
+      const assignedVideoIdsAll = await this.prisma.projectVideoAssignment.findMany({
+        select: { videoId: true },
+        distinct: ['videoId'],
+      })
+      const allAssignedIds = new Set(assignedVideoIdsAll.map(a => a.videoId))
 
-    const assignedVideoIds = [...new Set(assignments.map(a => a.videoId))]
+      const globalVideos = await this.prisma.video.findMany({
+        where: { id: { notIn: [...allAssignedIds] } },
+        select: { id: true },
+      })
 
-    // 5. Get "global" video IDs (videos with zero assignments)
-    const assignedVideoIdsAll = await this.prisma.projectVideoAssignment.findMany({
-      select: { videoId: true },
-      distinct: ['videoId'],
-    })
-    const allAssignedIds = new Set(assignedVideoIdsAll.map(a => a.videoId))
+      const globalVideoIds = globalVideos.map(v => v.id)
 
-    const globalVideos = await this.prisma.video.findMany({
-      where: { id: { notIn: [...allAssignedIds] } },
-      select: { id: true },
-    })
-
-    const globalVideoIds = globalVideos.map(v => v.id)
-
-    // 6. Return the union of assigned and global video IDs
-    const result = [...new Set([...assignedVideoIds, ...globalVideoIds])]
-    span.setAttribute('video_access.result_count', result.length)
-    return result
+      // 6. Return the union of assigned and global video IDs
+      const result = [...new Set([...assignedVideoIds, ...globalVideoIds])]
+      span.setAttribute('video_access.result_count', result.length)
+      return result
     } finally {
       span.end()
     }
