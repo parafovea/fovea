@@ -9,7 +9,7 @@ occlusion handling, and mask-based segmentation output.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ IOU_MATCH_THRESHOLD = 0.3
 LOW_CONFIDENCE_IOU_THRESHOLD = 0.5
 
 
-class TrackingFramework(str, Enum):
+class TrackingFramework(StrEnum):
     """Supported tracking frameworks for model execution."""
 
     PYTORCH = "pytorch"

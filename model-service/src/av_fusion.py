@@ -8,13 +8,13 @@ processing, timestamp alignment, native multimodal models, and hybrid approaches
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class FusionStrategy(str, Enum):
+class FusionStrategy(StrEnum):
     """Supported audio-visual fusion strategies."""
 
     SEQUENTIAL = "sequential"
