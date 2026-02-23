@@ -230,6 +230,29 @@ The comment field allows you to add additional notes or commentary about a claim
 - "Contradicts claim #123 - needs resolution"
 - "High confidence based on multiple visual cues"
 
+## Summary Preview on Claims Tab
+
+When you switch to the Claims tab, a collapsible "Summary Preview" accordion appears at the top if the summary has content. This read-only preview shows the full summary text (with gloss references rendered) so you can reference it while reviewing or creating claims without switching back to the Summary tab.
+
+The accordion starts expanded and can be collapsed by clicking its header. It does not appear when the summary is empty.
+
+## Workspace Toggle from Claim Editor
+
+While editing a claim, you may need to look up or create an entity type in the Ontology Builder, or an object in the Object Builder. Instead of losing your in-progress claim, you can use keyboard shortcuts to save a draft and switch workspaces:
+
+- Press **W** to save the claim form as a draft and switch to the Object Builder.
+- Press **O** to save the claim form as a draft and switch to the Ontology Builder.
+
+These shortcuts only work when the Claim Editor dialog is open and no input field is focused (they will not interfere with typing in text fields).
+
+All form fields are preserved in the draft: claim text, confidence, modality metadata, claimer information, context fields, and comment.
+
+### Returning to Your Draft
+
+After switching workspaces, a "Draft Claim" chip appears in the top toolbar with a warning color. Click the chip to navigate back to the video's annotation workspace. The summary dialog and claim editor re-open automatically with all your draft fields restored.
+
+To discard the draft without returning, click the chip's delete (X) button.
+
 ## Deleting Claims
 
 ### Single Claim
