@@ -8,6 +8,9 @@ import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
 import './index.css'
 
+// Initialize command registry before React renders (must be before component mount effects)
+import { initializeCommands, initializeGlobalContext } from '@lib/commands/init-commands'
+
 // Initialize telemetry before React renders
 import { initTracing } from '@telemetry/tracing'
 import { initErrorLogging } from '@services/errorLogging'
@@ -24,6 +27,10 @@ initErrorLogging({
   sampleRate: import.meta.env.PROD ? 0.2 : 1.0, // 20% in prod, 100% in dev
   consoleLogging: import.meta.env.DEV,
 })
+
+// Initialize commands synchronously so they're available when component effects run
+initializeCommands()
+initializeGlobalContext()
 
 const theme = createTheme({
   palette: {
