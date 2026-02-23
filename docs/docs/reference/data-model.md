@@ -514,8 +514,271 @@ Static objects use sequences with one keyframe and no interpolation.
 }
 ```
 
+## RBAC Models
+
+### UserGroup Model
+
+Represents a collection of users who share access to projects and resources.
+
+```prisma
+model UserGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  slug        String   @unique
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members        GroupMembership[]
+  projects       Project[]
+  resourceShares ResourceShare[]
+
+  @@map("user_groups")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `name`: Display name for the group
+- `description`: Optional description
+- `slug`: Unique URL-friendly identifier (lowercase alphanumeric and hyphens)
+- `createdBy`: User ID of the creator
+- `members`: One-to-many relationship with GroupMembership
+- `projects`: One-to-many relationship with Project (group-owned projects)
+- `resourceShares`: One-to-many relationship with ResourceShare (shares targeting this group)
+
+### GroupMembership Model
+
+Tracks user membership and role within a group.
+
+```prisma
+model GroupMembership {
+  id       String    @id @default(uuid())
+  userId   String
+  user     User      @relation(...)
+  groupId  String
+  group    UserGroup @relation(...)
+  role     String
+  joinedAt DateTime  @default(now())
+
+  @@unique([userId, groupId])
+  @@map("group_memberships")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `userId`: Foreign key to User
+- `groupId`: Foreign key to UserGroup
+- `role`: One of `group_owner`, `group_admin`, `group_member`
+- `joinedAt`: Timestamp when the user joined the group
+- Unique constraint on (userId, groupId) prevents duplicate memberships
+
+### Project Model
+
+Organizes videos, annotations, and team members around a shared goal.
+
+```prisma
+model Project {
+  id           String    @id @default(uuid())
+  name         String
+  description  String?
+  slug         String    @unique
+  ownerUserId  String?
+  ownerUser    User?     @relation(...)
+  ownerGroupId String?
+  ownerGroup   UserGroup? @relation(...)
+  settings     Json      @default("{}")
+  isArchived   Boolean   @default(false)
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  members          ProjectMembership[]
+  videoAssignments ProjectVideoAssignment[]
+  personas         Persona[]
+  worldStates      WorldState[]
+  annotations      Annotation[]
+  videoSummaries   VideoSummary[]
+  claims           Claim[]
+
+  @@map("projects")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `name`: Display name
+- `description`: Optional description
+- `slug`: Unique URL-friendly identifier
+- `ownerUserId`: Foreign key to User (for personal projects, null for group-owned)
+- `ownerGroupId`: Foreign key to UserGroup (for group-owned projects, null for personal)
+- `settings`: JSON configuration object
+- `isArchived`: Whether the project is archived
+- `createdBy`: User ID who created the project
+- `members`: One-to-many relationship with ProjectMembership
+- `videoAssignments`: One-to-many relationship with ProjectVideoAssignment
+- `personas`, `worldStates`, `annotations`, `videoSummaries`, `claims`: project-scoped resources
+
+### ProjectMembership Model
+
+Tracks user membership and role within a project.
+
+```prisma
+model ProjectMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(...)
+  projectId String
+  project   Project  @relation(...)
+  role      String
+  joinedAt  DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@map("project_memberships")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `userId`: Foreign key to User
+- `projectId`: Foreign key to Project
+- `role`: One of `project_owner`, `project_manager`, `annotator`, `reviewer`, `viewer`
+- `joinedAt`: Timestamp when the user joined the project
+- Unique constraint on (userId, projectId) prevents duplicate memberships
+
+### ProjectVideoAssignment Model
+
+Links videos to projects with optional user assignment.
+
+```prisma
+model ProjectVideoAssignment {
+  id             String   @id @default(uuid())
+  projectId      String
+  project        Project  @relation(...)
+  videoId        String
+  video          Video    @relation(...)
+  assignedUserId String?
+  assignedUser   User?    @relation(...)
+  source         String   @default("manual")
+  ruleDefinition Json?
+  assignedBy     String?
+  assignedAt     DateTime @default(now())
+
+  @@unique([projectId, videoId])
+  @@map("project_video_assignments")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `projectId`: Foreign key to Project
+- `videoId`: Foreign key to Video
+- `assignedUserId`: Optional foreign key to User (for task assignment)
+- `source`: How the assignment was created: `manual` or `rule`
+- `ruleDefinition`: JSON storing rule metadata when source is `rule`
+- `assignedBy`: User ID who created the assignment
+- `assignedAt`: Timestamp of assignment
+- Unique constraint on (projectId, videoId) prevents duplicate assignments
+
+### VideoAssignmentRule Model
+
+Defines automatic video-to-project assignment logic based on metadata conditions.
+
+```prisma
+model VideoAssignmentRule {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  conditions  Json
+  targetType  String
+  targetId    String
+  isActive    Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("video_assignment_rules")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `name`: Display name for the rule
+- `description`: Optional description
+- `conditions`: JSON array of `{field, operator, value}` condition objects
+- `targetType`: One of `user`, `project`, `group`
+- `targetId`: UUID of the target entity
+- `isActive`: Whether the rule is evaluated during batch runs
+- `createdBy`: User ID who created the rule
+
+### ResourceShare Model
+
+Tracks sharing of resources between users and groups.
+
+```prisma
+model ResourceShare {
+  id                String    @id @default(uuid())
+  resourceType      String
+  resourceId        String
+  sharedByUserId    String
+  sharedByUser      User      @relation(...)
+  sharedWithUserId  String?
+  sharedWithUser    User?     @relation(...)
+  sharedWithGroupId String?
+  sharedWithGroup   UserGroup? @relation(...)
+  permissionLevel   String    @default("read_only")
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@map("resource_shares")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `resourceType`: One of `annotation`, `summary`, `claim`, `persona`, `world_state`
+- `resourceId`: UUID of the shared resource
+- `sharedByUserId`: Foreign key to User (the sharer)
+- `sharedWithUserId`: Optional foreign key to User (direct share target)
+- `sharedWithGroupId`: Optional foreign key to UserGroup (group share target)
+- `permissionLevel`: `read_only` or `forkable`
+- `expiresAt`: Optional expiration timestamp
+- Exactly one of sharedWithUserId or sharedWithGroupId is non-null per record
+
+### RolePermission Model
+
+Defines the permission matrix: what actions each role can perform on each resource type.
+
+```prisma
+model RolePermission {
+  id           String   @id @default(uuid())
+  scope        String
+  role         String
+  resourceType String
+  action       String
+  ownOnly      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([scope, role, resourceType, action])
+  @@map("role_permissions")
+}
+```
+
+**Fields**:
+- `id`: UUID primary key
+- `scope`: One of `system`, `group`, `project`
+- `role`: Role identifier (e.g., `system_admin`, `group_owner`, `annotator`)
+- `resourceType`: Resource the permission applies to (e.g., `annotation`, `video`, `project`, `group`)
+- `action`: Permitted action (e.g., `create`, `read`, `update`, `delete`, `share`, `export`, `assign`, `manage_members`, `fork`, `review`)
+- `ownOnly`: When true, the permission applies only to resources created by the user
+- Unique constraint on (scope, role, resourceType, action) prevents duplicate entries
+
 ## Next Steps
 
 - Learn about [Exporting Data](../user-guides/data-management/exporting-data.md)
 - Learn about [Importing Data](../user-guides/data-management/importing-data.md)
 - Explore [Architecture](../concepts/architecture.md)
+- Learn about [Projects, Groups, and RBAC](../concepts/projects-groups.md)
