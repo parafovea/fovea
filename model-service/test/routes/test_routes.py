@@ -486,8 +486,8 @@ class TestDetectionEndpoint:
         import numpy as np
 
         mock_cap = Mock()
-        mock_cap.get.side_effect = (
-            lambda prop: 30.0 if prop == 5 else 100 if prop == 7 else 0
+        mock_cap.get.side_effect = lambda prop: (
+            30.0 if prop == 5 else 100 if prop == 7 else 0
         )  # FPS and frame count
         mock_cap.read.return_value = (True, np.zeros((480, 640, 3), dtype=np.uint8))
         mock_cap.set.return_value = True

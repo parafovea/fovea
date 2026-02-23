@@ -8,7 +8,7 @@ inference backends for CPU and GPU deployment.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import torch
@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 logger = logging.getLogger(__name__)
 
 
-class AudioFramework(str, Enum):
+class AudioFramework(StrEnum):
     """Supported frameworks for audio model execution."""
 
     WHISPER = "whisper"
