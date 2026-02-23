@@ -81,7 +81,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
   // Auto-save hook for new entities
   const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, typeAssignments, wikidataId, wikidataUrl, alternateNames },
+    data: { name, description, typeAssignments, wikidataId, wikidataUrl, alternateNamesInput },
     isEnabled: open && !!name && !entity, // Only for new entities, require name
     onSave: async (entityData) => {
       const now = new Date().toISOString()
@@ -94,7 +94,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
         importedFrom: entityData.wikidataId ? 'wikidata' : undefined,
         importedAt: entityData.wikidataId ? now : undefined,
         metadata: {
-          alternateNames: entityData.alternateNames.filter(Boolean),
+          alternateNames: entityData.alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
           externalIds: {},
           properties: {},
         },
