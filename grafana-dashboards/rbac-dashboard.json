@@ -1,0 +1,177 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "RBAC, projects, groups, sharing, and video assignment monitoring",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Permission Checks (Allowed vs Denied)",
+      "type": "timeseries",
+      "id": 1,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2,
+            "stacking": { "group": "A", "mode": "normal" },
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "ops"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "denied" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "allowed" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "expr": "sum by (result) (rate(fovea_rbac_checks_total[5m]))", "legendFormat": "{{result}}", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Permission Checks by Role",
+      "type": "bargauge",
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "showUnfilled": true
+      },
+      "targets": [
+        { "expr": "sum by (role) (increase(fovea_rbac_checks_total[1h]))", "legendFormat": "{{role}}", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Group and Project Operations",
+      "type": "timeseries",
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": true },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "expr": "sum by (operation) (rate(fovea_group_operations_total[5m]))", "legendFormat": "group: {{operation}}", "refId": "A" },
+        { "expr": "sum by (operation) (rate(fovea_project_operations_total[5m]))", "legendFormat": "project: {{operation}}", "refId": "B" }
+      ]
+    },
+    {
+      "title": "Sharing Activity",
+      "type": "timeseries",
+      "id": 4,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": true },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "expr": "sum by (operation) (rate(fovea_sharing_operations_total[5m]))", "legendFormat": "{{operation}}", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Video Assignment Operations",
+      "type": "timeseries",
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": true },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "expr": "sum by (operation, source) (rate(fovea_video_assignment_operations_total[5m]))", "legendFormat": "{{operation}} ({{source}})", "refId": "A" }
+      ]
+    },
+    {
+      "title": "RBAC Check Latency (p50, p95, p99)",
+      "type": "timeseries",
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "spanNulls": true },
+          "unit": "ms"
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(fovea_rbac_check_duration_bucket[5m]))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(fovea_rbac_check_duration_bucket[5m]))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, rate(fovea_rbac_check_duration_bucket[5m]))", "legendFormat": "p99", "refId": "C" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["fovea", "rbac", "projects", "groups", "sharing"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"] },
+  "timezone": "",
+  "title": "Fovea RBAC and Projects Dashboard",
+  "uid": "fovea-rbac",
+  "version": 1,
+  "weekStart": ""
+}

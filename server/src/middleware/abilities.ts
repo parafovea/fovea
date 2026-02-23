@@ -9,14 +9,18 @@
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify'
+import { trace } from '@opentelemetry/api'
 
 import {
   defineAbilitiesFor,
   UserRoles,
   RolePermissionRow,
 } from '../lib/abilities.js'
+import type { Actions, Subjects } from '../lib/abilities.js'
 import { prisma } from '../lib/prisma.js'
 import { rbacCheckCounter, rbacCheckDuration } from '../metrics.js'
+
+const tracer = trace.getTracer('fovea-rbac')
 
 /** In-memory cache for role permissions, invalidated after CACHE_TTL_MS. */
 let cachedPermissions: RolePermissionRow[] | null = null
@@ -77,28 +81,40 @@ export async function buildAbilities(
 ): Promise<void> {
   if (!request.user) return
 
-  const userId = request.user.id
+  const span = tracer.startSpan('rbac.buildAbilities')
+  try {
+    const userId = request.user.id
+    const cacheHadData = cachedPermissions !== null
 
-  // Load user's roles from all scopes in parallel
-  const [groupMemberships, projectMemberships, permissions] = await Promise.all([
-    prisma.groupMembership.findMany({
-      where: { userId },
-      select: { groupId: true, role: true },
-    }),
-    prisma.projectMembership.findMany({
-      where: { userId },
-      select: { projectId: true, role: true },
-    }),
-    getPermissions(),
-  ])
+    // Load user's roles from all scopes in parallel
+    const [groupMemberships, projectMemberships, permissions] = await Promise.all([
+      prisma.groupMembership.findMany({
+        where: { userId },
+        select: { groupId: true, role: true },
+      }),
+      prisma.projectMembership.findMany({
+        where: { userId },
+        select: { projectId: true, role: true },
+      }),
+      getPermissions(),
+    ])
 
-  const roles: UserRoles = {
-    systemRole: request.user.systemRole || 'user',
-    groupRoles: groupMemberships.map(gm => ({ groupId: gm.groupId, role: gm.role })),
-    projectRoles: projectMemberships.map(pm => ({ projectId: pm.projectId, role: pm.role })),
+    const roles: UserRoles = {
+      systemRole: request.user.systemRole || 'user',
+      groupRoles: groupMemberships.map(gm => ({ groupId: gm.groupId, role: gm.role })),
+      projectRoles: projectMemberships.map(pm => ({ projectId: pm.projectId, role: pm.role })),
+    }
+
+    span.setAttribute('rbac.cache_hit', cacheHadData)
+    span.setAttribute('rbac.user_id', userId)
+    span.setAttribute('rbac.system_role', roles.systemRole)
+    span.setAttribute('rbac.group_count', roles.groupRoles.length)
+    span.setAttribute('rbac.project_count', roles.projectRoles.length)
+
+    request.ability = defineAbilitiesFor(userId, roles, permissions)
+  } finally {
+    span.end()
   }
-
-  request.ability = defineAbilitiesFor(userId, roles, permissions)
 }
 
 /**
@@ -123,23 +139,32 @@ export async function buildAbilities(
 export function authorize(action: string, subject: string) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const start = Date.now()
+    const span = tracer.startSpan('rbac.authorize')
 
-    if (!request.ability) {
-      rbacCheckCounter.add(1, { action, resource: subject, result: 'denied', role: 'none' })
+    try {
+      span.setAttribute('rbac.action', action)
+      span.setAttribute('rbac.resource', subject)
+
+      if (!request.ability) {
+        span.setAttribute('rbac.result', 'denied')
+        rbacCheckCounter.add(1, { action, resource: subject, result: 'denied', role: 'none' })
+        rbacCheckDuration.record(Date.now() - start, { action, resource: subject })
+        reply.code(403).send({ error: 'FORBIDDEN', message: 'No abilities defined' })
+        return
+      }
+
+      const allowed = request.ability.can(action as Actions, subject as Subjects)
+      const role = request.user?.systemRole || 'user'
+      span.setAttribute('rbac.result', allowed ? 'allowed' : 'denied')
+      rbacCheckCounter.add(1, { action, resource: subject, result: allowed ? 'allowed' : 'denied', role })
       rbacCheckDuration.record(Date.now() - start, { action, resource: subject })
-      reply.code(403).send({ error: 'FORBIDDEN', message: 'No abilities defined' })
-      return
-    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allowed = request.ability.can(action as any, subject as any)
-    const role = request.user?.systemRole || 'user'
-    rbacCheckCounter.add(1, { action, resource: subject, result: allowed ? 'allowed' : 'denied', role })
-    rbacCheckDuration.record(Date.now() - start, { action, resource: subject })
-
-    if (!allowed) {
-      reply.code(403).send({ error: 'FORBIDDEN', message: `Cannot ${action} ${subject}` })
-      return
+      if (!allowed) {
+        reply.code(403).send({ error: 'FORBIDDEN', message: `Cannot ${action} ${subject}` })
+        return
+      }
+    } finally {
+      span.end()
     }
   }
 }

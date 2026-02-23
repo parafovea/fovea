@@ -10,6 +10,7 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { PrismaClient } from '@prisma/client'
 
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { groupOperationCounter } from '../metrics.js'
@@ -143,8 +144,7 @@ const AdminAddMemberBody = Type.Object({
  * @throws {ForbiddenError} when the user is not a member of the group
  */
 async function requireGroupMembership(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client type from fastify decorator
-  prisma: any,
+  prisma: PrismaClient,
   userId: string,
   groupId: string,
 ): Promise<string> {

@@ -5,6 +5,9 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { trace } from '@opentelemetry/api'
+
+const tracer = trace.getTracer('fovea-rbac')
 
 /**
  * Determines which videos a user can access based on project assignments,
@@ -50,8 +53,17 @@ export class VideoAccessService {
     systemRole: string
   ): Promise<string[] | 'all'> {
     // 1. System admins have unrestricted access
-    if (systemRole === 'system_admin') return 'all'
+    const span = tracer.startSpan('video-access.resolve')
+    span.setAttribute('video_access.user_id', userId)
+    span.setAttribute('video_access.system_role', systemRole)
 
+    if (systemRole === 'system_admin') {
+      span.setAttribute('video_access.result_count', -1)
+      span.end()
+      return 'all'
+    }
+
+    try {
     // 2. Get user's group IDs via GroupMembership
     const groupMemberships = await this.prisma.groupMembership.findMany({
       where: { userId },
@@ -113,6 +125,11 @@ export class VideoAccessService {
     const globalVideoIds = globalVideos.map(v => v.id)
 
     // 6. Return the union of assigned and global video IDs
-    return [...new Set([...assignedVideoIds, ...globalVideoIds])]
+    const result = [...new Set([...assignedVideoIds, ...globalVideoIds])]
+    span.setAttribute('video_access.result_count', result.length)
+    return result
+    } finally {
+      span.end()
+    }
   }
 }

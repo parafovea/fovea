@@ -82,3 +82,32 @@ groups:
         annotations:
           summary: "Queue processing errors detected"
           description: "{{ $value | printf \"%.3f\" }} queue errors/sec"
+
+  - name: rbac_alerts
+    rules:
+      - alert: HighPermissionDenialRate
+        expr: rate(fovea_rbac_checks_total{result="denied"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High RBAC denial rate, possible misconfiguration or unauthorized access attempts"
+          description: "RBAC denial rate is {{ $value | printf \"%.2f\" }}/sec (threshold: 10/sec)"
+
+      - alert: RBACCheckLatencyHigh
+        expr: histogram_quantile(0.99, rate(fovea_rbac_check_duration_bucket[5m])) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RBAC check p99 latency exceeds 50ms, check ability cache"
+          description: "RBAC p99 latency is {{ $value | printf \"%.1f\" }}ms (threshold: 50ms)"
+
+      - alert: VideoAssignmentSpikeRate
+        expr: rate(fovea_video_assignment_operations_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High video assignment operation rate"
+          description: "{{ $value | printf \"%.1f\" }} video assignment ops/sec (threshold: 50/sec)"

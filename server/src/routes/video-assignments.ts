@@ -40,7 +40,7 @@ const AssignmentResponseSchema = Type.Object({
   videoId: Type.String({ format: 'uuid' }),
   assignedUserId: NullableString,
   source: Type.String(),
-  ruleDefinition: Type.Optional(Type.Any()),
+  ruleDefinition: Type.Optional(Type.Unknown()),
   assignedBy: NullableString,
   assignedAt: Type.String({ format: 'date-time' }),
 })

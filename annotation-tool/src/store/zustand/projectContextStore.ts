@@ -7,6 +7,7 @@
 
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { getTracer } from '../../telemetry/tracing'
 
 /**
  * State and actions for the active project context.
@@ -40,22 +41,41 @@ export interface ProjectContextState {
  */
 export const useProjectContextStore = create<ProjectContextState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       activeProjectId: null,
       activeProjectName: null,
       activeProjectRole: null,
-      setActiveProject: (id, name, role) =>
-        set(
-          { activeProjectId: id, activeProjectName: name, activeProjectRole: role },
-          false,
-          'setActiveProject'
-        ),
-      clearProject: () =>
-        set(
-          { activeProjectId: null, activeProjectName: null, activeProjectRole: null },
-          false,
-          'clearProject'
-        ),
+      setActiveProject: (id, name, role) => {
+        const previousId = get().activeProjectId
+        const span = getTracer().startSpan('project.context.switch')
+        try {
+          span.setAttribute('project.id', id)
+          span.setAttribute('project.name', name)
+          span.setAttribute('project.role', role)
+          span.setAttribute('project.previous_id', previousId ?? 'none')
+          set(
+            { activeProjectId: id, activeProjectName: name, activeProjectRole: role },
+            false,
+            'setActiveProject'
+          )
+        } finally {
+          span.end()
+        }
+      },
+      clearProject: () => {
+        const previousId = get().activeProjectId
+        const span = getTracer().startSpan('project.context.clear')
+        try {
+          span.setAttribute('project.previous_id', previousId ?? 'none')
+          set(
+            { activeProjectId: null, activeProjectName: null, activeProjectRole: null },
+            false,
+            'clearProject'
+          )
+        } finally {
+          span.end()
+        }
+      },
     }),
     { name: 'project-context' }
   )

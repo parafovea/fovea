@@ -8,6 +8,7 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import { requireAuth } from '@middleware/auth.js'
 import { projectOperationCounter } from '../metrics.js'
 import { buildAbilities } from '@middleware/abilities.js'
@@ -49,7 +50,7 @@ const ProjectSchema = Type.Object({
   slug: Type.String(),
   ownerUserId: NullableString,
   ownerGroupId: NullableString,
-  settings: Type.Any(),
+  settings: Type.Unknown(),
   isArchived: Type.Boolean(),
   createdBy: Type.String(),
   createdAt: Type.String({ format: 'date-time' }),
@@ -63,7 +64,7 @@ const ProjectWithMetaSchema = Type.Object({
   slug: Type.String(),
   ownerUserId: NullableString,
   ownerGroupId: NullableString,
-  settings: Type.Any(),
+  settings: Type.Unknown(),
   isArchived: Type.Boolean(),
   createdBy: Type.String(),
   createdAt: Type.String({ format: 'date-time' }),
@@ -104,13 +105,13 @@ const WorldStateResponseSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   userId: Type.String({ format: 'uuid' }),
   projectId: NullableString,
-  entities: Type.Array(Type.Any()),
-  events: Type.Array(Type.Any()),
-  times: Type.Array(Type.Any()),
-  entityCollections: Type.Array(Type.Any()),
-  eventCollections: Type.Array(Type.Any()),
-  timeCollections: Type.Array(Type.Any()),
-  relations: Type.Array(Type.Any()),
+  entities: Type.Array(Type.Unknown()),
+  events: Type.Array(Type.Unknown()),
+  times: Type.Array(Type.Unknown()),
+  entityCollections: Type.Array(Type.Unknown()),
+  eventCollections: Type.Array(Type.Unknown()),
+  timeCollections: Type.Array(Type.Unknown()),
+  relations: Type.Array(Type.Unknown()),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
 })
@@ -241,8 +242,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       const scope = request.query.scope ?? 'all'
 
       // Build the OR conditions based on scope
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma where clause union requires any
-      const conditions: any[] = []
+      const conditions: Prisma.ProjectWhereInput[] = []
 
       if (scope === 'personal' || scope === 'all') {
         conditions.push({ ownerUserId: userId })
@@ -332,7 +332,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
             slug: Type.String(),
             ownerUserId: NullableString,
             ownerGroupId: NullableString,
-            settings: Type.Any(),
+            settings: Type.Unknown(),
             isArchived: Type.Boolean(),
             createdBy: Type.String(),
             createdAt: Type.String({ format: 'date-time' }),
@@ -446,8 +446,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         data: {
           ...(name !== undefined && { name }),
           ...(description !== undefined && { description }),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          ...(settings !== undefined && { settings: settings as any }),
+          ...(settings !== undefined && { settings: settings as Prisma.InputJsonValue }),
           ...(isArchived !== undefined && { isArchived }),
         },
       })
@@ -966,20 +965,13 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         worldState = await fastify.prisma.worldState.update({
           where: { userId_projectId: { userId, projectId } },
           data: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            entities: updateData.entities !== undefined ? (updateData.entities as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            events: updateData.events !== undefined ? (updateData.events as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            times: updateData.times !== undefined ? (updateData.times as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as any) : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            relations: updateData.relations !== undefined ? (updateData.relations as any) : undefined,
+            entities: updateData.entities !== undefined ? (updateData.entities as Prisma.InputJsonValue) : undefined,
+            events: updateData.events !== undefined ? (updateData.events as Prisma.InputJsonValue) : undefined,
+            times: updateData.times !== undefined ? (updateData.times as Prisma.InputJsonValue) : undefined,
+            entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as Prisma.InputJsonValue) : undefined,
+            eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as Prisma.InputJsonValue) : undefined,
+            timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as Prisma.InputJsonValue) : undefined,
+            relations: updateData.relations !== undefined ? (updateData.relations as Prisma.InputJsonValue) : undefined,
           },
         })
       } else {
@@ -987,20 +979,13 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
           data: {
             userId,
             projectId,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            entities: (updateData.entities || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            events: (updateData.events || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            times: (updateData.times || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            entityCollections: (updateData.entityCollections || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            eventCollections: (updateData.eventCollections || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            timeCollections: (updateData.timeCollections || []) as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-            relations: (updateData.relations || []) as any,
+            entities: (updateData.entities || []) as Prisma.InputJsonValue,
+            events: (updateData.events || []) as Prisma.InputJsonValue,
+            times: (updateData.times || []) as Prisma.InputJsonValue,
+            entityCollections: (updateData.entityCollections || []) as Prisma.InputJsonValue,
+            eventCollections: (updateData.eventCollections || []) as Prisma.InputJsonValue,
+            timeCollections: (updateData.timeCollections || []) as Prisma.InputJsonValue,
+            relations: (updateData.relations || []) as Prisma.InputJsonValue,
           },
         })
       }
@@ -1038,7 +1023,7 @@ const CreateProjectBody = Type.Object({
 const UpdateProjectBody = Type.Object({
   name: Type.Optional(Type.String({ minLength: 1 })),
   description: Type.Optional(Type.String()),
-  settings: Type.Optional(Type.Any()),
+  settings: Type.Optional(Type.Unknown()),
   isArchived: Type.Optional(Type.Boolean()),
 })
 
@@ -1052,13 +1037,13 @@ const ChangeRoleBody = Type.Object({
 })
 
 const UpdateWorldBody = Type.Object({
-  entities: Type.Optional(Type.Array(Type.Any())),
-  events: Type.Optional(Type.Array(Type.Any())),
-  times: Type.Optional(Type.Array(Type.Any())),
-  entityCollections: Type.Optional(Type.Array(Type.Any())),
-  eventCollections: Type.Optional(Type.Array(Type.Any())),
-  timeCollections: Type.Optional(Type.Array(Type.Any())),
-  relations: Type.Optional(Type.Array(Type.Any())),
+  entities: Type.Optional(Type.Array(Type.Unknown())),
+  events: Type.Optional(Type.Array(Type.Unknown())),
+  times: Type.Optional(Type.Array(Type.Unknown())),
+  entityCollections: Type.Optional(Type.Array(Type.Unknown())),
+  eventCollections: Type.Optional(Type.Array(Type.Unknown())),
+  timeCollections: Type.Optional(Type.Array(Type.Unknown())),
+  relations: Type.Optional(Type.Array(Type.Unknown())),
 })
 
 export default projectsRoute

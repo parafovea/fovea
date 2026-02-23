@@ -9,16 +9,17 @@
  */
 
 import {
-  AbilityBuilder,
   createMongoAbility,
   MongoAbility,
+  RawRuleFrom,
 } from '@casl/ability'
+import type { MongoQuery } from '@casl/ability'
 
 /**
  * All resource subjects matching Prisma model names.
  * The special value 'all' is a CASL built-in that matches every subject.
  */
-type Subjects =
+export type Subjects =
   | 'Annotation'
   | 'Claim'
   | 'Persona'
@@ -34,7 +35,7 @@ type Subjects =
  * All actions that can be performed on resources.
  * 'manage' is a CASL built-in that grants all actions.
  */
-type Actions =
+export type Actions =
   | 'create'
   | 'read'
   | 'update'
@@ -49,6 +50,17 @@ type Actions =
 
 /** CASL ability type parameterized with Fovea actions and subjects. */
 export type AppAbility = MongoAbility<[Actions, Subjects]>
+
+/**
+ * A raw CASL rule for AppAbility using the unparameterized MongoQuery.
+ *
+ * CASL's AbilityBuilder.can() with string-only subjects resolves conditions
+ * to MongoQuery<never>, which rejects all condition objects. By using the
+ * base MongoQuery (equivalent to MongoQuery<AnyObject>) as the conditions
+ * type, we can construct rules with MongoDB-style conditions while keeping
+ * action and subject strictly typed.
+ */
+type AppRule = RawRuleFrom<[Actions, Subjects], MongoQuery>
 
 /** Aggregated role information for a single user across all scopes. */
 export interface UserRoles {
@@ -92,12 +104,12 @@ export function defineAbilitiesFor(
   roles: UserRoles,
   permissions: RolePermissionRow[],
 ): AppAbility {
-  const { can, build } = new AbilityBuilder<AppAbility>(createMongoAbility)
+  const rules: AppRule[] = []
 
   // System admin gets full access
   if (roles.systemRole === 'system_admin') {
-    can('manage', 'all')
-    return build()
+    rules.push({ action: 'manage', subject: 'all' })
+    return createMongoAbility<[Actions, Subjects], MongoQuery>(rules)
   }
 
   // Apply permissions based on role hierarchy
@@ -110,10 +122,9 @@ export function defineAbilitiesFor(
     if (perm.scope === 'system') {
       // System-level permissions apply globally
       if (perm.ownOnly) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        can(action, subject, { createdByUserId: userId } as any)
+        rules.push({ action, subject, conditions: { createdByUserId: userId } })
       } else {
-        can(action, subject)
+        rules.push({ action, subject })
       }
     } else if (perm.scope === 'project') {
       // Check if user has this role in any project
@@ -123,11 +134,9 @@ export function defineAbilitiesFor(
 
       if (matchingProjects.length > 0) {
         if (perm.ownOnly) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          can(action, subject, { projectId: { $in: matchingProjects }, createdByUserId: userId } as any)
+          rules.push({ action, subject, conditions: { projectId: { $in: matchingProjects }, createdByUserId: userId } })
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          can(action, subject, { projectId: { $in: matchingProjects } } as any)
+          rules.push({ action, subject, conditions: { projectId: { $in: matchingProjects } } })
         }
       }
     } else if (perm.scope === 'group') {
@@ -138,39 +147,29 @@ export function defineAbilitiesFor(
 
       if (matchingGroups.length > 0) {
         if (perm.ownOnly) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          can(action, subject, { createdByUserId: userId } as any)
+          rules.push({ action, subject, conditions: { createdByUserId: userId } })
         } else {
-          can(action, subject)
+          rules.push({ action, subject })
         }
       }
     }
   }
 
   // Resource ownership always grants full access to own resources
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('read', 'Annotation', { createdByUserId: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('update', 'Annotation', { createdByUserId: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('delete', 'Annotation', { createdByUserId: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('read', 'VideoSummary', { createdBy: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('update', 'VideoSummary', { createdBy: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('delete', 'VideoSummary', { createdBy: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('read', 'Claim', { createdBy: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('update', 'Claim', { createdBy: userId } as any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  can('delete', 'Claim', { createdBy: userId } as any)
+  rules.push({ action: 'read', subject: 'Annotation', conditions: { createdByUserId: userId } })
+  rules.push({ action: 'update', subject: 'Annotation', conditions: { createdByUserId: userId } })
+  rules.push({ action: 'delete', subject: 'Annotation', conditions: { createdByUserId: userId } })
+  rules.push({ action: 'read', subject: 'VideoSummary', conditions: { createdBy: userId } })
+  rules.push({ action: 'update', subject: 'VideoSummary', conditions: { createdBy: userId } })
+  rules.push({ action: 'delete', subject: 'VideoSummary', conditions: { createdBy: userId } })
+  rules.push({ action: 'read', subject: 'Claim', conditions: { createdBy: userId } })
+  rules.push({ action: 'update', subject: 'Claim', conditions: { createdBy: userId } })
+  rules.push({ action: 'delete', subject: 'Claim', conditions: { createdBy: userId } })
 
   // All authenticated users can read videos (filtered by VideoAccessService)
-  can('read', 'Video')
+  rules.push({ action: 'read', subject: 'Video' })
 
-  return build()
+  return createMongoAbility<[Actions, Subjects], MongoQuery>(rules)
 }
 
 /**

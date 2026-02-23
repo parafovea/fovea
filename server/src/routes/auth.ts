@@ -496,7 +496,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         tags: ['auth'],
         response: {
           200: Type.Object({
-            rules: Type.Array(Type.Any()),
+            rules: Type.Array(Type.Unknown()),
           }),
           401: Type.Object({
             error: Type.String(),

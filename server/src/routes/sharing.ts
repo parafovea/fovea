@@ -10,7 +10,8 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
+import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'
 import { sharingOperationCounter } from '../metrics.js'
 import { buildAbilities } from '@middleware/abilities.js'
@@ -20,6 +21,8 @@ import {
   ForbiddenError,
   ErrorResponseSchema,
 } from '@lib/errors.js'
+
+const tracer = trace.getTracer('fovea-rbac')
 
 /**
  * Nullable type helpers for fast-json-stringify compatibility.
@@ -122,8 +125,7 @@ const CreateShareSchema = Type.Object({
  * @throws {NotFoundError} when the resource does not exist
  */
 async function verifyResourceExists(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify prisma decorator type
-  prisma: any,
+  prisma: PrismaClient,
   resourceType: string,
   resourceId: string,
 ): Promise<boolean> {
@@ -167,8 +169,7 @@ async function verifyResourceExists(
  * @throws {ForbiddenError} when the user lacks permission to share the resource
  */
 async function verifySharePermission(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify prisma decorator type
-  prisma: any,
+  prisma: PrismaClient,
   resourceType: string,
   resourceId: string,
   userId: string,
@@ -510,7 +511,7 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
           201: Type.Object({
             resourceType: Type.String(),
             resourceId: Type.String(),
-            resource: Type.Any(),
+            resource: Type.Unknown(),
           }),
           400: ErrorResponseSchema,
           403: ErrorResponseSchema,
@@ -521,7 +522,9 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { shareId } = request.params
       const userId = request.user!.id
+      const span = tracer.startSpan('sharing.fork')
 
+      try {
       // Load the share
       const share = await fastify.prisma.resourceShare.findUnique({
         where: { id: shareId },
@@ -530,6 +533,9 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
       if (!share) {
         throw new NotFoundError('ResourceShare', shareId)
       }
+
+      span.setAttribute('sharing.resource_type', share.resourceType)
+      span.setAttribute('sharing.share_id', shareId)
 
       // Verify the share is forkable
       if (share.permissionLevel !== 'forkable') {
@@ -721,6 +727,7 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         }
       })
 
+      span.setAttribute('sharing.fork_success', true)
       sharingOperationCounter.add(1, {
         operation: 'fork',
         resourceType: share.resourceType,
@@ -731,6 +738,9 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         resourceId: forkedResource.id,
         resource: forkedResource,
       })
+      } finally {
+        span.end()
+      }
     },
   )
 }
