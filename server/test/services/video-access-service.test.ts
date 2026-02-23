@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { PrismaClient } from '@prisma/client'
 import { VideoAccessService } from '../../src/services/video-access-service.js'
 
 // Mock OpenTelemetry tracer
@@ -16,7 +17,7 @@ vi.mock('@opentelemetry/api', () => ({
 /**
  * Creates a mock PrismaClient with the subset of models used by VideoAccessService.
  */
-function createMockPrisma() {
+function createMockPrisma(): PrismaClient {
   return {
     groupMembership: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -33,7 +34,7 @@ function createMockPrisma() {
     video: {
       findMany: vi.fn().mockResolvedValue([]),
     },
-  } as any
+  } as unknown as PrismaClient
 }
 
 describe('VideoAccessService', () => {

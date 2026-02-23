@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { FastifyRequest, FastifyReply } from 'fastify'
 
 // Mock prisma before importing the module under test
 vi.mock('../../src/lib/prisma.js', () => ({
@@ -33,6 +34,26 @@ import {
   invalidatePermissionCache,
 } from '../../src/middleware/abilities.js'
 
+/**
+ * Creates a mock FastifyRequest with optional user data.
+ *
+ * @param overrides - partial request properties to include
+ * @returns a mock FastifyRequest cast through unknown
+ */
+function mockRequest(overrides: Record<string, unknown> = {}): FastifyRequest {
+  return { ...overrides } as unknown as FastifyRequest
+}
+
+/**
+ * Creates a mock FastifyReply with optional method stubs.
+ *
+ * @param overrides - partial reply properties to include
+ * @returns a mock FastifyReply cast through unknown
+ */
+function mockReply(overrides: Record<string, unknown> = {}): FastifyReply {
+  return { ...overrides } as unknown as FastifyReply
+}
+
 describe('buildAbilities', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -40,8 +61,8 @@ describe('buildAbilities', () => {
   })
 
   it('skips when no user on request', async () => {
-    const request = {} as any
-    const reply = {} as any
+    const request = mockRequest()
+    const reply = mockReply()
 
     await buildAbilities(request, reply)
 
@@ -49,53 +70,53 @@ describe('buildAbilities', () => {
   })
 
   it('attaches ability to request when user exists', async () => {
-    const request = {
+    const request = mockRequest({
       user: { id: 'user-1', systemRole: 'user' },
-    } as any
-    const reply = {} as any
+    })
+    const reply = mockReply()
 
     await buildAbilities(request, reply)
 
     expect(request.ability).toBeDefined()
-    expect(request.ability.can).toBeTypeOf('function')
+    expect(request.ability!.can).toBeTypeOf('function')
   })
 
   it('system_admin gets manage all ability', async () => {
-    const request = {
+    const request = mockRequest({
       user: { id: 'admin-1', systemRole: 'system_admin' },
-    } as any
-    const reply = {} as any
+    })
+    const reply = mockReply()
 
     await buildAbilities(request, reply)
 
     expect(request.ability).toBeDefined()
-    expect(request.ability.can('manage', 'all')).toBe(true)
+    expect(request.ability!.can('manage', 'all')).toBe(true)
   })
 
   it('regular user does not get manage all', async () => {
-    const request = {
+    const request = mockRequest({
       user: { id: 'user-1', systemRole: 'user' },
-    } as any
-    const reply = {} as any
+    })
+    const reply = mockReply()
 
     await buildAbilities(request, reply)
 
     expect(request.ability).toBeDefined()
-    expect(request.ability.can('manage', 'all')).toBe(false)
+    expect(request.ability!.can('manage', 'all')).toBe(false)
   })
 
   it('defaults systemRole to "user" when not provided', async () => {
-    const request = {
+    const request = mockRequest({
       user: { id: 'user-1' },
-    } as any
-    const reply = {} as any
+    })
+    const reply = mockReply()
 
     await buildAbilities(request, reply)
 
     expect(request.ability).toBeDefined()
     // With no systemRole and empty permissions, should get baseline abilities only
-    expect(request.ability.can('manage', 'all')).toBe(false)
-    expect(request.ability.can('read', 'Video')).toBe(true)
+    expect(request.ability!.can('manage', 'all')).toBe(false)
+    expect(request.ability!.can('read', 'Video')).toBe(true)
   })
 })
 
@@ -106,16 +127,15 @@ describe('authorize', () => {
 
   it('returns 403 when no ability on request', async () => {
     const handler = authorize('read', 'Annotation')
-    const request = {} as any
-    const reply = {
-      code: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    } as any
+    const request = mockRequest()
+    const codeFn = vi.fn().mockReturnThis()
+    const sendFn = vi.fn()
+    const reply = mockReply({ code: codeFn, send: sendFn })
 
     await handler(request, reply)
 
-    expect(reply.code).toHaveBeenCalledWith(403)
-    expect(reply.send).toHaveBeenCalledWith(
+    expect(codeFn).toHaveBeenCalledWith(403)
+    expect(sendFn).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'FORBIDDEN' }),
     )
   })
@@ -123,38 +143,36 @@ describe('authorize', () => {
   it('allows when ability.can returns true', async () => {
     const handler = authorize('manage', 'all')
     const mockAbility = { can: vi.fn().mockReturnValue(true) }
-    const request = {
+    const request = mockRequest({
       ability: mockAbility,
       user: { systemRole: 'system_admin' },
-    } as any
-    const reply = {
-      code: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    } as any
+    })
+    const codeFn = vi.fn().mockReturnThis()
+    const sendFn = vi.fn()
+    const reply = mockReply({ code: codeFn, send: sendFn })
 
     await handler(request, reply)
 
-    expect(reply.code).not.toHaveBeenCalled()
-    expect(reply.send).not.toHaveBeenCalled()
+    expect(codeFn).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
     expect(mockAbility.can).toHaveBeenCalledWith('manage', 'all')
   })
 
   it('returns 403 when ability.can returns false', async () => {
     const handler = authorize('delete', 'Video')
     const mockAbility = { can: vi.fn().mockReturnValue(false) }
-    const request = {
+    const request = mockRequest({
       ability: mockAbility,
       user: { systemRole: 'user' },
-    } as any
-    const reply = {
-      code: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    } as any
+    })
+    const codeFn = vi.fn().mockReturnThis()
+    const sendFn = vi.fn()
+    const reply = mockReply({ code: codeFn, send: sendFn })
 
     await handler(request, reply)
 
-    expect(reply.code).toHaveBeenCalledWith(403)
-    expect(reply.send).toHaveBeenCalledWith(
+    expect(codeFn).toHaveBeenCalledWith(403)
+    expect(sendFn).toHaveBeenCalledWith(
       expect.objectContaining({
         error: 'FORBIDDEN',
         message: 'Cannot delete Video',
@@ -165,14 +183,13 @@ describe('authorize', () => {
   it('checks the correct action and subject', async () => {
     const handler = authorize('create', 'Annotation')
     const mockAbility = { can: vi.fn().mockReturnValue(true) }
-    const request = {
+    const request = mockRequest({
       ability: mockAbility,
       user: { systemRole: 'user' },
-    } as any
-    const reply = {
-      code: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    } as any
+    })
+    const codeFn = vi.fn().mockReturnThis()
+    const sendFn = vi.fn()
+    const reply = mockReply({ code: codeFn, send: sendFn })
 
     await handler(request, reply)
 

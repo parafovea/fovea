@@ -8,7 +8,7 @@ automatic fallback handling.
 
 import asyncio
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,7 @@ from transformers import (
 )
 
 
-class LLMFramework(str, Enum):
+class LLMFramework(StrEnum):
     """Inference framework options for LLM models."""
 
     SGLANG = "sglang"
