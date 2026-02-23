@@ -29,6 +29,12 @@ export interface VideoUiState {
   /** Tag filters for video list */
   tagFilters: string[]
 
+  // ========== Navigation State ==========
+  /** Currently selected video index in the grid */
+  selectedVideoIndex: number
+  /** Scroll position to restore on return */
+  scrollPosition: number
+
   // ========== Tracking State ==========
   /** Last annotation created, for "continue where you left off" feature */
   lastAnnotation: {
@@ -45,6 +51,10 @@ export interface VideoUiState {
   setSearchTerm: (term: string) => void
   setTagFilters: (tags: string[]) => void
   clearFilters: () => void
+
+  // Navigation actions
+  setSelectedVideoIndex: (index: number) => void
+  setScrollPosition: (position: number) => void
 
   // Tracking actions
   setLastAnnotation: (videoId: string, timestamp: number) => void
@@ -68,6 +78,8 @@ export interface VideoUiState {
 const initialState = {
   searchTerm: '',
   tagFilters: [],
+  selectedVideoIndex: 0,
+  scrollPosition: 0,
   lastAnnotation: {
     videoId: null,
     timestamp: 0,
@@ -103,6 +115,12 @@ export const useVideoUiStore = create<VideoUiState>()(
       setTagFilters: (tagFilters) => set({ tagFilters }, false, 'setTagFilters'),
       clearFilters: () =>
         set({ searchTerm: '', tagFilters: [] }, false, 'clearFilters'),
+
+      // Navigation actions
+      setSelectedVideoIndex: (selectedVideoIndex) =>
+        set({ selectedVideoIndex }, false, 'setSelectedVideoIndex'),
+      setScrollPosition: (scrollPosition) =>
+        set({ scrollPosition }, false, 'setScrollPosition'),
 
       // Tracking actions
       setLastAnnotation: (videoId, timestamp) =>
