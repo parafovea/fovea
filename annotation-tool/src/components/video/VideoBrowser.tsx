@@ -332,12 +332,29 @@ export default function VideoBrowser() {
     setSelectedVideoIndex(0)
   }, [searchTerm, setSelectedVideoIndex])
 
+  // Find the scrollable parent container (Layout's overflow: auto Box)
+  const scrollContainerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    // Walk up from the component root to find the scrollable ancestor
+    const el = document.getElementById('video-browser-root')
+    if (el) {
+      let parent = el.parentElement
+      while (parent) {
+        const style = getComputedStyle(parent)
+        if (style.overflow === 'auto' || style.overflowY === 'auto') {
+          scrollContainerRef.current = parent
+          break
+        }
+        parent = parent.parentElement
+      }
+    }
+  }, [])
+
   // Restore scroll position on mount
   useEffect(() => {
-    // Use requestAnimationFrame to ensure the DOM is ready
     requestAnimationFrame(() => {
-      if (scrollPosition > 0) {
-        window.scrollTo(0, scrollPosition)
+      if (scrollPosition > 0 && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollPosition
       }
     })
     // Only run on mount
@@ -346,11 +363,13 @@ export default function VideoBrowser() {
 
   // Save scroll position on scroll
   useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
     const handleScroll = () => {
-      setScrollPosition(window.scrollY)
+      setScrollPosition(container.scrollTop)
     }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
   }, [setScrollPosition])
 
   /**
@@ -371,7 +390,7 @@ export default function VideoBrowser() {
   }
 
   return (
-    <Box>
+    <Box id="video-browser-root">
       <Box mb={3}>
         <TextField
           fullWidth
