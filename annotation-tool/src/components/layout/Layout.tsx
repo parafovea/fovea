@@ -93,6 +93,14 @@ export default function Layout() {
   // Track the path we came from when toggling to each builder (separate refs for independent toggles)
   const ontologyReturnPathRef = useRef<string | null>(null)
   const objectsReturnPathRef = useRef<string | null>(null)
+  const lastVideoPathRef = useRef<string | null>(null)
+
+  // Track the last active video annotation path
+  useEffect(() => {
+    if (location.pathname.startsWith('/annotate/')) {
+      lastVideoPathRef.current = location.pathname
+    }
+  }, [location.pathname])
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
@@ -196,6 +204,11 @@ export default function Layout() {
       else {
         objectsReturnPathRef.current = currentPath
         navigate('/objects')
+      }
+    },
+    'navigate.toggleVideo': () => {
+      if (lastVideoPathRef.current) {
+        navigate(lastVideoPathRef.current)
       }
     },
     'file.save': () => {
