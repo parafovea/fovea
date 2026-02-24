@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useParams, Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -43,6 +44,7 @@ import {
   useUpdateGroupMember,
   useRemoveGroupMember,
 } from '@store/queries/useGroups'
+import { useUsers } from '@store/queries/admin/useUsers'
 import { useAuthStore } from '@store/zustand/authStore'
 
 const ADMIN_ROLES = ['group_owner', 'group_admin']
@@ -56,6 +58,7 @@ export default function GroupDetailPage(): JSX.Element {
   const addMember = useAddGroupMember()
   const updateMember = useUpdateGroupMember()
   const removeMember = useRemoveGroupMember()
+  const { data: allUsers = [] } = useUsers()
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [newUserId, setNewUserId] = useState('')
@@ -186,13 +189,30 @@ export default function GroupDetailPage(): JSX.Element {
       <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Member</DialogTitle>
         <DialogContent>
-          <TextField
-            label="User ID"
+          <Autocomplete
+            options={allUsers}
+            getOptionLabel={(option) =>
+              typeof option === 'string' ? option : `${option.username} (${option.displayName})`
+            }
+            freeSolo
             fullWidth
-            value={newUserId}
-            onChange={(e) => setNewUserId(e.target.value)}
-            sx={{ mt: 1 }}
-            autoFocus
+            onChange={(_e, value) => {
+              if (value && typeof value !== 'string') {
+                setNewUserId(value.id)
+              } else if (typeof value === 'string') {
+                setNewUserId(value)
+              } else {
+                setNewUserId('')
+              }
+            }}
+            onInputChange={(_e, value, reason) => {
+              if (reason === 'input') {
+                setNewUserId(value)
+              }
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="User" autoFocus sx={{ mt: 1 }} />
+            )}
           />
           <Select
             fullWidth

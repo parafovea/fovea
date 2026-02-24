@@ -14,7 +14,6 @@ import {
   ListItemText,
   Divider,
   FormControl,
-  InputLabel,
   MenuItem,
   Select,
   type SelectChangeEvent,
@@ -309,22 +308,12 @@ export default function Layout() {
             sx={{
               minWidth: 180,
               mr: 2,
-              '& .MuiOutlinedInput-root': {
-                color: 'inherit',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.7)' },
-              },
-              '& .MuiSvgIcon-root': { color: 'inherit' },
-              '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
             }}
           >
-            <InputLabel id="project-context-label">Project</InputLabel>
             <Select
-              labelId="project-context-label"
               value={activeProjectId ?? ''}
-              label="Project"
               onChange={handleProjectChange}
+              displayEmpty
             >
               <MenuItem value="">Personal Workspace</MenuItem>
               {myProjects.map((project) => (
@@ -338,11 +327,7 @@ export default function Layout() {
             <Chip
               label={activeProjectRole}
               size="small"
-              sx={{
-                mr: 2,
-                color: 'inherit',
-                borderColor: 'rgba(255,255,255,0.5)',
-              }}
+              sx={{ mr: 2 }}
               variant="outlined"
             />
           )}

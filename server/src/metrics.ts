@@ -144,3 +144,12 @@ export const videoAssignmentCounter = meter.createCounter('fovea.video_assignmen
   description: 'Number of video assignment operations',
   unit: '1'
 })
+
+/**
+ * Counter for persona operations.
+ * Attributes: operation (create/update/delete), status (success/error)
+ */
+export const personaOperationCounter = meter.createCounter('fovea.persona.operations', {
+  description: 'Number of persona operations',
+  unit: '1'
+})

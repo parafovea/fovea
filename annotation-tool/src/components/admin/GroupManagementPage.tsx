@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import {
+  Autocomplete,
   Box,
   Button,
   TextField,
@@ -40,6 +41,7 @@ import {
   PersonAdd as PersonAddIcon,
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useUsers } from '@store/queries/admin/useUsers'
 import ConfirmDialog from '../shared/ConfirmDialog'
 
 interface GroupMember {
@@ -95,6 +97,7 @@ export default function GroupManagementPage() {
     queryFn: fetchGroups,
     staleTime: 2 * 60 * 1000,
   })
+  const { data: allUsers = [] } = useUsers()
 
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -390,13 +393,30 @@ export default function GroupManagementPage() {
         <DialogTitle>Add Member</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="User ID"
-              value={newMemberUserId}
-              onChange={(e) => setNewMemberUserId(e.target.value)}
+            <Autocomplete
+              options={allUsers}
+              getOptionLabel={(option) =>
+                typeof option === 'string' ? option : `${option.username} (${option.displayName})`
+              }
+              freeSolo
               fullWidth
-              required
-              helperText="Enter the UUID of the user to add"
+              onChange={(_e, value) => {
+                if (value && typeof value !== 'string') {
+                  setNewMemberUserId(value.id)
+                } else if (typeof value === 'string') {
+                  setNewMemberUserId(value)
+                } else {
+                  setNewMemberUserId('')
+                }
+              }}
+              onInputChange={(_e, value, reason) => {
+                if (reason === 'input') {
+                  setNewMemberUserId(value)
+                }
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="User" fullWidth required />
+              )}
             />
             <FormControl fullWidth>
               <InputLabel>Role</InputLabel>

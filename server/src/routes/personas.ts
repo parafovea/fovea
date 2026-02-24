@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireAuth, optionalAuth } from '@middleware/auth.js'
 import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '@lib/errors.js'
+import { personaOperationCounter } from '../metrics.js'
 import {
   updateGlossesInTypes,
   countTypeRefsInGlosses,
@@ -53,6 +54,7 @@ const createPersonaSchema = z.object({
   role: z.string().min(1, 'Role is required'),
   informationNeed: z.string().min(1, 'Information need is required'),
   details: z.string().optional(),
+  projectId: z.string().uuid().optional(),
   isSystemGenerated: z.boolean().optional().default(false),
   hidden: z.boolean().optional().default(false)
 })
@@ -143,6 +145,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         role: Type.String(),
         informationNeed: Type.String(),
         details: Type.Optional(Type.String()),
+        projectId: Type.Optional(Type.String({ format: 'uuid' })),
         isSystemGenerated: Type.Optional(Type.Boolean()),
         hidden: Type.Optional(Type.Boolean())
       }),
@@ -186,6 +189,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         isSystemGenerated: validatedData.isSystemGenerated,
         hidden: validatedData.hidden,
         userId,
+        projectId: validatedData.projectId || null,
         ontology: {
           create: {
             entityTypes: [],
@@ -197,6 +201,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
     })
 
+    personaOperationCounter.add(1, { operation: 'create', status: 'success' })
     return reply.code(201).send(persona)
   })
 
@@ -306,6 +311,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data: validatedData
       })
+      personaOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(persona)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
@@ -535,6 +541,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.persona.delete({
         where: { id }
       })
+      personaOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Persona deleted successfully' })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {

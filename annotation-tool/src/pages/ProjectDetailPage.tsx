@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useParams, Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -49,6 +50,7 @@ import {
   type ProjectMember,
   type ProjectPersona,
 } from '@store/queries/useProjects'
+import { useUsers } from '@store/queries/admin/useUsers'
 import { useProjectContextStore } from '@store/zustand/projectContextStore'
 import { useAuthStore } from '@store/zustand/authStore'
 
@@ -67,6 +69,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const updateMember = useUpdateProjectMember()
   const removeMember = useRemoveProjectMember()
   const updateProject = useUpdateProject()
+  const { data: allUsers = [] } = useUsers()
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [newUserId, setNewUserId] = useState('')
@@ -277,13 +280,30 @@ export default function ProjectDetailPage(): JSX.Element {
       <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Member</DialogTitle>
         <DialogContent>
-          <TextField
-            label="User ID"
+          <Autocomplete
+            options={allUsers}
+            getOptionLabel={(option) =>
+              typeof option === 'string' ? option : `${option.username} (${option.displayName})`
+            }
+            freeSolo
             fullWidth
-            value={newUserId}
-            onChange={(e) => setNewUserId(e.target.value)}
-            sx={{ mt: 1 }}
-            autoFocus
+            onChange={(_e, value) => {
+              if (value && typeof value !== 'string') {
+                setNewUserId(value.id)
+              } else if (typeof value === 'string') {
+                setNewUserId(value)
+              } else {
+                setNewUserId('')
+              }
+            }}
+            onInputChange={(_e, value, reason) => {
+              if (reason === 'input') {
+                setNewUserId(value)
+              }
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="User" autoFocus sx={{ mt: 1 }} />
+            )}
           />
           <TextField
             label="Role"
