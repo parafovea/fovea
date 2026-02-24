@@ -12,6 +12,7 @@ describe('Videos API - Detection', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
   let testUserId: string
+  let testSessionToken: string
 
   beforeAll(async () => {
     app = await buildApp()
@@ -44,6 +45,14 @@ describe('Videos API - Detection', () => {
       }
     })
     testUserId = user.id
+
+    // Login to get session token
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'test-user', password: 'testpass123' }
+    })
+    testSessionToken = loginResponse.cookies.find(c => c.name === 'session_token')!.value
   })
 
   describe('POST /api/videos/:videoId/detect', () => {
@@ -63,6 +72,7 @@ describe('Videos API - Detection', () => {
         method: 'POST',
         url: '/api/videos/test-video-id/detect',
         payload: {},
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(400)
@@ -131,6 +141,7 @@ describe('Videos API - Detection', () => {
           personaId: persona.id,
           confidenceThreshold: 0.5,
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -190,6 +201,7 @@ describe('Videos API - Detection', () => {
             includeEventGlosses: true,
           },
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -232,6 +244,7 @@ describe('Videos API - Detection', () => {
         payload: {
           manualQuery: 'person wearing red shirt',
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -246,6 +259,7 @@ describe('Videos API - Detection', () => {
         payload: {
           personaId: '00000000-0000-0000-0000-000000000000',
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(400)
@@ -269,6 +283,7 @@ describe('Videos API - Detection', () => {
         payload: {
           personaId: persona.id,
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(400)
@@ -315,6 +330,7 @@ describe('Videos API - Detection', () => {
         payload: {
           personaId: persona.id,
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -383,6 +399,7 @@ describe('Videos API - Detection', () => {
           frameNumbers: [0, 10, 20],
           enableTracking: true,
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -435,6 +452,7 @@ describe('Videos API - Detection', () => {
         payload: {
           personaId: persona.id,
         },
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(500)

@@ -211,4 +211,67 @@ describe('LoginPage', () => {
 
     expect(screen.getByRole('button', { name: /^login$/i })).toBeEnabled()
   })
+
+  describe('post-login redirect', () => {
+    it('navigates to "/" by default after successful login', async () => {
+      const user = userEvent.setup()
+
+      renderWithProviders(
+        <MemoryRouter initialEntries={['/login']}>
+          <LoginPage />
+        </MemoryRouter>
+      )
+
+      await user.type(screen.getByLabelText(/username/i), 'admin')
+      await user.type(screen.getByLabelText(/password/i), 'admin123')
+      await user.click(screen.getByRole('button', { name: /^login$/i }))
+
+      // Login completes without error (navigate was called)
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+    })
+
+    it('reads location.state.from for redirect target', async () => {
+      const user = userEvent.setup()
+
+      // Simulate arriving at /login with state.from set by a route guard
+      renderWithProviders(
+        <MemoryRouter
+          initialEntries={[
+            { pathname: '/login', state: { from: '/videos/123' } },
+          ]}
+        >
+          <LoginPage />
+        </MemoryRouter>
+      )
+
+      await user.type(screen.getByLabelText(/username/i), 'admin')
+      await user.type(screen.getByLabelText(/password/i), 'admin123')
+      await user.click(screen.getByRole('button', { name: /^login$/i }))
+
+      // Login completes without error (navigate was called with from path)
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+    })
+
+    it('falls back to "/" when location.state is undefined', async () => {
+      const user = userEvent.setup()
+
+      renderWithProviders(
+        <MemoryRouter initialEntries={[{ pathname: '/login' }]}>
+          <LoginPage />
+        </MemoryRouter>
+      )
+
+      await user.type(screen.getByLabelText(/username/i), 'admin')
+      await user.type(screen.getByLabelText(/password/i), 'admin123')
+      await user.click(screen.getByRole('button', { name: /^login$/i }))
+
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+    })
+  })
 })

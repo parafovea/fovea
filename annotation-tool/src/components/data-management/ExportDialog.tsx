@@ -73,6 +73,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [exportStats, setExportStats] = useState<ExportStats | null>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [videoFilterExpanded, setVideoFilterExpanded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   /**
@@ -268,21 +269,36 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
           {/* Filter Annotations by Video */}
           <Box>
-            <FormLabel component="legend">Filter Annotations by Video (optional)</FormLabel>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Leave empty to export annotations for all videos
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-              {videos.map((video: VideoMetadata) => (
-                <Chip
-                  key={video.id}
-                  label={video.title || video.id}
-                  onClick={() => toggleVideo(video.id)}
-                  color={selectedVideoIds.includes(video.id) ? 'primary' : 'default'}
-                  variant={selectedVideoIds.includes(video.id) ? 'filled' : 'outlined'}
-                />
-              ))}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FormLabel
+                component="legend"
+                sx={{ cursor: 'pointer' }}
+                onClick={() => setVideoFilterExpanded(prev => !prev)}
+              >
+                Filter Annotations by Video (optional) {videoFilterExpanded ? '▾' : '▸'}
+              </FormLabel>
+              {selectedVideoIds.length > 0 && (
+                <Chip label={selectedVideoIds.length} size="small" color="primary" />
+              )}
             </Box>
+            {videoFilterExpanded && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                  Leave empty to export annotations for all videos
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                  {videos.map((video: VideoMetadata) => (
+                    <Chip
+                      key={video.id}
+                      label={video.title || video.id}
+                      onClick={() => toggleVideo(video.id)}
+                      color={selectedVideoIds.includes(video.id) ? 'primary' : 'default'}
+                      variant={selectedVideoIds.includes(video.id) ? 'filled' : 'outlined'}
+                    />
+                  ))}
+                </Box>
+              </>
+            )}
           </Box>
 
           {/* Filter Annotations by Type */}
@@ -335,7 +351,11 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
                     <ListItem sx={{ py: 0 }}>
                       <ListItemText
                         primary="Personas"
-                        secondary={exportStats.personaCount.toLocaleString()}
+                        secondary={
+                          exportStats.systemPersonaCount > 0
+                            ? `${exportStats.personaCount - exportStats.systemPersonaCount} user-created, ${exportStats.systemPersonaCount} system-generated`
+                            : exportStats.personaCount.toLocaleString()
+                        }
                       />
                     </ListItem>
                     <ListItem sx={{ py: 0 }}>

@@ -148,9 +148,9 @@ describe('Model Routes', () => {
         url: '/api/models/config'
       })
 
-      expect(response.statusCode).toBe(500)
+      expect(response.statusCode).toBe(503)
       const body = response.json()
-      expect(body.error).toContain('timeout')
+      expect(body.error).toBe('Model service is unavailable')
     })
 
     it('handles model service unavailable (503)', async () => {
@@ -599,9 +599,9 @@ describe('Model Routes', () => {
         url: '/api/models/config'
       })
 
-      expect(response.statusCode).toBe(500)
+      expect(response.statusCode).toBe(503)
       const body = response.json()
-      expect(body.error).toContain('Network Error')
+      expect(body.error).toBe('Model service is unavailable')
     })
 
     it('proxies requests to model service with correct timeout', async () => {

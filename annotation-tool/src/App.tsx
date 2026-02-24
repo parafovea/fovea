@@ -62,7 +62,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (mode === 'multi-user' && !isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    const redirect = location.pathname + location.search
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />
   }
 
   return <>{children}</>
