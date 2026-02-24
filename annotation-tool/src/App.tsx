@@ -23,7 +23,6 @@ import { usePersonas } from './store/queries'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession'
 import { CommandPalette } from '@components/shared/CommandPalette'
-import { initializeCommands, initializeGlobalContext } from './lib/commands/init-commands'
 import { commandRegistry } from './lib/commands/command-registry'
 import { AbilityContext } from './lib/ability'
 import { useAbilityStore } from './store/zustand/abilityStore'
@@ -71,7 +70,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (mode === 'multi-user' && !isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    const redirect = location.pathname + location.search
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />
   }
 
   return <>{children}</>
@@ -90,12 +90,6 @@ function App() {
   const { data: personas = [] } = usePersonas()
   const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
-
-  // Initialize command registry
-  useEffect(() => {
-    initializeCommands()
-    initializeGlobalContext()
-  }, [])
 
   // Track input focus globally to prevent shortcuts when typing
   useEffect(() => {

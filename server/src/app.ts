@@ -6,12 +6,12 @@ import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import fastifyCookie from '@fastify/cookie'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
-import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
+import { prisma } from './lib/prisma.js'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
@@ -38,6 +38,7 @@ import { recordApiError } from './lib/errorMetrics.js'
  */
 export async function buildApp() {
   const app = Fastify({
+    trustProxy: true,
     logger: {
       level: process.env.LOG_LEVEL || 'info',
       transport: process.env.NODE_ENV !== 'production' ? {
@@ -68,7 +69,10 @@ export async function buildApp() {
   if (process.env.NODE_ENV !== 'test') {
     await app.register(fastifyRateLimit, {
       max: 1000,
-      timeWindow: '1 minute'
+      timeWindow: '1 minute',
+      keyGenerator: (request) => {
+        return request.ip
+      }
     })
   }
 
@@ -123,13 +127,6 @@ export async function buildApp() {
   })
   serverAdapter.setBasePath('/admin/queues')
   await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
-
-  // Database connection
-  const prisma = new PrismaClient({
-    log: process.env.NODE_ENV === 'development'
-      ? ['query', 'error', 'warn']
-      : ['error']
-  })
 
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)
@@ -206,6 +203,18 @@ export async function buildApp() {
         error: 'VALIDATION_ERROR',
         message: error.message,
         details: error.validation
+      })
+    }
+
+    // Handle rate limit errors from @fastify/rate-limit plugin
+    // These are not AppError instances but have statusCode 429
+    if (error.statusCode === 429) {
+      recordApiError(method, route, 429, 'RATE_LIMITED', 'warning')
+      const retryAfter = reply.getHeader('Retry-After')
+      return reply.code(429).send({
+        error: 'RATE_LIMITED',
+        message: error.message || 'Too many requests',
+        ...(retryAfter ? { retryAfter: Number(retryAfter) } : {})
       })
     }
 

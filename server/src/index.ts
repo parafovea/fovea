@@ -91,6 +91,30 @@ async function initializeVideoSync(app: Awaited<ReturnType<typeof buildApp>>) {
 }
 
 /**
+ * Connects to the database with retry logic.
+ * Ensures the database is reachable before accepting requests.
+ */
+async function connectDatabase(maxRetries = 5, delayMs = 2000) {
+  const { prisma } = await import('./lib/prisma.js')
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await prisma.$connect()
+      console.log('Database connected successfully')
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (attempt === maxRetries) {
+        console.error(`Failed to connect to database after ${maxRetries} attempts: ${message}`)
+        throw error
+      }
+      console.warn(`Database connection attempt ${attempt}/${maxRetries} failed: ${message}. Retrying in ${delayMs}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+}
+
+/**
  * Starts the Fastify server.
  * Initializes the data directory, user mode, starts listening, then syncs videos.
  */
@@ -99,6 +123,7 @@ async function start() {
   const PORT = parseInt(process.env.PORT || '3001', 10)
 
   try {
+    await connectDatabase()
     await initializeDataDirectory()
     await initializeSingleUserMode()
     await app.listen({ port: PORT, host: '0.0.0.0' })

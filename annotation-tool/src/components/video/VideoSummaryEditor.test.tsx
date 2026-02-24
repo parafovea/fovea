@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vite
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import VideoSummaryEditor from './VideoSummaryEditor'
 
 // Mock ResizeObserver for MUI components
@@ -63,6 +64,7 @@ vi.mock('@store/zustand/claimsUiStore', () => ({
   useClaimsUiStore: vi.fn((selector) => {
     const state = {
       selectedClaimId: null,
+      draftClaim: null,
       extracting: false,
       extractionJobId: null,
       extractionProgress: null,
@@ -84,7 +86,9 @@ function createWrapper() {
     },
   })
   return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </MemoryRouter>
   )
 }
 
@@ -542,6 +546,121 @@ describe('VideoSummaryEditor', () => {
       await waitFor(() => {
         expect(screen.getByText(/Failed to load claims/i)).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('Summary Preview Accordion', () => {
+    it('renders the summary preview accordion on Claims tab when summary has content', async () => {
+      const { useVideoSummary } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [{ type: 'text', content: 'A summary of the video' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      // Default tab is Claims (tab index 1)
+      await waitFor(() => {
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        expect(claimsTab).toHaveAttribute('aria-selected', 'true')
+      })
+
+      // The Summary Preview accordion should be visible
+      expect(screen.getByText('Summary Preview')).toBeInTheDocument()
+    })
+
+    it('does not render the summary preview accordion when summary is empty', async () => {
+      const { useVideoSummary } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      // Default tab is Claims
+      await waitFor(() => {
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        expect(claimsTab).toHaveAttribute('aria-selected', 'true')
+      })
+
+      // Summary Preview should NOT be rendered when summary is empty
+      expect(screen.queryByText('Summary Preview')).not.toBeInTheDocument()
+    })
+
+    it('is collapsible via click', async () => {
+      const user = userEvent.setup()
+      const { useVideoSummary } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [{ type: 'text', content: 'Some summary content' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary Preview')).toBeInTheDocument()
+      })
+
+      // Click the accordion header to collapse it
+      await user.click(screen.getByText('Summary Preview'))
+
+      // The accordion should still be in the DOM (just collapsed)
+      expect(screen.getByText('Summary Preview')).toBeInTheDocument()
     })
   })
 })

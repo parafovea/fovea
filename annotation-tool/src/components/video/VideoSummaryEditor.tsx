@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Paper,
   CircularProgress,
@@ -13,7 +16,7 @@ import {
   Typography,
   Tooltip,
 } from '@mui/material'
-import { Add as AddIcon } from '@mui/icons-material'
+import { Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import {
   usePersonaOntology,
   useVideoSummary,
@@ -32,6 +35,7 @@ import {
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useQueryClient } from '@tanstack/react-query'
 import GlossEditor from '@components/ontology/GlossEditor'
+import { GlossRenderer } from '@components/ontology'
 import ClaimsViewer from '@components/claims/ClaimsViewer'
 import ClaimEditor from '@components/claims/ClaimEditor'
 import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
@@ -81,6 +85,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   const updateExtractionProgress = useClaimsUiStore((state) => state.updateExtractionProgress)
   const setExtractionError = useClaimsUiStore((state) => state.setExtractionError)
   const clearExtractionState = useClaimsUiStore((state) => state.clearExtractionState)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [localComment, setLocalComment] = useState<string>('')
@@ -91,10 +96,14 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   const [parentClaimId, setParentClaimId] = useState<string | undefined>(undefined)
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
+  const [summaryPreviewExpanded, setSummaryPreviewExpanded] = useState(true)
 
   // Track which video/persona combo we've initialized local state for
   // This prevents re-syncing localSummary when currentSummary updates after autosave
   const initializedForRef = useRef<string | null>(null)
+
+  // Track whether we have already restored a draft claim for this mount
+  const draftRestoredRef = useRef(false)
 
   // TanStack Query hooks for claims
   const summaryId = currentSummary?.id
@@ -161,13 +170,13 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   // Track if we've already tried to create an empty summary for this video/persona
   const creatingEmptySummaryRef = useRef<string | null>(null)
 
-  // Ensure Claims tab is selected when summary loads (but not on initial mount if no summary)
-  // Only switch to Claims tab if we have a valid summaryId
+  // Switch to Claims tab when a different summary loads (e.g. switching videos/personas)
+  // Only depends on summaryId so background refetches don't reset the tab
   useEffect(() => {
-    if (summaryId && summaryId.trim() !== '' && currentSummary) {
+    if (summaryId && summaryId.trim() !== '') {
       setActiveTab(1)
     }
-  }, [summaryId, currentSummary]) // Only run when summaryId changes and summary exists
+  }, [summaryId])
 
   // Log claims loading errors
   useEffect(() => {
@@ -278,6 +287,20 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
       }
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
+
+  // Restore draft claim when returning from another workspace
+  useEffect(() => {
+    if (
+      draftClaim &&
+      draftClaim.videoId === videoId &&
+      draftClaim.personaId === personaId &&
+      !draftRestoredRef.current
+    ) {
+      draftRestoredRef.current = true
+      setActiveTab(1)
+      setEditorDialogOpen(true)
+    }
+  }, [draftClaim, videoId, personaId])
 
   // Simple handler - useAutoSave handles the debounced saving
   const handleSummaryChange = (summary: GlossItem[]) => {
@@ -493,6 +516,20 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
           {/* Claims Tab */}
           {activeTab === 1 && (
             <>
+              {localSummary.length > 0 && (
+                <Accordion
+                  expanded={summaryPreviewExpanded}
+                  onChange={(_event, isExpanded) => setSummaryPreviewExpanded(isExpanded)}
+                  sx={{ mb: 2 }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="body2" color="text.secondary">Summary Preview</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <GlossRenderer gloss={localSummary} personaId={personaId} />
+                  </AccordionDetails>
+                </Accordion>
+              )}
               {!summaryId ? (
                 <Alert severity="info">
                   Please create or select a summary first to view claims.

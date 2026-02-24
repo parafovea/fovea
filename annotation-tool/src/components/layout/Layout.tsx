@@ -42,6 +42,7 @@ import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
 import { useMyProjects } from '@store/queries/useProjects'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
 import { useProjectContextStore } from '@store/zustand/projectContextStore'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
@@ -91,6 +92,8 @@ export default function Layout() {
   const activeProjectRole = useProjectContextStore(state => state.activeProjectRole)
   const setActiveProject = useProjectContextStore(state => state.setActiveProject)
   const clearProject = useProjectContextStore(state => state.clearProject)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
+  const clearDraftClaim = useClaimsUiStore((state) => state.clearDraftClaim)
 
   // Project context selector data
   const { data: myProjects = [] } = useMyProjects()
@@ -119,11 +122,19 @@ export default function Layout() {
   // Track the path we came from when toggling to each builder (separate refs for independent toggles)
   const ontologyReturnPathRef = useRef<string | null>(null)
   const objectsReturnPathRef = useRef<string | null>(null)
+  const lastVideoPathRef = useRef<string | null>(null)
+
+  // Track the last active video annotation path
+  useEffect(() => {
+    if (location.pathname.startsWith('/annotate/')) {
+      lastVideoPathRef.current = location.pathname
+    }
+  }, [location.pathname])
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
-    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+    { text: 'World Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
   ]
 
   const collaborationItems = [
@@ -230,6 +241,11 @@ export default function Layout() {
         navigate('/objects')
       }
     },
+    'navigate.toggleVideo': () => {
+      if (lastVideoPathRef.current) {
+        navigate(lastVideoPathRef.current)
+      }
+    },
     'file.save': () => {
       if (!saving) {
         handleSave()
@@ -241,7 +257,7 @@ export default function Layout() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#bdbdbd', color: 'text.primary' }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -278,7 +294,7 @@ export default function Layout() {
               variant="body2"
               component="div"
               sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: 'text.primary',
                 fontWeight: 300,
                 display: { xs: 'none', md: 'block' }
               }}
@@ -328,6 +344,16 @@ export default function Layout() {
                 borderColor: 'rgba(255,255,255,0.5)',
               }}
               variant="outlined"
+            />
+          )}
+          {draftClaim && (
+            <Chip
+              label="Draft Claim"
+              color="warning"
+              size="small"
+              onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
+              onDelete={clearDraftClaim}
+              sx={{ mr: 1 }}
             />
           )}
           {unsavedChanges && (

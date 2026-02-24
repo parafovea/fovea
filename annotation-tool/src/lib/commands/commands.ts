@@ -60,11 +60,19 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
   },
   {
     id: 'navigate.toggleWorld',
-    title: 'Toggle Object Builder',
+    title: 'Toggle World Builder',
     category: 'navigation',
     keybinding: 'w',
     when: '!inputFocused && !dialogOpen',
-    description: 'Toggle between current view and object builder (world)'
+    description: 'Toggle between current view and world builder'
+  },
+  {
+    id: 'navigate.toggleVideo',
+    title: 'Return to Video',
+    category: 'navigation',
+    keybinding: 'v',
+    when: '!inputFocused && !dialogOpen',
+    description: 'Navigate back to the last active video annotation'
   },
   {
     id: 'file.save',

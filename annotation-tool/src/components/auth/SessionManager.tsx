@@ -59,15 +59,16 @@ export function SessionManager(): JSX.Element | null {
     }
     logoutSuccess()
     if (mode === 'multi-user') {
-      navigate('/login')
+      navigate('/login', { replace: true })
     }
   }, [logoutSuccess, mode, navigate])
 
   // Listen for session:expired event
   useEffect(() => {
     const handleExpired = (): void => {
-      if (mode === 'multi-user') {
-        navigate('/login')
+      if (mode === 'multi-user' && window.location.pathname !== '/login') {
+        const redirect = window.location.pathname + window.location.search
+        navigate(`/login?redirect=${encodeURIComponent(redirect)}`)
       }
     }
 

@@ -47,6 +47,7 @@ describe('Videos API - Route Registration', () => {
   })
 
   afterAll(async () => {
+    await prisma.session.deleteMany({ where: { userId: 'video-test-admin' } })
     await prisma.user.deleteMany({ where: { id: 'video-test-admin' } })
     await app.close()
   })
@@ -61,6 +62,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -84,6 +86,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -112,6 +115,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -134,6 +138,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -158,6 +163,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/test-video-id',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -175,6 +181,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/nonexistent-id',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(404)
@@ -196,6 +203,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/repo-test-id',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -218,6 +226,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/nonexistent/stream',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(404)
@@ -229,6 +238,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/stream-test-id/stream',
+        cookies: { session_token: adminSessionToken },
       })
 
       // Will be 404 or 500 because file doesn't exist, but route is accessible
@@ -241,7 +251,8 @@ describe('Videos API - Route Registration', () => {
         url: '/api/videos/stream-test-id/stream',
         headers: {
           range: 'bytes=0-1023'
-        }
+        },
+        cookies: { session_token: adminSessionToken },
       })
 
       // Route is accessible and accepts range header
@@ -296,6 +307,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/url-test-id/url',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -308,6 +320,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/url-test-id/url?expiresIn=7200',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -319,6 +332,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/nonexistent/url',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(404)
@@ -329,6 +343,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/url-test-id/url',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(200)
@@ -350,6 +365,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/nonexistent/thumbnail',
+        cookies: { session_token: adminSessionToken },
       })
 
       expect(response.statusCode).toBe(404)
@@ -360,6 +376,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/thumb-test-id/thumbnail?size=small',
+        cookies: { session_token: adminSessionToken },
       })
 
       // Will fail to generate thumbnail in test env, but route is accessible
@@ -370,6 +387,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/thumb-test-id/thumbnail?timestamp=5.0',
+        cookies: { session_token: adminSessionToken },
       })
 
       // Will fail to generate thumbnail in test env, but route is accessible
@@ -380,6 +398,7 @@ describe('Videos API - Route Registration', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/thumb-test-id/thumbnail',
+        cookies: { session_token: adminSessionToken },
       })
 
       // Route is accessible and attempts to fetch video
@@ -398,20 +417,21 @@ describe('Videos API - Route Registration', () => {
         }
       })
 
-      // Test each route is accessible
-      const routes = [
+      // Test each route is accessible with authentication
+      const routes: Array<{ method: string; url: string; expectedCodes: number[] }> = [
         { method: 'GET', url: '/api/videos', expectedCodes: [200] },
         { method: 'GET', url: '/api/videos/integration-test', expectedCodes: [200] },
         { method: 'GET', url: '/api/videos/integration-test/stream', expectedCodes: [200, 404, 500] },
         { method: 'GET', url: '/api/videos/integration-test/thumbnail', expectedCodes: [200, 404, 500] },
         { method: 'GET', url: '/api/videos/integration-test/url', expectedCodes: [200] },
-        { method: 'POST', url: '/api/videos/sync', expectedCodes: [401] }, // Requires admin auth
+        { method: 'POST', url: '/api/videos/sync', expectedCodes: [200] },
       ]
 
       for (const route of routes) {
         const response = await app.inject({
           method: route.method,
           url: route.url,
+          cookies: { session_token: adminSessionToken },
         })
 
         expect(route.expectedCodes).toContain(response.statusCode)
