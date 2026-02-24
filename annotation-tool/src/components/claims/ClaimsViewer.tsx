@@ -160,7 +160,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
             <Typography variant="body2" sx={{ mb: 0.5 }}>
               <strong>Claim {depth === 0 ? '' : `(depth ${depth})`}:</strong>{' '}
               {claim.gloss && claim.gloss.length > 0 ? (
-                <GlossRenderer gloss={claim.gloss} personaId={personaId} inline={true} />
+                <GlossRenderer gloss={claim.gloss} personaId={personaId} inline={true} claims={allClaims} />
               ) : (
                 claim.text
               )}
