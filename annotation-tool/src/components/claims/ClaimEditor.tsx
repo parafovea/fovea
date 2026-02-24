@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Dialog,
   DialogTitle,
@@ -28,6 +29,7 @@ import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { useClaims } from '@store/queries'
 import { logWarning } from '@services/errorLogging'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 
 interface ClaimEditorProps {
   open: boolean
@@ -75,10 +77,44 @@ export default function ClaimEditor({
   // Comment field
   const [comment, setComment] = useState<string>('')
 
+  // Navigation and draft persistence for workspace toggle
+  const navigate = useNavigate()
+  const saveDraftClaim = useClaimsUiStore((state) => state.saveDraftClaim)
+
+  // Ref to track current form state without triggering effect re-runs
+  const formStateRef = useRef({
+    gloss, confidence, claimerType, claimerGloss, claimRelation,
+    claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment,
+  })
+
+  useEffect(() => {
+    formStateRef.current = {
+      gloss, confidence, claimerType, claimerGloss, claimRelation,
+      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment,
+    }
+  }, [gloss, confidence, claimerType, claimerGloss, claimRelation,
+      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment])
+
   // Initialize form when dialog opens or claim changes
   useEffect(() => {
     if (open) {
-      if (claim) {
+      // Check for draft claim to restore (saved before workspace toggle)
+      const draft = useClaimsUiStore.getState().draftClaim
+      if (draft) {
+        setGloss(draft.gloss)
+        setConfidence(draft.confidence)
+        setClaimerType(draft.claimerType)
+        setClaimerGloss(draft.claimerGloss)
+        setClaimRelation(draft.claimRelation)
+        setClaimEventId(draft.claimEventId)
+        setClaimTimeId(draft.claimTimeId)
+        setClaimLocationId(draft.claimLocationId)
+        setAudio(draft.audio)
+        setVideo(draft.video)
+        setMetadata(draft.metadata)
+        setComment(draft.comment)
+        useClaimsUiStore.getState().clearDraftClaim()
+      } else if (claim) {
         // Edit mode
         setGloss(claim.gloss || [])
         setConfidence(claim.confidence ?? 0.9)
@@ -109,6 +145,38 @@ export default function ClaimEditor({
       }
     }
   }, [open, claim])
+
+  // Keyboard shortcut: 'o' for Ontology Builder, 'w' for Object Builder
+  useEffect(() => {
+    if (!open) return
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement
+      const isInput =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('[role="combobox"]') !== null
+      if (isInput) return
+
+      if (e.key === 'o' || e.key === 'w') {
+        e.preventDefault()
+        const state = formStateRef.current
+        saveDraftClaim({
+          ...state,
+          videoId: videoId || '',
+          personaId: personaId || '',
+          summaryId,
+          editingClaimId: claim?.id,
+          parentClaimId,
+        })
+        navigate(e.key === 'o' ? '/ontology' : '/objects')
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open, videoId, personaId, summaryId, claim?.id, parentClaimId, navigate, saveDraftClaim])
 
   const handleSave = () => {
     // Convert gloss to plain text for the text field
@@ -466,7 +534,7 @@ export default function ClaimEditor({
           <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Typography variant="subtitle2">
-                Claimer (optional) {claimerType && `— ${claimerType}`}
+                Claimer (optional) {claimerType && `(${claimerType})`}
               </Typography>
             </AccordionSummary>
             <AccordionDetails>

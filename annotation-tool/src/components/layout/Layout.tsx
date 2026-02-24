@@ -5,6 +5,7 @@ import {
   Typography,
   Box,
   Button,
+  Chip,
   IconButton,
   Drawer,
   List,
@@ -31,6 +32,7 @@ import {
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
@@ -76,6 +78,8 @@ export default function Layout() {
 
   // Zustand stores
   const lastAnnotation = useVideoUiStore((state) => state.lastAnnotation)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
+  const clearDraftClaim = useClaimsUiStore((state) => state.clearDraftClaim)
 
   // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
   const unsavedChanges = false
@@ -89,6 +93,14 @@ export default function Layout() {
   // Track the path we came from when toggling to each builder (separate refs for independent toggles)
   const ontologyReturnPathRef = useRef<string | null>(null)
   const objectsReturnPathRef = useRef<string | null>(null)
+  const lastVideoPathRef = useRef<string | null>(null)
+
+  // Track the last active video annotation path
+  useEffect(() => {
+    if (location.pathname.startsWith('/annotate/')) {
+      lastVideoPathRef.current = location.pathname
+    }
+  }, [location.pathname])
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
@@ -194,6 +206,11 @@ export default function Layout() {
         navigate('/objects')
       }
     },
+    'navigate.toggleVideo': () => {
+      if (lastVideoPathRef.current) {
+        navigate(lastVideoPathRef.current)
+      }
+    },
     'file.save': () => {
       if (!saving) {
         handleSave()
@@ -250,6 +267,16 @@ export default function Layout() {
               Flexible Ontology Visual Event Analyzer
             </Typography>
           </Box>
+          {draftClaim && (
+            <Chip
+              label="Draft Claim"
+              color="warning"
+              size="small"
+              onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
+              onDelete={clearDraftClaim}
+              sx={{ mr: 1 }}
+            />
+          )}
           {unsavedChanges && (
             <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes

@@ -1,7 +1,22 @@
+"""Pytest configuration and shared fixtures for model service tests.
+
+This file is automatically loaded by pytest and provides fixtures
+available to all tests.
 """
-Pytest configuration and shared fixtures for model service tests.
-This file is automatically loaded by pytest and provides fixtures available to all tests.
-"""
+
+import importlib.metadata
+import sys
+import types
+
+# Shim pkg_resources with importlib.metadata for Python 3.12+ environments
+# where setuptools (which provides pkg_resources) is not installed.
+# The opentelemetry-instrumentation packages import pkg_resources at
+# module level to check dependency versions.
+if "pkg_resources" not in sys.modules:
+    _pkg_resources = types.ModuleType("pkg_resources")
+    _pkg_resources.__path__ = []  # type: ignore[attr-defined]
+    _pkg_resources.get_distribution = importlib.metadata.distribution  # type: ignore[attr-defined]
+    sys.modules["pkg_resources"] = _pkg_resources
 
 import pytest
 from fastapi.testclient import TestClient

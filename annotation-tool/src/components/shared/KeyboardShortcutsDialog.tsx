@@ -112,10 +112,9 @@ export default function KeyboardShortcutsDialog({
   currentContext,
 }: KeyboardShortcutsDialogProps) {
   const [tabValue, setTabValue] = useState(() => {
-    if (currentContext === 'videoBrowser') return 1
-    if (currentContext === 'ontologyWorkspace') return 2
-    if (currentContext === 'objectWorkspace') return 3
-    if (currentContext === 'annotationWorkspace') return 4
+    if (currentContext === 'ontologyWorkspace') return 1
+    if (currentContext === 'objectWorkspace') return 2
+    if (currentContext === 'annotationWorkspace') return 3
     return 0
   })
 
@@ -167,9 +166,8 @@ export default function KeyboardShortcutsDialog({
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label="Global" />
-            <Tab label="Video Browser" />
             <Tab label="Ontology Builder" />
-            <Tab label="Object Builder" />
+            <Tab label="World Builder" />
             <Tab label="Annotation Workspace" />
           </Tabs>
         </Box>
@@ -183,33 +181,19 @@ export default function KeyboardShortcutsDialog({
 
         <TabPanel value={tabValue} index={1}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available when browsing videos
-          </Typography>
-          <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              The Video Browser uses global shortcuts (see Global tab).
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Press <strong>O</strong> to toggle to Ontology Builder, <strong>W</strong> to toggle to Object Builder.
-            </Typography>
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Ontology Builder workspace (including persona browser)
           </Typography>
           <ShortcutTable commands={commandsByCategory.ontology} />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={2}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available in the Object Builder workspace
+            Available in the World Builder workspace
           </Typography>
           <ShortcutTable commands={commandsByCategory.object} />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={tabValue} index={3}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
             Available in the Annotation Workspace (video annotation)
           </Typography>
