@@ -209,7 +209,7 @@ export default function Layout() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#bdbdbd', color: 'text.primary' }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -246,7 +246,7 @@ export default function Layout() {
               variant="body2"
               component="div"
               sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: 'text.primary',
                 fontWeight: 300,
                 display: { xs: 'none', md: 'block' }
               }}

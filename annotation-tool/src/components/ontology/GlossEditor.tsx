@@ -148,19 +148,53 @@ export default function GlossEditor({
     }
   }) : [], [includeAnnotations, annotations, entities, events, allTypes])
 
-  // Get all available claims (if enabled)
-  const allClaims: ClaimOption[] = useMemo(() => includeClaims ? claims.map(claim => {
-    // Get a display name from the claim's gloss content
-    const glossText = claim.gloss
-      .map(item => item.type === 'text' ? item.content : `[${item.type}]`)
+  // Resolve a claim's gloss to plain text for display
+  const resolveClaimText = useCallback((claim: { gloss: GlossItem[] }): string => {
+    return claim.gloss
+      .map(item => {
+        if (item.type === 'text') return item.content
+        if (item.type === 'typeRef') {
+          const t = allTypes.find(t => t.id === item.content)
+          return t ? t.name : item.content
+        }
+        if (item.type === 'objectRef') {
+          const o = allObjects.find(o => o.id === item.content)
+          return o ? o.name : item.content
+        }
+        if (item.type === 'claimRef') {
+          const ref = claims.find(c => c.id === item.content)
+          if (ref) {
+            // Resolve one level deep, reusing type/object resolution
+            return ref.gloss
+              .map(g => {
+                if (g.type === 'text') return g.content
+                if (g.type === 'typeRef') {
+                  const t = allTypes.find(t => t.id === g.content)
+                  return t ? t.name : g.content
+                }
+                if (g.type === 'objectRef') {
+                  const o = allObjects.find(o => o.id === g.content)
+                  return o ? o.name : g.content
+                }
+                return g.content
+              })
+              .join('')
+              .slice(0, 40)
+          }
+          return item.content
+        }
+        return item.content
+      })
       .join('')
-      .slice(0, 50) // Truncate long claims
-    return {
-      id: claim.id,
-      name: glossText || 'Claim',
-      type: 'claim' as const
-    }
-  }) : [], [includeClaims, claims])
+      .slice(0, 80)
+  }, [allTypes, allObjects, claims])
+
+  // Get all available claims (if enabled)
+  const allClaims: ClaimOption[] = useMemo(() => includeClaims ? claims.map(claim => ({
+    id: claim.id,
+    name: resolveClaimText(claim) || 'Claim',
+    type: 'claim' as const
+  })) : [], [includeClaims, claims, resolveClaimText])
 
   // Filter types based on search query
   const filteredTypes = searchQuery
