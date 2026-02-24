@@ -523,7 +523,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
                   sx={{ mb: 2 }}
                 >
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="subtitle2">Summary Preview</Typography>
+                    <Typography variant="body2" color="text.secondary">Summary Preview</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
                     <GlossRenderer gloss={localSummary} personaId={personaId} />

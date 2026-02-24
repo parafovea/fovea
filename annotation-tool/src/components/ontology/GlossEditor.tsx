@@ -597,53 +597,45 @@ export default function GlossEditor({
 
   // Render gloss preview
   const renderGlossPreview = () => {
+    const getChipStyle = (type: string) => {
+      switch (type) {
+        case 'typeRef':       return { color: 'primary' as const,   variant: 'outlined' as const, fontStyle: 'italic' }
+        case 'objectRef':     return { color: 'secondary' as const, variant: 'outlined' as const, fontStyle: 'normal' }
+        case 'annotationRef': return { color: 'warning' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+        case 'claimRef':      return { color: 'info' as const,      variant: 'outlined' as const, fontStyle: 'normal' }
+        default:              return { color: 'default' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+      }
+    }
+
     return gloss.map((item, index) => {
       if (item.type === 'text') {
-        // Replace spaces with non-breaking spaces to make them visible
-        // But preserve regular spaces for normal text flow
         const content = item.content.replace(/ /g, '\u00A0')
         return <span key={index}>{content}</span>
-      } else if (item.type === 'typeRef') {
+      }
+
+      let displayName = item.content
+      if (item.type === 'typeRef') {
         const typeObj = allTypes.find(t => t.id === item.content)
-        const displayName = typeObj ? typeObj.name : item.content
-        return (
-          <Chip
-            key={index}
-            label={displayName}
-            size="small"
-            color="primary"
-            variant="outlined"
-            sx={{ mx: 0.5, verticalAlign: 'middle', fontStyle: 'italic' }}
-          />
-        )
+        if (typeObj) displayName = typeObj.name
       } else if (item.type === 'objectRef') {
         const obj = allObjects.find(o => o.id === item.content)
-        const displayName = obj ? obj.name : item.content
-        return (
-          <Chip
-            key={index}
-            label={displayName}
-            size="small"
-            color="secondary"
-            variant="filled"
-            sx={{ mx: 0.5, verticalAlign: 'middle' }}
-          />
-        )
+        if (obj) displayName = obj.name
       } else if (item.type === 'claimRef') {
         const claim = allClaims.find(c => c.id === item.content)
-        const displayName = claim ? claim.name : item.content
-        return (
-          <Chip
-            key={index}
-            label={displayName}
-            size="small"
-            color="success"
-            variant="outlined"
-            sx={{ mx: 0.5, verticalAlign: 'middle' }}
-          />
-        )
+        if (claim) displayName = claim.name
       }
-      return null
+
+      const chipProps = getChipStyle(item.type)
+      return (
+        <Chip
+          key={index}
+          label={displayName}
+          size="small"
+          color={chipProps.color}
+          variant={chipProps.variant}
+          sx={{ mx: 0.5, verticalAlign: 'middle', fontStyle: chipProps.fontStyle }}
+        />
+      )
     })
   }
 
