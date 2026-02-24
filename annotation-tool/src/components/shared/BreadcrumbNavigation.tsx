@@ -95,7 +95,7 @@ export default function BreadcrumbNavigation() {
       }
     } else if (pathSegments[0] === 'objects') {
       breadcrumbs.push({
-        label: 'Object Builder',
+        label: 'World Builder',
         path: '/objects',
         icon: <ObjectIcon fontSize="small" />,
       })

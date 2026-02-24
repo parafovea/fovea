@@ -93,7 +93,7 @@ export default function Layout() {
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
-    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+    { text: 'World Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -205,7 +205,7 @@ export default function Layout() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#bdbdbd', color: 'text.primary' }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -242,7 +242,7 @@ export default function Layout() {
               variant="body2"
               component="div"
               sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: 'text.primary',
                 fontWeight: 300,
                 display: { xs: 'none', md: 'block' }
               }}

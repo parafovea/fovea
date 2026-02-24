@@ -81,7 +81,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
-  const [alternateNames, setAlternateNames] = useState<string[]>([])
+  const [alternateNamesInput, setAlternateNamesInput] = useState('')
   const [typeAssignments, setTypeAssignments] = useState<EntityTypeAssignment[]>([])
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
@@ -129,7 +129,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       typeAssignments,
       wikidataId,
       wikidataUrl,
-      alternateNames,
+      alternateNamesInput,
       locationType,
       coordinateSystem,
       pointCoordinates,
@@ -149,7 +149,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         importedFrom: locationData.wikidataId ? 'wikidata' : undefined,
         importedAt: locationData.wikidataId ? now : undefined,
         metadata: {
-          alternateNames: locationData.alternateNames.filter(Boolean),
+          alternateNames: locationData.alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
           externalIds: {},
           properties: {},
         },
@@ -200,7 +200,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     if (location) {
       setName(location.name)
       setDescription(location.description)
-      setAlternateNames(location.metadata?.alternateNames || [])
+      setAlternateNamesInput(location.metadata?.alternateNames?.join(', ') || '')
       setTypeAssignments(location.typeAssignments || [])
       setWikidataId(location.wikidataId || '')
       setWikidataUrl(location.wikidataUrl || '')
@@ -222,7 +222,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       // Reset for new location
       setName('')
       setDescription([{ type: 'text', content: '' }])
-      setAlternateNames([])
+      setAlternateNamesInput('')
       setTypeAssignments([])
       setLocationType('point')
       setCoordinateSystem('GPS')
@@ -310,7 +310,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       importedFrom: wikidataId ? (location?.importedFrom || 'wikidata') : undefined,
       importedAt: wikidataId ? (location?.importedAt || now) : undefined,
       metadata: {
-        alternateNames: alternateNames.filter(Boolean),
+        alternateNames: alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
         externalIds: {},
         properties: {},
       },
@@ -544,8 +544,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
           <TextField
             label="Alternate Names"
-            value={alternateNames.join(', ')}
-            onChange={(e) => setAlternateNames(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            value={alternateNamesInput}
+            onChange={(e) => setAlternateNamesInput(e.target.value)}
             fullWidth
             helperText="Other names for this location (comma-separated)"
           />
