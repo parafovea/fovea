@@ -26,6 +26,7 @@ import {
 import { ExpandMore as ExpandMoreIcon, Info as InfoIcon } from '@mui/icons-material'
 import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
+import { useClaims } from '@store/queries'
 import { logWarning } from '@services/errorLogging'
 
 interface ClaimEditorProps {
@@ -49,6 +50,9 @@ export default function ClaimEditor({
   videoId,
   parentClaimId,
 }: ClaimEditorProps) {
+  // Fetch sibling claims for $ references
+  const { data: existingClaims = [] } = useClaims(summaryId)
+
   // Core content
   const [gloss, setGloss] = useState<GlossItem[]>([])
   const [confidence, setConfidence] = useState(0.9)
@@ -228,6 +232,8 @@ export default function ClaimEditor({
               personaId={personaId}
               videoId={videoId}
               includeAnnotations={!!videoId}
+              includeClaims={true}
+              claims={existingClaims}
               label="Claim text with references"
             />
           </Box>
