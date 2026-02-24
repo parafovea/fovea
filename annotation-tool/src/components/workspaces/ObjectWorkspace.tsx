@@ -217,15 +217,15 @@ export default function ObjectWorkspace() {
   const filteredAllCollections = [...filteredEntityCollections, ...filteredEventCollections]
 
   const getEntityTypeNames = (entity: typeof entities[0]) => {
-    // Show number of type assignments
-    const count = entity.typeAssignments.length
-    return count > 0 ? `${count} type${count > 1 ? 's' : ''}` : 'Untyped'
+    // Show number of type assignments - handle undefined from API
+    const count = entity.typeAssignments?.length ?? 0
+    return count > 0 ? `${count} type${count > 1 ? 's' : ''}` : ''
   }
 
   const getEventTypeNames = (event: typeof events[0]) => {
-    // Show number of persona interpretations
-    const count = event.personaInterpretations.length
-    return count > 0 ? `${count} interpretation${count > 1 ? 's' : ''}` : 'No interpretations'
+    // Show number of persona interpretations - handle undefined from API
+    const count = event.personaInterpretations?.length ?? 0
+    return count > 0 ? `${count} interpretation${count > 1 ? 's' : ''}` : ''
   }
   
   const formatTimeDisplay = (time: typeof times[0]): string => {
@@ -495,20 +495,22 @@ export default function ObjectWorkspace() {
                       </Box>
                     }
                     secondary={
-                      <Box>
-                        <Typography variant="caption" component="div">
-                          {entityIsLocation ? (
-                            <>Type: {entity.locationType === 'point' ? 'Point' : 'Extent'} Location</>
-                          ) : (
-                            <>Types: {getEntityTypeNames(entity) || 'None assigned'}</>
-                          )}
-                        </Typography>
+                      <>
+                        {(entityIsLocation || getEntityTypeNames(entity)) && (
+                          <Typography variant="caption" component="span" display="block">
+                            {entityIsLocation ? (
+                              <>Type: {entity.locationType === 'point' ? 'Point' : 'Extent'} Location</>
+                            ) : (
+                              <>Types: {getEntityTypeNames(entity)}</>
+                            )}
+                          </Typography>
+                        )}
                         {entity.metadata?.alternateNames && entity.metadata.alternateNames.length > 0 && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" component="span" display="block" color="text.secondary">
                             Also known as: {entity.metadata.alternateNames.join(', ')}
                           </Typography>
                         )}
-                      </Box>
+                      </>
                     }
                   />
                   <ListItemSecondaryAction>
@@ -554,9 +556,11 @@ export default function ObjectWorkspace() {
                     </Box>
                   }
                   secondary={
-                    <Typography variant="caption">
-                      Types: {getEventTypeNames(event) || 'None assigned'}
-                    </Typography>
+                    getEventTypeNames(event) ? (
+                      <Typography variant="caption">
+                        Types: {getEventTypeNames(event)}
+                      </Typography>
+                    ) : undefined
                   }
                 />
                 <ListItemSecondaryAction>
@@ -642,9 +646,11 @@ export default function ObjectWorkspace() {
                     </Box>
                   }
                   secondary={
-                    <Typography variant="caption">
-                      {getTimeDescription(time)}
-                    </Typography>
+                    getTimeDescription(time) ? (
+                      <Typography variant="caption">
+                        {getTimeDescription(time)}
+                      </Typography>
+                    ) : undefined
                   }
                 />
                 <ListItemSecondaryAction>

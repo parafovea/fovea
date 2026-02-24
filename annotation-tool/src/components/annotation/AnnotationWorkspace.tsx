@@ -61,7 +61,7 @@ import {
   usePersonas,
   useAllPersonaOntologies,
 } from '@store/queries'
-import { useVideoUiStore, useAnnotationUiStore } from '@store/zustand'
+import { useVideoUiStore, useAnnotationUiStore, useClaimsUiStore } from '@store/zustand'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './AnnotationAutocomplete'
@@ -158,6 +158,9 @@ export default function AnnotationWorkspace() {
   const setDetectionResults = useAnnotationUiStore((state) => state.setDetectionResults)
   const setShowDetectionCandidates = useAnnotationUiStore((state) => state.setShowDetectionCandidates)
   const clearDetectionState = useAnnotationUiStore((state) => state.clearDetectionState)
+
+  // Claims UI state for draft restoration
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
 
   // TanStack Query for persona data
   const { data: personas = [] } = usePersonas()
@@ -372,6 +375,14 @@ export default function AnnotationWorkspace() {
       setLastAnnotation(videoId, Date.now())
     }
   }, [videoId, setLastAnnotation])
+
+  // Auto-open summary dialog when returning with a draft claim
+  useEffect(() => {
+    if (draftClaim && draftClaim.videoId === videoId) {
+      setSelectedPersonaId(draftClaim.personaId)
+      setSummaryDialogOpen(true)
+    }
+  }, [draftClaim, videoId, setSelectedPersonaId])
 
   // Note: Annotations are automatically loaded via useAnnotations() TanStack Query hook
 

@@ -128,3 +128,4 @@ docs/planning/
 notes/
 tutorial/
 .claude/
+.venv/

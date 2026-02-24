@@ -88,13 +88,20 @@ export class CommandRegistry {
    * ```
    */
   register(command: Command): Disposable {
-    // Silently allow re-registration to update command handlers
-    // This is the intended pattern for components to override placeholder handlers
+    // Save previous command so it can be restored on dispose.
+    // This is critical for React StrictMode, which unmounts and remounts components.
+    // Without this, dispose() would delete the command entirely, and on remount
+    // the command wouldn't be found in the registry.
+    const previousCommand = this.commands.get(command.id)
     this.commands.set(command.id, command)
 
     return {
       dispose: () => {
-        this.commands.delete(command.id)
+        if (previousCommand) {
+          this.commands.set(command.id, previousCommand)
+        } else {
+          this.commands.delete(command.id)
+        }
       }
     }
   }

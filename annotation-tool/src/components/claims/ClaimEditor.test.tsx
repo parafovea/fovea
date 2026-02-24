@@ -8,14 +8,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
 import ClaimEditor from './ClaimEditor'
 import { Claim } from '@models/types'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { server } from '@test/setup'
 
 /**
@@ -43,9 +44,11 @@ function createTestQueryClient() {
 function createWrapper() {
   const queryClient = createTestQueryClient()
   return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>{children}</BrowserRouter>
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </MemoryRouter>
   )
 }
 
@@ -76,6 +79,7 @@ describe('ClaimEditor', () => {
   beforeEach(() => {
     server.resetHandlers()
     vi.clearAllMocks()
+    useClaimsUiStore.getState().reset()
 
     // Set up MSW handlers for APIs the component may use
     server.use(
@@ -1097,6 +1101,126 @@ describe('ClaimEditor', () => {
           text: expect.any(String),
         })
       )
+    })
+  })
+
+  describe('Workspace Toggle Keyboard Shortcuts', () => {
+    /**
+     * Dispatches a keydown event on the dialog's title element.
+     * This targets a non-input DOM element so the handler does not skip it,
+     * and avoids the jsdom limitation where Document nodes lack .closest().
+     */
+    function pressKeyOnDialog(key: string): void {
+      const title = screen.getByRole('heading', { level: 2 })
+      fireEvent.keyDown(title, { key })
+    }
+
+    it('saves draft and navigates to /ontology when "o" is pressed', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      pressKeyOnDialog('o')
+
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft).not.toBeNull()
+      expect(draft?.videoId).toBe('video-1')
+      expect(draft?.personaId).toBe('persona-1')
+      expect(draft?.summaryId).toBe('summary-1')
+    })
+
+    it('saves draft and navigates to /objects when "w" is pressed', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      pressKeyOnDialog('w')
+
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft).not.toBeNull()
+      expect(draft?.videoId).toBe('video-1')
+      expect(draft?.personaId).toBe('persona-1')
+      expect(draft?.summaryId).toBe('summary-1')
+    })
+
+    it('does not save draft when "o" is pressed and dialog is closed', () => {
+      render(<ClaimEditor {...defaultProps} open={false} />, { wrapper: createWrapper() })
+
+      // No dialog, so dispatch on document body
+      fireEvent.keyDown(document.body, { key: 'o' })
+
+      expect(useClaimsUiStore.getState().draftClaim).toBeNull()
+    })
+
+    it('does not fire when focus is on an INPUT element', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      // GlossEditor renders an input with label "Claim text with references"
+      const inputField = screen.getByLabelText(/claim text with references/i)
+      fireEvent.keyDown(inputField, { key: 'o' })
+
+      expect(useClaimsUiStore.getState().draftClaim).toBeNull()
+    })
+
+    it('does not fire when focus is on a TEXTAREA element', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      const commentField = screen.getByPlaceholderText(/Enter comment/i)
+      fireEvent.keyDown(commentField, { key: 'w' })
+
+      expect(useClaimsUiStore.getState().draftClaim).toBeNull()
+    })
+
+    it('includes editingClaimId when editing an existing claim', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      pressKeyOnDialog('o')
+
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft?.editingClaimId).toBe('claim-1')
+    })
+
+    it('includes parentClaimId when creating a subclaim', () => {
+      render(
+        <ClaimEditor {...defaultProps} parentClaimId="parent-1" />,
+        { wrapper: createWrapper() }
+      )
+
+      // "Add Subclaim" is the h2 heading when parentClaimId is set
+      const title = screen.getByRole('heading', { level: 2 })
+      fireEvent.keyDown(title, { key: 'w' })
+
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft?.parentClaimId).toBe('parent-1')
+    })
+
+    it('preserves form state in draft when shortcut is triggered', () => {
+      const claimWithAll: Claim = {
+        ...mockClaim,
+        audio: ['speech', 'non-speech'],
+        video: ['text'],
+        metadata: ['non-text'],
+        comment: 'Test comment',
+        claimerType: 'entity',
+        claimerGloss: [{ type: 'text', content: 'Reporter' }],
+      }
+      render(<ClaimEditor {...defaultProps} claim={claimWithAll} />, { wrapper: createWrapper() })
+
+      pressKeyOnDialog('o')
+
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft).not.toBeNull()
+      expect(draft?.confidence).toBe(0.85)
+      expect(draft?.audio).toEqual(['speech', 'non-speech'])
+      expect(draft?.video).toEqual(['text'])
+      expect(draft?.metadata).toEqual(['non-text'])
+      expect(draft?.comment).toBe('Test comment')
+    })
+
+    it('ignores unrelated keys', () => {
+      render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
+
+      pressKeyOnDialog('a')
+      pressKeyOnDialog('x')
+      pressKeyOnDialog('Enter')
+
+      expect(useClaimsUiStore.getState().draftClaim).toBeNull()
     })
   })
 })

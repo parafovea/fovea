@@ -27,7 +27,10 @@ function matchesKeybinding(event: KeyboardEvent, keybinding: string): boolean {
   // Check that modifiers match exactly
   const modPressed = isMac ? event.metaKey : event.ctrlKey
   if (needsMod !== modPressed) return false
-  if (needsShift !== event.shiftKey) return false
+  // Allow shift for keys that require it to type (e.g. '?' is Shift+/)
+  const keyRequiresShift = !needsShift && event.shiftKey && event.key.length === 1 && event.key !== event.key.toLowerCase()
+  const isSymbolWithShift = !needsShift && event.shiftKey && event.key.length === 1 && /[^a-zA-Z0-9]/.test(event.key)
+  if (needsShift !== event.shiftKey && !keyRequiresShift && !isSymbolWithShift) return false
   if (needsAlt !== event.altKey) return false
   // Don't check ctrl separately if mod is active (they overlap on non-Mac)
   if (!isMac && needsMod) {
