@@ -161,13 +161,13 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   // Track if we've already tried to create an empty summary for this video/persona
   const creatingEmptySummaryRef = useRef<string | null>(null)
 
-  // Ensure Claims tab is selected when summary loads (but not on initial mount if no summary)
-  // Only switch to Claims tab if we have a valid summaryId
+  // Switch to Claims tab when a different summary loads (e.g. switching videos/personas)
+  // Only depends on summaryId so background refetches don't reset the tab
   useEffect(() => {
-    if (summaryId && summaryId.trim() !== '' && currentSummary) {
+    if (summaryId && summaryId.trim() !== '') {
       setActiveTab(1)
     }
-  }, [summaryId, currentSummary]) // Only run when summaryId changes and summary exists
+  }, [summaryId])
 
   // Log claims loading errors
   useEffect(() => {
