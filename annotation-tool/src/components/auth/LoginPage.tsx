@@ -50,7 +50,8 @@ export default function LoginPage() {
 
     try {
       await login(username, password, rememberMe)
-      const from = (location.state as { from?: string })?.from || '/'
+      const params = new URLSearchParams(location.search)
+      const from = params.get('redirect') || '/'
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')

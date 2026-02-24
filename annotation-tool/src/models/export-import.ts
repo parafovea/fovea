@@ -124,6 +124,8 @@ export interface ExportStats {
   // Personas & Ontologies
   /** Number of personas */
   personaCount: number
+  /** Number of system-generated personas included in the count */
+  systemPersonaCount: number
   /** Number of ontologies */
   ontologyCount: number
   /** Total entity types across all ontologies */

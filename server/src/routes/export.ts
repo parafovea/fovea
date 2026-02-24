@@ -246,6 +246,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
         200: Type.Object({
           // Personas & Ontologies
           personaCount: Type.Number(),
+          systemPersonaCount: Type.Number(),
           ontologyCount: Type.Number(),
           entityTypeCount: Type.Number(),
           eventTypeCount: Type.Number(),
@@ -300,6 +301,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.user!.id },
       orderBy: { createdAt: 'asc' }
     })
+    const systemPersonaCount = personas.filter(p => p.isSystemGenerated).length
     const userPersonaIds = personas.map(p => p.id)
     const ontologies = await fastify.prisma.ontology.findMany({
       where: { personaId: { in: userPersonaIds } },
@@ -401,6 +403,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     const response: {
       personaCount: number
+      systemPersonaCount: number
       ontologyCount: number
       entityTypeCount: number
       eventTypeCount: number
@@ -425,6 +428,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       warning?: string
     } = {
       personaCount: personas.length,
+      systemPersonaCount,
       ontologyCount: ontologies.length,
       entityTypeCount,
       eventTypeCount,
