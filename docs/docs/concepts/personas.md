@@ -106,8 +106,11 @@ Follow these steps to create a persona and build an ontology:
 Navigate to the Persona workspace and click "New Persona". Provide:
 
 - **Name**: Identifying name for the persona (e.g., "Baseball Scout")
-- **Description**: Brief description of the analytical perspective
-- **Domain**: Area of expertise (e.g., "Sports Analysis", "Medical Research")
+- **Role**: Professional role or analytical perspective (e.g., "Sports Analyst")
+- **Information Need**: What the persona is looking for in the video
+- **Details** (optional): Additional context or focus areas
+- **Project Assignment** (optional): Assign the persona to a project. Defaults to the active project context. Leave as "Personal Workspace" for an unscoped personal persona.
+- **Share After Creation** (optional): Share the persona with specific users or groups immediately after creation, with read-only or forkable permissions.
 
 ### Step 2: Define Entity Types
 

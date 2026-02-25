@@ -178,15 +178,59 @@ GET /api/export/stats
 
 ```json
 {
-  "totalSize": 104857600,
-  "totalSizeMB": "100.00MB",
+  "personaCount": 3,
+  "systemPersonaCount": 1,
+  "ontologyCount": 3,
+  "entityTypeCount": 8,
+  "eventTypeCount": 5,
+  "roleTypeCount": 4,
+  "relationTypeCount": 2,
+  "entityCount": 12,
+  "eventCount": 6,
+  "timeCount": 3,
+  "entityCollectionCount": 1,
+  "eventCollectionCount": 0,
+  "timeCollectionCount": 0,
+  "worldRelationCount": 4,
+  "summaryCount": 5,
+  "claimCount": 18,
+  "claimRelationCount": 7,
   "annotationCount": 150,
   "sequenceCount": 150,
   "keyframeCount": 450,
   "interpolatedFrameCount": 3600,
+  "totalSize": 104857600,
+  "totalSizeMB": "100.00MB",
   "warning": "Large export. Consider filtering by persona or video."
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| personaCount | number | Total number of personas |
+| systemPersonaCount | number | Number of system-generated personas included in personaCount |
+| ontologyCount | number | Number of persona ontologies |
+| entityTypeCount | number | Total entity types across all ontologies |
+| eventTypeCount | number | Total event types |
+| roleTypeCount | number | Total role types |
+| relationTypeCount | number | Total relation types |
+| entityCount | number | World state entities |
+| eventCount | number | World state events |
+| timeCount | number | World state times |
+| entityCollectionCount | number | Entity collections |
+| eventCollectionCount | number | Event collections |
+| timeCollectionCount | number | Time collections |
+| worldRelationCount | number | World state relations |
+| summaryCount | number | Video summaries |
+| claimCount | number | Claims |
+| claimRelationCount | number | Claim relations |
+| annotationCount | number | Annotations (filtered by persona/video/type if specified) |
+| sequenceCount | number | Bounding box sequences |
+| keyframeCount | number | Total keyframes |
+| interpolatedFrameCount | number | Total interpolated frames (0 if includeInterpolated is false) |
+| totalSize | number | Estimated export size in bytes |
+| totalSizeMB | string | Formatted size in MB |
+| warning | string | Optional warning for large exports |
 
 ### Example
 

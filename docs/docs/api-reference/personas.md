@@ -60,6 +60,7 @@ POST /api/personas
   "role": "Professional Baseball Scout",
   "informationNeed": "Evaluate player performance and technique",
   "details": "Focus on batting mechanics and pitch recognition",
+  "projectId": "770e8400-e29b-41d4-a716-446655440002",
   "isSystemGenerated": false,
   "hidden": false
 }
@@ -73,6 +74,7 @@ POST /api/personas
 | role | string | Yes | Professional role or perspective (min length: 1) |
 | informationNeed | string | Yes | What the persona wants to learn (min length: 1) |
 | details | string | No | Additional context or focus areas |
+| projectId | UUID | No | Assign persona to a project. If omitted, the persona is personal (not project-scoped). |
 | isSystemGenerated | boolean | No | Whether created by system (default: false) |
 | hidden | boolean | No | Whether hidden from UI (default: false) |
 
@@ -103,6 +105,19 @@ curl -X POST http://localhost:3001/api/personas \
     "name": "Sports Scout",
     "role": "Professional Baseball Scout",
     "informationNeed": "Evaluate player performance and technique"
+  }'
+```
+
+### Example: Create Project-Scoped Persona
+
+```bash
+curl -X POST http://localhost:3001/api/personas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sports Scout",
+    "role": "Professional Baseball Scout",
+    "informationNeed": "Evaluate player performance and technique",
+    "projectId": "770e8400-e29b-41d4-a716-446655440002"
   }'
 ```
 
