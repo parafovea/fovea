@@ -95,10 +95,12 @@ interface CollectionData {
 export class ImportHandler {
   private validator: SequenceValidator
   private prisma: PrismaClient
+  private userId: string
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, userId: string) {
     this.validator = new SequenceValidator()
     this.prisma = prisma
+    this.userId = userId
   }
 
   /**
@@ -410,14 +412,47 @@ export class ImportHandler {
    * @param existingData - Existing data in database
    * @returns Array of conflicts
    */
+  private isOwnedByImporter(id: string, type: string, existingData: ExistingData): boolean {
+    switch (type) {
+      case 'persona': return existingData.ownedPersonaIds.has(id)
+      case 'annotation': return existingData.ownedAnnotationIds.has(id)
+      case 'summary': return existingData.ownedSummaryIds.has(id)
+      case 'claim': return existingData.ownedClaimIds.has(id)
+      case 'claim_relation': return existingData.ownedClaimRelationIds.has(id)
+      case 'entity': return existingData.ownedEntityIds.has(id)
+      case 'event': return existingData.ownedEventIds.has(id)
+      case 'time': return existingData.ownedTimeIds.has(id)
+      case 'entity_collection': case 'entityCollection':
+      case 'event_collection': case 'eventCollection':
+      case 'time_collection': case 'timeCollection':
+        return existingData.ownedCollectionIds.has(id)
+      case 'relation': return existingData.ownedWorldStateId !== null
+      default: return false
+    }
+  }
+
   async detectConflicts(lines: ImportLine[], existingData: ExistingData): Promise<Conflict[]> {
     const conflicts: Conflict[] = []
 
     for (const line of lines) {
       switch (line.type) {
+        case 'persona': {
+          const personaData = line.data as PersonaData
+          if (existingData.personaIds.has(personaData.id)) {
+            conflicts.push({
+              type: 'duplicate-persona',
+              line: line.lineNumber,
+              originalId: personaData.id,
+              existingId: personaData.id,
+              details: `Persona with ID ${personaData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(personaData.id, 'persona', existingData)
+            })
+          }
+          break
+        }
+
         case 'annotation': {
           const annotationData = line.data as AnnotationData
-          // Check for duplicate annotation ID
           if (existingData.annotationIds.has(annotationData.id)) {
             const sequence = annotationData.boundingBoxSequence
             const keyframes = sequence.boxes.filter((b) => b.isKeyframe)
@@ -433,7 +468,8 @@ export class ImportHandler {
               existingId: annotationData.id,
               details: `Annotation with ID ${annotationData.id} already exists`,
               frameRange,
-              interpolationType: (sequence.interpolationSegments as Array<{ type?: string }>)[0]?.type
+              interpolationType: (sequence.interpolationSegments as Array<{ type?: string }>)[0]?.type,
+              ownedByImporter: this.isOwnedByImporter(annotationData.id, 'annotation', existingData)
             })
           }
 
@@ -466,7 +502,8 @@ export class ImportHandler {
               line: line.lineNumber,
               originalId: entityData.id,
               existingId: entityData.id,
-              details: `Entity with ID ${entityData.id} already exists`
+              details: `Entity with ID ${entityData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(entityData.id, 'entity', existingData)
             })
           }
           break
@@ -480,7 +517,103 @@ export class ImportHandler {
               line: line.lineNumber,
               originalId: eventData.id,
               existingId: eventData.id,
-              details: `Event with ID ${eventData.id} already exists`
+              details: `Event with ID ${eventData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(eventData.id, 'event', existingData)
+            })
+          }
+          break
+        }
+
+        case 'time': {
+          const timeData = line.data as TimeData
+          if (existingData.timeIds.has(timeData.id)) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: timeData.id,
+              existingId: timeData.id,
+              details: `Time with ID ${timeData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(timeData.id, 'time', existingData)
+            })
+          }
+          break
+        }
+
+        case 'entity_collection':
+        case 'entityCollection':
+        case 'event_collection':
+        case 'eventCollection':
+        case 'time_collection':
+        case 'timeCollection': {
+          const collectionData = line.data as CollectionData
+          if (existingData.collectionIds.has(collectionData.id)) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: collectionData.id,
+              existingId: collectionData.id,
+              details: `Collection with ID ${collectionData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(collectionData.id, line.type, existingData)
+            })
+          }
+          break
+        }
+
+        case 'relation': {
+          const relationData = line.data as { id: string; [key: string]: unknown }
+          if (relationData.id && existingData.collectionIds.has(relationData.id)) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: relationData.id,
+              existingId: relationData.id,
+              details: `Relation with ID ${relationData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(relationData.id, 'relation', existingData)
+            })
+          }
+          break
+        }
+
+        case 'summary': {
+          const summaryData = line.data as { id: string; [key: string]: unknown }
+          if (summaryData.id && existingData.summaryIds.has(summaryData.id)) {
+            conflicts.push({
+              type: 'duplicate-summary',
+              line: line.lineNumber,
+              originalId: summaryData.id,
+              existingId: summaryData.id,
+              details: `Summary with ID ${summaryData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(summaryData.id, 'summary', existingData)
+            })
+          }
+          break
+        }
+
+        case 'claim': {
+          const claimData = line.data as { id: string; [key: string]: unknown }
+          if (claimData.id && existingData.claimIds.has(claimData.id)) {
+            conflicts.push({
+              type: 'duplicate-claim',
+              line: line.lineNumber,
+              originalId: claimData.id,
+              existingId: claimData.id,
+              details: `Claim with ID ${claimData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(claimData.id, 'claim', existingData)
+            })
+          }
+          break
+        }
+
+        case 'claim_relation': {
+          const relationData = line.data as { id: string; [key: string]: unknown }
+          if (relationData.id && existingData.claimRelationIds.has(relationData.id)) {
+            conflicts.push({
+              type: 'duplicate-claim-relation',
+              line: line.lineNumber,
+              originalId: relationData.id,
+              existingId: relationData.id,
+              details: `Claim relation with ID ${relationData.id} already exists`,
+              ownedByImporter: this.isOwnedByImporter(relationData.id, 'claim_relation', existingData)
             })
           }
           break
@@ -502,6 +635,18 @@ export class ImportHandler {
     const resolutions: Resolution[] = []
 
     for (const conflict of conflicts) {
+      // Foreign data (not owned by importing user) is always copied with new IDs
+      if (conflict.ownedByImporter === false) {
+        resolutions.push({
+          conflictType: conflict.type,
+          strategy: 'create-new',
+          originalId: conflict.originalId,
+          newId: randomUUID(),
+          action: 'create-new'
+        })
+        continue
+      }
+
       let resolution: Resolution
 
       switch (conflict.type) {
@@ -523,6 +668,20 @@ export class ImportHandler {
           break
         }
 
+        case 'duplicate-persona': {
+          const personaStrategy = options.conflictResolution.personas
+          resolution = {
+            conflictType: conflict.type,
+            strategy: personaStrategy,
+            originalId: conflict.originalId,
+            action: personaStrategy === 'skip' ? 'skip' :
+                    personaStrategy === 'replace' ? 'replace' :
+                    personaStrategy === 'merge' ? 'merge' :
+                    personaStrategy === 'rename' ? 'rename' : 'skip'
+          }
+          break
+        }
+
         case 'duplicate-object': {
           const objStrategy = options.conflictResolution.worldObjects
           resolution = {
@@ -532,6 +691,18 @@ export class ImportHandler {
             action: objStrategy === 'skip' ? 'skip' :
                     objStrategy === 'replace' ? 'replace' :
                     objStrategy === 'merge-assignments' ? 'merge' : 'skip'
+          }
+          break
+        }
+
+        case 'duplicate-summary':
+        case 'duplicate-claim':
+        case 'duplicate-claim-relation': {
+          resolution = {
+            conflictType: conflict.type,
+            strategy: 'skip',
+            originalId: conflict.originalId,
+            action: 'skip'
           }
           break
         }
@@ -651,32 +822,91 @@ export class ImportHandler {
    * @returns Existing data
    */
   async loadExistingData(): Promise<ExistingData> {
-    const [personas, videos, worldState, annotations, summaries, claims, claimRelations, ontologies] = await Promise.all([
-      this.prisma.persona.findMany({ select: { id: true } }),
+    const [personas, videos, allWorldStates, userWorldState, annotations, summaries, claims, claimRelations, ontologies] = await Promise.all([
+      this.prisma.persona.findMany({ select: { id: true, userId: true } }),
       this.prisma.video.findMany({ select: { id: true } }),
-      this.prisma.worldState.findFirst(),
-      this.prisma.annotation.findMany({ select: { id: true } }),
-      this.prisma.videoSummary.findMany({ select: { id: true } }),
-      this.prisma.claim.findMany({ select: { id: true } }),
-      this.prisma.claimRelation.findMany({ select: { id: true } }),
+      this.prisma.worldState.findMany(),
+      this.prisma.worldState.findFirst({ where: { userId: this.userId } }),
+      this.prisma.annotation.findMany({ select: { id: true, personaId: true } }),
+      this.prisma.videoSummary.findMany({ select: { id: true, personaId: true } }),
+      this.prisma.claim.findMany({ select: { id: true, summaryId: true } }),
+      this.prisma.claimRelation.findMany({ select: { id: true, sourceClaimId: true } }),
       this.prisma.ontology.findMany({ select: { personaId: true } })
     ])
 
+    // Build ownership sets
+    const ownedPersonaIds = new Set(
+      personas.filter(p => p.userId === this.userId).map(p => p.id)
+    )
+    const ownedSummaryIds = new Set(
+      summaries.filter(s => ownedPersonaIds.has(s.personaId)).map(s => s.id)
+    )
+    const ownedClaimIds = new Set(
+      claims.filter(c => ownedSummaryIds.has(c.summaryId)).map(c => c.id)
+    )
+    const ownedClaimRelationIds = new Set(
+      claimRelations.filter(r => ownedClaimIds.has(r.sourceClaimId)).map(r => r.id)
+    )
+    const ownedAnnotationIds = new Set(
+      annotations
+        .filter(a => a.personaId ? ownedPersonaIds.has(a.personaId) : false)
+        .map(a => a.id)
+    )
+
+    // Extract owned world state object IDs
+    const ownedEntityIds = new Set<string>()
+    const ownedEventIds = new Set<string>()
+    const ownedTimeIds = new Set<string>()
+    const ownedCollectionIds = new Set<string>()
+    if (userWorldState) {
+      const uws = userWorldState as unknown as {
+        entities?: Prisma.JsonValue; events?: Prisma.JsonValue; times?: Prisma.JsonValue
+        entityCollections?: Prisma.JsonValue; eventCollections?: Prisma.JsonValue; timeCollections?: Prisma.JsonValue
+      }
+      for (const entity of (Array.isArray(uws.entities) ? uws.entities : [])) {
+        if (entity && typeof entity === 'object' && 'id' in entity) ownedEntityIds.add(entity.id as string)
+      }
+      for (const event of (Array.isArray(uws.events) ? uws.events : [])) {
+        if (event && typeof event === 'object' && 'id' in event) ownedEventIds.add(event.id as string)
+      }
+      for (const time of (Array.isArray(uws.times) ? uws.times : [])) {
+        if (time && typeof time === 'object' && 'id' in time) ownedTimeIds.add(time.id as string)
+      }
+      for (const arr of [uws.entityCollections, uws.eventCollections, uws.timeCollections]) {
+        if (Array.isArray(arr)) {
+          for (const col of arr) {
+            if (col && typeof col === 'object' && 'id' in col) ownedCollectionIds.add(col.id as string)
+          }
+        }
+      }
+    }
+
     const existingData: ExistingData = {
       personaIds: new Set(personas.map(p => p.id)),
-      entityIds: new Set(),
-      eventIds: new Set(),
-      timeIds: new Set(),
-      collectionIds: new Set(),
+      entityIds: new Set<string>(),
+      eventIds: new Set<string>(),
+      timeIds: new Set<string>(),
+      collectionIds: new Set<string>(),
       annotationIds: new Set(annotations.map(a => a.id)),
       videoIds: new Set(videos.map(v => v.id)),
       summaryIds: new Set(summaries.map(s => s.id)),
       claimIds: new Set(claims.map(c => c.id)),
       claimRelationIds: new Set(claimRelations.map(r => r.id)),
-      ontologyPersonaIds: new Set(ontologies.map(o => o.personaId))
+      ontologyPersonaIds: new Set(ontologies.map(o => o.personaId)),
+      ownedPersonaIds,
+      ownedAnnotationIds,
+      ownedSummaryIds,
+      ownedClaimIds,
+      ownedClaimRelationIds,
+      ownedEntityIds,
+      ownedEventIds,
+      ownedTimeIds,
+      ownedCollectionIds,
+      ownedWorldStateId: userWorldState?.id ?? null,
     }
 
-    if (worldState) {
+    // Extract IDs from ALL world states for global conflict detection
+    for (const worldState of allWorldStates) {
       const ws = worldState as unknown as {
         entities?: Prisma.JsonValue
         events?: Prisma.JsonValue
@@ -686,7 +916,6 @@ export class ImportHandler {
         timeCollections?: Prisma.JsonValue
       }
 
-      // Extract entity IDs
       if (Array.isArray(ws.entities)) {
         for (const entity of ws.entities) {
           if (entity && typeof entity === 'object' && 'id' in entity) {
@@ -694,8 +923,6 @@ export class ImportHandler {
           }
         }
       }
-
-      // Extract event IDs
       if (Array.isArray(ws.events)) {
         for (const event of ws.events) {
           if (event && typeof event === 'object' && 'id' in event) {
@@ -703,8 +930,6 @@ export class ImportHandler {
           }
         }
       }
-
-      // Extract time IDs
       if (Array.isArray(ws.times)) {
         for (const time of ws.times) {
           if (time && typeof time === 'object' && 'id' in time) {
@@ -712,26 +937,12 @@ export class ImportHandler {
           }
         }
       }
-
-      // Extract collection IDs
-      if (Array.isArray(ws.entityCollections)) {
-        for (const collection of ws.entityCollections) {
-          if (collection && typeof collection === 'object' && 'id' in collection) {
-            existingData.collectionIds.add(collection.id as string)
-          }
-        }
-      }
-      if (Array.isArray(ws.eventCollections)) {
-        for (const collection of ws.eventCollections) {
-          if (collection && typeof collection === 'object' && 'id' in collection) {
-            existingData.collectionIds.add(collection.id as string)
-          }
-        }
-      }
-      if (Array.isArray(ws.timeCollections)) {
-        for (const collection of ws.timeCollections) {
-          if (collection && typeof collection === 'object' && 'id' in collection) {
-            existingData.collectionIds.add(collection.id as string)
+      for (const collectionArray of [ws.entityCollections, ws.eventCollections, ws.timeCollections]) {
+        if (Array.isArray(collectionArray)) {
+          for (const collection of collectionArray) {
+            if (collection && typeof collection === 'object' && 'id' in collection) {
+              existingData.collectionIds.add(collection.id as string)
+            }
           }
         }
       }
@@ -888,12 +1099,12 @@ export class ImportHandler {
     }
 
     // 3. Import world state objects
-    // Get or create world state
-    let worldState = await tx.worldState.findFirst()
+    // Get or create world state for the importing user
+    let worldState = await tx.worldState.findFirst({ where: { userId: this.userId } })
     if (!worldState) {
       worldState = await tx.worldState.create({
         data: {
-          userId: 'default',
+          userId: this.userId,
           entities: [],
           events: [],
           times: [],
@@ -1014,25 +1225,10 @@ export class ImportHandler {
           }
         })
       } else if (!existingPersona) {
-        // Create new persona - need to link to a user
-        // For import, we'll create a system user if needed
-        let systemUser = await tx.user.findFirst({ where: { username: 'import-system' } })
-        if (!systemUser) {
-          systemUser = await tx.user.create({
-            data: {
-              username: 'import-system',
-              email: 'import@system.local',
-              passwordHash: 'import-disabled',
-              displayName: 'Import System',
-              isAdmin: false
-            }
-          })
-        }
-
         await tx.persona.create({
           data: {
             id: personaId,
-            userId: systemUser.id,
+            userId: this.userId,
             name: line.data.name as string,
             role: line.data.role as string,
             informationNeed: line.data.informationNeed as string,

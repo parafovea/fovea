@@ -620,6 +620,7 @@ export class AnnotationExporter {
       type: 'persona',
       data: {
         id: persona.id,
+        userId: persona.userId,
         name: persona.name,
         role: persona.role,
         informationNeed: persona.informationNeed,
