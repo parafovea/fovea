@@ -85,7 +85,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id)
 
     try {
       // Parse multipart data
@@ -192,7 +192,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id)
 
     try {
       // Parse multipart data
