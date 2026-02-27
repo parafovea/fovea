@@ -34,7 +34,7 @@ describe('ImportHandler', () => {
   let handler: ImportHandler
 
   beforeEach(() => {
-    handler = new ImportHandler(mockPrismaClient)
+    handler = new ImportHandler(mockPrismaClient, 'test-user-id')
     vi.clearAllMocks()
   })
 
@@ -282,7 +282,21 @@ describe('ImportHandler', () => {
         timeIds: new Set<string>(),
         collectionIds: new Set<string>(),
         annotationIds: new Set(['ann-1']),
-        videoIds: new Set(['vid-1'])
+        videoIds: new Set(['vid-1']),
+        summaryIds: new Set<string>(),
+        claimIds: new Set<string>(),
+        claimRelationIds: new Set<string>(),
+        ontologyPersonaIds: new Set<string>(),
+        ownedPersonaIds: new Set<string>(),
+        ownedAnnotationIds: new Set(['ann-1']),
+        ownedSummaryIds: new Set<string>(),
+        ownedClaimIds: new Set<string>(),
+        ownedClaimRelationIds: new Set<string>(),
+        ownedEntityIds: new Set<string>(),
+        ownedEventIds: new Set<string>(),
+        ownedTimeIds: new Set<string>(),
+        ownedCollectionIds: new Set<string>(),
+        ownedWorldStateId: null,
       }
 
       const conflicts = await handler.detectConflicts(lines, existingData)
@@ -290,6 +304,7 @@ describe('ImportHandler', () => {
       expect(conflicts).toHaveLength(1)
       expect(conflicts[0].type).toBe('duplicate-sequence')
       expect(conflicts[0].originalId).toBe('ann-1')
+      expect(conflicts[0].ownedByImporter).toBe(true)
     })
 
     it('should detect missing video dependency', async () => {
@@ -319,7 +334,21 @@ describe('ImportHandler', () => {
         timeIds: new Set<string>(),
         collectionIds: new Set<string>(),
         annotationIds: new Set<string>(),
-        videoIds: new Set<string>()
+        videoIds: new Set<string>(),
+        summaryIds: new Set<string>(),
+        claimIds: new Set<string>(),
+        claimRelationIds: new Set<string>(),
+        ontologyPersonaIds: new Set<string>(),
+        ownedPersonaIds: new Set<string>(),
+        ownedAnnotationIds: new Set<string>(),
+        ownedSummaryIds: new Set<string>(),
+        ownedClaimIds: new Set<string>(),
+        ownedClaimRelationIds: new Set<string>(),
+        ownedEntityIds: new Set<string>(),
+        ownedEventIds: new Set<string>(),
+        ownedTimeIds: new Set<string>(),
+        ownedCollectionIds: new Set<string>(),
+        ownedWorldStateId: null,
       }
 
       const conflicts = await handler.detectConflicts(lines, existingData)

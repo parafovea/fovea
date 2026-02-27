@@ -367,6 +367,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Create session so the user is logged in immediately after registration
+      const { token, expiresAt } = await authService.regenerateSession('', user.id, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+        expiresInDays: 7,
+      })
+
+      recordSessionEvent('created')
+
+      reply.setCookie('session_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        expires: expiresAt,
+        path: '/',
+      })
+
       return reply.code(201).send({
         user: {
           id: user.id,

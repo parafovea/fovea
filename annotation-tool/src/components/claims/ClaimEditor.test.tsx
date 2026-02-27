@@ -883,11 +883,11 @@ describe('ClaimEditor', () => {
     it('enables save when content, confidence, and modality are set', async () => {
       const user = userEvent.setup()
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      
+
       // Enter content
       const input = screen.getByLabelText(/claim text with references/i)
       await user.type(input, 'Test claim')
-      
+
       // Select at least one modality
       const speechCheckbox = screen.getByLabelText('Speech', { selector: 'input' })
       await user.click(speechCheckbox)
@@ -897,6 +897,100 @@ describe('ClaimEditor', () => {
       await waitFor(() => {
         expect(saveButton).not.toBeDisabled()
       })
+    })
+
+    it('disables save when only metadata sources are selected', async () => {
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Enter content
+      const input = screen.getByLabelText(/claim text with references/i)
+      await user.type(input, 'Test claim')
+
+      // Select only metadata checkbox (no audio or video)
+      const metadataSection = screen.getByText(/Metadata Sources/i).parentElement?.parentElement
+      await user.click(within(metadataSection!).getByLabelText('Text', { selector: 'input' }))
+
+      // Save should be disabled because metadata-only is not allowed
+      const saveButton = screen.getByRole('button', { name: /create/i })
+      expect(saveButton).toBeDisabled()
+    })
+
+    it('enables save when metadata plus audio source is selected', async () => {
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Enter content
+      const input = screen.getByLabelText(/claim text with references/i)
+      await user.type(input, 'Test claim')
+
+      // Select metadata checkbox
+      const metadataSection = screen.getByText(/Metadata Sources/i).parentElement?.parentElement
+      await user.click(within(metadataSection!).getByLabelText('Text', { selector: 'input' }))
+
+      // Also select an audio checkbox
+      const speechCheckbox = screen.getByLabelText('Speech', { selector: 'input' })
+      await user.click(speechCheckbox)
+
+      // Save should be enabled since we have audio + metadata
+      const saveButton = screen.getByRole('button', { name: /create/i })
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled()
+      })
+    })
+
+    it('enables save when metadata plus video source is selected', async () => {
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Enter content
+      const input = screen.getByLabelText(/claim text with references/i)
+      await user.type(input, 'Test claim')
+
+      // Select metadata checkbox
+      const metadataSection = screen.getByText(/Metadata Sources/i).parentElement?.parentElement
+      await user.click(within(metadataSection!).getByLabelText('Non-text', { selector: 'input' }))
+
+      // Also select a video checkbox
+      const videoSection = screen.getByText(/Video Sources/i).parentElement?.parentElement
+      await user.click(within(videoSection!).getByLabelText('Non-text', { selector: 'input' }))
+
+      // Save should be enabled since we have video + metadata
+      const saveButton = screen.getByRole('button', { name: /create/i })
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled()
+      })
+    })
+
+    it('shows warning when only metadata sources are selected', async () => {
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Select only metadata checkbox
+      const metadataSection = screen.getByText(/Metadata Sources/i).parentElement?.parentElement
+      await user.click(within(metadataSection!).getByLabelText('Text', { selector: 'input' }))
+
+      // Warning message should appear
+      expect(screen.getByText(/Metadata sources cannot be the only selection/i)).toBeInTheDocument()
+    })
+
+    it('hides warning when audio or video source is added', async () => {
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      // Select only metadata checkbox
+      const metadataSection = screen.getByText(/Metadata Sources/i).parentElement?.parentElement
+      await user.click(within(metadataSection!).getByLabelText('Text', { selector: 'input' }))
+
+      // Warning should be visible
+      expect(screen.getByText(/Metadata sources cannot be the only selection/i)).toBeInTheDocument()
+
+      // Add an audio source
+      const speechCheckbox = screen.getByLabelText('Speech', { selector: 'input' })
+      await user.click(speechCheckbox)
+
+      // Warning should disappear
+      expect(screen.queryByText(/Metadata sources cannot be the only selection/i)).not.toBeInTheDocument()
     })
   })
 
