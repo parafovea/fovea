@@ -241,10 +241,13 @@ export default function ClaimEditor({
   const hasContent = gloss.some(item => item.content.trim().length > 0)
   // Check if at least one modality checkbox is checked
   const hasModalityMetadata = audio.length > 0 || video.length > 0 || metadata.length > 0
+  // Metadata sources alone are not sufficient - must have at least one audio or video source
+  const hasNonMetadataSource = audio.length > 0 || video.length > 0
+  const metadataOnly = metadata.length > 0 && !hasNonMetadataSource
   // Check if confidence is set (should always be set, but validate anyway)
   const hasConfidence = confidence !== undefined
-  // Validation: content, confidence, and modality are required
-  const isValid = hasContent && hasConfidence && hasModalityMetadata
+  // Validation: content, confidence, and modality are required; metadata-only is not allowed
+  const isValid = hasContent && hasConfidence && hasModalityMetadata && !metadataOnly
 
   // Track validation state to log failures only when user attempts to save
   const previousValidationAttemptRef = useRef<boolean>(false)
@@ -262,6 +265,7 @@ export default function ClaimEditor({
           hasContent,
           hasConfidence,
           hasModalityMetadata,
+          metadataOnly,
           glossLength: gloss.length,
         })
         previousValidationAttemptRef.current = true
@@ -269,7 +273,7 @@ export default function ClaimEditor({
     } else {
       previousValidationAttemptRef.current = false
     }
-  }, [isValid, hasContent, hasConfidence, hasModalityMetadata, summaryId, claim?.id, gloss.length, open])
+  }, [isValid, hasContent, hasConfidence, hasModalityMetadata, metadataOnly, summaryId, claim?.id, gloss.length, open])
 
   return (
     <Dialog
@@ -333,8 +337,13 @@ export default function ClaimEditor({
               Modality Metadata *
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-              Indicate what sources support this claim. You can select multiple options for each field. At least one option must be selected.
+              Indicate what sources support this claim. You can select multiple options for each field. At least one audio or video source must be selected.
             </Typography>
+            {metadataOnly && (
+              <Typography variant="caption" color="error" sx={{ mb: 1.5, display: 'block' }}>
+                Please select at least one audio or video source. Metadata sources cannot be the only selection.
+              </Typography>
+            )}
             <Box sx={{ display: 'flex', gap: 2 }}>
               {/* Audio Modality */}
               <Box sx={{ flex: '1 1 33%', minWidth: 0 }}>
