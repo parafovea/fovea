@@ -502,6 +502,13 @@ describe('Authentication Routes', () => {
       expect(body.user.isAdmin).toBe(false)
       expect(body.user.passwordHash).toBeUndefined()
 
+      // Verify session cookie is set (user is logged in after registration)
+      const sessionCookie = response.cookies.find(
+        (c: { name: string }) => c.name === 'session_token'
+      )
+      expect(sessionCookie).toBeDefined()
+      expect(sessionCookie!.value).toBeTruthy()
+
       // Verify user created in database
       const user = await prisma.user.findUnique({
         where: { username: 'newuser' },
@@ -509,6 +516,12 @@ describe('Authentication Routes', () => {
       expect(user).toBeDefined()
       expect(user!.passwordHash).toBeDefined()
       expect(user!.passwordHash).not.toBe('securepass123') // Should be hashed
+
+      // Verify session created in database
+      const session = await prisma.session.findFirst({
+        where: { userId: user!.id },
+      })
+      expect(session).toBeDefined()
 
       // Clean up
       delete process.env.ALLOW_REGISTRATION
