@@ -13,7 +13,7 @@ import {
   Chip,
 } from '@mui/material'
 import { usePersonaOntology, useWorld, useAnnotations } from '@store/queries'
-import { GlossItem, TimeInstant, getAnnotationTimeBounds } from '@models/types'
+import { GlossItem, TimeInstant, getAnnotationTimeBounds, Claim } from '@models/types'
 
 interface GlossEditorProps {
   gloss: GlossItem[]
@@ -23,6 +23,8 @@ interface GlossEditorProps {
   disabled?: boolean
   videoId?: string | null  // For annotation references
   includeAnnotations?: boolean  // Whether to allow ^ references
+  includeClaims?: boolean  // Whether to allow $ references
+  claims?: Claim[]  // Available claims for $ references
   label?: string  // Optional label for the editor (defaults to 'Gloss Definition')
 }
 
@@ -45,14 +47,22 @@ interface AnnotationOption {
   type: 'annotation'
 }
 
-export default function GlossEditor({ 
-  gloss, 
-  onChange, 
-  availableTypes, 
-  personaId, 
-  disabled = false, 
+interface ClaimOption {
+  id: string
+  name: string
+  type: 'claim'
+}
+
+export default function GlossEditor({
+  gloss,
+  onChange,
+  availableTypes,
+  personaId,
+  disabled = false,
   videoId = null,
   includeAnnotations = false,
+  includeClaims = false,
+  claims = [],
   label = 'Gloss Definition'
 }: GlossEditorProps) {
   // TanStack Query hooks for data fetching
@@ -68,7 +78,7 @@ export default function GlossEditor({
   const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
-  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations'>('types')
+  const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations' | 'claims'>('types')
   const inputRef = useRef<HTMLInputElement>(null)
   const [cursorPosition, setCursorPosition] = useState(0)
 
@@ -138,8 +148,56 @@ export default function GlossEditor({
     }
   }) : [], [includeAnnotations, annotations, entities, events, allTypes])
 
+  // Resolve a claim's gloss to plain text for display
+  const resolveClaimText = useCallback((claim: { gloss: GlossItem[] }): string => {
+    return claim.gloss
+      .map(item => {
+        if (item.type === 'text') return item.content
+        if (item.type === 'typeRef') {
+          const t = allTypes.find(t => t.id === item.content)
+          return t ? t.name : item.content
+        }
+        if (item.type === 'objectRef') {
+          const o = allObjects.find(o => o.id === item.content)
+          return o ? o.name : item.content
+        }
+        if (item.type === 'claimRef') {
+          const ref = claims.find(c => c.id === item.content)
+          if (ref) {
+            // Resolve one level deep, reusing type/object resolution
+            return ref.gloss
+              .map(g => {
+                if (g.type === 'text') return g.content
+                if (g.type === 'typeRef') {
+                  const t = allTypes.find(t => t.id === g.content)
+                  return t ? t.name : g.content
+                }
+                if (g.type === 'objectRef') {
+                  const o = allObjects.find(o => o.id === g.content)
+                  return o ? o.name : g.content
+                }
+                return g.content
+              })
+              .join('')
+              .slice(0, 40)
+          }
+          return item.content
+        }
+        return item.content
+      })
+      .join('')
+      .slice(0, 80)
+  }, [allTypes, allObjects, claims])
+
+  // Get all available claims (if enabled)
+  const allClaims: ClaimOption[] = useMemo(() => includeClaims ? claims.map(claim => ({
+    id: claim.id,
+    name: resolveClaimText(claim) || 'Claim',
+    type: 'claim' as const
+  })) : [], [includeClaims, claims, resolveClaimText])
+
   // Filter types based on search query
-  const filteredTypes = searchQuery 
+  const filteredTypes = searchQuery
     ? allTypes.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : allTypes
 
@@ -152,6 +210,11 @@ export default function GlossEditor({
   const filteredAnnotations = searchQuery
     ? allAnnotations.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : allAnnotations
+
+  // Filter claims based on search query
+  const filteredClaims = searchQuery
+    ? allClaims.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allClaims
 
   // Group filtered types by type
   const groupedTypes = {
@@ -183,10 +246,13 @@ export default function GlossEditor({
       } else if (item.type === 'annotationRef') {
         const ann = allAnnotations.find(a => a.id === item.content)
         return ann ? `^\`${ann.name}\`` : `^[${item.content}]`
+      } else if (item.type === 'claimRef') {
+        const claim = allClaims.find(c => c.id === item.content)
+        return claim ? `$\`${claim.name}\`` : `$[${item.content}]`
       }
       return ''
     }).join('')
-  }, [allTypes, allObjects, allAnnotations])
+  }, [allTypes, allObjects, allAnnotations, allClaims])
 
   // Parse string to gloss items
   const stringToGloss = (text: string): GlossItem[] => {
@@ -369,6 +435,42 @@ export default function GlossEditor({
             i++
           }
         }
+      } else if (text[i] === '$' && includeClaims) {
+        // Handle claim reference
+        if (currentText) {
+          items.push({ type: 'text', content: currentText })
+          currentText = ''
+        }
+
+        // Check if it's a backtick-delimited reference
+        if (text[i + 1] === '`') {
+          const endBacktick = text.indexOf('`', i + 2)
+          if (endBacktick !== -1) {
+            const claimName = text.slice(i + 2, endBacktick)
+            const claim = allClaims.find(c => c.name === claimName)
+
+            if (claim) {
+              items.push({
+                type: 'claimRef',
+                content: claim.id,
+                refType: 'claim'
+              })
+              i = endBacktick + 1
+            } else {
+              // No match, treat as text
+              currentText += text.slice(i, endBacktick + 1)
+              i = endBacktick + 1
+            }
+          } else {
+            // No closing backtick, treat as text
+            currentText += '$`'
+            i += 2
+          }
+        } else {
+          // No backtick, treat as text
+          currentText += '$'
+          i++
+        }
       } else {
         currentText += text[i]
         i++
@@ -386,7 +488,7 @@ export default function GlossEditor({
   // Initialize input value from gloss
   useEffect(() => {
     setInputValue(glossToString(gloss))
-  }, [gloss, glossToString]) // Re-run when gloss or glossToString changes
+  }, [gloss, glossToString])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -414,9 +516,16 @@ export default function GlossEditor({
       setAutocompleteAnchor(e.target)
       setSearchQuery('')
       setSelectedIndex(0)
+    } else if (lastChar === '$' && includeClaims) {
+      setShowAutocomplete(true)
+      setAutocompleteMode('claims')
+      setAutocompleteAnchor(e.target)
+      setSearchQuery('')
+      setSelectedIndex(0)
     } else if (showAutocomplete) {
       // Update search query if autocomplete is open
-      const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
+      const charMap = { types: '#', objects: '@', annotations: '^', claims: '$' }
+      const char = charMap[autocompleteMode]
       const charIndex = value.lastIndexOf(char, cursorPos - 1)
       if (charIndex !== -1) {
         const query = value.slice(charIndex + 1, cursorPos)
@@ -432,8 +541,9 @@ export default function GlossEditor({
     onChange(newGloss)
   }
 
-  const insertReference = (item: TypeOption | ObjectOption | AnnotationOption) => {
-    const char = autocompleteMode === 'types' ? '#' : (autocompleteMode === 'objects' ? '@' : '^')
+  const insertReference = (item: TypeOption | ObjectOption | AnnotationOption | ClaimOption) => {
+    const charMap = { types: '#', objects: '@', annotations: '^', claims: '$' }
+    const char = charMap[autocompleteMode]
     const beforeChar = inputValue.lastIndexOf(char, cursorPosition - 1)
     const beforeText = inputValue.slice(0, beforeChar)
     const afterText = inputValue.slice(cursorPosition)
@@ -464,6 +574,8 @@ export default function GlossEditor({
       ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event, ...groupedTypes.relation]
       : autocompleteMode === 'objects'
       ? [...groupedObjects.entities, ...groupedObjects.locations, ...groupedObjects.events, ...groupedObjects.times]
+      : autocompleteMode === 'claims'
+      ? filteredClaims
       : filteredAnnotations
     
     if (e.key === 'ArrowDown') {
@@ -472,7 +584,7 @@ export default function GlossEditor({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIndex((prev) => (prev - 1 + allFilteredItems.length) % allFilteredItems.length)
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault()
       if (allFilteredItems[selectedIndex]) {
         insertReference(allFilteredItems[selectedIndex])
@@ -485,40 +597,45 @@ export default function GlossEditor({
 
   // Render gloss preview
   const renderGlossPreview = () => {
+    const getChipStyle = (type: string) => {
+      switch (type) {
+        case 'typeRef':       return { color: 'primary' as const,   variant: 'outlined' as const, fontStyle: 'italic' }
+        case 'objectRef':     return { color: 'secondary' as const, variant: 'outlined' as const, fontStyle: 'normal' }
+        case 'annotationRef': return { color: 'warning' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+        case 'claimRef':      return { color: 'info' as const,      variant: 'outlined' as const, fontStyle: 'normal' }
+        default:              return { color: 'default' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+      }
+    }
+
     return gloss.map((item, index) => {
       if (item.type === 'text') {
-        // Replace spaces with non-breaking spaces to make them visible
-        // But preserve regular spaces for normal text flow
         const content = item.content.replace(/ /g, '\u00A0')
         return <span key={index}>{content}</span>
-      } else if (item.type === 'typeRef') {
+      }
+
+      let displayName = item.content
+      if (item.type === 'typeRef') {
         const typeObj = allTypes.find(t => t.id === item.content)
-        const displayName = typeObj ? typeObj.name : item.content
-        return (
-          <Chip
-            key={index}
-            label={displayName}
-            size="small"
-            color="primary"
-            variant="outlined"
-            sx={{ mx: 0.5, verticalAlign: 'middle', fontStyle: 'italic' }}
-          />
-        )
+        if (typeObj) displayName = typeObj.name
       } else if (item.type === 'objectRef') {
         const obj = allObjects.find(o => o.id === item.content)
-        const displayName = obj ? obj.name : item.content
-        return (
-          <Chip
-            key={index}
-            label={displayName}
-            size="small"
-            color="secondary"
-            variant="filled"
-            sx={{ mx: 0.5, verticalAlign: 'middle' }}
-          />
-        )
+        if (obj) displayName = obj.name
+      } else if (item.type === 'claimRef') {
+        const claim = allClaims.find(c => c.id === item.content)
+        if (claim) displayName = claim.name
       }
-      return null
+
+      const chipProps = getChipStyle(item.type)
+      return (
+        <Chip
+          key={index}
+          label={displayName}
+          size="small"
+          color={chipProps.color}
+          variant={chipProps.variant}
+          sx={{ mx: 0.5, verticalAlign: 'middle', fontStyle: chipProps.fontStyle }}
+        />
+      )
     })
   }
 
@@ -795,8 +912,39 @@ export default function GlossEditor({
                     </>
                   ) : (
                     <ListItem>
-                      <ListItemText 
-                        primary="No annotations found" 
+                      <ListItemText
+                        primary="No annotations found"
+                        secondary="Type to search or ESC to close"
+                      />
+                    </ListItem>
+                  )}
+                </>
+              ) : autocompleteMode === 'claims' ? (
+                // Claims mode
+                <>
+                  {filteredClaims.length > 0 ? (
+                    <>
+                      <ListSubheader>Claims</ListSubheader>
+                      {filteredClaims.map((claim, idx) => (
+                        <ListItem
+                          key={claim.id}
+                          onClick={() => insertReference(claim)}
+                          sx={{
+                            backgroundColor: selectedIndex === idx ? 'action.selected' : undefined,
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: 'action.hover',
+                            }
+                          }}
+                        >
+                          <ListItemText primary={claim.name} />
+                        </ListItem>
+                      ))}
+                    </>
+                  ) : (
+                    <ListItem>
+                      <ListItemText
+                        primary="No claims found"
                         secondary="Type to search or ESC to close"
                       />
                     </ListItem>
@@ -824,7 +972,7 @@ export default function GlossEditor({
       </Paper>
 
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        Tip: Type # for types or @ for objects. References are wrapped in backticks (e.g., @`John Smith`). Use arrow keys to navigate suggestions.
+        Tip: Type # for types, @ for objects{includeClaims ? ', $ for claims' : ''}. References are wrapped in backticks (e.g., @`John Smith`). Use arrow keys to navigate suggestions.
       </Typography>
     </Box>
   )

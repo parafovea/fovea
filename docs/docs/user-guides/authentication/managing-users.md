@@ -234,8 +234,46 @@ When a team member leaves:
 3. Revoke all sessions and have user try again
 4. Check database connectivity
 
+## Admin Group and Project Management
+
+System administrators have additional capabilities for managing groups and projects across the entire system.
+
+### Group Administration
+
+From the Admin Panel, system administrators can:
+
+- **List all groups** in the system, regardless of membership
+- **Create groups** on behalf of any user (the specified user becomes the group_owner)
+- **Update any group** name and description
+- **Delete any group** (cascade-deletes memberships)
+- **Add members to any group** with any role, including group_owner
+
+See [Groups API](../../api-reference/groups.md) for the admin endpoints.
+
+### Project Administration
+
+System administrators can:
+
+- **View any project** details, members, and video assignments
+- **Delete any project** regardless of membership
+- **Manage video assignments** including bulk assignment of videos to projects
+- **Create and manage video assignment rules** for automated video-to-project mapping
+
+See [Projects API](../../api-reference/projects.md) and [Video Assignments API](../../api-reference/video-assignments.md) for the admin endpoints.
+
+### System Roles
+
+Every user has a system-level role:
+
+- **system_admin**: full access to all resources and admin endpoints. Bypasses all RBAC permission checks.
+- **user**: standard access governed by group and project memberships.
+
+To promote a user to system_admin, update the user's `isAdmin` flag and `systemRole` field via the Admin Panel or database.
+
 ## API Reference
 
 For programmatic user management, see:
 - [Authentication API Reference](../../api-reference/authentication.md)
 - User Management endpoints (`/api/admin/users/*`)
+- [Groups API Reference](../../api-reference/groups.md) (admin endpoints)
+- [Projects API Reference](../../api-reference/projects.md)

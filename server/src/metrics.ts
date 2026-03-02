@@ -90,3 +90,66 @@ export const cacheOperationDuration = meter.createHistogram('cache.operation.dur
   description: 'Cache operation duration in milliseconds',
   unit: 'ms'
 })
+
+/**
+ * Counter for RBAC permission checks.
+ * Attributes: action, resource, result (allowed/denied), role
+ */
+export const rbacCheckCounter = meter.createCounter('fovea.rbac.checks', {
+  description: 'Number of RBAC permission checks',
+  unit: '1'
+})
+
+/**
+ * Histogram for RBAC permission check duration.
+ * Attributes: action, resource
+ */
+export const rbacCheckDuration = meter.createHistogram('fovea.rbac.check.duration', {
+  description: 'RBAC permission check duration in milliseconds',
+  unit: 'ms'
+})
+
+/**
+ * Counter for group operations.
+ * Attributes: operation (create/update/delete/add_member/remove_member), status
+ */
+export const groupOperationCounter = meter.createCounter('fovea.group.operations', {
+  description: 'Number of group management operations',
+  unit: '1'
+})
+
+/**
+ * Counter for project operations.
+ * Attributes: operation (create/update/delete/add_member/remove_member/archive), status
+ */
+export const projectOperationCounter = meter.createCounter('fovea.project.operations', {
+  description: 'Number of project management operations',
+  unit: '1'
+})
+
+/**
+ * Counter for sharing operations.
+ * Attributes: operation (share/revoke/fork), resourceType, targetType (user/group)
+ */
+export const sharingOperationCounter = meter.createCounter('fovea.sharing.operations', {
+  description: 'Number of sharing operations',
+  unit: '1'
+})
+
+/**
+ * Counter for video assignment operations.
+ * Attributes: operation (assign/unassign/rule_evaluate), source (manual/rule)
+ */
+export const videoAssignmentCounter = meter.createCounter('fovea.video_assignment.operations', {
+  description: 'Number of video assignment operations',
+  unit: '1'
+})
+
+/**
+ * Counter for persona operations.
+ * Attributes: operation (create/update/delete), status (success/error)
+ */
+export const personaOperationCounter = meter.createCounter('fovea.persona.operations', {
+  description: 'Number of persona operations',
+  unit: '1'
+})

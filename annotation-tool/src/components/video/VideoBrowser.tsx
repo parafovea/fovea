@@ -69,6 +69,10 @@ export default function VideoBrowser() {
   // Zustand for UI state
   const searchTerm = useVideoUiStore((state) => state.searchTerm)
   const setSearchTerm = useVideoUiStore((state) => state.setSearchTerm)
+  const selectedVideoIndex = useVideoUiStore((state) => state.selectedVideoIndex)
+  const setSelectedVideoIndex = useVideoUiStore((state) => state.setSelectedVideoIndex)
+  const scrollPosition = useVideoUiStore((state) => state.scrollPosition)
+  const setScrollPosition = useVideoUiStore((state) => state.setScrollPosition)
   const activeSummaryJobs = useVideoUiStore((state) => state.activeSummaryJobs)
   const videoSummaries = useVideoUiStore((state) => state.videoSummaries)
   const setActiveSummaryJob = useVideoUiStore((state) => state.setActiveSummaryJob)
@@ -80,7 +84,6 @@ export default function VideoBrowser() {
   const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
 
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm)
-  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number>(0)
   const [expandedSummaries, setExpandedSummaries] = useState<Record<string, boolean>>({})
   const [isBatchSummarizing, setIsBatchSummarizing] = useState(false)
   const { videoSources: allowExternalVideoLinks } = useExternalLinksConfig()
@@ -305,18 +308,18 @@ export default function VideoBrowser() {
       }
     },
     'navigate.left': () => {
-      setSelectedVideoIndex(prev => Math.max(0, prev - 1))
+      setSelectedVideoIndex(Math.max(0, selectedVideoIndex - 1))
     },
     'navigate.right': () => {
-      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + 1))
+      setSelectedVideoIndex(Math.min(filteredVideos.length - 1, selectedVideoIndex + 1))
     },
     'navigate.up': () => {
       const cols = getGridColumns()
-      setSelectedVideoIndex(prev => Math.max(0, prev - cols))
+      setSelectedVideoIndex(Math.max(0, selectedVideoIndex - cols))
     },
     'navigate.down': () => {
       const cols = getGridColumns()
-      setSelectedVideoIndex(prev => Math.min(filteredVideos.length - 1, prev + cols))
+      setSelectedVideoIndex(Math.min(filteredVideos.length - 1, selectedVideoIndex + cols))
     },
   }, {
     context: 'videoBrowser',
@@ -327,7 +330,47 @@ export default function VideoBrowser() {
   // Reset selection when search changes
   useEffect(() => {
     setSelectedVideoIndex(0)
-  }, [searchTerm])
+  }, [searchTerm, setSelectedVideoIndex])
+
+  // Find the scrollable parent container (Layout's overflow: auto Box)
+  const scrollContainerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    // Walk up from the component root to find the scrollable ancestor
+    const el = document.getElementById('video-browser-root')
+    if (el) {
+      let parent = el.parentElement
+      while (parent) {
+        const style = getComputedStyle(parent)
+        if (style.overflow === 'auto' || style.overflowY === 'auto') {
+          scrollContainerRef.current = parent
+          break
+        }
+        parent = parent.parentElement
+      }
+    }
+  }, [])
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      if (scrollPosition > 0 && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollPosition
+      }
+    })
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save scroll position on scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const handleScroll = () => {
+      setScrollPosition(container.scrollTop)
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [setScrollPosition])
 
   /**
    * Selects a video card for keyboard navigation.
@@ -347,7 +390,7 @@ export default function VideoBrowser() {
   }
 
   return (
-    <Box>
+    <Box id="video-browser-root">
       <Box mb={3}>
         <TextField
           fullWidth
@@ -439,6 +482,7 @@ export default function VideoBrowser() {
               handleSummaryJobFail={handleSummaryJobFail}
               isCpuOnly={isCpuOnly}
               allowExternalVideoLinks={allowExternalVideoLinks}
+              addVideoSummary={addVideoSummary}
             />
           )
         })}
@@ -506,6 +550,8 @@ interface VideoCardProps {
   isCpuOnly: boolean
   /** Whether external video source links are allowed */
   allowExternalVideoLinks: boolean
+  /** Handler to sync discovered summaries to local state */
+  addVideoSummary: (videoId: string, personaId: string) => void
 }
 
 /**
@@ -531,6 +577,7 @@ function VideoCard({
   handleSummaryJobFail,
   isCpuOnly,
   allowExternalVideoLinks,
+  addVideoSummary,
 }: VideoCardProps) {
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
@@ -541,9 +588,18 @@ function VideoCard({
     video.id,
     activePersonaId || '',
     {
-      enabled: !!activePersonaId && hasSummary,
+      // Always attempt to fetch summary when persona is active - don't rely on local state
+      // This ensures summaries created in other browsers/sessions are discovered
+      enabled: !!activePersonaId,
     }
   )
+
+  // Sync discovered summaries to local state for badge display
+  useEffect(() => {
+    if (summary && activePersonaId && !hasSummary) {
+      addVideoSummary(video.id, activePersonaId)
+    }
+  }, [summary, activePersonaId, hasSummary, video.id, addVideoSummary])
 
   return (
     <Grid item xs={12} sm={6} md={4} lg={3}>

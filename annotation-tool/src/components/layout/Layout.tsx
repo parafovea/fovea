@@ -5,6 +5,7 @@ import {
   Typography,
   Box,
   Button,
+  Chip,
   IconButton,
   Drawer,
   List,
@@ -12,6 +13,10 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  FormControl,
+  MenuItem,
+  Select,
+  type SelectChangeEvent,
   Snackbar,
   Alert,
   CircularProgress,
@@ -22,6 +27,9 @@ import {
   VideoLibrary as VideoIcon,
   Category as OntologyIcon,
   Inventory2 as ObjectIcon,
+  Group as GroupIcon,
+  Folder as FolderIcon,
+  Share as ShareIcon,
   Save as SaveIcon,
   Download as ExportIcon,
   Upload as ImportIcon,
@@ -30,7 +38,10 @@ import {
 } from '@mui/icons-material'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
+import { useMyProjects } from '@store/queries/useProjects'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
+import { useProjectContextStore } from '@store/zustand/projectContextStore'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
@@ -76,6 +87,27 @@ export default function Layout() {
 
   // Zustand stores
   const lastAnnotation = useVideoUiStore((state) => state.lastAnnotation)
+  const activeProjectId = useProjectContextStore(state => state.activeProjectId)
+  const activeProjectRole = useProjectContextStore(state => state.activeProjectRole)
+  const setActiveProject = useProjectContextStore(state => state.setActiveProject)
+  const clearProject = useProjectContextStore(state => state.clearProject)
+  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
+  const clearDraftClaim = useClaimsUiStore((state) => state.clearDraftClaim)
+
+  // Project context selector data
+  const { data: myProjects = [] } = useMyProjects()
+
+  const handleProjectChange = useCallback((event: SelectChangeEvent<string>) => {
+    const value = event.target.value
+    if (value === '') {
+      clearProject()
+    } else {
+      const project = myProjects.find(p => p.id === value)
+      if (project) {
+        setActiveProject(project.id, project.name, project.myRole ?? 'member')
+      }
+    }
+  }, [myProjects, setActiveProject, clearProject])
 
   // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
   const unsavedChanges = false
@@ -89,11 +121,25 @@ export default function Layout() {
   // Track the path we came from when toggling to each builder (separate refs for independent toggles)
   const ontologyReturnPathRef = useRef<string | null>(null)
   const objectsReturnPathRef = useRef<string | null>(null)
+  const lastVideoPathRef = useRef<string | null>(null)
+
+  // Track the last active video annotation path
+  useEffect(() => {
+    if (location.pathname.startsWith('/annotate/')) {
+      lastVideoPathRef.current = location.pathname
+    }
+  }, [location.pathname])
 
   const menuItems = [
     { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
     { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
-    { text: 'Object Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+    { text: 'World Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+  ]
+
+  const collaborationItems = [
+    { text: 'My Groups', icon: <GroupIcon />, path: '/groups' },
+    { text: 'My Projects', icon: <FolderIcon />, path: '/projects' },
+    { text: 'Shared', icon: <ShareIcon />, path: '/shared' },
   ]
 
   const handleSave = useCallback(async () => {
@@ -194,6 +240,11 @@ export default function Layout() {
         navigate('/objects')
       }
     },
+    'navigate.toggleVideo': () => {
+      if (lastVideoPathRef.current) {
+        navigate(lastVideoPathRef.current)
+      }
+    },
     'file.save': () => {
       if (!saving) {
         handleSave()
@@ -205,7 +256,7 @@ export default function Layout() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#bdbdbd', color: 'text.primary' }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -242,7 +293,7 @@ export default function Layout() {
               variant="body2"
               component="div"
               sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: 'text.primary',
                 fontWeight: 300,
                 display: { xs: 'none', md: 'block' }
               }}
@@ -250,6 +301,46 @@ export default function Layout() {
               Flexible Ontology Visual Event Analyzer
             </Typography>
           </Box>
+          {/* Project Context Selector */}
+          <FormControl
+            size="small"
+            variant="outlined"
+            sx={{
+              minWidth: 180,
+              mr: 2,
+            }}
+          >
+            <Select
+              value={activeProjectId ?? ''}
+              onChange={handleProjectChange}
+              displayEmpty
+            >
+              <MenuItem value="">Personal Workspace</MenuItem>
+              {myProjects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {activeProjectRole && (
+            <Chip
+              label={activeProjectRole}
+              size="small"
+              sx={{ mr: 2 }}
+              variant="outlined"
+            />
+          )}
+          {draftClaim && (
+            <Chip
+              label="Draft Claim"
+              color="warning"
+              size="small"
+              onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
+              onDelete={clearDraftClaim}
+              sx={{ mr: 1 }}
+            />
+          )}
           {unsavedChanges && (
             <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
               Unsaved changes
@@ -332,14 +423,33 @@ export default function Layout() {
               }}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText 
-                primary={item.text} 
+              <ListItemText
+                primary={item.text}
                 secondary={item.shortcut}
-                secondaryTypographyProps={{ 
+                secondaryTypographyProps={{
                   variant: 'caption',
                   sx: { opacity: 0.7 }
                 }}
               />
+            </ListItem>
+          ))}
+        </List>
+        <Divider />
+        <List>
+          {collaborationItems.map((item) => (
+            <ListItem
+              key={item.path}
+              component={Link}
+              to={item.path}
+              onClick={() => setDrawerOpen(false)}
+              sx={{
+                textDecoration: 'none',
+                color: 'inherit',
+                backgroundColor: location.pathname.startsWith(item.path) ? 'action.selected' : 'transparent',
+              }}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
             </ListItem>
           ))}
         </List>

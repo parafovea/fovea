@@ -1,15 +1,35 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../src/app.js'
 import type { FastifyInstance } from 'fastify'
+import { PrismaClient } from '@prisma/client'
+import { createUserWithPassword } from './fixtures/users.js'
 
 describe('Fastify App', () => {
   let app: FastifyInstance
+  let prisma: PrismaClient
+  let sessionToken: string
 
   beforeAll(async () => {
     app = await buildApp()
+    prisma = app.prisma
+
+    const user = await createUserWithPassword('testpass123', {
+      id: 'app-test-user',
+      username: 'apptestuser',
+    })
+    await prisma.user.create({ data: user })
+
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'apptestuser', password: 'testpass123' },
+    })
+    sessionToken = loginResponse.cookies.find((c) => c.name === 'session_token')!.value
   })
 
   afterAll(async () => {
+    await prisma.session.deleteMany({ where: { userId: 'app-test-user' } })
+    await prisma.user.deleteMany({ where: { id: 'app-test-user' } })
     await app.close()
   })
 
@@ -103,7 +123,8 @@ describe('Fastify App', () => {
     it('should handle NotFoundError from real route', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/videos/nonexistent-video-id'
+        url: '/api/videos/nonexistent-video-id',
+        cookies: { session_token: sessionToken },
       })
 
       expect(response.statusCode).toBe(404)

@@ -2,8 +2,21 @@ import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
 import { Type } from '@sinclair/typebox'
 import { authService } from '../services/auth-service.js'
+import { lockoutService } from '../services/lockout-service.js'
 import { prisma } from '../lib/prisma.js'
-import { UnauthorizedError, ForbiddenError, ConflictError } from '../lib/errors.js'
+import {
+  UnauthorizedError,
+  ForbiddenError,
+  ConflictError,
+  TooManyRequestsError,
+} from '../lib/errors.js'
+import {
+  recordLoginAttempt,
+  recordSessionEvent,
+} from '../lib/authMetrics.js'
+import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import { serializeAbilities } from '../lib/abilities.js'
 
 /**
  * Authentication routes for login, logout, registration.
@@ -12,6 +25,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * Login endpoint.
    * Authenticates user and creates session.
+   * Implements account lockout and session regeneration.
    *
    * @route POST /api/auth/login
    */
@@ -45,11 +59,39 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           401: Type.Object({
             error: Type.String(),
           }),
+          429: Type.Object({
+            error: Type.String(),
+            message: Type.String(),
+            details: Type.Object({
+              retryAfterSeconds: Type.Number(),
+            }),
+          }),
+        },
+      },
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
         },
       },
     },
     async (request, reply) => {
       const { username, password, rememberMe } = request.body
+
+      // Check lockout status before authentication
+      // Note: recordLockout is called within lockoutService.checkLockout when locked
+      const lockoutStatus = await lockoutService.checkLockout(username)
+      if (lockoutStatus.locked) {
+        request.log.warn(
+          { username, attemptCount: lockoutStatus.attemptCount },
+          'Login blocked due to lockout'
+        )
+        reply.header('Retry-After', lockoutStatus.retryAfterSeconds.toString())
+        throw new TooManyRequestsError(
+          'Too many failed login attempts. Please try again later.',
+          lockoutStatus.retryAfterSeconds
+        )
+      }
 
       // Authenticate with password provider
       const result = await authService.authenticate('password', {
@@ -58,17 +100,34 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       if (!result.success || !result.user) {
+        // Record failed attempt
+        await lockoutService.recordFailedAttempt(username, request.ip)
+        recordLoginAttempt(false, result.error || 'invalid_credentials')
+        request.log.info({ username }, 'Failed login attempt')
         throw new UnauthorizedError(result.error || 'Authentication failed')
       }
 
-      // Create session
-      const { token, expiresAt } = await authService.createSession(
-        result.user.id,
-        {
+      // Clear failed attempts on successful login
+      await lockoutService.recordSuccessfulLogin(username)
+
+      // Get existing session token (if any) for regeneration
+      const oldToken = request.cookies.session_token || ''
+
+      // Regenerate session (creates new session and invalidates old one atomically)
+      const { token, expiresAt, oldSessionId, newSessionId } =
+        await authService.regenerateSession(oldToken, result.user.id, {
           ipAddress: request.ip,
           userAgent: request.headers['user-agent'],
           expiresInDays: rememberMe ? 30 : 7,
-        }
+        })
+
+      // Record successful login and session event
+      recordLoginAttempt(true)
+      recordSessionEvent(oldSessionId ? 'regenerated' : 'created')
+
+      request.log.info(
+        { userId: result.user.id, oldSessionId, newSessionId },
+        'Session regenerated on login'
       )
 
       // Set session cookie
@@ -116,6 +175,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (token) {
         await authService.destroySession(token)
+        recordSessionEvent('revoked')
       }
 
       reply.clearCookie('session_token', { path: '/' })
@@ -307,6 +367,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Create session so the user is logged in immediately after registration
+      const { token, expiresAt } = await authService.regenerateSession('', user.id, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+        expiresInDays: 7,
+      })
+
+      recordSessionEvent('created')
+
+      reply.setCookie('session_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        expires: expiresAt,
+        path: '/',
+      })
+
       return reply.code(201).send({
         user: {
           id: user.id,
@@ -316,6 +393,142 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           isAdmin: user.isAdmin,
         },
       })
+    }
+  )
+
+  /**
+   * Session status endpoint.
+   * Returns session expiration and last activity times.
+   *
+   * @route GET /api/auth/session-status
+   */
+  fastify.get(
+    '/api/auth/session-status',
+    {
+      schema: {
+        description: 'Get current session status',
+        tags: ['auth'],
+        response: {
+          200: Type.Object({
+            expiresAt: Type.String({ format: 'date-time' }),
+            lastActivityAt: Type.String({ format: 'date-time' }),
+          }),
+          401: Type.Object({
+            error: Type.String(),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      const token = request.cookies.session_token
+
+      if (!token) {
+        throw new UnauthorizedError('No session found')
+      }
+
+      // Get session without updating lastActivityAt
+      const session = await authService.getSession(token)
+
+      if (!session) {
+        throw new UnauthorizedError('Session not found or expired')
+      }
+
+      // Check if session has expired
+      if (session.expiresAt < new Date()) {
+        throw new UnauthorizedError('Session expired')
+      }
+
+      return {
+        expiresAt: session.expiresAt.toISOString(),
+        lastActivityAt: (session.lastActivityAt || session.createdAt).toISOString(),
+      }
+    }
+  )
+
+  /**
+   * Extend session endpoint.
+   * Extends the current session expiration by 30 minutes.
+   *
+   * @route POST /api/auth/extend-session
+   */
+  fastify.post(
+    '/api/auth/extend-session',
+    {
+      schema: {
+        description: 'Extend current session expiration',
+        tags: ['auth'],
+        response: {
+          200: Type.Object({
+            expiresAt: Type.String({ format: 'date-time' }),
+          }),
+          401: Type.Object({
+            error: Type.String(),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const token = request.cookies.session_token
+
+      if (!token) {
+        throw new UnauthorizedError('No session found')
+      }
+
+      // Extend session by 30 minutes
+      const newExpiresAt = await authService.extendSession(token, 30)
+
+      if (!newExpiresAt) {
+        throw new UnauthorizedError('Session not found or expired')
+      }
+
+      recordSessionEvent('extended')
+
+      // Update cookie with new expiration
+      reply.setCookie('session_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        expires: newExpiresAt,
+        path: '/',
+      })
+
+      return {
+        expiresAt: newExpiresAt.toISOString(),
+      }
+    }
+  )
+
+  /**
+   * Get CASL abilities for the current user.
+   * Returns serialized permission rules for frontend authorization.
+   *
+   * @route GET /api/auth/abilities
+   */
+  fastify.get(
+    '/api/auth/abilities',
+    {
+      onRequest: [requireAuth, buildAbilities],
+      schema: {
+        description: 'Get serialized CASL abilities for current user',
+        tags: ['auth'],
+        response: {
+          200: Type.Object({
+            rules: Type.Array(Type.Unknown()),
+          }),
+          401: Type.Object({
+            error: Type.String(),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      if (!request.ability) {
+        throw new UnauthorizedError('No abilities defined')
+      }
+
+      return {
+        rules: serializeAbilities(request.ability),
+      }
     }
   )
 }

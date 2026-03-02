@@ -10,3 +10,9 @@ export { useCurrentUser } from './useCurrentUser'
 export type { CurrentUserInfo } from './useCurrentUser'
 
 export { useSession } from './useSession'
+
+export { useSessionHeartbeat } from './useSessionHeartbeat'
+export type { SessionHeartbeatState } from './useSessionHeartbeat'
+
+export { useEmergencySave } from './useEmergencySave'
+export type { EmergencySaveResult, EmergencySaveState } from './useEmergencySave'

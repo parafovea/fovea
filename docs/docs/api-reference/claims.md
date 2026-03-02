@@ -16,6 +16,7 @@ Claims support:
 - Automatic and manual creation
 - Rich text with gloss references
 - Confidence scores and attribution
+- Modality metadata (audio, video, metadata sources)
 - Async extraction via job queues
 
 ## Data Model
@@ -40,6 +41,10 @@ Claims support:
   confidence?: number | null      // 0-1 confidence score
   modelUsed?: string | null       // AI model ID (if extracted)
   extractionStrategy?: string | null // sentence-based, semantic-units, hierarchical
+  audio?: ("speech" | "non-speech")[] | null // Modality: array of audio sources (speech and/or non-speech)
+  video?: ("text" | "non-text")[] | null // Modality: array of video sources (text and/or non-text visual content)
+  metadata?: ("text" | "non-text")[] | null // Modality: array of metadata sources (text = caption metadata, non-text = other metadata like location from .info.json)
+  comment?: string | null         // Optional comment/notes field for annotator notes
   createdBy?: string | null       // User ID
   createdAt: string               // ISO 8601 timestamp
   updatedAt: string               // ISO 8601 timestamp
@@ -171,12 +176,18 @@ Content-Type: application/json
   "gloss": [
     {"type": "text", "content": "The rocket launched on December 25, 2021"}
   ],
+  "comment": "Optional comment or notes about this claim",
+  ],
   "parentClaimId": null,              // Optional: UUID of parent (for subclaims)
   "textSpans": [                      // Optional
     {"sentenceIndex": 0, "charStart": 0, "charEnd": 42}
   ],
   "claimerType": "author",            // Optional
-  "confidence": 0.9                   // Optional, 0-1
+  "confidence": 0.9,                  // Optional, 0-1
+  "audio": ["speech"],                // Optional: array of "speech" and/or "non-speech"
+  "video": ["text"],                  // Optional: array of "text" and/or "non-text"
+  "metadata": ["text"],               // Optional: array of "text" and/or "non-text"
+  "comment": "Optional comment or notes about this claim"  // Optional: string or null
 }
 ```
 
@@ -188,6 +199,10 @@ Content-Type: application/json
   "text": "The rocket launched on December 25, 2021",
   "gloss": [...],
   "confidence": 0.9,
+  "audio": ["speech"],
+  "video": ["text"],
+  "metadata": null,
+  "comment": "Optional comment or notes about this claim",
   "createdAt": "2025-01-20T10:30:00Z",
   "updatedAt": "2025-01-20T10:30:00Z"
 }
@@ -209,7 +224,10 @@ Content-Type: application/json
   "gloss": [...],                     // Optional
   "confidence": 0.85,                 // Optional
   "claimerType": "entity",            // Optional
-  "notes": "Updated based on new evidence"
+  "audio": ["non-speech"],            // Optional: array of "speech" and/or "non-speech", or null
+  "video": ["non-text"],              // Optional: array of "text" and/or "non-text", or null
+  "metadata": ["text"],               // Optional: array of "text" and/or "non-text", or null
+  "comment": "Updated based on new evidence"  // Optional: string or null
 }
 ```
 
@@ -219,6 +237,7 @@ Content-Type: application/json
   "id": "claim-uuid",
   "text": "Updated claim text",
   "confidence": 0.85,
+  "comment": "Updated based on new evidence",
   "updatedAt": "2025-01-20T11:00:00Z"
 }
 ```

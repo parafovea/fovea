@@ -620,6 +620,7 @@ export class AnnotationExporter {
       type: 'persona',
       data: {
         id: persona.id,
+        userId: persona.userId,
         name: persona.name,
         role: persona.role,
         informationNeed: persona.informationNeed,
@@ -798,6 +799,7 @@ export class AnnotationExporter {
         audioModelUsed: summary.audioModelUsed || undefined,
         visualModelUsed: summary.visualModelUsed || undefined,
         fusionStrategy: summary.fusionStrategy || undefined,
+        comment: summary.comment || undefined,
         createdAt: summary.createdAt.toISOString(),
         updatedAt: summary.updatedAt.toISOString(),
         createdBy: summary.createdBy || undefined,
@@ -829,6 +831,10 @@ export class AnnotationExporter {
         confidence: claim.confidence || undefined,
         modelUsed: claim.modelUsed || undefined,
         extractionStrategy: claim.extractionStrategy || undefined,
+        audio: claim.audio || undefined,
+        video: claim.video || undefined,
+        metadata: claim.metadata ?? undefined,
+        comment: claim.comment || undefined,
         createdBy: claim.createdBy || undefined,
         createdAt: claim.createdAt.toISOString(),
         updatedAt: claim.updatedAt.toISOString(),
@@ -931,8 +937,8 @@ export class AnnotationExporter {
     }
 
     // 2. Export world state
-    const worldState = await prisma.worldState.findUnique({
-      where: { userId }
+    const worldState = await prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
     if (worldState) {
       const worldLines = this.exportWorldState(worldState)

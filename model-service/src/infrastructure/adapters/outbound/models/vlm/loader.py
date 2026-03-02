@@ -9,14 +9,14 @@ strategies and inference frameworks (SGLang or vLLM).
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import torch
 from PIL import Image
 from transformers import (
     AutoModel,
-    AutoModelForVision2Seq,
+    AutoModelForImageTextToText,
     AutoProcessor,
     AutoTokenizer,
     BitsAndBytesConfig,
@@ -26,7 +26,7 @@ from transformers import (
 logger = logging.getLogger(__name__)
 
 
-class QuantizationType(str, Enum):
+class QuantizationType(StrEnum):
     """Supported quantization types for model compression."""
 
     NONE = "none"
@@ -35,7 +35,7 @@ class QuantizationType(str, Enum):
     AWQ = "awq"
 
 
-class InferenceFramework(str, Enum):
+class InferenceFramework(StrEnum):
     """Supported inference frameworks for model execution."""
 
     SGLANG = "sglang"
@@ -262,7 +262,7 @@ class Llama4MaverickLoader(VLMLoader):
             self.config.model_id, trust_remote_code=self.config.trust_remote_code
         )
 
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(
             self.config.model_id,
             quantization_config=quantization_config,
             device_map="auto",
@@ -427,8 +427,6 @@ class Gemma3Loader(VLMLoader):
 
     def _load_with_transformers(self) -> None:
         """Load model using HuggingFace Transformers."""
-        from transformers import AutoModelForVision2Seq
-
         quantization_config = self._get_quantization_config()
 
         self.processor = AutoProcessor.from_pretrained(
@@ -438,7 +436,7 @@ class Gemma3Loader(VLMLoader):
             self.config.model_id, trust_remote_code=self.config.trust_remote_code
         )
 
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(
             self.config.model_id,
             quantization_config=quantization_config,
             device_map="auto",
@@ -654,8 +652,6 @@ class PixtralLargeLoader(VLMLoader):
 
     def _load_with_transformers(self) -> None:
         """Load model using HuggingFace Transformers."""
-        from transformers import AutoModelForVision2Seq
-
         quantization_config = self._get_quantization_config()
 
         self.processor = AutoProcessor.from_pretrained(
@@ -665,7 +661,7 @@ class PixtralLargeLoader(VLMLoader):
             self.config.model_id, trust_remote_code=self.config.trust_remote_code
         )
 
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(
             self.config.model_id,
             quantization_config=quantization_config,
             device_map="auto",

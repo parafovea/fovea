@@ -45,6 +45,8 @@ interface AnnotationOverlayProps {
   videoFps?: number
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
+  /** Optional callback when annotation edit is complete (drag/resize finished) */
+  onAnnotationEditComplete?: () => void
 }
 
 /**
@@ -73,6 +75,7 @@ export default function AnnotationOverlay({
   videoHeight,
   videoFps = 30,
   detectionResults,
+  onAnnotationEditComplete,
 }: AnnotationOverlayProps) {
   const { videoId } = useParams()
 
@@ -86,10 +89,18 @@ export default function AnnotationOverlay({
   const { data: allAnnotations = [] } = useAnnotations(videoId)
 
   // Filter annotations by selected persona if one is selected and in type mode
+  // Note: Both type and object annotations should always be visible regardless of toggle state
+  // The toggle only affects which type of annotation can be created, not which are displayed
   const annotations = useMemo(() => {
     if (selectedPersonaId && annotationMode === 'type') {
-      return allAnnotations.filter(a => a.annotationType === 'type' && a.personaId === selectedPersonaId)
+      // When in type mode with persona selected, filter type annotations by persona
+      // but always include all object annotations
+      return allAnnotations.filter(a => 
+        (a.annotationType === 'type' && a.personaId === selectedPersonaId) || 
+        a.annotationType === 'object'
+      )
     }
+    // In object mode or no persona selected, show all annotations
     return allAnnotations
   }, [allAnnotations, selectedPersonaId, annotationMode])
 
@@ -219,6 +230,7 @@ export default function AnnotationOverlay({
       selectedAnnotation={selectedAnnotation}
       detectionResults={detectionResults}
       onAnnotationSelect={setSelectedAnnotation}
+      onAnnotationEditComplete={onAnnotationEditComplete}
     />
   )
 }

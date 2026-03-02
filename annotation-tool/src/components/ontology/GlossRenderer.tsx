@@ -1,14 +1,15 @@
 import { Box, Chip } from '@mui/material'
-import { GlossItem, TimeInstant, EntityType, RoleType, EventType, RelationType, Entity, Event, Time, Location } from '@models/types'
+import { GlossItem, TimeInstant, EntityType, RoleType, EventType, RelationType, Entity, Event, Time, Location, Claim } from '@models/types'
 import { usePersonaOntology, useWorld } from '@store/queries'
 
 interface GlossRendererProps {
   gloss: GlossItem[]
   personaId?: string | null
   inline?: boolean
+  claims?: Claim[]
 }
 
-export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendererProps) {
+export function GlossRenderer({ gloss, personaId, inline = false, claims = [] }: GlossRendererProps) {
   // TanStack Query hooks for data fetching
   const { data: activeOntology } = usePersonaOntology(personaId)
   const { data: world } = useWorld()
@@ -21,9 +22,9 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
     return inline ? <span /> : <Box />
   }
 
-  const getItemDisplay = (item: GlossItem): { name: string; found: boolean; isObject?: boolean } => {
+  const getItemDisplay = (item: GlossItem): { name: string; found: boolean; kind: 'text' | 'type' | 'object' | 'annotation' | 'claim' } => {
     if (item.type === 'text') {
-      return { name: item.content, found: true }
+      return { name: item.content, found: true, kind: 'text' }
     }
 
     // Look up type reference
@@ -50,7 +51,7 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
       return {
         name: typeObj ? typeObj.name : item.content,
         found: !!typeObj,
-        isObject: false
+        kind: 'type' as const
       }
     }
 
@@ -80,11 +81,43 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
       return {
         name: displayName,
         found: !!foundObj,
-        isObject: true
+        kind: 'object' as const
       }
     }
 
-    return { name: item.content, found: false }
+    // Look up annotation reference
+    if (item.type === 'annotationRef') {
+      return { name: item.content, found: false, kind: 'annotation' as const }
+    }
+
+    // Look up claim reference
+    if (item.type === 'claimRef') {
+      const claim = claims.find(c => c.id === item.content)
+      if (claim) {
+        const claimText = claim.gloss
+          ?.map(g => {
+            if (g.type === 'text') return g.content
+            const inner = getItemDisplay(g)
+            return inner.name
+          })
+          .join('')
+          .slice(0, 40) || 'Claim'
+        return { name: claimText, found: true, kind: 'claim' as const }
+      }
+      return { name: item.content, found: false, kind: 'claim' as const }
+    }
+
+    return { name: item.content, found: false, kind: 'text' as const }
+  }
+
+  const getChipStyle = (kind: string) => {
+    switch (kind) {
+      case 'type':       return { color: 'primary' as const,   variant: 'outlined' as const, fontStyle: 'italic' }
+      case 'object':     return { color: 'secondary' as const, variant: 'outlined' as const, fontStyle: 'normal' }
+      case 'annotation': return { color: 'warning' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+      case 'claim':      return { color: 'info' as const,      variant: 'outlined' as const, fontStyle: 'normal' }
+      default:           return { color: 'default' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+    }
   }
 
   if (inline) {
@@ -96,19 +129,20 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
           if (item.type === 'text') {
             return <span key={index}>{display.name}</span>
           } else {
+            const chipProps = getChipStyle(display.kind)
             return (
               <Chip
                 key={index}
                 label={display.name}
                 size="small"
-                color={display.isObject ? 'secondary' : 'primary'}
-                variant={display.isObject ? 'filled' : 'outlined'}
+                color={chipProps.color}
+                variant={chipProps.variant}
                 component="span"
-                sx={{ 
-                  mx: 0.5, 
-                  verticalAlign: 'baseline', 
+                sx={{
+                  mx: 0.5,
+                  verticalAlign: 'baseline',
                   height: 20,
-                  fontStyle: display.isObject ? 'normal' : 'italic'
+                  fontStyle: chipProps.fontStyle,
                 }}
               />
             )
@@ -125,14 +159,15 @@ export function GlossRenderer({ gloss, personaId, inline = false }: GlossRendere
         if (item.type === 'text') {
           return <span key={index}>{display.name}</span>
         } else {
+          const chipProps = getChipStyle(display.kind)
           return (
             <Chip
               key={index}
               label={display.name}
               size="small"
-              color={display.isObject ? 'secondary' : 'primary'}
-              variant={display.isObject ? 'filled' : 'outlined'}
-              sx={{ fontStyle: display.isObject ? 'normal' : 'italic' }}
+              color={chipProps.color}
+              variant={chipProps.variant}
+              sx={{ fontStyle: chipProps.fontStyle }}
             />
           )
         }

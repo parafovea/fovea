@@ -235,9 +235,13 @@ jobs:
           echo "Testing frontend loads..."
           curl --fail -s https://demo.fovea.video | grep -q "<!doctype html>" || exit 1
 
-          # Test video listing endpoint
-          echo "Testing video listing..."
-          curl --fail -s https://demo.fovea.video/api/videos | grep -q "\[" || exit 1
+          # Test video listing endpoint requires authentication
+          echo "Testing video auth..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://demo.fovea.video/api/videos)
+          if [ "$HTTP_CODE" != "401" ]; then
+            echo "Expected 401 from /api/videos, got $HTTP_CODE"
+            exit 1
+          fi
 
           echo "✅ Smoke tests passed"
 

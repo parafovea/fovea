@@ -20,7 +20,6 @@ export function createUser(overrides: Partial<User> = {}): User {
     displayName: 'Test User',
     passwordHash: '$2b$12$KIXs.l9Z4K8n0UrN.ZZFqOz4z5s1VJQiNW5Y8zYQ0ZQ0ZQ0ZQ0ZQ0', // "password123"
     isAdmin: false,
-    isSingleUser: false,
     createdAt: new Date('2025-10-01T10:00:00Z'),
     updatedAt: new Date('2025-10-01T10:00:00Z'),
     ...overrides,

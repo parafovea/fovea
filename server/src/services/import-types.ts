@@ -66,13 +66,15 @@ export interface ValidationResult {
  */
 export interface Conflict {
   type: 'duplicate-persona' | 'duplicate-object' | 'missing-dependency' | 'id-conflict' |
-        'duplicate-sequence' | 'overlapping-frames' | 'interpolation-conflict'
+        'duplicate-sequence' | 'overlapping-frames' | 'interpolation-conflict' |
+        'duplicate-summary' | 'duplicate-claim' | 'duplicate-claim-relation'
   line: number
   originalId: string
   existingId?: string
   details: string
   frameRange?: { start: number; end: number }
   interpolationType?: string
+  ownedByImporter?: boolean
 }
 
 /**
@@ -231,6 +233,17 @@ export interface ExistingData {
   claimIds: Set<string>
   claimRelationIds: Set<string>
   ontologyPersonaIds: Set<string>
+  // Ownership tracking: IDs owned by the importing user
+  ownedPersonaIds: Set<string>
+  ownedAnnotationIds: Set<string>
+  ownedSummaryIds: Set<string>
+  ownedClaimIds: Set<string>
+  ownedClaimRelationIds: Set<string>
+  ownedEntityIds: Set<string>
+  ownedEventIds: Set<string>
+  ownedTimeIds: Set<string>
+  ownedCollectionIds: Set<string>
+  ownedWorldStateId: string | null
 }
 
 /**

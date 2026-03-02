@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -32,11 +32,12 @@ import {
   Language as WikidataIcon,
 } from '@mui/icons-material'
 import { useVideos } from '@store/queries'
-import { useAddTime, useUpdateTime } from '@store/queries'
+import { useAddTime, useUpdateTime, useDeleteTime } from '@store/queries'
 import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '@components/shared/WikidataSearch'
 import { generateId } from '@utils/uuid'
+import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 /** Granularity options for vagueness */
 type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
@@ -63,9 +64,10 @@ interface VideoReference {
 
 export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const { data: videos = [] } = useVideos()
-  const { mutate: addTime } = useAddTime()
-  const { mutate: updateTime } = useUpdateTime()
-  
+  const { mutateAsync: addTime } = useAddTime()
+  const { mutateAsync: updateTime } = useUpdateTime()
+  const { mutate: deleteTime } = useDeleteTime()
+
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
   const [label, setLabel] = useState('')
@@ -74,11 +76,11 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
 
   // Instant fields
   const [timestamp, setTimestamp] = useState('')
-  
+
   // Interval fields
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
-  
+
   // Vagueness fields
   const [hasVagueness, setHasVagueness] = useState(false)
   const [vaguenessType, setVaguenessType] = useState<'approximate' | 'bounded' | 'fuzzy'>('approximate')
@@ -87,17 +89,120 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const [latestBound, setLatestBound] = useState('')
   const [typicalTime, setTypicalTime] = useState('')
   const [granularity, setGranularity] = useState<VaguenessGranularity>('minute')
-  
+
   // Deictic reference
   const [hasDeictic, setHasDeictic] = useState(false)
   const [deicticAnchorType, setDeicticAnchorType] = useState<DeicticAnchorType>('video_time')
   const [deicticExpression, setDeicticExpression] = useState('')
-  
+
   // Video references
   const [videoReferences, setVideoReferences] = useState<VideoReference[]>([])
-  
+
   // Certainty
   const [certainty, setCertainty] = useState(1.0)
+
+  // Track auto-created time ID for cancel cleanup
+  const [autoCreatedTimeId, setAutoCreatedTimeId] = useState<string | null>(null)
+  const autoCreatedIdRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state for callbacks
+  useEffect(() => {
+    autoCreatedIdRef.current = autoCreatedTimeId
+  }, [autoCreatedTimeId])
+
+  // Auto-save hook for new times
+  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
+    data: {
+      timeType,
+      label,
+      timestamp,
+      startTime,
+      endTime,
+      hasVagueness,
+      vaguenessType,
+      vaguenessDescription,
+      earliestBound,
+      latestBound,
+      typicalTime,
+      granularity,
+      hasDeictic,
+      deicticAnchorType,
+      deicticExpression,
+      videoReferences,
+      certainty,
+      wikidataId,
+      wikidataUrl,
+    },
+    isEnabled: open && !!label && !time, // Only for new times, require label
+    onSave: async (timeData) => {
+      const baseTime: Omit<Time, 'id'> = {
+        type: timeData.timeType,
+        label: timeData.label || undefined,
+        videoReferences: timeData.videoReferences.filter(ref => ref.videoId),
+        certainty: timeData.certainty,
+        wikidataId: timeData.wikidataId || undefined,
+        wikidataUrl: timeData.wikidataUrl || undefined,
+        metadata: {},
+      }
+
+      if (timeData.hasVagueness) {
+        baseTime.vagueness = {
+          type: timeData.vaguenessType,
+          description: timeData.vaguenessDescription || undefined,
+          bounds: (timeData.earliestBound || timeData.latestBound || timeData.typicalTime) ? {
+            earliest: timeData.earliestBound || undefined,
+            latest: timeData.latestBound || undefined,
+            typical: timeData.typicalTime || undefined,
+          } : undefined,
+          granularity: timeData.granularity,
+        }
+      }
+
+      if (timeData.hasDeictic) {
+        baseTime.deictic = {
+          anchorType: timeData.deicticAnchorType,
+          anchorTime: undefined,
+          expression: timeData.deicticExpression || undefined,
+        }
+      }
+
+      let fullTimeData: Omit<Time, 'id'>
+
+      if (timeData.timeType === 'instant') {
+        fullTimeData = {
+          ...baseTime,
+          type: 'instant',
+          timestamp: timeData.timestamp,
+        } as Omit<TimeInstant, 'id'>
+      } else {
+        fullTimeData = {
+          ...baseTime,
+          type: 'interval',
+          startTime: timeData.startTime || undefined,
+          endTime: timeData.endTime || undefined,
+        } as Omit<TimeInterval, 'id'>
+      }
+
+      if (autoCreatedIdRef.current) {
+        // Update the auto-created time
+        await updateTime({
+          ...fullTimeData,
+          id: autoCreatedIdRef.current,
+        } as Time)
+      } else {
+        // Create new time and track ID
+        const newId = generateId()
+        const result = await addTime({ ...fullTimeData, id: newId } as Time)
+        // Get the newly created time ID from the result
+        const newTime = result.times[result.times.length - 1]
+        if (newTime) {
+          setAutoCreatedTimeId(newTime.id)
+        }
+      }
+    },
+    entityType: 'world-object',
+    entityId: time?.id || autoCreatedIdRef.current || undefined,
+  })
 
   useEffect(() => {
     if (time) {
@@ -149,7 +254,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       setVideoReferences([])
       setCertainty(1.0)
     }
-  }, [time])
+    // Reset auto-created ID when dialog opens/closes or time changes
+    setAutoCreatedTimeId(null)
+  }, [time, open])
 
   const handleAddVideoReference = () => {
     setVideoReferences([...videoReferences, {
@@ -167,7 +274,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     setVideoReferences(videoReferences.filter((_, i) => i !== index))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const baseTime: Omit<Time, 'id'> = {
       type: timeType,
       label: label || undefined,
@@ -217,16 +324,35 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     }
 
     if (time) {
-      updateTime({ ...time, ...timeData })
+      await updateTime({ ...time, ...timeData })
     } else {
-      addTime({ ...timeData, id: generateId() } as Time)
+      await addTime({ ...timeData, id: generateId() } as Time)
     }
 
     onClose()
   }
 
+  // Cancel handler deletes auto-created time
+  const handleCancel = () => {
+    if (autoCreatedIdRef.current) {
+      deleteTime(autoCreatedIdRef.current)
+    }
+    setAutoCreatedTimeId(null)
+    onClose()
+  }
+
+  // Done handler keeps the time (already saved via autosave)
+  const handleDone = async () => {
+    // Force save any pending changes before closing
+    if (!time && autoCreatedIdRef.current) {
+      await forceSave()
+    }
+    setAutoCreatedTimeId(null)
+    onClose()
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <TimeIcon color="secondary" />
@@ -237,7 +363,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
           <Alert severity="info" icon={<TimeIcon />}>
-            A time represents when something happens - either a specific instant or an interval.
+            A time represents when something happens, either a specific instant or an interval.
             Times can be precise or vague, and can reference specific video frames.
           </Alert>
 
@@ -270,16 +396,16 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
               onImport={(data) => {
                 setWikidataId(data.wikidataId)
                 setWikidataUrl(data.wikidataUrl)
-                
+
                 if (data.temporalData) {
                   const td = data.temporalData
-                  
+
                   // Handle interval (start and end times)
                   if (td.startTime && td.endTime) {
                     setTimeType('interval')
                     setStartTime(td.startTime.timestamp)
                     setEndTime(td.endTime.timestamp)
-                    
+
                     // Set vagueness if needed
                     if (td.startTime.granularity !== 'day' || td.endTime.granularity !== 'day') {
                       setHasVagueness(true)
@@ -426,7 +552,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     <MenuItem value="fuzzy">Fuzzy</MenuItem>
                   </Select>
                 </FormControl>
-                
+
                 <TextField
                   label="Description"
                   size="small"
@@ -435,7 +561,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                   placeholder="e.g., 'around noon', 'early morning'"
                   fullWidth
                 />
-                
+
                 {vaguenessType === 'bounded' && (
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
@@ -464,7 +590,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     />
                   </Box>
                 )}
-                
+
                 <FormControl fullWidth size="small">
                   <InputLabel>Granularity</InputLabel>
                   <Select
@@ -513,7 +639,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     <MenuItem value="reference_time">Reference Time</MenuItem>
                   </Select>
                 </FormControl>
-                
+
                 <TextField
                   label="Expression"
                   size="small"
@@ -536,7 +662,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
             <Typography variant="caption" color="text.secondary" paragraph>
               Link this time to specific moments in videos
             </Typography>
-            
+
             {videoReferences.map((ref, index) => (
               <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
                 <FormControl sx={{ minWidth: 200 }}>
@@ -555,7 +681,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     ))}
                   </Select>
                 </FormControl>
-                
+
                 {timeType === 'instant' ? (
                   <>
                     <TextField
@@ -563,9 +689,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                       type="number"
                       size="small"
                       value={ref.frameNumber || ''}
-                      onChange={(e) => handleUpdateVideoReference(index, { 
-                        ...ref, 
-                        frameNumber: e.target.value ? parseInt(e.target.value) : undefined 
+                      onChange={(e) => handleUpdateVideoReference(index, {
+                        ...ref,
+                        frameNumber: e.target.value ? parseInt(e.target.value) : undefined
                       })}
                     />
                     <TextField
@@ -573,9 +699,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                       type="number"
                       size="small"
                       value={ref.milliseconds || ''}
-                      onChange={(e) => handleUpdateVideoReference(index, { 
-                        ...ref, 
-                        milliseconds: e.target.value ? parseInt(e.target.value) : undefined 
+                      onChange={(e) => handleUpdateVideoReference(index, {
+                        ...ref,
+                        milliseconds: e.target.value ? parseInt(e.target.value) : undefined
                       })}
                     />
                   </>
@@ -596,13 +722,13 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                     />
                   </>
                 )}
-                
+
                 <IconButton size="small" onClick={() => handleRemoveVideoReference(index)}>
                   <DeleteIcon />
                 </IconButton>
               </Box>
             ))}
-            
+
             <Button
               size="small"
               startIcon={<AddIcon />}
@@ -632,20 +758,44 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained"
-          color="secondary"
-          disabled={
-            timeType === 'instant' 
-              ? !timestamp && !hasVagueness && !hasDeictic
-              : !startTime && !endTime && !hasVagueness && !hasDeictic
-          }
-        >
-          {time ? 'Update' : 'Create'} Time
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
+        <Box>
+          {!time && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              retryCount={retryCount}
+              onRetry={forceSave}
+            />
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleCancel}>Cancel</Button>
+          {time ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="secondary"
+              disabled={
+                timeType === 'instant'
+                  ? !timestamp && !hasVagueness && !hasDeictic
+                  : !startTime && !endTime && !hasVagueness && !hasDeictic
+              }
+            >
+              Update Time
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDone}
+              variant="contained"
+              color="secondary"
+              disabled={!label || !autoCreatedTimeId}
+            >
+              Done
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   )

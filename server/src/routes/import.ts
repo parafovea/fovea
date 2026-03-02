@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client'
 import { ImportHandler } from '../services/import-handler.js'
 import { DEFAULT_IMPORT_OPTIONS, ImportOptions } from '../services/import-types.js'
 import { ValidationError, InternalError } from '../lib/errors.js'
+import { requireAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schemas for import responses.
@@ -49,6 +50,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Import result with statistics
    */
   fastify.post('/api/import', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Import data from JSON Lines file',
       tags: ['import'],
@@ -83,7 +85,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id)
 
     try {
       // Parse multipart data
@@ -164,6 +166,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Import preview with counts and conflicts
    */
   fastify.post('/api/import/preview', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Preview import without committing changes',
       tags: ['import'],
@@ -189,7 +192,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id)
 
     try {
       // Parse multipart data
@@ -281,6 +284,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Array of import history records
    */
   fastify.get('/api/import/history', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Get import history',
       tags: ['import'],

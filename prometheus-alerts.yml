@@ -1,0 +1,113 @@
+groups:
+  - name: fovea-error-alerts
+    rules:
+      # High overall error rate
+      - alert: HighErrorRate
+        expr: sum(rate(fovea_errors_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec (threshold: 0.5/sec)"
+
+      # Critical errors detected
+      - alert: CriticalErrorsDetected
+        expr: sum(rate(fovea_errors_total{severity="critical"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical errors detected"
+          description: "{{ $value | printf \"%.2f\" }} critical errors/sec detected"
+
+      # High API error rate (percentage of total requests)
+      - alert: HighAPIErrorRate
+        expr: |
+          sum(rate(fovea_errors_api[5m])) /
+          sum(rate(api_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | printf \"%.1f\" }}% (threshold: 5%)"
+
+      # Specific route has high error rate
+      - alert: RouteHighErrorRate
+        expr: sum by (route) (rate(fovea_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on route {{ $labels.route }}"
+          description: "Route {{ $labels.route }} has {{ $value | printf \"%.2f\" }} errors/sec"
+
+      # Frontend error spike
+      - alert: FrontendErrorSpike
+        expr: sum(increase(fovea_errors_frontend[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frontend error spike detected"
+          description: "{{ $value | printf \"%.0f\" }} frontend errors in the last 5 minutes"
+
+      # Specific component error rate
+      - alert: ComponentHighErrorRate
+        expr: sum by (component) (rate(fovea_errors_frontend[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "High error rate in component {{ $labels.component }}"
+          description: "Component {{ $labels.component }} has {{ $value | printf \"%.3f\" }} errors/sec"
+
+      # Server errors (5xx) spike
+      - alert: ServerErrorSpike
+        expr: sum(rate(fovea_errors_api{status_code=~"5.."}[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server error spike detected"
+          description: "{{ $value | printf \"%.2f\" }} 5xx errors/sec"
+
+      # Queue processing errors
+      - alert: QueueProcessingErrors
+        expr: sum(rate(fovea_errors_queue[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue processing errors detected"
+          description: "{{ $value | printf \"%.3f\" }} queue errors/sec"
+
+  - name: rbac_alerts
+    rules:
+      - alert: HighPermissionDenialRate
+        expr: rate(fovea_rbac_checks_total{result="denied"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High RBAC denial rate, possible misconfiguration or unauthorized access attempts"
+          description: "RBAC denial rate is {{ $value | printf \"%.2f\" }}/sec (threshold: 10/sec)"
+
+      - alert: RBACCheckLatencyHigh
+        expr: histogram_quantile(0.99, rate(fovea_rbac_check_duration_bucket[5m])) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RBAC check p99 latency exceeds 50ms, check ability cache"
+          description: "RBAC p99 latency is {{ $value | printf \"%.1f\" }}ms (threshold: 50ms)"
+
+      - alert: VideoAssignmentSpikeRate
+        expr: rate(fovea_video_assignment_operations_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High video assignment operation rate"
+          description: "{{ $value | printf \"%.1f\" }} video assignment ops/sec (threshold: 50/sec)"

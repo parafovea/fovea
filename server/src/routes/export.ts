@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { AnnotationExporter } from '../services/export-handler.js'
+import { requireAuth } from '../middleware/auth.js'
 
 /**
  * TypeBox schema for validation errors.
@@ -34,6 +35,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with all user data
    */
   fastify.get('/api/export', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export all user data',
       tags: ['export'],
@@ -82,9 +84,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 1. Export personas with ontologies
     const personas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
       orderBy: { createdAt: 'asc' }
     })
+    const userPersonaIds = personas.map(p => p.id)
     const ontologies = await fastify.prisma.ontology.findMany({
+      where: { personaId: { in: userPersonaIds } },
       orderBy: { createdAt: 'asc' }
     })
     if (personas.length > 0) {
@@ -92,7 +97,9 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // 2. Export world state
-    const worldState = await fastify.prisma.worldState.findFirst()
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: request.user!.id }
+    })
     if (worldState) {
       const worldLines = exporter.exportWorldState(worldState)
       if (worldLines) {
@@ -102,6 +109,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 3. Export summaries with claims
     const summaries = await fastify.prisma.videoSummary.findMany({
+      where: { personaId: { in: userPersonaIds } },
       orderBy: { createdAt: 'asc' }
     })
     const summaryIds = summaries.map(s => s.id)
@@ -224,6 +232,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Export statistics for all data types
    */
   fastify.get('/api/export/stats', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Get export statistics for all data types',
       tags: ['export'],
@@ -237,6 +246,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
         200: Type.Object({
           // Personas & Ontologies
           personaCount: Type.Number(),
+          systemPersonaCount: Type.Number(),
           ontologyCount: Type.Number(),
           entityTypeCount: Type.Number(),
           eventTypeCount: Type.Number(),
@@ -288,9 +298,13 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 1. Count personas and ontologies
     const personas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
       orderBy: { createdAt: 'asc' }
     })
+    const systemPersonaCount = personas.filter(p => p.isSystemGenerated).length
+    const userPersonaIds = personas.map(p => p.id)
     const ontologies = await fastify.prisma.ontology.findMany({
+      where: { personaId: { in: userPersonaIds } },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -307,7 +321,9 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // 2. Count world state objects
-    const worldState = await fastify.prisma.worldState.findFirst()
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: request.user!.id }
+    })
     const worldCounts = worldState ? {
       entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
       events: Array.isArray(worldState.events) ? (worldState.events as unknown[]).length : 0,
@@ -318,10 +334,31 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       relations: Array.isArray(worldState.relations) ? (worldState.relations as unknown[]).length : 0,
     } : { entities: 0, events: 0, times: 0, entityCollections: 0, eventCollections: 0, timeCollections: 0, relations: 0 }
 
-    // 3. Count summaries and claims
-    const summaryCount = await fastify.prisma.videoSummary.count()
-    const claimCount = await fastify.prisma.claim.count()
-    const claimRelationCount = await fastify.prisma.claimRelation.count()
+    // 3. Count summaries and claims (scoped to user's personas)
+    const summaryCount = await fastify.prisma.videoSummary.count({
+      where: { personaId: { in: userPersonaIds } }
+    })
+    const userSummaries = await fastify.prisma.videoSummary.findMany({
+      where: { personaId: { in: userPersonaIds } },
+      select: { id: true }
+    })
+    const userSummaryIds = userSummaries.map(s => s.id)
+    const claimCount = await fastify.prisma.claim.count({
+      where: { summaryId: { in: userSummaryIds } }
+    })
+    const userClaims = await fastify.prisma.claim.findMany({
+      where: { summaryId: { in: userSummaryIds } },
+      select: { id: true }
+    })
+    const userClaimIds = userClaims.map(c => c.id)
+    const claimRelationCount = await fastify.prisma.claimRelation.count({
+      where: {
+        OR: [
+          { sourceClaimId: { in: userClaimIds } },
+          { targetClaimId: { in: userClaimIds } }
+        ]
+      }
+    })
 
     // 4. Count and analyze annotations (with optional filtering)
     const annotationWhere: {
@@ -366,6 +403,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     const response: {
       personaCount: number
+      systemPersonaCount: number
       ontologyCount: number
       entityTypeCount: number
       eventTypeCount: number
@@ -390,6 +428,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       warning?: string
     } = {
       personaCount: personas.length,
+      systemPersonaCount,
       ontologyCount: ontologies.length,
       entityTypeCount,
       eventTypeCount,
@@ -428,6 +467,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with personas and ontologies
    */
   fastify.get('/api/export/personas', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export personas with their ontologies',
       tags: ['export'],
@@ -444,13 +484,16 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
 
-    // Fetch all personas
+    // Fetch user's personas
     const personas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
       orderBy: { createdAt: 'asc' }
     })
 
-    // Fetch all ontologies
+    // Fetch ontologies for user's personas
+    const personaIds = personas.map(p => p.id)
     const ontologies = await fastify.prisma.ontology.findMany({
+      where: { personaId: { in: personaIds } },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -479,6 +522,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with world state objects
    */
   fastify.get('/api/export/world', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export world state objects',
       tags: ['export'],
@@ -499,8 +543,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
 
-    // Fetch world state - for now, get the first one (or implement user-specific)
-    const worldState = await fastify.prisma.worldState.findFirst()
+    // Fetch world state for the authenticated user
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: request.user!.id }
+    })
 
     if (!worldState) {
       reply.code(404)
@@ -537,6 +583,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with summaries, claims, and claim relations
    */
   fastify.get('/api/export/summaries', {
+    onRequest: [requireAuth],
     schema: {
       description: 'Export video summaries with claims',
       tags: ['export'],
@@ -578,6 +625,22 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
     if (personaIdArray && personaIdArray.length > 0) {
       where.personaId = { in: personaIdArray }
+    }
+
+    // Always scope to user's personas
+    const userPersonas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
+      select: { id: true }
+    })
+    const userPersonaIds = userPersonas.map(p => p.id)
+
+    // Add user persona filtering
+    if (where.personaId) {
+      // Intersect with user's personas
+      const requestedIds = where.personaId.in
+      where.personaId = { in: requestedIds.filter((id: string) => userPersonaIds.includes(id)) }
+    } else {
+      where.personaId = { in: userPersonaIds }
     }
 
     // Fetch summaries

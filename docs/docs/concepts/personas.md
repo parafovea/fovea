@@ -106,8 +106,11 @@ Follow these steps to create a persona and build an ontology:
 Navigate to the Persona workspace and click "New Persona". Provide:
 
 - **Name**: Identifying name for the persona (e.g., "Baseball Scout")
-- **Description**: Brief description of the analytical perspective
-- **Domain**: Area of expertise (e.g., "Sports Analysis", "Medical Research")
+- **Role**: Professional role or analytical perspective (e.g., "Sports Analyst")
+- **Information Need**: What the persona is looking for in the video
+- **Details** (optional): Additional context or focus areas
+- **Project Assignment** (optional): Assign the persona to a project. Defaults to the active project context. Leave as "Personal Workspace" for an unscoped personal persona.
+- **Share After Creation** (optional): Share the persona with specific users or groups immediately after creation, with read-only or forkable permissions.
 
 ### Step 2: Define Entity Types
 
@@ -203,8 +206,20 @@ As you annotate videos:
 - Remove unused types to keep ontology focused
 - Adjust type definitions as understanding evolves
 
+## Project-Scoped vs Personal Personas
+
+Personas can be scoped to a project or remain personal:
+
+- **Project-scoped personas** have a `projectId` field set to a specific project. They are visible to all members of that project according to their project role permissions. Use project-scoped personas when collaborating with a team on shared analytical goals.
+- **Personal personas** have no `projectId` (null). They belong only to the user who created them and are not visible to others unless explicitly shared via the resource sharing system.
+
+When you create a persona within a project context, it is automatically scoped to that project. When you create a persona outside of any project context, it remains personal.
+
+See [Projects, Groups, and RBAC](./projects-groups.md) for details on how project membership and sharing control access to personas.
+
 ## Next Steps
 
 - Review the [Architecture](./architecture.md) to understand how personas integrate with the system
 - Read about [Bounding Box Sequences](../user-guides/annotation/bounding-box-sequences.md) to create annotations
 - Explore [Automated Tracking](../user-guides/annotation/automated-tracking.md) for efficient annotation workflows
+- Learn about [collaboration with projects](../user-guides/collaboration/projects.md)

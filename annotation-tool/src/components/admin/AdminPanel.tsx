@@ -1,6 +1,6 @@
 /**
  * Admin panel component.
- * Provides tabs for user management, session management, and settings.
+ * Provides tabs for user, group, project, video access, permissions, session, and settings management.
  * Only accessible to users with isAdmin flag set to true.
  */
 
@@ -16,12 +16,20 @@ import {
 } from '@mui/material'
 import {
   People as PeopleIcon,
+  Group as GroupIcon,
+  Folder as FolderIcon,
+  VideoLibrary as VideoLibraryIcon,
+  Security as SecurityIcon,
   Lock as LockIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useAuthStore } from '@store/zustand/authStore'
 import UserManagementPage from './UserManagementPage'
 import SessionManagementPage from './SessionManagementPage'
+import GroupManagementPage from './GroupManagementPage'
+import ProjectManagementPage from './ProjectManagementPage'
+import VideoAssignmentPage from './VideoAssignmentPage'
+import PermissionsPage from './PermissionsPage'
 
 /**
  * Tab panel component.
@@ -48,7 +56,7 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 
 /**
  * Admin panel component.
- * Displays user management, session management, and settings tabs.
+ * Displays tabs for users, groups, projects, video access, permissions, sessions, and settings.
  * Redirects non-admin users to home page.
  */
 export default function AdminPanel() {
@@ -77,7 +85,7 @@ export default function AdminPanel() {
           Admin Panel
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage users, sessions, and system settings
+          Manage users, groups, projects, video access, permissions, sessions, and system settings
         </Typography>
       </Box>
 
@@ -86,6 +94,8 @@ export default function AdminPanel() {
           value={currentTab}
           onChange={handleTabChange}
           aria-label="admin panel tabs"
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab
@@ -96,18 +106,46 @@ export default function AdminPanel() {
             aria-controls="admin-tabpanel-0"
           />
           <Tab
+            icon={<GroupIcon />}
+            iconPosition="start"
+            label="Groups"
+            id="admin-tab-1"
+            aria-controls="admin-tabpanel-1"
+          />
+          <Tab
+            icon={<FolderIcon />}
+            iconPosition="start"
+            label="Projects"
+            id="admin-tab-2"
+            aria-controls="admin-tabpanel-2"
+          />
+          <Tab
+            icon={<VideoLibraryIcon />}
+            iconPosition="start"
+            label="Video Access"
+            id="admin-tab-3"
+            aria-controls="admin-tabpanel-3"
+          />
+          <Tab
+            icon={<SecurityIcon />}
+            iconPosition="start"
+            label="Permissions"
+            id="admin-tab-4"
+            aria-controls="admin-tabpanel-4"
+          />
+          <Tab
             icon={<LockIcon />}
             iconPosition="start"
             label="Sessions"
-            id="admin-tab-1"
-            aria-controls="admin-tabpanel-1"
+            id="admin-tab-5"
+            aria-controls="admin-tabpanel-5"
           />
           <Tab
             icon={<SettingsIcon />}
             iconPosition="start"
             label="Settings"
-            id="admin-tab-2"
-            aria-controls="admin-tabpanel-2"
+            id="admin-tab-6"
+            aria-controls="admin-tabpanel-6"
           />
         </Tabs>
 
@@ -116,10 +154,26 @@ export default function AdminPanel() {
         </TabPanel>
 
         <TabPanel value={currentTab} index={1}>
-          <SessionManagementPage />
+          <GroupManagementPage />
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
+          <ProjectManagementPage />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={3}>
+          <VideoAssignmentPage />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={4}>
+          <PermissionsPage />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={5}>
+          <SessionManagementPage />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={6}>
           <Box sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               System Settings

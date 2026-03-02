@@ -47,6 +47,16 @@ When reviewing tracking results, **Y** accepts the current track as an annotatio
 
 With a box selected, the arrow keys nudge it 1 pixel in any direction. Hold **Shift** with the arrow keys to nudge 10 pixels at a time. This provides precise positioning without requiring mouse interaction.
 
+## Claim Editor Shortcuts
+
+When the Claim Editor dialog is open and no input field is focused, the following shortcuts switch workspaces while preserving your in-progress claim as a draft.
+
+Press **W** to save the current claim form as a draft and navigate to the Object Builder. Press **O** to save the draft and navigate to the Ontology Builder. Both shortcuts store all form fields (gloss, confidence, modality, claimer, context, comment) so you can look up or create entities in the other workspace.
+
+After navigating away, a "Draft Claim" chip appears in the top toolbar. Click it to return to the annotation workspace and resume editing. The chip's delete button discards the draft.
+
+These shortcuts do not fire when focus is on an input, textarea, contentEditable element, or combobox, so they will not interfere with typing.
+
 ## Dialog and Export Operations
 
 **Ctrl+E** opens the export dialog. **Ctrl+I** opens the import dialog. These work from anywhere in the application.

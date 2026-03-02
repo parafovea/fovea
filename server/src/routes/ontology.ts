@@ -102,9 +102,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' }
     })
 
-    // Fetch world state for this user
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId }
+    // Fetch personal world state for this user (projectId: null)
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
 
     // Transform to frontend format
@@ -301,28 +301,30 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       // Save world state if provided (for this user)
       let savedWorldState = null
       if (world) {
-        savedWorldState = await tx.worldState.upsert({
-          where: { userId },
-          create: {
-            userId,
-            entities: world.entities || [],
-            events: world.events || [],
-            times: world.times || [],
-            entityCollections: world.entityCollections || [],
-            eventCollections: world.eventCollections || [],
-            timeCollections: world.timeCollections || [],
-            relations: world.relations || []
-          },
-          update: {
-            entities: world.entities || [],
-            events: world.events || [],
-            times: world.times || [],
-            entityCollections: world.entityCollections || [],
-            eventCollections: world.eventCollections || [],
-            timeCollections: world.timeCollections || [],
-            relations: world.relations || []
-          }
+        const existingWorld = await tx.worldState.findFirst({
+          where: { userId, projectId: null }
         })
+
+        const worldData = {
+          entities: world.entities || [],
+          events: world.events || [],
+          times: world.times || [],
+          entityCollections: world.entityCollections || [],
+          eventCollections: world.eventCollections || [],
+          timeCollections: world.timeCollections || [],
+          relations: world.relations || []
+        }
+
+        if (existingWorld) {
+          savedWorldState = await tx.worldState.update({
+            where: { id: existingWorld.id },
+            data: worldData
+          })
+        } else {
+          savedWorldState = await tx.worldState.create({
+            data: { userId, ...worldData }
+          })
+        }
       }
 
         return { savedPersonas, savedOntologies, savedWorldState }

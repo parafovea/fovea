@@ -155,6 +155,22 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * 429 Too Many Requests error.
+ * Use when rate limiting or lockout is triggered.
+ *
+ * @example
+ * ```typescript
+ * throw new TooManyRequestsError('Too many login attempts', 30)
+ * // Returns: 429 { error: 'TOO_MANY_REQUESTS', message: 'Too many login attempts', details: { retryAfterSeconds: 30 } }
+ * ```
+ */
+export class TooManyRequestsError extends AppError {
+  constructor(message: string, public readonly retryAfterSeconds: number) {
+    super(429, 'TOO_MANY_REQUESTS', message, { retryAfterSeconds })
+  }
+}
+
+/**
  * 500 Internal Server Error.
  * Use when an unexpected error occurs during processing.
  *

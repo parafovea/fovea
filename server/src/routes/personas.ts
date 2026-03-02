@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireAuth, optionalAuth } from '@middleware/auth.js'
 import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '@lib/errors.js'
+import { personaOperationCounter } from '../metrics.js'
 import {
   updateGlossesInTypes,
   countTypeRefsInGlosses,
@@ -53,6 +54,7 @@ const createPersonaSchema = z.object({
   role: z.string().min(1, 'Role is required'),
   informationNeed: z.string().min(1, 'Information need is required'),
   details: z.string().optional(),
+  projectId: z.string().uuid().optional(),
   isSystemGenerated: z.boolean().optional().default(false),
   hidden: z.boolean().optional().default(false)
 })
@@ -103,17 +105,17 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const mode = process.env.FOVEA_MODE || 'multi-user'
 
-    let where: { userId?: string; isSystemGenerated?: boolean } = {}
+    let where: { userId?: string; isSystemGenerated?: boolean; hidden?: boolean } = {}
 
     if (mode === 'single-user') {
-      // Single-user mode: return all personas
-      where = {}
+      // Single-user mode: return all non-hidden personas
+      where = { hidden: false }
     } else if (request.user) {
-      // Multi-user mode with auth: return user's personas
-      where = { userId: request.user.id }
+      // Multi-user mode with auth: return user's non-hidden personas
+      where = { userId: request.user.id, hidden: false }
     } else {
-      // Multi-user mode without auth: return only system personas
-      where = { isSystemGenerated: true }
+      // Multi-user mode without auth: return only non-hidden system personas
+      where = { isSystemGenerated: true, hidden: false }
     }
 
     const personas = await fastify.prisma.persona.findMany({
@@ -143,6 +145,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         role: Type.String(),
         informationNeed: Type.String(),
         details: Type.Optional(Type.String()),
+        projectId: Type.Optional(Type.String({ format: 'uuid' })),
         isSystemGenerated: Type.Optional(Type.Boolean()),
         hidden: Type.Optional(Type.Boolean())
       }),
@@ -186,6 +189,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         isSystemGenerated: validatedData.isSystemGenerated,
         hidden: validatedData.hidden,
         userId,
+        projectId: validatedData.projectId || null,
         ontology: {
           create: {
             entityTypes: [],
@@ -197,6 +201,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
     })
 
+    personaOperationCounter.add(1, { operation: 'create', status: 'success' })
     return reply.code(201).send(persona)
   })
 
@@ -306,6 +311,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data: validatedData
       })
+      personaOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(persona)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
@@ -383,8 +389,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     // Count world state assignments for this persona
     let worldAssignmentCount = 0
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId: persona.userId }
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: persona.userId, projectId: null }
     })
 
     if (worldState) {
@@ -468,8 +474,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Clean up world state: remove type assignments and interpretations for this persona
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId: existingPersona.userId }
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId: existingPersona.userId, projectId: null }
     })
 
     if (worldState) {
@@ -517,7 +523,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Update world state with cleaned data
       await fastify.prisma.worldState.update({
-        where: { userId: existingPersona.userId },
+        where: { id: worldState.id },
         data: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
           entities: cleanedEntities as any,
@@ -535,6 +541,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.persona.delete({
         where: { id }
       })
+      personaOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Persona deleted successfully' })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
@@ -747,8 +754,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Count world state type assignments
       let worldAssignmentCount = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -849,8 +856,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Clean up world state type assignments
       let worldAssignments = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -859,7 +866,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
 
         await fastify.prisma.worldState.update({
-          where: { userId: persona.userId },
+          where: { id: worldState.id },
           data: {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             entities: cleanedEntities as any
@@ -1180,8 +1187,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Count world state event interpretations
       let worldInterpretationCount = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -1276,8 +1283,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
       // Clean up world state event interpretations
       let worldInterpretations = 0
-      const worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId: persona.userId }
+      const worldState = await fastify.prisma.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null }
       })
 
       if (worldState) {
@@ -1286,7 +1293,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
 
         await fastify.prisma.worldState.update({
-          where: { userId: persona.userId },
+          where: { id: worldState.id },
           data: {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             events: cleanedEvents as any

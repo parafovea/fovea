@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
         'concepts/data-flow',
         'concepts/external-api-integration',
         'concepts/audio-processing',
+        'concepts/projects-groups',
       ],
     },
     {
@@ -52,6 +53,15 @@ const sidebars: SidebarsConfig = {
             'user-guides/audio/fusion-strategies',
           ],
         },
+        {
+          type: 'category',
+          label: 'Collaboration',
+          items: [
+            'user-guides/collaboration/groups',
+            'user-guides/collaboration/projects',
+            'user-guides/collaboration/sharing',
+          ],
+        },
         'user-guides/external-apis',
         {
           type: 'category',
@@ -67,6 +77,7 @@ const sidebars: SidebarsConfig = {
           label: 'Video Management',
           items: [
             'user-guides/video-management/s3-storage',
+            'user-guides/video-management/video-assignments',
           ],
         },
         {
@@ -185,6 +196,10 @@ const sidebars: SidebarsConfig = {
     'api-reference/claims',
     'api-reference/export-import',
     'api-reference/audio-transcription',
+    'api-reference/groups',
+    'api-reference/projects',
+    'api-reference/sharing',
+    'api-reference/video-assignments',
     {
       type: 'link',
       label: 'Frontend API',

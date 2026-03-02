@@ -10,10 +10,11 @@ This guide explains how to manually create, edit, and manage claims. While autom
 
 1. Navigate to the Claims tab
 2. Click **Add Manual Claim**
-3. Enter your claim text
-4. Optionally adjust confidence (default: 90%)
-5. Add notes if needed
-6. Click **Create**
+3. Enter your claim text (required)
+4. Set confidence (default: 90%) (required)
+5. Select at least one modality metadata checkbox (required)
+6. Optionally add claimer information, context, or comment
+7. Click **Create**
 
 ### Adding a Subclaim
 
@@ -30,18 +31,20 @@ Subclaims appear nested under their parent and help break down complex claims in
 ### Basic Editing
 
 1. Click the **Edit** button (pencil icon) on any claim
-2. Modify the claim text
-3. Adjust confidence if needed
-4. Update notes
-5. Click **Save**
+2. Modify the claim text (required)
+3. Adjust confidence if needed (required)
+4. Ensure at least one modality metadata checkbox is selected (required)
+5. Update claimer information, context, or comment as needed
+6. Click **Save**
 
 ### What You Can Edit
 
-- **Claim Text**: The core statement
-- **Confidence**: Your certainty level (0-100%)
+- **Claim Text**: The core statement (required)
+- **Confidence**: Your certainty level (0-100%) (required)
+- **Modality Metadata**: What sources support the claim (audio, video, metadata) (required - at least one must be selected)
 - **Claimer Information**: Who is making this claim
 - **Context**: When and where the claim was made
-- **Notes**: Additional commentary
+- **Comment**: Additional commentary or notes about the claim
 
 ## Using Gloss Syntax
 
@@ -142,6 +145,113 @@ Specify when and where the claim was made:
 - Example: "At Yankee Stadium"
 
 *Note: These fields link to your world state. Create relevant entities first.*
+
+## Modality Metadata (Optional)
+
+Modality metadata indicates what sources support a claim. This helps track where information comes from in the video.
+
+### Audio Modality
+
+Indicates if the claim is based at least in part on audio from the video:
+
+- **speech**: The claim is based on spoken audio (dialogue, narration, etc.)
+- **non-speech**: The claim is based on other audio (music, sound effects, ambient sounds, etc.)
+- **None** (empty): No indication about audio sources - does NOT mean the claim is NOT based on audio
+
+### Video Modality
+
+Indicates if the claim is based at least in part on non-audio video information:
+
+- **text**: The claim is based on text visible in the video (captions, signs, on-screen text, etc.)
+- **non-text**: The claim is based on visual content (actions, objects, scenes, etc.)
+- **None** (empty): No indication about video sources - does NOT mean the claim is NOT based on video
+
+### Metadata Modality
+
+Indicates if the claim is based on video metadata:
+
+- **Yes**: The claim is based on information from video metadata (title, description, tags, etc.)
+- **No**: The claim is explicitly NOT based on metadata
+- **None** (empty): No indication about metadata sources
+
+### Important Notes
+
+- **Empty values are meaningful**: Leaving a field empty does NOT mean the claim is NOT based on that source
+- **Multiple sources**: A claim can be based on multiple sources (e.g., both audio speech and visual text)
+- **User-editable**: These fields are set manually during claim editing, not automatically extracted
+- **Optional fields**: All three fields are optional - you can set none, some, or all of them
+
+### Example Use Cases
+
+**Audio-based claim**:
+- Audio: "speech"
+- Video: None
+- Metadata: None
+- Example: "The narrator states that the game was postponed"
+
+**Visual text claim**:
+- Audio: None
+- Video: "text"
+- Metadata: None
+- Example: "The scoreboard shows 3-2"
+
+**Metadata-based claim**:
+- Audio: None
+- Video: None
+- Metadata: true
+- Example: "The video title indicates this is a highlight reel"
+
+**Multi-source claim**:
+- Audio: "speech"
+- Video: "non-text"
+- Metadata: false
+- Example: "The commentator describes the play while showing the action"
+
+## Comment Field
+
+The comment field allows you to add additional notes or commentary about a claim. This is useful for:
+
+- **Documentation**: Explaining your reasoning for a claim
+- **Collaboration**: Leaving notes for other annotators
+- **Quality Control**: Flagging claims that need review
+- **Context**: Adding information that doesn't fit in the claim text itself
+
+### Using Comments
+
+- Comments are optional - you can leave them empty
+- Comments are saved with the claim and exported in JSON exports
+- Comments can be edited at any time
+- Comments appear in the claim editor dialog
+
+### Example Comments
+
+- "This claim needs verification from another source"
+- "Based on timestamp 0:45-1:20"
+- "Contradicts claim #123 - needs resolution"
+- "High confidence based on multiple visual cues"
+
+## Summary Preview on Claims Tab
+
+When you switch to the Claims tab, a collapsible "Summary Preview" accordion appears at the top if the summary has content. This read-only preview shows the full summary text (with gloss references rendered) so you can reference it while reviewing or creating claims without switching back to the Summary tab.
+
+The accordion starts expanded and can be collapsed by clicking its header. It does not appear when the summary is empty.
+
+## Workspace Toggle from Claim Editor
+
+While editing a claim, you may need to look up or create an entity type in the Ontology Builder, or an object in the Object Builder. Instead of losing your in-progress claim, you can use keyboard shortcuts to save a draft and switch workspaces:
+
+- Press **W** to save the claim form as a draft and switch to the Object Builder.
+- Press **O** to save the claim form as a draft and switch to the Ontology Builder.
+
+These shortcuts only work when the Claim Editor dialog is open and no input field is focused (they will not interfere with typing in text fields).
+
+All form fields are preserved in the draft: claim text, confidence, modality metadata, claimer information, context fields, and comment.
+
+### Returning to Your Draft
+
+After switching workspaces, a "Draft Claim" chip appears in the top toolbar with a warning color. Click the chip to navigate back to the video's annotation workspace. The summary dialog and claim editor re-open automatically with all your draft fields restored.
+
+To discard the draft without returning, click the chip's delete (X) button.
 
 ## Deleting Claims
 

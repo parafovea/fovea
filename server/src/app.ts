@@ -6,13 +6,14 @@ import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import fastifyCookie from '@fastify/cookie'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
-import { PrismaClient } from '@prisma/client'
 import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
-import { AppError } from './lib/errors.js'
+import { prisma } from './lib/prisma.js'
+import { AppError, TooManyRequestsError } from './lib/errors.js'
+import { recordApiError } from './lib/errorMetrics.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -37,6 +38,7 @@ import { AppError } from './lib/errors.js'
  */
 export async function buildApp() {
   const app = Fastify({
+    trustProxy: true,
     logger: {
       level: process.env.LOG_LEVEL || 'info',
       transport: process.env.NODE_ENV !== 'production' ? {
@@ -67,7 +69,10 @@ export async function buildApp() {
   if (process.env.NODE_ENV !== 'test') {
     await app.register(fastifyRateLimit, {
       max: 1000,
-      timeWindow: '1 minute'
+      timeWindow: '1 minute',
+      keyGenerator: (request) => {
+        return request.ip
+      }
     })
   }
 
@@ -123,13 +128,6 @@ export async function buildApp() {
   serverAdapter.setBasePath('/admin/queues')
   await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
 
-  // Database connection
-  const prisma = new PrismaClient({
-    log: process.env.NODE_ENV === 'development'
-      ? ['query', 'error', 'warn']
-      : ['error']
-  })
-
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)
 
@@ -175,17 +173,48 @@ export async function buildApp() {
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
   app.setErrorHandler((error, request, reply) => {
+    const route = request.routeOptions?.url || request.url
+    const method = request.method
+
     // Handle known AppError instances
     if (error instanceof AppError) {
+      // Record error metrics for AppError
+      recordApiError(
+        method,
+        route,
+        error.statusCode,
+        error.code,
+        error.statusCode >= 500 ? 'error' : 'warning'
+      )
+
+      // Add Retry-After header for rate limiting errors
+      if (error instanceof TooManyRequestsError) {
+        reply.header('Retry-After', error.retryAfterSeconds.toString())
+      }
+
       return reply.code(error.statusCode).send(error.toJSON())
     }
 
     // Handle Fastify validation errors (schema validation failures)
     if (error.validation) {
+      // Record validation error metrics
+      recordApiError(method, route, 400, 'VALIDATION_ERROR', 'warning')
       return reply.code(400).send({
         error: 'VALIDATION_ERROR',
         message: error.message,
         details: error.validation
+      })
+    }
+
+    // Handle rate limit errors from @fastify/rate-limit plugin
+    // These are not AppError instances but have statusCode 429
+    if (error.statusCode === 429) {
+      recordApiError(method, route, 429, 'RATE_LIMITED', 'warning')
+      const retryAfter = reply.getHeader('Retry-After')
+      return reply.code(429).send({
+        error: 'RATE_LIMITED',
+        message: error.message || 'Too many requests',
+        ...(retryAfter ? { retryAfter: Number(retryAfter) } : {})
       })
     }
 
@@ -197,6 +226,9 @@ export async function buildApp() {
       params: request.params,
       query: request.query
     }, 'Unexpected error occurred')
+
+    // Record internal error metrics
+    recordApiError(method, route, 500, 'INTERNAL_ERROR', 'critical')
 
     // Return safe generic error response (don't leak implementation details)
     return reply.code(500).send({
@@ -275,6 +307,21 @@ export async function buildApp() {
 
   const importRoute = await import('./routes/import.js')
   await app.register(importRoute.default)
+
+  const telemetryRoute = await import('./routes/telemetry.js')
+  await app.register(telemetryRoute.default)
+
+  const groupsRoute = await import('./routes/groups.js')
+  await app.register(groupsRoute.default)
+
+  const projectsRoute = await import('./routes/projects.js')
+  await app.register(projectsRoute.default)
+
+  const sharingRoute = await import('./routes/sharing.js')
+  await app.register(sharingRoute.default)
+
+  const videoAssignmentsRoute = await import('./routes/video-assignments.js')
+  await app.register(videoAssignmentsRoute.default)
 
   return app
 }

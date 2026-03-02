@@ -8,42 +8,66 @@ import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
 import './index.css'
 
+// Initialize command registry before React renders (must be before component mount effects)
+import { initializeCommands, initializeGlobalContext } from '@lib/commands/init-commands'
+
+// Initialize telemetry before React renders
+import { initTracing } from '@telemetry/tracing'
+import { initErrorLogging } from '@services/errorLogging'
+
+// Initialize tracing first - must be before any other code that might make network requests
+initTracing({
+  enabled: import.meta.env.PROD,
+  sampleRate: import.meta.env.PROD ? 0.2 : 1.0, // 20% in prod, 100% in dev
+})
+
+// Initialize error logging with backend reporting
+initErrorLogging({
+  enabled: import.meta.env.PROD,
+  sampleRate: import.meta.env.PROD ? 0.2 : 1.0, // 20% in prod, 100% in dev
+  consoleLogging: import.meta.env.DEV,
+})
+
+// Initialize commands synchronously so they're available when component effects run
+initializeCommands()
+initializeGlobalContext()
+
 const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#4e878c',
-      dark: '#00241b',
-      light: '#65b891',
+      main: '#8c4e87',
+      light: '#b87ab3',
+      dark: '#633660',
     },
     secondary: {
       main: '#4e878c',
-      light: '#65b891',
-      dark: '#00241b',
+      light: '#7ab8b3',
+      dark: '#366360',
     },
     error: {
-      main: '#4e878c',
-      light: '#65b891',
-      dark: '#00241b',
+      main: '#8c534e',
+      light: '#b87a76',
+      dark: '#633633',
     },
     warning: {
-      main: '#65b891',
-      light: '#93e5ab',
-      dark: '#4e878c',
+      main: '#8c7d4e',
+      light: '#b8a87a',
+      dark: '#635636',
     },
     background: {
       default: '#f8f9fa',
       paper: '#ffffff',
     },
     success: {
-      main: '#65b891',
-      light: '#93e5ab',
-      dark: '#4e878c',
+      main: '#4e8c53',
+      light: '#7ab87e',
+      dark: '#366338',
     },
     info: {
-      main: '#4e878c',
-      light: '#65b891',
-      dark: '#00241b',
+      main: '#4e678c',
+      light: '#7a93b8',
+      dark: '#364863',
     },
     text: {
       primary: 'rgba(0, 0, 0, 0.87)',
