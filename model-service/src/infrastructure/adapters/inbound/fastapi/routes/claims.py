@@ -110,7 +110,7 @@ async def extract_claims(
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
-                framework=LLMFramework.TRANSFORMERS,
+                framework=LLMFramework(selected_config.framework),
                 max_tokens=4096,
                 temperature=0.7,
             )
@@ -222,7 +222,7 @@ async def synthesize_summary(
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
-                framework=LLMFramework.TRANSFORMERS,
+                framework=LLMFramework(selected_config.framework),
                 max_tokens=8192,  # Larger for complex syntheses
                 temperature=0.8,
             )

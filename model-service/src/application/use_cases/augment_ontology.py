@@ -16,8 +16,11 @@ from typing import Any
 from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
 from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
-
-from .llm_loader import GenerationConfig, LLMConfig, LLMLoader
+from src.infrastructure.adapters.outbound.models.llm.loader import (
+    GenerationConfig,
+    LLMConfig,
+    LLMLoader,
+)
 
 logger = logging.getLogger(__name__)
 

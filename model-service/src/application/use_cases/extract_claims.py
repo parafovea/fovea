@@ -12,8 +12,7 @@ import re
 from typing import Any
 
 from src.infrastructure.adapters.inbound.fastapi.schemas import ExtractedClaim
-
-from .llm_loader import GenerationConfig, LLMLoader
+from src.infrastructure.adapters.outbound.models.llm.loader import GenerationConfig, LLMLoader
 
 logger = logging.getLogger(__name__)
 

@@ -18,6 +18,14 @@ from typing import Any
 from opentelemetry import trace
 from PIL import Image
 
+from src.application.services.audio_processing import extract_audio_track, has_audio_stream
+from src.application.use_cases.fuse_modalities import (
+    AudioSegment,
+    FusionConfig,
+    FusionStrategy,
+    VisualFrame,
+    create_fusion_strategy,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas import (
     KeyFrame,
     SummarizeRequest,
@@ -25,17 +33,11 @@ from src.infrastructure.adapters.inbound.fastapi.schemas import (
 )
 from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
-
-from .audio_utils import extract_audio_track, has_audio_stream
-from .av_fusion import (
-    AudioSegment,
-    FusionConfig,
-    FusionStrategy,
-    VisualFrame,
-    create_fusion_strategy,
+from src.infrastructure.adapters.outbound.models.vlm.loader import VLMConfig, create_vlm_loader
+from src.infrastructure.adapters.outbound.video.processor import (
+    extract_frames_uniform,
+    get_video_info,
 )
-from .video_utils import extract_frames_uniform, get_video_info
-from .vlm_loader import VLMConfig, create_vlm_loader
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
