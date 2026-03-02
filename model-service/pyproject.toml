@@ -153,8 +153,8 @@ ignore = [
 "src/routes.py" = ["PLC0415"]
 "src/summarization.py" = ["PLC0415"]
 "src/av_fusion.py" = ["PLC0415"]
-"src/external_apis/*.py" = ["PLC0415"]
-"src/external_apis/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/external_apis/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/external_apis/**/*.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -198,7 +198,7 @@ follow_imports = "skip"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["external_apis", "external_apis.*"]
+module = ["src.infrastructure.adapters.outbound.external_apis", "src.infrastructure.adapters.outbound.external_apis.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]

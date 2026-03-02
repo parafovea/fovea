@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from PIL import Image
 
-from src.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.models import SummarizeRequest
 from src.summarization import (
     calculate_frame_sample_count,

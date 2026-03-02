@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .external_apis.base import ExternalAPIConfig
-from .external_apis.router import ExternalModelRouter
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
 from .llm_loader import GenerationConfig, LLMConfig, LLMLoader
-from .models import OntologyType
+from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
 
 logger = logging.getLogger(__name__)
 

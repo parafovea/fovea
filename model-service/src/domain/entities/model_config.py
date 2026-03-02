@@ -7,7 +7,7 @@ task configurations, and inference settings.
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.domain.types import DeviceType, ExternalAPIProvider, InferenceFramework
+from src.domain.types import DeviceType
 
 
 @dataclass
@@ -196,11 +196,7 @@ class TaskConfig:
         dict[str, ModelConfig]
             CPU-compatible model options.
         """
-        return {
-            name: config
-            for name, config in self.options.items()
-            if config.cpu_compatible
-        }
+        return {name: config for name, config in self.options.items() if config.cpu_compatible}
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation.
@@ -212,9 +208,7 @@ class TaskConfig:
         """
         return {
             "selected": self.selected,
-            "options": {
-                name: config.to_dict() for name, config in self.options.items()
-            },
+            "options": {name: config.to_dict() for name, config in self.options.items()},
         }
 
 
@@ -246,13 +240,11 @@ class InferenceConfig:
         """Validate configuration values."""
         if not 0.0 <= self.offload_threshold <= 1.0:
             raise ValueError(
-                f"offload_threshold must be between 0.0 and 1.0, "
-                f"got {self.offload_threshold}"
+                f"offload_threshold must be between 0.0 and 1.0, got {self.offload_threshold}"
             )
         if self.default_batch_size < 1:
             raise ValueError(
-                f"default_batch_size must be at least 1, "
-                f"got {self.default_batch_size}"
+                f"default_batch_size must be at least 1, got {self.default_batch_size}"
             )
         if self.max_batch_size < self.default_batch_size:
             raise ValueError(

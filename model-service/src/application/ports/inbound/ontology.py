@@ -6,8 +6,6 @@ This module defines the interface for ontology augmentation services.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from src.domain.types import OntologyCategory
-
 
 @dataclass
 class OntologyTypeOutput:

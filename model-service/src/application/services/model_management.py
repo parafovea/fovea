@@ -775,7 +775,7 @@ class ModelManager:
         ValueError
             If task type is invalid or doesn't use external API.
         """
-        from src.external_apis.base import ExternalAPIConfig
+        from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 
         if not self.is_external_api(task_type):
             raise ValueError(f"Task {task_type} does not use external API")

@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from .llm_loader import GenerationConfig, LLMLoader
-from .models import ClaimRelationship, ClaimSource
+from src.infrastructure.adapters.inbound.fastapi.schemas import ClaimRelationship, ClaimSource
 
 logger = logging.getLogger(__name__)
 

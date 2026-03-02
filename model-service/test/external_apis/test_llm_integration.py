@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.ontology_augmentation import (
     AugmentationContext,
     augment_ontology_with_external_api,
