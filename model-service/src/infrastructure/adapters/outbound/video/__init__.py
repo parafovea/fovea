@@ -12,25 +12,23 @@ downloader
 """
 
 from src.infrastructure.adapters.outbound.video.downloader import (
-    download_video,
-    is_remote_url,
+    cleanup_temp_video,
+    download_video_if_needed,
 )
 from src.infrastructure.adapters.outbound.video.processor import (
     VideoInfo,
     VideoProcessingError,
     extract_audio,
-    extract_frames,
-    extract_frames_at_timestamps,
+    extract_frames_uniform,
     get_video_info,
 )
 
 __all__ = [
     "VideoInfo",
     "VideoProcessingError",
-    "download_video",
+    "cleanup_temp_video",
+    "download_video_if_needed",
     "extract_audio",
-    "extract_frames",
-    "extract_frames_at_timestamps",
+    "extract_frames_uniform",
     "get_video_info",
-    "is_remote_url",
 ]

@@ -32,6 +32,7 @@ InferenceFramework = Literal[
     "pyannote",
     "onnx",
     "openvino",
+    "llama_cpp",
     "external_api",
 ]
 
