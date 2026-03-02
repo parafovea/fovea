@@ -1,23 +1,16 @@
-"""External API client adapters.
+"""External API client abstractions."""
 
-This package contains adapters for external API services that
-implement the IExternalAPIClient outbound port interface.
+from .anthropic_client import AnthropicClient
+from .base import ExternalAPIClient, ExternalAPIConfig
+from .google_client import GoogleClient
+from .openai_client import OpenAIClient
+from .router import ExternalModelRouter
 
-Modules
--------
-anthropic
-    Anthropic Claude API adapter.
-openai
-    OpenAI GPT API adapter.
-google
-    Google Gemini API adapter.
-base
-    Base adapter class and common utilities.
-
-Subpackages
------------
-audio
-    External audio transcription API adapters (AssemblyAI, Deepgram, etc.).
-"""
-
-__all__: list[str] = []
+__all__ = [
+    "AnthropicClient",
+    "ExternalAPIClient",
+    "ExternalAPIConfig",
+    "ExternalModelRouter",
+    "GoogleClient",
+    "OpenAIClient",
+]

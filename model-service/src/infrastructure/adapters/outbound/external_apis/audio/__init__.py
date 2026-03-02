@@ -1,24 +1,28 @@
-"""External audio transcription API adapters.
+"""External audio API clients for transcription and diarization.
 
-This package contains adapters for external audio transcription
-services that implement the IAudioTranscriber outbound port interface.
-
-Modules
--------
-assemblyai
-    AssemblyAI transcription adapter.
-deepgram
-    Deepgram Nova transcription adapter.
-revai
-    Rev AI transcription adapter.
-gladia
-    Gladia transcription adapter.
-aws_transcribe
-    AWS Transcribe adapter.
-google_speech
-    Google Speech-to-Text adapter.
-azure_speech
-    Azure Speech Services adapter.
+This package provides clients for external audio transcription services including
+AssemblyAI, Deepgram, Rev AI, Gladia, AWS Transcribe, Google Speech-to-Text,
+and Azure Speech Services.
 """
 
-__all__: list[str] = []
+from .assemblyai_client import AssemblyAIClient
+from .aws_transcribe_client import AWSTranscribeClient
+from .azure_speech_client import AzureSpeechClient
+from .base import AudioAPIClient, TranscriptResult, TranscriptSegment
+from .deepgram_client import DeepgramClient
+from .gladia_client import GladiaClient
+from .google_speech_client import GoogleSpeechClient
+from .revai_client import RevAIClient
+
+__all__ = [
+    "AWSTranscribeClient",
+    "AssemblyAIClient",
+    "AudioAPIClient",
+    "AzureSpeechClient",
+    "DeepgramClient",
+    "GladiaClient",
+    "GoogleSpeechClient",
+    "RevAIClient",
+    "TranscriptResult",
+    "TranscriptSegment",
+]

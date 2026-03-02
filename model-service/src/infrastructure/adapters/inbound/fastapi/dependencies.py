@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import Depends, HTTPException
 
 if TYPE_CHECKING:
-    from src.model_manager import ModelManager
+    from src.application.services.model_management import ModelManager
 
 
 def get_model_manager() -> "ModelManager":

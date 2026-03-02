@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.types.literals import ClaimExtractionStrategy, SynthesisStrategy
+from src.domain.types import ClaimExtractionStrategy, SynthesisStrategy
 
 
 @dataclass

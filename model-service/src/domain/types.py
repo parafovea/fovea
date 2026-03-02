@@ -1,8 +1,8 @@
-"""Literal type definitions for the model service.
+"""Domain Literal type definitions.
 
-This module defines Literal types that constrain string values to specific
-enumerated options, providing compile-time type safety for configuration
-values, API parameters, and framework identifiers.
+Defines Literal types that constrain string values to specific enumerated
+options, providing compile-time type safety for configuration values, API
+parameters, and framework identifiers.
 """
 
 from typing import Literal

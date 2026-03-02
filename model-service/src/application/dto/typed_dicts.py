@@ -1,8 +1,8 @@
-"""TypedDict definitions for structured dictionary types.
+"""TypedDict definitions for application data transfer objects.
 
-This module defines TypedDict classes for dictionaries with known key structures,
-enabling type checking for configuration data, API responses, and internal
-data transfer objects.
+Defines TypedDict classes for dictionaries with known key structures,
+enabling type checking for configuration data, API responses, and
+internal data transfer objects.
 """
 
 from typing import Any, TypedDict

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
         ISummarizationService,
         ITrackingService,
     )
-    from src.model_manager import ModelManager
+    from src.application.services.model_management import ModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class Container:
             Singleton ModelManager instance.
         """
         if self._model_manager is None:
-            from src.model_manager import ModelManager
+            from src.application.services.model_management import ModelManager
 
             self._model_manager = ModelManager(str(self.config.model_config_path))
             logger.info("ModelManager initialized")

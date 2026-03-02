@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .model_manager import ModelManager
+from .application.services.model_management import ModelManager
 from .observability import configure_observability, instrument_app
 from .routes import router, set_model_manager
 

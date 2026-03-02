@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from src.model_manager import (
+from src.application.services.model_management import (
     InferenceConfig,
     ModelConfig,
     ModelManager,

@@ -7,7 +7,7 @@ task configurations, and inference settings.
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.types.literals import DeviceType, ExternalAPIProvider, InferenceFramework
+from src.domain.types import DeviceType, ExternalAPIProvider, InferenceFramework
 
 
 @dataclass
