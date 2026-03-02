@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from src.application.services.model_management import ModelManager
 
 
-def get_model_manager() -> "ModelManager":
+def get_model_manager() -> ModelManager:
     """Get the ModelManager instance from the container.
 
     Returns

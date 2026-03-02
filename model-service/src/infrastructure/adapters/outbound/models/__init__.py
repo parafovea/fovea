@@ -31,9 +31,9 @@ from src.infrastructure.adapters.outbound.models import (
 )
 
 __all__ = [
-    "vlm",
-    "llm",
-    "detection",
-    "tracking",
     "audio",
+    "detection",
+    "llm",
+    "tracking",
+    "vlm",
 ]

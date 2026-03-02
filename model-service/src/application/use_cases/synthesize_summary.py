@@ -12,8 +12,9 @@ from structured claim hierarchies. Supports:
 import logging
 from typing import Any
 
-from .llm_loader import GenerationConfig, LLMLoader
 from src.infrastructure.adapters.inbound.fastapi.schemas import ClaimRelationship, ClaimSource
+
+from .llm_loader import GenerationConfig, LLMLoader
 
 logger = logging.getLogger(__name__)
 

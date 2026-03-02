@@ -24,8 +24,8 @@ from src.infrastructure.adapters.outbound import (
 )
 
 __all__ = [
-    "models",
     "external_apis",
-    "video",
+    "models",
     "persistence",
+    "video",
 ]

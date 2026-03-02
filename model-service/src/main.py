@@ -2,7 +2,8 @@
 
 This module provides the main FastAPI application with endpoints for video
 summarization, ontology augmentation, and object detection using open-weight
-AI models.
+AI models. Serves as the composition root, wiring the dependency injection
+container to the FastAPI application.
 """
 
 import os
@@ -15,20 +16,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .application.services.model_management import ModelManager
-from .observability import configure_observability, instrument_app
-from .routes import router, set_model_manager
-
-# Global model manager instance
-model_manager: ModelManager | None = None
+from .infrastructure.adapters.inbound.fastapi.routes import router
+from .infrastructure.config.container import (
+    ContainerConfig,
+    init_container,
+    shutdown_container,
+)
+from .infrastructure.observability import configure_observability, instrument_app
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifecycle for FastAPI application.
 
-    Handles startup and shutdown operations including model loading
-    and resource cleanup.
+    Handles startup and shutdown operations including container
+    initialization and resource cleanup.
 
     Parameters
     ----------
@@ -40,28 +42,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     None
         Control during application runtime.
     """
-    global model_manager
-
     # Startup
     configure_observability()
 
-    # Initialize ModelManager
-    config_path = os.getenv(
-        "MODEL_CONFIG_PATH",
-        str(Path(__file__).parent.parent / "config" / "models.yaml"),
+    # Initialize DI container
+    config_path = Path(
+        os.getenv(
+            "MODEL_CONFIG_PATH",
+            str(Path(__file__).parent.parent / "config" / "models.yaml"),
+        )
     )
 
-    model_manager = ModelManager(config_path)
-    set_model_manager(model_manager)
-
-    # Warmup models if configured
-    await model_manager.warmup_models()
+    config = ContainerConfig(
+        model_config_path=config_path,
+        enable_warmup=True,
+    )
+    container = init_container(config)
+    await container.initialize()
 
     yield
 
     # Shutdown
-    if model_manager:
-        await model_manager.shutdown()
+    await shutdown_container()
 
 
 app = FastAPI(

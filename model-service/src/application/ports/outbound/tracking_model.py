@@ -4,7 +4,6 @@ This module defines the interface for video object tracking model adapters.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray

@@ -147,12 +147,11 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004", "PLC0415", "RUF059"]
-# Loader files use deferred imports for lazy loading of heavy ML dependencies
-"src/*_loader.py" = ["PLC0415"]
-"src/model_manager.py" = ["PLC0415"]
-"src/routes.py" = ["PLC0415"]
-"src/summarization.py" = ["PLC0415"]
-"src/av_fusion.py" = ["PLC0415"]
+# Deferred imports for lazy loading of heavy ML dependencies
+"src/infrastructure/adapters/outbound/models/**/loader.py" = ["PLC0415"]
+"src/infrastructure/adapters/inbound/fastapi/routes/*.py" = ["PLC0415"]
+"src/application/services/*.py" = ["PLC0415"]
+"src/application/use_cases/*.py" = ["PLC0415"]
 "src/infrastructure/adapters/outbound/external_apis/*.py" = ["PLC0415"]
 "src/infrastructure/adapters/outbound/external_apis/**/*.py" = ["PLC0415"]
 

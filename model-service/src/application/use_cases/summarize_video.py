@@ -18,6 +18,14 @@ from typing import Any
 from opentelemetry import trace
 from PIL import Image
 
+from src.infrastructure.adapters.inbound.fastapi.schemas import (
+    KeyFrame,
+    SummarizeRequest,
+    SummarizeResponse,
+)
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
+
 from .audio_utils import extract_audio_track, has_audio_stream
 from .av_fusion import (
     AudioSegment,
@@ -26,9 +34,6 @@ from .av_fusion import (
     VisualFrame,
     create_fusion_strategy,
 )
-from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
-from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
-from src.infrastructure.adapters.inbound.fastapi.schemas import KeyFrame, SummarizeRequest, SummarizeResponse
 from .video_utils import extract_frames_uniform, get_video_info
 from .vlm_loader import VLMConfig, create_vlm_loader
 

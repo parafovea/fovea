@@ -12,7 +12,6 @@ from pydantic import Field
 from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     ConfidenceScore,
     NonEmptyStr,
-    PositiveInt,
     ProcessingTime,
     StrictBaseModel,
 )

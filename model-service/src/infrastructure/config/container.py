@@ -13,15 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.application.ports.inbound import (
-        IClaimExtractionService,
-        IClaimSynthesisService,
-        IDetectionService,
-        IModelManagementService,
-        IOntologyService,
-        ISummarizationService,
-        ITrackingService,
-    )
     from src.application.services.model_management import ModelManager
 
 logger = logging.getLogger(__name__)

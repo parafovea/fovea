@@ -4,10 +4,7 @@ This module defines the interface for video processing adapters.
 """
 
 from abc import ABC, abstractmethod
-from typing import Iterator
-
-import numpy as np
-from numpy.typing import NDArray
+from collections.abc import Iterator
 
 from src.domain.entities import Frame, VideoInfo
 from src.domain.value_objects import TimeRange

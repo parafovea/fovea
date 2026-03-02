@@ -7,7 +7,6 @@ and voice activity detection model adapters.
 from abc import ABC, abstractmethod
 from typing import Any
 
-from src.domain.entities import TranscriptSegment
 from src.domain.value_objects import TimeRange
 
 
