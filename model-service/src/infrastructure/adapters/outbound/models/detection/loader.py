@@ -26,6 +26,7 @@ class DetectionFramework(StrEnum):
     PYTORCH = "pytorch"
     ULTRALYTICS = "ultralytics"
     TRANSFORMERS = "transformers"
+    ONNX = "onnx"
 
 
 @dataclass
@@ -589,6 +590,47 @@ class Florence2Loader(DetectionModelLoader):
         return detections
 
 
+def _create_onnx_loader(config: DetectionConfig) -> DetectionModelLoader:
+    """Create an ONNX detection loader based on the model ID.
+
+    Parameters
+    ----------
+    config : DetectionConfig
+        Configuration with model_id used to select the ONNX loader.
+
+    Returns
+    -------
+    DetectionModelLoader
+        ONNX loader instance for the specified model.
+
+    Raises
+    ------
+    ValueError
+        If no ONNX loader is available for the model ID.
+    """
+    onnx_model_name = config.model_id.lower().replace("-", "").replace("_", "")
+    if "yoloworld" in onnx_model_name:
+        from src.infrastructure.adapters.outbound.models.onnx.yolo_world import (
+            YOLOWorldONNXLoader,
+        )
+
+        return YOLOWorldONNXLoader(config)
+    if "florence" in onnx_model_name:
+        from src.infrastructure.adapters.outbound.models.onnx.florence import (
+            Florence2ONNXLoader,
+        )
+
+        return Florence2ONNXLoader(config)
+    if "groundingdino" in onnx_model_name:
+        from src.infrastructure.adapters.outbound.models.onnx.grounding_dino import (
+            GroundingDINOONNXLoader,
+        )
+
+        return GroundingDINOONNXLoader(config)
+    msg = f"No ONNX loader available for model: {config.model_id}"
+    raise ValueError(msg)
+
+
 def create_detection_loader(model_name: str, config: DetectionConfig) -> DetectionModelLoader:
     """Factory function to create appropriate detection loader based on model name.
 
@@ -613,6 +655,9 @@ def create_detection_loader(model_name: str, config: DetectionConfig) -> Detecti
     ValueError
         If model_name is not recognized.
     """
+    if config.framework == DetectionFramework.ONNX:
+        return _create_onnx_loader(config)
+
     model_name_lower = model_name.lower().replace("_", "-")
 
     if "yolo-world" in model_name_lower or "yoloworld" in model_name_lower:

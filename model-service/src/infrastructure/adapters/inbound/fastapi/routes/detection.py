@@ -123,6 +123,7 @@ async def detect_objects(
                 "pytorch": DetectionFramework.PYTORCH,
                 "ultralytics": DetectionFramework.ULTRALYTICS,
                 "transformers": DetectionFramework.TRANSFORMERS,
+                "onnx": DetectionFramework.ONNX,
             }
             framework = framework_map.get(
                 selected_model_config.framework,

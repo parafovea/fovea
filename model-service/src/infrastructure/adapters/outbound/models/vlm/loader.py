@@ -41,6 +41,7 @@ class InferenceFramework(StrEnum):
     SGLANG = "sglang"
     VLLM = "vllm"
     TRANSFORMERS = "transformers"
+    LLAMA_CPP = "llama_cpp"
 
 
 @dataclass
@@ -930,8 +931,100 @@ class Qwen25VLLoader(VLMLoader):
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+class SmallVLMLoader(VLMLoader):
+    """Loader for small VLMs (SmolVLM, Moondream) via Transformers on CPU.
+
+    Designed for CPU-friendly vision-language models that run without GPU
+    using standard HuggingFace Transformers.
+
+    Parameters
+    ----------
+    config : VLMConfig
+        VLM configuration.
+    """
+
+    def __init__(self, config: VLMConfig) -> None:
+        super().__init__(config)
+        self._model: Any = None
+        self._processor: Any = None
+
+    def load(self) -> None:
+        """Load model and processor from HuggingFace."""
+        self._processor = AutoProcessor.from_pretrained(
+            self.config.model_id, trust_remote_code=True
+        )
+        self._model = AutoModelForImageTextToText.from_pretrained(
+            self.config.model_id,
+            torch_dtype=torch.float32,
+            device_map="cpu",
+            trust_remote_code=True,
+        )
+        logger.info("Loaded small VLM: %s", self.config.model_id)
+
+    def generate(
+        self,
+        images: list[Image.Image],
+        prompt: str,
+        max_new_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> str:
+        """Generate text from images and prompt.
+
+        Parameters
+        ----------
+        images : list[Image.Image]
+            List of PIL Images.
+        prompt : str
+            Text prompt.
+        max_new_tokens : int
+            Maximum tokens to generate.
+        temperature : float
+            Sampling temperature.
+
+        Returns
+        -------
+        str
+            Generated text.
+
+        Raises
+        ------
+        RuntimeError
+            If the model or processor has not been loaded.
+        """
+        if self._model is None or self._processor is None:
+            msg = "Model not loaded. Call load() first."
+            raise RuntimeError(msg)
+
+        inputs = self._processor(
+            images=images[0] if images else None,
+            text=prompt,
+            return_tensors="pt",
+        )
+
+        output = self._model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature if temperature > 0 else 1.0,
+            do_sample=temperature > 0,
+        )
+
+        # Decode only new tokens
+        generated = output[0][inputs["input_ids"].shape[-1] :]
+        return self._processor.decode(generated, skip_special_tokens=True)  # type: ignore[no-any-return]
+
+    def unload(self) -> None:
+        """Unload model and processor."""
+        self._model = None
+        self._processor = None
+        logger.info("Unloaded small VLM: %s", self.config.model_id)
+
+
 def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
     """Factory function to create appropriate VLM loader based on model name.
+
+    When ``config.framework`` is ``LLAMA_CPP``, a ``LlamaCppVLMLoader`` is
+    returned regardless of model name. For small CPU models (SmolVLM,
+    Moondream), a ``SmallVLMLoader`` is returned.
 
     Parameters
     ----------
@@ -942,6 +1035,8 @@ def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
         - "internvl3-78b" or "internvl3"
         - "pixtral-large" or "pixtral"
         - "qwen2.5-vl-72b" or "qwen25vl"
+        - "smolvlm" (SmolVLM variants)
+        - "moondream" (Moondream variants)
     config : VLMConfig
         Configuration for model loading and inference.
 
@@ -955,7 +1050,22 @@ def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
     ValueError
         If model_name is not recognized.
     """
+    # llama.cpp GGUF dispatch
+    if config.framework == InferenceFramework.LLAMA_CPP:
+        from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
+        from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
+
+        llama_config = LlamaCppConfig(
+            model_id=config.model_id,
+            n_ctx=4096,
+        )
+        return LlamaCppVLMLoader(llama_config)  # type: ignore[return-value]
+
     model_name_lower = model_name.lower().replace("_", "-")
+
+    # Small CPU VLMs (Transformers)
+    if "smolvlm" in model_name_lower or "moondream" in model_name_lower:
+        return SmallVLMLoader(config)
 
     if "llama-4-maverick" in model_name_lower or "llama4-maverick" in model_name_lower:
         return Llama4MaverickLoader(config)
@@ -973,5 +1083,6 @@ def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
         return Qwen25VLLoader(config)
     raise ValueError(
         f"Unknown model name: {model_name}. Supported models: "
-        "llama-4-maverick, gemma-3-27b, internvl3-78b, pixtral-large, qwen2.5-vl-72b"
+        "llama-4-maverick, gemma-3-27b, internvl3-78b, pixtral-large, qwen2.5-vl-72b, "
+        "smolvlm, moondream"
     )

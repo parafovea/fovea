@@ -94,7 +94,7 @@ async def extract_claims(
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
             LLMFramework,
-            LLMLoader,
+            create_llm_loader,
         )
 
         try:
@@ -116,7 +116,7 @@ async def extract_claims(
             )
 
             # Load LLM
-            loader = LLMLoader(llm_config)
+            loader = create_llm_loader(llm_config)
             await loader.load()
 
             try:
@@ -206,7 +206,7 @@ async def synthesize_summary(
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
             LLMFramework,
-            LLMLoader,
+            create_llm_loader,
         )
 
         try:
@@ -228,7 +228,7 @@ async def synthesize_summary(
             )
 
             # Load LLM
-            loader = LLMLoader(llm_config)
+            loader = create_llm_loader(llm_config)
             await loader.load()
 
             try:

@@ -6,11 +6,12 @@ multiple model options (Llama 4 Scout, Llama 3.3 70B, DeepSeek V3, Gemma 3),
 automatic fallback handling.
 """
 
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from transformers import (
@@ -21,12 +22,20 @@ from transformers import (
     PreTrainedTokenizer,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from src.infrastructure.adapters.outbound.models.llama_cpp.llm import (
+        LlamaCppLLMLoader,
+    )
+
 
 class LLMFramework(StrEnum):
     """Inference framework options for LLM models."""
 
     SGLANG = "sglang"
     TRANSFORMERS = "transformers"
+    LLAMA_CPP = "llama_cpp"
 
 
 @dataclass
@@ -390,3 +399,42 @@ async def create_llm_loader_with_fallback(
             continue
 
     raise RuntimeError("Unreachable: should have raised error in loop")
+
+
+def create_llm_loader(
+    config: LLMConfig,
+    cache_dir: Path | None = None,
+) -> LLMLoader | LlamaCppLLMLoader:
+    """Create an LLM loader based on framework configuration.
+
+    Returns a ``LlamaCppLLMLoader`` when the framework is ``llama_cpp``,
+    or the default ``LLMLoader`` for other frameworks.
+
+    Parameters
+    ----------
+    config : LLMConfig
+        LLM configuration with framework specification.
+    cache_dir : Path | None
+        Directory for caching model files.
+
+    Returns
+    -------
+    LLMLoader | LlamaCppLLMLoader
+        Configured LLM loader instance.
+    """
+    if config.framework == LLMFramework.LLAMA_CPP:
+        from src.infrastructure.adapters.outbound.models.llama_cpp.base import (
+            LlamaCppConfig,
+        )
+        from src.infrastructure.adapters.outbound.models.llama_cpp.llm import (
+            LlamaCppLLMLoader,
+        )
+
+        llama_config = LlamaCppConfig(
+            model_id=config.model_id,
+            n_ctx=config.max_tokens or 4096,
+            cache_dir=cache_dir,
+        )
+        return LlamaCppLLMLoader(llama_config)
+
+    return LLMLoader(config, cache_dir)

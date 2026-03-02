@@ -15,4 +15,17 @@ grounding_dino
     GroundingDINO ONNX adapter.
 """
 
-__all__: list[str] = []
+from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.adapters.outbound.models.onnx.florence import Florence2ONNXLoader
+from src.infrastructure.adapters.outbound.models.onnx.grounding_dino import (
+    GroundingDINOONNXLoader,
+)
+from src.infrastructure.adapters.outbound.models.onnx.yolo_world import YOLOWorldONNXLoader
+
+__all__ = [
+    "Florence2ONNXLoader",
+    "GroundingDINOONNXLoader",
+    "ONNXConfig",
+    "ONNXModelLoader",
+    "YOLOWorldONNXLoader",
+]

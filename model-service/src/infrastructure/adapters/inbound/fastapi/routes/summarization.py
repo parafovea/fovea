@@ -138,6 +138,7 @@ async def summarize_video(
                     "4bit": QuantizationType.FOUR_BIT,
                     "8bit": QuantizationType.EIGHT_BIT,
                     "awq": QuantizationType.AWQ,
+                    "none": QuantizationType.NONE,
                 }
                 quantization = quantization_map.get(
                     selected_model_config.quantization or "4bit",
@@ -148,6 +149,7 @@ async def summarize_video(
                     "sglang": InferenceFramework.SGLANG,
                     "vllm": InferenceFramework.VLLM,
                     "transformers": InferenceFramework.TRANSFORMERS,
+                    "llama_cpp": InferenceFramework.LLAMA_CPP,
                 }
                 framework = framework_map.get(
                     selected_model_config.framework,

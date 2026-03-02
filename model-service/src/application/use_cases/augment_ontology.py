@@ -19,7 +19,7 @@ from src.infrastructure.adapters.outbound.external_apis.router import ExternalMo
 from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     LLMConfig,
-    LLMLoader,
+    create_llm_loader,
 )
 
 logger = logging.getLogger(__name__)
@@ -381,7 +381,7 @@ async def augment_ontology_with_llm(
     ValueError
         If LLM response cannot be parsed.
     """
-    loader = LLMLoader(llm_config, cache_dir)
+    loader = create_llm_loader(llm_config, cache_dir)
 
     try:
         await loader.load()

@@ -16,6 +16,7 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
     LLMFramework,
     LLMLoader,
     create_llm_config_from_dict,
+    create_llm_loader,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "LLMFramework",
     "LLMLoader",
     "create_llm_config_from_dict",
+    "create_llm_loader",
 ]
