@@ -16,6 +16,7 @@
 #               NOTE: Requires DEVICE=gpu, will fail on CPU/ARM64
 #
 # Examples:
+#   CPU build: docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=minimal -t fovea-model-service:cpu .
 #   docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=minimal .
 #   docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=recommended .
 #   docker build --build-arg DEVICE=gpu --build-arg BUILD_MODE=full .
@@ -73,13 +74,14 @@ ARG DEVICE=cpu
 # BUILD_MODE options: minimal (base only), recommended (+ bitsandbytes), full (+ all inference engines)
 # DEVICE options: cpu (local dev), gpu (production)
 
-# Install Python and build tools
+# Install Python and build tools (cmake needed for llama-cpp-python on CPU)
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-dev \
     python3-pip \
     git \
     build-essential \
+    cmake \
     kmod \
     && rm -rf /var/lib/apt/lists/*
 
@@ -107,10 +109,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip install --no-cache-dir -e ".[recommended]"; \
     else \
         pip install --no-cache-dir -e .; \
+    fi && \
+    if [ "$DEVICE" = "cpu" ]; then \
+        pip install --no-cache-dir -e ".[cpu]"; \
     fi
 
 # Production stage
 FROM base AS production
+
+ARG DEVICE=cpu
 
 WORKDIR /app
 
@@ -129,6 +136,13 @@ RUN mkdir -p /models /videos
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_CACHE=/models
 ENV HF_HOME=/models
+# Create symlink to active model config based on DEVICE; override at runtime via env var
+RUN if [ "$DEVICE" = "cpu" ]; then \
+        ln -sf /app/config/models-cpu.yaml /app/config/active-models.yaml; \
+    else \
+        ln -sf /app/config/models.yaml /app/config/active-models.yaml; \
+    fi
+ENV MODEL_CONFIG_PATH=/app/config/active-models.yaml
 
 # Expose port
 EXPOSE 8000
