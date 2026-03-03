@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-
 from src.video_downloader import cleanup_temp_video, download_video_if_needed
 
 # Use S3 URLs that match the allowed patterns for SSRF protection

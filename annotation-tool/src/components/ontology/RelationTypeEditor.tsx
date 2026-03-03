@@ -112,7 +112,7 @@ export default function RelationTypeEditor({
     setExampleInput('')
     setSourceId('')
     setTargetId('')
-  }, [relationType, personaId])
+  }, [relationType, personaId, targetPersonaIds])
 
   const handleSave = async () => {
     if (!personaId) return

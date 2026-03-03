@@ -186,9 +186,7 @@ class NormalizedBBox:
         return cls(x=x1, y=y1, width=x2 - x1, height=y2 - y1)
 
     @classmethod
-    def from_center(
-        cls, center_x: float, center_y: float, width: float, height: float
-    ) -> Self:
+    def from_center(cls, center_x: float, center_y: float, width: float, height: float) -> Self:
         """Create from center point and dimensions.
 
         Parameters
@@ -252,9 +250,7 @@ class AbsoluteBBox:
         if self.x < 0 or self.y < 0:
             raise ValueError(f"Coordinates must be non-negative: ({self.x}, {self.y})")
         if self.width < 0 or self.height < 0:
-            raise ValueError(
-                f"Dimensions must be non-negative: ({self.width}, {self.height})"
-            )
+            raise ValueError(f"Dimensions must be non-negative: ({self.width}, {self.height})")
         if self.x + self.width > self.image_width:
             raise ValueError(
                 f"x + width exceeds image width: {self.x + self.width} > {self.image_width}"

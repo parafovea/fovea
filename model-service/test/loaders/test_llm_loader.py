@@ -5,7 +5,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 import torch
-
 from src.llm_loader import (
     GenerationConfig,
     GenerationResult,

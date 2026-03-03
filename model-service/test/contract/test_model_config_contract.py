@@ -5,7 +5,6 @@ using fake model manager implementations.
 """
 
 import pytest
-from fastapi.testclient import TestClient
 
 from test.fakes import FakeModelConfig, FakeModelManager, FakeModelManagerConfig
 

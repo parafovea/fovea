@@ -37,7 +37,7 @@ vi.mock('@store/queries', async () => {
     })),
     usePersonaOntology: vi.fn(() => ({ data: null })),
     useModelConfig: vi.fn(() => ({
-      data: { cudaAvailable: true },
+      data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
       isLoading: false,
       error: null,
     })),
@@ -416,8 +416,8 @@ describe('VideoSummaryEditor', () => {
     })
   })
 
-  describe('CPU-Only Mode', () => {
-    it('disables Extract Claims button in CPU-only mode', async () => {
+  describe('Models Disabled Mode', () => {
+    it('disables Extract Claims button when no models available', async () => {
       const { useVideoSummary, useModelConfig } = await import('@store/queries')
       const existingSummary = {
         id: 'summary-1',
@@ -437,7 +437,7 @@ describe('VideoSummaryEditor', () => {
       } as any)
 
       vi.mocked(useModelConfig).mockReturnValue({
-        data: { cudaAvailable: false },
+        data: { cudaAvailable: false, modelsAvailable: false, cpuModelsAvailable: false },
         isLoading: false,
         error: null,
       } as any)
@@ -482,7 +482,51 @@ describe('VideoSummaryEditor', () => {
       } as any)
 
       vi.mocked(useModelConfig).mockReturnValue({
-        data: { cudaAvailable: true },
+        data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
+        isLoading: false,
+        error: null,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        const claimsTab = screen.getByRole('tab', { name: /claims/i })
+        userEvent.setup().click(claimsTab)
+      })
+
+      await waitFor(() => {
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        expect(extractButton).not.toBeDisabled()
+      })
+    })
+
+    it('enables Extract Claims button when CPU models are available', async () => {
+      const { useVideoSummary, useModelConfig } = await import('@store/queries')
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [{ type: 'text', content: 'Test summary' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useModelConfig).mockReturnValue({
+        data: { cudaAvailable: false, modelsAvailable: true, cpuModelsAvailable: true },
         isLoading: false,
         error: null,
       } as any)

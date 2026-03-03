@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import torch
 from PIL import Image
-
 from src.detection_loader import (
     BoundingBox,
     Detection,

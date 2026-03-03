@@ -77,6 +77,8 @@ function createMockStatusResponse(
     totalVramAvailableGb: 24.0,
     timestamp: new Date().toISOString(),
     cudaAvailable: true,
+    modelsAvailable: true,
+    cpuModelsAvailable: false,
     ...overrides,
   }
 }
@@ -147,10 +149,14 @@ describe('ModelStatusDashboard', () => {
       expect(screen.getByText(/0 models loaded/i)).toBeInTheDocument()
     })
 
-    it('displays CPU-only mode warning when CUDA not available', () => {
-      const cpuOnlyStatus = createMockStatusResponse([], { cudaAvailable: false })
+    it('displays no-models warning when CUDA and CPU models not available', () => {
+      const noModelsStatus = createMockStatusResponse([], {
+        cudaAvailable: false,
+        modelsAvailable: false,
+        cpuModelsAvailable: false,
+      })
       vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
-        data: cpuOnlyStatus,
+        data: noModelsStatus,
         isLoading: false,
         error: null,
         refetch: vi.fn(),
@@ -162,9 +168,31 @@ describe('ModelStatusDashboard', () => {
         </TestWrapper>
       )
 
-      expect(screen.getByText(/CPU-Only Mode Detected/i)).toBeInTheDocument()
-      expect(screen.getByText(/no GPU\/CUDA available/i)).toBeInTheDocument()
-      expect(screen.getByText(/No models loaded\. GPU required/i)).toBeInTheDocument()
+      expect(screen.getByText(/No AI Models Available/i)).toBeInTheDocument()
+      expect(screen.getByText(/No models available\. Install CPU-compatible models or add a GPU\./i)).toBeInTheDocument()
+    })
+
+    it('displays CPU mode info when CPU models are available', () => {
+      const cpuModeStatus = createMockStatusResponse([], {
+        cudaAvailable: false,
+        modelsAvailable: true,
+        cpuModelsAvailable: true,
+      })
+      vi.spyOn(useModelConfigHooks, 'useModelStatus').mockReturnValue({
+        data: cpuModeStatus,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as any)
+
+      render(
+        <TestWrapper>
+          <ModelStatusDashboard />
+        </TestWrapper>
+      )
+
+      expect(screen.getByText(/CPU Mode/i)).toBeInTheDocument()
+      expect(screen.getByText(/Running with CPU-optimized models/i)).toBeInTheDocument()
     })
   })
 

@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 from PIL import Image
-
 from src.vlm_loader import (
     Gemma3Loader,
     InferenceFramework,

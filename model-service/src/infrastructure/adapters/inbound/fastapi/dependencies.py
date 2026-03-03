@@ -27,7 +27,7 @@ def get_model_manager() -> ModelManager:
     HTTPException
         If container or model manager is not initialized.
     """
-    from src.infrastructure.config.container import get_container
+    from src.infrastructure.config.container import get_container  # noqa: PLC0415
 
     try:
         container = get_container()

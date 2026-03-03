@@ -71,9 +71,9 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   const saveSummaryMutation = useSaveSummary()
   const error = queryError?.message || saveSummaryMutation.error?.message || null
 
-  // Check for CPU-only mode
+  // Check whether AI models are available
   const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cudaAvailable
+  const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
 
   // Claims UI state from Zustand
   const selectedClaimId = useClaimsUiStore((state) => state.selectedClaimId)
@@ -195,23 +195,24 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     }
   }, [claimsError, summaryId, videoId, personaId])
 
-  // Track CPU-only mode detection (only log once per session)
-  const cpuOnlyLoggedRef = useRef(false)
+  // Track models-disabled state detection (only log once per session)
+  const modelsDisabledLoggedRef = useRef(false)
   useEffect(() => {
-    if (isCpuOnly && modelConfig && !cpuOnlyLoggedRef.current) {
-      logWarning('CPU-only mode detected - Extract Claims disabled', {
+    if (modelsDisabled && modelConfig && !modelsDisabledLoggedRef.current) {
+      logWarning('No AI models available - Extract Claims disabled', {
         component: 'VideoSummaryEditor',
         videoId,
         personaId,
         cudaAvailable: modelConfig.cudaAvailable ?? false,
+        cpuModelsAvailable: modelConfig.cpuModelsAvailable ?? false,
       })
-      cpuOnlyLoggedRef.current = true
+      modelsDisabledLoggedRef.current = true
     }
-    // Reset if GPU becomes available
-    if (!isCpuOnly) {
-      cpuOnlyLoggedRef.current = false
+    // Reset if models become available
+    if (!modelsDisabled) {
+      modelsDisabledLoggedRef.current = false
     }
-  }, [isCpuOnly, videoId, personaId, modelConfig])
+  }, [modelsDisabled, videoId, personaId, modelConfig])
 
   // Load summary when video/persona changes - only sync on actual changes, not after autosave
   // IMPORTANT: This effect should NOT have saveSummaryMutation in deps to avoid re-running
@@ -422,12 +423,12 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
         {/* Action buttons for Claims tab */}
         {activeTab === 1 && (
           <Stack direction="row" spacing={1}>
-            <Tooltip title={isCpuOnly ? 'GPU required for claim extraction (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for claim extraction' : ''}>
               <span>
                 <Button
                   variant="contained"
                   onClick={() => setExtractDialogOpen(true)}
-                  disabled={extracting || !summaryId || localSummary.length === 0 || isCpuOnly}
+                  disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
                   size="small"
                 >
                   Extract Claims

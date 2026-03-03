@@ -301,11 +301,7 @@ class ModelManager:
             raise ValueError(f"Invalid task type: {task_type}")
 
         task = self.tasks[task_type]
-        return {
-            name: config
-            for name, config in task.options.items()
-            if config.cpu_compatible
-        }
+        return {name: config for name, config in task.options.items() if config.cpu_compatible}
 
     def get_available_vram(self) -> int:
         """Get available GPU memory in bytes.

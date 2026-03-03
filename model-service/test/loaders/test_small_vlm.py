@@ -40,9 +40,7 @@ class TestSmallVLMLoader:
         assert loader._model is None
         assert loader._processor is None
 
-    @patch(
-        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText"
-    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
     def test_load_initializes_model_and_processor(
         self,

@@ -305,8 +305,8 @@ describe('VideoBrowser', () => {
     })
   })
 
-  describe('CPU-only mode', () => {
-    it('hides persona selector in CPU-only mode', async () => {
+  describe('models disabled mode', () => {
+    it('hides persona selector when no models available', async () => {
       // Use relative URL to match the ApiClient's default behavior (SSH port forwarding compatible)
       server.use(
         http.get('/api/models/config', () => {
@@ -318,6 +318,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: false,
+            modelsAvailable: false,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -332,7 +334,7 @@ describe('VideoBrowser', () => {
       expect(screen.queryByLabelText(/persona/i)).not.toBeInTheDocument()
     })
 
-    it('hides batch summarize button in CPU-only mode', async () => {
+    it('hides batch summarize button when no models available', async () => {
       server.use(
         http.get('/api/models/config', () => {
           return HttpResponse.json({
@@ -343,6 +345,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: false,
+            modelsAvailable: false,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -357,7 +361,7 @@ describe('VideoBrowser', () => {
       expect(screen.queryByText(/summarize all/i)).not.toBeInTheDocument()
     })
 
-    it('disables individual video summarize button in CPU-only mode', async () => {
+    it('disables individual video summarize button when no models available', async () => {
       server.use(
         http.get('/api/models/config', () => {
           return HttpResponse.json({
@@ -368,6 +372,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: false,
+            modelsAvailable: false,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -403,6 +409,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -431,6 +439,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -464,6 +474,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         }),
         // Return 404 for summaries to simulate videos without summaries
@@ -505,6 +517,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -539,6 +553,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -647,6 +663,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )
@@ -682,6 +700,8 @@ describe('VideoBrowser', () => {
               warmup_on_startup: true,
             },
             cudaAvailable: true,
+            modelsAvailable: true,
+            cpuModelsAvailable: false,
           })
         })
       )

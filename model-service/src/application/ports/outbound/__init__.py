@@ -22,23 +22,23 @@ from src.application.ports.outbound.video_processor import IVideoProcessor
 from src.application.ports.outbound.vlm import IVisionLanguageModel
 
 __all__ = [
-    # Audio
-    "IAudioTranscriber",
-    "ISpeakerDiarizer",
-    "IVoiceActivityDetector",
-    # Detection
-    "IDetectionModel",
     # External API
     "ExternalAPIResponse",
+    # Audio
+    "IAudioTranscriber",
+    # Detection
+    "IDetectionModel",
     "IExternalAPIClient",
     # LLM
     "ILanguageModel",
     # Model Repository
     "IModelRepository",
+    "ISpeakerDiarizer",
     # Tracking
     "ITrackingModel",
     # Video
     "IVideoProcessor",
     # VLM
     "IVisionLanguageModel",
+    "IVoiceActivityDetector",
 ]

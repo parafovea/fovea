@@ -8,7 +8,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from src.llm_loader import GenerationResult, LLMConfig, LLMFramework
 from src.models import OntologyType
 from src.ontology_augmentation import (

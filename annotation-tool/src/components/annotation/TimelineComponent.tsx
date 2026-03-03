@@ -278,7 +278,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         onSeek(targetFrame)
       }
     },
-    [isDragging, draggingKeyframe, dragStartFrame, totalFrames, keyframes, onSeek]
+    [isDragging, draggingKeyframe, dragStartFrame, totalFrames, keyframes, onSeek, annotation?.boundingBoxSequence?.interpolationSegments]
   )
 
   // Handle mouse up

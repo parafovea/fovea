@@ -31,31 +31,31 @@ from src.domain.entities.summary import (
 from src.domain.entities.video import Frame, VideoInfo, VideoSegment
 
 __all__ = [
-    # Detection
-    "Detection",
-    "DetectionResult",
-    "FrameDetections",
-    "TrackingFrameResult",
-    "TrackingMask",
-    "TrackingResult",
-    # Model Config
-    "DeviceInfo",
-    "InferenceConfig",
-    "ModelConfig",
-    "TaskConfig",
     # Ontology
     "AugmentationResult",
-    "OntologyType",
     # Summary
     "ClaimExtractionResult",
     "ClaimRelationship",
+    # Detection
+    "Detection",
+    "DetectionResult",
+    # Model Config
+    "DeviceInfo",
     "ExtractedClaim",
-    "KeyFrame",
-    "Summary",
-    "SynthesizedSummary",
-    "TranscriptSegment",
     # Video
     "Frame",
+    "FrameDetections",
+    "InferenceConfig",
+    "KeyFrame",
+    "ModelConfig",
+    "OntologyType",
+    "Summary",
+    "SynthesizedSummary",
+    "TaskConfig",
+    "TrackingFrameResult",
+    "TrackingMask",
+    "TrackingResult",
+    "TranscriptSegment",
     "VideoInfo",
     "VideoSegment",
 ]

@@ -145,7 +145,7 @@ vi.mock('@hooks/preferences', () => ({
  * Returns TanStack Query result shape.
  */
 const mockUseModelConfig = vi.fn(() => ({
-  data: { cudaAvailable: true },
+  data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
   error: null,
   isLoading: false,
   isError: false,
@@ -354,7 +354,7 @@ describe('OntologyWorkspace', () => {
     server.resetHandlers()
     // Reset model config mock to default GPU-available state
     mockUseModelConfig.mockReturnValue({
-      data: { cudaAvailable: true },
+      data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
       error: null,
       isLoading: false,
       isError: false,
@@ -865,10 +865,10 @@ describe('OntologyWorkspace', () => {
       })
     })
 
-    it('hides ontology augmentation in CPU-only mode', async () => {
-      // Override mock to return CPU-only mode
+    it('disables ontology augmentation when no models available', async () => {
+      // Override mock to return no models available
       mockUseModelConfig.mockReturnValue({
-        data: { cudaAvailable: false },
+        data: { cudaAvailable: false, modelsAvailable: false, cpuModelsAvailable: false },
         error: null,
         isLoading: false,
         isError: false,

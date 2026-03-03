@@ -48,12 +48,8 @@ class ExtractedClaim(StrictBaseModel):
     char_end: int | None = Field(
         default=None, ge=0, description="Character offset end in summary text"
     )
-    subclaims: list[ExtractedClaim] = Field(
-        default_factory=list, description="Nested subclaims"
-    )
-    confidence: ConfidenceScore = Field(
-        ..., description="Model confidence in claim extraction"
-    )
+    subclaims: list[ExtractedClaim] = Field(default_factory=list, description="Nested subclaims")
+    confidence: ConfidenceScore = Field(..., description="Model confidence in claim extraction")
     claim_type: str | None = Field(default=None, description="Semantic type of claim")
 
 

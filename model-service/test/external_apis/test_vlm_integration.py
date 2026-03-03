@@ -5,8 +5,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from PIL import Image
-
-from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.models import SummarizeRequest
 from src.summarization import (
     calculate_frame_sample_count,
@@ -14,6 +12,8 @@ from src.summarization import (
     get_external_api_prompt,
     summarize_video_with_external_api,
 )
+
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 
 
 class TestFrameSampling:

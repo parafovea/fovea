@@ -129,13 +129,15 @@ class FakeVLMLoader:
         """
         assert self.config is not None
 
-        self._call_history.append({
-            "num_images": len(images),
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "kwargs": kwargs,
-        })
+        self._call_history.append(
+            {
+                "num_images": len(images),
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "kwargs": kwargs,
+            }
+        )
 
         if self.config.fail_on_generate:
             raise RuntimeError(self.config.error_message)

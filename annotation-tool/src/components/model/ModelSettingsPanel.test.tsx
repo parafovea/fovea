@@ -112,6 +112,8 @@ const mockConfig: ModelConfig = {
     warmupOnStartup: true,
   },
   cudaAvailable: true,
+  modelsAvailable: true,
+  cpuModelsAvailable: false,
 }
 
 /**

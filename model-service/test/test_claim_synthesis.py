@@ -6,7 +6,6 @@ Tests the synthesis of narrative summaries from claim hierarchies.
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from src.claim_synthesis import (
     _format_claims_hierarchy,
     build_synthesis_prompt,

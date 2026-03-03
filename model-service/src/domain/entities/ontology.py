@@ -118,9 +118,7 @@ class AugmentationResult:
         """Number of suggestions."""
         return len(self.suggestions)
 
-    def filter_by_confidence(
-        self, min_confidence: float = 0.5
-    ) -> list[OntologyType]:
+    def filter_by_confidence(self, min_confidence: float = 0.5) -> list[OntologyType]:
         """Get suggestions above confidence threshold.
 
         Parameters
@@ -133,9 +131,7 @@ class AugmentationResult:
         list[OntologyType]
             Suggestions above threshold.
         """
-        return [
-            s for s in self.suggestions if s.confidence.value >= min_confidence
-        ]
+        return [s for s in self.suggestions if s.confidence.value >= min_confidence]
 
     def get_top_suggestions(self, n: int = 5) -> list[OntologyType]:
         """Get top N suggestions by confidence.

@@ -66,43 +66,43 @@ from src.infrastructure.adapters.inbound.fastapi.schemas.tracking import (
 )
 
 __all__ = [
-    # Common
-    "ConfidenceScore",
-    "ErrorResponse",
-    "MutableStrictModel",
-    "NonEmptyStr",
-    "NonNegativeInt",
-    "NormalizedCoordinate",
-    "PositiveInt",
-    "ProcessingTime",
-    "StrictBaseModel",
-    "ThumbnailGenerateRequest",
-    "ThumbnailGenerateResponse",
-    # Summarization
-    "KeyFrame",
-    "SummarizeRequest",
-    "SummarizeResponse",
-    # Detection
-    "BoundingBox",
-    "Detection",
-    "DetectionRequest",
-    "DetectionResponse",
-    "FrameDetections",
-    # Tracking
-    "TrackingFrameResult",
-    "TrackingMaskData",
-    "TrackingRequest",
-    "TrackingResponse",
     # Ontology
     "AugmentRequest",
     "AugmentResponse",
-    "OntologyType",
+    # Detection
+    "BoundingBox",
     # Claims
     "ClaimExtractionRequest",
     "ClaimExtractionResponse",
     "ClaimRelationship",
     "ClaimSource",
+    # Common
+    "ConfidenceScore",
+    "Detection",
+    "DetectionRequest",
+    "DetectionResponse",
+    "ErrorResponse",
     "ExtractedClaim",
+    "FrameDetections",
+    # Summarization
+    "KeyFrame",
+    "MutableStrictModel",
+    "NonEmptyStr",
+    "NonNegativeInt",
+    "NormalizedCoordinate",
+    "OntologyType",
+    "PositiveInt",
+    "ProcessingTime",
+    "StrictBaseModel",
+    "SummarizeRequest",
+    "SummarizeResponse",
     "SummarySynthesisRequest",
     "SummarySynthesisResponse",
+    "ThumbnailGenerateRequest",
+    "ThumbnailGenerateResponse",
+    # Tracking
+    "TrackingFrameResult",
+    "TrackingMaskData",
+    "TrackingRequest",
+    "TrackingResponse",
 ]

@@ -219,6 +219,8 @@ export function ModelStatusDashboard({
   const isVramWarning = vramUtilizationPercent >= 80 && vramUtilizationPercent < 100
   const isVramError = vramUtilizationPercent >= 100
   const isCpuOnly = !status.cudaAvailable
+  const cpuModelsAvailable = status.cpuModelsAvailable
+  const modelsDisabled = !status.cudaAvailable && !cpuModelsAvailable
 
   return (
     <Card>
@@ -255,15 +257,26 @@ export function ModelStatusDashboard({
           </Typography>
         </Box>
 
-        {/* CPU-Only Mode Warning */}
-        {isCpuOnly && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
+        {/* CPU Mode Info / No Models Warning */}
+        {isCpuOnly && cpuModelsAvailable && (
+          <Alert severity="info" sx={{ mb: 3 }}>
             <Typography variant="subtitle2" gutterBottom>
-              CPU-Only Mode Detected
+              CPU Mode
             </Typography>
             <Typography variant="body2">
-              The model service is running in CPU-only mode (no GPU/CUDA available).
-              Deep learning models cannot be loaded or used without GPU acceleration.
+              Running with CPU-optimized models (no GPU/CUDA detected).
+              Performance may be slower than GPU mode.
+            </Typography>
+          </Alert>
+        )}
+        {modelsDisabled && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              No AI Models Available
+            </Typography>
+            <Typography variant="body2">
+              No GPU/CUDA detected and no CPU-compatible models are installed.
+              AI features are disabled.
             </Typography>
           </Alert>
         )}
@@ -306,9 +319,9 @@ export function ModelStatusDashboard({
 
         {/* Loaded Models */}
         {status.loadedModels.length === 0 ? (
-          <Alert severity={isCpuOnly ? "warning" : "info"}>
-            {isCpuOnly
-              ? "No models loaded. GPU required to load deep learning models."
+          <Alert severity={modelsDisabled ? "warning" : "info"}>
+            {modelsDisabled
+              ? "No models available. Install CPU-compatible models or add a GPU."
               : "No models currently loaded. Models will load automatically when needed."}
           </Alert>
         ) : (

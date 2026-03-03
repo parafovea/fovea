@@ -179,9 +179,7 @@ class ExternalAPIError(DomainError):
         HTTP status code if applicable.
     """
 
-    def __init__(
-        self, provider: str, reason: str, status_code: int | None = None
-    ) -> None:
+    def __init__(self, provider: str, reason: str, status_code: int | None = None) -> None:
         self.provider = provider
         self.reason = reason
         self.status_code = status_code

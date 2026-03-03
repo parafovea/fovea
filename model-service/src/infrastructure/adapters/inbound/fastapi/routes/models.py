@@ -52,6 +52,13 @@ async def get_model_config(manager: ModelManagerDep) -> dict[str, object]:
             },
         }
 
+    has_any_model = any(task_config.options for task_config in manager.tasks.values())
+    has_cpu_model = any(
+        model.cpu_compatible
+        for task_config in manager.tasks.values()
+        for model in task_config.options.values()
+    )
+
     return {
         "models": config,
         "inference": {
@@ -62,6 +69,8 @@ async def get_model_config(manager: ModelManagerDep) -> dict[str, object]:
             "max_batch_size": manager.inference_config.max_batch_size,
         },
         "cuda_available": torch.cuda.is_available(),
+        "models_available": has_any_model,
+        "cpu_models_available": has_cpu_model,
     }
 
 
@@ -108,12 +117,21 @@ async def get_model_status(manager: ModelManagerDep) -> dict[str, object]:
             }
         )
 
+    has_any_model = any(task_config.options for task_config in manager.tasks.values())
+    has_cpu_model = any(
+        model.cpu_compatible
+        for task_config in manager.tasks.values()
+        for model in task_config.options.values()
+    )
+
     return {
         "loaded_models": loaded_models,
         "total_vram_allocated_gb": sum(m["vram_allocated_gb"] for m in loaded_models),
         "total_vram_available_gb": total_vram / 1024**3,
         "timestamp": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         "cuda_available": torch.cuda.is_available(),
+        "models_available": has_any_model,
+        "cpu_models_available": has_cpu_model,
     }
 
 

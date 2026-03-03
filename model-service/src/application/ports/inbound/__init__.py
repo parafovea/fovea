@@ -55,6 +55,11 @@ from src.application.ports.inbound.tracking import (
 )
 
 __all__ = [
+    # Ontology
+    "AugmentInput",
+    "AugmentOutput",
+    # Detection
+    "BoundingBoxOutput",
     # Claims
     "ClaimExtractionInput",
     "ClaimExtractionOutput",
@@ -62,37 +67,32 @@ __all__ = [
     "ClaimSourceInput",
     "ClaimSynthesisInput",
     "ClaimSynthesisOutput",
-    "ExtractedClaimOutput",
-    "IClaimExtractionService",
-    "IClaimSynthesisService",
-    # Detection
-    "BoundingBoxOutput",
     "DetectionInput",
     "DetectionOutput",
     "DetectionServiceOutput",
+    "ExtractedClaimOutput",
     "FrameDetectionsOutput",
+    "IClaimExtractionService",
+    "IClaimSynthesisService",
     "IDetectionService",
     # Model Management
     "IModelManagementService",
+    "IOntologyService",
+    # Summarization
+    "ISummarizationService",
+    # Tracking
+    "ITrackingService",
+    "KeyFrameOutput",
     "LoadedModelOutput",
     "MemoryValidationOutput",
     "ModelConfigOutput",
     "ModelOptionOutput",
     "ModelRequirementOutput",
     "ModelStatusOutput",
-    "TaskConfigOutput",
-    # Ontology
-    "AugmentInput",
-    "AugmentOutput",
-    "IOntologyService",
     "OntologyTypeOutput",
-    # Summarization
-    "ISummarizationService",
-    "KeyFrameOutput",
     "SummarizeInput",
     "SummarizeOutput",
-    # Tracking
-    "ITrackingService",
+    "TaskConfigOutput",
     "TrackingFrameOutput",
     "TrackingInput",
     "TrackingMaskOutput",

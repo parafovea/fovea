@@ -206,10 +206,12 @@ class FakeModelManager:
         RuntimeError
             If fail_on_load is True.
         """
-        self._operation_history.append({
-            "operation": "load_model",
-            "task_type": task_type,
-        })
+        self._operation_history.append(
+            {
+                "operation": "load_model",
+                "task_type": task_type,
+            }
+        )
 
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
@@ -238,10 +240,12 @@ class FakeModelManager:
         task_type : str
             Task type to unload model for.
         """
-        self._operation_history.append({
-            "operation": "unload_model",
-            "task_type": task_type,
-        })
+        self._operation_history.append(
+            {
+                "operation": "unload_model",
+                "task_type": task_type,
+            }
+        )
 
         if task_type in self.loaded_models:
             del self.loaded_models[task_type]
@@ -276,10 +280,7 @@ class FakeModelManager:
 
     def validate_memory_budget(self) -> dict[str, Any]:
         """Validate memory budget."""
-        if self.cpu_only_mode:
-            total_memory = self.get_total_ram()
-        else:
-            total_memory = self.get_total_vram()
+        total_memory = self.get_total_ram() if self.cpu_only_mode else self.get_total_vram()
 
         total_required = sum(self.model_memory_usage.values())
         threshold = 0.85

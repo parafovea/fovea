@@ -17,7 +17,7 @@ from src.main import app
 
 
 @pytest.fixture(autouse=True)
-def mock_model_manager() -> Mock:
+def mock_model_manager() -> Generator[Mock, None, None]:
     """Mock the global model manager for all tests."""
     mock_manager = Mock()
 
@@ -28,7 +28,9 @@ def mock_model_manager() -> Mock:
     mock_model_config.model_id = "meta-llama/Llama-4-Maverick"
     mock_model_config.quantization = "4bit"
     mock_model_config.framework = "sglang"
+    mock_model_config.cpu_compatible = False
     mock_task_config.get_selected_config.return_value = mock_model_config
+    mock_task_config.options = {"llama-4-maverick": mock_model_config}
 
     # Object detection task config
     mock_detection_task = Mock()
@@ -37,7 +39,9 @@ def mock_model_manager() -> Mock:
     mock_detection_config.model_id = "ultralytics/yolov8x-worldv2"
     mock_detection_config.quantization = None
     mock_detection_config.framework = "ultralytics"
+    mock_detection_config.cpu_compatible = True
     mock_detection_task.get_selected_config.return_value = mock_detection_config
+    mock_detection_task.options = {"yolo-world-v2": mock_detection_config}
 
     # Ontology augmentation task config
     mock_augment_task = Mock()
@@ -46,7 +50,9 @@ def mock_model_manager() -> Mock:
     mock_augment_config.model_id = "meta-llama/Llama-4-Scout"
     mock_augment_config.quantization = "4bit"
     mock_augment_config.framework = "sglang"
+    mock_augment_config.cpu_compatible = False
     mock_augment_task.get_selected_config.return_value = mock_augment_config
+    mock_augment_task.options = {"llama-4-scout": mock_augment_config}
 
     # Video tracking task config
     mock_tracking_task = Mock()
@@ -55,7 +61,9 @@ def mock_model_manager() -> Mock:
     mock_tracking_config.model_id = "yangchris11/samurai"
     mock_tracking_config.quantization = None
     mock_tracking_config.framework = "pytorch"
+    mock_tracking_config.cpu_compatible = False
     mock_tracking_task.get_selected_config.return_value = mock_tracking_config
+    mock_tracking_task.options = {"samurai": mock_tracking_config}
 
     mock_manager.tasks = {
         "video_summarization": mock_task_config,

@@ -4,6 +4,7 @@ This module defines an immutable value object for confidence scores with
 validated bounds between 0.0 and 1.0.
 """
 
+import math
 from dataclasses import dataclass
 
 
@@ -35,9 +36,7 @@ class ConfidenceScore:
     def __post_init__(self) -> None:
         """Validate that value is within bounds."""
         if not 0.0 <= self.value <= 1.0:
-            raise ValueError(
-                f"Confidence score must be between 0.0 and 1.0, got {self.value}"
-            )
+            raise ValueError(f"Confidence score must be between 0.0 and 1.0, got {self.value}")
 
     def as_percentage(self) -> float:
         """Return confidence as a percentage.
@@ -93,8 +92,6 @@ class ConfidenceScore:
         ConfidenceScore
             Confidence score after sigmoid transformation.
         """
-        import math
-
         probability = 1.0 / (1.0 + math.exp(-logit))
         return cls(probability)
 

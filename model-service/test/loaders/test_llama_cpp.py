@@ -60,9 +60,7 @@ class TestLlamaCppConfig:
         assert config.cache_dir == Path("/tmp/models")
 
     @patch("huggingface_hub.hf_hub_download", return_value="/cache/model.gguf")
-    def test_resolve_model_path_with_explicit_filename(
-        self, mock_download: Mock
-    ) -> None:
+    def test_resolve_model_path_with_explicit_filename(self, mock_download: Mock) -> None:
         config = LlamaCppConfig(
             model_id="TheBloke/Llama-2-7B-GGUF",
             gguf_filename="llama-2-7b.Q4_K_M.gguf",

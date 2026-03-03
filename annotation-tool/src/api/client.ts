@@ -230,6 +230,8 @@ export interface ModelConfig {
   models: Record<string, TaskConfig>
   inference: InferenceConfig
   cudaAvailable: boolean
+  modelsAvailable: boolean
+  cpuModelsAvailable: boolean
 }
 
 /**
@@ -312,6 +314,8 @@ export interface ModelStatusResponse {
   totalVramAvailableGb: number
   timestamp: string
   cudaAvailable: boolean
+  modelsAvailable: boolean
+  cpuModelsAvailable: boolean
 }
 
 /**

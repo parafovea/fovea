@@ -116,9 +116,7 @@ class FrameDetections:
         """
         return [d for d in self.detections if d.label == label]
 
-    def filter_by_confidence(
-        self, min_confidence: float = 0.0
-    ) -> list[Detection]:
+    def filter_by_confidence(self, min_confidence: float = 0.0) -> list[Detection]:
         """Get detections above confidence threshold.
 
         Parameters
@@ -335,9 +333,7 @@ class TrackingResult:
             return self.total_frames / self.processing_time
         return 0.0
 
-    def get_object_trajectory(
-        self, object_id: int
-    ) -> list[tuple[int, TrackingMask]]:
+    def get_object_trajectory(self, object_id: int) -> list[tuple[int, TrackingMask]]:
         """Get trajectory for a specific object.
 
         Parameters

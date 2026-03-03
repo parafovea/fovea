@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from src.application.services.model_management import ModelManager
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ class Container:
             Singleton ModelManager instance.
         """
         if self._model_manager is None:
-            from src.application.services.model_management import ModelManager
+            from src.application.services.model_management import ModelManager  # noqa: PLC0415
 
             self._model_manager = ModelManager(str(self.config.model_config_path))
             logger.info("ModelManager initialized")

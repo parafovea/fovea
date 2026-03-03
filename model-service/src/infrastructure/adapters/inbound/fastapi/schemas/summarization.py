@@ -33,9 +33,7 @@ class KeyFrame(StrictBaseModel):
     frame_number: int = Field(..., description="Frame number in the video")
     timestamp: float = Field(..., ge=0.0, description="Time in seconds from video start")
     description: str = Field(..., description="Frame description")
-    confidence: ConfidenceScore = Field(
-        default=0.0, description="Model confidence score"
-    )
+    confidence: ConfidenceScore = Field(default=0.0, description="Model confidence score")
 
 
 class SummarizeRequest(StrictBaseModel):

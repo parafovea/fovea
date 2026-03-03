@@ -69,9 +69,7 @@ class TranscriptSegment:
     start: Timestamp
     end: Timestamp
     speaker: str | None = None
-    confidence: ConfidenceScore = field(
-        default_factory=lambda: ConfidenceScore(1.0)
-    )
+    confidence: ConfidenceScore = field(default_factory=lambda: ConfidenceScore(1.0))
 
     @property
     def duration(self) -> float:
@@ -128,9 +126,7 @@ class Summary:
     visual_analysis: str | None = None
     audio_transcript: str | None = None
     key_frames: list[KeyFrame] = field(default_factory=list)
-    confidence: ConfidenceScore = field(
-        default_factory=lambda: ConfidenceScore(0.0)
-    )
+    confidence: ConfidenceScore = field(default_factory=lambda: ConfidenceScore(0.0))
     transcript_segments: list[TranscriptSegment] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -270,9 +266,7 @@ class ClaimRelationship:
     source_claim_id: str
     target_claim_id: str
     relation_type: str
-    confidence: ConfidenceScore = field(
-        default_factory=lambda: ConfidenceScore(0.8)
-    )
+    confidence: ConfidenceScore = field(default_factory=lambda: ConfidenceScore(0.8))
     notes: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -322,6 +316,4 @@ class SynthesizedSummary:
     @property
     def text(self) -> str:
         """Extract plain text from gloss items."""
-        return " ".join(
-            item.get("text", "") for item in self.gloss_items if "text" in item
-        )
+        return " ".join(item.get("text", "") for item in self.gloss_items if "text" in item)
