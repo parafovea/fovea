@@ -84,7 +84,7 @@ jobs:
             context: ./model-service
             platforms: linux/amd64
             build-args: |
-              DEVICE=cuda
+              DEVICE=gpu
               BUILD_MODE=full
     steps:
       - uses: actions/checkout@v4
