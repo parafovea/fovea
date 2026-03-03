@@ -129,3 +129,4 @@ notes/
 tutorial/
 .claude/
 .venv/
+model-service/uv.lock
