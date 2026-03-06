@@ -107,7 +107,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "test-model",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()
@@ -153,7 +155,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "gpt-4o",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()
@@ -199,7 +203,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "test-model",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()
@@ -229,7 +235,9 @@ class TestExternalAPIOntologyAugmentation:
             model_id="test-model",
         )
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(
                 side_effect=Exception("API authentication failed")
@@ -268,7 +276,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "test-model",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()
@@ -318,7 +328,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "test-model",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()
@@ -357,7 +369,9 @@ class TestExternalAPIOntologyAugmentation:
             "model": "test-model",
         }
 
-        with patch("src.application.use_cases.augment_ontology.ExternalModelRouter") as mock_router_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.ExternalModelRouter"
+        ) as mock_router_class:
             mock_router = Mock()
             mock_router.generate_text = AsyncMock(return_value=mock_router_result)
             mock_router.close_all = AsyncMock()

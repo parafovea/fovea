@@ -221,7 +221,9 @@ class TestGemma3Loader:
         assert loader.config == vlm_config
         assert loader.model is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained"
+    )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
     def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
@@ -301,7 +303,9 @@ class TestPixtralLargeLoader:
         assert loader.config == vlm_config
         assert loader.model is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained"
+    )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
     def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):

@@ -187,8 +187,12 @@ class TestExternalAPISummarization:
 
         with (
             patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
-            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
-            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
+            patch(
+                "src.application.use_cases.summarize_video.extract_frames_uniform"
+            ) as mock_extract,
+            patch(
+                "src.application.use_cases.summarize_video.ExternalModelRouter"
+            ) as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,
@@ -248,8 +252,12 @@ class TestExternalAPISummarization:
 
         with (
             patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
-            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
-            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
+            patch(
+                "src.application.use_cases.summarize_video.extract_frames_uniform"
+            ) as mock_extract,
+            patch(
+                "src.application.use_cases.summarize_video.ExternalModelRouter"
+            ) as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=1000,
@@ -294,8 +302,12 @@ class TestExternalAPISummarization:
 
         with (
             patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
-            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
-            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
+            patch(
+                "src.application.use_cases.summarize_video.extract_frames_uniform"
+            ) as mock_extract,
+            patch(
+                "src.application.use_cases.summarize_video.ExternalModelRouter"
+            ) as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,
@@ -343,7 +355,9 @@ class TestExternalAPISummarization:
 
         with (
             patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
-            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
+            patch(
+                "src.application.use_cases.summarize_video.extract_frames_uniform"
+            ) as mock_extract,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,

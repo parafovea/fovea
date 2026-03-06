@@ -214,7 +214,9 @@ async def test_summarize_video_with_vlm_success():
             "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
         )
 
-        with patch("src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader):
+        with patch(
+            "src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader
+        ):
             request = SummarizeRequest(
                 video_id="test-video",
                 persona_id=str(uuid.uuid4()),
@@ -288,7 +290,9 @@ async def test_summarize_video_with_vlm_model_error():
         mock_loader = MagicMock()
         mock_loader.load.side_effect = RuntimeError("Model loading failed")
 
-        with patch("src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader):
+        with patch(
+            "src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader
+        ):
             request = SummarizeRequest(
                 video_id="test-video",
                 persona_id=str(uuid.uuid4()),

@@ -365,8 +365,13 @@ class TestLLMLoader:
         assert loader.is_loaded()
 
         with (
-            patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available", return_value=True),
-            patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.empty_cache") as mock_empty_cache,
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+                return_value=True,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.empty_cache"
+            ) as mock_empty_cache,
         ):
             await loader.unload()
 
@@ -400,9 +405,18 @@ class TestLLMLoader:
         loader = LLMLoader(config)
 
         with (
-            patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available", return_value=True),
-            patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_allocated", return_value=1024 * 1024 * 1024),
-            patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+                return_value=True,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_allocated",
+                return_value=1024 * 1024 * 1024,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_reserved",
+                return_value=2 * 1024 * 1024 * 1024,
+            ),
         ):
             usage = loader.get_memory_usage()
 
@@ -418,7 +432,10 @@ class TestLLMLoader:
         )
         loader = LLMLoader(config)
 
-        with patch("src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available", return_value=False):
+        with patch(
+            "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+            return_value=False,
+        ):
             usage = loader.get_memory_usage()
 
             assert usage["allocated"] == 0

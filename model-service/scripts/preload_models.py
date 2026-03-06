@@ -54,12 +54,14 @@ def get_default_models(config: dict) -> list[dict]:
             print(f"  Skipping {task_type}/{selected}: external API model")
             continue
 
-        models.append({
-            "task_type": task_type,
-            "name": selected,
-            "model_id": model_id,
-            "framework": framework,
-        })
+        models.append(
+            {
+                "task_type": task_type,
+                "name": selected,
+                "model_id": model_id,
+                "framework": framework,
+            }
+        )
 
     return models
 
@@ -73,15 +75,16 @@ def download_model(model: dict, cache_dir: str) -> bool:
     framework = model["framework"]
     task_type = model["task_type"]
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Downloading: {model_id}")
     print(f"  Task: {task_type} | Framework: {framework}")
     print(f"  Cache: {cache_dir}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         if framework in ("transformers", "llama_cpp", "ctranslate2", "onnx"):
             from huggingface_hub import snapshot_download
+
             snapshot_download(
                 model_id,
                 cache_dir=cache_dir,
@@ -93,6 +96,7 @@ def download_model(model: dict, cache_dir: str) -> bool:
             # but we can pre-cache via huggingface_hub if the model_id is an HF repo
             if "/" in model_id:
                 from huggingface_hub import snapshot_download
+
                 snapshot_download(
                     model_id,
                     cache_dir=cache_dir,
@@ -105,6 +109,7 @@ def download_model(model: dict, cache_dir: str) -> bool:
         else:
             print(f"  Unknown framework '{framework}', attempting generic HF download")
             from huggingface_hub import snapshot_download
+
             snapshot_download(
                 model_id,
                 cache_dir=cache_dir,
@@ -160,9 +165,9 @@ def main() -> None:
         else:
             failures += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Pre-download complete: {successes} succeeded, {failures} failed")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     if failures > 0:
         print("WARNING: Some models failed to download. They will be downloaded on first use.")

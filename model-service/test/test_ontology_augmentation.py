@@ -511,7 +511,9 @@ class TestEndToEndAugmentation:
             finish_reason="eos",
         )
 
-        with patch("src.application.use_cases.augment_ontology.create_llm_loader") as mock_loader_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.create_llm_loader"
+        ) as mock_loader_class:
             mock_loader = AsyncMock()
             mock_loader.load = AsyncMock()
             mock_loader.generate = AsyncMock(return_value=mock_response)
@@ -564,7 +566,9 @@ class TestEndToEndAugmentation:
             finish_reason="eos",
         )
 
-        with patch("src.application.use_cases.augment_ontology.create_llm_loader") as mock_loader_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.create_llm_loader"
+        ) as mock_loader_class:
             mock_loader = AsyncMock()
             mock_loader.load = AsyncMock()
             mock_loader.generate = AsyncMock(return_value=mock_response)
@@ -592,7 +596,9 @@ class TestEndToEndAugmentation:
             finish_reason="eos",
         )
 
-        with patch("src.application.use_cases.augment_ontology.create_llm_loader") as mock_loader_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.create_llm_loader"
+        ) as mock_loader_class:
             mock_loader = AsyncMock()
             mock_loader.load = AsyncMock()
             mock_loader.generate = AsyncMock(return_value=mock_response)
@@ -612,7 +618,9 @@ class TestEndToEndAugmentation:
         mock_llm_config: LLMConfig,
     ) -> None:
         """Test that model is unloaded even if generation fails."""
-        with patch("src.application.use_cases.augment_ontology.create_llm_loader") as mock_loader_class:
+        with patch(
+            "src.application.use_cases.augment_ontology.create_llm_loader"
+        ) as mock_loader_class:
             mock_loader = AsyncMock()
             mock_loader.load = AsyncMock()
             mock_loader.generate = AsyncMock(side_effect=RuntimeError("Generation failed"))
