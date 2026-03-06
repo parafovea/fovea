@@ -265,7 +265,7 @@ class ModelManager:
         """
         import psutil
 
-        return psutil.virtual_memory().available
+        return int(psutil.virtual_memory().available)
 
     def get_total_ram(self) -> int:
         """Get total system RAM in bytes.
@@ -277,7 +277,7 @@ class ModelManager:
         """
         import psutil
 
-        return psutil.virtual_memory().total
+        return int(psutil.virtual_memory().total)
 
     def get_cpu_compatible_models(self, task_type: str) -> dict[str, ModelConfig]:
         """Get models that can run on CPU for a task type.
@@ -510,7 +510,7 @@ class ModelManager:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         if task_type == "audio_transcription":
-            from src.audio_loader import (
+            from src.infrastructure.adapters.outbound.models.audio.loader import (
                 AudioFramework,
                 FasterWhisperLoader,
                 TranscriptionConfig,
@@ -543,7 +543,10 @@ class ModelManager:
             return loader
 
         if task_type == "speaker_diarization":
-            from src.audio_loader import DiarizationConfig, PyannoteLoader
+            from src.infrastructure.adapters.outbound.models.audio.loader import (
+                DiarizationConfig,
+                PyannoteLoader,
+            )
 
             diar_config = DiarizationConfig(  # type: ignore[assignment]
                 model_id=model_config.model_id,
@@ -556,7 +559,10 @@ class ModelManager:
             return diar_loader  # type: ignore[return-value]
 
         if task_type == "voice_activity_detection":
-            from src.audio_loader import SileroVADLoader, VADConfig
+            from src.infrastructure.adapters.outbound.models.audio.loader import (
+                SileroVADLoader,
+                VADConfig,
+            )
 
             vad_config = VADConfig(  # type: ignore[assignment]
                 model_id=model_config.model_id,

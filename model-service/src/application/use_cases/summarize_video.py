@@ -345,7 +345,11 @@ async def transcribe_audio(
         try:
             await extract_audio_track(video_path, output_path=audio_path)
 
-            from .audio_loader import AudioFramework, TranscriptionConfig, WhisperLoader
+            from src.infrastructure.adapters.outbound.models.audio.loader import (
+                AudioFramework,
+                TranscriptionConfig,
+                WhisperLoader,
+            )
 
             config = TranscriptionConfig(
                 model_id="openai/whisper-large-v3-turbo",
@@ -372,7 +376,10 @@ async def transcribe_audio(
 
                 speaker_count = None
                 if enable_diarization:
-                    from .audio_loader import DiarizationConfig, PyannoteLoader
+                    from src.infrastructure.adapters.outbound.models.audio.loader import (
+                        DiarizationConfig,
+                        PyannoteLoader,
+                    )
 
                     diar_config = DiarizationConfig(
                         model_id="pyannote/speaker-diarization-3.1",

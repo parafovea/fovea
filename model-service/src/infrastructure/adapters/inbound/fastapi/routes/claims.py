@@ -136,7 +136,7 @@ async def extract_claims(
                     strategy=request.extraction_strategy,
                     max_claims=request.max_claims,
                     min_confidence=request.min_confidence,
-                    llm_loader=loader,
+                    llm_loader=loader,  # type: ignore[arg-type]
                     ontology_context=ontology_context,
                     annotation_context=request.annotations,
                 )
@@ -240,7 +240,7 @@ async def synthesize_summary(
                     synthesis_strategy=request.synthesis_strategy,
                     ontology_context=request.ontology_context,
                     persona_context=request.persona_context,
-                    llm_loader=loader,
+                    llm_loader=loader,  # type: ignore[arg-type]
                     max_length=request.max_length,
                     include_conflicts=request.include_conflicts,
                     include_citations=request.include_citations,

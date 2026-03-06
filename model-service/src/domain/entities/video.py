@@ -150,7 +150,7 @@ class VideoSegment:
     time_range: TimeRange
     frames: list[Frame] = field(default_factory=list)
     label: str | None = None
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     @property
     def duration(self) -> float:

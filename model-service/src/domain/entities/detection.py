@@ -32,7 +32,7 @@ class Detection:
     bounding_box: NormalizedBBox
     confidence: ConfidenceScore
     track_id: str | None = None
-    attributes: dict = field(default_factory=dict)
+    attributes: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Detection":

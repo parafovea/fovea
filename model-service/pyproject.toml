@@ -78,6 +78,7 @@ dev = [
     "ruff>=0.14.0",
     "mypy==1.8.0",
     "types-PyYAML>=6.0.0",
+    "types-psutil>=5.9.0",
 ]
 docs = [
     "sphinx>=7.0.0",
@@ -185,17 +186,50 @@ follow_imports = "skip"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["external_apis", "external_apis.*"]
+module = ["src.infrastructure.adapters.outbound.external_apis.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
+module = [
+    "ultralytics", "ultralytics.*",
+    "groundingdino", "groundingdino.*",
+    "supervision", "supervision.*",
+    "sam2", "sam2.*",
+    "pycocotools", "pycocotools.*",
+    "httpx", "httpx.*",
+    "tenacity", "tenacity.*",
+    "cv2", "cv2.*",
+    "onnxruntime", "onnxruntime.*",
+    "llama_cpp", "llama_cpp.*",
+    "psutil", "psutil.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
+module = [
+    "whisper", "whisper.*",
+    "faster_whisper", "faster_whisper.*",
+    "pyannote", "pyannote.*",
+    "torch_audiomentations", "torch_audiomentations.*",
+    "pydub", "pydub.*",
+    "assemblyai", "assemblyai.*",
+    "deepgram", "deepgram.*",
+    "boto3", "boto3.*",
+    "google.cloud.speech", "google.cloud.speech.*",
+    "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*"]
+module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*", "yaml", "yaml.*"]
 ignore_missing_imports = true
+
+# Loader and adapter modules with heavy use of dynamic imports and Any types
+[[tool.mypy.overrides]]
+module = [
+    "src.infrastructure.adapters.outbound.models.onnx.*",
+    "src.infrastructure.adapters.outbound.models.llama_cpp.*",
+    "src.infrastructure.adapters.outbound.video.processor",
+]
+disallow_any_unimported = false
+warn_return_any = false
