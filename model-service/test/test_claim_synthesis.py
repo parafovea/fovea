@@ -6,12 +6,12 @@ Tests the synthesis of narrative summaries from claim hierarchies.
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from src.claim_synthesis import (
+from src.application.use_cases.synthesize_summary import (
     _format_claims_hierarchy,
     build_synthesis_prompt,
     synthesize_summary_from_claims,
 )
-from src.models import ClaimRelationship, ClaimSource
+from src.infrastructure.adapters.inbound.fastapi.schemas import ClaimRelationship, ClaimSource
 
 
 @pytest.fixture

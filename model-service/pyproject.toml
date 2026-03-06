@@ -123,6 +123,7 @@ ignore = [
     "ARG002",  # unused method argument (kwargs is standard idiom)
     "PLR0913", # too many arguments (VideoInfo dataclass needs 7 params)
     "PLR0912", # too many branches (video processing has complex logic)
+    "PLR0911", # too many return statements (factory functions with multiple model types)
     "PLR0915", # too many statements (video processing needs many steps)
     "PTH123",  # use Path.open (external APIs provide string paths)
     "PTH110",  # use Path.exists (temp file handling uses os.path)
@@ -140,13 +141,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004", "PLC0415", "RUF059"]
 # Loader files use deferred imports for lazy loading of heavy ML dependencies
-"src/*_loader.py" = ["PLC0415"]
-"src/model_manager.py" = ["PLC0415"]
-"src/routes.py" = ["PLC0415"]
-"src/summarization.py" = ["PLC0415"]
-"src/av_fusion.py" = ["PLC0415"]
-"src/external_apis/*.py" = ["PLC0415"]
-"src/external_apis/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/loader.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/base.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/external_apis/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/inbound/fastapi/routes/*.py" = ["PLC0415"]
+"src/application/services/*.py" = ["PLC0415"]
+"src/application/use_cases/*.py" = ["PLC0415"]
+"scripts/*.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"

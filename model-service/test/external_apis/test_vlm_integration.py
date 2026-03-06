@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from PIL import Image
-from src.models import SummarizeRequest
-from src.summarization import (
+from src.infrastructure.adapters.inbound.fastapi.schemas import SummarizeRequest
+from src.application.use_cases.summarize_video import (
     calculate_frame_sample_count,
     convert_image_to_base64,
     get_external_api_prompt,
@@ -186,9 +186,9 @@ class TestExternalAPISummarization:
         }
 
         with (
-            patch("src.summarization.get_video_info") as mock_video_info,
-            patch("src.summarization.extract_frames_uniform") as mock_extract,
-            patch("src.summarization.ExternalModelRouter") as mock_router_class,
+            patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
+            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
+            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,
@@ -247,9 +247,9 @@ class TestExternalAPISummarization:
         }
 
         with (
-            patch("src.summarization.get_video_info") as mock_video_info,
-            patch("src.summarization.extract_frames_uniform") as mock_extract,
-            patch("src.summarization.ExternalModelRouter") as mock_router_class,
+            patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
+            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
+            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=1000,
@@ -293,9 +293,9 @@ class TestExternalAPISummarization:
         )
 
         with (
-            patch("src.summarization.get_video_info") as mock_video_info,
-            patch("src.summarization.extract_frames_uniform") as mock_extract,
-            patch("src.summarization.ExternalModelRouter") as mock_router_class,
+            patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
+            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
+            patch("src.application.use_cases.summarize_video.ExternalModelRouter") as mock_router_class,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,
@@ -314,7 +314,7 @@ class TestExternalAPISummarization:
             mock_router.close_all = AsyncMock()
             mock_router_class.return_value = mock_router
 
-            from src.summarization import SummarizationError
+            from src.application.use_cases.summarize_video import SummarizationError
 
             with pytest.raises(SummarizationError, match="External API summarization failed"):
                 await summarize_video_with_external_api(
@@ -342,8 +342,8 @@ class TestExternalAPISummarization:
         )
 
         with (
-            patch("src.summarization.get_video_info") as mock_video_info,
-            patch("src.summarization.extract_frames_uniform") as mock_extract,
+            patch("src.application.use_cases.summarize_video.get_video_info") as mock_video_info,
+            patch("src.application.use_cases.summarize_video.extract_frames_uniform") as mock_extract,
         ):
             mock_video_info.return_value = Mock(
                 frame_count=300,
@@ -353,7 +353,7 @@ class TestExternalAPISummarization:
 
             mock_extract.return_value = []
 
-            from src.summarization import SummarizationError
+            from src.application.use_cases.summarize_video import SummarizationError
 
             with pytest.raises(SummarizationError, match="No frames could be extracted"):
                 await summarize_video_with_external_api(

@@ -18,7 +18,6 @@ from pathlib import Path
 
 import yaml
 
-
 # Frameworks that require downloading model weights from HuggingFace
 HF_FRAMEWORKS = {"transformers", "llama_cpp", "ctranslate2", "onnx", "ultralytics"}
 
@@ -81,23 +80,7 @@ def download_model(model: dict, cache_dir: str) -> bool:
     print(f"{'='*60}")
 
     try:
-        if framework in ("transformers", "llama_cpp"):
-            from huggingface_hub import snapshot_download
-            snapshot_download(
-                model_id,
-                cache_dir=cache_dir,
-                token=os.environ.get("HF_TOKEN"),
-            )
-
-        elif framework == "ctranslate2":
-            from huggingface_hub import snapshot_download
-            snapshot_download(
-                model_id,
-                cache_dir=cache_dir,
-                token=os.environ.get("HF_TOKEN"),
-            )
-
-        elif framework == "onnx":
+        if framework in ("transformers", "llama_cpp", "ctranslate2", "onnx"):
             from huggingface_hub import snapshot_download
             snapshot_download(
                 model_id,

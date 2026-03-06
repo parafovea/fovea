@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import pytest
-from src.models import SummarizeRequest
-from src.summarization import (
+from src.infrastructure.adapters.inbound.fastapi.schemas import SummarizeRequest
+from src.application.use_cases.summarize_video import (
     SummarizationError,
     get_default_prompt_template,
     get_persona_prompt,
@@ -18,7 +18,7 @@ from src.summarization import (
     parse_vlm_response,
     summarize_video_with_vlm,
 )
-from src.vlm_loader import InferenceFramework, QuantizationType, VLMConfig
+from src.infrastructure.adapters.outbound.models.vlm.loader import InferenceFramework, QuantizationType, VLMConfig
 
 
 def test_get_default_prompt_template():
@@ -209,7 +209,7 @@ async def test_summarize_video_with_vlm_success():
             "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
         )
 
-        with patch("src.summarization.create_vlm_loader", return_value=mock_loader):
+        with patch("src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader):
             request = SummarizeRequest(
                 video_id="test-video",
                 persona_id=str(uuid.uuid4()),
@@ -283,7 +283,7 @@ async def test_summarize_video_with_vlm_model_error():
         mock_loader = MagicMock()
         mock_loader.load.side_effect = RuntimeError("Model loading failed")
 
-        with patch("src.summarization.create_vlm_loader", return_value=mock_loader):
+        with patch("src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader):
             request = SummarizeRequest(
                 video_id="test-video",
                 persona_id=str(uuid.uuid4()),
