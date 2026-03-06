@@ -9,56 +9,6 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get previous tag
-          PREV_TAG=$(git describe --abbrev=0 --tags "$(git rev-list --tags --skip=1 --max-count=1)" 2>/dev/null || echo "")
-
-          if [ -z "$PREV_TAG" ]; then
-            # First release
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
-          else
-            # Generate changelog from previous tag
-            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)")
-          fi
-
-          {
-            echo "CHANGELOG<<EOF"
-            echo "$CHANGELOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          body: |
-            ## Changes
-
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ## Docker Images
-
-            Pull the images:
-            ```bash
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/frontend:${{ github.ref_name }}
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/backend:${{ github.ref_name }}
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/model-service:${{ github.ref_name }}-cpu
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}/model-service:${{ github.ref_name }}-gpu
-            ```
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-
   build-and-push-images:
     name: Build Release Images
     runs-on: ubuntu-latest

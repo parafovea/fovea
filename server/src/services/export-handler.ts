@@ -442,13 +442,20 @@ export class AnnotationExporter {
           )
         }
 
-        // Check for gaps with next segment
+        // Check for gaps with next segment (gaps are allowed if they fall in non-visible ranges)
         if (i < sortedSegments.length - 1) {
           const nextSegment = sortedSegments[i + 1]
           if (segment.endFrame < nextSegment.startFrame - 1) {
-            errors.push(
-              `Gap between interpolation segments: [${segment.endFrame}, ${nextSegment.startFrame}]`
+            const gapStart = segment.endFrame + 1
+            const gapEnd = nextSegment.startFrame - 1
+            const gapInNonVisibleRange = sequence.visibilityRanges.every(
+              range => !range.visible || range.endFrame < gapStart || range.startFrame > gapEnd
             )
+            if (!gapInNonVisibleRange) {
+              errors.push(
+                `Gap between interpolation segments: [${segment.endFrame}, ${nextSegment.startFrame}]`
+              )
+            }
           }
           if (segment.endFrame >= nextSegment.startFrame) {
             errors.push(

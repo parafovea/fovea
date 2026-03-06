@@ -5,104 +5,23 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - Unreleased
-
-### Added
-
-#### Model Service Clean Architecture
-
-- Domain layer with entities, value objects, and exception hierarchy
-- Application layer with service interfaces (ports) and use cases
-- Infrastructure layer with adapter pattern for all external dependencies
-- Dependency injection container with manual factory wiring
-- Pydantic StrictBaseModel with plugin for stricter validation
-- NumPy-style docstrings across all model service modules
-- Contract tests with fake model manager and VLM loader
-
-#### CPU Inference Support
-
-- ONNX Runtime detection loaders (YOLO-World, Florence-2, Grounding DINO)
-- llama.cpp LLM loader with GGUF quantization for fast CPU text generation
-- llama.cpp VLM loader with GGUF multimodal inference
-- SmallVLMLoader for Transformers-based CPU vision models (SmolVLM, Moondream)
-- Factory function dispatch for all loader types (detection, LLM, VLM)
-- CPU model configurations in models-cpu.yaml with GGUF entries
-- llama-cpp-python added to CPU optional dependency group
-
-#### Docker CPU Build
-
-- Automatic installation of CPU extras (onnxruntime, llama-cpp-python) when DEVICE=cpu
-- cmake added to builder stage for compiling native extensions
-- Model config auto-selection via symlink (models-cpu.yaml for CPU, models.yaml for GPU)
-
-#### Frontend CPU Mode
-
-- Backend config endpoint exposes `models_available` and `cpu_models_available` flags
-- Three-state UI: GPU mode, CPU mode with models (info), no models available (error)
-- All AI features (detection, summarization, ontology, claims) enabled when CPU models exist
-- Replaced binary `isCpuOnly` gating with `modelsDisabled` across all components
-
-### Changed
-
-- Model service restructured from flat module layout to Clean Architecture layers
-- Route handlers decomposed into domain-specific modules with DI
-- Use cases updated with corrected imports after architecture relocation
-- Claims route reads framework from config instead of hardcoding Transformers
-- Frontend `ModelConfig` interface extended with `modelsAvailable` and `cpuModelsAvailable`
-- ModelSettingsPanel shows CPU mode info banner instead of GPU-required error
-- ModelStatusDashboard uses severity-appropriate alerts for CPU mode
+## [0.1.3] - 2026-03-06
 
 ### Fixed
 
-- Broken relative imports in use cases after architecture refactoring
-- Video module export mismatches (download_video vs download_video_if_needed)
-- Claims route hardcoding `LLMFramework.TRANSFORMERS` instead of reading config
-- ESLint warnings: missing hook dependencies, unused variables and imports
-- Ruff errors: unsorted `__all__` lists, import ordering, deferred import warnings
+- Skips invalid annotation sequences during export instead of returning 400
 
-## [0.2.0] - Unreleased
+## [0.1.2] - 2026-03-06
 
-### Added
+### Fixed
 
-#### Role-Based Access Control (RBAC)
+- Stabilizes entity dropdown scroll behavior in annotation autocomplete
 
-- CASL authorization engine with permission seed data
-- Role-based permission schema (admin, manager, annotator, viewer)
-- Permission checks integrated across all API routes
+## [0.1.1] - 2026-03-06
 
-#### Projects and Groups
+### Fixed
 
-- Project entity with membership, ownership, and sharing controls
-- Group entity for organizing users into teams
-- Backend routes for CRUD operations on projects, groups, and memberships
-- Video assignment to projects with access scoping
-- Project sharing with configurable permission levels
-- User autocomplete for persona and member dialogs
-
-#### Frontend
-
-- Admin panel pages for project and group management
-- Frontend stores and TanStack Query hooks for RBAC entities
-- Project assignment and sharing dialogs in persona editor
-- Member management with role selection
-
-#### Observability
-
-- OTEL tracing spans for RBAC authorization checks
-- Prometheus alert rules for permission denied events
-- Grafana RBAC monitoring dashboard
-- Metrics for group, project, sharing, and video assignment operations
-
-#### Testing
-
-- Unit and integration tests for RBAC, groups, projects, sharing, and video assignments
-- Frontend tests for RBAC stores, query hooks, and user management pages
-
-#### Documentation
-
-- User guide for projects and groups workflow
-- RBAC architecture and permission model documentation
-- API reference for new endpoints
+- Scopes annotation export to the authenticated user's personas
 
 ## [0.1.0] - 2026-02-27
 
@@ -221,6 +140,7 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
-[0.3.0]: https://github.com/parafovea/fovea/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.0...v0.2.0
+[0.1.3]: https://github.com/parafovea/fovea/releases/tag/v0.1.3
+[0.1.2]: https://github.com/parafovea/fovea/releases/tag/v0.1.2
+[0.1.1]: https://github.com/parafovea/fovea/releases/tag/v0.1.1
 [0.1.0]: https://github.com/parafovea/fovea/releases/tag/v0.1.0
