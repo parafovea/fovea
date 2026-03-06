@@ -126,8 +126,23 @@ function getHealthIcon(health: ModelHealth) {
  */
 const TASK_DISPLAY_NAMES: Record<string, string> = {
   videoSummarization: 'Video Summarization',
+  video_summarization: 'Video Summarization',
   objectDetection: 'Object Detection',
+  object_detection: 'Object Detection',
   videoTracking: 'Video Tracking',
+  video_tracking: 'Video Tracking',
+  ontologyAugmentation: 'Ontology Augmentation',
+  ontology_augmentation: 'Ontology Augmentation',
+  audioTranscription: 'Audio Transcription',
+  audio_transcription: 'Audio Transcription',
+  speakerDiarization: 'Speaker Diarization',
+  speaker_diarization: 'Speaker Diarization',
+  voiceActivityDetection: 'Voice Activity Detection',
+  voice_activity_detection: 'Voice Activity Detection',
+  claimExtraction: 'Claim Extraction',
+  claim_extraction: 'Claim Extraction',
+  claimSynthesis: 'Claim Synthesis',
+  claim_synthesis: 'Claim Synthesis',
 }
 
 /**

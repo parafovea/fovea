@@ -128,6 +128,7 @@ COPY --link --from=builder-base /usr/local/bin /usr/local/bin
 # Copy application code with link
 COPY --link src ./src
 COPY --link config ./config
+COPY --link scripts ./scripts
 
 # Create cache directories
 RUN mkdir -p /models /videos
@@ -143,6 +144,17 @@ RUN if [ "$DEVICE" = "cpu" ]; then \
         ln -sf /app/config/models.yaml /app/config/active-models.yaml; \
     fi
 ENV MODEL_CONFIG_PATH=/app/config/active-models.yaml
+
+# Optionally pre-download default models at build time
+ARG PRELOAD_MODELS=false
+RUN --mount=type=secret,id=hf_token,required=false \
+    if [ "$PRELOAD_MODELS" = "true" ]; then \
+        echo "Pre-downloading default models..." && \
+        export HF_TOKEN=$(cat /run/secrets/hf_token 2>/dev/null || echo "") && \
+        python scripts/preload_models.py --config /app/config/active-models.yaml --cache-dir /models; \
+    else \
+        echo "Skipping model pre-download (PRELOAD_MODELS=false)"; \
+    fi
 
 # Expose port
 EXPOSE 8000

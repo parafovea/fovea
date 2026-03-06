@@ -50,7 +50,7 @@ describe('JobStatusIndicator', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Generating Summary')).toBeInTheDocument()
-      expect(screen.getByText(/Processing\.\.\. 50%/i)).toBeInTheDocument()
+      expect(screen.getByText(/Processing results\.\.\. 50%/i)).toBeInTheDocument()
     })
   })
 

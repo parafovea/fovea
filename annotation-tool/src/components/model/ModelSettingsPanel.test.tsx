@@ -44,66 +44,90 @@ const mockConfig: ModelConfig = {
   models: {
     videoSummarization: {
       selected: 'llama-4-maverick',
-      options: {
-        'llama-4-maverick': {
+      options: [
+        {
+          name: 'llama-4-maverick',
           modelId: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
           framework: 'transformers',
           vramGb: 11.2,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'fast',
           description: 'Fast VLM with strong reasoning capabilities',
           fps: 2.5,
+          requiresApiKey: false,
         },
-        'qwen-2.5-vl': {
+        {
+          name: 'qwen-2.5-vl',
           modelId: 'Qwen/Qwen2.5-VL-7B-Instruct',
           framework: 'transformers',
           vramGb: 7.8,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'fast',
           description: 'Efficient VLM with multilingual support',
           fps: 3.2,
+          requiresApiKey: false,
         },
-      },
+      ],
     },
     objectDetection: {
       selected: 'yolo-world',
-      options: {
-        'yolo-world': {
+      options: [
+        {
+          name: 'yolo-world',
           modelId: 'AILab-CVC/YOLO-World',
           framework: 'transformers',
           vramGb: 2.1,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'fast',
           description: 'Real-time open-vocabulary object detection',
           fps: 25.0,
+          requiresApiKey: false,
         },
-        'owlv2-large': {
+        {
+          name: 'owlv2-large',
           modelId: 'google/owlv2-large-patch14-ensemble',
           framework: 'transformers',
           vramGb: 4.5,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'moderate',
           description: 'High-accuracy open-vocabulary detection',
           fps: 8.0,
+          requiresApiKey: false,
         },
-      },
+      ],
     },
     videoTracking: {
       selected: 'samurai',
-      options: {
-        samurai: {
+      options: [
+        {
+          name: 'samurai',
           modelId: 'yangchris11/samurai',
           framework: 'transformers',
           vramGb: 6.2,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'moderate',
           description: 'State-of-the-art video object segmentation and tracking',
           fps: 5.0,
+          requiresApiKey: false,
         },
-        'yolo11n-seg': {
+        {
+          name: 'yolo11n-seg',
           modelId: 'ultralytics/yolo11n-seg',
           framework: 'ultralytics',
           vramGb: 1.8,
+          cpuMemoryGb: 0,
+          cpuCompatible: false,
           speed: 'fast',
           description: 'Lightweight segmentation and tracking',
           fps: 30.0,
+          requiresApiKey: false,
         },
-      },
+      ],
     },
   },
   inference: {
@@ -129,14 +153,17 @@ const mockValidation: MemoryValidation = {
     videoSummarization: {
       modelId: 'meta-llama/Llama-3.2-11B-Vision-Instruct',
       vramGb: 11.2,
+      cpuCompatible: false,
     },
     objectDetection: {
       modelId: 'AILab-CVC/YOLO-World',
       vramGb: 2.1,
+      cpuCompatible: false,
     },
     videoTracking: {
       modelId: 'yangchris11/samurai',
       vramGb: 6.2,
+      cpuCompatible: false,
     },
   },
 }
@@ -810,9 +837,9 @@ describe('ModelSettingsPanel', () => {
         threshold: 0.9,
         maxAllowedGb: 7.2,
         modelRequirements: {
-          videoSummarization: { modelId: 'Qwen/Qwen2.5-VL-7B-Instruct', vramGb: 7.8 },
-          objectDetection: { modelId: 'AILab-CVC/YOLO-World', vramGb: 2.1 },
-          videoTracking: { modelId: 'ultralytics/yolo11n-seg', vramGb: 1.8 },
+          videoSummarization: { modelId: 'Qwen/Qwen2.5-VL-7B-Instruct', vramGb: 7.8, cpuCompatible: false },
+          objectDetection: { modelId: 'AILab-CVC/YOLO-World', vramGb: 2.1, cpuCompatible: false },
+          videoTracking: { modelId: 'ultralytics/yolo11n-seg', vramGb: 1.8, cpuCompatible: false },
         },
       }
 

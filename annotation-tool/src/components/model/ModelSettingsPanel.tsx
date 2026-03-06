@@ -56,8 +56,11 @@ const TASK_DISPLAY_NAMES: Record<string, string> = {
  * Speed indicator color mapping.
  */
 const SPEED_COLORS: Record<string, 'success' | 'warning' | 'error'> = {
+  real_time: 'success',
+  very_fast: 'success',
   fast: 'success',
   moderate: 'warning',
+  medium: 'warning',
   slow: 'error',
 }
 
@@ -110,7 +113,7 @@ export function ModelSettingsPanel({
     Object.entries(pendingSelections).forEach(([taskType, modelName]) => {
       const taskConfig = config.models[taskType]
       if (taskConfig) {
-        const modelOption = taskConfig.options[modelName]
+        const modelOption = taskConfig.options.find((o) => o.name === modelName)
         if (modelOption) {
           totalRequired += modelOption.vramGb
           requirements[taskType] = {
@@ -362,11 +365,11 @@ export function ModelSettingsPanel({
                   onChange={(e) => handleModelChange(taskType, e.target.value)}
                   disabled={modelsDisabled}
                 >
-                  {Object.entries(taskConfig.options).map(([name, option]) => (
-                    <MenuItem key={name} value={name}>
+                  {taskConfig.options.map((option) => (
+                    <MenuItem key={option.name} value={option.name}>
                       <Box sx={{ width: '100%' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography>{name}</Typography>
+                          <Typography>{option.name}</Typography>
                           <Chip
                             label={`${option.vramGb.toFixed(1)} GB`}
                             size="small"
@@ -397,7 +400,9 @@ export function ModelSettingsPanel({
 
               {/* Display current model info */}
               <ModelOptionInfo
-                option={taskConfig.options[pendingSelections[taskType] || taskConfig.selected]}
+                option={taskConfig.options.find(
+                  (o) => o.name === (pendingSelections[taskType] || taskConfig.selected),
+                )}
               />
             </Box>
           ))}

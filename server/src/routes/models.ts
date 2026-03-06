@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
-import snakecaseKeys from 'snakecase-keys'
 import { InternalError } from '../lib/errors.js'
 
 /**
@@ -23,6 +22,18 @@ import { InternalError } from '../lib/errors.js'
  * app.register(modelsRoute, { prefix: '/api/models' })
  * ```
  */
+/**
+ * Convert a camelCase string to snake_case.
+ * Used to convert frontend task type identifiers (e.g. "videoSummarization")
+ * back to the Python model-service format (e.g. "video_summarization").
+ *
+ * Note: snakecaseKeys only converts object KEYS, not string values,
+ * so this helper is needed for URL path segments and query param values.
+ */
+function toSnakeCase(str: string): string {
+  return str.replace(/([A-Z])/g, '_$1').toLowerCase()
+}
+
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
 
@@ -194,12 +205,14 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType, modelName } = request.query
-      const snakeCaseParams = snakecaseKeys({ taskType, modelName })
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/select`,
         null,
         {
-          params: snakeCaseParams,
+          params: {
+            task_type: toSnakeCase(taskType),
+            model_name: modelName,
+          },
           timeout: 30000
         }
       )
@@ -258,7 +271,126 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const response = await axios.post(`${MODEL_SERVICE_URL}/api/models/validate`, null, {
         timeout: 10000
       })
-      return response.data
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Check whether a model is cached locally.
+   *
+   * @route GET /api/models/task-ready/:taskType
+   */
+  fastify.get<{
+    Params: { taskType: string }
+  }>('/api/models/task-ready/:taskType', {
+    schema: {
+      description: 'Check if model is cached locally',
+      tags: ['models'],
+      params: {
+        type: 'object',
+        required: ['taskType'],
+        properties: {
+          taskType: { type: 'string' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { taskType } = request.params
+      const response = await axios.get(
+        `${MODEL_SERVICE_URL}/api/models/task-ready/${toSnakeCase(taskType)}`,
+        { timeout: 10000 }
+      )
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Load a model into memory (triggers download if not cached).
+   *
+   * @route POST /api/models/load/:taskType
+   */
+  fastify.post<{
+    Params: { taskType: string }
+  }>('/api/models/load/:taskType', {
+    schema: {
+      description: 'Load model for task type',
+      tags: ['models'],
+      params: {
+        type: 'object',
+        required: ['taskType'],
+        properties: {
+          taskType: { type: 'string' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { taskType } = request.params
+      const response = await axios.post(
+        `${MODEL_SERVICE_URL}/api/models/load/${toSnakeCase(taskType)}`,
+        null,
+        { timeout: 300000 } // 5 min timeout for model download + load
+      )
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Unload a model from memory.
+   *
+   * @route POST /api/models/unload/:taskType
+   */
+  fastify.post<{
+    Params: { taskType: string }
+  }>('/api/models/unload/:taskType', {
+    schema: {
+      description: 'Unload model for task type',
+      tags: ['models'],
+      params: {
+        type: 'object',
+        required: ['taskType'],
+        properties: {
+          taskType: { type: 'string' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { taskType } = request.params
+      const response = await axios.post(
+        `${MODEL_SERVICE_URL}/api/models/unload/${toSnakeCase(taskType)}`,
+        null,
+        { timeout: 30000 }
+      )
+      return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {

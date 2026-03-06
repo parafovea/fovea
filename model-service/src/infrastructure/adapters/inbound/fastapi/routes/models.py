@@ -5,7 +5,9 @@ selection, loading, unloading, and memory validation.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import torch
 from fastapi import APIRouter, HTTPException
@@ -39,17 +41,21 @@ async def get_model_config(manager: ModelManagerDep) -> dict[str, object]:
     for task_type, task_config in manager.tasks.items():
         config[task_type] = {
             "selected": task_config.selected,
-            "options": {
-                name: {
+            "options": [
+                {
+                    "name": name,
                     "model_id": opt.model_id,
                     "framework": opt.framework,
                     "vram_gb": opt.vram_gb,
+                    "cpu_memory_gb": opt.cpu_memory_gb,
+                    "cpu_compatible": opt.cpu_compatible,
                     "speed": opt.speed,
                     "description": opt.description,
                     "fps": opt.fps,
+                    "requires_api_key": opt.requires_api_key,
                 }
                 for name, opt in task_config.options.items()
-            },
+            ],
         }
 
     has_any_model = any(task_config.options for task_config in manager.tasks.values())
@@ -273,4 +279,66 @@ async def load_model(
         "status": "success",
         "task_type": task_type,
         "message": "Model loaded successfully",
+    }
+
+
+@router.get(
+    "/models/task-ready/{task_type}",
+    summary="Check if model is cached locally",
+    description="Checks whether the selected model for a task type is already "
+    "downloaded and cached locally. Useful for distinguishing between "
+    "'Downloading model' and 'Loading model' in the UI.",
+)
+async def check_task_ready(
+    task_type: str,
+    manager: ModelManagerDep,
+) -> dict[str, object]:
+    """Check if the selected model for a task type is cached locally.
+
+    Parameters
+    ----------
+    task_type : str
+        Task type to check (e.g., "video_summarization").
+    manager : ModelManager
+        Injected model manager instance.
+
+    Returns
+    -------
+    dict[str, object]
+        Dictionary with task_type, model_id, cached status, and framework.
+
+    Raises
+    ------
+    HTTPException
+        If task type is not found in configuration.
+    """
+    if task_type not in manager.tasks:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown task type: {task_type}",
+        )
+
+    task_config = manager.tasks[task_type]
+    model_config = task_config.get_selected_config()
+
+    if model_config.framework == "external_api":
+        return {
+            "task_type": task_type,
+            "model_id": model_config.model_id,
+            "cached": True,
+            "framework": model_config.framework,
+        }
+
+    cache_dir = Path(
+        os.environ.get("TRANSFORMERS_CACHE", Path.home() / ".cache" / "huggingface" / "hub")
+    )
+    model_cache_name = f"models--{model_config.model_id.replace('/', '--')}"
+    model_cache_path = cache_dir / model_cache_name
+    cached = model_cache_path.is_dir()
+
+    return {
+        "task_type": task_type,
+        "model_id": model_config.model_id,
+        "cached": cached,
+        "framework": model_config.framework,
     }

@@ -531,7 +531,7 @@ describe('VideoBrowser', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/generating summary/i)).toBeInTheDocument()
-        expect(screen.getByText(/processing\.\.\. 50%/i)).toBeInTheDocument()
+        expect(screen.getByText(/processing results\.\.\. 50%/i)).toBeInTheDocument()
       })
     })
 

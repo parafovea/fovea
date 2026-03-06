@@ -258,11 +258,21 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({
-            jobId: Type.String(),
-            status: Type.String(),
-            progress: Type.Union([Type.Number(), Type.Null()]),
-            result: Type.Union([VideoSummarySchema, Type.Null()]),
-            error: Type.Union([Type.String(), Type.Null()]),
+            id: Type.String(),
+            state: Type.String(),
+            progress: Type.Union([
+              Type.Number(),
+              Type.Object({ percent: Type.Number(), stage: Type.String() }),
+              Type.Null(),
+            ]),
+            data: Type.Object({
+              videoId: Type.String(),
+              personaId: Type.String(),
+            }),
+            returnvalue: Type.Optional(Type.Union([VideoSummarySchema, Type.Null()])),
+            failedReason: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+            finishedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+            processedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
           }),
           404: Type.Object({ error: Type.String() }),
         },
@@ -276,23 +286,21 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const state = await job.getState()
-      const progress = job.progress as number | null
-
-      let result = null
-      let error = null
-
-      if (state === 'completed') {
-        result = job.returnvalue
-      } else if (state === 'failed') {
-        error = job.failedReason || 'Job failed'
-      }
+      const progress = job.progress as number | { percent: number; stage: string } | null
+      const jobData = job.data as { videoId: string; personaId: string }
 
       return reply.send({
-        jobId: job.id as string,
-        status: state,
+        id: job.id as string,
+        state,
         progress,
-        result,
-        error,
+        data: {
+          videoId: jobData.videoId,
+          personaId: jobData.personaId,
+        },
+        returnvalue: state === 'completed' ? job.returnvalue : null,
+        failedReason: state === 'failed' ? (job.failedReason || 'Job failed') : null,
+        finishedOn: job.finishedOn ?? null,
+        processedOn: job.processedOn ?? null,
       })
     }
   )

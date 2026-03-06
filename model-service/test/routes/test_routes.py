@@ -1493,9 +1493,12 @@ class TestModelConfigEndpoints:
         mock_option.model_id = "meta-llama/Llama-4-Maverick"
         mock_option.framework = "sglang"
         mock_option.vram_gb = 16.0
+        mock_option.cpu_memory_gb = 0.0
+        mock_option.cpu_compatible = False
         mock_option.speed = "fast"
         mock_option.description = "Test model"
         mock_option.fps = 2.5
+        mock_option.requires_api_key = False
 
         mock_task = Mock()
         mock_task.selected = "llama-4-maverick"

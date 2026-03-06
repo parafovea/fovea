@@ -3,6 +3,7 @@
  * Provides automatic polling and completion detection.
  */
 
+import React from 'react'
 import { useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query'
 import { apiClient, JobStatus, ApiError } from '@api/client'
 import { summaryKeys } from './useSummaries'
@@ -105,6 +106,31 @@ export function useJobStatus(jobId: string | null, options: UseJobStatusOptions 
 }
 
 /**
+ * Human-readable messages for each backend processing stage.
+ */
+const STAGE_MESSAGES: Record<string, string> = {
+  preparing: 'Preparing video frames...',
+  downloading: 'Downloading AI model (first time only)...',
+  loading: 'Loading AI model...',
+  inferring: 'Analyzing video with AI...',
+  processing: 'Processing results...',
+  saving: 'Saving summary...',
+  complete: 'Complete',
+}
+
+/**
+ * Fallback progress thresholds for legacy number-only progress reporting.
+ * Used when the backend does not send a stage string.
+ */
+const PROGRESS_STAGES = [
+  { threshold: 0, message: 'Starting...' },
+  { threshold: 5, message: 'Preparing video frames...' },
+  { threshold: 10, message: 'Running AI model (this may take a minute)...' },
+  { threshold: 50, message: 'Processing results...' },
+  { threshold: 70, message: 'Saving summary...' },
+] as const
+
+/**
  * Get a human-readable status message for a job.
  *
  * @param status - Job status object
@@ -116,11 +142,29 @@ export function getJobStatusMessage(status: JobStatus): string {
       return 'Waiting in queue...'
     case 'delayed':
       return 'Delayed, will retry soon...'
-    case 'active':
-      if (status.progress > 0) {
-        return `Processing... ${Math.round(status.progress)}%`
+    case 'active': {
+      const progress = Number.isFinite(status.progress) ? status.progress : 0
+      const stage = status.stage
+
+      // Use stage-based message if available
+      if (stage && STAGE_MESSAGES[stage]) {
+        return progress > 0
+          ? `${STAGE_MESSAGES[stage]} ${Math.round(progress)}%`
+          : STAGE_MESSAGES[stage]
       }
-      return 'Processing...'
+
+      // Fallback to threshold-based messages for legacy number-only progress
+      let message = 'Processing...'
+      for (const s of PROGRESS_STAGES) {
+        if (progress >= s.threshold) {
+          message = s.message
+        }
+      }
+      if (progress > 0) {
+        return `${message} ${Math.round(progress)}%`
+      }
+      return message
+    }
     case 'completed':
       return 'Completed successfully'
     case 'failed':
@@ -139,6 +183,3 @@ export function getJobStatusMessage(status: JobStatus): string {
 export function isJobActive(status: JobStatus): boolean {
   return status.state === 'waiting' || status.state === 'active' || status.state === 'delayed'
 }
-
-// React import for useEffect and useRef
-import React from 'react'

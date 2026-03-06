@@ -692,7 +692,7 @@ class ModelManager:
 
             model_requirements[task_type] = {
                 "model_id": model_config.model_id,
-                "memory_gb": memory_gb,
+                "vram_gb": memory_gb,
                 "cpu_compatible": model_config.cpu_compatible,
             }
             total_required += memory_bytes

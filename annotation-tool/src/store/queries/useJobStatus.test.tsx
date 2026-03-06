@@ -117,6 +117,7 @@ describe('getJobStatusMessage', () => {
       id: 'job-1',
       state: 'waiting',
       progress: 0,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -128,32 +129,47 @@ describe('getJobStatusMessage', () => {
       id: 'job-1',
       state: 'delayed',
       progress: 0,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
     expect(getJobStatusMessage(status)).toBe('Delayed, will retry soon...')
   })
 
-  it('returns progress percentage for active state', () => {
+  it('returns stage-based message when stage is provided', () => {
+    const status: JobStatus = {
+      id: 'job-1',
+      state: 'active',
+      progress: 45,
+      stage: 'inferring',
+      data: { videoId: 'video-1', personaId: 'persona-1' },
+    }
+
+    expect(getJobStatusMessage(status)).toBe('Analyzing video with AI... 45%')
+  })
+
+  it('returns threshold-based message for legacy progress without stage', () => {
     const status: JobStatus = {
       id: 'job-1',
       state: 'active',
       progress: 75,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
-    expect(getJobStatusMessage(status)).toBe('Processing... 75%')
+    expect(getJobStatusMessage(status)).toBe('Saving summary... 75%')
   })
 
-  it('returns generic message for active state with no progress', () => {
+  it('returns starting message for active state with no progress', () => {
     const status: JobStatus = {
       id: 'job-1',
       state: 'active',
       progress: 0,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
-    expect(getJobStatusMessage(status)).toBe('Processing...')
+    expect(getJobStatusMessage(status)).toBe('Starting...')
   })
 
   it('returns completed message', () => {
@@ -161,6 +177,7 @@ describe('getJobStatusMessage', () => {
       id: 'job-1',
       state: 'completed',
       progress: 100,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -172,6 +189,7 @@ describe('getJobStatusMessage', () => {
       id: 'job-1',
       state: 'failed',
       progress: 50,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
       failedReason: 'Network timeout',
     }
@@ -186,6 +204,7 @@ describe('isJobActive', () => {
       id: 'job-1',
       state: 'waiting',
       progress: 0,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -197,6 +216,7 @@ describe('isJobActive', () => {
       id: 'job-1',
       state: 'active',
       progress: 50,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -208,6 +228,7 @@ describe('isJobActive', () => {
       id: 'job-1',
       state: 'delayed',
       progress: 0,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -219,6 +240,7 @@ describe('isJobActive', () => {
       id: 'job-1',
       state: 'completed',
       progress: 100,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
     }
 
@@ -230,6 +252,7 @@ describe('isJobActive', () => {
       id: 'job-1',
       state: 'failed',
       progress: 70,
+      stage: null,
       data: { videoId: 'video-1', personaId: 'persona-1' },
       failedReason: 'Error',
     }
