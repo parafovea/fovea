@@ -133,19 +133,21 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 4. Export annotations with optional filtering
     const annotationWhere: {
-      personaId?: { in: string[] }
+      personaId: { in: string[] }
       videoId?: { in: string[] }
-    } = {}
+    } = {
+      personaId: { in: userPersonaIds }
+    }
 
     if (personaIdArray && personaIdArray.length > 0) {
-      annotationWhere.personaId = { in: personaIdArray }
+      annotationWhere.personaId = { in: personaIdArray.filter((id: string) => userPersonaIds.includes(id)) }
     }
     if (videoIdArray && videoIdArray.length > 0) {
       annotationWhere.videoId = { in: videoIdArray }
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
+      where: annotationWhere,
       orderBy: { createdAt: 'asc' }
     })
 
@@ -362,19 +364,21 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 4. Count and analyze annotations (with optional filtering)
     const annotationWhere: {
-      personaId?: { in: string[] }
+      personaId: { in: string[] }
       videoId?: { in: string[] }
-    } = {}
+    } = {
+      personaId: { in: userPersonaIds }
+    }
 
     if (personaIdArray && personaIdArray.length > 0) {
-      annotationWhere.personaId = { in: personaIdArray }
+      annotationWhere.personaId = { in: personaIdArray.filter((id: string) => userPersonaIds.includes(id)) }
     }
     if (videoIdArray && videoIdArray.length > 0) {
       annotationWhere.videoId = { in: videoIdArray }
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
+      where: annotationWhere,
       orderBy: { createdAt: 'asc' }
     })
 
