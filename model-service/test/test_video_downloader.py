@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from src.infrastructure.adapters.outbound.video.downloader import cleanup_temp_video, download_video_if_needed
+
+from src.infrastructure.adapters.outbound.video.downloader import (
+    cleanup_temp_video,
+    download_video_if_needed,
+)
 
 # Use S3 URLs that match the allowed patterns for SSRF protection
 TEST_S3_URL_HTTP = "http://bucket.s3.us-east-1.amazonaws.com/video.mp4"

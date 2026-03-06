@@ -3,12 +3,12 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from src.application.use_cases.augment_ontology import (
     AugmentationContext,
     augment_ontology_with_external_api,
     extract_json_from_response,
 )
-
 from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 
 

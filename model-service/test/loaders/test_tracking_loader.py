@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 from PIL import Image
+
 from src.infrastructure.adapters.outbound.models.tracking.loader import (
     SAM2Loader,
     SAM2LongLoader,

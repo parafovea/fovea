@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import pytest
-from src.infrastructure.adapters.inbound.fastapi.schemas import SummarizeRequest
+
 from src.application.use_cases.summarize_video import (
     SummarizationError,
     get_default_prompt_template,
@@ -18,7 +18,12 @@ from src.application.use_cases.summarize_video import (
     parse_vlm_response,
     summarize_video_with_vlm,
 )
-from src.infrastructure.adapters.outbound.models.vlm.loader import InferenceFramework, QuantizationType, VLMConfig
+from src.infrastructure.adapters.inbound.fastapi.schemas import SummarizeRequest
+from src.infrastructure.adapters.outbound.models.vlm.loader import (
+    InferenceFramework,
+    QuantizationType,
+    VLMConfig,
+)
 
 
 def test_get_default_prompt_template():

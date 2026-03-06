@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import torch
+
 from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     GenerationResult,

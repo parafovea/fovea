@@ -470,7 +470,18 @@ describe('Model Routes', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(response.json()).toEqual(mockValidation)
+      // Route applies camelcaseKeys to the response
+      expect(response.json()).toEqual({
+        valid: true,
+        totalRequiredMb: 1536,
+        totalAvailableMb: 8192,
+        breakdown: {
+          detection: 512,
+          tracking: 1024,
+          summarization: 0
+        },
+        warnings: ['VRAM usage at 18.75% of capacity']
+      })
       expect(mockedAxios.post).toHaveBeenCalledWith(
         'http://localhost:8000/api/models/validate',
         null,
@@ -527,7 +538,7 @@ describe('Model Routes', () => {
       expect(response.statusCode).toBe(200)
       const body = response.json()
       expect(body.valid).toBe(true)
-      expect(body.total_required_mb).toBe(0)
+      expect(body.totalRequiredMb).toBe(0)
     })
 
     it('includes warnings for high VRAM usage', async () => {

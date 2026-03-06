@@ -8,8 +8,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from src.infrastructure.adapters.outbound.models.llm.loader import GenerationResult, LLMConfig, LLMFramework
-from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
+
 from src.application.use_cases.augment_ontology import (
     AugmentationContext,
     augment_ontology_with_llm,
@@ -17,6 +16,12 @@ from src.application.use_cases.augment_ontology import (
     create_augmentation_prompt,
     generate_augmentation_reasoning,
     parse_llm_response,
+)
+from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
+from src.infrastructure.adapters.outbound.models.llm.loader import (
+    GenerationResult,
+    LLMConfig,
+    LLMFramework,
 )
 
 # Note: parse_llm_response signature changed - removed unused target_category parameter

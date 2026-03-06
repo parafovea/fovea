@@ -2,17 +2,22 @@ loaders:
   - type: python
     search_path: [src]
     modules:
-      - routes
-      - models
-      - llm_loader
-      - vlm_loader
-      - detection_loader
-      - tracking_loader
-      - summarization
-      - claim_extraction
-      - claim_synthesis
-      - video_utils
-      - model_manager
+      - infrastructure.adapters.inbound.fastapi.routes.models
+      - infrastructure.adapters.inbound.fastapi.routes.detection
+      - infrastructure.adapters.inbound.fastapi.routes.tracking
+      - infrastructure.adapters.inbound.fastapi.routes.summarization
+      - infrastructure.adapters.inbound.fastapi.routes.claims
+      - infrastructure.adapters.inbound.fastapi.routes.ontology
+      - infrastructure.adapters.inbound.fastapi.schemas
+      - infrastructure.adapters.outbound.models.llm.loader
+      - infrastructure.adapters.outbound.models.vlm.loader
+      - infrastructure.adapters.outbound.models.detection.loader
+      - infrastructure.adapters.outbound.models.tracking.loader
+      - infrastructure.adapters.outbound.video.processor
+      - application.services.model_management
+      - application.use_cases.summarize_video
+      - application.use_cases.extract_claims
+      - application.use_cases.synthesize_summary
 
 processors:
   - type: filter
