@@ -207,6 +207,7 @@ export default function AnnotationAutocomplete({
       getOptionLabel={(option) => option.label}
       disabled={disabled || (mode === 'type' && !personaId)}
       fullWidth
+      slotProps={{ listbox: { sx: { maxHeight: 300, overflowY: 'auto' } } }}
       renderInput={(params) => (
         <TextField
           {...params}
@@ -245,7 +246,7 @@ export default function AnnotationAutocomplete({
       }}
       renderGroup={(params) => (
         <Box component="li" key={params.key}>
-          <ListSubheader component="div" sx={{ backgroundColor: 'background.paper' }}>
+          <ListSubheader component="div" sx={{ position: 'static', backgroundColor: 'background.paper' }}>
             {params.group} ({groupedOptions[params.group].length})
           </ListSubheader>
           <Box component="ul" sx={{ padding: 0 }}>
@@ -254,7 +255,7 @@ export default function AnnotationAutocomplete({
         </Box>
       )}
       PaperComponent={(props) => (
-        <Paper {...props} elevation={8} />
+        <Paper {...props} elevation={8} sx={{ overflow: 'hidden' }} />
       )}
     />
   )
