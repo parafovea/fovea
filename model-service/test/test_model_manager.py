@@ -494,6 +494,9 @@ class TestModelManager:
 
     def test_validate_memory_budget(self, model_manager):
         """Test validating memory budget."""
+        # Force GPU mode and patch VRAM
+        model_manager.cpu_only_mode = False
+        model_manager.device = "cuda"
         with patch.object(model_manager, "get_total_vram", return_value=32 * 1024**3):
             validation = model_manager.validate_memory_budget()
 
@@ -506,6 +509,9 @@ class TestModelManager:
 
     def test_validate_memory_budget_insufficient(self, model_manager):
         """Test validating memory budget with insufficient memory."""
+        # Force GPU mode and patch VRAM
+        model_manager.cpu_only_mode = False
+        model_manager.device = "cuda"
         with patch.object(model_manager, "get_total_vram", return_value=8 * 1024**3):
             validation = model_manager.validate_memory_budget()
 

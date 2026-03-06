@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import cv2
 import numpy as np
 import pytest
+
 from src.infrastructure.adapters.outbound.video.processor import (
     VideoInfo,
     VideoProcessingError,
