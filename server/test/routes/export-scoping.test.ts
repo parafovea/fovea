@@ -264,10 +264,15 @@ describe('Export API - User Scoping', () => {
       // Should include user A's type annotation + shared null-persona object annotation
       // but NOT user B's type annotation
       expect(annotationLines).toHaveLength(2)
-      const personaIds = annotationLines.map((a: { data: { personaId: string | null } }) => a.data.personaId)
-      expect(personaIds).toContain(userAPersonaId)
-      expect(personaIds).toContain(null)
-      expect(personaIds).not.toContain(userBPersonaId)
+      const typeAnnotations = annotationLines.filter(
+        (a: { data: { annotationType: string } }) => a.data.annotationType === 'type'
+      )
+      const objectAnnotations = annotationLines.filter(
+        (a: { data: { annotationType: string } }) => a.data.annotationType === 'object'
+      )
+      expect(typeAnnotations).toHaveLength(1)
+      expect(typeAnnotations[0].data.personaId).toBe(userAPersonaId)
+      expect(objectAnnotations).toHaveLength(1)
     })
 
     it('includes object annotations with null personaId', async () => {
