@@ -587,6 +587,91 @@ describe('Export API', () => {
     })
   })
 
+  describe('GET /api/export - invalid annotation handling', () => {
+    it('skips annotations with invalid sequences and sets X-Export-Skipped header', async () => {
+      // Create a valid annotation
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: testPersonaId,
+          type: 'type',
+          label: 'entity-1',
+          frames: {
+            boxes: [{ x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true }],
+            interpolationSegments: [],
+            visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+            totalFrames: 1,
+            keyframeCount: 1,
+            interpolatedFrameCount: 0
+          }
+        }
+      })
+
+      // Create an invalid annotation (negative dimensions)
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: testPersonaId,
+          type: 'type',
+          label: 'entity-1',
+          frames: {
+            boxes: [{ x: 10, y: 20, width: -5, height: 50, frameNumber: 0, isKeyframe: true }],
+            interpolationSegments: [],
+            visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+            totalFrames: 1,
+            keyframeCount: 1,
+            interpolatedFrameCount: 0
+          }
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/export',
+        cookies: { session_token: testSessionToken }
+      })
+
+      // Should succeed, not return 400
+      expect(response.statusCode).toBe(200)
+
+      // Should have skipped header
+      expect(response.headers['x-export-skipped']).toBe('1')
+
+      // Should only contain the valid annotation
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines.filter(l => JSON.parse(l).type === 'annotation')
+      expect(annotationLines).toHaveLength(1)
+    })
+
+    it('does not set X-Export-Skipped header when all annotations are valid', async () => {
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: testPersonaId,
+          type: 'type',
+          label: 'entity-1',
+          frames: {
+            boxes: [{ x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true }],
+            interpolationSegments: [],
+            visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+            totalFrames: 1,
+            keyframeCount: 1,
+            interpolatedFrameCount: 0
+          }
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/export',
+        cookies: { session_token: testSessionToken }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['x-export-skipped']).toBeUndefined()
+    })
+  })
+
   describe('Round-trip: Export -> Import', () => {
     it('exported data can be re-imported', async () => {
       // Create data to export
