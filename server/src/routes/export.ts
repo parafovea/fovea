@@ -132,20 +132,24 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // 4. Export annotations with optional filtering
-    const annotationWhere: {
-      personaId?: { in: string[] }
-      videoId?: { in: string[] }
-    } = {}
+    // Include annotations belonging to the user's personas AND object annotations (personaId: null)
+    const annotationWhere: Record<string, unknown> = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
-      annotationWhere.personaId = { in: personaIdArray }
+      const scopedIds = personaIdArray.filter((id: string) => userPersonaIds.includes(id))
+      annotationWhere.personaId = { in: scopedIds }
+    } else {
+      annotationWhere.OR = [
+        { personaId: { in: userPersonaIds } },
+        { personaId: null }
+      ]
     }
     if (videoIdArray && videoIdArray.length > 0) {
       annotationWhere.videoId = { in: videoIdArray }
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
+      where: annotationWhere,
       orderBy: { createdAt: 'asc' }
     })
 
@@ -361,20 +365,24 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     // 4. Count and analyze annotations (with optional filtering)
-    const annotationWhere: {
-      personaId?: { in: string[] }
-      videoId?: { in: string[] }
-    } = {}
+    // Include annotations belonging to the user's personas AND object annotations (personaId: null)
+    const annotationWhere: Record<string, unknown> = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
-      annotationWhere.personaId = { in: personaIdArray }
+      const scopedIds = personaIdArray.filter((id: string) => userPersonaIds.includes(id))
+      annotationWhere.personaId = { in: scopedIds }
+    } else {
+      annotationWhere.OR = [
+        { personaId: { in: userPersonaIds } },
+        { personaId: null }
+      ]
     }
     if (videoIdArray && videoIdArray.length > 0) {
       annotationWhere.videoId = { in: videoIdArray }
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: Object.keys(annotationWhere).length > 0 ? annotationWhere : undefined,
+      where: annotationWhere,
       orderBy: { createdAt: 'asc' }
     })
 
