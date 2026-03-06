@@ -4,14 +4,6 @@ import { AnnotationExporter } from '../services/export-handler.js'
 import { requireAuth } from '../middleware/auth.js'
 
 /**
- * TypeBox schema for validation errors.
- */
-const ValidationErrorSchema = Type.Object({
-  annotationId: Type.String(),
-  errors: Type.Array(Type.String())
-})
-
-/**
  * Fastify plugin for export-related routes.
  * Provides endpoints for exporting all user data.
  *
@@ -50,12 +42,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
         annotationTypes: Type.Optional(Type.String())
       }),
       response: {
-        200: Type.String(),
-        400: Type.Object({
-          error: Type.String(),
-          message: Type.String(),
-          validationErrors: Type.Array(ValidationErrorSchema)
-        })
+        200: Type.String()
       }
     }
   }, async (request, reply) => {
@@ -164,27 +151,20 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       )
     }
 
-    // Validate all sequences before export
-    const validationErrors: Array<{ annotationId: string; errors: string[] }> = []
-    for (const annotation of convertedAnnotations) {
+    // Filter out annotations with invalid sequences
+    const validAnnotations = convertedAnnotations.filter(annotation => {
       const validation = exporter.validateSequence(annotation.boundingBoxSequence)
       if (!validation.valid) {
-        validationErrors.push({
-          annotationId: annotation.id,
-          errors: validation.errors
-        })
+        fastify.log.warn({ annotationId: annotation.id, errors: validation.errors }, 'Skipping annotation with invalid sequence')
+        return false
       }
+      return true
+    })
+    const skippedCount = convertedAnnotations.length - validAnnotations.length
+    if (skippedCount > 0) {
+      reply.header('X-Export-Skipped', skippedCount.toString())
     }
-
-    // If there are validation errors, return 400
-    if (validationErrors.length > 0) {
-      reply.code(400)
-      return reply.send({
-        error: 'Validation failed',
-        message: 'Some annotations have invalid sequences',
-        validationErrors
-      })
-    }
+    convertedAnnotations = validAnnotations
 
     if (convertedAnnotations.length > 0) {
       lines.push(exporter.exportAnnotations(convertedAnnotations, { includeInterpolated }))
