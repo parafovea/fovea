@@ -207,7 +207,7 @@ export default function AnnotationAutocomplete({
       getOptionLabel={(option) => option.label}
       disabled={disabled || (mode === 'type' && !personaId)}
       fullWidth
-      slotProps={{ listbox: { sx: { maxHeight: 300, overflowY: 'auto' } } }}
+      ListboxProps={{ sx: { maxHeight: 300, overflowY: 'auto' } }}
       renderInput={(params) => (
         <TextField
           {...params}
