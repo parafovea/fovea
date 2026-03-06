@@ -171,6 +171,39 @@ describe('Export API - User Scoping', () => {
       },
     })
 
+    // Create annotation for user A's persona (type annotation)
+    await prisma.annotation.create({
+      data: {
+        videoId: sharedVideoId,
+        personaId: userAPersonaId,
+        type: 'type',
+        label: 'e1',
+        frames: {},
+      },
+    })
+
+    // Create annotation for user B's persona (type annotation)
+    await prisma.annotation.create({
+      data: {
+        videoId: sharedVideoId,
+        personaId: userBPersonaId,
+        type: 'type',
+        label: 'e2',
+        frames: {},
+      },
+    })
+
+    // Create object annotation with null personaId (shared)
+    await prisma.annotation.create({
+      data: {
+        videoId: sharedVideoId,
+        personaId: null,
+        type: 'object',
+        label: 'entity-a',
+        frames: {},
+      },
+    })
+
     // Login as user A
     const loginResponse = await app.inject({
       method: 'POST',
@@ -215,6 +248,69 @@ describe('Export API - User Scoping', () => {
       expect(ontologyLines[0].data.personaId).toBe(userAPersonaId)
     })
 
+    it('excludes annotations belonging to other users\' personas', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/export',
+        cookies: { session_token: userASessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines
+        .map(l => JSON.parse(l))
+        .filter((entry: { type: string }) => entry.type === 'annotation')
+
+      // Should include user A's type annotation + shared null-persona object annotation
+      // but NOT user B's type annotation
+      expect(annotationLines).toHaveLength(2)
+      const typeAnnotations = annotationLines.filter(
+        (a: { data: { annotationType: string } }) => a.data.annotationType === 'type'
+      )
+      const objectAnnotations = annotationLines.filter(
+        (a: { data: { annotationType: string } }) => a.data.annotationType === 'object'
+      )
+      expect(typeAnnotations).toHaveLength(1)
+      expect(typeAnnotations[0].data.personaId).toBe(userAPersonaId)
+      expect(objectAnnotations).toHaveLength(1)
+    })
+
+    it('includes object annotations with null personaId', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/export',
+        cookies: { session_token: userASessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines
+        .map(l => JSON.parse(l))
+        .filter((entry: { type: string }) => entry.type === 'annotation')
+
+      const objectAnnotations = annotationLines.filter(
+        (a: { data: { annotationType: string } }) => a.data.annotationType === 'object'
+      )
+      expect(objectAnnotations).toHaveLength(1)
+    })
+
+    it('intersects personaIds filter with user\'s own personas for annotations', async () => {
+      // Try to filter by user B's persona ID — should get no annotations
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/export?personaIds=${userBPersonaId}`,
+        cookies: { session_token: userASessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const lines = response.body.trim().split('\n').filter(l => l)
+      const annotationLines = lines
+        .map(l => JSON.parse(l))
+        .filter((entry: { type: string }) => entry.type === 'annotation')
+
+      expect(annotationLines).toHaveLength(0)
+    })
+
     it('exports only summaries for the user\'s personas', async () => {
       const response = await app.inject({
         method: 'GET',
@@ -248,6 +344,8 @@ describe('Export API - User Scoping', () => {
       expect(stats.personaCount).toBe(1)
       expect(stats.ontologyCount).toBe(1)
       expect(stats.summaryCount).toBe(1)
+      // User A's annotation + shared null-persona annotation, not user B's
+      expect(stats.annotationCount).toBe(2)
     })
   })
 

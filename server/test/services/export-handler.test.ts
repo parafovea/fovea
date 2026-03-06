@@ -356,6 +356,61 @@ describe('AnnotationExporter', () => {
       expect(result.valid).toBe(false)
       expect(result.errors).toContain('Sequence must have at least 1 keyframe')
     })
+
+    it('allows interpolation gap when gap falls in a non-visible range', () => {
+      // Object appears frames 0-50, disappears 51-149, reappears 150-200
+      const sequence = {
+        boxes: [
+          { x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true },
+          { x: 20, y: 30, width: 100, height: 50, frameNumber: 50, isKeyframe: true },
+          { x: 30, y: 40, width: 100, height: 50, frameNumber: 150, isKeyframe: true },
+          { x: 40, y: 50, width: 100, height: 50, frameNumber: 200, isKeyframe: true }
+        ],
+        interpolationSegments: [
+          { startFrame: 0, endFrame: 50, type: 'linear' as const },
+          { startFrame: 150, endFrame: 200, type: 'linear' as const }
+        ],
+        visibilityRanges: [
+          { startFrame: 0, endFrame: 50, visible: true },
+          { startFrame: 51, endFrame: 149, visible: false },
+          { startFrame: 150, endFrame: 200, visible: true }
+        ],
+        totalFrames: 201,
+        keyframeCount: 4,
+        interpolatedFrameCount: 197
+      }
+
+      const result = exporter.validateSequence(sequence)
+
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('rejects interpolation gap when gap overlaps a visible range', () => {
+      const sequence = {
+        boxes: [
+          { x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true },
+          { x: 20, y: 30, width: 100, height: 50, frameNumber: 50, isKeyframe: true },
+          { x: 30, y: 40, width: 100, height: 50, frameNumber: 150, isKeyframe: true },
+          { x: 40, y: 50, width: 100, height: 50, frameNumber: 200, isKeyframe: true }
+        ],
+        interpolationSegments: [
+          { startFrame: 0, endFrame: 50, type: 'linear' as const },
+          { startFrame: 150, endFrame: 200, type: 'linear' as const }
+        ],
+        visibilityRanges: [
+          { startFrame: 0, endFrame: 200, visible: true }
+        ],
+        totalFrames: 201,
+        keyframeCount: 4,
+        interpolatedFrameCount: 197
+      }
+
+      const result = exporter.validateSequence(sequence)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('Gap between interpolation segments'))).toBe(true)
+    })
   })
 
   describe('getExportStats', () => {
