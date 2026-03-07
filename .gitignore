@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
 yarn.lock
-pnpm-lock.yaml
 
 # Production builds
 dist/
