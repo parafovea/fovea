@@ -4,25 +4,27 @@
  */
 
 import { useState, useEffect, FormEvent } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { useCreateApiKey, useUpdateApiKey, ApiKey, ApiKeyProvider } from '@store/queries/useApiKeys'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
   Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Alert,
-  Box,
-  CircularProgress,
-  InputAdornment,
-  IconButton,
-} from '@mui/material'
-import { Visibility, VisibilityOff } from '@mui/icons-material'
-import { useCreateApiKey, useUpdateApiKey, ApiKey, ApiKeyProvider } from '@store/queries/useApiKeys'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 
 /**
  * Props for ApiKeyDialog component.
@@ -166,88 +168,97 @@ export default function ApiKeyDialog({ open, onClose, mode, existingKey }: ApiKe
   const error = createApiKey.error || updateApiKey.error
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <form onSubmit={handleSubmit}>
-        <DialogTitle>
-          {mode === 'create' ? 'Add API Key' : 'Edit API Key'}
-        </DialogTitle>
-        <DialogContent>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
+      <DialogContent className="sm:max-w-sm">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>
+              {mode === 'create' ? 'Add API Key' : 'Edit API Key'}
+            </DialogTitle>
+          </DialogHeader>
+
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error.message || 'Failed to save API key'}
+            <Alert variant="destructive" className="mt-2">
+              <AlertDescription>
+                {error.message || 'Failed to save API key'}
+              </AlertDescription>
             </Alert>
           )}
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel id="provider-label">Provider</InputLabel>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label>Provider</Label>
               <Select
-                labelId="provider-label"
                 value={formData.provider}
-                onChange={(e) => updateField('provider', e.target.value)}
-                label="Provider"
+                onValueChange={(value) => updateField('provider', value as string)}
                 disabled={mode === 'edit'}
               >
-                <MenuItem value="anthropic">Anthropic</MenuItem>
-                <MenuItem value="openai">OpenAI</MenuItem>
-                <MenuItem value="google">Google</MenuItem>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
-            <TextField
-              label="Key Name"
-              value={formData.keyName}
-              onChange={(e) => updateField('keyName', e.target.value)}
-              error={!!errors.keyName}
-              helperText={errors.keyName || 'Friendly name for this API key'}
-              required
-              fullWidth
-              autoFocus
-            />
+            <div className="space-y-2">
+              <Label>Key Name</Label>
+              <Input
+                value={formData.keyName}
+                onChange={(e) => updateField('keyName', e.target.value)}
+                aria-invalid={!!errors.keyName}
+                required
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                {errors.keyName || 'Friendly name for this API key'}
+              </p>
+            </div>
 
-            <TextField
-              label="API Key"
-              type={showApiKey ? 'text' : 'password'}
-              value={formData.apiKey}
-              onChange={(e) => updateField('apiKey', e.target.value)}
-              error={!!errors.apiKey}
-              helperText={
-                mode === 'edit'
+            <div className="space-y-2">
+              <Label>API Key</Label>
+              <div className="relative">
+                <Input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={formData.apiKey}
+                  onChange={(e) => updateField('apiKey', e.target.value)}
+                  aria-invalid={!!errors.apiKey}
+                  required={mode === 'create'}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute right-1 top-0.5"
+                  aria-label="toggle API key visibility"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {mode === 'edit'
                   ? 'Leave blank to keep existing key'
-                  : errors.apiKey || 'Your API key from the provider'
-              }
-              required={mode === 'create'}
-              fullWidth
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="toggle API key visibility"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      edge="end"
-                    >
-                      {showApiKey ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isLoading}
-            startIcon={isLoading ? <CircularProgress size={16} /> : undefined}
-          >
-            {mode === 'create' ? 'Add Key' : 'Save Changes'}
-          </Button>
-        </DialogActions>
-      </form>
+                  : errors.apiKey || 'Your API key from the provider'}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading && <Spinner className="size-4" />}
+              {mode === 'create' ? 'Add Key' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   )
 }

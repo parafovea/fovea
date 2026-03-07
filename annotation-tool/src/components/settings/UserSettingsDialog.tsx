@@ -3,50 +3,19 @@
  * Provides tabs for profile settings, API key management, and preferences.
  */
 
-import { useState } from 'react'
+import { User, KeyRound, Settings, X } from 'lucide-react'
+import { useAuthStore } from '@store/zustand/authStore'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Tabs,
-  Tab,
-  Box,
-  IconButton,
-} from '@mui/material'
-import {
-  Person as PersonIcon,
-  VpnKey as KeyIcon,
-  Settings as SettingsIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material'
-import { useAuthStore } from '@store/zustand/authStore'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import ProfileTab from './ProfileTab'
 import ApiKeyManagementPanel from './ApiKeyManagementPanel'
-
-/**
- * Tab panel component.
- * Displays content for the selected tab.
- *
- * @param children - Tab content
- * @param value - Current tab value
- * @param index - Tab index
- * @returns Tab panel content
- */
-interface TabPanelProps {
-  children?: React.ReactNode
-  value: number
-  index: number
-}
-
-function TabPanel({ children, value, index }: TabPanelProps) {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
-    </div>
-  )
-}
 
 /**
  * Props for UserSettingsDialog component.
@@ -66,89 +35,61 @@ interface UserSettingsDialogProps {
  */
 export default function UserSettingsDialog({ open, onClose }: UserSettingsDialogProps) {
   const mode = useAuthStore(state => state.mode)
-  const [currentTab, setCurrentTab] = useState(0)
-
-  /**
-   * Handles tab change.
-   *
-   * @param _ - Change event (unused)
-   * @param newValue - New tab index
-   */
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setCurrentTab(newValue)
-  }
-
-  /**
-   * Resets dialog state on close.
-   */
-  const handleClose = () => {
-    setCurrentTab(0)
-    onClose()
-  }
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          User Settings
-          <IconButton
-            aria-label="close"
-            onClick={handleClose}
-            size="small"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle>User Settings</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="close"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </div>
+        </DialogHeader>
 
-      <Tabs
-        value={currentTab}
-        onChange={handleTabChange}
-        aria-label="user settings tabs"
-        sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
-      >
-        <Tab
-          icon={<PersonIcon />}
-          iconPosition="start"
-          label="Profile"
-          id="settings-tab-0"
-          aria-controls="settings-tabpanel-0"
-        />
-        <Tab
-          icon={<KeyIcon />}
-          iconPosition="start"
-          label="API Keys"
-          id="settings-tab-1"
-          aria-controls="settings-tabpanel-1"
-        />
-        <Tab
-          icon={<SettingsIcon />}
-          iconPosition="start"
-          label="Preferences"
-          id="settings-tab-2"
-          aria-controls="settings-tabpanel-2"
-        />
-      </Tabs>
+        <Tabs defaultValue="profile">
+          <TabsList variant="line" className="w-full justify-start border-b px-0">
+            <TabsTrigger value="profile">
+              <User className="size-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="api-keys">
+              <KeyRound className="size-4" />
+              API Keys
+            </TabsTrigger>
+            <TabsTrigger value="preferences">
+              <Settings className="size-4" />
+              Preferences
+            </TabsTrigger>
+          </TabsList>
 
-      <DialogContent sx={{ minHeight: 400 }}>
-        <TabPanel value={currentTab} index={0}>
-          <ProfileTab showPasswordChange={mode === 'multi-user'} />
-        </TabPanel>
+          <div className="min-h-[400px]">
+            <TabsContent value="profile" className="py-2">
+              <ProfileTab showPasswordChange={mode === 'multi-user'} />
+            </TabsContent>
 
-        <TabPanel value={currentTab} index={1}>
-          <ApiKeyManagementPanel />
-        </TabPanel>
+            <TabsContent value="api-keys" className="py-2">
+              <ApiKeyManagementPanel />
+            </TabsContent>
 
-        <TabPanel value={currentTab} index={2}>
-          <Box sx={{ p: 2 }}>
-            <p>Preferences settings coming soon.</p>
-          </Box>
-        </TabPanel>
+            <TabsContent value="preferences" className="py-2">
+              <div className="p-2">
+                <p>Preferences settings coming soon.</p>
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   )
 }

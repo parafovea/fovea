@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import ImportDataDialog from './ImportDataDialog'
+import { ImportDataDialog } from './ImportDataDialog'
 
 // Mock API
 vi.mock('../services/api', () => ({

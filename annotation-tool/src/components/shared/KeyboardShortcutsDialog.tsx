@@ -3,31 +3,27 @@
  * Displays all available keyboard shortcuts organized by context.
  */
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
+
+import { Keyboard } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Paper,
-  Tabs,
-  Tab,
-  Chip,
-  IconButton,
-} from '@mui/material'
-import {
-  Close as CloseIcon,
-  Keyboard as KeyboardIcon,
-} from '@mui/icons-material'
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { commandRegistry, Command } from '@lib/commands/command-registry'
 import { formatKeybinding } from '@lib/commands/commands'
 
@@ -37,90 +33,56 @@ interface KeyboardShortcutsDialogProps {
   currentContext?: 'videoBrowser' | 'ontologyWorkspace' | 'objectWorkspace' | 'annotationWorkspace' | 'settings'
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`shortcuts-tabpanel-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  )
-}
-
-function ShortcutTable({ commands }: { commands: Command[] }) {
+function ShortcutTable({ commands }: { commands: Command[] }): JSX.Element {
   if (commands.length === 0) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          No shortcuts available
-        </Typography>
-      </Box>
+      <div className="p-4 text-center text-sm text-muted-foreground">
+        No shortcuts available
+      </div>
     )
   }
 
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small">
-        <TableHead>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
           <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Shortcut</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
+            <TableHead className="font-bold">Shortcut</TableHead>
+            <TableHead className="font-bold">Description</TableHead>
           </TableRow>
-        </TableHead>
+        </TableHeader>
         <TableBody>
           {commands
-            .filter(cmd => cmd.keybinding) // Only show commands with keybindings
+            .filter(cmd => cmd.keybinding)
             .map((command) => (
               <TableRow key={command.id}>
                 <TableCell>
-                  <Chip
-                    label={
-                      Array.isArray(command.keybinding)
-                        ? formatKeybinding(command.keybinding[0])
-                        : formatKeybinding(command.keybinding!)
-                    }
-                    size="small"
-                    sx={{
-                      fontFamily: 'monospace',
-                      backgroundColor: 'grey.200',
-                      color: 'grey.800',
-                    }}
-                  />
+                  <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                    {Array.isArray(command.keybinding)
+                      ? formatKeybinding(command.keybinding[0])
+                      : formatKeybinding(command.keybinding!)}
+                  </kbd>
                 </TableCell>
                 <TableCell>{command.description || command.title}</TableCell>
               </TableRow>
             ))}
         </TableBody>
       </Table>
-    </TableContainer>
+    </div>
   )
 }
 
-export default function KeyboardShortcutsDialog({
+export function KeyboardShortcutsDialog({
   open,
   onClose,
   currentContext,
-}: KeyboardShortcutsDialogProps) {
-  const [tabValue, setTabValue] = useState(() => {
-    if (currentContext === 'ontologyWorkspace') return 1
-    if (currentContext === 'objectWorkspace') return 2
-    if (currentContext === 'annotationWorkspace') return 3
-    return 0
-  })
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue)
-  }
+}: KeyboardShortcutsDialogProps): JSX.Element {
+  const defaultTab = useMemo(() => {
+    if (currentContext === 'ontologyWorkspace') return 'ontology'
+    if (currentContext === 'objectWorkspace') return 'object'
+    if (currentContext === 'annotationWorkspace') return 'annotation'
+    return 'global'
+  }, [currentContext])
 
   const commandsByCategory = useMemo(() => {
     const allCommands = commandRegistry.getCommands() || []
@@ -135,86 +97,63 @@ export default function KeyboardShortcutsDialog({
   }, [])
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: { minHeight: '60vh' }
-      }}
-    >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <KeyboardIcon color="primary" />
-            <Typography variant="h6">Keyboard Shortcuts</Typography>
-          </Box>
-          <IconButton
-            edge="end"
-            color="inherit"
-            onClick={onClose}
-            aria-label="close"
-            size="small"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl min-h-[60vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Keyboard className="size-5 text-primary" />
+            Keyboard Shortcuts
+          </DialogTitle>
+        </DialogHeader>
 
-      <DialogContent>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange}>
-            <Tab label="Global" />
-            <Tab label="Ontology Builder" />
-            <Tab label="World Builder" />
-            <Tab label="Annotation Workspace" />
-          </Tabs>
-        </Box>
+        <Tabs defaultValue={defaultTab}>
+          <TabsList>
+            <TabsTrigger value="global">Global</TabsTrigger>
+            <TabsTrigger value="ontology">Ontology Builder</TabsTrigger>
+            <TabsTrigger value="object">World Builder</TabsTrigger>
+            <TabsTrigger value="annotation">Annotation Workspace</TabsTrigger>
+          </TabsList>
 
-        <TabPanel value={tabValue} index={0}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            These shortcuts work everywhere in the application
-          </Typography>
-          <ShortcutTable commands={commandsByCategory.global} />
-        </TabPanel>
+          <TabsContent value="global" className="space-y-2 pt-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              These shortcuts work everywhere in the application
+            </p>
+            <ShortcutTable commands={commandsByCategory.global} />
+          </TabsContent>
 
-        <TabPanel value={tabValue} index={1}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available in the Ontology Builder workspace (including persona browser)
-          </Typography>
-          <ShortcutTable commands={commandsByCategory.ontology} />
-        </TabPanel>
+          <TabsContent value="ontology" className="space-y-2 pt-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Available in the Ontology Builder workspace (including persona browser)
+            </p>
+            <ShortcutTable commands={commandsByCategory.ontology} />
+          </TabsContent>
 
-        <TabPanel value={tabValue} index={2}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available in the World Builder workspace
-          </Typography>
-          <ShortcutTable commands={commandsByCategory.object} />
-        </TabPanel>
+          <TabsContent value="object" className="space-y-2 pt-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Available in the World Builder workspace
+            </p>
+            <ShortcutTable commands={commandsByCategory.object} />
+          </TabsContent>
 
-        <TabPanel value={tabValue} index={3}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-            Available in the Annotation Workspace (video annotation)
-          </Typography>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" fontWeight="bold" gutterBottom>
-              Video Playback
-            </Typography>
-            <ShortcutTable commands={commandsByCategory.video} />
-          </Box>
-          <Box>
-            <Typography variant="body2" fontWeight="bold" gutterBottom>
-              Annotation Controls
-            </Typography>
-            <ShortcutTable commands={commandsByCategory.annotation} />
-          </Box>
-        </TabPanel>
+          <TabsContent value="annotation" className="space-y-4 pt-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Available in the Annotation Workspace (video annotation)
+            </p>
+            <div>
+              <h4 className="mb-2 text-sm font-bold">Video Playback</h4>
+              <ShortcutTable commands={commandsByCategory.video} />
+            </div>
+            <div>
+              <h4 className="mb-2 text-sm font-bold">Annotation Controls</h4>
+              <ShortcutTable commands={commandsByCategory.annotation} />
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   )
 }

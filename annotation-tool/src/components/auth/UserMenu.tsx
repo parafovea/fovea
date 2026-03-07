@@ -1,24 +1,17 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+
+import { Info, LayoutDashboard, LogOut, Settings, ShieldCheck } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 import {
-  Box,
-  Avatar,
-  IconButton,
-  Menu,
-  MenuItem,
-  Typography,
-  Divider,
-  ListItemIcon,
-} from '@mui/material'
-import {
-  Settings as SettingsIcon,
-  AdminPanelSettings as AdminIcon,
-  Logout as LogoutIcon,
-  Dashboard as DashboardIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material'
-import { useAuth } from '@hooks/auth'
-import { useCurrentUser } from '@hooks/auth'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useAuth, useCurrentUser } from '@hooks/auth'
 import { useAuthStore } from '@store/zustand/authStore'
 
 /**
@@ -36,19 +29,16 @@ export interface UserMenuProps {
  * Displays user avatar and dropdown menu with user settings, model settings, about, admin panel, and logout options.
  * Only shown when user is authenticated.
  */
-export default function UserMenu({
+export function UserMenu({
   onSettingsClick,
   onModelSettingsClick,
   onAboutClick,
   onAdminPanelClick,
-}: UserMenuProps) {
+}: UserMenuProps): JSX.Element | null {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const { user, isAdmin } = useCurrentUser()
   const mode = useAuthStore(state => state.mode)
-
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const open = Boolean(anchorEl)
 
   if (!user) {
     return null
@@ -68,66 +58,9 @@ export default function UserMenu({
   }
 
   /**
-   * Opens user menu.
-   *
-   * @param event - Click event
-   */
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  /**
-   * Closes user menu.
-   */
-  const handleClose = () => {
-    setAnchorEl(null)
-  }
-
-  /**
-   * Opens settings dialog.
-   */
-  const handleSettings = () => {
-    handleClose()
-    if (onSettingsClick) {
-      onSettingsClick()
-    }
-  }
-
-  /**
-   * Opens admin panel dialog.
-   */
-  const handleAdmin = () => {
-    handleClose()
-    if (onAdminPanelClick) {
-      onAdminPanelClick()
-    }
-  }
-
-  /**
-   * Opens model settings dialog.
-   */
-  const handleModelSettings = () => {
-    handleClose()
-    if (onModelSettingsClick) {
-      onModelSettingsClick()
-    }
-  }
-
-  /**
-   * Opens about dialog.
-   */
-  const handleAbout = () => {
-    handleClose()
-    if (onAboutClick) {
-      onAboutClick()
-    }
-  }
-
-  /**
    * Logs out user and redirects to login page.
    */
   const handleLogout = async () => {
-    handleClose()
     await logout()
     if (mode === 'multi-user') {
       navigate('/login')
@@ -135,82 +68,67 @@ export default function UserMenu({
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
+    <div className="flex items-center gap-1">
+      <span className="text-sm hidden sm:block">
         {user.displayName}
-      </Typography>
-      <IconButton onClick={handleClick} size="small">
-        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem' }}>
-          {getUserInitials()}
-        </Avatar>
-      </IconButton>
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <span className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                {getUserInitials()}
+              </span>
+            </Button>
+          }
+        />
 
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        onClick={handleClose}
-        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-      >
-        <MenuItem disabled>
-          <Box>
-            <Typography variant="body2" fontWeight="bold">
-              {user.displayName}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              @{user.username}
-            </Typography>
-          </Box>
-        </MenuItem>
+        <DropdownMenuContent align="end" sideOffset={4}>
+          <DropdownMenuLabel>
+            <div>
+              <p className="text-sm font-semibold">{user.displayName}</p>
+              <p className="text-xs text-muted-foreground">@{user.username}</p>
+            </div>
+          </DropdownMenuLabel>
 
-        <Divider />
+          <DropdownMenuSeparator />
 
-        <MenuItem onClick={handleSettings}>
-          <ListItemIcon>
-            <SettingsIcon fontSize="small" />
-          </ListItemIcon>
-          User Settings
-        </MenuItem>
+          <DropdownMenuItem onClick={onSettingsClick}>
+            <Settings className="size-4" />
+            User Settings
+          </DropdownMenuItem>
 
-        <MenuItem onClick={handleModelSettings}>
-          <ListItemIcon>
-            <DashboardIcon fontSize="small" />
-          </ListItemIcon>
-          Model Settings
-        </MenuItem>
+          <DropdownMenuItem onClick={onModelSettingsClick}>
+            <LayoutDashboard className="size-4" />
+            Model Settings
+          </DropdownMenuItem>
 
-        <MenuItem onClick={handleAbout}>
-          <ListItemIcon>
-            <InfoIcon fontSize="small" />
-          </ListItemIcon>
-          About
-        </MenuItem>
+          <DropdownMenuItem onClick={onAboutClick}>
+            <Info className="size-4" />
+            About
+          </DropdownMenuItem>
 
-        {isAdmin && (
-          <>
-            <Divider />
-            <MenuItem onClick={handleAdmin}>
-              <ListItemIcon>
-                <AdminIcon fontSize="small" />
-              </ListItemIcon>
-              Admin Panel
-            </MenuItem>
-          </>
-        )}
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onAdminPanelClick}>
+                <ShieldCheck className="size-4" />
+                Admin Panel
+              </DropdownMenuItem>
+            </>
+          )}
 
-        {mode === 'multi-user' && (
-          <>
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <LogoutIcon fontSize="small" />
-              </ListItemIcon>
-              Logout
-            </MenuItem>
-          </>
-        )}
-      </Menu>
-    </Box>
+          {mode === 'multi-user' && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="size-4" />
+                Logout
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }

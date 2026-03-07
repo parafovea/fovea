@@ -4,48 +4,19 @@
  */
 
 import { useState } from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Tabs,
-  Tab,
-  Box,
-  IconButton,
-  Alert,
-} from '@mui/material'
-import {
-  Settings as SettingsIcon,
-  Dashboard as DashboardIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material'
+import { Settings, LayoutDashboard, X } from 'lucide-react'
 import { ModelSettingsPanel } from '@components/model/ModelSettingsPanel'
 import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
-
-/**
- * Tab panel component.
- * Displays content for the selected tab.
- *
- * @param children - Tab content
- * @param value - Current tab value
- * @param index - Tab index
- * @returns Tab panel content
- */
-interface TabPanelProps {
-  children?: React.ReactNode
-  value: number
-  index: number
-}
-
-function TabPanel({ children, value, index }: TabPanelProps) {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
-    </div>
-  )
-}
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 /**
  * Props for ModelSettingsDialog component.
@@ -64,28 +35,15 @@ interface ModelSettingsDialogProps {
  * @returns Model settings dialog
  */
 export default function ModelSettingsDialog({ open, onClose }: ModelSettingsDialogProps) {
-  const [currentTab, setCurrentTab] = useState(0)
   const [notification, setNotification] = useState<{
     message: string
     severity: 'success' | 'error'
   } | null>(null)
 
   /**
-   * Handles tab change.
-   *
-   * @param _ - Change event (unused)
-   * @param newValue - New tab index
-   */
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setCurrentTab(newValue)
-    setNotification(null)
-  }
-
-  /**
    * Resets dialog state on close.
    */
   const handleClose = () => {
-    setCurrentTab(0)
     setNotification(null)
     onClose()
   }
@@ -105,73 +63,62 @@ export default function ModelSettingsDialog({ open, onClose }: ModelSettingsDial
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Model Settings
-          <IconButton
-            aria-label="close"
-            onClick={handleClose}
-            size="small"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
+      <DialogContent className="sm:max-w-4xl" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Model Settings</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="close"
+              onClick={handleClose}
+            >
+              <X />
+            </Button>
+          </div>
+        </DialogHeader>
 
-      {notification && (
-        <Box sx={{ px: 3, pt: 2 }}>
-          <Alert
-            severity={notification.severity}
-            onClose={() => setNotification(null)}
-          >
-            {notification.message}
+        {notification && (
+          <Alert variant={notification.severity === 'error' ? 'destructive' : 'default'}>
+            <AlertDescription>{notification.message}</AlertDescription>
           </Alert>
-        </Box>
-      )}
+        )}
 
-      <Tabs
-        value={currentTab}
-        onChange={handleTabChange}
-        aria-label="model settings tabs"
-        sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
-      >
-        <Tab
-          icon={<SettingsIcon />}
-          iconPosition="start"
-          label="Configuration"
-          id="model-settings-tab-0"
-          aria-controls="model-settings-tabpanel-0"
-        />
-        <Tab
-          icon={<DashboardIcon />}
-          iconPosition="start"
-          label="Status"
-          id="model-settings-tab-1"
-          aria-controls="model-settings-tabpanel-1"
-        />
-      </Tabs>
+        <Tabs defaultValue="configuration" onValueChange={() => setNotification(null)}>
+          <TabsList variant="line" className="w-full justify-start border-b px-0">
+            <TabsTrigger value="configuration">
+              <Settings className="size-4" />
+              Configuration
+            </TabsTrigger>
+            <TabsTrigger value="status">
+              <LayoutDashboard className="size-4" />
+              Status
+            </TabsTrigger>
+          </TabsList>
 
-      <DialogContent sx={{ minHeight: 500 }}>
-        <TabPanel value={currentTab} index={0}>
-          <ModelSettingsPanel
-            onSaveSuccess={handleSaveSuccess}
-            onSaveError={handleSaveError}
-          />
-        </TabPanel>
+          <div className="min-h-[500px]">
+            <TabsContent value="configuration" className="py-2">
+              <ModelSettingsPanel
+                onSaveSuccess={handleSaveSuccess}
+                onSaveError={handleSaveError}
+              />
+            </TabsContent>
 
-        <TabPanel value={currentTab} index={1}>
-          <ModelStatusDashboard
-            refreshInterval={15000}
-            showRefreshButton={true}
-            showAutoRefreshToggle={true}
-          />
-        </TabPanel>
+            <TabsContent value="status" className="py-2">
+              <ModelStatusDashboard
+                refreshInterval={15000}
+                showRefreshButton={true}
+                showAutoRefreshToggle={true}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   )
 }

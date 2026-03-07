@@ -7,16 +7,11 @@
  * @module components/shared/SaveStatusIndicator
  */
 
-import {
-  Box,
-  Typography,
-  CircularProgress,
-  IconButton,
-  Tooltip,
-} from '@mui/material'
-import CheckIcon from '@mui/icons-material/Check'
-import ErrorIcon from '@mui/icons-material/Error'
-import RefreshIcon from '@mui/icons-material/Refresh'
+import { Check, CircleAlert, RefreshCw } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 /**
  * Status of the save operation.
@@ -91,69 +86,78 @@ export function SaveStatusIndicator({
   maxRetries = 3,
   onRetry,
   compact = false,
-}: SaveStatusIndicatorProps) {
+}: SaveStatusIndicatorProps): JSX.Element | null {
   if (status === 'idle') {
     return null
   }
 
   if (compact) {
     return (
-      <Box
+      <div
         data-testid={`save-status-${status}`}
-        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+        className="flex items-center gap-1"
       >
-        {status === 'saving' && <CircularProgress size={14} />}
+        {status === 'saving' && <Spinner className="size-3.5" />}
         {status === 'saved' && (
-          <CheckIcon sx={{ fontSize: 14, color: 'success.main' }} />
+          <Check className="size-3.5 text-green-600" />
         )}
         {status === 'error' && (
-          <Tooltip title={errorMessage || 'Save failed'}>
-            <ErrorIcon sx={{ fontSize: 14, color: 'error.main' }} />
+          <Tooltip>
+            <TooltipTrigger render={
+              <span className="inline-flex">
+                <CircleAlert className="size-3.5 text-destructive" />
+              </span>
+            } />
+            <TooltipContent>{errorMessage || 'Save failed'}</TooltipContent>
           </Tooltip>
         )}
         {status === 'retrying' && (
-          <Tooltip title={`Retrying (${retryCount + 1}/${maxRetries})`}>
-            <CircularProgress size={14} />
+          <Tooltip>
+            <TooltipTrigger render={
+              <span className="inline-flex">
+                <Spinner className="size-3.5" />
+              </span>
+            } />
+            <TooltipContent>Retrying ({retryCount + 1}/{maxRetries})</TooltipContent>
           </Tooltip>
         )}
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box
+    <div
       data-testid={`save-status-${status}`}
-      sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+      className="flex items-center gap-2"
     >
       {status === 'saving' && (
         <>
-          <CircularProgress size={16} />
-          <Typography variant="caption" color="text.secondary">
-            Saving...
-          </Typography>
+          <Spinner className="size-4" />
+          <span className="text-xs text-muted-foreground">Saving...</span>
         </>
       )}
 
       {status === 'saved' && (
         <>
-          <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
-          <Typography variant="caption" color="success.main">
+          <Check className="size-4 text-green-600" />
+          <span className="text-xs text-green-600">
             Saved{lastSavedAt ? ` at ${formatTime(lastSavedAt)}` : ''}
-          </Typography>
+          </span>
         </>
       )}
 
       {status === 'error' && (
         <>
-          <ErrorIcon sx={{ fontSize: 16, color: 'error.main' }} />
-          <Typography variant="caption" color="error.main">
-            Save failed
-          </Typography>
+          <CircleAlert className="size-4 text-destructive" />
+          <span className="text-xs text-destructive">Save failed</span>
           {onRetry && (
-            <Tooltip title="Retry">
-              <IconButton size="small" onClick={onRetry}>
-                <RefreshIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button variant="ghost" size="icon-xs" onClick={onRetry}>
+                  <RefreshCw className="size-4" />
+                </Button>
+              } />
+              <TooltipContent>Retry</TooltipContent>
             </Tooltip>
           )}
         </>
@@ -161,12 +165,12 @@ export function SaveStatusIndicator({
 
       {status === 'retrying' && (
         <>
-          <CircularProgress size={16} />
-          <Typography variant="caption" color="text.secondary">
+          <Spinner className="size-4" />
+          <span className="text-xs text-muted-foreground">
             Retrying ({retryCount + 1}/{maxRetries})...
-          </Typography>
+          </span>
         </>
       )}
-    </Box>
+    </div>
   )
 }

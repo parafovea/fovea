@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Copy, Trash2, Pencil, ChevronDown, UserPlus, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import {
-  Box,
-  Paper,
-  Typography,
-  Button,
-  Menu,
-  MenuItem,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Chip,
-  Tooltip,
-  ListItemText,
-  ListItemSecondaryAction,
-  Divider,
-  IconButton,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  PersonAdd as AddPersonaIcon,
-  ContentCopy as CopyIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  ExpandMore as ExpandMoreIcon,
-} from '@mui/icons-material'
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import {
   usePersonas,
   usePersonaOntology,
@@ -36,7 +35,7 @@ import {
 } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 import { Persona } from '@models/types'
-import ConfirmDialog from '@components/shared/ConfirmDialog'
+import { ConfirmDialog } from '@components/shared/ConfirmDialog'
 import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
 
 export default function PersonaManager() {
@@ -58,7 +57,6 @@ export default function PersonaManager() {
   // Fetch ontology for active persona
   const { data: activeOntology } = usePersonaOntology(activePersonaId)
 
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
@@ -185,14 +183,6 @@ export default function PersonaManager() {
     entityId: createdPersonaId || 'new',
   })
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  const handleMenuClose = () => {
-    setAnchorEl(null)
-  }
-
   const handleCreateNew = () => {
     setFormData({
       name: '',
@@ -203,7 +193,6 @@ export default function PersonaManager() {
     setCreatedPersonaId(null) // Reset for fresh creation
     createdPersonaIdRef.current = null
     setCreateDialogOpen(true)
-    handleMenuClose()
   }
 
   const handleCancelCreate = () => {
@@ -247,7 +236,6 @@ export default function PersonaManager() {
         },
       })
     }
-    handleMenuClose()
   }
 
   const handleSaveNew = () => {
@@ -273,7 +261,6 @@ export default function PersonaManager() {
   const handleDeleteClick = useCallback((persona: Persona) => {
     setPersonaToDelete(persona)
     setDeleteDialogOpen(true)
-    handleMenuClose()
   }, [])
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -335,216 +322,229 @@ export default function PersonaManager() {
   }
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Paper sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">Active Persona</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              endIcon={<ExpandMoreIcon />}
-              onClick={handleMenuClick}
-              disabled={personas.length === 0}
-            >
-              {activePersona?.name || 'Select Persona'}
+    <div className="mb-6">
+      <div className="rounded-xl border bg-card p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Active Persona</h2>
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" disabled={personas.length === 0} />
+                }
+              >
+                {activePersona?.name || 'Select Persona'}
+                <ChevronDown className="ml-1 size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[250px]">
+                {personas.map((persona) => (
+                  <DropdownMenuItem
+                    key={persona.id}
+                    onClick={() => setSelectedPersonaId(persona.id)}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex flex-col">
+                      <span className={persona.id === activePersonaId ? 'font-medium' : ''}>
+                        {persona.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {persona.role} &middot; {getOntologyStats(persona.id).entities} entities, {getOntologyStats(persona.id).events} events
+                      </span>
+                    </div>
+                    <div className="ml-4 flex gap-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation()
+                                handleCopyPersona(persona.id)
+                              }}
+                            />
+                          }
+                        >
+                          <Copy className="size-3" />
+                        </TooltipTrigger>
+                        <TooltipContent>Copy persona</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation()
+                                handleDeleteClick(persona)
+                              }}
+                            />
+                          }
+                        >
+                          <Trash2 className="size-3" />
+                        </TooltipTrigger>
+                        <TooltipContent>Delete persona</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleCreateNew}>
+                  <UserPlus className="mr-2 size-4" />
+                  Create New Persona
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="ghost" size="icon" onClick={handleCreateNew}>
+              <Plus className="size-4" />
             </Button>
-            <IconButton color="primary" onClick={handleCreateNew}>
-              <AddPersonaIcon />
-            </IconButton>
-          </Box>
-        </Box>
+          </div>
+        </div>
 
         {activePersona && (
-          <Box>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Role:
-              </Typography>
-              <Typography variant="body2">{activePersona.role}</Typography>
-              <IconButton size="small" onClick={() => handleEditPersona(activePersona)}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Box sx={{ mb: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Information Need:
-              </Typography>
-              <Typography variant="body2">{activePersona.informationNeed}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Role:</span>
+              <span className="text-sm">{activePersona.role}</span>
+              <Button variant="ghost" size="icon-xs" onClick={() => handleEditPersona(activePersona)}>
+                <Pencil className="size-3" />
+              </Button>
+            </div>
+            <div className="mb-2">
+              <span className="text-sm font-medium text-muted-foreground">Information Need:</span>
+              <p className="text-sm">{activePersona.informationNeed}</p>
+            </div>
+            <div className="mt-4 flex gap-2">
               {(() => {
                 const stats = getOntologyStats(activePersona.id)
                 return (
                   <>
-                    <Chip label={`${stats.entities} Entities`} size="small" color="success" />
-                    <Chip label={`${stats.roles} Roles`} size="small" color="primary" />
-                    <Chip label={`${stats.events} Events`} size="small" color="warning" />
-                    <Chip label={`${stats.relations} Relations`} size="small" color="secondary" />
+                    <Badge>{stats.entities} Entities</Badge>
+                    <Badge variant="secondary">{stats.roles} Roles</Badge>
+                    <Badge variant="outline">{stats.events} Events</Badge>
+                    <Badge variant="secondary">{stats.relations} Relations</Badge>
                   </>
                 )
               })()}
-            </Box>
-          </Box>
+            </div>
+          </div>
         )}
+      </div>
 
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleMenuClose}
-        >
-          {personas.map((persona) => (
-            <MenuItem
-              key={persona.id}
-              selected={persona.id === activePersonaId}
-              onClick={() => {
-                setSelectedPersonaId(persona.id)
-                handleMenuClose()
-              }}
-            >
-              <ListItemText
-                primary={persona.name}
-                secondary={`${persona.role} • ${getOntologyStats(persona.id).entities} entities, ${getOntologyStats(persona.id).events} events`}
+      <Dialog open={createDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCancelCreate() }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{createdPersonaId ? 'Edit New Persona' : 'Create New Persona'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label>Persona Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
               />
-              <ListItemSecondaryAction>
-                <Tooltip title="Copy persona">
-                  <IconButton
-                    size="small"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation()
-                      handleCopyPersona(persona.id)
-                    }}
-                  >
-                    <CopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete persona">
-                  <IconButton
-                    size="small"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation()
-                      handleDeleteClick(persona)
-                    }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </ListItemSecondaryAction>
-            </MenuItem>
-          ))}
-          <Divider />
-          <MenuItem onClick={handleCreateNew}>
-            <AddPersonaIcon sx={{ mr: 1 }} />
-            Create New Persona
-          </MenuItem>
-        </Menu>
-      </Paper>
-
-      <Dialog open={createDialogOpen} onClose={handleCancelCreate} maxWidth="md" fullWidth>
-        <DialogTitle>{createdPersonaId ? 'Edit New Persona' : 'Create New Persona'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              label="Persona Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Role"
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              fullWidth
-              helperText="e.g., 'Tactically-Oriented Analyst', 'Strategic Planner', 'Field Operator'"
-            />
-            <TextField
-              label="Information Need"
-              value={formData.informationNeed}
-              onChange={(e) => setFormData({ ...formData, informationNeed: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              helperText="What specific information does this persona need to extract?"
-            />
-            <TextField
-              label="Additional Details"
-              value={formData.details}
-              onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              helperText="Background, constraints, or other relevant information"
-            />
-          </Box>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Input
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">e.g., 'Tactically-Oriented Analyst', 'Strategic Planner', 'Field Operator'</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Information Need</Label>
+              <Textarea
+                value={formData.informationNeed}
+                onChange={(e) => setFormData({ ...formData, informationNeed: e.target.value })}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">What specific information does this persona need to extract?</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Additional Details</Label>
+              <Textarea
+                value={formData.details}
+                onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">Background, constraints, or other relevant information</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <div className="mr-auto flex items-center gap-2">
+              <SaveStatusIndicator
+                status={createSaveStatus}
+                lastSavedAt={createLastSavedAt}
+                errorMessage={createErrorMessage}
+                retryCount={createRetryCount}
+                onRetry={createForceSave}
+              />
+            </div>
+            <Button variant="outline" onClick={handleCancelCreate}>Cancel</Button>
+            <Button
+              onClick={createdPersonaId ? handleCloseCreate : handleSaveNew}
+              disabled={!formData.name}
+            >
+              {createdPersonaId ? 'Done' : 'Create Persona'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', ml: 1 }}>
-            <SaveStatusIndicator
-              status={createSaveStatus}
-              lastSavedAt={createLastSavedAt}
-              errorMessage={createErrorMessage}
-              retryCount={createRetryCount}
-              onRetry={createForceSave}
-            />
-          </Box>
-          <Button onClick={handleCancelCreate}>Cancel</Button>
-          <Button
-            onClick={createdPersonaId ? handleCloseCreate : handleSaveNew}
-            variant="contained"
-            disabled={!formData.name}
-          >
-            {createdPersonaId ? 'Done' : 'Create Persona'}
-          </Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Edit Persona</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              label="Persona Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Role"
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Information Need"
-              value={formData.informationNeed}
-              onChange={(e) => setFormData({ ...formData, informationNeed: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-            />
-            <TextField
-              label="Additional Details"
-              value={formData.details}
-              onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Box>
+      <Dialog open={editDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setEditDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Persona</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label>Persona Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Input
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Information Need</Label>
+              <Textarea
+                value={formData.informationNeed}
+                onChange={(e) => setFormData({ ...formData, informationNeed: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Additional Details</Label>
+              <Textarea
+                value={formData.details}
+                onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <div className="mr-auto flex items-center gap-2">
+              <SaveStatusIndicator
+                status={editSaveStatus}
+                lastSavedAt={editLastSavedAt}
+                errorMessage={editErrorMessage}
+                retryCount={editRetryCount}
+                onRetry={editForceSave}
+              />
+            </div>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Done</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', ml: 1 }}>
-            <SaveStatusIndicator
-              status={editSaveStatus}
-              lastSavedAt={editLastSavedAt}
-              errorMessage={editErrorMessage}
-              retryCount={editRetryCount}
-              onRetry={editForceSave}
-            />
-          </Box>
-          <Button onClick={() => setEditDialogOpen(false)}>Done</Button>
-        </DialogActions>
       </Dialog>
 
       <ConfirmDialog
@@ -552,11 +552,11 @@ export default function PersonaManager() {
         title="Delete Persona"
         message={getDeleteMessage()}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
         loading={deletePersonaMutation.isPending || isLoadingPreview}
       />
-    </Box>
+    </div>
   )
 }

@@ -5,33 +5,30 @@
 
 import { useState } from 'react'
 import {
-  Box,
-  Button,
+  Plus,
+  Pencil,
+  Trash2,
+  Lock,
+  ToggleLeft,
+  ToggleRight,
+} from 'lucide-react'
+import { useAuthStore } from '@store/zustand/authStore'
+import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '@store/queries/useApiKeys'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  IconButton,
-  Chip,
-  Alert,
-  CircularProgress,
-  Typography,
-  Tooltip,
-} from '@mui/material'
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Lock as LockIcon,
-  ToggleOn as ToggleOnIcon,
-  ToggleOff as ToggleOffIcon,
-} from '@mui/icons-material'
-import { useAuthStore } from '@store/zustand/authStore'
-import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '@store/queries/useApiKeys'
+} from '@/components/ui/table'
 import ApiKeyDialog from './ApiKeyDialog'
-import ConfirmDialog from '../shared/ConfirmDialog'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 /**
  * API key management panel.
@@ -108,7 +105,7 @@ export default function ApiKeyManagementPanel() {
    * @returns Formatted date string
    */
   const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '—'
+    if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -133,126 +130,145 @@ export default function ApiKeyManagementPanel() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-6" />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert severity="error">
-          Failed to load API keys: {error.message}
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load API keys: {error.message}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div className="flex flex-col gap-4">
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
           Manage your API keys for external services. Admin keys are inherited and cannot be modified.
-        </Typography>
+        </p>
         <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+          size="sm"
           onClick={() => setCreateDialogOpen(true)}
-          size="small"
         >
+          <Plus className="size-4" />
           Add Key
         </Button>
-      </Box>
+      </div>
 
       {/* API Keys Table */}
       {apiKeys.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body1" color="text.secondary">
+        <div className="py-8 text-center">
+          <p className="text-muted-foreground">
             No API keys configured
-          </Typography>
-        </Box>
+          </p>
+        </div>
       ) : (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Provider</TableCell>
-                <TableCell>Key Name</TableCell>
-                <TableCell>Key</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Last Used</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {apiKeys.map((key) => (
-                <TableRow key={key.id} hover>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {getProviderName(key.provider)}
-                      {key.isAdminKey && (
-                        <Tooltip title="Admin key (inherited)">
-                          <LockIcon fontSize="small" color="action" />
-                        </Tooltip>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{key.keyName}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                      {key.keyMask}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {key.isActive ? (
-                      <Chip label="Active" color="success" size="small" />
-                    ) : (
-                      <Chip label="Inactive" size="small" />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Provider</TableHead>
+              <TableHead>Key Name</TableHead>
+              <TableHead>Key</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last Used</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {apiKeys.map((key) => (
+              <TableRow key={key.id}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {getProviderName(key.provider)}
+                    {key.isAdminKey && (
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Lock className="size-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>Admin key (inherited)</TooltipContent>
+                      </Tooltip>
                     )}
-                  </TableCell>
-                  <TableCell>{formatDate(key.lastUsedAt)}</TableCell>
-                  <TableCell align="right">
-                    {key.isAdminKey ? (
-                      <Chip label="Admin Key" size="small" color="primary" />
-                    ) : (
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                        <Tooltip title={key.isActive ? 'Deactivate' : 'Activate'}>
-                          <IconButton
-                            size="small"
+                  </div>
+                </TableCell>
+                <TableCell>{key.keyName}</TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs">
+                    {key.keyMask}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {key.isActive ? (
+                    <Badge variant="secondary">Active</Badge>
+                  ) : (
+                    <Badge variant="outline">Inactive</Badge>
+                  )}
+                </TableCell>
+                <TableCell>{formatDate(key.lastUsedAt)}</TableCell>
+                <TableCell className="text-right">
+                  {key.isAdminKey ? (
+                    <Badge>Admin Key</Badge>
+                  ) : (
+                    <div className="flex justify-end gap-1">
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => handleToggleActive(key)}
                             aria-label="toggle active status"
                           >
-                            {key.isActive ? <ToggleOnIcon fontSize="small" /> : <ToggleOffIcon fontSize="small" />}
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit">
-                          <IconButton
-                            size="small"
+                            {key.isActive
+                              ? <ToggleRight className="size-4" />
+                              : <ToggleLeft className="size-4" />
+                            }
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {key.isActive ? 'Deactivate' : 'Activate'}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => handleEdit(key)}
                             aria-label="edit key"
                           >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
+                            <Pencil className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => handleDeleteClick(key)}
                             aria-label="delete key"
                           >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {/* Dialogs */}
@@ -279,7 +295,7 @@ export default function ApiKeyManagementPanel() {
         title="Delete API Key"
         message={`Are you sure you want to delete the API key "${deletingKey?.keyName}"? This action cannot be undone.`}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeleteConfirmOpen(false)
@@ -287,6 +303,6 @@ export default function ApiKeyManagementPanel() {
         }}
         loading={deleteApiKey.isPending}
       />
-    </Box>
+    </div>
   )
 }

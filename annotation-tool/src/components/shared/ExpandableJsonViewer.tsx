@@ -4,8 +4,8 @@
  */
 
 import { useState } from 'react'
-import { Box, IconButton } from '@mui/material'
-import { ExpandMore as ExpandIcon, ChevronRight as CollapseIcon } from '@mui/icons-material'
+
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 /** JSON-compatible value type for the viewer. */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
@@ -39,13 +39,13 @@ const colors = {
  * @param initialCollapsed - Whether sections start collapsed
  * @returns Expandable JSON viewer component
  */
-export default function ExpandableJsonViewer({
+export function ExpandableJsonViewer({
   data,
   initialCollapsed = false
-}: ExpandableJsonViewerProps) {
+}: ExpandableJsonViewerProps): JSX.Element {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
 
-  const togglePath = (path: string) => {
+  const togglePath = (path: string): void => {
     setExpandedPaths(prev => {
       const newSet = new Set(prev)
       if (newSet.has(path)) {
@@ -57,7 +57,7 @@ export default function ExpandableJsonViewer({
     })
   }
 
-  const isExpanded = (path: string) => {
+  const isExpanded = (path: string): boolean => {
     return expandedPaths.has(path) || !initialCollapsed
   }
 
@@ -89,29 +89,30 @@ export default function ExpandableJsonViewer({
       const preview = `Array(${value.length})`
 
       return (
-        <Box component="span">
-          <IconButton
-            size="small"
+        <span>
+          <button
+            type="button"
+            className="inline-flex size-4 cursor-pointer items-center justify-center border-none bg-transparent p-0 align-middle"
+            style={{ color: colors.punctuation }}
             onClick={() => togglePath(path)}
-            sx={{ p: 0, minWidth: 16, mr: 0.5, color: colors.punctuation }}
           >
-            {expanded ? <ExpandIcon fontSize="inherit" /> : <CollapseIcon fontSize="inherit" />}
-          </IconButton>
+            {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          </button>
           <span style={{ color: colors.comment }}>{preview} </span>
           <span style={{ color: colors.punctuation }}>[</span>
           {expanded && (
-            <Box component="span" sx={{ display: 'block' }}>
+            <span className="block">
               {value.map((item, index) => (
-                <Box key={index} component="div">
+                <div key={index}>
                   {indentStr}  {renderValue(item, `${path}[${index}]`, indent + 1)}
                   {index < value.length - 1 && <span style={{ color: colors.punctuation }}>,</span>}
-                </Box>
+                </div>
               ))}
               <div>{indentStr}<span style={{ color: colors.punctuation }}>]</span></div>
-            </Box>
+            </span>
           )}
           {!expanded && <span style={{ color: colors.punctuation }}>]</span>}
-        </Box>
+        </span>
       )
     }
 
@@ -125,31 +126,32 @@ export default function ExpandableJsonViewer({
       const preview = `Object(${keys.length})`
 
       return (
-        <Box component="span">
-          <IconButton
-            size="small"
+        <span>
+          <button
+            type="button"
+            className="inline-flex size-4 cursor-pointer items-center justify-center border-none bg-transparent p-0 align-middle"
+            style={{ color: colors.punctuation }}
             onClick={() => togglePath(path)}
-            sx={{ p: 0, minWidth: 16, mr: 0.5, color: colors.punctuation }}
           >
-            {expanded ? <ExpandIcon fontSize="inherit" /> : <CollapseIcon fontSize="inherit" />}
-          </IconButton>
+            {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          </button>
           <span style={{ color: colors.comment }}>{preview} </span>
           <span style={{ color: colors.punctuation }}>{'{'}</span>
           {expanded && (
-            <Box component="span" sx={{ display: 'block' }}>
+            <span className="block">
               {keys.map((key, index) => (
-                <Box key={key} component="div">
+                <div key={key}>
                   {indentStr}  <span style={{ color: colors.key }}>"{key}"</span>
                   <span style={{ color: colors.punctuation }}>: </span>
                   {renderValue(value[key], `${path}.${key}`, indent + 1)}
                   {index < keys.length - 1 && <span style={{ color: colors.punctuation }}>,</span>}
-                </Box>
+                </div>
               ))}
               <div>{indentStr}<span style={{ color: colors.punctuation }}>{'}'}</span></div>
-            </Box>
+            </span>
           )}
           {!expanded && <span style={{ color: colors.punctuation }}>{'}'}</span>}
-        </Box>
+        </span>
       )
     }
 
@@ -157,25 +159,15 @@ export default function ExpandableJsonViewer({
   }
 
   return (
-    <Box
-      sx={{
-        bgcolor: '#1e1e1e',
+    <div
+      className="overflow-auto rounded border border-border font-mono text-xs leading-relaxed whitespace-pre"
+      style={{
+        backgroundColor: '#1e1e1e',
         color: '#d4d4d4',
-        p: 2,
-        borderRadius: 1,
-        overflow: 'auto',
-        fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-        fontSize: '0.75rem',
-        lineHeight: 1.6,
-        border: '1px solid',
-        borderColor: 'divider',
-        whiteSpace: 'pre',
-        '& .MuiIconButton-root': {
-          verticalAlign: 'middle',
-        }
+        padding: '0.5rem',
       }}
     >
       {renderValue(data)}
-    </Box>
+    </div>
   )
 }

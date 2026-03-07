@@ -4,33 +4,24 @@
  */
 
 import { useState, useMemo } from 'react'
+import { UserPlus, Pencil, Trash2, Search, ArrowUpDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import {
-  Box,
-  Button,
-  TextField,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  TableSortLabel,
-  IconButton,
-  Chip,
-  Alert,
-  CircularProgress,
-  InputAdornment,
-} from '@mui/material'
-import {
-  PersonAdd as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material'
+} from '@/components/ui/table'
 import { useUsers, useDeleteUser, UserWithStats } from '@store/queries/admin/useUsers'
-import CreateUserDialog from './CreateUserDialog'
-import EditUserDialog from './EditUserDialog'
-import ConfirmDialog from '../shared/ConfirmDialog'
+import { CreateUserDialog } from './CreateUserDialog'
+import { EditUserDialog } from './EditUserDialog'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 type SortField = 'username' | 'displayName' | 'email' | 'createdAt' | 'personaCount' | 'sessionCount'
 type SortOrder = 'asc' | 'desc'
@@ -39,7 +30,7 @@ type SortOrder = 'asc' | 'desc'
  * User management page.
  * Provides interface for viewing, creating, editing, and deleting users.
  */
-export default function UserManagementPage() {
+export function UserManagementPage(): JSX.Element {
   const { data: users = [], isLoading, error } = useUsers()
   const deleteUser = useDeleteUser()
 
@@ -175,157 +166,131 @@ export default function UserManagementPage() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load users: {error.message}
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load users: {error.message}</AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6">
       {/* Toolbar */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
-        <TextField
-          placeholder="Search users..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          size="small"
-          sx={{ flexGrow: 1, maxWidth: 400 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setCreateDialogOpen(true)}
-        >
+      <div className="flex gap-4 mb-6 items-center">
+        <div className="relative flex-grow max-w-[400px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search users..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" />
           Add User
         </Button>
-      </Box>
+      </div>
 
       {/* Users Table */}
-      <TableContainer>
-        <Table>
-          <TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('username')}>
+                Username
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('displayName')}>
+                Display Name
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('email')}>
+                Email
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead className="text-right">
+              <Button variant="ghost" size="sm" className="-mr-3 h-8" onClick={() => handleSort('personaCount')}>
+                Personas
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead className="text-right">
+              <Button variant="ghost" size="sm" className="-mr-3 h-8" onClick={() => handleSort('sessionCount')}>
+                Sessions
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('createdAt')}>
+                Created
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredUsers.length === 0 ? (
             <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'username'}
-                  direction={sortField === 'username' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('username')}
-                >
-                  Username
-                </TableSortLabel>
+              <TableCell colSpan={8} className="text-center py-8">
+                No users found
               </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'displayName'}
-                  direction={sortField === 'displayName' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('displayName')}
-                >
-                  Display Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'email'}
-                  direction={sortField === 'email' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('email')}
-                >
-                  Email
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={sortField === 'personaCount'}
-                  direction={sortField === 'personaCount' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('personaCount')}
-                >
-                  Personas
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={sortField === 'sessionCount'}
-                  direction={sortField === 'sessionCount' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('sessionCount')}
-                >
-                  Sessions
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'createdAt'}
-                  direction={sortField === 'createdAt' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('createdAt')}
-                >
-                  Created
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">Actions</TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                  No users found
+          ) : (
+            filteredUsers.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>{user.username}</TableCell>
+                <TableCell>{user.displayName}</TableCell>
+                <TableCell>{user.email || '-'}</TableCell>
+                <TableCell>
+                  {user.isAdmin ? (
+                    <Badge>Admin</Badge>
+                  ) : (
+                    <Badge variant="secondary">User</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">{user.personaCount || 0}</TableCell>
+                <TableCell className="text-right">{user.sessionCount || 0}</TableCell>
+                <TableCell>{formatDate(user.createdAt)}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEdit(user)}
+                    aria-label="edit user"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteClick(user)}
+                    aria-label="delete user"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : (
-              filteredUsers.map((user) => (
-                <TableRow key={user.id} hover>
-                  <TableCell>{user.username}</TableCell>
-                  <TableCell>{user.displayName}</TableCell>
-                  <TableCell>{user.email || '—'}</TableCell>
-                  <TableCell>
-                    {user.isAdmin ? (
-                      <Chip label="Admin" color="primary" size="small" />
-                    ) : (
-                      <Chip label="User" size="small" />
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{user.personaCount || 0}</TableCell>
-                  <TableCell align="right">{user.sessionCount || 0}</TableCell>
-                  <TableCell>{formatDate(user.createdAt)}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEdit(user)}
-                      aria-label="edit user"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDeleteClick(user)}
-                      aria-label="delete user"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {/* Dialogs */}
       <CreateUserDialog
@@ -349,7 +314,7 @@ export default function UserManagementPage() {
         title="Delete User"
         message={`Are you sure you want to delete user "${deletingUser?.username}"? This action cannot be undone.`}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeleteConfirmOpen(false)
@@ -357,6 +322,6 @@ export default function UserManagementPage() {
         }}
         loading={deleteUser.isPending}
       />
-    </Box>
+    </div>
   )
 }

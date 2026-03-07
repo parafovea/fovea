@@ -7,38 +7,48 @@
 
 import { useState } from 'react'
 import { useParams, Link as RouterLink } from 'react-router-dom'
+import { ArrowLeft, UserPlus, Trash2, Star, ChevronsUpDown, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Container,
   Dialog,
-  DialogActions,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  Divider,
-  IconButton,
-  MenuItem,
-  Paper,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material'
+} from '@/components/ui/dialog'
 import {
-  ArrowBack as ArrowBackIcon,
-  PersonAdd as PersonAddIcon,
-  Delete as DeleteIcon,
-  Star as StarIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandItem,
+} from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 import {
   useProject,
   useProjectMembers,
@@ -74,6 +84,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [newUserId, setNewUserId] = useState('')
   const [newRole, setNewRole] = useState('annotator')
+  const [userComboboxOpen, setUserComboboxOpen] = useState(false)
 
   const myRole = members.find((m: ProjectMember) => m.userId === currentUserId)?.role
   const isManager = myRole ? MANAGER_ROLES.includes(myRole) : false
@@ -109,86 +120,90 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (projectLoading || membersLoading) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="flex justify-center py-12">
+          <Spinner className="size-8" />
+        </div>
+      </div>
     )
   }
 
   if (projectError || !project) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 3 }}>
-          <Alert severity="error">Failed to load project.</Alert>
-          <Button component={RouterLink} to="/projects" startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
-            Back to Projects
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="py-6">
+          <Alert variant="destructive">
+            <AlertDescription>Failed to load project.</AlertDescription>
+          </Alert>
+          <Button variant="ghost" className="mt-4" asChild>
+            <RouterLink to="/projects">
+              <ArrowLeft className="size-4" />
+              Back to Projects
+            </RouterLink>
           </Button>
-        </Box>
-      </Container>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ py: 3 }}>
-        <Button component={RouterLink} to="/projects" startIcon={<ArrowBackIcon />} sx={{ mb: 2 }}>
-          Back to Projects
+    <div className="mx-auto max-w-screen-lg px-4">
+      <div className="py-6">
+        <Button variant="ghost" className="mb-4" asChild>
+          <RouterLink to="/projects">
+            <ArrowLeft className="size-4" />
+            Back to Projects
+          </RouterLink>
         </Button>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-          <Box>
-            <Typography variant="h4" component="h1">
-              {project.name}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-              <Chip
-                label={project.isArchived ? 'Archived' : 'Active'}
-                size="small"
-                color={project.isArchived ? 'warning' : 'success'}
-              />
-              {myRole && <Chip label={myRole.replace('project_', '')} size="small" color="primary" />}
-            </Box>
-          </Box>
-          <Button variant="outlined" startIcon={<StarIcon />} onClick={handleSetActive}>
+        <div className="mb-2 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{project.name}</h1>
+            <div className="mt-2 flex gap-2">
+              <Badge variant={project.isArchived ? 'secondary' : 'default'}>
+                {project.isArchived ? 'Archived' : 'Active'}
+              </Badge>
+              {myRole && <Badge>{myRole.replace('project_', '')}</Badge>}
+            </div>
+          </div>
+          <Button variant="outline" onClick={handleSetActive}>
+            <Star className="size-4" />
             Set as Active Project
           </Button>
-        </Box>
+        </div>
 
         {project.description && (
-          <Typography variant="body1" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
-            {project.description}
-          </Typography>
+          <p className="mt-2 mb-6 text-muted-foreground">{project.description}</p>
         )}
 
         {/* Videos */}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+        <p className="mt-4 text-sm text-muted-foreground">
           {project.videoAssignmentCount ?? 0} video assignments
-        </Typography>
+        </p>
 
-        <Divider sx={{ my: 3 }} />
+        <Separator className="my-6" />
 
         {/* Members Section */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Members</Typography>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Members</h2>
           {isManager && (
-            <Button size="small" startIcon={<PersonAddIcon />} onClick={() => setAddDialogOpen(true)}>
+            <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+              <UserPlus className="size-4" />
               Add Member
             </Button>
           )}
-        </Box>
+        </div>
 
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Joined</TableCell>
-                {isManager && <TableCell align="right">Actions</TableCell>}
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Joined</TableHead>
+                {isManager && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            </TableHead>
+            </TableHeader>
             <TableBody>
               {members.map((member: ProjectMember) => (
                 <TableRow key={member.id}>
@@ -196,41 +211,45 @@ export default function ProjectDetailPage(): JSX.Element {
                   <TableCell>
                     {isManager && member.role !== 'project_owner' ? (
                       <Select
-                        size="small"
                         value={member.role}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           projectId &&
                           updateMember.mutate({
                             projectId,
                             userId: member.userId,
-                            role: e.target.value,
+                            role: value,
                           })
                         }
-                        sx={{ minWidth: 150 }}
                       >
-                        {ASSIGNABLE_ROLES.map((r) => (
-                          <MenuItem key={r} value={r}>
-                            {r.replace('project_', '')}
-                          </MenuItem>
-                        ))}
+                        <SelectTrigger className="w-[150px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ASSIGNABLE_ROLES.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {r.replace('project_', '')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     ) : (
-                      <Chip label={member.role.replace('project_', '')} size="small" />
+                      <Badge variant="secondary">{member.role.replace('project_', '')}</Badge>
                     )}
                   </TableCell>
                   <TableCell>{new Date(member.joinedAt).toLocaleDateString()}</TableCell>
                   {isManager && (
-                    <TableCell align="right">
+                    <TableCell className="text-right">
                       {member.role !== 'project_owner' && (
-                        <IconButton
-                          size="small"
-                          color="error"
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
                           onClick={() =>
                             projectId && removeMember.mutate({ projectId, userId: member.userId })
                           }
                         >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                          <Trash2 className="size-4" />
+                        </Button>
                       )}
                     </TableCell>
                   )}
@@ -238,35 +257,30 @@ export default function ProjectDetailPage(): JSX.Element {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </div>
 
         {/* Personas Section */}
-        <Divider sx={{ my: 3 }} />
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Personas
-        </Typography>
+        <Separator className="my-6" />
+        <h2 className="mb-4 text-lg font-semibold">Personas</h2>
         {personas.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <p className="text-sm text-muted-foreground">
             No personas assigned to this project.
-          </Typography>
+          </p>
         ) : (
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <div className="flex flex-wrap gap-2">
             {personas.map((p: ProjectPersona) => (
-              <Chip key={p.id} label={`${p.name} (${p.role})`} variant="outlined" />
+              <Badge key={p.id} variant="outline">{p.name} ({p.role})</Badge>
             ))}
-          </Box>
+          </div>
         )}
 
         {/* Settings (owner only) */}
         {isOwner && (
           <>
-            <Divider sx={{ my: 3 }} />
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Settings
-            </Typography>
+            <Separator className="my-6" />
+            <h2 className="mb-4 text-lg font-semibold">Settings</h2>
             <Button
-              variant="outlined"
-              color={project.isArchived ? 'success' : 'warning'}
+              variant="outline"
               onClick={handleToggleArchive}
               disabled={updateProject.isPending}
             >
@@ -274,68 +288,83 @@ export default function ProjectDetailPage(): JSX.Element {
             </Button>
           </>
         )}
-      </Box>
+      </div>
 
       {/* Add Member Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Member</DialogTitle>
-        <DialogContent>
-          <Autocomplete
-            options={allUsers}
-            getOptionLabel={(option) =>
-              typeof option === 'string' ? option : `${option.username} (${option.displayName})`
-            }
-            freeSolo
-            fullWidth
-            onChange={(_e, value) => {
-              if (value && typeof value !== 'string') {
-                setNewUserId(value.id)
-              } else if (typeof value === 'string') {
-                setNewUserId(value)
-              } else {
-                setNewUserId('')
-              }
-            }}
-            onInputChange={(_e, value, reason) => {
-              if (reason === 'input') {
-                setNewUserId(value)
-              }
-            }}
-            renderInput={(params) => (
-              <TextField {...params} label="User" autoFocus sx={{ mt: 1 }} />
+      <Dialog open={addDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setAddDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label>User</Label>
+              <Popover open={userComboboxOpen} onOpenChange={setUserComboboxOpen}>
+                <PopoverTrigger
+                  className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                >
+                  {newUserId
+                    ? allUsers.find((u) => u.id === newUserId)
+                      ? `${allUsers.find((u) => u.id === newUserId)!.username} (${allUsers.find((u) => u.id === newUserId)!.displayName})`
+                      : newUserId
+                    : 'Select user...'}
+                  <ChevronsUpDown className="ml-2 size-4 opacity-50" />
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandList>
+                      <CommandEmpty>No users found.</CommandEmpty>
+                      {allUsers.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          value={`${user.username} ${user.displayName}`}
+                          onSelect={() => {
+                            setNewUserId(user.id)
+                            setUserComboboxOpen(false)
+                          }}
+                        >
+                          <Check className={cn('size-4', newUserId === user.id ? 'opacity-100' : 'opacity-0')} />
+                          {user.username} ({user.displayName})
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={newRole} onValueChange={(value) => setNewRole(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ASSIGNABLE_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r.replace('project_', '')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {addMember.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>{(addMember.error as Error).message}</AlertDescription>
+              </Alert>
             )}
-          />
-          <TextField
-            label="Role"
-            fullWidth
-            select
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            sx={{ mt: 2 }}
-          >
-            {ASSIGNABLE_ROLES.map((r) => (
-              <MenuItem key={r} value={r}>
-                {r.replace('project_', '')}
-              </MenuItem>
-            ))}
-          </TextField>
-          {addMember.isError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {(addMember.error as Error).message}
-            </Alert>
-          )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddMember}
+              disabled={!newUserId.trim() || addMember.isPending}
+            >
+              {addMember.isPending ? 'Adding...' : 'Add'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleAddMember}
-            disabled={!newUserId.trim() || addMember.isPending}
-          >
-            {addMember.isPending ? 'Adding...' : 'Add'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Container>
+    </div>
   )
 }

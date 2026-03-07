@@ -1,9 +1,10 @@
-import { Box, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
-import {
-  Edit as EditIcon,
-  Language as WikidataIcon,
-  ContentCopy as CopyIcon,
-} from '@mui/icons-material'
+/**
+ * Mode selector component for choosing between manual, copy, and Wikidata input modes.
+ */
+
+import { Copy, Globe, Pencil } from 'lucide-react'
+
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface ModeSelectorProps {
   mode: 'manual' | 'copy' | 'wikidata'
@@ -12,36 +13,32 @@ interface ModeSelectorProps {
   disabled?: boolean
 }
 
-export default function ModeSelector({ mode, onChange, showCopy = true, disabled = false }: ModeSelectorProps) {
+export function ModeSelector({ mode, onChange, showCopy = true, disabled = false }: ModeSelectorProps): JSX.Element {
   return (
-    <ToggleButtonGroup
-      value={mode}
-      exclusive
-      onChange={(_, newMode) => newMode && onChange(newMode)}
-      fullWidth
-      size="small"
+    <ToggleGroup
+      value={[mode]}
+      onValueChange={(newValue) => {
+        if (newValue.length > 0) {
+          onChange(newValue[newValue.length - 1] as 'manual' | 'copy' | 'wikidata')
+        }
+      }}
+      className="w-full"
       disabled={disabled}
     >
-      <ToggleButton value="manual">
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EditIcon fontSize="small" />
-          <Typography variant="body2">Manual Entry</Typography>
-        </Box>
-      </ToggleButton>
+      <ToggleGroupItem value="manual" className="flex-1 gap-2">
+        <Pencil className="size-4" />
+        <span className="text-sm">Manual Entry</span>
+      </ToggleGroupItem>
       {showCopy && (
-        <ToggleButton value="copy">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CopyIcon fontSize="small" />
-            <Typography variant="body2">Copy from Existing</Typography>
-          </Box>
-        </ToggleButton>
+        <ToggleGroupItem value="copy" className="flex-1 gap-2">
+          <Copy className="size-4" />
+          <span className="text-sm">Copy from Existing</span>
+        </ToggleGroupItem>
       )}
-      <ToggleButton value="wikidata">
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WikidataIcon fontSize="small" />
-          <Typography variant="body2">Import from Wikidata</Typography>
-        </Box>
-      </ToggleButton>
-    </ToggleButtonGroup>
+      <ToggleGroupItem value="wikidata" className="flex-1 gap-2">
+        <Globe className="size-4" />
+        <span className="text-sm">Import from Wikidata</span>
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }

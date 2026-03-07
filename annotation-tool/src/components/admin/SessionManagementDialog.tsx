@@ -3,29 +3,29 @@
  * Displays active sessions with ability to revoke them.
  */
 
+import { useState } from 'react'
+import { Trash2, RefreshCw } from 'lucide-react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  IconButton,
-  Alert,
-  CircularProgress,
-  Box,
-  Typography,
-  Chip,
-} from '@mui/material'
-import { Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+} from '@/components/ui/table'
 import { useSessions, useRevokeSession } from '@store/queries/admin/useSessions'
-import ConfirmDialog from '../shared/ConfirmDialog'
-import { useState } from 'react'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 /**
  * Props for SessionManagementDialog component.
@@ -44,7 +44,7 @@ interface SessionManagementDialogProps {
  * @param onClose - Callback when dialog closes
  * @returns Session management dialog
  */
-export default function SessionManagementDialog({ open, onClose }: SessionManagementDialogProps) {
+export function SessionManagementDialog({ open, onClose }: SessionManagementDialogProps): JSX.Element {
   const { data: sessions = [], isLoading, error, refetch } = useSessions()
   const revokeSession = useRevokeSession()
 
@@ -109,7 +109,7 @@ export default function SessionManagementDialog({ open, onClose }: SessionManage
    * @returns Truncated user agent
    */
   const truncateUserAgent = (userAgent: string | undefined) => {
-    if (!userAgent) return '—'
+    if (!userAgent) return '-'
     if (userAgent.length <= 50) return userAgent
     return userAgent.substring(0, 47) + '...'
   }
@@ -118,102 +118,104 @@ export default function SessionManagementDialog({ open, onClose }: SessionManage
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Session Management
-            <IconButton
-              onClick={() => refetch()}
-              disabled={isLoading}
-              aria-label="refresh sessions"
-              size="small"
-            >
-              <RefreshIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              Failed to load sessions: {error.message}
-            </Alert>
-          )}
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <div className="flex justify-between items-center">
+              <DialogTitle>Session Management</DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refetch()}
+                disabled={isLoading}
+                aria-label="refresh sessions"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          <div>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>Failed to load sessions: {error.message}</AlertDescription>
+              </Alert>
+            )}
 
-          {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : sessions.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body1" color="text.secondary">
-                No active sessions
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Showing {sessions.length} active session{sessions.length !== 1 ? 's' : ''}. Auto-refreshes every 30 seconds.
-              </Typography>
+            {isLoading ? (
+              <div className="flex justify-center p-8">
+                <Spinner />
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  No active sessions
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Showing {sessions.length} active session{sessions.length !== 1 ? 's' : ''}. Auto-refreshes every 30 seconds.
+                </p>
 
-              <TableContainer>
                 <Table>
-                  <TableHead>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell>User</TableCell>
-                      <TableCell>IP Address</TableCell>
-                      <TableCell>User Agent</TableCell>
-                      <TableCell>Created</TableCell>
-                      <TableCell>Expires</TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableHead>User</TableHead>
+                      <TableHead>IP Address</TableHead>
+                      <TableHead>User Agent</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  </TableHead>
+                  </TableHeader>
                   <TableBody>
                     {sessions.map((session) => (
-                      <TableRow key={session.id} hover>
+                      <TableRow key={session.id}>
                         <TableCell>
-                          <Box>
-                            <Typography variant="body2">
+                          <div>
+                            <p className="text-sm">
                               {session.displayName}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            </p>
+                            <p className="text-xs text-muted-foreground">
                               @{session.username}
-                            </Typography>
-                          </Box>
+                            </p>
+                          </div>
                         </TableCell>
-                        <TableCell>{session.ipAddress || '—'}</TableCell>
+                        <TableCell>{session.ipAddress || '-'}</TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          <span className="font-mono text-xs">
                             {truncateUserAgent(session.userAgent)}
-                          </Typography>
+                          </span>
                         </TableCell>
                         <TableCell>{formatDate(session.createdAt)}</TableCell>
                         <TableCell>
                           {isExpired(session.expiresAt) ? (
-                            <Chip label="Expired" size="small" color="error" />
+                            <Badge variant="destructive">Expired</Badge>
                           ) : (
                             formatDate(session.expiresAt)
                           )}
                         </TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            size="small"
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleRevokeClick(session.id)}
                             aria-label="revoke session"
                           >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
-            </>
-          )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* Revoke Confirmation Dialog */}
@@ -222,7 +224,7 @@ export default function SessionManagementDialog({ open, onClose }: SessionManage
         title="Revoke Session"
         message={`Are you sure you want to revoke the session for ${revokingSession?.displayName} (@${revokingSession?.username})? They will be logged out immediately.`}
         confirmText="Revoke"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleRevokeConfirm}
         onCancel={() => {
           setRevokeConfirmOpen(false)

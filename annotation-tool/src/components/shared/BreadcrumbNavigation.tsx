@@ -1,27 +1,42 @@
+/**
+ * Breadcrumb navigation component.
+ * Displays hierarchical navigation based on the current route.
+ */
+
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Breadcrumbs, Link, Typography, Chip, Box } from '@mui/material'
+
 import {
-  NavigateNext as NavigateNextIcon,
-  VideoLibrary as VideoIcon,
-  School as OntologyIcon,
-  Public as ObjectIcon,
-  Person as PersonaIcon,
-  Category as EntityIcon,
-  Event as EventIcon,
-  LocationOn as LocationIcon,
-  AccessTime as TimeIcon,
-  Folder as CollectionIcon,
-} from '@mui/icons-material'
+  CalendarDays,
+  Clock,
+  Folder,
+  GraduationCap,
+  MapPin,
+  Package,
+  Tag,
+  User,
+  Video,
+} from 'lucide-react'
+
+import { Badge } from '@/components/ui/badge'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { cn } from '@/lib/utils'
 import { usePersonas, useVideos, useWorld } from '@store/queries'
 
-interface BreadcrumbItem {
+interface BreadcrumbEntry {
   label: string
   path?: string
   icon?: React.ReactNode
   isActive?: boolean
 }
 
-export default function BreadcrumbNavigation() {
+export function BreadcrumbNavigation(): JSX.Element | null {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -31,18 +46,18 @@ export default function BreadcrumbNavigation() {
   const { data: worldData } = useWorld()
   const entities = worldData?.entities ?? []
   const events = worldData?.events ?? []
-  
+
   // Parse the current path to build breadcrumbs
-  const buildBreadcrumbs = (): BreadcrumbItem[] => {
+  const buildBreadcrumbs = (): BreadcrumbEntry[] => {
     const pathSegments = location.pathname.split('/').filter(Boolean)
-    const breadcrumbs: BreadcrumbItem[] = []
-    
+    const breadcrumbs: BreadcrumbEntry[] = []
+
     // Add root based on first segment
     if (pathSegments.length === 0 || pathSegments[0] === 'videos' || pathSegments[0] === 'annotate') {
       breadcrumbs.push({
         label: 'Video Browser',
         path: '/',
-        icon: <VideoIcon fontSize="small" />,
+        icon: <Video className="size-4" />,
       })
 
       // Check if we're in annotation workspace
@@ -61,9 +76,9 @@ export default function BreadcrumbNavigation() {
       breadcrumbs.push({
         label: 'Ontology Builder',
         path: '/ontology',
-        icon: <OntologyIcon fontSize="small" />,
+        icon: <GraduationCap className="size-4" />,
       })
-      
+
       // Check if a persona is selected
       const params = new URLSearchParams(location.search)
       const personaId = params.get('persona')
@@ -72,9 +87,9 @@ export default function BreadcrumbNavigation() {
         if (persona) {
           breadcrumbs.push({
             label: `Persona: "${persona.name}"`,
-            icon: <PersonaIcon fontSize="small" />,
+            icon: <User className="size-4" />,
           })
-          
+
           // Check if a specific type tab is active
           const typeTab = params.get('tab')
           if (typeTab) {
@@ -97,26 +112,26 @@ export default function BreadcrumbNavigation() {
       breadcrumbs.push({
         label: 'World Builder',
         path: '/objects',
-        icon: <ObjectIcon fontSize="small" />,
+        icon: <Package className="size-4" />,
       })
-      
+
       // Check if a specific object tab is active
       const params = new URLSearchParams(location.search)
       const objectTab = params.get('tab')
       if (objectTab) {
         const tabLabels: Record<string, { label: string; icon: React.ReactNode }> = {
-          entities: { label: 'Entities', icon: <EntityIcon fontSize="small" /> },
-          events: { label: 'Events', icon: <EventIcon fontSize="small" /> },
-          locations: { label: 'Locations', icon: <LocationIcon fontSize="small" /> },
-          times: { label: 'Times', icon: <TimeIcon fontSize="small" /> },
-          collections: { label: 'Collections', icon: <CollectionIcon fontSize="small" /> },
+          entities: { label: 'Entities', icon: <Tag className="size-4" /> },
+          events: { label: 'Events', icon: <CalendarDays className="size-4" /> },
+          locations: { label: 'Locations', icon: <MapPin className="size-4" /> },
+          times: { label: 'Times', icon: <Clock className="size-4" /> },
+          collections: { label: 'Collections', icon: <Folder className="size-4" /> },
         }
         if (tabLabels[objectTab]) {
           breadcrumbs.push({
             label: tabLabels[objectTab].label,
             icon: tabLabels[objectTab].icon,
           })
-          
+
           // Check if a specific object is being edited
           const objectId = params.get('edit')
           if (objectId) {
@@ -128,7 +143,7 @@ export default function BreadcrumbNavigation() {
               const event = events.find(e => e.id === objectId)
               objectName = event?.name || ''
             }
-            
+
             if (objectName) {
               breadcrumbs.push({
                 label: `${objectTab === 'entities' ? 'Entity' : 'Event'}: "${objectName}"`,
@@ -139,81 +154,60 @@ export default function BreadcrumbNavigation() {
         }
       }
     }
-    
+
     return breadcrumbs
   }
-  
+
   const breadcrumbs = buildBreadcrumbs()
-  
+
   if (breadcrumbs.length === 0) {
     return null
   }
-  
+
   return (
-    <Box sx={{ 
-      px: 2, 
-      py: 1, 
-      borderBottom: 1, 
-      borderColor: 'divider',
-      bgcolor: 'background.paper',
-      display: 'flex',
-      alignItems: 'center',
-    }}>
-      <Breadcrumbs 
-        separator={<NavigateNextIcon fontSize="small" />}
-        aria-label="breadcrumb"
-        sx={{ flexGrow: 1 }}
-      >
-        {breadcrumbs.map((crumb, index) => {
-          const isLast = index === breadcrumbs.length - 1
-          
-          if (isLast || !crumb.path) {
+    <div className="flex items-center border-b bg-background px-4 py-2">
+      <Breadcrumb className="flex-1">
+        <BreadcrumbList>
+          {breadcrumbs.map((crumb, index) => {
+            const isLast = index === breadcrumbs.length - 1
+
             return (
-              <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                {crumb.icon}
-                <Typography 
-                  color={crumb.isActive ? 'primary' : 'text.primary'}
-                  sx={{ fontWeight: crumb.isActive ? 600 : 400 }}
-                >
-                  {crumb.label}
-                </Typography>
-              </Box>
+              <BreadcrumbItem key={index}>
+                {index > 0 && <BreadcrumbSeparator />}
+                {isLast || !crumb.path ? (
+                  <BreadcrumbPage className={cn(
+                    'flex items-center gap-1',
+                    crumb.isActive && 'font-semibold text-primary'
+                  )}>
+                    {crumb.icon}
+                    {crumb.label}
+                  </BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink
+                    render={
+                      <button
+                        type="button"
+                        className="flex cursor-pointer items-center gap-1"
+                        onClick={() => navigate(crumb.path!)}
+                      />
+                    }
+                  >
+                    {crumb.icon}
+                    {crumb.label}
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
             )
-          }
-          
-          return (
-            <Link
-              key={index}
-              underline="hover"
-              color="inherit"
-              sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 0.5,
-                cursor: 'pointer',
-                '&:hover': {
-                  color: 'primary.main',
-                },
-              }}
-              onClick={() => navigate(crumb.path!)}
-            >
-              {crumb.icon}
-              {crumb.label}
-            </Link>
-          )
-        })}
-      </Breadcrumbs>
-      
-      {/* Optional: Add context chips */}
+          })}
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      {/* Optional: Add context badge */}
       {location.pathname.includes('/annotate/') && (
-        <Chip
-          label="Annotation Mode"
-          color="primary"
-          size="small"
-          variant="outlined"
-          sx={{ ml: 2 }}
-        />
+        <Badge variant="outline" className="ml-4">
+          Annotation Mode
+        </Badge>
       )}
-    </Box>
+    </div>
   )
 }

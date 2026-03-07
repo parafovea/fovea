@@ -7,36 +7,48 @@
 
 import { useState } from 'react'
 import { useParams, Link as RouterLink } from 'react-router-dom'
+import { ArrowLeft, UserPlus, Trash2, ChevronsUpDown, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Container,
   Dialog,
-  DialogActions,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  IconButton,
-  MenuItem,
-  Paper,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material'
+} from '@/components/ui/dialog'
 import {
-  ArrowBack as ArrowBackIcon,
-  PersonAdd as PersonAddIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandItem,
+} from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 import {
   useGroup,
   useGroupMembers,
@@ -63,6 +75,7 @@ export default function GroupDetailPage(): JSX.Element {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [newUserId, setNewUserId] = useState('')
   const [newRole, setNewRole] = useState<string>('group_member')
+  const [userComboboxOpen, setUserComboboxOpen] = useState(false)
 
   const myRole = members.find((m) => m.userId === currentUserId)?.role
   const isAdmin = myRole ? ADMIN_ROLES.includes(myRole) : false
@@ -83,63 +96,68 @@ export default function GroupDetailPage(): JSX.Element {
 
   if (groupLoading || membersLoading) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="flex justify-center py-12">
+          <Spinner className="size-8" />
+        </div>
+      </div>
     )
   }
 
   if (groupError || !group) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 3 }}>
-          <Alert severity="error">Failed to load group.</Alert>
-          <Button component={RouterLink} to="/groups" startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
-            Back to Groups
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="py-6">
+          <Alert variant="destructive">
+            <AlertDescription>Failed to load group.</AlertDescription>
+          </Alert>
+          <Button variant="ghost" className="mt-4" asChild>
+            <RouterLink to="/groups">
+              <ArrowLeft className="size-4" />
+              Back to Groups
+            </RouterLink>
           </Button>
-        </Box>
-      </Container>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ py: 3 }}>
-        <Button component={RouterLink} to="/groups" startIcon={<ArrowBackIcon />} sx={{ mb: 2 }}>
-          Back to Groups
+    <div className="mx-auto max-w-screen-lg px-4">
+      <div className="py-6">
+        <Button variant="ghost" className="mb-4" asChild>
+          <RouterLink to="/groups">
+            <ArrowLeft className="size-4" />
+            Back to Groups
+          </RouterLink>
         </Button>
 
-        <Typography variant="h4" component="h1" gutterBottom>
-          {group.name}
-        </Typography>
+        <h1 className="text-2xl font-bold">{group.name}</h1>
         {group.description && (
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            {group.description}
-          </Typography>
+          <p className="mt-1 mb-6 text-muted-foreground">{group.description}</p>
         )}
 
         {/* Members */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 4 }}>
-          <Typography variant="h6">Members</Typography>
+        <div className="mt-8 mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Members</h2>
           {isAdmin && (
-            <Button size="small" startIcon={<PersonAddIcon />} onClick={() => setAddDialogOpen(true)}>
+            <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+              <UserPlus className="size-4" />
               Add Member
             </Button>
           )}
-        </Box>
+        </div>
 
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Joined</TableCell>
-                {isAdmin && <TableCell align="right">Actions</TableCell>}
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Joined</TableHead>
+                {isAdmin && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            </TableHead>
+            </TableHeader>
             <TableBody>
               {members.map((member) => (
                 <TableRow key={member.id}>
@@ -147,34 +165,38 @@ export default function GroupDetailPage(): JSX.Element {
                   <TableCell>
                     {isAdmin && member.role !== 'group_owner' ? (
                       <Select
-                        size="small"
                         value={member.role}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           groupId &&
-                          updateMember.mutate({ groupId, userId: member.userId, role: e.target.value })
+                          updateMember.mutate({ groupId, userId: member.userId, role: value })
                         }
-                        sx={{ minWidth: 140 }}
                       >
-                        <MenuItem value="group_admin">Admin</MenuItem>
-                        <MenuItem value="group_member">Member</MenuItem>
+                        <SelectTrigger className="w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="group_admin">Admin</SelectItem>
+                          <SelectItem value="group_member">Member</SelectItem>
+                        </SelectContent>
                       </Select>
                     ) : (
-                      <Chip label={member.role.replace('group_', '')} size="small" />
+                      <Badge variant="secondary">{member.role.replace('group_', '')}</Badge>
                     )}
                   </TableCell>
                   <TableCell>{new Date(member.joinedAt).toLocaleDateString()}</TableCell>
                   {isAdmin && (
-                    <TableCell align="right">
+                    <TableCell className="text-right">
                       {member.role !== 'group_owner' && (
-                        <IconButton
-                          size="small"
-                          color="error"
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
                           onClick={() =>
                             groupId && removeMember.mutate({ groupId, userId: member.userId })
                           }
                         >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                          <Trash2 className="size-4" />
+                        </Button>
                       )}
                     </TableCell>
                   )}
@@ -182,64 +204,81 @@ export default function GroupDetailPage(): JSX.Element {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
-      </Box>
+        </div>
+      </div>
 
       {/* Add Member Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Member</DialogTitle>
-        <DialogContent>
-          <Autocomplete
-            options={allUsers}
-            getOptionLabel={(option) =>
-              typeof option === 'string' ? option : `${option.username} (${option.displayName})`
-            }
-            freeSolo
-            fullWidth
-            onChange={(_e, value) => {
-              if (value && typeof value !== 'string') {
-                setNewUserId(value.id)
-              } else if (typeof value === 'string') {
-                setNewUserId(value)
-              } else {
-                setNewUserId('')
-              }
-            }}
-            onInputChange={(_e, value, reason) => {
-              if (reason === 'input') {
-                setNewUserId(value)
-              }
-            }}
-            renderInput={(params) => (
-              <TextField {...params} label="User" autoFocus sx={{ mt: 1 }} />
+      <Dialog open={addDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setAddDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label>User</Label>
+              <Popover open={userComboboxOpen} onOpenChange={setUserComboboxOpen}>
+                <PopoverTrigger
+                  className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                >
+                  {newUserId
+                    ? allUsers.find((u) => u.id === newUserId)
+                      ? `${allUsers.find((u) => u.id === newUserId)!.username} (${allUsers.find((u) => u.id === newUserId)!.displayName})`
+                      : newUserId
+                    : 'Select user...'}
+                  <ChevronsUpDown className="ml-2 size-4 opacity-50" />
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search users..." />
+                    <CommandList>
+                      <CommandEmpty>No users found.</CommandEmpty>
+                      {allUsers.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          value={`${user.username} ${user.displayName}`}
+                          onSelect={() => {
+                            setNewUserId(user.id)
+                            setUserComboboxOpen(false)
+                          }}
+                        >
+                          <Check className={cn('size-4', newUserId === user.id ? 'opacity-100' : 'opacity-0')} />
+                          {user.username} ({user.displayName})
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={newRole} onValueChange={(value) => setNewRole(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="group_admin">Admin</SelectItem>
+                  <SelectItem value="group_member">Member</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {addMember.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>{(addMember.error as Error).message}</AlertDescription>
+              </Alert>
             )}
-          />
-          <Select
-            fullWidth
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            sx={{ mt: 2 }}
-          >
-            <MenuItem value="group_admin">Admin</MenuItem>
-            <MenuItem value="group_member">Member</MenuItem>
-          </Select>
-          {addMember.isError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {(addMember.error as Error).message}
-            </Alert>
-          )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddMember}
+              disabled={!newUserId.trim() || addMember.isPending}
+            >
+              {addMember.isPending ? 'Adding...' : 'Add'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleAddMember}
-            disabled={!newUserId.trim() || addMember.isPending}
-          >
-            {addMember.isPending ? 'Adding...' : 'Add'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Container>
+    </div>
   )
 }

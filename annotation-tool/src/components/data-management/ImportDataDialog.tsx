@@ -1,50 +1,46 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  CircularProgress,
-  LinearProgress,
-  Divider,
-  FormGroup,
-  FormLabel,
-  Paper,
-  Radio,
-  RadioGroup,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Grid,
-  IconButton,
-  Snackbar,
-} from '@mui/material'
+  Upload,
+  FileText,
+  AlertTriangle,
+  CircleAlert,
+  X,
+  Info,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import {
-  CloudUpload as UploadIcon,
-  InsertDriveFile as FileIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Close as CloseIcon,
-  ExpandMore as ExpandMoreIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Spinner } from '@/components/ui/spinner'
+import { Progress } from '@/components/ui/progress'
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+import { cn } from '@/lib/utils'
 import { api } from '@services/api'
 import { ImportOptions, ImportPreview, ImportResult, Conflict } from '@models/types'
-import ImportResultDialog from './ImportResultDialog'
-import ExpandableJsonViewer from '@components/shared/ExpandableJsonViewer'
+import { ImportResultDialog } from './ImportResultDialog'
+import { ExpandableJsonViewer } from '@components/shared/ExpandableJsonViewer'
 
 /**
- * @interface ImportDataDialogProps
- * @description Props for the ImportDataDialog component.
- * @property open - Whether the dialog is open
- * @property onClose - Callback when dialog is closed
- * @property onImportComplete - Optional callback when import completes successfully
+ * Props for the ImportDataDialog component.
+ *
+ * @param open - Whether the dialog is open
+ * @param onClose - Callback when dialog is closed
+ * @param onImportComplete - Optional callback when import completes successfully
  */
 interface ImportDataDialogProps {
   open: boolean
@@ -60,7 +56,7 @@ interface ImportDataDialogProps {
  * @param props - Component props
  * @returns Import dialog component
  */
-export default function ImportDataDialog({ open, onClose, onImportComplete }: ImportDataDialogProps) {
+export function ImportDataDialog({ open, onClose, onImportComplete }: ImportDataDialogProps): JSX.Element {
   // File management
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -72,13 +68,6 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
 
   // Conflict resolution
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, string>>(new Map())
-
-  // Notifications
-  const [notification, setNotification] = useState<{
-    open: boolean
-    message: string
-    severity: 'success' | 'error' | 'info' | 'warning'
-  }>({ open: false, message: '', severity: 'success' })
 
   // Import options
   const [options, setOptions] = useState<ImportOptions>({
@@ -119,7 +108,6 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!open) {
-      // Reset all state when closing
       setFile(null)
       setPreview(null)
       setPreviewError(null)
@@ -157,13 +145,11 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
     setFile(selectedFile)
     setPreviewError(null)
 
-    // Auto-preview
     setPreviewing(true)
     try {
       const previewData = await api.previewImport(selectedFile)
       setPreview(previewData)
 
-      // Initialize conflict resolutions with defaults
       const resolutions = new Map<string, string>()
       for (const conflict of previewData.conflicts) {
         resolutions.set(conflict.originalId, getDefaultResolution(conflict.type))
@@ -190,24 +176,24 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Handle drag events.
    */
-  const handleDragEnter = (e: React.DragEvent) => {
+  const handleDragEnter = (e: React.DragEvent): void => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(true)
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent): void => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => {
     e.preventDefault()
     e.stopPropagation()
   }
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
@@ -226,7 +212,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Handle file input change.
    */
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0]
       if (selectedFile.name.endsWith('.jsonl')) {
@@ -240,7 +226,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Remove selected file.
    */
-  const handleRemoveFile = () => {
+  const handleRemoveFile = (): void => {
     setFile(null)
     setPreview(null)
     setPreviewError(null)
@@ -250,7 +236,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Update conflict resolution strategy.
    */
-  const updateConflictResolution = (conflictId: string, resolution: string) => {
+  const updateConflictResolution = (conflictId: string, resolution: string): void => {
     setConflictResolutions(prev => {
       const newMap = new Map(prev)
       newMap.set(conflictId, resolution)
@@ -278,25 +264,24 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
    */
   const buildImportOptions = (): ImportOptions => {
     const sequenceResolutions = {
-      duplicateSequenceIds: 'skip' as any,
-      overlappingFrameRanges: 'fail-import' as any,
-      interpolationConflicts: 'use-existing' as any,
+      duplicateSequenceIds: 'skip' as ImportOptions['conflictResolution']['sequences']['duplicateSequenceIds'],
+      overlappingFrameRanges: 'fail-import' as ImportOptions['conflictResolution']['sequences']['overlappingFrameRanges'],
+      interpolationConflicts: 'use-existing' as ImportOptions['conflictResolution']['sequences']['interpolationConflicts'],
     }
 
-    // Group conflicts by type and use most common resolution
     if (preview) {
       const sequenceConflicts = preview.conflicts.filter(c => c.type === 'duplicate-sequence')
       const overlappingConflicts = preview.conflicts.filter(c => c.type === 'overlapping-frames')
       const interpolationConflicts = preview.conflicts.filter(c => c.type === 'interpolation-conflict')
 
       if (sequenceConflicts.length > 0) {
-        sequenceResolutions.duplicateSequenceIds = conflictResolutions.get(sequenceConflicts[0].originalId) || 'skip'
+        sequenceResolutions.duplicateSequenceIds = (conflictResolutions.get(sequenceConflicts[0].originalId) || 'skip') as typeof sequenceResolutions.duplicateSequenceIds
       }
       if (overlappingConflicts.length > 0) {
-        sequenceResolutions.overlappingFrameRanges = conflictResolutions.get(overlappingConflicts[0].originalId) || 'fail-import'
+        sequenceResolutions.overlappingFrameRanges = (conflictResolutions.get(overlappingConflicts[0].originalId) || 'fail-import') as typeof sequenceResolutions.overlappingFrameRanges
       }
       if (interpolationConflicts.length > 0) {
-        sequenceResolutions.interpolationConflicts = conflictResolutions.get(interpolationConflicts[0].originalId) || 'use-existing'
+        sequenceResolutions.interpolationConflicts = (conflictResolutions.get(interpolationConflicts[0].originalId) || 'use-existing') as typeof sequenceResolutions.interpolationConflicts
       }
     }
 
@@ -312,7 +297,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Execute import.
    */
-  const handleImport = async () => {
+  const handleImport = async (): Promise<void> => {
     if (!file) return
 
     const importOptions = buildImportOptions()
@@ -323,26 +308,14 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
       setResult(importResult)
 
       if (importResult.success) {
-        setNotification({
-          open: true,
-          message: `Import successful: ${importResult.summary.importedItems.annotations} annotations imported`,
-          severity: 'success'
-        })
-
+        toast.success(`Import successful: ${importResult.summary.importedItems.annotations} annotations imported`)
         onImportComplete?.(importResult)
 
-        // Close dialog after short delay
         setTimeout(() => {
           onClose()
         }, 1500)
       } else {
-        setNotification({
-          open: true,
-          message: `Import failed: ${importResult.errors.length} errors`,
-          severity: 'error'
-        })
-
-        // Open result dialog to show details
+        toast.error(`Import failed: ${importResult.errors.length} errors`)
         setResultDialogOpen(true)
       }
     } catch (error: unknown) {
@@ -357,11 +330,7 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
           errorMessage = response.data.message
         }
       }
-      setNotification({
-        open: true,
-        message: `Import failed: ${errorMessage}`,
-        severity: 'error'
-      })
+      toast.error(`Import failed: ${errorMessage}`)
     } finally {
       setImporting(false)
     }
@@ -419,39 +388,37 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
   /**
    * Render conflict item.
    */
-  const renderConflict = (conflict: Conflict) => {
+  const renderConflict = (conflict: Conflict): JSX.Element => {
     const resolution = conflictResolutions.get(conflict.originalId)
-    const options = getResolutionOptions(conflict.type)
+    const resolutionOptions = getResolutionOptions(conflict.type)
 
     return (
-      <Box key={conflict.originalId} sx={{ mb: 2 }}>
-        <Typography variant="body2" sx={{ mb: 1 }}>
+      <div key={conflict.originalId} className="mb-4">
+        <p className="mb-2 text-sm">
           <strong>Line {conflict.line}:</strong> {conflict.details}
           {conflict.frameRange && (
-            <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+            <span className="ml-2 text-xs text-muted-foreground">
               (Frames {conflict.frameRange.start}-{conflict.frameRange.end})
-            </Typography>
+            </span>
           )}
           {conflict.interpolationType && (
-            <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+            <span className="ml-2 text-xs text-muted-foreground">
               (Type: {conflict.interpolationType})
-            </Typography>
+            </span>
           )}
-        </Typography>
+        </p>
         <RadioGroup
           value={resolution}
-          onChange={(e) => updateConflictResolution(conflict.originalId, e.target.value)}
+          onValueChange={(value) => updateConflictResolution(conflict.originalId, value)}
         >
-          {options.map(opt => (
-            <FormControlLabel
-              key={opt.value}
-              value={opt.value}
-              control={<Radio size="small" />}
-              label={opt.label}
-            />
+          {resolutionOptions.map(opt => (
+            <div key={opt.value} className="flex items-center gap-2">
+              <RadioGroupItem value={opt.value} />
+              <Label className="text-sm font-normal">{opt.label}</Label>
+            </div>
           ))}
         </RadioGroup>
-      </Box>
+      </div>
     )
   }
 
@@ -487,585 +454,435 @@ export default function ImportDataDialog({ open, onClose, onImportComplete }: Im
     <>
       <Dialog
         open={open}
-        onClose={onClose}
-        maxWidth="md"
-        fullWidth
+        onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
       >
-        <DialogTitle>Import Data</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Data</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-6 pt-2">
             {/* Import Progress */}
-            {importing && <LinearProgress />}
+            {importing && <Progress value={null} />}
 
             {/* Information Banner */}
-            <Alert severity="info" icon={<InfoIcon />}>
-              <Typography variant="body2">
+            <Alert>
+              <Info className="size-4" />
+              <AlertDescription>
                 Upload a JSON Lines (.jsonl) file exported from FOVEA. Expand the section below for format details and examples.
-              </Typography>
+              </AlertDescription>
             </Alert>
 
             {/* Format Documentation Accordion */}
             <Accordion>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  bgcolor: 'action.hover',
-                  '&:hover': { bgcolor: 'action.selected' }
-                }}
-              >
-                <Typography variant="subtitle2">
+              <AccordionItem value="format-spec">
+                <AccordionTrigger>
                   Format Specification & Example
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ bgcolor: 'background.default' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {/* Overview */}
-                  <Paper sx={{ p: 2, bgcolor: 'primary.50', borderLeft: 3, borderColor: 'primary.main' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                      JSON Lines format with one object per line. Each line must contain a <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.1)', padding: '2px 6px', borderRadius: 3 }}>type</code> field and corresponding <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.1)', padding: '2px 6px', borderRadius: 3 }}>data</code> object.
-                    </Typography>
-                  </Paper>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-col gap-6">
+                    {/* Overview */}
+                    <div className="rounded-md border-l-4 border-primary bg-muted/50 p-4">
+                      <p className="text-sm font-medium">
+                        JSON Lines format with one object per line. Each line must contain a{' '}
+                        <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">type</code> field and corresponding{' '}
+                        <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">data</code> object.
+                      </p>
+                    </div>
 
-                  {/* Example */}
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <FileIcon color="action" fontSize="small" />
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        Realistic Example: Container Ship Tracking
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                      Based on "Imports/Exports Analyst" persona tracking a cargo ship arrival with containers
-                    </Typography>
-                    <ExpandableJsonViewer
-                      data={{
-                        type: "annotation",
-                        data: {
-                          id: "7f8d9c2b-4a1e-4d6f-9c8b-2e5a1f3d7c4b",
-                          videoId: "f3e2d1c0-5b4a-3c2d-1e0f-9a8b7c6d5e4f",
-                          annotationType: "type",
-                          personaId: "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
-                          typeCategory: "entity",
-                          typeId: "container_ship",
-                          boundingBoxSequence: {
-                            boxes: [
-                              {
-                                x: 245,
-                                y: 180,
-                                width: 420,
-                                height: 285,
-                                frameNumber: 0,
-                                isKeyframe: true,
-                                confidence: 0.98,
-                                metadata: {
-                                  shipName: "MSC MEDITERRANEAN",
-                                  imo: "9876543",
-                                  callSign: "3FQM7",
-                                  flag: "Panama",
-                                  vesselLength: 366,
-                                  vesselBeam: 51,
-                                  dwt: 140000,
-                                  teu: 13800
+                    {/* Example */}
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <FileText className="size-4 text-muted-foreground" />
+                        <h4 className="text-sm font-bold">
+                          Realistic Example: Container Ship Tracking
+                        </h4>
+                      </div>
+                      <p className="mb-2 block text-xs text-muted-foreground">
+                        Based on "Imports/Exports Analyst" persona tracking a cargo ship arrival with containers
+                      </p>
+                      <ExpandableJsonViewer
+                        data={{
+                          type: "annotation",
+                          data: {
+                            id: "7f8d9c2b-4a1e-4d6f-9c8b-2e5a1f3d7c4b",
+                            videoId: "f3e2d1c0-5b4a-3c2d-1e0f-9a8b7c6d5e4f",
+                            annotationType: "type",
+                            personaId: "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
+                            typeCategory: "entity",
+                            typeId: "container_ship",
+                            boundingBoxSequence: {
+                              boxes: [
+                                {
+                                  x: 245, y: 180, width: 420, height: 285,
+                                  frameNumber: 0, isKeyframe: true, confidence: 0.98,
+                                  metadata: {
+                                    shipName: "MSC MEDITERRANEAN", imo: "9876543",
+                                    callSign: "3FQM7", flag: "Panama",
+                                    vesselLength: 366, vesselBeam: 51,
+                                    dwt: 140000, teu: 13800
+                                  }
+                                },
+                                { x: 320, y: 195, width: 450, height: 310, frameNumber: 120, isKeyframe: true, confidence: 0.99 },
+                                { x: 410, y: 210, width: 485, height: 335, frameNumber: 240, isKeyframe: true, confidence: 0.97 },
+                                {
+                                  x: 520, y: 225, width: 515, height: 360,
+                                  frameNumber: 360, isKeyframe: true, confidence: 0.98,
+                                  metadata: {
+                                    containersDischarged: 247, containersLoaded: 189,
+                                    netMovement: -58, estimatedDepartureTime: "2025-01-15T18:30:00Z"
+                                  }
                                 }
-                              },
-                              {
-                                x: 320,
-                                y: 195,
-                                width: 450,
-                                height: 310,
-                                frameNumber: 120,
-                                isKeyframe: true,
-                                confidence: 0.99
-                              },
-                              {
-                                x: 410,
-                                y: 210,
-                                width: 485,
-                                height: 335,
-                                frameNumber: 240,
-                                isKeyframe: true,
-                                confidence: 0.97
-                              },
-                              {
-                                x: 520,
-                                y: 225,
-                                width: 515,
-                                height: 360,
-                                frameNumber: 360,
-                                isKeyframe: true,
-                                confidence: 0.98,
-                                metadata: {
-                                  containersDischarged: 247,
-                                  containersLoaded: 189,
-                                  netMovement: -58,
-                                  estimatedDepartureTime: "2025-01-15T18:30:00Z"
-                                }
-                              }
-                            ],
-                            interpolationSegments: [
-                              {
-                                startFrame: 0,
-                                endFrame: 120,
-                                type: "ease-in-out"
-                              },
-                              {
-                                startFrame: 120,
-                                endFrame: 240,
-                                type: "linear"
-                              },
-                              {
-                                startFrame: 240,
-                                endFrame: 360,
-                                type: "ease-out"
-                              }
-                            ],
-                            visibilityRanges: [
-                              {
-                                startFrame: 0,
-                                endFrame: 360,
-                                visible: true
-                              }
-                            ],
-                            trackId: 1,
-                            trackingSource: "manual",
-                            trackingConfidence: 0.98,
-                            totalFrames: 361,
-                            keyframeCount: 4,
-                            interpolatedFrameCount: 357
-                          },
-                          confidence: 0.98,
-                          notes: "Container ship MSC MEDITERRANEAN arriving at berth 12 for discharge/load operations. Ship approached from southwest channel, berthed at 08:45 UTC. Gantry cranes 3, 4, and 5 assigned for operations. Weather conditions: clear, wind 8 knots NE.",
-                          metadata: {
-                            vesselData: {
-                              shipType: "Container Ship",
-                              operator: "Mediterranean Shipping Company",
-                              buildYear: 2018,
-                              port: "Long Beach",
-                              terminal: "Pacific Container Terminal",
-                              berth: "PCT-12",
-                              arrivalTime: "2025-01-15T08:45:00Z",
-                              berthingDuration: 12,
-                              operationType: "discharge-load"
-                            },
-                            cargoOperations: {
-                              containersOnBoard: 8543,
-                              containerTypes: {
-                                "20ft": 3245,
-                                "40ft": 4812,
-                                "40ft_hc": 486
-                              },
-                              refrigeratedContainers: 842,
-                              hazmatContainers: 67,
-                              companiesObserved: [
-                                "MAERSK",
-                                "MSC",
-                                "CMA CGM",
-                                "COSCO",
-                                "EVERGREEN",
-                                "HAPAG-LLOYD",
-                                "ONE"
                               ],
-                              loadingEquipment: [
-                                "Gantry Crane 3",
-                                "Gantry Crane 4",
-                                "Gantry Crane 5"
-                              ]
+                              interpolationSegments: [
+                                { startFrame: 0, endFrame: 120, type: "ease-in-out" },
+                                { startFrame: 120, endFrame: 240, type: "linear" },
+                                { startFrame: 240, endFrame: 360, type: "ease-out" }
+                              ],
+                              visibilityRanges: [{ startFrame: 0, endFrame: 360, visible: true }],
+                              trackId: 1, trackingSource: "manual", trackingConfidence: 0.98,
+                              totalFrames: 361, keyframeCount: 4, interpolatedFrameCount: 357
                             },
-                            weatherConditions: {
-                              visibility: "excellent",
-                              windSpeed: 8,
-                              windDirection: "NE",
-                              temperature: 18,
-                              seaState: "calm"
-                            }
-                          },
-                          createdBy: "analyst_maritime_ops_01",
-                          createdAt: "2025-01-15T09:15:23Z",
-                          updatedAt: "2025-01-15T14:35:47Z"
-                        }
-                      }}
-                      initialCollapsed={true}
-                    />
-                  </Box>
+                            confidence: 0.98,
+                            notes: "Container ship MSC MEDITERRANEAN arriving at berth 12 for discharge/load operations.",
+                            metadata: {
+                              vesselData: {
+                                shipType: "Container Ship", operator: "Mediterranean Shipping Company",
+                                buildYear: 2018, port: "Long Beach", terminal: "Pacific Container Terminal",
+                                berth: "PCT-12", arrivalTime: "2025-01-15T08:45:00Z",
+                                berthingDuration: 12, operationType: "discharge-load"
+                              }
+                            },
+                            createdBy: "analyst_maritime_ops_01",
+                            createdAt: "2025-01-15T09:15:23Z",
+                            updatedAt: "2025-01-15T14:35:47Z"
+                          }
+                        }}
+                        initialCollapsed={true}
+                      />
+                    </div>
 
-                  {/* Field Descriptions */}
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
-                      Key Field Descriptions
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>annotationType</code>
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                    {/* Field Descriptions */}
+                    <div>
+                      <h4 className="mb-4 text-sm font-bold">
+                        Key Field Descriptions
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-md border bg-card p-4">
+                          <p className="mb-2 text-sm font-medium">
+                            <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">annotationType</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
                             "type" assigns a persona's ontology type to a video region. "object" links to an existing world entity, event, or location.
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>boxes</code>
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          </p>
+                        </div>
+                        <div className="rounded-md border bg-card p-4">
+                          <p className="mb-2 text-sm font-medium">
+                            <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">boxes</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
                             Keyframe positions defining bounding box movement. Only boxes marked isKeyframe:true are stored; intermediate frames are interpolated.
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>interpolationSegments</code>
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          </p>
+                        </div>
+                        <div className="rounded-md border bg-card p-4">
+                          <p className="mb-2 text-sm font-medium">
+                            <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">interpolationSegments</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
                             Controls how boxes move between keyframes. Linear for constant motion, ease-in/out for acceleration/deceleration, bezier for custom curves.
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Paper sx={{ p: 2, height: '100%', bgcolor: 'background.paper' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                            <code style={{ backgroundColor: 'rgba(0, 0, 0, 0.08)', padding: '2px 6px', borderRadius: 3 }}>visibilityRanges</code>
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          </p>
+                        </div>
+                        <div className="rounded-md border bg-card p-4">
+                          <p className="mb-2 text-sm font-medium">
+                            <code className="rounded bg-black/10 px-1.5 py-0.5 text-xs">visibilityRanges</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
                             Defines when the annotation is visible. Supports gaps for objects that leave and re-enter the frame (e.g., occlusion).
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    </Grid>
-                  </Box>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* Footer Note */}
-                  <Alert severity="success" variant="outlined" sx={{ borderRadius: 1 }}>
-                    <Typography variant="caption">
-                      <strong>Tip:</strong> Export a sample file using the Export button to examine the complete structure with all supported fields.
-                    </Typography>
-                  </Alert>
-                </Box>
-              </AccordionDetails>
+                    {/* Footer Note */}
+                    <Alert>
+                      <AlertDescription>
+                        <strong>Tip:</strong> Export a sample file using the Export button to examine the complete structure with all supported fields.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             </Accordion>
 
             {/* File Upload Area */}
-            <Box>
-              <FormLabel component="legend">Select File</FormLabel>
+            <div>
+              <Label className="mb-2">Select File</Label>
               {!file ? (
-                <Paper
+                <div
                   onDragEnter={handleDragEnter}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  sx={{
-                    mt: 1,
-                    p: 4,
-                    border: dragActive ? '2px dashed' : '2px dashed',
-                    borderColor: dragActive ? 'primary.main' : 'divider',
-                    backgroundColor: dragActive ? 'action.hover' : 'background.paper',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      backgroundColor: 'action.hover',
-                      borderColor: 'primary.main',
-                    }
-                  }}
+                  className={cn(
+                    "mt-2 cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+                    dragActive
+                      ? "border-primary bg-muted/50"
+                      : "border-border bg-card hover:border-primary hover:bg-muted/50"
+                  )}
                   onClick={() => document.getElementById('import-file-input')?.click()}
                 >
-                  <UploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="body1" gutterBottom>
+                  <Upload className="mx-auto mb-4 size-12 text-muted-foreground" />
+                  <p className="text-sm">
                     Drag and drop a .jsonl file here
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  </p>
+                  <p className="text-sm text-muted-foreground">
                     or click to browse
-                  </Typography>
+                  </p>
                   <input
                     id="import-file-input"
                     type="file"
                     accept=".jsonl"
-                    style={{ display: 'none' }}
+                    className="hidden"
                     onChange={handleFileInputChange}
                   />
-                </Paper>
+                </div>
               ) : (
-                <Paper sx={{ mt: 1, p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <FileIcon color="primary" />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2">{file.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                <div className="mt-2 flex items-center gap-3 rounded-lg border bg-card p-3">
+                  <FileText className="size-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {formatBytes(file.size)}
-                    </Typography>
-                  </Box>
-                  <IconButton onClick={handleRemoveFile} size="small">
-                    <CloseIcon />
-                  </IconButton>
-                </Paper>
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon-sm" onClick={handleRemoveFile}>
+                    <X className="size-4" />
+                  </Button>
+                </div>
               )}
 
               {file && file.size > 50 * 1024 * 1024 && (
-                <Alert severity="warning" sx={{ mt: 1 }}>
-                  Large file ({formatBytes(file.size)}). Import may take several minutes.
+                <Alert className="mt-2">
+                  <AlertTriangle className="size-4" />
+                  <AlertDescription>
+                    Large file ({formatBytes(file.size)}). Import may take several minutes.
+                  </AlertDescription>
                 </Alert>
               )}
-            </Box>
+            </div>
 
             {/* Preview Error */}
             {previewError && (
-              <Alert severity="error" icon={<ErrorIcon />}>
-                {previewError}
+              <Alert variant="destructive">
+                <CircleAlert className="size-4" />
+                <AlertDescription>{previewError}</AlertDescription>
               </Alert>
             )}
 
             {/* Previewing Indicator */}
             {previewing && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <CircularProgress size={24} />
-                <Typography variant="body2">Analyzing file...</Typography>
-              </Box>
+              <div className="flex items-center gap-3">
+                <Spinner />
+                <p className="text-sm">Analyzing file...</p>
+              </div>
             )}
 
             {/* Preview Section */}
             {preview && !previewing && (
               <>
-                <Divider />
+                <Separator />
 
                 {/* Item Counts */}
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Preview
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="primary">{preview.counts.annotations}</Typography>
-                        <Typography variant="caption">Annotations</Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="primary">{preview.counts.totalKeyframes}</Typography>
-                        <Typography variant="caption">Keyframes</Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="primary">{preview.counts.singleKeyframeSequences}</Typography>
-                        <Typography variant="caption">Single-frame</Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h6">{preview.counts.personas}</Typography>
-                        <Typography variant="caption">Personas</Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h6">{preview.counts.entities}</Typography>
-                        <Typography variant="caption">Entities</Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h6">{preview.counts.events}</Typography>
-                        <Typography variant="caption">Events</Typography>
-                      </Paper>
-                    </Grid>
-                  </Grid>
-                </Box>
+                <div>
+                  <h3 className="mb-3 text-sm font-medium">Preview</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">{preview.counts.annotations}</p>
+                      <p className="text-xs text-muted-foreground">Annotations</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">{preview.counts.totalKeyframes}</p>
+                      <p className="text-xs text-muted-foreground">Keyframes</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">{preview.counts.singleKeyframeSequences}</p>
+                      <p className="text-xs text-muted-foreground">Single-frame</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-lg font-semibold">{preview.counts.personas}</p>
+                      <p className="text-xs text-muted-foreground">Personas</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-lg font-semibold">{preview.counts.entities}</p>
+                      <p className="text-xs text-muted-foreground">Entities</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-lg font-semibold">{preview.counts.events}</p>
+                      <p className="text-xs text-muted-foreground">Events</p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Warnings */}
                 {preview.warnings.length > 0 && (
-                  <Alert severity="warning" icon={<WarningIcon />}>
-                    <Typography variant="subtitle2" gutterBottom>Warnings ({preview.warnings.length})</Typography>
-                    {preview.warnings.map((warning, idx) => (
-                      <Typography key={idx} variant="caption" component="div">
-                        {warning}
-                      </Typography>
-                    ))}
+                  <Alert>
+                    <AlertTriangle className="size-4" />
+                    <AlertDescription>
+                      <h4 className="mb-1 text-sm font-medium">Warnings ({preview.warnings.length})</h4>
+                      {preview.warnings.map((warning, idx) => (
+                        <p key={idx} className="text-xs">{warning}</p>
+                      ))}
+                    </AlertDescription>
                   </Alert>
                 )}
 
                 {/* Conflicts */}
                 {preview.conflicts.length > 0 && (
-                  <Box>
-                    <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
-                      {preview.conflicts.length} conflict{preview.conflicts.length !== 1 ? 's' : ''} detected.
-                      Please select resolution strategies below.
+                  <div>
+                    <Alert className="mb-3">
+                      <AlertTriangle className="size-4" />
+                      <AlertDescription>
+                        {preview.conflicts.length} conflict{preview.conflicts.length !== 1 ? 's' : ''} detected.
+                        Please select resolution strategies below.
+                      </AlertDescription>
                     </Alert>
 
-                    {Array.from(groupConflictsByType(preview.conflicts)).map(([type, conflicts]) => (
-                      <Accordion key={type} defaultExpanded>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                          <Typography>
+                    <Accordion defaultValue={Array.from(groupConflictsByType(preview.conflicts).keys())}>
+                      {Array.from(groupConflictsByType(preview.conflicts)).map(([type, conflicts]) => (
+                        <AccordionItem key={type} value={type}>
+                          <AccordionTrigger>
                             {getConflictTypeName(type)} ({conflicts.length})
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                          {conflicts.map(renderConflict)}
-                        </AccordionDetails>
-                      </Accordion>
-                    ))}
-                  </Box>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            {conflicts.map(renderConflict)}
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
                 )}
 
-                <Divider />
+                <Separator />
 
                 {/* Import Options */}
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Import Options
-                  </Typography>
+                <div>
+                  <h3 className="mb-3 text-sm font-medium">Import Options</h3>
 
-                  <FormGroup>
-                    <FormLabel component="legend" sx={{ mt: 1 }}>Scope</FormLabel>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.scope.includePersonas}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            scope: { ...options.scope, includePersonas: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Import Personas"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.scope.includeWorldState}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            scope: { ...options.scope, includeWorldState: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Import World State"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.scope.includeAnnotations}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            scope: { ...options.scope, includeAnnotations: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Import Annotations"
-                    />
+                  <div className="flex flex-col gap-4">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">Scope</Label>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.scope.includePersonas}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          scope: { ...options.scope, includePersonas: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Import Personas</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.scope.includeWorldState}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          scope: { ...options.scope, includeWorldState: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Import World State</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.scope.includeAnnotations}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          scope: { ...options.scope, includeAnnotations: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Import Annotations</Label>
+                    </div>
 
-                    <FormLabel component="legend" sx={{ mt: 2 }}>Validation</FormLabel>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.validation.strictMode}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            validation: { ...options.validation, strictMode: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Strict Mode (fail on warnings)"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.validation.validateReferences}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            validation: { ...options.validation, validateReferences: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Validate References"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.validation.validateSequenceIntegrity}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            validation: { ...options.validation, validateSequenceIntegrity: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Validate Sequence Integrity"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.validation.validateBoundingBoxRanges}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            validation: { ...options.validation, validateBoundingBoxRanges: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Validate Bounding Box Ranges"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.validation.recomputeInterpolation}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            validation: { ...options.validation, recomputeInterpolation: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Recompute Interpolation"
-                    />
+                    <Label className="mt-2 text-xs font-semibold uppercase text-muted-foreground">Validation</Label>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.validation.strictMode}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          validation: { ...options.validation, strictMode: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Strict Mode (fail on warnings)</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.validation.validateReferences}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          validation: { ...options.validation, validateReferences: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Validate References</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.validation.validateSequenceIntegrity}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          validation: { ...options.validation, validateSequenceIntegrity: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Validate Sequence Integrity</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.validation.validateBoundingBoxRanges}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          validation: { ...options.validation, validateBoundingBoxRanges: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Validate Bounding Box Ranges</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.validation.recomputeInterpolation}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          validation: { ...options.validation, recomputeInterpolation: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Recompute Interpolation</Label>
+                    </div>
 
-                    <FormLabel component="legend" sx={{ mt: 2 }}>Transaction</FormLabel>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={options.transaction.atomic}
-                          onChange={(e) => setOptions({
-                            ...options,
-                            transaction: { ...options.transaction, atomic: e.target.checked }
-                          })}
-                        />
-                      }
-                      label="Atomic (all-or-nothing)"
-                    />
-                  </FormGroup>
-                </Box>
+                    <Label className="mt-2 text-xs font-semibold uppercase text-muted-foreground">Transaction</Label>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={options.transaction.atomic}
+                        onCheckedChange={(checked) => setOptions({
+                          ...options,
+                          transaction: { ...options.transaction, atomic: !!checked }
+                        })}
+                      />
+                      <Label className="font-normal">Atomic (all-or-nothing)</Label>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={importing}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleImport}
-            variant="contained"
-            disabled={!file || previewing || importing || !allConflictsResolved()}
-          >
-            {importing ? 'Importing...' : 'Import'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </div>
 
-      {/* Notification Snackbar */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={() => setNotification({ ...notification, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={() => setNotification({ ...notification, open: false })}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose} disabled={importing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={!file || previewing || importing || !allConflictsResolved()}
+            >
+              {importing ? 'Importing...' : 'Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Result Dialog */}
       <ImportResultDialog

@@ -6,17 +6,17 @@
 import { useState, FormEvent } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  Box,
-  CircularProgress,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import { useCreateUser } from '@store/queries/admin/useUsers'
 
 /**
@@ -35,7 +35,7 @@ interface CreateUserDialogProps {
  * @param onClose - Callback when dialog closes
  * @returns Create user dialog
  */
-export default function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
+export function CreateUserDialog({ open, onClose }: CreateUserDialogProps): JSX.Element {
   const createUser = useCreateUser()
 
   const [formData, setFormData] = useState({
@@ -146,95 +146,107 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <form onSubmit={handleSubmit}>
-        <DialogTitle>Create User</DialogTitle>
-        <DialogContent>
-          {createUser.isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {createUser.error?.message || 'Failed to create user'}
-            </Alert>
-          )}
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Create User</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {createUser.isError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>
+                  {createUser.error?.message || 'Failed to create user'}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="Username"
-              value={formData.username}
-              onChange={(e) => updateField('username', e.target.value)}
-              error={!!errors.username}
-              helperText={errors.username}
-              required
-              fullWidth
-              autoFocus
-            />
-
-            <TextField
-              label="Display Name"
-              value={formData.displayName}
-              onChange={(e) => updateField('displayName', e.target.value)}
-              error={!!errors.displayName}
-              helperText={errors.displayName}
-              required
-              fullWidth
-            />
-
-            <TextField
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              error={!!errors.email}
-              helperText={errors.email}
-              fullWidth
-            />
-
-            <TextField
-              label="Password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              error={!!errors.password}
-              helperText={errors.password || 'Minimum 8 characters'}
-              required
-              fullWidth
-            />
-
-            <TextField
-              label="Confirm Password"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => updateField('confirmPassword', e.target.value)}
-              error={!!errors.confirmPassword}
-              helperText={errors.confirmPassword}
-              required
-              fullWidth
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={formData.isAdmin}
-                  onChange={(e) => updateField('isAdmin', e.target.checked)}
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="create-username">Username *</Label>
+                <Input
+                  id="create-username"
+                  value={formData.username}
+                  onChange={(e) => updateField('username', e.target.value)}
+                  autoFocus
                 />
-              }
-              label="Administrator"
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} disabled={createUser.isPending}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={createUser.isPending}
-            startIcon={createUser.isPending ? <CircularProgress size={16} /> : undefined}
-          >
-            Create User
-          </Button>
-        </DialogActions>
-      </form>
+                {errors.username && (
+                  <p className="text-sm text-destructive">{errors.username}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-displayName">Display Name *</Label>
+                <Input
+                  id="create-displayName"
+                  value={formData.displayName}
+                  onChange={(e) => updateField('displayName', e.target.value)}
+                />
+                {errors.displayName && (
+                  <p className="text-sm text-destructive">{errors.displayName}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-email">Email</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                />
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-password">Password *</Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => updateField('password', e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {errors.password || 'Minimum 8 characters'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-confirmPassword">Confirm Password *</Label>
+                <Input
+                  id="create-confirmPassword"
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => updateField('confirmPassword', e.target.value)}
+                />
+                {errors.confirmPassword && (
+                  <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="create-isAdmin"
+                  checked={formData.isAdmin}
+                  onCheckedChange={(checked) => updateField('isAdmin', !!checked)}
+                />
+                <Label htmlFor="create-isAdmin">Administrator</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={createUser.isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createUser.isPending}>
+              {createUser.isPending && <Spinner className="mr-2 h-4 w-4" />}
+              Create User
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   )
 }

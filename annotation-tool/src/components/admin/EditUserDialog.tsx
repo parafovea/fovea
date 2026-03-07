@@ -4,28 +4,30 @@
  */
 
 import { useState, useEffect, FormEvent } from 'react'
+import { ChevronDown } from 'lucide-react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  Box,
-  CircularProgress,
-  Typography,
-  Divider,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
+import {
   Accordion,
-  AccordionSummary,
-  AccordionDetails,
-} from '@mui/material'
-import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
 import { useUpdateUser, useDeleteUser, UserWithStats } from '@store/queries/admin/useUsers'
 import { useAuthStore } from '@store/zustand/authStore'
-import ConfirmDialog from '../shared/ConfirmDialog'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 /**
  * Props for EditUserDialog component.
@@ -45,7 +47,7 @@ interface EditUserDialogProps {
  * @param onClose - Callback when dialog closes
  * @returns Edit user dialog
  */
-export default function EditUserDialog({ open, user, onClose }: EditUserDialogProps) {
+export function EditUserDialog({ open, user, onClose }: EditUserDialogProps): JSX.Element {
   const updateUser = useUpdateUser()
   const deleteUser = useDeleteUser()
   const currentUser = useAuthStore(state => state.currentUser)
@@ -199,130 +201,147 @@ export default function EditUserDialog({ open, user, onClose }: EditUserDialogPr
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSubmit}>
-          <DialogTitle>Edit User: {user.username}</DialogTitle>
-          <DialogContent>
-            {updateUser.isError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {updateUser.error?.message || 'Failed to update user'}
-              </Alert>
-            )}
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Edit User: {user.username}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              {updateUser.isError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>
+                    {updateUser.error?.message || 'Failed to update user'}
+                  </AlertDescription>
+                </Alert>
+              )}
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-              {/* User Statistics */}
-              <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  User Statistics
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                  <Typography variant="body2">
-                    Personas: <strong>{user.personaCount || 0}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    Sessions: <strong>{user.sessionCount || 0}</strong>
-                  </Typography>
-                  <Typography variant="body2" sx={{ gridColumn: '1 / -1' }}>
-                    Created: <strong>{formatDate(user.createdAt)}</strong>
-                  </Typography>
-                </Box>
-              </Box>
+              <div className="flex flex-col gap-4">
+                {/* User Statistics */}
+                <div className="p-4 bg-muted rounded-md">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">
+                    User Statistics
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <p className="text-sm">
+                      Personas: <strong>{user.personaCount || 0}</strong>
+                    </p>
+                    <p className="text-sm">
+                      Sessions: <strong>{user.sessionCount || 0}</strong>
+                    </p>
+                    <p className="text-sm col-span-2">
+                      Created: <strong>{formatDate(user.createdAt)}</strong>
+                    </p>
+                  </div>
+                </div>
 
-              <TextField
-                label="Username"
-                value={user.username}
-                disabled
-                fullWidth
-                helperText="Username cannot be changed"
-              />
-
-              <TextField
-                label="Display Name"
-                value={formData.displayName}
-                onChange={(e) => updateField('displayName', e.target.value)}
-                error={!!errors.displayName}
-                helperText={errors.displayName}
-                required
-                fullWidth
-              />
-
-              <TextField
-                label="Email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                error={!!errors.email}
-                helperText={errors.email}
-                fullWidth
-              />
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={formData.isAdmin}
-                    onChange={(e) => updateField('isAdmin', e.target.checked)}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-username">Username</Label>
+                  <Input
+                    id="edit-username"
+                    value={user.username}
+                    disabled
                   />
-                }
-                label="Administrator"
-              />
+                  <p className="text-sm text-muted-foreground">Username cannot be changed</p>
+                </div>
 
-              <Divider sx={{ my: 1 }} />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-displayName">Display Name *</Label>
+                  <Input
+                    id="edit-displayName"
+                    value={formData.displayName}
+                    onChange={(e) => updateField('displayName', e.target.value)}
+                  />
+                  {errors.displayName && (
+                    <p className="text-sm text-destructive">{errors.displayName}</p>
+                  )}
+                </div>
 
-              {/* Change Password Section */}
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle2">Change Password</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <TextField
-                      label="New Password"
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => updateField('password', e.target.value)}
-                      error={!!errors.password}
-                      helperText={errors.password || 'Leave blank to keep current password'}
-                      fullWidth
-                    />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-email">Email</Label>
+                  <Input
+                    id="edit-email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => updateField('email', e.target.value)}
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
+                </div>
 
-                    <TextField
-                      label="Confirm New Password"
-                      type="password"
-                      value={formData.confirmPassword}
-                      onChange={(e) => updateField('confirmPassword', e.target.value)}
-                      error={!!errors.confirmPassword}
-                      helperText={errors.confirmPassword}
-                      fullWidth
-                      disabled={!formData.password}
-                    />
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-            <Button
-              color="error"
-              onClick={() => setDeleteConfirmOpen(true)}
-              disabled={!canDelete || updateUser.isPending}
-            >
-              Delete User
-            </Button>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button onClick={handleClose} disabled={updateUser.isPending}>
-                Cancel
-              </Button>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-isAdmin"
+                    checked={formData.isAdmin}
+                    onCheckedChange={(checked) => updateField('isAdmin', !!checked)}
+                  />
+                  <Label htmlFor="edit-isAdmin">Administrator</Label>
+                </div>
+
+                <Separator className="my-2" />
+
+                {/* Change Password Section */}
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="password">
+                    <AccordionTrigger className="text-sm font-medium">
+                      Change Password
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="flex flex-col gap-4 pt-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-password">New Password</Label>
+                          <Input
+                            id="edit-password"
+                            type="password"
+                            value={formData.password}
+                            onChange={(e) => updateField('password', e.target.value)}
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            {errors.password || 'Leave blank to keep current password'}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-confirmPassword">Confirm New Password</Label>
+                          <Input
+                            id="edit-confirmPassword"
+                            type="password"
+                            value={formData.confirmPassword}
+                            onChange={(e) => updateField('confirmPassword', e.target.value)}
+                            disabled={!formData.password}
+                          />
+                          {errors.confirmPassword && (
+                            <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            </div>
+            <DialogFooter className="flex justify-between sm:justify-between">
               <Button
-                type="submit"
-                variant="contained"
-                disabled={updateUser.isPending}
-                startIcon={updateUser.isPending ? <CircularProgress size={16} /> : undefined}
+                type="button"
+                variant="destructive"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={!canDelete || updateUser.isPending}
               >
-                Save Changes
+                Delete User
               </Button>
-            </Box>
-          </DialogActions>
-        </form>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={handleClose} disabled={updateUser.isPending}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateUser.isPending}>
+                  {updateUser.isPending && <Spinner className="mr-2 h-4 w-4" />}
+                  Save Changes
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
@@ -331,7 +350,7 @@ export default function EditUserDialog({ open, user, onClose }: EditUserDialogPr
         title="Delete User"
         message={`Are you sure you want to delete user "${user.username}"? This will also delete all their personas and annotations. This action cannot be undone.`}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
         loading={deleteUser.isPending}

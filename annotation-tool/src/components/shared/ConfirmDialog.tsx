@@ -5,13 +5,14 @@
 
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  CircularProgress,
-} from '@mui/material'
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 
 /**
  * Props for ConfirmDialog component.
@@ -22,7 +23,7 @@ interface ConfirmDialogProps {
   message: string
   confirmText?: string
   cancelText?: string
-  confirmColor?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'
+  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost'
   onConfirm: () => void | Promise<void>
   onCancel: () => void
   loading?: boolean
@@ -37,43 +38,51 @@ interface ConfirmDialogProps {
  * @param message - Confirmation message
  * @param confirmText - Confirm button text
  * @param cancelText - Cancel button text
- * @param confirmColor - Confirm button color
+ * @param confirmVariant - Confirm button variant
  * @param onConfirm - Callback when user confirms
  * @param onCancel - Callback when user cancels
  * @param loading - Whether action is in progress
  * @returns Confirmation dialog
  */
-export default function ConfirmDialog({
+export function ConfirmDialog({
   open,
   title,
   message,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  confirmColor = 'primary',
+  confirmVariant = 'default',
   onConfirm,
   onCancel,
   loading = false,
-}: ConfirmDialogProps) {
+}: ConfirmDialogProps): JSX.Element {
   return (
-    <Dialog open={open} onClose={loading ? undefined : onCancel} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        <Typography>{message}</Typography>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !loading) {
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{message}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
+            {cancelText}
+          </Button>
+          <Button
+            variant={confirmVariant}
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading && <Spinner className="size-4" />}
+            {confirmText}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel} disabled={loading}>
-          {cancelText}
-        </Button>
-        <Button
-          onClick={onConfirm}
-          color={confirmColor}
-          variant="contained"
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={16} /> : undefined}
-        >
-          {confirmText}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

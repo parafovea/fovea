@@ -1,33 +1,27 @@
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Chip,
-  Grid,
-  Paper,
-} from '@mui/material'
+  CheckCircle,
+  CircleAlert,
+  AlertTriangle,
+} from 'lucide-react'
 import {
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { ImportResult } from '@models/types'
 
 /**
- * @interface ImportResultDialogProps
- * @description Props for the ImportResultDialog component.
- * @property open - Whether the dialog is open
- * @property result - Import result data to display
- * @property onClose - Callback when dialog is closed
+ * Props for the ImportResultDialog component.
+ *
+ * @param open - Whether the dialog is open
+ * @param result - Import result data to display
+ * @param onClose - Callback when dialog is closed
  */
 interface ImportResultDialogProps {
   open: boolean
@@ -36,202 +30,167 @@ interface ImportResultDialogProps {
 }
 
 /**
- * ImportResultDialog component for displaying detailed import results.
- * Shows summary statistics, warnings, errors, and resolved conflicts.
+ * Displays detailed import results including summary statistics,
+ * warnings, errors, and resolved conflicts.
  *
  * @param props - Component props
  * @returns Import result dialog component
  */
-export default function ImportResultDialog({ open, result, onClose }: ImportResultDialogProps) {
+export function ImportResultDialog({ open, result, onClose }: ImportResultDialogProps): JSX.Element | null {
   if (!result) return null
 
   return (
     <Dialog
       open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
+      onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {result.success ? (
-            <>
-              <SuccessIcon color="success" />
-              <Typography variant="h6">Import Successful</Typography>
-            </>
-          ) : (
-            <>
-              <ErrorIcon color="error" />
-              <Typography variant="h6">Import Failed</Typography>
-            </>
-          )}
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
-          {/* Summary Statistics */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Summary
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2 }}>
-                  <Typography variant="h4" color="success.main">
-                    {result.summary.importedItems.annotations}
-                  </Typography>
-                  <Typography variant="caption">Annotations Imported</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2 }}>
-                  <Typography variant="h4" color="primary">
-                    {result.summary.importedItems.totalKeyframes}
-                  </Typography>
-                  <Typography variant="caption">Total Keyframes</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={4}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h6">{result.summary.importedItems.personas}</Typography>
-                  <Typography variant="caption">Personas</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={4}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h6">{result.summary.importedItems.entities}</Typography>
-                  <Typography variant="caption">Entities</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={4}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h6">{result.summary.importedItems.events}</Typography>
-                  <Typography variant="caption">Events</Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-
-            <List dense sx={{ mt: 2 }}>
-              <ListItem>
-                <ListItemText
-                  primary="Total Lines Processed"
-                  secondary={result.summary.processedLines.toLocaleString()}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText
-                  primary="Single-Frame Sequences"
-                  secondary={result.summary.importedItems.singleKeyframeSequences.toLocaleString()}
-                />
-              </ListItem>
-              {result.summary.skippedItems.annotations > 0 && (
-                <ListItem>
-                  <ListItemText
-                    primary="Annotations Skipped"
-                    secondary={result.summary.skippedItems.annotations.toLocaleString()}
-                  />
-                </ListItem>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            <span className="flex items-center gap-2">
+              {result.success ? (
+                <>
+                  <CheckCircle className="size-5 text-green-600" />
+                  Import Successful
+                </>
+              ) : (
+                <>
+                  <CircleAlert className="size-5 text-destructive" />
+                  Import Failed
+                </>
               )}
-            </List>
-          </Box>
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-6 pt-2">
+          {/* Summary Statistics */}
+          <div>
+            <h3 className="mb-3 text-sm font-medium">Summary</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-2xl font-bold text-green-600">
+                  {result.summary.importedItems.annotations}
+                </p>
+                <p className="text-xs text-muted-foreground">Annotations Imported</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-2xl font-bold text-primary">
+                  {result.summary.importedItems.totalKeyframes}
+                </p>
+                <p className="text-xs text-muted-foreground">Total Keyframes</p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-lg font-semibold">{result.summary.importedItems.personas}</p>
+                <p className="text-xs text-muted-foreground">Personas</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-lg font-semibold">{result.summary.importedItems.entities}</p>
+                <p className="text-xs text-muted-foreground">Entities</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <p className="text-lg font-semibold">{result.summary.importedItems.events}</p>
+                <p className="text-xs text-muted-foreground">Events</p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-1">
+              <div className="flex justify-between py-1 text-sm">
+                <span>Total Lines Processed</span>
+                <span className="text-muted-foreground">{result.summary.processedLines.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1 text-sm">
+                <span>Single-Frame Sequences</span>
+                <span className="text-muted-foreground">{result.summary.importedItems.singleKeyframeSequences.toLocaleString()}</span>
+              </div>
+              {result.summary.skippedItems.annotations > 0 && (
+                <div className="flex justify-between py-1 text-sm">
+                  <span>Annotations Skipped</span>
+                  <span className="text-muted-foreground">{result.summary.skippedItems.annotations.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Resolved Conflicts */}
           {result.conflicts.length > 0 && (
             <>
-              <Divider />
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
+              <Separator />
+              <div>
+                <h3 className="mb-3 text-sm font-medium">
                   Resolved Conflicts ({result.conflicts.length})
-                </Typography>
-                <List dense>
+                </h3>
+                <div className="space-y-2">
                   {result.conflicts.map((conflict, idx) => (
-                    <ListItem key={idx}>
-                      <ListItemText
-                        primary={`Line ${conflict.line}: ${conflict.details}`}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                            <Typography variant="caption">Resolution:</Typography>
-                            <Chip
-                              label={conflict.resolution}
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                            />
-                          </Box>
-                        }
-                      />
-                    </ListItem>
+                    <div key={idx} className="flex items-start justify-between gap-2 py-1 text-sm">
+                      <span>Line {conflict.line}: {conflict.details}</span>
+                      <Badge variant="outline">{conflict.resolution}</Badge>
+                    </div>
                   ))}
-                </List>
-              </Box>
+                </div>
+              </div>
             </>
           )}
 
           {/* Warnings */}
           {result.warnings.length > 0 && (
             <>
-              <Divider />
-              <Box>
-                <Alert severity="warning" icon={<WarningIcon />}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Warnings ({result.warnings.length})
-                  </Typography>
-                  <List dense>
+              <Separator />
+              <Alert>
+                <AlertTriangle className="size-4" />
+                <AlertDescription>
+                  <h4 className="mb-2 text-sm font-medium">Warnings ({result.warnings.length})</h4>
+                  <div className="space-y-1">
                     {result.warnings.map((warning, idx) => (
-                      <ListItem key={idx} sx={{ py: 0 }}>
-                        <ListItemText
-                          primary={`Line ${warning.line}: ${warning.message}`}
-                          secondary={warning.type}
-                          primaryTypographyProps={{ variant: 'caption' }}
-                          secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-                        />
-                      </ListItem>
+                      <div key={idx} className="text-xs">
+                        <span>Line {warning.line}: {warning.message}</span>
+                        <span className="ml-2 text-muted-foreground">{warning.type}</span>
+                      </div>
                     ))}
-                  </List>
-                </Alert>
-              </Box>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </>
           )}
 
           {/* Errors */}
           {result.errors.length > 0 && (
             <>
-              <Divider />
-              <Box>
-                <Alert severity="error" icon={<ErrorIcon />}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Errors ({result.errors.length})
-                  </Typography>
-                  <List dense>
+              <Separator />
+              <Alert variant="destructive">
+                <CircleAlert className="size-4" />
+                <AlertDescription>
+                  <h4 className="mb-2 text-sm font-medium">Errors ({result.errors.length})</h4>
+                  <div className="space-y-1">
                     {result.errors.map((error, idx) => (
-                      <ListItem key={idx} sx={{ py: 0 }}>
-                        <ListItemText
-                          primary={`Line ${error.line}: ${error.message}`}
-                          secondary={error.type}
-                          primaryTypographyProps={{ variant: 'caption' }}
-                          secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-                        />
-                      </ListItem>
+                      <div key={idx} className="text-xs">
+                        <span>Line {error.line}: {error.message}</span>
+                        <span className="ml-2 text-muted-foreground">{error.type}</span>
+                      </div>
                     ))}
-                  </List>
-                </Alert>
-              </Box>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </>
           )}
 
           {/* Success Message */}
           {result.success && result.errors.length === 0 && (
-            <Alert severity="success" icon={<SuccessIcon />}>
-              All items imported successfully with no errors.
+            <Alert>
+              <CheckCircle className="size-4" />
+              <AlertDescription>
+                All items imported successfully with no errors.
+              </AlertDescription>
             </Alert>
           )}
-        </Box>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="contained">
-          Close
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
