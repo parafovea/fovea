@@ -9,10 +9,6 @@ import { Toaster } from '@/components/ui/sonner'
 import App from './App'
 import './index.css'
 
-// MUI theme (kept during migration, will be removed in cleanup)
-import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
-
 // Initialize command registry before React renders (must be before component mount effects)
 import { initializeCommands, initializeGlobalContext } from '@lib/commands/init-commands'
 
@@ -37,52 +33,6 @@ initErrorLogging({
 initializeCommands()
 initializeGlobalContext()
 
-// MUI theme (kept during migration, will be removed when all MUI components are migrated)
-const muiTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#8c4e87',
-      light: '#b87ab3',
-      dark: '#633660',
-    },
-    secondary: {
-      main: '#4e878c',
-      light: '#7ab8b3',
-      dark: '#366360',
-    },
-    error: {
-      main: '#8c534e',
-      light: '#b87a76',
-      dark: '#633633',
-    },
-    warning: {
-      main: '#8c7d4e',
-      light: '#b8a87a',
-      dark: '#635636',
-    },
-    background: {
-      default: '#f8f9fa',
-      paper: '#ffffff',
-    },
-    success: {
-      main: '#4e8c53',
-      light: '#7ab87e',
-      dark: '#366338',
-    },
-    info: {
-      main: '#4e678c',
-      light: '#7a93b8',
-      dark: '#364863',
-    },
-    text: {
-      primary: 'rgba(0, 0, 0, 0.87)',
-      secondary: 'rgba(0, 0, 0, 0.70)',
-      disabled: 'rgba(0, 0, 0, 0.50)',
-    },
-  },
-})
-
 /**
  * TanStack Query client configuration.
  * Manages caching, refetching, and background updates for API requests.
@@ -102,14 +52,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <MuiThemeProvider theme={muiTheme}>
-            <CssBaseline />
-            <TooltipProvider>
-              <App />
-              <Toaster position="bottom-right" />
-            </TooltipProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </MuiThemeProvider>
+          <TooltipProvider>
+            <App />
+            <Toaster position="bottom-right" />
+          </TooltipProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
         </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>

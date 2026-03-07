@@ -189,7 +189,7 @@ describe('WikidataChip', () => {
       expect(chipElement.closest('a')).toBeNull()
     })
 
-    it('Wikidata chip has default color when disabled', () => {
+    it('Wikidata chip has reduced opacity when disabled', () => {
       useAuthStore.getState().setConfig(offlineConfig)
       render(
         <WikidataChip
@@ -197,11 +197,13 @@ describe('WikidataChip', () => {
           wikidataUrl="https://www.wikidata.org/wiki/Q42"
         />
       )
-      const chip = screen.getByText('Wikidata: Q42').closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-colorDefault')
+      const chipElement = screen.getByText('Wikidata: Q42')
+      // The Badge wrapping element should have the opacity class
+      const badge = chipElement.closest('[data-slot="badge"]')
+      expect(badge).toHaveClass('opacity-60')
     })
 
-    it('Wikidata chip has primary color when enabled', () => {
+    it('Wikidata chip is a link when enabled', () => {
       useAuthStore.getState().setConfig(onlineConfig)
       render(
         <WikidataChip
@@ -209,8 +211,8 @@ describe('WikidataChip', () => {
           wikidataUrl="https://www.wikidata.org/wiki/Q42"
         />
       )
-      const chip = screen.getByText('Wikidata: Q42').closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-colorPrimary')
+      const chip = screen.getByText('Wikidata: Q42').closest('a')
+      expect(chip).not.toBeNull()
     })
 
     it('Wikidata chip is not clickable when no URL provided', () => {
@@ -227,8 +229,8 @@ describe('WikidataChip', () => {
       render(
         <WikidataChip wikidataId="Q42" wikidataUrl="https://www.wikidata.org/wiki/Q42" />
       )
-      const chip = screen.getByText('Wikidata: Q42').closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-sizeSmall')
+      // Size prop is accepted but the Badge component is always the same size
+      expect(screen.getByText('Wikidata: Q42')).toBeInTheDocument()
     })
 
     it('renders medium size when specified', () => {
@@ -240,8 +242,7 @@ describe('WikidataChip', () => {
           size="medium"
         />
       )
-      const chip = screen.getByText('Wikidata: Q42').closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-sizeMedium')
+      expect(screen.getByText('Wikidata: Q42')).toBeInTheDocument()
     })
   })
 

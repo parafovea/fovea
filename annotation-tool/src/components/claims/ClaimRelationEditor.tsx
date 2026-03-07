@@ -1,23 +1,24 @@
 import { useState, useEffect } from 'react'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  FormControl,
-  InputLabel,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
   Select,
-  MenuItem,
-  TextField,
-  Stack,
-  Typography,
-  Autocomplete,
-  Slider,
-  Alert,
-  Box,
-  Paper,
-} from '@mui/material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Textarea } from '@/components/ui/textarea'
 import { Claim, RelationType } from '@models/types'
 import { useClaims } from '@store/queries'
 
@@ -68,7 +69,7 @@ export function ClaimRelationEditor({
 
   const flatClaims = flattenClaims(allClaims).filter((c) => c.id !== sourceClaim.id)
 
-  // Filter relation types to only show those that support claim→claim
+  // Filter relation types to only show those that support claim->claim
   const claimRelationTypes = relationTypes.filter(
     (rt) => rt.sourceTypes.includes('claim') && rt.targetTypes.includes('claim')
   )
@@ -116,145 +117,157 @@ export function ClaimRelationEditor({
     }
   }
 
-  const selectedTargetClaim = flatClaims.find((c) => c.id === targetClaimId)
-
   const getClaimText = (claim: Claim) => {
     return claim.gloss.map((g) => g.content).join(' ')
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Create Claim Relation</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 2 }}>
-          {error && <Alert severity="error">{error}</Alert>}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Create Claim Relation</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-6 pt-2">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
           {claimRelationTypes.length === 0 && (
-            <Alert severity="warning">
-              No relation types support claim-to-claim relations. Please create a relation type
-              with both sourceTypes and targetTypes including 'claim' in the Ontology Workspace.
+            <Alert>
+              <AlertDescription>
+                No relation types support claim-to-claim relations. Please create a relation type
+                with both sourceTypes and targetTypes including &apos;claim&apos; in the Ontology Workspace.
+              </AlertDescription>
             </Alert>
           )}
 
           {/* Source Claim (read-only) */}
-          <Box>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          <div>
+            <p className="mb-2 text-sm font-medium text-muted-foreground">
               Source Claim
-            </Typography>
-            <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
-              <Typography variant="body2">
+            </p>
+            <div className="rounded-lg border bg-muted/50 p-4">
+              <p className="text-sm">
                 {getClaimText(sourceClaim).substring(0, 150)}
                 {getClaimText(sourceClaim).length > 150 ? '...' : ''}
-              </Typography>
-            </Paper>
-          </Box>
+              </p>
+            </div>
+          </div>
 
           {/* Relation Type */}
-          <FormControl fullWidth disabled={claimRelationTypes.length === 0}>
-            <InputLabel id="relation-type-label">Relation Type</InputLabel>
+          <div className="flex flex-col gap-2">
+            <Label>Relation Type</Label>
             <Select
-              labelId="relation-type-label"
-              id="relation-type-select"
               value={relationTypeId}
-              onChange={(e) => setRelationTypeId(e.target.value)}
-              label="Relation Type"
+              onValueChange={(v) => setRelationTypeId(v ?? '')}
+              disabled={claimRelationTypes.length === 0}
             >
-              {claimRelationTypes.map((rt) => (
-                <MenuItem key={rt.id} value={rt.id}>
-                  <Box>
-                    <Typography variant="body2">{rt.name}</Typography>
-                    {rt.gloss && rt.gloss.length > 0 && (
-                      <Typography variant="caption" color="text.secondary">
-                        {rt.gloss.map((g) => g.content).join(' ').substring(0, 80)}
-                      </Typography>
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select relation type" />
+              </SelectTrigger>
+              <SelectContent>
+                {claimRelationTypes.map((rt) => (
+                  <SelectItem key={rt.id} value={rt.id}>
+                    <div>
+                      <span className="text-sm">{rt.name}</span>
+                      {rt.gloss && rt.gloss.length > 0 && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {rt.gloss.map((g) => g.content).join(' ').substring(0, 80)}
+                        </span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
           {/* Target Claim */}
-          <Autocomplete
-            options={flatClaims}
-            getOptionLabel={(claim) => getClaimText(claim).substring(0, 80)}
-            value={selectedTargetClaim || null}
-            onChange={(_, newValue) => {
-              setTargetClaimId(newValue?.id || '')
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Target Claim"
-                placeholder="Select target claim"
-              />
-            )}
-            renderOption={(props, claim) => (
-              <li {...props} key={claim.id}>
-                <Box sx={{ width: '100%' }}>
-                  <Typography variant="body2">
-                    {getClaimText(claim).substring(0, 100)}
-                    {getClaimText(claim).length > 100 ? '...' : ''}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    ID: {claim.id.substring(0, 8)}...
-                  </Typography>
-                </Box>
-              </li>
-            )}
-            disabled={flatClaims.length === 0}
-          />
+          <div className="flex flex-col gap-2">
+            <Label>Target Claim</Label>
+            <Select
+              value={targetClaimId}
+              onValueChange={(v) => setTargetClaimId(v ?? '')}
+              disabled={flatClaims.length === 0}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select target claim" />
+              </SelectTrigger>
+              <SelectContent>
+                {flatClaims.map((claim) => (
+                  <SelectItem key={claim.id} value={claim.id}>
+                    <div className="flex flex-col">
+                      <span className="text-sm">
+                        {getClaimText(claim).substring(0, 100)}
+                        {getClaimText(claim).length > 100 ? '...' : ''}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ID: {claim.id.substring(0, 8)}...
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {flatClaims.length === 0 && (
-            <Alert severity="info">
-              No other claims available. Create more claims to establish relations between them.
+            <Alert>
+              <AlertDescription>
+                No other claims available. Create more claims to establish relations between them.
+              </AlertDescription>
             </Alert>
           )}
 
           {/* Confidence Slider */}
-          <Box>
-            <Typography gutterBottom>
+          <div className="flex flex-col gap-2">
+            <Label>
               Confidence: {(confidence * 100).toFixed(0)}%
-            </Typography>
+            </Label>
             <Slider
-              value={confidence}
-              onChange={(_, value) => setConfidence(value as number)}
+              value={[confidence]}
+              onValueChange={(value) => {
+                const v = Array.isArray(value) ? value[0] : value
+                setConfidence(v)
+              }}
               min={0}
               max={1}
               step={0.05}
-              marks={[
-                { value: 0, label: '0%' },
-                { value: 0.5, label: '50%' },
-                { value: 1, label: '100%' },
-              ]}
-              valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${(value * 100).toFixed(0)}%`}
             />
-          </Box>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
 
           {/* Notes */}
-          <TextField
-            label="Notes (optional)"
-            multiline
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add notes explaining this relationship..."
-          />
-        </Stack>
+          <div className="flex flex-col gap-2">
+            <Label>Notes (optional)</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes explaining this relationship..."
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !targetClaimId || !relationTypeId || claimRelationTypes.length === 0}
+          >
+            {saving ? 'Saving...' : 'Save Relation'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={saving || !targetClaimId || !relationTypeId || claimRelationTypes.length === 0}
-        >
-          {saving ? 'Saving...' : 'Save Relation'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

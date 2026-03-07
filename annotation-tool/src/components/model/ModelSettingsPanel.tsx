@@ -5,33 +5,30 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  Alert,
-  LinearProgress,
-  Chip,
-  Stack,
-  Divider,
-  Skeleton,
-  Grid,
-  Paper,
-  Tooltip,
-} from '@mui/material'
+  MemoryStick,
+  Gauge,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  RefreshCw,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
-  Memory as MemoryIcon,
-  Speed as SpeedIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Card, CardContent } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { useModelConfig, useSelectModel, useMemoryValidation } from '@store/queries/useModelConfig'
 import { ModelOption } from '@api/client'
 
@@ -53,15 +50,15 @@ const TASK_DISPLAY_NAMES: Record<string, string> = {
 }
 
 /**
- * Speed indicator color mapping.
+ * Speed indicator variant mapping.
  */
-const SPEED_COLORS: Record<string, 'success' | 'warning' | 'error'> = {
-  real_time: 'success',
-  very_fast: 'success',
-  fast: 'success',
-  moderate: 'warning',
-  medium: 'warning',
-  slow: 'error',
+const SPEED_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  real_time: 'secondary',
+  very_fast: 'secondary',
+  fast: 'secondary',
+  moderate: 'outline',
+  medium: 'outline',
+  slow: 'destructive',
 }
 
 /**
@@ -98,7 +95,6 @@ export function ModelSettingsPanel({
 
   /**
    * Calculates total VRAM usage and validates against available budget.
-   * Compares pending model selections against configured threshold.
    *
    * @returns Object containing VRAM requirements, utilization percent, and validation status, or null if config/validation unavailable
    */
@@ -140,7 +136,7 @@ export function ModelSettingsPanel({
   /**
    * Updates pending model selection for a task type and marks configuration as changed.
    *
-   * @param taskType - Task type identifier (e.g., 'video_summarization')
+   * @param taskType - Task type identifier
    * @param modelName - Name of the selected model option
    */
   const handleModelChange = (taskType: string, modelName: string) => {
@@ -149,7 +145,6 @@ export function ModelSettingsPanel({
       [taskType]: modelName,
     }))
 
-    // Check if there are any changes from the current config
     const allSelectionsMatchCurrent = Object.entries({
       ...pendingSelections,
       [taskType]: modelName,
@@ -160,14 +155,11 @@ export function ModelSettingsPanel({
 
   /**
    * Saves all pending model selections to the backend.
-   * Only sends API calls for selections that differ from current configuration.
-   * Triggers success/error callbacks on completion.
    */
   const handleSave = async () => {
     if (!config) return
 
     try {
-      // Save all changed selections
       const promises = Object.entries(pendingSelections).map(([taskType, modelName]) => {
         const current = config.models[taskType]?.selected
         if (current !== modelName) {
@@ -191,7 +183,6 @@ export function ModelSettingsPanel({
 
   /**
    * Resets pending selections to current saved configuration.
-   * Discards all unsaved changes and clears the changed state flag.
    */
   const handleReset = () => {
     if (config) {
@@ -208,8 +199,8 @@ export function ModelSettingsPanel({
     return (
       <Card>
         <CardContent>
-          <Skeleton variant="text" width="60%" height={32} />
-          <Skeleton variant="rectangular" height={200} sx={{ mt: 2 }} />
+          <Skeleton className="h-8 w-3/5 mb-2" />
+          <Skeleton className="h-[200px] w-full mt-4" />
         </CardContent>
       </Card>
     )
@@ -219,8 +210,11 @@ export function ModelSettingsPanel({
     return (
       <Card>
         <CardContent>
-          <Alert severity="error" icon={<ErrorIcon />}>
-            Failed to load model configuration: {error.message}
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load model configuration: {error.message}
+            </AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -231,8 +225,10 @@ export function ModelSettingsPanel({
     return (
       <Card>
         <CardContent>
-          <Alert severity="info">
-            No model configuration available.
+          <Alert>
+            <AlertDescription>
+              No model configuration available.
+            </AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -249,208 +245,213 @@ export function ModelSettingsPanel({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" component="div" gutterBottom>
+        <div className="mb-6">
+          <h5 className="text-lg font-semibold mb-1">
             Model Configuration
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+          </h5>
+          <p className="text-sm text-muted-foreground">
             Configure model selection for each task type. Monitor VRAM usage to ensure models fit within budget.
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
         {/* CPU Mode Info / No Models Warning */}
         {isCpuOnly && cpuModelsAvailable && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+          <Alert className="mb-6">
+            <AlertTitle className="font-bold">
               CPU Mode - Using Optimized CPU Models
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              No GPU/CUDA detected. Running with CPU-optimized models (ONNX detection, llama.cpp).
-            </Typography>
-            <Typography variant="body2">
-              Performance may be slower than GPU mode. VRAM budget does not apply.
-            </Typography>
+            </AlertTitle>
+            <AlertDescription>
+              <p className="mb-1">
+                No GPU/CUDA detected. Running with CPU-optimized models (ONNX detection, llama.cpp).
+              </p>
+              <p>
+                Performance may be slower than GPU mode. VRAM budget does not apply.
+              </p>
+            </AlertDescription>
           </Alert>
         )}
         {modelsDisabled && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle className="font-bold">
               No AI Models Available
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              No GPU/CUDA detected and no CPU-compatible models are installed.
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              <strong>All AI-powered features are disabled:</strong>
-            </Typography>
-            <Box component="ul" sx={{ m: 0, pl: 2 }}>
-              <li>Video summarization</li>
-              <li>Object detection</li>
-              <li>Object tracking</li>
-              <li>Ontology augmentation</li>
-            </Box>
-            <Typography variant="body2" sx={{ mt: 1, fontWeight: 'bold' }}>
-              Install CPU-compatible models or add a GPU to enable AI features.
-            </Typography>
+            </AlertTitle>
+            <AlertDescription>
+              <p className="mb-1">
+                No GPU/CUDA detected and no CPU-compatible models are installed.
+              </p>
+              <p className="mb-1">
+                <strong>All AI-powered features are disabled:</strong>
+              </p>
+              <ul className="list-disc pl-4 mb-1">
+                <li>Video summarization</li>
+                <li>Object detection</li>
+                <li>Object tracking</li>
+                <li>Ontology augmentation</li>
+              </ul>
+              <p className="font-bold">
+                Install CPU-compatible models or add a GPU to enable AI features.
+              </p>
+            </AlertDescription>
           </Alert>
         )}
 
-        {/* VRAM Budget Visualization - Only show if GPU available and validation data loaded */}
+        {/* VRAM Budget Visualization */}
         {!isCpuOnly && !modelsDisabled && vramCalculation && validation && (
-          <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <MemoryIcon sx={{ mr: 1 }} />
-            <Typography variant="subtitle1">
-              VRAM Budget
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <Chip
-              label={`${vramCalculation.totalRequired.toFixed(1)} / ${vramCalculation.maxAllowed.toFixed(1)} GB`}
-              color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-              icon={
-                isVramError ? (
-                  <ErrorIcon />
+          <div className="rounded-lg border bg-card p-4 mb-6">
+            <div className="flex items-center mb-2">
+              <MemoryStick className="mr-2 h-4 w-4" />
+              <span className="font-medium">VRAM Budget</span>
+              <div className="flex-grow" />
+              <Badge
+                variant={isVramError ? 'destructive' : isVramWarning ? 'outline' : 'secondary'}
+              >
+                {isVramError ? (
+                  <XCircle className="mr-1 h-3 w-3" />
                 ) : isVramWarning ? (
-                  <WarningIcon />
+                  <AlertTriangle className="mr-1 h-3 w-3" />
                 ) : (
-                  <CheckCircleIcon />
-                )
-              }
-              size="small"
-            />
-          </Box>
-
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(vramCalculation.utilizationPercent, 100)}
-            color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-            sx={{ height: 8, borderRadius: 1 }}
-          />
-
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Total available: {validation.totalVramGb.toFixed(1)} GB
-            {' · '}
-            Utilization: {vramCalculation.utilizationPercent.toFixed(0)}%
-          </Typography>
-
-          {isVramError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              Configuration exceeds available VRAM budget. Please select smaller models.
-            </Alert>
-          )}
-
-          {isVramWarning && !isVramError && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Approaching VRAM limit. Consider smaller models if performance issues occur.
-            </Alert>
-          )}
-          </Paper>
-        )}
-
-        {/* Model Selection per Task - hide when no models available */}
-        {!modelsDisabled && (
-          <Stack spacing={3}>
-          {Object.entries(config.models).map(([taskType, taskConfig]) => (
-            <Box key={taskType}>
-              <Typography variant="h6" gutterBottom>
-                {TASK_DISPLAY_NAMES[taskType] || taskType}
-              </Typography>
-
-              <FormControl fullWidth disabled={modelsDisabled}>
-                <InputLabel id={`${taskType}-label`}>Model</InputLabel>
-                <Select
-                  labelId={`${taskType}-label`}
-                  value={pendingSelections[taskType] || taskConfig.selected}
-                  label="Model"
-                  onChange={(e) => handleModelChange(taskType, e.target.value)}
-                  disabled={modelsDisabled}
-                >
-                  {taskConfig.options.map((option) => (
-                    <MenuItem key={option.name} value={option.name}>
-                      <Box sx={{ width: '100%' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography>{option.name}</Typography>
-                          <Chip
-                            label={`${option.vramGb.toFixed(1)} GB`}
-                            size="small"
-                            icon={<MemoryIcon />}
-                          />
-                          <Chip
-                            label={option.speed}
-                            size="small"
-                            color={SPEED_COLORS[option.speed] || 'default'}
-                            icon={<SpeedIcon />}
-                          />
-                          {option.fps && (
-                            <Chip
-                              label={`${option.fps} FPS`}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                          {option.description}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {/* Display current model info */}
-              <ModelOptionInfo
-                option={taskConfig.options.find(
-                  (o) => o.name === (pendingSelections[taskType] || taskConfig.selected),
+                  <CheckCircle className="mr-1 h-3 w-3" />
                 )}
-              />
-            </Box>
-          ))}
-          </Stack>
+                {vramCalculation.totalRequired.toFixed(1)} / {vramCalculation.maxAllowed.toFixed(1)} GB
+              </Badge>
+            </div>
+
+            <Progress
+              value={Math.min(vramCalculation.utilizationPercent, 100)}
+              className={cn(
+                'h-2',
+                isVramError && '[&>div]:bg-destructive',
+                isVramWarning && !isVramError && '[&>div]:bg-yellow-500',
+              )}
+            />
+
+            <p className="text-xs text-muted-foreground mt-2">
+              Total available: {validation.totalVramGb.toFixed(1)} GB
+              {' \u00b7 '}
+              Utilization: {vramCalculation.utilizationPercent.toFixed(0)}%
+            </p>
+
+            {isVramError && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertDescription>
+                  Configuration exceeds available VRAM budget. Please select smaller models.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {isVramWarning && !isVramError && (
+              <Alert className="mt-4">
+                <AlertDescription>
+                  Approaching VRAM limit. Consider smaller models if performance issues occur.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         )}
 
-        {!modelsDisabled && <Divider sx={{ my: 3 }} />}
+        {/* Model Selection per Task */}
+        {!modelsDisabled && (
+          <div className="flex flex-col gap-6">
+            {Object.entries(config.models).map(([taskType, taskConfig]) => (
+              <div key={taskType}>
+                <h6 className="text-base font-semibold mb-2">
+                  {TASK_DISPLAY_NAMES[taskType] || taskType}
+                </h6>
+
+                <div>
+                  <Label className="mb-2">Model</Label>
+                  <Select
+                    value={pendingSelections[taskType] || taskConfig.selected}
+                    onValueChange={(value) => { if (value !== null) handleModelChange(taskType, value) }}
+                    disabled={modelsDisabled}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {taskConfig.options.map((option) => (
+                        <SelectItem key={option.name} value={option.name}>
+                          <div className="flex items-center gap-2">
+                            <span>{option.name}</span>
+                            <Badge variant="outline">
+                              <MemoryStick className="mr-1 h-3 w-3" />
+                              {option.vramGb.toFixed(1)} GB
+                            </Badge>
+                            <Badge variant={SPEED_VARIANTS[option.speed] || 'outline'}>
+                              <Gauge className="mr-1 h-3 w-3" />
+                              {option.speed}
+                            </Badge>
+                            {option.fps && (
+                              <Badge variant="outline">{option.fps} FPS</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Display current model info */}
+                <ModelOptionInfo
+                  option={taskConfig.options.find(
+                    (o) => o.name === (pendingSelections[taskType] || taskConfig.selected),
+                  )}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!modelsDisabled && <Separator className="my-6" />}
 
         {/* Action Buttons */}
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <div className="flex gap-4">
           <Button
-            variant="contained"
             onClick={handleSave}
             disabled={modelsDisabled || !hasChanges || isVramError || selectModelMutation.isPending}
           >
             {selectModelMutation.isPending ? 'Saving...' : 'Save Configuration'}
           </Button>
           <Button
-            variant="outlined"
+            variant="outline"
             onClick={handleReset}
             disabled={modelsDisabled || !hasChanges || selectModelMutation.isPending}
           >
             Reset
           </Button>
-          <Box sx={{ flexGrow: 1 }} />
-          <Tooltip title="Refresh configuration">
-            <Button
-              variant="outlined"
-              onClick={() => {
-                refetch()
-                refetchValidation()
-              }}
-              startIcon={<RefreshIcon />}
+          <div className="flex-grow" />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    refetch()
+                    refetchValidation()
+                  }}
+                />
+              }
             >
+              <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
-            </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh configuration</TooltipContent>
           </Tooltip>
-        </Box>
+        </div>
 
         {selectModelMutation.isError && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            Failed to save configuration: {selectModelMutation.error.message}
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>
+              Failed to save configuration: {selectModelMutation.error.message}
+            </AlertDescription>
           </Alert>
         )}
 
         {selectModelMutation.isSuccess && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            Configuration saved successfully
+          <Alert className="mt-4">
+            <AlertDescription>
+              Configuration saved successfully
+            </AlertDescription>
           </Alert>
         )}
       </CardContent>
@@ -475,66 +476,42 @@ function ModelOptionInfo({ option }: ModelOptionInfoProps) {
   if (!option) return null
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, mt: 2, bgcolor: 'background.default' }}>
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <Typography variant="subtitle2" color="text.secondary">
+    <div className="rounded-lg border bg-muted p-4 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="col-span-full">
+          <p className="text-sm font-medium text-muted-foreground">
             Model Details
-          </Typography>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Typography variant="body2" color="text.secondary">
-            Model ID
-          </Typography>
-          <Typography variant="body2" fontWeight="medium">
-            {option.modelId}
-          </Typography>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Typography variant="body2" color="text.secondary">
-            Framework
-          </Typography>
-          <Typography variant="body2" fontWeight="medium">
-            {option.framework}
-          </Typography>
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <Typography variant="body2" color="text.secondary">
-            VRAM Required
-          </Typography>
-          <Typography variant="body2" fontWeight="medium">
-            {option.vramGb.toFixed(1)} GB
-          </Typography>
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <Typography variant="body2" color="text.secondary">
-            Speed
-          </Typography>
-          <Chip
-            label={option.speed}
-            size="small"
-            color={SPEED_COLORS[option.speed] || 'default'}
-          />
-        </Grid>
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">Model ID</p>
+          <p className="text-sm font-medium">{option.modelId}</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">Framework</p>
+          <p className="text-sm font-medium">{option.framework}</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">VRAM Required</p>
+          <p className="text-sm font-medium">{option.vramGb.toFixed(1)} GB</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">Speed</p>
+          <Badge variant={SPEED_VARIANTS[option.speed] || 'outline'}>
+            {option.speed}
+          </Badge>
+        </div>
         {option.fps && (
-          <Grid item xs={12} sm={4}>
-            <Typography variant="body2" color="text.secondary">
-              Performance
-            </Typography>
-            <Typography variant="body2" fontWeight="medium">
-              {option.fps} FPS
-            </Typography>
-          </Grid>
+          <div>
+            <p className="text-sm text-muted-foreground">Performance</p>
+            <p className="text-sm font-medium">{option.fps} FPS</p>
+          </div>
         )}
-        <Grid item xs={12}>
-          <Typography variant="body2" color="text.secondary">
-            Description
-          </Typography>
-          <Typography variant="body2">
-            {option.description}
-          </Typography>
-        </Grid>
-      </Grid>
-    </Paper>
+        <div className="col-span-full">
+          <p className="text-sm text-muted-foreground">Description</p>
+          <p className="text-sm">{option.description}</p>
+        </div>
+      </div>
+    </div>
   )
 }

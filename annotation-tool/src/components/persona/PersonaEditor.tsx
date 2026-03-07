@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Trash2, ChevronsUpDown, Check } from 'lucide-react'
+import { Trash2, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -34,7 +34,6 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
 import { useCreatePersona, useUpdatePersona } from '@store/queries'
 import { useMyProjects } from '@store/queries/useProjects'
 import { useMyGroups } from '@store/queries/useGroups'
@@ -237,7 +236,7 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
               <Separator />
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Project Assignment</Label>
-                <Select value={projectId} onValueChange={setProjectId}>
+                <Select value={projectId} onValueChange={(v) => setProjectId(v ?? '')}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Personal Workspace" />
                   </SelectTrigger>
@@ -299,7 +298,7 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
 
                   {/* Add group share */}
                   {myGroups.length > 0 && (
-                    <Select value="" onValueChange={addGroupShare}>
+                    <Select value="" onValueChange={(v) => { if (v) addGroupShare(v) }}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Share with group..." />
                       </SelectTrigger>
@@ -324,11 +323,13 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
                       </Badge>
                       <span className="flex-1 text-sm">{entry.label}</span>
                       <ToggleGroup
-                        type="single"
                         size="sm"
-                        value={entry.permission}
+                        value={[entry.permission]}
                         onValueChange={(value) => {
-                          if (value) updateSharePermission(index, value as 'read_only' | 'forkable')
+                          const selected = value[value.length - 1]
+                          if (selected === 'read_only' || selected === 'forkable') {
+                            updateSharePermission(index, selected)
+                          }
                         }}
                       >
                         <ToggleGroupItem value="read_only" className="px-2 py-0.5 text-xs">

@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import React from 'react'
-import ClaimsViewer from './ClaimsViewer'
+import { ClaimsViewer } from './ClaimsViewer'
 import { Claim } from '@models/types'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
@@ -178,7 +178,7 @@ describe('ClaimsViewer', () => {
         { wrapper: createWrapper() }
       )
 
-      const skeletons = container.querySelectorAll('.MuiSkeleton-root')
+      const skeletons = container.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletons.length).toBeGreaterThan(0)
     })
 
@@ -228,13 +228,15 @@ describe('ClaimsViewer', () => {
       const user = userEvent.setup()
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      // Open confidence filter dropdown
-      const confidenceSelect = screen.getByRole('combobox', { name: /min confidence/i })
-      await user.click(confidenceSelect)
+      // Open confidence filter dropdown by clicking the trigger showing "All"
+      const confidenceTrigger = screen.getByText('Min Confidence').closest('div')!.querySelector('button')!
+      await user.click(confidenceTrigger)
 
       // Select 80%+ option
-      const option80 = screen.getByRole('option', { name: '80%+' })
-      await user.click(option80)
+      await waitFor(async () => {
+        const option80 = screen.getByText('80%+')
+        await user.click(option80)
+      })
 
       // Only claim with 90% confidence should be visible
       expect(screen.getByText(/Baseball is a popular sport/)).toBeInTheDocument()
@@ -247,12 +249,14 @@ describe('ClaimsViewer', () => {
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Open strategy filter dropdown
-      const strategySelect = screen.getByRole('combobox', { name: /strategy/i })
-      await user.click(strategySelect)
+      const strategyTrigger = screen.getByText('Strategy').closest('div')!.querySelector('button')!
+      await user.click(strategyTrigger)
 
       // Select semantic-units option
-      const semanticOption = screen.getByRole('option', { name: 'Semantic Units' })
-      await user.click(semanticOption)
+      await waitFor(async () => {
+        const semanticOption = screen.getByText('Semantic Units')
+        await user.click(semanticOption)
+      })
 
       // Only semantic-units claim should be visible
       expect(screen.getByText(/Marine mammals migrate seasonally/)).toBeInTheDocument()
@@ -266,12 +270,14 @@ describe('ClaimsViewer', () => {
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Open model filter dropdown
-      const modelSelect = screen.getByRole('combobox', { name: /model/i })
-      await user.click(modelSelect)
+      const modelTrigger = screen.getByText('Model').closest('div')!.querySelector('button')!
+      await user.click(modelTrigger)
 
       // Select GPT-3.5 option
-      const gpt35Option = screen.getByRole('option', { name: 'GPT-3.5' })
-      await user.click(gpt35Option)
+      await waitFor(async () => {
+        const gpt35Option = screen.getByText('GPT-3.5')
+        await user.click(gpt35Option)
+      })
 
       // Only GPT-3.5 claim should be visible
       expect(screen.getByText(/Marine mammals migrate seasonally/)).toBeInTheDocument()
@@ -374,21 +380,20 @@ describe('ClaimsViewer', () => {
       const user = userEvent.setup()
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      // Find the expand/collapse button for the claim with subclaims
+      // Find the expand/collapse button for the claim with subclaims (ChevronDown icon)
       const expandButtons = screen.getAllByRole('button')
       const expandButton = expandButtons.find((btn) => {
-        const icon = btn.querySelector('svg')
-        return icon && icon.getAttribute('data-testid') === 'ExpandMoreIcon'
+        return btn.querySelector('svg.lucide-chevron-down') !== null
       })
 
-      if (expandButton) {
-        await user.click(expandButton)
+      expect(expandButton).toBeDefined()
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      await user.click(expandButton!)
 
-        // Subclaim should not be visible after collapse
-        await waitFor(() => {
-          expect(screen.queryByText(/Baseball is played professionally/)).not.toBeVisible()
-        })
-      }
+      // Subclaim text should be removed from DOM after collapse (base-ui unmounts panel)
+      await waitFor(() => {
+        expect(screen.queryByText(/Baseball is played professionally/)).not.toBeInTheDocument()
+      })
     })
 
     it('disables expand button when no subclaims', () => {
@@ -407,11 +412,14 @@ describe('ClaimsViewer', () => {
     it('calls onEditClaim when edit button clicked', async () => {
       const user = userEvent.setup()
       const onEditClaim = vi.fn()
-      render(<ClaimsViewer {...defaultProps} onEditClaim={onEditClaim} />, {
+      const { container } = render(<ClaimsViewer {...defaultProps} onEditClaim={onEditClaim} />, {
         wrapper: createWrapper(),
       })
 
-      const editButtons = screen.getAllByRole('button', { name: /edit claim/i })
+      // Find edit buttons by Pencil icon
+      const editButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-pencil') !== null
+      )
       await user.click(editButtons[0])
 
       expect(onEditClaim).toHaveBeenCalledTimes(1)
@@ -421,11 +429,14 @@ describe('ClaimsViewer', () => {
     it('calls onDeleteClaim when delete button clicked', async () => {
       const user = userEvent.setup()
       const onDeleteClaim = vi.fn()
-      render(<ClaimsViewer {...defaultProps} onDeleteClaim={onDeleteClaim} />, {
+      const { container } = render(<ClaimsViewer {...defaultProps} onDeleteClaim={onDeleteClaim} />, {
         wrapper: createWrapper(),
       })
 
-      const deleteButtons = screen.getAllByRole('button', { name: /delete claim/i })
+      // Find delete buttons by Trash2 icon
+      const deleteButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-trash-2') !== null
+      )
       await user.click(deleteButtons[0])
 
       expect(onDeleteClaim).toHaveBeenCalledTimes(1)
@@ -435,11 +446,14 @@ describe('ClaimsViewer', () => {
     it('calls onAddClaim when add subclaim button clicked', async () => {
       const user = userEvent.setup()
       const onAddClaim = vi.fn()
-      render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
+      const { container } = render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
         wrapper: createWrapper(),
       })
 
-      const addButtons = screen.getAllByRole('button', { name: /add subclaim/i })
+      // Find add buttons by Plus icon (inside the claim cards, not the top-level "Add Manual Claim")
+      const addButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-plus') !== null
+      )
       await user.click(addButtons[0])
 
       expect(onAddClaim).toHaveBeenCalledTimes(1)
@@ -448,11 +462,13 @@ describe('ClaimsViewer', () => {
     it('passes parent claim ID when adding subclaim', async () => {
       const user = userEvent.setup()
       const onAddClaim = vi.fn()
-      render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
+      const { container } = render(<ClaimsViewer {...defaultProps} onAddClaim={onAddClaim} />, {
         wrapper: createWrapper(),
       })
 
-      const addButtons = screen.getAllByRole('button', { name: /add subclaim/i })
+      const addButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-plus') !== null
+      )
       await user.click(addButtons[0])
 
       expect(onAddClaim).toHaveBeenCalledWith('claim-1')
@@ -461,17 +477,22 @@ describe('ClaimsViewer', () => {
 
   describe('Relations Integration', () => {
     it('shows relations icon button', () => {
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
+      const { container } = render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      const relationsButtons = screen.getAllByRole('button', { name: /relations/i })
+      const relationsButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-git-branch') !== null
+      )
       expect(relationsButtons.length).toBeGreaterThan(0)
     })
 
     it('expands relations viewer when icon clicked', async () => {
       const user = userEvent.setup()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
+      const { container } = render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      const relationsButtons = screen.getAllByRole('button', { name: /show relations/i })
+      // Find relation toggle buttons (GitBranch icon inside ghost buttons)
+      const relationsButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-git-branch') !== null
+      )
       await user.click(relationsButtons[0])
 
       // Relations section should be visible
@@ -482,19 +503,24 @@ describe('ClaimsViewer', () => {
 
     it('hides relations viewer when icon clicked again', async () => {
       const user = userEvent.setup()
-      render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
+      const { container } = render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      const relationsButton = screen.getAllByRole('button', { name: /show relations/i })[0]
-      await user.click(relationsButton)
+      // Find and click the relation toggle button
+      const relationsButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-git-branch') !== null
+      )
+      await user.click(relationsButtons[0])
 
       // Wait for relations to appear
       await waitFor(() => {
         expect(screen.getByTestId('claim-relations-viewer')).toBeInTheDocument()
       })
 
-      // Click again to hide
-      const hideButton = screen.getAllByRole('button', { name: /hide relations/i })[0]
-      await user.click(hideButton)
+      // Click again to hide - re-query since DOM may have changed
+      const hideButtons = Array.from(container.querySelectorAll('button')).filter(
+        (btn) => btn.querySelector('svg.lucide-git-branch') !== null
+      )
+      await user.click(hideButtons[0])
 
       // Verify relations viewer is hidden
       await waitFor(() => {
@@ -509,7 +535,7 @@ describe('ClaimsViewer', () => {
       render(<ClaimsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
       // Find claim with subclaims
-      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('.MuiPaper-root')
+      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('[class*="rounded-lg border"]')
       expect(claimCard).toBeInTheDocument()
 
       // Initially subclaim should be visible (expanded by default or collapsed)
@@ -532,7 +558,7 @@ describe('ClaimsViewer', () => {
       render(<ClaimsViewer {...defaultProps} onClaimSelect={onClaimSelect} />, { wrapper: createWrapper() })
 
       // Find claim with subclaims
-      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('.MuiPaper-root')
+      const claimCard = screen.getByText(/Baseball is a popular sport/).closest('[class*="rounded-lg border"]')
       
       if (claimCard) {
         await user.click(claimCard)
@@ -549,7 +575,7 @@ describe('ClaimsViewer', () => {
       render(<ClaimsViewer {...defaultProps} onClaimSelect={onClaimSelect} />, { wrapper: createWrapper() })
 
       // Find claim without subclaims (claim-2)
-      const claimCard = screen.getByText(/Marine mammals migrate seasonally/).closest('.MuiPaper-root')
+      const claimCard = screen.getByText(/Marine mammals migrate seasonally/).closest('[class*="rounded-lg border"]')
       
       if (claimCard) {
         await user.click(claimCard)

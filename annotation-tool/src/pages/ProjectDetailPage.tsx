@@ -135,11 +135,9 @@ export default function ProjectDetailPage(): JSX.Element {
           <Alert variant="destructive">
             <AlertDescription>Failed to load project.</AlertDescription>
           </Alert>
-          <Button variant="ghost" className="mt-4" asChild>
-            <RouterLink to="/projects">
-              <ArrowLeft className="size-4" />
-              Back to Projects
-            </RouterLink>
+          <Button variant="ghost" className="mt-4" render={<RouterLink to="/projects" />}>
+            <ArrowLeft className="size-4" />
+            Back to Projects
           </Button>
         </div>
       </div>
@@ -149,11 +147,9 @@ export default function ProjectDetailPage(): JSX.Element {
   return (
     <div className="mx-auto max-w-screen-lg px-4">
       <div className="py-6">
-        <Button variant="ghost" className="mb-4" asChild>
-          <RouterLink to="/projects">
-            <ArrowLeft className="size-4" />
-            Back to Projects
-          </RouterLink>
+        <Button variant="ghost" className="mb-4" render={<RouterLink to="/projects" />}>
+          <ArrowLeft className="size-4" />
+          Back to Projects
         </Button>
 
         <div className="mb-2 flex items-start justify-between">
@@ -212,14 +208,15 @@ export default function ProjectDetailPage(): JSX.Element {
                     {isManager && member.role !== 'project_owner' ? (
                       <Select
                         value={member.role}
-                        onValueChange={(value) =>
-                          projectId &&
-                          updateMember.mutate({
-                            projectId,
-                            userId: member.userId,
-                            role: value,
-                          })
-                        }
+                        onValueChange={(value) => {
+                          if (value && projectId) {
+                            updateMember.mutate({
+                              projectId,
+                              userId: member.userId,
+                              role: value,
+                            })
+                          }
+                        }}
                       >
                         <SelectTrigger className="w-[150px]">
                           <SelectValue />
@@ -335,7 +332,7 @@ export default function ProjectDetailPage(): JSX.Element {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={newRole} onValueChange={(value) => setNewRole(value)}>
+              <Select value={newRole} onValueChange={(value) => { if (value) setNewRole(value) }}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

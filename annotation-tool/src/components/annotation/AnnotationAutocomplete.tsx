@@ -1,21 +1,7 @@
 import React, { useState } from 'react'
-import {
-  TextField,
-  Autocomplete,
-  Box,
-  Typography,
-  ListSubheader,
-  Paper,
-  InputAdornment,
-} from '@mui/material'
-import {
-  Category as EntityIcon,
-  AccountTree as RoleIcon,
-  Event as EventIcon,
-  Person as EntityObjectIcon,
-  LocationOn as LocationIcon,
-  Folder as CollectionIcon,
-} from '@mui/icons-material'
+import { Tag, GitBranch, CalendarDays, User, MapPin, Folder, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { usePersonaOntology, useWorld } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 
@@ -42,6 +28,7 @@ export default function AnnotationAutocomplete({
 }: AnnotationAutocompleteProps) {
   const [value, setValue] = useState<AnnotationOption | null>(null)
   const [inputValue, setInputValue] = useState('')
+  const [open, setOpen] = useState(false)
 
   // Zustand for link target state
   const setLinkTarget = useAnnotationUiStore((state) => state.setLinkTarget)
@@ -59,7 +46,7 @@ export default function AnnotationAutocomplete({
   // Build options based on mode
   const options: AnnotationOption[] = React.useMemo(() => {
     const opts: AnnotationOption[] = []
-    
+
     if (mode === 'type' && personaOntology) {
       // Add entity types
       personaOntology.entities.forEach(e => {
@@ -68,10 +55,10 @@ export default function AnnotationAutocomplete({
           label: e.name,
           category: 'Entity Types',
           type: 'entity',
-          icon: <EntityIcon fontSize="small" />
+          icon: <Tag className="size-4" />
         })
       })
-      
+
       // Add role types
       personaOntology.roles.forEach(r => {
         opts.push({
@@ -79,10 +66,10 @@ export default function AnnotationAutocomplete({
           label: r.name,
           category: 'Role Types',
           type: 'role',
-          icon: <RoleIcon fontSize="small" />
+          icon: <GitBranch className="size-4" />
         })
       })
-      
+
       // Add event types
       personaOntology.events.forEach(e => {
         opts.push({
@@ -90,7 +77,7 @@ export default function AnnotationAutocomplete({
           label: e.name,
           category: 'Event Types',
           type: 'event',
-          icon: <EventIcon fontSize="small" />
+          icon: <CalendarDays className="size-4" />
         })
       })
     } else if (mode === 'object') {
@@ -101,10 +88,10 @@ export default function AnnotationAutocomplete({
           label: e.name,
           category: 'Entities',
           type: 'entity-object',
-          icon: <EntityObjectIcon fontSize="small" />
+          icon: <User className="size-4" />
         })
       })
-      
+
       // Add location objects
       entities.filter(e => 'locationType' in e).forEach(l => {
         opts.push({
@@ -112,10 +99,10 @@ export default function AnnotationAutocomplete({
           label: l.name,
           category: 'Locations',
           type: 'location-object',
-          icon: <LocationIcon fontSize="small" />
+          icon: <MapPin className="size-4" />
         })
       })
-      
+
       // Add event objects
       events.forEach(e => {
         opts.push({
@@ -123,10 +110,10 @@ export default function AnnotationAutocomplete({
           label: e.name,
           category: 'Events',
           type: 'event-object',
-          icon: <EventIcon fontSize="small" />
+          icon: <CalendarDays className="size-4" />
         })
       })
-      
+
       // Add entity collections
       entityCollections.forEach(c => {
         opts.push({
@@ -134,10 +121,10 @@ export default function AnnotationAutocomplete({
           label: c.name,
           category: 'Entity Collections',
           type: 'collection',
-          icon: <CollectionIcon fontSize="small" />
+          icon: <Folder className="size-4" />
         })
       })
-      
+
       // Add event collections
       eventCollections.forEach(c => {
         opts.push({
@@ -145,11 +132,11 @@ export default function AnnotationAutocomplete({
           label: c.name,
           category: 'Event Collections',
           type: 'collection',
-          icon: <CollectionIcon fontSize="small" />
+          icon: <Folder className="size-4" />
         })
       })
     }
-    
+
     return opts
   }, [mode, personaOntology, entities, events, entityCollections, eventCollections])
 
@@ -165,23 +152,39 @@ export default function AnnotationAutocomplete({
     return grouped
   }, [options])
 
-  const handleChange = (_: React.SyntheticEvent, newValue: AnnotationOption | null) => {
-    setValue(newValue)
-    onSelect(newValue)
+  // Filter options by search input
+  const filteredGrouped = React.useMemo(() => {
+    if (!inputValue) return groupedOptions
+    const lowerInput = inputValue.toLowerCase()
+    const result: Record<string, AnnotationOption[]> = {}
+    for (const [category, opts] of Object.entries(groupedOptions)) {
+      const filtered = opts.filter(o => o.label.toLowerCase().includes(lowerInput))
+      if (filtered.length > 0) {
+        result[category] = filtered
+      }
+    }
+    return result
+  }, [groupedOptions, inputValue])
+
+  const handleSelect = (option: AnnotationOption) => {
+    setValue(option)
+    onSelect(option)
+    setOpen(false)
+    setInputValue('')
 
     // Update Zustand state for link target if in object mode
-    if (mode === 'object' && newValue) {
+    if (mode === 'object') {
       let targetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | null = null
-      if (newValue.type === 'entity-object') targetType = 'entity'
-      else if (newValue.type === 'event-object') targetType = 'event'
-      else if (newValue.type === 'location-object') targetType = 'location'
-      else if (newValue.type === 'collection') {
+      if (option.type === 'entity-object') targetType = 'entity'
+      else if (option.type === 'event-object') targetType = 'event'
+      else if (option.type === 'location-object') targetType = 'location'
+      else if (option.type === 'collection') {
         // Determine if it's entity or event collection
-        const isEntityCollection = entityCollections.some(c => c.id === newValue.id)
+        const isEntityCollection = entityCollections.some(c => c.id === option.id)
         targetType = isEntityCollection ? 'entity-collection' : 'event-collection'
       }
 
-      setLinkTarget(newValue.id, targetType)
+      setLinkTarget(option.id, targetType)
     }
   }
 
@@ -196,67 +199,74 @@ export default function AnnotationAutocomplete({
     return mode === 'type' ? 'Select Type' : 'Select Object'
   }
 
+  const isDisabled = disabled || (mode === 'type' && !personaId)
+  const placeholder = mode === 'type' && !personaId
+    ? 'Please select a persona first'
+    : mode === 'type'
+      ? 'Search for entity, role, or event type...'
+      : 'Search for world object...'
+
   return (
-    <Autocomplete
-      value={value}
-      onChange={handleChange}
-      inputValue={inputValue}
-      onInputChange={(_, newInputValue) => setInputValue(newInputValue)}
-      options={options}
-      groupBy={(option) => option.category}
-      getOptionLabel={(option) => option.label}
-      disabled={disabled || (mode === 'type' && !personaId)}
-      fullWidth
-      ListboxProps={{ sx: { maxHeight: 300, overflowY: 'auto' } }}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          size="small"
-          label={getTypeLabel()}
-          placeholder={
-            mode === 'type' && !personaId
-              ? 'Please select a persona first'
-              : mode === 'type'
-                ? 'Search for entity, role, or event type...'
-                : 'Search for world object...'
-          }
-          InputProps={{
-            ...params.InputProps,
-            'aria-label': getTypeLabel(),
-            startAdornment: value && (
-              <InputAdornment position="start">
-                {value.icon}
-              </InputAdornment>
-            ),
-          }}
-          inputProps={{
-            ...params.inputProps,
-            'aria-label': getTypeLabel(),
-          }}
-        />
-      )}
-      renderOption={(props, option) => {
-        const { key, ...otherProps } = props as any
-        return (
-          <Box component="li" key={key} {...otherProps} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {option.icon}
-            <Typography>{option.label}</Typography>
-          </Box>
-        )
-      }}
-      renderGroup={(params) => (
-        <Box component="li" key={params.key}>
-          <ListSubheader component="div" sx={{ position: 'static', backgroundColor: 'background.paper' }}>
-            {params.group} ({groupedOptions[params.group].length})
-          </ListSubheader>
-          <Box component="ul" sx={{ padding: 0 }}>
-            {params.children}
-          </Box>
-        </Box>
-      )}
-      PaperComponent={(props) => (
-        <Paper {...props} elevation={8} sx={{ overflow: 'hidden' }} />
-      )}
-    />
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label={getTypeLabel()}
+            disabled={isDisabled}
+            className="w-full justify-start text-left font-normal"
+          />
+        }
+      >
+        {value ? (
+          <span className="flex items-center gap-2">
+            {value.icon}
+            {value.label}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">{getTypeLabel()}</span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="start">
+        <div className="p-2">
+          <div className="flex items-center gap-2 px-2 pb-2 border-b">
+            <Search className="size-4 text-muted-foreground" />
+            <input
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              placeholder={placeholder}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-1">
+          {Object.entries(filteredGrouped).map(([category, opts]) => (
+            <div key={category}>
+              <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50">
+                {category} ({opts.length})
+              </div>
+              {opts.map((option) => (
+                <button
+                  key={option.id}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.icon}
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+          {Object.keys(filteredGrouped).length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No results found
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

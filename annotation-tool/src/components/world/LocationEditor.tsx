@@ -1,43 +1,38 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  ToggleButton,
-  ToggleButtonGroup,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Paper,
-  Grid,
-  Chip,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Link,
-} from '@mui/material'
+  MapPin,
+  Crosshair,
+  Maximize2,
+  Trash2,
+  Plus,
+  Navigation,
+  Grid3x3,
+  Map,
+  Globe,
+  Pencil,
+  ExternalLink,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Place as LocationIcon,
-  PinDrop as PointIcon,
-  CropFree as ExtentIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  GpsFixed as GPSIcon,
-  Grid3x3 as CartesianIcon,
-  Map as MapIcon,
-  Language as WikidataIcon,
-  Edit as EditIcon,
-  OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material'
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment, Entity } from '@models/types'
@@ -175,7 +170,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       }
 
       if (autoCreatedIdRef.current) {
-        // Update the auto-created location
         await updateEntity({
           id: autoCreatedIdRef.current,
           createdAt: now,
@@ -183,9 +177,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
           ...fullLocationData,
         } as Entity)
       } else {
-        // Create new location and track ID
         const result = await addEntity(fullLocationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
-        // Get the newly created location ID from the result
         const newLocation = result.entities[result.entities.length - 1]
         if (newLocation) {
           setAutoCreatedLocationId(newLocation.id)
@@ -219,7 +211,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
         }
       }
     } else {
-      // Reset for new location
       setName('')
       setDescription([{ type: 'text', content: '' }])
       setAlternateNamesInput('')
@@ -233,7 +224,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setWikidataId('')
       setWikidataUrl('')
     }
-    // Reset auto-created ID when dialog opens/closes or location changes
     setAutoCreatedLocationId(null)
   }, [location, open])
 
@@ -281,7 +271,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     } else if (type === 'extent' && Array.isArray(coordinates)) {
       setLocationType('extent')
       setBoundaryPoints(coordinates)
-      // Calculate bounding box if GPS coordinates
       if (coordinateSystem === 'GPS' && coordinates.length > 0) {
         const lats = coordinates.map(c => c.latitude).filter((v): v is number => v !== undefined)
         const lngs = coordinates.map(c => c.longitude).filter((v): v is number => v !== undefined)
@@ -344,7 +333,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     onClose()
   }
 
-  // Cancel handler deletes auto-created location
   const handleCancel = () => {
     if (autoCreatedIdRef.current) {
       deleteEntity(autoCreatedIdRef.current)
@@ -353,9 +341,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
     onClose()
   }
 
-  // Done handler keeps the location (already saved via autosave)
   const handleDone = async () => {
-    // Force save any pending changes before closing
     if (!location && autoCreatedIdRef.current) {
       await forceSave()
     }
@@ -381,114 +367,94 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   const renderCoordinateInputs = (coord: Coordinate, onChange: (coord: Coordinate) => void) => {
     if (coordinateSystem === 'GPS') {
       return (
-        <Grid container spacing={1}>
-          <Grid item xs={4}>
-            <TextField
-              label="Latitude"
-              type="number"
-              size="small"
-              value={coord.latitude || ''}
-              onChange={(e) => onChange({ ...coord, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-              inputProps={{ step: 0.000001 }}
-            />
-          </Grid>
-          <Grid item xs={4}>
-            <TextField
-              label="Longitude"
-              type="number"
-              size="small"
-              value={coord.longitude || ''}
-              onChange={(e) => onChange({ ...coord, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-              inputProps={{ step: 0.000001 }}
-            />
-          </Grid>
-          <Grid item xs={4}>
-            <TextField
-              label="Altitude (m)"
-              type="number"
-              size="small"
-              value={coord.altitude || ''}
-              onChange={(e) => onChange({ ...coord, altitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-            />
-          </Grid>
-        </Grid>
+        <div className="grid grid-cols-3 gap-2">
+          <Input
+            type="number"
+            placeholder="Latitude"
+            value={coord.latitude || ''}
+            onChange={(e) => onChange({ ...coord, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+            step={0.000001}
+          />
+          <Input
+            type="number"
+            placeholder="Longitude"
+            value={coord.longitude || ''}
+            onChange={(e) => onChange({ ...coord, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+            step={0.000001}
+          />
+          <Input
+            type="number"
+            placeholder="Altitude (m)"
+            value={coord.altitude || ''}
+            onChange={(e) => onChange({ ...coord, altitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+          />
+        </div>
       )
     } else {
       return (
-        <Grid container spacing={1}>
-          <Grid item xs={4}>
-            <TextField
-              label="X"
-              type="number"
-              size="small"
-              value={coord.x || ''}
-              onChange={(e) => onChange({ ...coord, x: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={4}>
-            <TextField
-              label="Y"
-              type="number"
-              size="small"
-              value={coord.y || ''}
-              onChange={(e) => onChange({ ...coord, y: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={4}>
-            <TextField
-              label="Z"
-              type="number"
-              size="small"
-              value={coord.z || ''}
-              onChange={(e) => onChange({ ...coord, z: e.target.value ? parseFloat(e.target.value) : undefined })}
-              fullWidth
-            />
-          </Grid>
-        </Grid>
+        <div className="grid grid-cols-3 gap-2">
+          <Input
+            type="number"
+            placeholder="X"
+            value={coord.x || ''}
+            onChange={(e) => onChange({ ...coord, x: e.target.value ? parseFloat(e.target.value) : undefined })}
+          />
+          <Input
+            type="number"
+            placeholder="Y"
+            value={coord.y || ''}
+            onChange={(e) => onChange({ ...coord, y: e.target.value ? parseFloat(e.target.value) : undefined })}
+          />
+          <Input
+            type="number"
+            placeholder="Z"
+            value={coord.z || ''}
+            onChange={(e) => onChange({ ...coord, z: e.target.value ? parseFloat(e.target.value) : undefined })}
+          />
+        </div>
       )
     }
   }
 
   return (
     <>
-    <Dialog open={open} onClose={handleCancel} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <LocationIcon color="secondary" />
-          {location ? 'Edit Location' : 'Create Location'}
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Alert severity="info" icon={<LocationIcon />}>
-            A location is a specific place in the world (e.g., "Times Square", "Mount Everest").
-            Locations are special types of entities with coordinate information.
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="size-5 text-secondary" />
+            {location ? 'Edit Location' : 'Create Location'}
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <MapPin className="size-4" />
+            <AlertDescription>
+              A location is a specific place in the world (e.g., "Times Square", "Mount Everest").
+              Locations are special types of entities with coordinate information.
+            </AlertDescription>
           </Alert>
 
           {/* Import mode selector */}
           {!location && (
-            <ToggleButtonGroup
-              value={importMode}
-              exclusive
-              onChange={(_, value) => value && setImportMode(value)}
-              size="small"
-              fullWidth
+            <ToggleGroup
+              value={[importMode]}
+              onValueChange={(value) => {
+                if (value.length > 0) setImportMode(value[0] as 'manual' | 'wikidata')
+              }}
+              size="sm"
+              className="w-full"
             >
-              <ToggleButton value="manual">
-                <EditIcon sx={{ mr: 1 }} />
+              <ToggleGroupItem value="manual" className="flex flex-1 items-center gap-1">
+                <Pencil className="size-4" />
                 Manual Entry
-              </ToggleButton>
-              <ToggleButton value="wikidata">
-                <WikidataIcon sx={{ mr: 1 }} />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="wikidata" className="flex flex-1 items-center gap-1">
+                <Globe className="size-4" />
                 Import from Wikidata
-              </ToggleButton>
-            </ToggleButtonGroup>
+              </ToggleGroupItem>
+            </ToggleGroup>
           )}
 
           {/* Wikidata import */}
@@ -504,359 +470,325 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
           {/* Show Wikidata link if imported */}
           {wikidataUrl && (
-            <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WikidataIcon color="action" />
-                <Typography variant="body2">Imported from Wikidata:</Typography>
-                <Link
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Globe className="size-4 text-muted-foreground" />
+                <span className="text-sm">Imported from Wikidata:</span>
+                <a
                   href={wikidataUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  className="flex items-center gap-1 text-sm text-primary hover:underline"
                 >
                   {wikidataId}
-                  <OpenInNewIcon fontSize="small" />
-                </Link>
-              </Box>
-            </Paper>
+                  <ExternalLink className="size-3" />
+                </a>
+              </div>
+            </div>
           )}
 
           {/* Basic Entity Fields */}
-          <TextField
-            label="Location Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            helperText="The specific name of this location"
-          />
+          <div className="space-y-1">
+            <Label>Location Name *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Location name"
+            />
+            <p className="text-xs text-muted-foreground">The specific name of this location</p>
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Description
-            </Typography>
+          <div className="space-y-1">
+            <Label>Description</Label>
             <GlossEditor
               gloss={description}
               onChange={setDescription}
-              personaId={activePersonaId} // Use active persona for type references
+              personaId={activePersonaId}
             />
-          </Box>
+          </div>
 
-          <TextField
-            label="Alternate Names"
-            value={alternateNamesInput}
-            onChange={(e) => setAlternateNamesInput(e.target.value)}
-            fullWidth
-            helperText="Other names for this location (comma-separated)"
-          />
+          <div className="space-y-1">
+            <Label>Alternate Names</Label>
+            <Input
+              value={alternateNamesInput}
+              onChange={(e) => setAlternateNamesInput(e.target.value)}
+              placeholder="Other names (comma-separated)"
+            />
+            <p className="text-xs text-muted-foreground">Other names for this location (comma-separated)</p>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Location-Specific Fields */}
-          <Box>
-            <Typography variant="subtitle1" gutterBottom>
-              Location Geometry
-            </Typography>
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Location Geometry</h3>
 
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <ToggleButtonGroup
-                value={locationType}
-                exclusive
-                onChange={(_, value) => value && setLocationType(value)}
+            <div className="flex gap-4 mb-4">
+              <ToggleGroup
+                value={[locationType]}
+                onValueChange={(value) => {
+                  if (value.length > 0) setLocationType(value[0] as 'point' | 'extent')
+                }}
               >
-                <ToggleButton value="point">
-                  <PointIcon sx={{ mr: 1 }} />
+                <ToggleGroupItem value="point" className="flex items-center gap-1">
+                  <Crosshair className="size-4" />
                   Point
-                </ToggleButton>
-                <ToggleButton value="extent">
-                  <ExtentIcon sx={{ mr: 1 }} />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="extent" className="flex items-center gap-1">
+                  <Maximize2 className="size-4" />
                   Extent/Region
-                </ToggleButton>
-              </ToggleButtonGroup>
+                </ToggleGroupItem>
+              </ToggleGroup>
 
-              <FormControl sx={{ minWidth: 150 }}>
-                <InputLabel>Coordinate System</InputLabel>
-                <Select
-                  value={coordinateSystem}
-                  onChange={(e) => setCoordinateSystem(e.target.value as CoordinateSystemType)}
-                  label="Coordinate System"
-                >
-                  <MenuItem value="GPS">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <GPSIcon fontSize="small" />
-                      GPS (Lat/Long)
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="cartesian">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <CartesianIcon fontSize="small" />
-                      Cartesian (X/Y/Z)
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="relative">Relative</MenuItem>
+              <div style={{ minWidth: 150 }}>
+                <Select value={coordinateSystem} onValueChange={(value) => setCoordinateSystem(value as CoordinateSystemType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GPS">
+                      <span className="flex items-center gap-1">
+                        <Navigation className="size-3" />
+                        GPS (Lat/Long)
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="cartesian">
+                      <span className="flex items-center gap-1">
+                        <Grid3x3 className="size-3" />
+                        Cartesian (X/Y/Z)
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="relative">Relative</SelectItem>
+                  </SelectContent>
                 </Select>
-              </FormControl>
-            </Box>
+              </div>
+            </div>
 
             {/* Map button */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                startIcon={<MapIcon />}
-                onClick={handleOpenMap}
-                fullWidth
-              >
-                {(locationType === 'point' && (pointCoordinates.latitude || pointCoordinates.x)) ||
-                 (locationType === 'extent' && boundaryPoints.length > 0)
-                  ? 'View/Edit on Map'
-                  : 'Select on Map'
-                }
-              </Button>
-            </Box>
+            <Button
+              variant="outline"
+              onClick={handleOpenMap}
+              className="w-full mb-4"
+            >
+              <Map className="mr-2 size-4" />
+              {(locationType === 'point' && (pointCoordinates.latitude || pointCoordinates.x)) ||
+               (locationType === 'extent' && boundaryPoints.length > 0)
+                ? 'View/Edit on Map'
+                : 'Select on Map'
+              }
+            </Button>
 
             {/* Point Coordinates */}
             {locationType === 'point' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Point Coordinates
-                </Typography>
+              <div className="rounded-lg border bg-card p-4 space-y-2">
+                <Label className="text-sm font-medium">Point Coordinates</Label>
                 {renderCoordinateInputs(pointCoordinates, setPointCoordinates)}
-              </Paper>
+              </div>
             )}
 
             {/* Extent Boundaries */}
             {locationType === 'extent' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Region Boundary
-                </Typography>
+              <div className="rounded-lg border bg-card p-4 space-y-3">
+                <Label className="text-sm font-medium">Region Boundary</Label>
 
                 {/* Boundary Points */}
                 {!useBoundingBox && (
                   <>
-                    <List dense>
+                    <ul className="space-y-2">
                       {boundaryPoints.map((point, index) => (
-                        <ListItem key={index}>
-                          <Box sx={{ flex: 1 }}>
+                        <li key={index} className="flex items-center gap-2">
+                          <div className="flex-1">
                             {renderCoordinateInputs(point, (coord) => handleUpdateBoundaryPoint(index, coord))}
-                          </Box>
-                          <IconButton size="small" onClick={() => handleRemoveBoundaryPoint(index)}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </ListItem>
+                          </div>
+                          <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveBoundaryPoint(index)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </li>
                       ))}
-                    </List>
+                    </ul>
                     <Button
-                      size="small"
-                      startIcon={<AddIcon />}
+                      variant="ghost"
+                      size="sm"
                       onClick={handleAddBoundaryPoint}
                     >
+                      <Plus className="mr-1 size-4" />
                       Add Boundary Point
                     </Button>
                   </>
                 )}
 
                 {/* Bounding Box Option */}
-                <Box sx={{ mt: 2 }}>
+                <div className="mt-4">
                   <Button
-                    size="small"
-                    variant={useBoundingBox ? "contained" : "outlined"}
+                    size="sm"
+                    variant={useBoundingBox ? "default" : "outline"}
                     onClick={() => setUseBoundingBox(!useBoundingBox)}
                   >
                     {useBoundingBox ? 'Using Bounding Box' : 'Use Bounding Box Instead'}
                   </Button>
 
                   {useBoundingBox && coordinateSystem === 'GPS' && (
-                    <Grid container spacing={1} sx={{ mt: 1 }}>
-                      <Grid item xs={6}>
-                        <TextField
-                          label="Min Latitude"
-                          type="number"
-                          size="small"
-                          value={boundingBox.minLatitude || ''}
-                          onChange={(e) => setBoundingBox({
-                            ...boundingBox,
-                            minLatitude: e.target.value ? parseFloat(e.target.value) : undefined
-                          })}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={6}>
-                        <TextField
-                          label="Max Latitude"
-                          type="number"
-                          size="small"
-                          value={boundingBox.maxLatitude || ''}
-                          onChange={(e) => setBoundingBox({
-                            ...boundingBox,
-                            maxLatitude: e.target.value ? parseFloat(e.target.value) : undefined
-                          })}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={6}>
-                        <TextField
-                          label="Min Longitude"
-                          type="number"
-                          size="small"
-                          value={boundingBox.minLongitude || ''}
-                          onChange={(e) => setBoundingBox({
-                            ...boundingBox,
-                            minLongitude: e.target.value ? parseFloat(e.target.value) : undefined
-                          })}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={6}>
-                        <TextField
-                          label="Max Longitude"
-                          type="number"
-                          size="small"
-                          value={boundingBox.maxLongitude || ''}
-                          onChange={(e) => setBoundingBox({
-                            ...boundingBox,
-                            maxLongitude: e.target.value ? parseFloat(e.target.value) : undefined
-                          })}
-                          fullWidth
-                        />
-                      </Grid>
-                    </Grid>
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <Input
+                        type="number"
+                        placeholder="Min Latitude"
+                        value={boundingBox.minLatitude || ''}
+                        onChange={(e) => setBoundingBox({
+                          ...boundingBox,
+                          minLatitude: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Max Latitude"
+                        value={boundingBox.maxLatitude || ''}
+                        onChange={(e) => setBoundingBox({
+                          ...boundingBox,
+                          maxLatitude: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Min Longitude"
+                        value={boundingBox.minLongitude || ''}
+                        onChange={(e) => setBoundingBox({
+                          ...boundingBox,
+                          minLongitude: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Max Longitude"
+                        value={boundingBox.maxLongitude || ''}
+                        onChange={(e) => setBoundingBox({
+                          ...boundingBox,
+                          maxLongitude: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                      />
+                    </div>
                   )}
-                </Box>
-              </Paper>
+                </div>
+              </div>
             )}
-          </Box>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Type Assignments */}
-          <Box>
-            <Typography variant="subtitle1" gutterBottom>
-              Type Assignments by Persona
-            </Typography>
-            <Typography variant="caption" color="text.secondary" paragraph>
+          <div>
+            <h3 className="text-sm font-semibold mb-1">Type Assignments by Persona</h3>
+            <p className="text-xs text-muted-foreground mb-3">
               Different personas can classify this location with different entity types.
-            </Typography>
+            </p>
 
             {/* Existing assignments */}
             {typeAssignments.length > 0 && (
-              <List dense>
+              <ul className="space-y-2 mb-3">
                 {typeAssignments.map((assignment) => (
-                  <ListItem key={assignment.personaId}>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip
-                            label={getPersonaName(assignment.personaId)}
-                            size="small"
-                            color="primary"
-                          />
-                          <Typography variant="body2">classifies as</Typography>
-                          <Chip
-                            label={getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{ fontStyle: 'italic' }}
-                          />
-                        </Box>
-                      }
-                    />
-                    <IconButton
-                      size="small"
+                  <li key={assignment.personaId} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge>{getPersonaName(assignment.personaId)}</Badge>
+                      <span className="text-sm">classifies as</span>
+                      <Badge variant="outline" className="italic">
+                        {getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
+                      </Badge>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => handleRemoveTypeAssignment(assignment.personaId)}
                     >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItem>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </li>
                 ))}
-              </List>
+              </ul>
             )}
 
             {/* Add new assignment */}
-            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-              <FormControl sx={{ minWidth: 150 }} size="small">
-                <InputLabel>Persona</InputLabel>
-                <Select
-                  value={selectedPersonaId}
-                  onChange={(e) => {
-                    setSelectedPersonaId(e.target.value)
-                    setSelectedEntityTypeId('')
-                  }}
-                  label="Persona"
-                >
-                  {personas.map(persona => (
-                    <MenuItem key={persona.id} value={persona.id}>
-                      {persona.name}
-                    </MenuItem>
-                  ))}
+            <div className="flex gap-2 mt-2">
+              <div style={{ minWidth: 150 }}>
+                <Select value={selectedPersonaId || '_none'} onValueChange={(value) => {
+                  setSelectedPersonaId(!value || value === '_none' ? '' : value)
+                  setSelectedEntityTypeId('')
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Persona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select Persona</SelectItem>
+                    {personas.map(persona => (
+                      <SelectItem key={persona.id} value={persona.id}>
+                        {persona.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
-              </FormControl>
+              </div>
 
               {selectedPersonaId && (
-                <FormControl sx={{ minWidth: 150 }} size="small">
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select
-                    value={selectedEntityTypeId}
-                    onChange={(e) => setSelectedEntityTypeId(e.target.value)}
-                    label="Entity Type"
-                  >
-                    {availableEntityTypes.map(type => (
-                      <MenuItem key={type.id} value={type.id}>
-                        <em>{type.name}</em>
-                      </MenuItem>
-                    ))}
+                <div style={{ minWidth: 150 }}>
+                  <Select value={selectedEntityTypeId || '_none'} onValueChange={(value) => setSelectedEntityTypeId(!value || value === '_none' ? '' : value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Entity Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Select Type</SelectItem>
+                      {availableEntityTypes.map(type => (
+                        <SelectItem key={type.id} value={type.id}>
+                          <em>{type.name}</em>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
-                </FormControl>
+                </div>
               )}
 
               <Button
-                variant="outlined"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={handleAddTypeAssignment}
                 disabled={!selectedPersonaId || !selectedEntityTypeId}
               >
                 Add
               </Button>
-            </Box>
-          </Box>
-        </Box>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="flex items-center justify-between">
+          <div>
+            {!location && (
+              <SaveStatusIndicator
+                status={saveStatus}
+                lastSavedAt={lastSavedAt}
+                errorMessage={errorMessage}
+                retryCount={retryCount}
+                onRetry={forceSave}
+              />
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+            {location ? (
+              <Button
+                variant="secondary"
+                onClick={handleSave}
+                disabled={!name || description.length === 0}
+              >
+                Update Location
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={handleDone}
+                disabled={!name || description.length === 0 || !autoCreatedLocationId}
+              >
+                Done
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
-        <Box>
-          {!location && (
-            <SaveStatusIndicator
-              status={saveStatus}
-              lastSavedAt={lastSavedAt}
-              errorMessage={errorMessage}
-              retryCount={retryCount}
-              onRetry={forceSave}
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={handleCancel}>Cancel</Button>
-          {location ? (
-            <Button
-              onClick={handleSave}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0}
-            >
-              Update Location
-            </Button>
-          ) : (
-            <Button
-              onClick={handleDone}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0 || !autoCreatedLocationId}
-            >
-              Done
-            </Button>
-          )}
-        </Box>
-      </DialogActions>
     </Dialog>
 
     {/* Map Location Picker */}

@@ -1,23 +1,22 @@
 import { ReactNode } from 'react'
+import { Globe } from 'lucide-react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  Divider,
-  Alert,
-  Fade,
-  Chip,
-} from '@mui/material'
-import { Public as ObjectIcon } from '@mui/icons-material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import WikidataSearch, { WikidataImportCallbackData } from './WikidataSearch'
-import ModeSelector from './ModeSelector'
+import { ModeSelector } from './ModeSelector'
 import { WikidataChip } from './WikidataChip'
 import { TypeObjectBadge } from './TypeObjectToggle'
 
@@ -35,7 +34,7 @@ export interface BaseObjectEditorProps {
   onClose: () => void
   objectType: 'entity' | 'event' | 'location' | 'time'
   personaId: string | null
-  
+
   // Form state
   name: string
   setName: (name: string) => void
@@ -43,11 +42,11 @@ export interface BaseObjectEditorProps {
   setDescription: (desc: GlossItem[]) => void
   mode: 'manual' | 'copy' | 'wikidata'
   setMode: (mode: 'manual' | 'copy' | 'wikidata') => void
-  
+
   // Metadata
   metadata?: ObjectMetadata
   setMetadata?: (metadata: ObjectMetadata) => void
-  
+
   // Wikidata state
   wikidataId?: string
   wikidataUrl?: string
@@ -55,11 +54,11 @@ export interface BaseObjectEditorProps {
   importedFrom?: 'wikidata' | 'persona'
   importedAt?: string
   onWikidataSelect?: (item: WikidataImportCallbackData) => void
-  
+
   // Actions
   onSave: () => void
   onDelete?: () => void
-  
+
   // Customization
   title?: string
   icon?: ReactNode
@@ -93,7 +92,7 @@ export default function BaseObjectEditor({
   onSave,
   onDelete,
   title,
-  icon = <ObjectIcon />,
+  icon = <Globe className="h-5 w-5" />,
   additionalFields,
   sourceSelector,
   validationErrors = [],
@@ -102,196 +101,191 @@ export default function BaseObjectEditor({
   personaSpecificContent,
 }: BaseObjectEditorProps) {
   const isValid = name.trim() && description.some(d => d.content.trim())
-  
-  
+
   return (
-    <Fade in={open}>
-      <Dialog
-        open={open}
-        onClose={onClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{ sx: { minHeight: '60vh' } }}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {icon}
-            <Typography variant="h6">
-              {title || `${isEditing ? 'Edit' : 'Create'} ${objectType}`}
-            </Typography>
-            <TypeObjectBadge isType={false} />
-          </Box>
-        </DialogTitle>
-        
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
-            {/* Mode Selection */}
-            {!isEditing && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>Creation Mode</Typography>
-                <ModeSelector 
-                  mode={mode} 
-                  onChange={setMode}
-                  showCopy={true}
-                />
-              </Box>
-            )}
-            
-            {/* Wikidata Chip */}
-            {wikidataId && wikidataUrl && (
-              <Box>
-                <WikidataChip
-                  wikidataId={wikidataId}
-                  wikidataUrl={wikidataUrl}
-                  wikibaseId={wikibaseId}
-                  importedAt={importedAt}
-                />
-                {importedFrom === 'wikidata' && (
-                  <Alert severity="info" sx={{ mt: 1 }}>
+    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
+      <DialogContent className="sm:max-w-2xl min-h-[60vh]">
+        <DialogHeader>
+          <DialogTitle>
+            <div className="flex items-center gap-2">
+              {icon}
+              <span>{title || `${isEditing ? 'Edit' : 'Create'} ${objectType}`}</span>
+              <TypeObjectBadge isType={false} />
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-6 pt-2">
+          {/* Mode Selection */}
+          {!isEditing && (
+            <div>
+              <Label className="mb-2">Creation Mode</Label>
+              <ModeSelector
+                mode={mode}
+                onChange={setMode}
+                showCopy={true}
+              />
+            </div>
+          )}
+
+          {/* Wikidata Chip */}
+          {wikidataId && wikidataUrl && (
+            <div>
+              <WikidataChip
+                wikidataId={wikidataId}
+                wikidataUrl={wikidataUrl}
+                wikibaseId={wikibaseId}
+                importedAt={importedAt}
+              />
+              {importedFrom === 'wikidata' && (
+                <Alert className="mt-2">
+                  <AlertDescription>
                     This {objectType} was imported from Wikidata. You can edit the fields below while preserving the Wikidata reference.
-                  </Alert>
-                )}
-              </Box>
-            )}
-            
-            {/* Copy Mode Source Selection */}
-            {mode === 'copy' && sourceSelector}
-            
-            {/* Manual/Edit Mode Fields */}
-            {(mode === 'manual' || isEditing) && (
-              <>
-                <TextField
-                  label="Name"
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* Copy Mode Source Selection */}
+          {mode === 'copy' && sourceSelector}
+
+          {/* Manual/Edit Mode Fields */}
+          {(mode === 'manual' || isEditing) && (
+            <>
+              <div>
+                <Label htmlFor="object-name" className="mb-2">Name</Label>
+                <Input
+                  id="object-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  fullWidth
                   required
                   autoFocus
                 />
-                
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>Description</Typography>
-                  <GlossEditor
-                    gloss={description}
-                    onChange={setDescription}
-                    personaId={personaId}
-                  />
-                </Box>
-                
-                {/* Additional type-specific fields */}
-                {additionalFields}
-                
-                {/* Metadata section */}
-                {metadata && (
-                  <>
-                    <Divider />
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom>Metadata</Typography>
-                      
-                      {/* Alternative Names */}
-                      {metadata.alternateNames && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Alternative Names
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                            {metadata.alternateNames.map((altName: string, idx: number) => (
-                              <Chip key={idx} label={altName} size="small" />
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-                      
-                      {/* External IDs */}
-                      {metadata.externalIds && Object.keys(metadata.externalIds).length > 0 && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            External IDs
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                            {Object.entries(metadata.externalIds).map(([key, value]) => (
-                              <Chip 
-                                key={key} 
-                                label={`${key}: ${value}`} 
-                                size="small"
-                                variant="outlined"
-                              />
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-                      
-                      {/* Certainty */}
-                      {metadata.certainty !== undefined && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Certainty: {(metadata.certainty * 100).toFixed(0)}%
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  </>
-                )}
-                
-                {/* Persona-specific content (for entities and events) */}
-                {showPersonaSpecific && personaSpecificContent && (
-                  <>
-                    <Divider />
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Persona-Specific Interpretations
-                      </Typography>
-                      {personaSpecificContent}
-                    </Box>
-                  </>
-                )}
-              </>
-            )}
-            
-            {/* Wikidata Import Mode */}
-            {mode === 'wikidata' && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Search Wikidata for {objectType}
-                </Typography>
-                <WikidataSearch
-                  onImport={onWikidataSelect || (() => {})}
-                  entityType="object"
+              </div>
+
+              <div>
+                <Label className="mb-2">Description</Label>
+                <GlossEditor
+                  gloss={description}
+                  onChange={setDescription}
+                  personaId={personaId}
                 />
-                <Alert severity="info" sx={{ mt: 2 }}>
+              </div>
+
+              {/* Additional type-specific fields */}
+              {additionalFields}
+
+              {/* Metadata section */}
+              {metadata && (
+                <>
+                  <Separator />
+                  <div>
+                    <Label className="mb-2">Metadata</Label>
+
+                    {/* Alternative Names */}
+                    {metadata.alternateNames && (
+                      <div className="mb-4">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Alternative Names
+                        </p>
+                        <div className="flex gap-1 flex-wrap">
+                          {metadata.alternateNames.map((altName: string, idx: number) => (
+                            <Badge key={idx} variant="outline">{altName}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* External IDs */}
+                    {metadata.externalIds && Object.keys(metadata.externalIds).length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          External IDs
+                        </p>
+                        <div className="flex gap-1 flex-wrap">
+                          {Object.entries(metadata.externalIds).map(([key, value]) => (
+                            <Badge key={key} variant="outline">
+                              {key}: {value}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Certainty */}
+                    {metadata.certainty !== undefined && (
+                      <div className="mb-4">
+                        <p className="text-xs text-muted-foreground">
+                          Certainty: {(metadata.certainty * 100).toFixed(0)}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Persona-specific content (for entities and events) */}
+              {showPersonaSpecific && personaSpecificContent && (
+                <>
+                  <Separator />
+                  <div>
+                    <Label className="mb-2">
+                      Persona-Specific Interpretations
+                    </Label>
+                    {personaSpecificContent}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Wikidata Import Mode */}
+          {mode === 'wikidata' && (
+            <div>
+              <Label className="mb-2">
+                Search Wikidata for {objectType}
+              </Label>
+              <WikidataSearch
+                onImport={onWikidataSelect || (() => {})}
+                entityType="object"
+              />
+              <Alert className="mt-4">
+                <AlertDescription>
                   Importing from Wikidata will populate the {objectType}'s name and description automatically.
                   The Wikidata reference will be preserved for data provenance.
-                </Alert>
-              </Box>
-            )}
-            
-            {/* Validation Errors */}
-            {validationErrors.length > 0 && (
-              <Alert severity="error">
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {/* Validation Errors */}
+          {validationErrors.length > 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
                 {validationErrors.map((error, index) => (
                   <div key={index}>{error}</div>
                 ))}
-              </Alert>
-            )}
-          </Box>
-        </DialogContent>
-        
-        <DialogActions>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <DialogFooter>
           {isEditing && onDelete && (
-            <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
+            <Button variant="destructive" onClick={onDelete} className="mr-auto">
               Delete
             </Button>
           )}
-          <Button onClick={onClose}>Cancel</Button>
-          <Button 
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
             onClick={onSave}
-            variant="contained"
             disabled={!isValid}
           >
             {isEditing ? 'Save' : 'Create'}
           </Button>
-        </DialogActions>
-      </Dialog>
-    </Fade>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

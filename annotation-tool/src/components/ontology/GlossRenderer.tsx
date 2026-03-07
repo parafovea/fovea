@@ -1,4 +1,5 @@
-import { Box, Chip } from '@mui/material'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { GlossItem, TimeInstant, EntityType, RoleType, EventType, RelationType, Entity, Event, Time, Location, Claim } from '@models/types'
 import { usePersonaOntology, useWorld } from '@store/queries'
 
@@ -19,7 +20,7 @@ export function GlossRenderer({ gloss, personaId, inline = false, claims = [] }:
 
   // Handle undefined or null gloss
   if (!gloss || !Array.isArray(gloss)) {
-    return inline ? <span /> : <Box />
+    return inline ? <span /> : <div />
   }
 
   const getItemDisplay = (item: GlossItem): { name: string; found: boolean; kind: 'text' | 'type' | 'object' | 'annotation' | 'claim' } => {
@@ -110,41 +111,43 @@ export function GlossRenderer({ gloss, personaId, inline = false, claims = [] }:
     return { name: item.content, found: false, kind: 'text' as const }
   }
 
-  const getChipStyle = (kind: string) => {
+  const getBadgeVariant = (kind: string): 'outline' | 'default' | 'secondary' => {
     switch (kind) {
-      case 'type':       return { color: 'primary' as const,   variant: 'outlined' as const, fontStyle: 'italic' }
-      case 'object':     return { color: 'secondary' as const, variant: 'outlined' as const, fontStyle: 'normal' }
-      case 'annotation': return { color: 'warning' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
-      case 'claim':      return { color: 'info' as const,      variant: 'outlined' as const, fontStyle: 'normal' }
-      default:           return { color: 'default' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+      case 'type':       return 'outline'
+      case 'object':     return 'secondary'
+      case 'annotation': return 'outline'
+      case 'claim':      return 'outline'
+      default:           return 'outline'
+    }
+  }
+
+  const getBadgeClassName = (kind: string): string => {
+    switch (kind) {
+      case 'type':       return 'text-primary border-primary italic'
+      case 'object':     return 'text-secondary-foreground'
+      case 'annotation': return 'text-orange-600 border-orange-600'
+      case 'claim':      return 'text-blue-600 border-blue-600'
+      default:           return ''
     }
   }
 
   if (inline) {
     // For inline rendering, return a span container to avoid nesting issues
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap' }}>
+      <span className="inline-flex items-center flex-wrap">
         {gloss.map((item, index) => {
           const display = getItemDisplay(item)
           if (item.type === 'text') {
             return <span key={index}>{display.name}</span>
           } else {
-            const chipProps = getChipStyle(display.kind)
             return (
-              <Chip
+              <Badge
                 key={index}
-                label={display.name}
-                size="small"
-                color={chipProps.color}
-                variant={chipProps.variant}
-                component="span"
-                sx={{
-                  mx: 0.5,
-                  verticalAlign: 'baseline',
-                  height: 20,
-                  fontStyle: chipProps.fontStyle,
-                }}
-              />
+                variant={getBadgeVariant(display.kind)}
+                className={cn('mx-1 align-baseline h-5', getBadgeClassName(display.kind))}
+              >
+                {display.name}
+              </Badge>
             )
           }
         })}
@@ -153,25 +156,23 @@ export function GlossRenderer({ gloss, personaId, inline = false, claims = [] }:
   }
 
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+    <div className="flex flex-wrap gap-1 items-center">
       {gloss.map((item, index) => {
         const display = getItemDisplay(item)
         if (item.type === 'text') {
           return <span key={index}>{display.name}</span>
         } else {
-          const chipProps = getChipStyle(display.kind)
           return (
-            <Chip
+            <Badge
               key={index}
-              label={display.name}
-              size="small"
-              color={chipProps.color}
-              variant={chipProps.variant}
-              sx={{ fontStyle: chipProps.fontStyle }}
-            />
+              variant={getBadgeVariant(display.kind)}
+              className={cn(getBadgeClassName(display.kind))}
+            >
+              {display.name}
+            </Badge>
           )
         }
       })}
-    </Box>
+    </div>
   )
 }

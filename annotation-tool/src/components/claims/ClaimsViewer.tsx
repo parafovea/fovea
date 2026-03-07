@@ -1,33 +1,32 @@
 import { useState, useMemo, memo, useCallback } from 'react'
+
 import {
-  Box,
-  Paper,
-  Stack,
-  Typography,
-  IconButton,
-  Chip,
-  Collapse,
-  Button,
-  Tooltip,
-  Divider,
-  TextField,
-  InputAdornment,
-  FormControl,
-  InputLabel,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
   Select,
-  MenuItem,
-  Skeleton,
-  Alert,
-} from '@mui/material'
-import {
-  ExpandMore as ExpandMoreIcon,
-  ChevronRight as ChevronRightIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  AccountTree as RelationIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { Claim, ClaimTextSpan } from '@models/types'
 import { GlossRenderer } from '@components/ontology/GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
@@ -120,161 +119,165 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
   }
 
   return (
-    <Box sx={{ ml: depth * 3 }}>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 1.5,
-          mb: 1,
-          bgcolor: isSelected ? 'action.selected' : 'background.paper',
-          '&:hover': {
-            bgcolor: isSelected ? 'action.selected' : 'action.hover',
-          },
-          cursor: 'pointer',
-          transition: 'background-color 0.2s',
-        }}
+    <div style={{ marginLeft: `${depth * 1.5}rem` }}>
+      <div
+        className={cn(
+          'mb-2 cursor-pointer rounded-lg border p-3 transition-colors duration-200',
+          isSelected ? 'bg-accent' : 'bg-card hover:bg-accent/50',
+        )}
         onClick={handleClick}
       >
-        <Stack direction="row" spacing={1} alignItems="flex-start">
+        <div className="flex items-start gap-2">
           {/* Expand/Collapse Icon */}
-          <IconButton
-            size="small"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={handleToggle}
             disabled={!hasSubclaims}
-            sx={{ mt: -0.5 }}
+            className="-mt-0.5"
           >
             {hasSubclaims ? (
               expanded ? (
-                <ExpandMoreIcon fontSize="small" />
+                <ChevronDown className="size-4" />
               ) : (
-                <ChevronRightIcon fontSize="small" />
+                <ChevronRight className="size-4" />
               )
             ) : (
-              <Box sx={{ width: 20 }} />
+              <span className="size-5" />
             )}
-          </IconButton>
+          </Button>
 
           {/* Claim Content */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
+          <div className="min-w-0 flex-1">
             {/* Claim Text */}
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
+            <p className="mb-1 text-sm">
               <strong>Claim {depth === 0 ? '' : `(depth ${depth})`}:</strong>{' '}
               {claim.gloss && claim.gloss.length > 0 ? (
                 <GlossRenderer gloss={claim.gloss} personaId={personaId} inline={true} claims={allClaims} />
               ) : (
                 claim.text
               )}
-            </Typography>
+            </p>
 
-            {/* Metadata Chips */}
-            <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ gap: 0.5 }}>
+            {/* Metadata Badges */}
+            <div className="flex flex-wrap gap-1">
               {claim.confidence !== undefined && claim.confidence !== null && (
-                <Chip
-                  label={`${Math.round(claim.confidence * 100)}% confident`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ height: 20 }}
-                />
+                <Badge variant="outline" className="h-5">
+                  {Math.round(claim.confidence * 100)}% confident
+                </Badge>
               )}
               {claim.extractionStrategy && (
-                <Chip
-                  label={claim.extractionStrategy}
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                  sx={{ height: 20 }}
-                />
+                <Badge variant="outline" className="h-5">
+                  {claim.extractionStrategy}
+                </Badge>
               )}
               {claim.modelUsed && (
-                <Chip
-                  label={claim.modelUsed}
-                  size="small"
-                  variant="outlined"
-                  color="secondary"
-                  sx={{ height: 20 }}
-                />
+                <Badge variant="outline" className="h-5">
+                  {claim.modelUsed}
+                </Badge>
               )}
               {hasSubclaims && (
-                <Chip
-                  label={`${claim.subclaims!.length} subclaim${claim.subclaims!.length > 1 ? 's' : ''}`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ height: 20 }}
-                />
+                <Badge variant="outline" className="h-5">
+                  {claim.subclaims!.length} subclaim{claim.subclaims!.length > 1 ? 's' : ''}
+                </Badge>
               )}
-            </Stack>
-          </Box>
+            </div>
+          </div>
 
           {/* Action Buttons */}
-          <Stack direction="row" spacing={0.5}>
-            <Tooltip title={showRelations ? 'Hide relations' : 'Show relations'}>
-              <IconButton
-                size="small"
-                color={showRelations ? 'primary' : 'default'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowRelations(!showRelations)
-                }}
+          <div className="flex gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className={showRelations ? 'text-primary' : ''}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowRelations(!showRelations)
+                    }}
+                  />
+                }
               >
-                <RelationIcon fontSize="small" />
-              </IconButton>
+                <GitBranch className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{showRelations ? 'Hide relations' : 'Show relations'}</TooltipContent>
             </Tooltip>
             {onAdd && (
-              <Tooltip title="Add subclaim">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onAdd(claim.id)
-                  }}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAdd(claim.id)
+                      }}
+                    />
+                  }
                 >
-                  <AddIcon fontSize="small" />
-                </IconButton>
+                  <Plus className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>Add subclaim</TooltipContent>
               </Tooltip>
             )}
             {onEdit && (
-              <Tooltip title="Edit claim">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onEdit(claim)
-                  }}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEdit(claim)
+                      }}
+                    />
+                  }
                 >
-                  <EditIcon fontSize="small" />
-                </IconButton>
+                  <Pencil className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>Edit claim</TooltipContent>
               </Tooltip>
             )}
             {onDelete && (
-              <Tooltip title="Delete claim">
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDelete(claim)
-                  }}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDelete(claim)
+                      }}
+                    />
+                  }
                 >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
+                  <Trash2 className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>Delete claim</TooltipContent>
               </Tooltip>
             )}
-          </Stack>
-        </Stack>
+          </div>
+        </div>
 
         {/* Relations Section */}
         {showRelations && (
-          <Box onClick={(e) => e.stopPropagation()}>
-            <Divider sx={{ my: 2 }} />
+          <div onClick={(e) => e.stopPropagation()}>
+            <Separator className="my-4" />
             <ClaimRelationsViewer
               claimId={claim.id}
               summaryId={summaryId}
               personaId={personaId || ''}
               onAddRelation={() => setRelationEditorOpen(true)}
             />
-          </Box>
+          </div>
         )}
-      </Paper>
+      </div>
 
       {/* Relation Editor Dialog */}
       {personaId && (
@@ -289,27 +292,29 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
 
       {/* Subclaims */}
       {hasSubclaims && (
-        <Collapse in={expanded}>
-          <Box>
-            {claim.subclaims!.map((subclaim) => (
-              <ClaimTreeNode
-                key={subclaim.id}
-                claim={subclaim}
-                depth={depth + 1}
-                summaryId={summaryId}
-                personaId={personaId}
-                selectedClaimId={selectedClaimId}
-                allClaims={allClaims}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onAdd={onAdd}
-                onSelect={onSelect}
-              />
-            ))}
-          </Box>
-        </Collapse>
+        <Collapsible open={expanded}>
+          <CollapsibleContent>
+            <div>
+              {claim.subclaims!.map((subclaim) => (
+                <ClaimTreeNode
+                  key={subclaim.id}
+                  claim={subclaim}
+                  depth={depth + 1}
+                  summaryId={summaryId}
+                  personaId={personaId}
+                  selectedClaimId={selectedClaimId}
+                  allClaims={allClaims}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onAdd={onAdd}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       )}
-    </Box>
+    </div>
   )
 }, (prevProps, nextProps) => {
   // Custom comparison for optimization
@@ -323,7 +328,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
 /**
  * ClaimsViewer - Hierarchical tree view for displaying claims and subclaims
  */
-export default function ClaimsViewer({
+export function ClaimsViewer({
   claims,
   summaryId,
   personaId,
@@ -422,152 +427,147 @@ export default function ClaimsViewer({
   // Loading state
   if (loading) {
     return (
-      <Box>
-        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Stack spacing={2}>
-            <Skeleton variant="rectangular" height={40} />
-            <Stack direction="row" spacing={2}>
-              <Skeleton variant="rectangular" height={40} width={150} />
-              <Skeleton variant="rectangular" height={40} width={150} />
-              <Skeleton variant="rectangular" height={40} width={150} />
-            </Stack>
-          </Stack>
-        </Paper>
-        <Stack spacing={2}>
-          <Skeleton variant="rectangular" height={100} />
-          <Skeleton variant="rectangular" height={80} />
-          <Skeleton variant="rectangular" height={120} />
-        </Stack>
-      </Box>
+      <div>
+        <div className="mb-4 rounded-lg border p-4">
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-10 w-full" />
+            <div className="flex gap-4">
+              <Skeleton className="h-10 w-[150px]" />
+              <Skeleton className="h-10 w-[150px]" />
+              <Skeleton className="h-10 w-[150px]" />
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-[100px] w-full" />
+          <Skeleton className="h-[80px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+        </div>
+      </div>
     )
   }
 
   // Empty state
   if (!claims || claims.length === 0) {
     return (
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 4,
-          textAlign: 'center',
-          bgcolor: 'background.default',
-        }}
-      >
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+      <div className="rounded-lg border bg-background p-8 text-center">
+        <p className="mb-2 text-base font-semibold text-muted-foreground">
           No claims yet
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        </p>
+        <p className="mb-4 text-sm text-muted-foreground">
           Extract claims from the summary or add them manually to get started.
-        </Typography>
+        </p>
         {onAddClaim && (
           <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
+            variant="outline"
             onClick={() => onAddClaim()}
           >
+            <Plus className="size-4" />
             Add Manual Claim
           </Button>
         )}
-      </Paper>
+      </div>
     )
   }
 
   return (
-    <Box>
+    <div>
       {/* Error state */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
       {/* Filter Bar */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={2}>
+      <div className="mb-4 rounded-lg border p-4">
+        <div className="flex flex-col gap-4">
           {/* Search */}
-          <TextField
-            placeholder="Search claims..."
-            size="small"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-          />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search claims..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
 
           {/* Filters */}
-          <Stack direction="row" spacing={2}>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel id="min-confidence-label">Min Confidence</InputLabel>
+          <div className="flex gap-4">
+            <div className="flex min-w-[150px] flex-col gap-1">
+              <Label className="text-xs">Min Confidence</Label>
               <Select
-                labelId="min-confidence-label"
-                id="min-confidence-select"
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(e.target.value === '' ? '' : Number(e.target.value))}
-                label="Min Confidence"
+                value={String(minConfidence)}
+                onValueChange={(value) => setMinConfidence(value === '' || value === null ? '' : Number(value))}
               >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value={0.5}>50%+</MenuItem>
-                <MenuItem value={0.7}>70%+</MenuItem>
-                <MenuItem value={0.8}>80%+</MenuItem>
-                <MenuItem value={0.9}>90%+</MenuItem>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="0.5">50%+</SelectItem>
+                  <SelectItem value="0.7">70%+</SelectItem>
+                  <SelectItem value="0.8">80%+</SelectItem>
+                  <SelectItem value="0.9">90%+</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel id="strategy-label">Strategy</InputLabel>
+            <div className="flex min-w-[150px] flex-col gap-1">
+              <Label className="text-xs">Strategy</Label>
               <Select
-                labelId="strategy-label"
-                id="strategy-select"
                 value={filterStrategy}
-                onChange={(e) => setFilterStrategy(e.target.value)}
-                label="Strategy"
+                onValueChange={(v) => setFilterStrategy(v ?? 'all')}
               >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="sentence-based">Sentence-based</MenuItem>
-                <MenuItem value="semantic-units">Semantic Units</MenuItem>
-                <MenuItem value="hierarchical">Hierarchical</MenuItem>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="sentence-based">Sentence-based</SelectItem>
+                  <SelectItem value="semantic-units">Semantic Units</SelectItem>
+                  <SelectItem value="hierarchical">Hierarchical</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel id="model-label">Model</InputLabel>
+            <div className="flex min-w-[150px] flex-col gap-1">
+              <Label className="text-xs">Model</Label>
               <Select
-                labelId="model-label"
-                id="model-select"
                 value={filterModel}
-                onChange={(e) => setFilterModel(e.target.value)}
-                label="Model"
+                onValueChange={(v) => setFilterModel(v ?? 'all')}
               >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="gpt-4">GPT-4</MenuItem>
-                <MenuItem value="gpt-3.5-turbo">GPT-3.5</MenuItem>
-                <MenuItem value="llama-3-70b">Llama 3 70B</MenuItem>
-                <MenuItem value="qwen-2.5">Qwen 2.5</MenuItem>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5</SelectItem>
+                  <SelectItem value="llama-3-70b">Llama 3 70B</SelectItem>
+                  <SelectItem value="qwen-2.5">Qwen 2.5</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-          </Stack>
+            </div>
+          </div>
 
           {/* Results count */}
-          <Typography variant="caption" color="text.secondary">
+          <p className="text-xs text-muted-foreground">
             Showing {filteredClaims.length} of {claims.length} claim{claims.length !== 1 ? 's' : ''}
-          </Typography>
-        </Stack>
-      </Paper>
+          </p>
+        </div>
+      </div>
 
       {/* Claims Tree */}
       {filteredClaims.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
+        <div className="rounded-lg border p-8 text-center">
+          <p className="text-sm text-muted-foreground">
             No claims match your filters
-          </Typography>
-        </Paper>
+          </p>
+        </div>
       ) : (
-        <Box>
+        <div>
           {filteredClaims.map((claim) => (
             <ClaimTreeNode
               key={claim.id}
@@ -583,8 +583,8 @@ export default function ClaimsViewer({
               onSelect={handleSelect}
             />
           ))}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }

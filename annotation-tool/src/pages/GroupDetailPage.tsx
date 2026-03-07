@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Dialog,
@@ -111,11 +110,9 @@ export default function GroupDetailPage(): JSX.Element {
           <Alert variant="destructive">
             <AlertDescription>Failed to load group.</AlertDescription>
           </Alert>
-          <Button variant="ghost" className="mt-4" asChild>
-            <RouterLink to="/groups">
-              <ArrowLeft className="size-4" />
-              Back to Groups
-            </RouterLink>
+          <Button variant="ghost" className="mt-4" render={<RouterLink to="/groups" />}>
+            <ArrowLeft className="size-4" />
+            Back to Groups
           </Button>
         </div>
       </div>
@@ -125,11 +122,9 @@ export default function GroupDetailPage(): JSX.Element {
   return (
     <div className="mx-auto max-w-screen-lg px-4">
       <div className="py-6">
-        <Button variant="ghost" className="mb-4" asChild>
-          <RouterLink to="/groups">
-            <ArrowLeft className="size-4" />
-            Back to Groups
-          </RouterLink>
+        <Button variant="ghost" className="mb-4" render={<RouterLink to="/groups" />}>
+          <ArrowLeft className="size-4" />
+          Back to Groups
         </Button>
 
         <h1 className="text-2xl font-bold">{group.name}</h1>
@@ -166,10 +161,11 @@ export default function GroupDetailPage(): JSX.Element {
                     {isAdmin && member.role !== 'group_owner' ? (
                       <Select
                         value={member.role}
-                        onValueChange={(value) =>
-                          groupId &&
-                          updateMember.mutate({ groupId, userId: member.userId, role: value })
-                        }
+                        onValueChange={(value) => {
+                          if (value && groupId) {
+                            updateMember.mutate({ groupId, userId: member.userId, role: value })
+                          }
+                        }}
                       >
                         <SelectTrigger className="w-[140px]">
                           <SelectValue />
@@ -252,7 +248,7 @@ export default function GroupDetailPage(): JSX.Element {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={newRole} onValueChange={(value) => setNewRole(value)}>
+              <Select value={newRole} onValueChange={(value) => { if (value) setNewRole(value) }}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

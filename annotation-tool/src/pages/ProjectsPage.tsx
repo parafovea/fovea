@@ -185,7 +185,7 @@ export default function ProjectsPage(): JSX.Element {
             </div>
             <div className="space-y-2">
               <Label>Owner Group (optional)</Label>
-              <Select value={ownerGroupId} onValueChange={(value) => setOwnerGroupId(value)}>
+              <Select value={ownerGroupId} onValueChange={(value) => setOwnerGroupId(value ?? '')}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Personal (no group)" />
                 </SelectTrigger>

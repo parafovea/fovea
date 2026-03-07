@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Box, CircularProgress, Typography } from '@mui/material'
+import { Spinner } from '@/components/ui/spinner'
 import Layout from '@components/layout/Layout'
 import VideoBrowser from '@components/video/VideoBrowser'
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
@@ -12,9 +12,9 @@ import GroupDetailPage from './pages/GroupDetailPage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import SharedAnnotationsPage from './pages/SharedAnnotationsPage'
-import LoginPage from './components/auth/LoginPage'
-import RegisterPage from './components/auth/RegisterPage'
-import AdminPanel from './components/admin/AdminPanel'
+import { LoginPage } from './components/auth/LoginPage'
+import { RegisterPage } from './components/auth/RegisterPage'
+import { AdminPanel } from './components/admin/AdminPanel'
 import { ErrorBoundary } from '@components/shared/ErrorBoundary'
 import { SessionManager } from '@components/auth/SessionManager'
 import { useAuthStore } from './store/zustand/authStore'
@@ -34,21 +34,12 @@ import { useAbilities } from './store/queries/useAbilities'
  */
 function LoadingScreen() {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        gap: 2,
-      }}
-    >
-      <CircularProgress size={60} />
-      <Typography variant="h6" color="text.secondary">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+      <Spinner className="h-[60px] w-[60px]" />
+      <p className="text-base font-semibold text-muted-foreground">
         Loading...
-      </Typography>
-    </Box>
+      </p>
+    </div>
   )
 }
 

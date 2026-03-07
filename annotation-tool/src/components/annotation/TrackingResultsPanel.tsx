@@ -1,37 +1,26 @@
 /**
- * @file TrackingResultsPanel.tsx
- * @description Panel for reviewing and managing tracking results.
+ * Panel for reviewing and managing tracking results.
  * Displays candidate tracks with confidence indicators and frame coverage.
  * Allows preview, accept, and reject actions for each track.
+ *
+ * @module
  */
 
 import { useState } from 'react'
-import {
-  Box,
-  Typography,
-  Paper,
-  Button,
-  Stack,
-  Chip,
-  LinearProgress,
-  IconButton,
-  Tooltip,
-} from '@mui/material'
-import {
-  CheckCircle as AcceptIcon,
-  Cancel as RejectIcon,
-  Visibility as PreviewIcon,
-} from '@mui/icons-material'
+import { CheckCircle, XCircle, Eye } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { TrackingResult } from '@models/types'
 
 /**
- * @interface TrackingResultsPanelProps
- * @description Props for TrackingResultsPanel component.
- * @property trackingResults - Array of tracking results from model service
- * @property videoId - ID of the video being annotated
- * @property onAcceptTrack - Callback when track is accepted
- * @property onRejectTrack - Callback when track is rejected
- * @property onPreviewTrack - Callback when track preview is requested
+ * Props for TrackingResultsPanel component.
+ *
+ * @param trackingResults - Array of tracking results from model service
+ * @param videoId - ID of the video being annotated
+ * @param onAcceptTrack - Callback when track is accepted
+ * @param onRejectTrack - Callback when track is rejected
+ * @param onPreviewTrack - Callback when track preview is requested
  */
 export interface TrackingResultsPanelProps {
   trackingResults: TrackingResult[]
@@ -45,30 +34,30 @@ export interface TrackingResultsPanelProps {
  * Get color based on confidence level.
  *
  * @param confidence - Confidence value (0-1)
- * @returns MUI color string
+ * @returns CSS class name for confidence color
  */
-function getConfidenceColor(confidence: number): 'success' | 'warning' | 'error' {
-  if (confidence > 0.9) return 'success'
-  if (confidence > 0.7) return 'warning'
-  return 'error'
+function getConfidenceColorClass(confidence: number): string {
+  if (confidence > 0.9) return 'bg-green-500'
+  if (confidence > 0.7) return 'bg-yellow-500'
+  return 'bg-red-500'
 }
 
+/**
+ * Get badge variant for confidence level.
+ */
+function getConfidenceVariant(confidence: number): 'default' | 'secondary' | 'destructive' {
+  if (confidence > 0.9) return 'default'
+  if (confidence > 0.7) return 'secondary'
+  return 'destructive'
+}
 
 /**
- * @component TrackingResultsPanel
- * @description Panel for reviewing tracking results from automated tracking.
+ * Panel for reviewing tracking results from automated tracking.
  * Displays list of tracked candidates with confidence indicators, frame coverage
  * visualization, and preview, accept, and reject actions.
  *
  * @param props - Component properties
- * @param props.trackingResults - Array of tracking results to display
- * @param props.videoId - ID of the video being annotated
- * @param props.onAcceptTrack - Callback fired when user accepts a track
- * @param props.onRejectTrack - Callback fired when user rejects a track
- * @param props.onPreviewTrack - Callback fired when user requests track preview
  * @returns React component
- *
- * @public
  */
 export function TrackingResultsPanel({
   trackingResults,
@@ -91,34 +80,36 @@ export function TrackingResultsPanel({
   }
 
   return (
-    <Paper elevation={2} sx={{ p: 2, maxHeight: '400px', overflowY: 'auto' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Tracking Results</Typography>
-        <Typography variant="body2" color="text.secondary">
+    <div className="p-4 max-h-[400px] overflow-y-auto bg-card rounded-lg ring-1 ring-foreground/10 shadow-sm">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-base font-semibold">Tracking Results</h3>
+        <p className="text-sm text-muted-foreground">
           Found {trackingResults.length} track{trackingResults.length !== 1 ? 's' : ''}
-        </Typography>
-      </Box>
+        </p>
+      </div>
 
       {trackingResults.length > 1 && (
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <div className="flex flex-row gap-2 mb-4">
           <Button
-            size="small"
+            variant="ghost"
+            size="sm"
             onClick={handleAcceptAll}
             disabled={trackingResults.filter((t) => t.confidence > 0.9).length === 0}
           >
             Accept All High Confidence ({'>'}90%)
           </Button>
           <Button
-            size="small"
+            variant="ghost"
+            size="sm"
             onClick={handleRejectAll}
             disabled={trackingResults.filter((t) => t.confidence < 0.7).length === 0}
           >
             Reject All Low Confidence ({'<'}70%)
           </Button>
-        </Stack>
+        </div>
       )}
 
-      <Stack spacing={2}>
+      <div className="flex flex-col gap-4">
         {trackingResults.map((track) => {
           const frameNumbers = track.frames.map((f) => f.frameNumber)
           const minFrame = Math.min(...frameNumbers)
@@ -139,135 +130,126 @@ export function TrackingResultsPanel({
           }
 
           return (
-            <Paper
+            <div
               key={track.trackId}
-              variant="outlined"
-              sx={{
-                p: 2,
-                cursor: 'pointer',
-                transition: 'background-color 0.2s',
-                backgroundColor: hoveredTrack === track.trackId ? 'action.hover' : 'transparent',
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                },
-              }}
+              className={`p-4 rounded-lg ring-1 ring-foreground/10 cursor-pointer transition-colors ${
+                hoveredTrack === track.trackId ? 'bg-muted' : 'bg-transparent hover:bg-muted'
+              }`}
               onMouseEnter={() => setHoveredTrack(track.trackId)}
               onMouseLeave={() => setHoveredTrack(null)}
               onClick={() => onPreviewTrack(track.trackId)}
             >
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="subtitle2">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">
                     Track #{track.trackId}
-                  </Typography>
-                  <Chip
-                    label={track.label}
-                    size="small"
-                    color={getConfidenceColor(track.confidence)}
-                  />
-                  <Typography variant="caption" color="text.secondary">
+                  </span>
+                  <Badge variant={getConfidenceVariant(track.confidence)}>
+                    {track.label}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
                     conf: {track.confidence.toFixed(2)}
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={0.5}>
-                  <Tooltip title="Preview Track">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onPreviewTrack(track.trackId)
-                      }}
+                  </span>
+                </div>
+                <div className="flex flex-row gap-1">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onPreviewTrack(track.trackId)
+                          }}
+                        />
+                      }
                     >
-                      <PreviewIcon fontSize="small" />
-                    </IconButton>
+                      <Eye className="size-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Preview Track</TooltipContent>
                   </Tooltip>
-                  <Tooltip title="Accept Track">
-                    <IconButton
-                      size="small"
-                      color="success"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onAcceptTrack(track.trackId)
-                      }}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onAcceptTrack(track.trackId)
+                          }}
+                        />
+                      }
                     >
-                      <AcceptIcon fontSize="small" />
-                    </IconButton>
+                      <CheckCircle className="size-4 text-green-600" />
+                    </TooltipTrigger>
+                    <TooltipContent>Accept Track</TooltipContent>
                   </Tooltip>
-                  <Tooltip title="Reject Track">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onRejectTrack(track.trackId)
-                      }}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onRejectTrack(track.trackId)
+                          }}
+                        />
+                      }
                     >
-                      <RejectIcon fontSize="small" />
-                    </IconButton>
+                      <XCircle className="size-4 text-red-600" />
+                    </TooltipTrigger>
+                    <TooltipContent>Reject Track</TooltipContent>
                   </Tooltip>
-                </Stack>
-              </Box>
+                </div>
+              </div>
 
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              <p className="text-xs text-muted-foreground mb-2">
                 Frames {minFrame}-{maxFrame} ({gaps.length > 0 ? `${gaps.length} gap${gaps.length !== 1 ? 's' : ''}` : 'continuous'})
-              </Typography>
+              </p>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ flex: 1, position: 'relative', height: 20 }}>
-                  <LinearProgress
-                    variant="determinate"
-                    value={coverage}
-                    sx={{
-                      height: 20,
-                      borderRadius: 1,
-                      backgroundColor: 'action.disabledBackground',
-                      '& .MuiLinearProgress-bar': {
-                        backgroundColor: getConfidenceColor(track.confidence) === 'success'
-                          ? 'success.main'
-                          : getConfidenceColor(track.confidence) === 'warning'
-                          ? 'warning.main'
-                          : 'error.main',
-                      },
-                    }}
-                  />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative h-5">
+                  <div className="absolute inset-0 rounded bg-muted overflow-hidden">
+                    <div
+                      className={`h-full ${getConfidenceColorClass(track.confidence)} rounded`}
+                      style={{ width: `${coverage}%` }}
+                    />
+                  </div>
                   {/* Show gaps as overlays */}
                   {gaps.map((gap, idx) => {
                     const gapStart = ((gap.start - minFrame) / totalRange) * 100
                     const gapWidth = ((gap.end - gap.start + 1) / totalRange) * 100
                     return (
-                      <Box
+                      <div
                         key={idx}
-                        sx={{
-                          position: 'absolute',
-                          top: 0,
+                        className="absolute top-0 h-5 bg-muted border-l border-r border-border"
+                        style={{
                           left: `${gapStart}%`,
                           width: `${gapWidth}%`,
-                          height: 20,
-                          backgroundColor: 'action.disabledBackground',
-                          borderLeft: '1px solid',
-                          borderRight: '1px solid',
-                          borderColor: 'divider',
                         }}
                       />
                     )
                   })}
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>
+                </div>
+                <span className="text-xs text-muted-foreground min-w-[60px]">
                   {track.frames.length}/{totalRange} frames
-                </Typography>
-              </Box>
-            </Paper>
+                </span>
+              </div>
+            </div>
           )
         })}
-      </Stack>
+      </div>
 
       {trackingResults.length === 0 && (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body2" color="text.secondary">
+        <div className="text-center py-8">
+          <p className="text-sm text-muted-foreground">
             No tracking results available
-          </Typography>
-        </Box>
+          </p>
+        </div>
       )}
-    </Paper>
+    </div>
   )
 }

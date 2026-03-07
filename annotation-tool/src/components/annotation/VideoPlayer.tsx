@@ -1,5 +1,4 @@
 import React, { forwardRef, useImperativeHandle } from 'react'
-import { Box } from '@mui/material'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import { VideoMetadata } from '@models/types'
@@ -129,7 +128,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     ])
 
     return (
-      <Box sx={{ position: 'relative', flexGrow: 1, bgcolor: 'black', minHeight: 0 }}>
+      <div className="relative flex-grow bg-black min-h-0">
         <div className="annotation-video-container">
           <video
             ref={videoRef}
@@ -145,7 +144,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           </video>
         </div>
         {children}
-      </Box>
+      </div>
     )
   }
 )

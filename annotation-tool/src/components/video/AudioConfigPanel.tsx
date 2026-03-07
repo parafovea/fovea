@@ -3,14 +3,16 @@
  * Allows users to enable audio transcription, speaker diarization, and select fusion strategy.
  */
 
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import {
-  Box,
-  FormControlLabel,
-  Checkbox,
-  TextField,
-  MenuItem,
-  Typography,
-} from '@mui/material'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { AudioConfig, FusionStrategy } from './types'
 
 /**
@@ -71,26 +73,25 @@ const FUSION_STRATEGIES: { value: FusionStrategy; label: string; description: st
  * ```
  */
 export function AudioConfigPanel({ config, onChange, disabled = false }: AudioConfigPanelProps) {
-  const handleEnableAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const enableAudio = event.target.checked
+  const handleEnableAudioChange = (checked: boolean) => {
     onChange({
       ...config,
-      enableAudio,
-      enableSpeakerDiarization: enableAudio ? config.enableSpeakerDiarization : false,
+      enableAudio: checked,
+      enableSpeakerDiarization: checked ? config.enableSpeakerDiarization : false,
     })
   }
 
-  const handleEnableDiarizationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEnableDiarizationChange = (checked: boolean) => {
     onChange({
       ...config,
-      enableSpeakerDiarization: event.target.checked,
+      enableSpeakerDiarization: checked,
     })
   }
 
-  const handleFusionStrategyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFusionStrategyChange = (value: string) => {
     onChange({
       ...config,
-      fusionStrategy: event.target.value as FusionStrategy,
+      fusionStrategy: value as FusionStrategy,
     })
   }
 
@@ -102,62 +103,68 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
     })
   }
 
+  const selectedStrategy = FUSION_STRATEGIES.find((s) => s.value === config.fusionStrategy)
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="subtitle2" color="text.secondary">
+    <div className="flex flex-col gap-4">
+      <p className="text-sm font-medium text-muted-foreground">
         Audio Processing Options
-      </Typography>
+      </p>
 
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={config.enableAudio}
-            onChange={handleEnableAudioChange}
-            disabled={disabled}
-          />
-        }
-        label="Enable Audio Transcription"
-      />
+      <Label className="flex items-center gap-2">
+        <Checkbox
+          checked={config.enableAudio}
+          onCheckedChange={handleEnableAudioChange}
+          disabled={disabled}
+        />
+        Enable Audio Transcription
+      </Label>
 
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={config.enableSpeakerDiarization}
-            onChange={handleEnableDiarizationChange}
-            disabled={disabled || !config.enableAudio}
-          />
-        }
-        label="Enable Speaker Diarization"
-        sx={{ ml: 3 }}
-      />
+      <Label className="ml-6 flex items-center gap-2">
+        <Checkbox
+          checked={config.enableSpeakerDiarization}
+          onCheckedChange={handleEnableDiarizationChange}
+          disabled={disabled || !config.enableAudio}
+        />
+        Enable Speaker Diarization
+      </Label>
 
-      <TextField
-        select
-        label="Fusion Strategy"
-        value={config.fusionStrategy}
-        onChange={handleFusionStrategyChange}
-        disabled={disabled || !config.enableAudio}
-        helperText={
-          FUSION_STRATEGIES.find((s) => s.value === config.fusionStrategy)?.description
-        }
-        fullWidth
-      >
-        {FUSION_STRATEGIES.map((strategy) => (
-          <MenuItem key={strategy.value} value={strategy.value}>
-            {strategy.label}
-          </MenuItem>
-        ))}
-      </TextField>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="fusion-strategy">Fusion Strategy</Label>
+        <Select
+          value={config.fusionStrategy}
+          onValueChange={handleFusionStrategyChange}
+          disabled={disabled || !config.enableAudio}
+        >
+          <SelectTrigger className="w-full" id="fusion-strategy">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FUSION_STRATEGIES.map((strategy) => (
+              <SelectItem key={strategy.value} value={strategy.value}>
+                {strategy.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedStrategy && (
+          <p className="text-xs text-muted-foreground">{selectedStrategy.description}</p>
+        )}
+      </div>
 
-      <TextField
-        label="Audio Language (optional)"
-        value={config.audioLanguage || ''}
-        onChange={handleLanguageChange}
-        disabled={disabled || !config.enableAudio}
-        helperText="ISO language code (e.g., 'en', 'es', 'fr'). Leave empty for auto-detection."
-        fullWidth
-        placeholder="en"
-      />
-    </Box>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="audio-language">Audio Language (optional)</Label>
+        <Input
+          id="audio-language"
+          value={config.audioLanguage || ''}
+          onChange={handleLanguageChange}
+          disabled={disabled || !config.enableAudio}
+          placeholder="en"
+        />
+        <p className="text-xs text-muted-foreground">
+          ISO language code (e.g., 'en', 'es', 'fr'). Leave empty for auto-detection.
+        </p>
+      </div>
+    </div>
   )
 }

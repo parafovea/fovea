@@ -1,30 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+
+import { Info } from 'lucide-react'
+
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Slider,
-  Typography,
-  Box,
-  Stack,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
   Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Tooltip,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
-  TextField,
-  IconButton,
-} from '@mui/material'
-import { ExpandMore as ExpandMoreIcon, Info as InfoIcon } from '@mui/icons-material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { useClaims } from '@store/queries'
@@ -42,7 +46,7 @@ interface ClaimEditorProps {
   parentClaimId?: string // For creating subclaims
 }
 
-export default function ClaimEditor({
+export function ClaimEditor({
   open,
   onClose,
   onSave,
@@ -73,7 +77,7 @@ export default function ClaimEditor({
   const [audio, setAudio] = useState<('speech' | 'non-speech')[]>([])
   const [video, setVideo] = useState<('text' | 'non-text')[]>([])
   const [metadata, setMetadata] = useState<('text' | 'non-text')[]>([])
-  
+
   // Comment field
   const [comment, setComment] = useState<string>('')
 
@@ -231,12 +235,6 @@ export default function ClaimEditor({
     onClose()
   }
 
-  const confidenceMarks = [
-    { value: 0, label: '0%' },
-    { value: 0.5, label: '50%' },
-    { value: 1, label: '100%' },
-  ]
-
   // Check if claim has any content (at least one non-empty gloss item)
   const hasContent = gloss.some(item => item.content.trim().length > 0)
   // Check if at least one modality checkbox is checked
@@ -251,7 +249,7 @@ export default function ClaimEditor({
 
   // Track validation state to log failures only when user attempts to save
   const previousValidationAttemptRef = useRef<boolean>(false)
-  
+
   // Log validation failures when user attempts to save invalid claim
   useEffect(() => {
     if (!isValid && gloss.length > 0 && open) {
@@ -276,28 +274,23 @@ export default function ClaimEditor({
   }, [isValid, hasContent, hasConfidence, hasModalityMetadata, metadataOnly, summaryId, claim?.id, gloss.length, open])
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleCancel}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: { minHeight: '500px' },
-      }}
-    >
-      <DialogTitle>
-        {claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 1 }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent className="sm:max-w-lg min-h-[500px]">
+        <DialogHeader>
+          <DialogTitle>
+            {claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-6 pt-2">
           {/* Claim Content */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+          <div>
+            <p className="mb-1 text-sm font-medium">
               Claim Content *
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+            </p>
+            <p className="mb-2 block text-xs text-muted-foreground">
               Enter the claim text. Use # for entity types, @ for objects, ^ for annotations, and $ for claim references.
-            </Typography>
+            </p>
             <GlossEditor
               gloss={gloss}
               onChange={setGloss}
@@ -308,401 +301,375 @@ export default function ClaimEditor({
               claims={existingClaims}
               label="Claim text with references"
             />
-          </Box>
+          </div>
 
           {/* Confidence Slider */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+          <div>
+            <p className="mb-1 text-sm font-medium">
               Confidence *
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'center', px: 2 }}>
-              <Box sx={{ width: '100%', maxWidth: '600px' }}>
+            </p>
+            <div className="flex justify-center px-4">
+              <div className="w-full max-w-[600px]">
+                <div className="mb-1 text-center text-sm font-medium">
+                  {Math.round(confidence * 100)}%
+                </div>
                 <Slider
-                  value={confidence}
-                  onChange={(_, value) => setConfidence(value as number)}
+                  value={[confidence]}
+                  onValueChange={(value) => {
+                    const v = Array.isArray(value) ? value[0] : value
+                    setConfidence(v)
+                  }}
                   min={0}
                   max={1}
                   step={0.01}
-                  marks={confidenceMarks}
-                  valueLabelDisplay="on"
-                  valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
                 />
-              </Box>
-            </Box>
-          </Box>
+                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-          {/* Modality Metadata Section - Always visible, not in Accordion */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+          {/* Modality Metadata Section */}
+          <div>
+            <p className="mb-1 text-sm font-medium">
               Modality Metadata *
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
+            </p>
+            <p className="mb-3 block text-xs text-muted-foreground">
               Indicate what sources support this claim. You can select multiple options for each field. At least one audio or video source must be selected.
-            </Typography>
+            </p>
             {metadataOnly && (
-              <Typography variant="caption" color="error" sx={{ mb: 1.5, display: 'block' }}>
+              <p className="mb-3 block text-xs text-destructive">
                 Please select at least one audio or video source. Metadata sources cannot be the only selection.
-              </Typography>
+              </p>
             )}
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <div className="flex gap-4">
               {/* Audio Modality */}
-              <Box sx={{ flex: '1 1 33%', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-1">
+                  <span className="text-sm font-medium">
                     Audio Sources
-                  </Typography>
-                  <Tooltip
-                    title="Indicates if this claim is based at least in part on audio from the video. 'speech' means the claim is based on spoken audio (dialogue, narration, etc.). 'non-speech' means the claim is based on other audio (music, sound effects, ambient sounds, etc.). You can select both if applicable."
-                    arrow
-                    placement="top"
-                  >
-                    <IconButton size="small" sx={{ p: 0.25 }}>
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger render={<button type="button" className="inline-flex p-0.5" />}>
+                      <Info className="size-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Indicates if this claim is based at least in part on audio from the video. &apos;speech&apos; means the claim is based on spoken audio (dialogue, narration, etc.). &apos;non-speech&apos; means the claim is based on other audio (music, sound effects, ambient sounds, etc.). You can select both if applicable.
+                    </TooltipContent>
                   </Tooltip>
-                </Box>
-                <FormGroup sx={{ gap: 0.5 }}>
-                  <Tooltip
-                    title="The claim is based on spoken audio (dialogue, narration, etc.)"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={audio.includes('speech')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAudio([...audio, 'speech'])
-                            } else {
-                              setAudio(audio.filter(v => v !== 'speech'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Speech"
-                    />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={audio.includes('speech')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setAudio([...audio, 'speech'])
+                          } else {
+                            setAudio(audio.filter(v => v !== 'speech'))
+                          }
+                        }}
+                        id="audio-speech"
+                      />
+                      <Label htmlFor="audio-speech" className="text-sm">Speech</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on spoken audio (dialogue, narration, etc.)</TooltipContent>
                   </Tooltip>
-                  <Tooltip
-                    title="The claim is based on other audio (music, sound effects, ambient sounds, etc.)"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={audio.includes('non-speech')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAudio([...audio, 'non-speech'])
-                            } else {
-                              setAudio(audio.filter(v => v !== 'non-speech'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Non-speech"
-                    />
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={audio.includes('non-speech')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setAudio([...audio, 'non-speech'])
+                          } else {
+                            setAudio(audio.filter(v => v !== 'non-speech'))
+                          }
+                        }}
+                        id="audio-non-speech"
+                      />
+                      <Label htmlFor="audio-non-speech" className="text-sm">Non-speech</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on other audio (music, sound effects, ambient sounds, etc.)</TooltipContent>
                   </Tooltip>
-                </FormGroup>
-              </Box>
+                </div>
+              </div>
 
               {/* Video Modality */}
-              <Box sx={{ flex: '1 1 33%', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-1">
+                  <span className="text-sm font-medium">
                     Video Sources
-                  </Typography>
-                  <Tooltip
-                    title="Indicates if this claim is based at least in part on non-audio video information. 'text' means the claim is based on text visible in the video (captions, signs, on-screen text, etc.). 'non-text' means the claim is based on visual content (actions, objects, scenes, etc.). You can select both if applicable."
-                    arrow
-                    placement="top"
-                  >
-                    <IconButton size="small" sx={{ p: 0.25 }}>
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger render={<button type="button" className="inline-flex p-0.5" />}>
+                      <Info className="size-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Indicates if this claim is based at least in part on non-audio video information. &apos;text&apos; means the claim is based on text visible in the video (captions, signs, on-screen text, etc.). &apos;non-text&apos; means the claim is based on visual content (actions, objects, scenes, etc.). You can select both if applicable.
+                    </TooltipContent>
                   </Tooltip>
-                </Box>
-                <FormGroup sx={{ gap: 0.5 }}>
-                  <Tooltip
-                    title="The claim is based on text visible in the video (captions, signs, on-screen text, etc.)"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={video.includes('text')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setVideo([...video, 'text'])
-                            } else {
-                              setVideo(video.filter(v => v !== 'text'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Text"
-                    />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={video.includes('text')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setVideo([...video, 'text'])
+                          } else {
+                            setVideo(video.filter(v => v !== 'text'))
+                          }
+                        }}
+                        id="video-text"
+                      />
+                      <Label htmlFor="video-text" className="text-sm">Text</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on text visible in the video (captions, signs, on-screen text, etc.)</TooltipContent>
                   </Tooltip>
-                  <Tooltip
-                    title="The claim is based on visual content (actions, objects, scenes, etc.)"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={video.includes('non-text')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setVideo([...video, 'non-text'])
-                            } else {
-                              setVideo(video.filter(v => v !== 'non-text'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Non-text"
-                    />
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={video.includes('non-text')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setVideo([...video, 'non-text'])
+                          } else {
+                            setVideo(video.filter(v => v !== 'non-text'))
+                          }
+                        }}
+                        id="video-non-text"
+                      />
+                      <Label htmlFor="video-non-text" className="text-sm">Non-text</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on visual content (actions, objects, scenes, etc.)</TooltipContent>
                   </Tooltip>
-                </FormGroup>
-              </Box>
+                </div>
+              </div>
 
               {/* Metadata Modality */}
-              <Box sx={{ flex: '1 1 33%', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-1">
+                  <span className="text-sm font-medium">
                     Metadata Sources
-                  </Typography>
-                  <Tooltip
-                    title="Indicates if this claim is based on information from the video metadata. 'text' means the claim is based on caption/subtitle metadata. 'non-text' means the claim is based on other metadata like location from .info.json files. You can select both if applicable."
-                    arrow
-                    placement="top"
-                  >
-                    <IconButton size="small" sx={{ p: 0.25 }}>
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger render={<button type="button" className="inline-flex p-0.5" />}>
+                      <Info className="size-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Indicates if this claim is based on information from the video metadata. &apos;text&apos; means the claim is based on caption/subtitle metadata. &apos;non-text&apos; means the claim is based on other metadata like location from .info.json files. You can select both if applicable.
+                    </TooltipContent>
                   </Tooltip>
-                </Box>
-                <FormGroup sx={{ gap: 0.5 }}>
-                  <Tooltip
-                    title="The claim is based on caption/subtitle metadata"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={metadata.includes('text')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setMetadata([...metadata, 'text'])
-                            } else {
-                              setMetadata(metadata.filter(v => v !== 'text'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Text"
-                    />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={metadata.includes('text')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setMetadata([...metadata, 'text'])
+                          } else {
+                            setMetadata(metadata.filter(v => v !== 'text'))
+                          }
+                        }}
+                        id="metadata-text"
+                      />
+                      <Label htmlFor="metadata-text" className="text-sm">Text</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on caption/subtitle metadata</TooltipContent>
                   </Tooltip>
-                  <Tooltip
-                    title="The claim is based on other metadata like location, timestamps, etc. from .info.json files"
-                    arrow
-                    placement="top"
-                  >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={metadata.includes('non-text')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setMetadata([...metadata, 'non-text'])
-                            } else {
-                              setMetadata(metadata.filter(v => v !== 'non-text'))
-                            }
-                          }}
-                          size="small"
-                        />
-                      }
-                      label="Non-text"
-                    />
+                  <Tooltip>
+                    <TooltipTrigger render={<div className="flex items-center gap-2" />}>
+                      <Checkbox
+                        checked={metadata.includes('non-text')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setMetadata([...metadata, 'non-text'])
+                          } else {
+                            setMetadata(metadata.filter(v => v !== 'non-text'))
+                          }
+                        }}
+                        id="metadata-non-text"
+                      />
+                      <Label htmlFor="metadata-non-text" className="text-sm">Non-text</Label>
+                    </TooltipTrigger>
+                    <TooltipContent>The claim is based on other metadata like location, timestamps, etc. from .info.json files</TooltipContent>
                   </Tooltip>
-                </FormGroup>
-              </Box>
-            </Box>
-          </Box>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Claimer Section */}
           <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle2">
-                Claimer (optional) {claimerType && `(${claimerType})`}
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel id="claimer-type-label">Claimer Type</InputLabel>
-                  <Select
-                    labelId="claimer-type-label"
-                    id="claimer-type-select"
-                    value={claimerType || ''}
-                    onChange={(e) => setClaimerType(e.target.value as ClaimerType | null || null)}
-                    label="Claimer Type"
-                  >
-                    <MenuItem value="">
-                      <em>None (standalone claim)</em>
-                    </MenuItem>
-                    <MenuItem value="entity">Entity (single world state entity)</MenuItem>
-                    <MenuItem value="entity_type">Entity Type (ontology type)</MenuItem>
-                    <MenuItem value="author">Author (video creator)</MenuItem>
-                    <MenuItem value="mixed">Mixed (text + references)</MenuItem>
-                  </Select>
-                </FormControl>
+            <AccordionItem value="claimer">
+              <AccordionTrigger>
+                <span className="text-sm font-medium">
+                  Claimer (optional) {claimerType && `(${claimerType})`}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="flex flex-col gap-4 pt-2">
+                  <div className="flex flex-col gap-2">
+                    <Label>Claimer Type</Label>
+                    <Select
+                      value={claimerType || ''}
+                      onValueChange={(value) => setClaimerType((value as ClaimerType) || null)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="None (standalone claim)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="entity">Entity (single world state entity)</SelectItem>
+                        <SelectItem value="entity_type">Entity Type (ontology type)</SelectItem>
+                        <SelectItem value="author">Author (video creator)</SelectItem>
+                        <SelectItem value="mixed">Mixed (text + references)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {claimerType && claimerType !== 'author' && (
-                  <>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                        Who is making this claim?
-                      </Typography>
-                      <GlossEditor
-                        gloss={claimerGloss}
-                        onChange={setClaimerGloss}
-                        personaId={personaId}
-                        videoId={videoId}
-                        includeAnnotations={!!videoId}
-                        label="Claimer"
-                      />
-                    </Box>
+                  {claimerType && claimerType !== 'author' && (
+                    <>
+                      <div>
+                        <p className="mb-1 block text-xs text-muted-foreground">
+                          Who is making this claim?
+                        </p>
+                        <GlossEditor
+                          gloss={claimerGloss}
+                          onChange={setClaimerGloss}
+                          personaId={personaId}
+                          videoId={videoId}
+                          includeAnnotations={!!videoId}
+                          label="Claimer"
+                        />
+                      </div>
 
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                        How does the claimer relate to this claim? (e.g., "believes", "denies", "questions")
-                      </Typography>
-                      <GlossEditor
-                        gloss={claimRelation}
-                        onChange={setClaimRelation}
-                        personaId={personaId}
-                        videoId={videoId}
-                        includeAnnotations={false}
-                        label="Claim relation"
-                      />
-                    </Box>
-                  </>
-                )}
+                      <div>
+                        <p className="mb-1 block text-xs text-muted-foreground">
+                          How does the claimer relate to this claim? (e.g., &quot;believes&quot;, &quot;denies&quot;, &quot;questions&quot;)
+                        </p>
+                        <GlossEditor
+                          gloss={claimRelation}
+                          onChange={setClaimRelation}
+                          personaId={personaId}
+                          videoId={videoId}
+                          includeAnnotations={false}
+                          label="Claim relation"
+                        />
+                      </div>
+                    </>
+                  )}
 
-                {claimerType === 'author' && (
-                  <Typography variant="caption" color="text.secondary">
-                    The video creator explicitly asserts this claim.
-                  </Typography>
-                )}
-              </Stack>
-            </AccordionDetails>
+                  {claimerType === 'author' && (
+                    <p className="text-xs text-muted-foreground">
+                      The video creator explicitly asserts this claim.
+                    </p>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
 
           {/* Context Section */}
           <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle2">
-                Claim Context (optional)
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                <Typography variant="caption" color="text.secondary">
-                  Specify when and where this claim was made (if different from the video context).
-                </Typography>
+            <AccordionItem value="context">
+              <AccordionTrigger>
+                <span className="text-sm font-medium">
+                  Claim Context (optional)
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="flex flex-col gap-4 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Specify when and where this claim was made (if different from the video context).
+                  </p>
 
-                <FormControl fullWidth size="small">
-                  <InputLabel id="claim-event-label">Claiming Event</InputLabel>
-                  <Select
-                    labelId="claim-event-label"
-                    id="claim-event-select"
-                    value={claimEventId}
-                    onChange={(e) => setClaimEventId(e.target.value)}
-                    label="Claiming Event"
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {/* TODO: Populate with actual events from world state */}
-                  </Select>
-                </FormControl>
+                  <div className="flex flex-col gap-2">
+                    <Label>Claiming Event</Label>
+                    <Select
+                      value={claimEventId}
+                      onValueChange={(v) => setClaimEventId(v ?? '')}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {/* TODO: Populate with actual events from world state */}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <FormControl fullWidth size="small">
-                  <InputLabel id="claim-time-label">Claiming Time</InputLabel>
-                  <Select
-                    labelId="claim-time-label"
-                    id="claim-time-select"
-                    value={claimTimeId}
-                    onChange={(e) => setClaimTimeId(e.target.value)}
-                    label="Claiming Time"
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {/* TODO: Populate with actual time objects from world state */}
-                  </Select>
-                </FormControl>
+                  <div className="flex flex-col gap-2">
+                    <Label>Claiming Time</Label>
+                    <Select
+                      value={claimTimeId}
+                      onValueChange={(v) => setClaimTimeId(v ?? '')}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {/* TODO: Populate with actual time objects from world state */}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <FormControl fullWidth size="small">
-                  <InputLabel id="claim-location-label">Claiming Location</InputLabel>
-                  <Select
-                    labelId="claim-location-label"
-                    id="claim-location-select"
-                    value={claimLocationId}
-                    onChange={(e) => setClaimLocationId(e.target.value)}
-                    label="Claiming Location"
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {/* TODO: Populate with actual location objects from world state */}
-                  </Select>
-                </FormControl>
-              </Stack>
-            </AccordionDetails>
+                  <div className="flex flex-col gap-2">
+                    <Label>Claiming Location</Label>
+                    <Select
+                      value={claimLocationId}
+                      onValueChange={(v) => setClaimLocationId(v ?? '')}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {/* TODO: Populate with actual location objects from world state */}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
 
           {/* Comment Section */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+          <div>
+            <p className="mb-1 text-sm font-medium">
               Comment (optional)
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+            </p>
+            <p className="mb-2 block text-xs text-muted-foreground">
               Add any additional notes or comments about this claim.
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
+            </p>
+            <Textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Enter comment..."
-              variant="outlined"
-              size="small"
+              rows={3}
             />
-          </Box>
-        </Stack>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            disabled={!isValid}
+          >
+            {claim ? 'Save' : 'Create'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleCancel}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!isValid}
-        >
-          {claim ? 'Save' : 'Create'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

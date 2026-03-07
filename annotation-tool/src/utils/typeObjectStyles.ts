@@ -1,22 +1,20 @@
-import {
-  Category as CategoryIcon,
-  Inventory2 as ObjectIcon,
-} from '@mui/icons-material'
+import { Tag, Package } from 'lucide-react'
 
 /**
- * Helper function to get consistent styling for types vs objects
- * @param isType Whether the item is a type (true) or object (false)
+ * Helper function to get consistent styling for types vs objects.
+ *
+ * @param isType - Whether the item is a type (true) or object (false)
  * @returns Object containing style properties for types vs objects
  */
 export function getTypeObjectStyles(isType: boolean) {
   return {
     borderStyle: isType ? ('dashed' as const) : ('solid' as const),
-    borderColor: isType ? 'primary.main' : 'secondary.main',
-    bgcolor: isType ? 'primary.50' : 'secondary.50',
+    borderColorClass: isType ? 'border-primary' : 'border-secondary',
+    bgClass: isType ? 'bg-primary/10' : 'bg-secondary/10',
     fontStyle: isType ? 'italic' : 'normal',
     icon: {
-      color: isType ? 'primary.main' : 'secondary.main',
-      component: isType ? CategoryIcon : ObjectIcon,
+      colorClass: isType ? 'text-primary' : 'text-secondary',
+      component: isType ? Tag : Package,
     },
     text: {
       primary: isType ? 'italic' : 'normal',

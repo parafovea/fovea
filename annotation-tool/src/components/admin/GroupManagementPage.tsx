@@ -408,7 +408,7 @@ export function GroupManagementPage(): JSX.Element {
           <div className="flex flex-col gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="member-user">User *</Label>
-              <Select value={newMemberUserId} onValueChange={setNewMemberUserId}>
+              <Select value={newMemberUserId} onValueChange={(val) => { if (val !== null) setNewMemberUserId(val) }}>
                 <SelectTrigger id="member-user">
                   <SelectValue placeholder="Select a user" />
                 </SelectTrigger>
@@ -423,7 +423,7 @@ export function GroupManagementPage(): JSX.Element {
             </div>
             <div className="space-y-2">
               <Label htmlFor="member-role">Role</Label>
-              <Select value={newMemberRole} onValueChange={setNewMemberRole}>
+              <Select value={newMemberRole} onValueChange={(val) => { if (val !== null) setNewMemberRole(val) }}>
                 <SelectTrigger id="member-role">
                   <SelectValue />
                 </SelectTrigger>

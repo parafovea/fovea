@@ -1,29 +1,26 @@
 import { useState, useEffect } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  Grid,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  Stack,
-  Alert,
-  Divider,
-} from '@mui/material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
 import {
-  Person as EntityIcon,
-  Event as EventIcon,
-  LocationOn as LocationIcon,
-  Folder as CollectionIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { User, CalendarDays, MapPin, Folder, X } from 'lucide-react'
 import { usePersonas, usePersonaOntology, useWorld, useUpdateAnnotation } from '@store/queries'
 import type { Annotation, ObjectAnnotation, TypeAnnotation, BoundingBoxSequence, BoundingBox, InterpolationSegment } from '@models/types'
 import { getAnnotationTimeBounds } from '@models/types'
@@ -60,7 +57,7 @@ export default function AnnotationEditor({
   const events = worldData?.events ?? []
   const entityCollections = worldData?.entityCollections ?? []
   const eventCollections = worldData?.eventCollections ?? []
-  
+
   const [formData, setFormData] = useState({
     typeCategory: 'entity' as 'entity' | 'role' | 'event',
     typeId: '',
@@ -218,7 +215,7 @@ export default function AnnotationEditor({
 
   const getAvailableTypes = () => {
     if (!personaOntology) return []
-    
+
     switch (formData.typeCategory) {
       case 'entity':
         return personaOntology.entities.map(e => ({ id: e.id, name: e.name }))
@@ -239,270 +236,235 @@ export default function AnnotationEditor({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        Edit Annotation {persona && `(${persona.name})`}
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            Edit Annotation {persona && `(${persona.name})`}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 mt-4">
           {/* Type Assignment or Object Linking */}
-          <Typography variant="subtitle1">Annotation Target</Typography>
-          
+          <p className="text-sm font-medium">Annotation Target</p>
+
           {/* Show linked object if present */}
           {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedCollectionId) && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Stack spacing={1}>
-                <Typography variant="body2">Linked Object:</Typography>
-                {formData.linkedEntityId && (
-                  <Chip
-                    icon={<EntityIcon />}
-                    label={entities.find(e => e.id === formData.linkedEntityId)?.name || 'Unknown Entity'}
-                    onDelete={() => setFormData({ ...formData, linkedEntityId: '' })}
-                  />
-                )}
-                {formData.linkedEventId && (
-                  <Chip
-                    icon={<EventIcon />}
-                    label={events.find(e => e.id === formData.linkedEventId)?.name || 'Unknown Event'}
-                    onDelete={() => setFormData({ ...formData, linkedEventId: '' })}
-                  />
-                )}
-                {formData.linkedLocationId && (
-                  <Chip
-                    icon={<LocationIcon />}
-                    label={entities.find(e => e.id === formData.linkedLocationId)?.name || 'Unknown Location'}
-                    onDelete={() => setFormData({ ...formData, linkedLocationId: '' })}
-                  />
-                )}
-                {formData.linkedCollectionId && (
-                  <Chip
-                    icon={<CollectionIcon />}
-                    label={
-                      formData.linkedCollectionType === 'entity'
+            <Alert className="mb-4">
+              <AlertDescription>
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm">Linked Object:</p>
+                  {formData.linkedEntityId && (
+                    <Badge variant="outline" className="w-fit">
+                      <User className="size-3 mr-1" />
+                      {entities.find(e => e.id === formData.linkedEntityId)?.name || 'Unknown Entity'}
+                      <button onClick={() => setFormData({ ...formData, linkedEntityId: '' })} className="ml-1">
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {formData.linkedEventId && (
+                    <Badge variant="outline" className="w-fit">
+                      <CalendarDays className="size-3 mr-1" />
+                      {events.find(e => e.id === formData.linkedEventId)?.name || 'Unknown Event'}
+                      <button onClick={() => setFormData({ ...formData, linkedEventId: '' })} className="ml-1">
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {formData.linkedLocationId && (
+                    <Badge variant="outline" className="w-fit">
+                      <MapPin className="size-3 mr-1" />
+                      {entities.find(e => e.id === formData.linkedLocationId)?.name || 'Unknown Location'}
+                      <button onClick={() => setFormData({ ...formData, linkedLocationId: '' })} className="ml-1">
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {formData.linkedCollectionId && (
+                    <Badge variant="outline" className="w-fit">
+                      <Folder className="size-3 mr-1" />
+                      {formData.linkedCollectionType === 'entity'
                         ? entityCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
-                        : eventCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
-                    }
-                    onDelete={() => setFormData({ ...formData, linkedCollectionId: '', linkedCollectionType: '' })}
-                  />
-                )}
-              </Stack>
+                        : eventCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'}
+                      <button onClick={() => setFormData({ ...formData, linkedCollectionId: '', linkedCollectionType: '' })} className="ml-1">
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  )}
+                </div>
+              </AlertDescription>
             </Alert>
           )}
-          
+
           {/* Object picker buttons */}
           {!formData.linkedEntityId && !formData.linkedEventId && !formData.linkedLocationId && !formData.linkedCollectionId && (
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<EntityIcon />}
-                onClick={() => {
-                  setObjectPickerType('entity')
-                  setObjectPickerOpen(true)
-                }}
-              >
-                Link Entity
+            <div className="flex flex-row gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setObjectPickerType('entity'); setObjectPickerOpen(true) }}>
+                <User className="size-4 mr-1" /> Link Entity
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<EventIcon />}
-                onClick={() => {
-                  setObjectPickerType('event')
-                  setObjectPickerOpen(true)
-                }}
-              >
-                Link Event
+              <Button variant="outline" size="sm" onClick={() => { setObjectPickerType('event'); setObjectPickerOpen(true) }}>
+                <CalendarDays className="size-4 mr-1" /> Link Event
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<LocationIcon />}
-                onClick={() => {
-                  setObjectPickerType('location')
-                  setObjectPickerOpen(true)
-                }}
-              >
-                Link Location
+              <Button variant="outline" size="sm" onClick={() => { setObjectPickerType('location'); setObjectPickerOpen(true) }}>
+                <MapPin className="size-4 mr-1" /> Link Location
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<CollectionIcon />}
-                onClick={() => {
-                  setObjectPickerType('collection')
-                  setObjectPickerOpen(true)
-                }}
-              >
-                Link Collection
+              <Button variant="outline" size="sm" onClick={() => { setObjectPickerType('collection'); setObjectPickerOpen(true) }}>
+                <Folder className="size-4 mr-1" /> Link Collection
               </Button>
-            </Stack>
+            </div>
           )}
-          
-          <Divider>OR</Divider>
-          
+
+          <div className="relative flex items-center">
+            <Separator className="flex-1" />
+            <span className="px-3 text-xs text-muted-foreground">OR</span>
+            <Separator className="flex-1" />
+          </div>
+
           {/* Type Assignment (only if persona present) */}
           {persona && (
-            <>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Type Category</InputLabel>
-                    <Select
-                      value={formData.typeCategory}
-                      label="Type Category"
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        typeCategory: e.target.value as 'entity' | 'role' | 'event',
-                        typeId: '' // Reset type when category changes
-                      })}
-                    >
-                      <MenuItem value="entity">Entity</MenuItem>
-                      <MenuItem value="role">Role</MenuItem>
-                      <MenuItem value="event">Event</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Type</InputLabel>
-                    <Select
-                      value={formData.typeId}
-                      label="Type"
-                      onChange={(e) => setFormData({ ...formData, typeId: e.target.value })}
-                    >
-                      {getAvailableTypes().map(type => (
-                        <MenuItem key={type.id} value={type.id}>
-                          {type.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-            </>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Type Category</Label>
+                <Select
+                  value={formData.typeCategory}
+                  onValueChange={(val) => setFormData({
+                    ...formData,
+                    typeCategory: val as 'entity' | 'role' | 'event',
+                    typeId: '' // Reset type when category changes
+                  })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="entity">Entity</SelectItem>
+                    <SelectItem value="role">Role</SelectItem>
+                    <SelectItem value="event">Event</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Type</Label>
+                <Select
+                  value={formData.typeId}
+                  onValueChange={(val) => setFormData({ ...formData, typeId: val ?? '' })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    {getAvailableTypes().map(type => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           )}
 
-          <Typography variant="subtitle1" sx={{ mt: 2 }}>
-            Time Span
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <TextField
-                label="Start Time (seconds)"
+          <p className="text-sm font-medium mt-4">Time Span</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Start Time (seconds)</Label>
+              <Input
                 type="number"
                 value={formData.startTime}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  startTime: parseFloat(e.target.value) 
+                onChange={(e) => setFormData({
+                  ...formData,
+                  startTime: parseFloat(e.target.value)
                 })}
-                fullWidth
-                inputProps={{ step: 0.001, min: 0 }}
-                helperText={formatTime(formData.startTime)}
+                step={0.001}
+                min={0}
               />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                label="End Time (seconds)"
+              <p className="text-xs text-muted-foreground mt-1">{formatTime(formData.startTime)}</p>
+            </div>
+            <div>
+              <Label>End Time (seconds)</Label>
+              <Input
                 type="number"
                 value={formData.endTime}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  endTime: parseFloat(e.target.value) 
+                onChange={(e) => setFormData({
+                  ...formData,
+                  endTime: parseFloat(e.target.value)
                 })}
-                fullWidth
-                inputProps={{ step: 0.001, min: 0 }}
-                helperText={formatTime(formData.endTime)}
+                step={0.001}
+                min={0}
               />
-            </Grid>
-          </Grid>
+              <p className="text-xs text-muted-foreground mt-1">{formatTime(formData.endTime)}</p>
+            </div>
+          </div>
 
-          <Typography variant="subtitle1" sx={{ mt: 2 }}>
-            Bounding Box
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={3}>
-              <TextField
-                label="X"
+          <p className="text-sm font-medium mt-4">Bounding Box</p>
+          <div className="grid grid-cols-4 gap-4">
+            <div>
+              <Label>X</Label>
+              <Input
                 type="number"
                 value={formData.x}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  x: parseFloat(e.target.value) 
-                })}
-                fullWidth
-                inputProps={{ step: 1, min: 0 }}
+                onChange={(e) => setFormData({ ...formData, x: parseFloat(e.target.value) })}
+                step={1}
+                min={0}
               />
-            </Grid>
-            <Grid item xs={3}>
-              <TextField
-                label="Y"
+            </div>
+            <div>
+              <Label>Y</Label>
+              <Input
                 type="number"
                 value={formData.y}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  y: parseFloat(e.target.value) 
-                })}
-                fullWidth
-                inputProps={{ step: 1, min: 0 }}
+                onChange={(e) => setFormData({ ...formData, y: parseFloat(e.target.value) })}
+                step={1}
+                min={0}
               />
-            </Grid>
-            <Grid item xs={3}>
-              <TextField
-                label="Width"
+            </div>
+            <div>
+              <Label>Width</Label>
+              <Input
                 type="number"
                 value={formData.width}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  width: parseFloat(e.target.value) 
-                })}
-                fullWidth
-                inputProps={{ step: 1, min: 1 }}
+                onChange={(e) => setFormData({ ...formData, width: parseFloat(e.target.value) })}
+                step={1}
+                min={1}
               />
-            </Grid>
-            <Grid item xs={3}>
-              <TextField
-                label="Height"
+            </div>
+            <div>
+              <Label>Height</Label>
+              <Input
                 type="number"
                 value={formData.height}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  height: parseFloat(e.target.value) 
-                })}
-                fullWidth
-                inputProps={{ step: 1, min: 1 }}
+                onChange={(e) => setFormData({ ...formData, height: parseFloat(e.target.value) })}
+                step={1}
+                min={1}
               />
-            </Grid>
-          </Grid>
+            </div>
+          </div>
 
-          <TextField
-            label="Notes"
-            value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            fullWidth
-            multiline
-            rows={3}
-            placeholder="Optional notes about this annotation"
-          />
-        </Box>
+          <div>
+            <Label>Notes</Label>
+            <Textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              placeholder="Optional notes about this annotation"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            disabled={
+              !formData.typeId &&
+              !formData.linkedEntityId &&
+              !formData.linkedEventId &&
+              !formData.linkedLocationId &&
+              !formData.linkedCollectionId
+            }
+          >
+            Save Changes
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained"
-          disabled={
-            !formData.typeId && 
-            !formData.linkedEntityId && 
-            !formData.linkedEventId && 
-            !formData.linkedLocationId && 
-            !formData.linkedCollectionId
-          }
-        >
-          Save Changes
-        </Button>
-      </DialogActions>
-      
+
       <ObjectPicker
         open={objectPickerOpen}
         onClose={() => setObjectPickerOpen(false)}
@@ -516,7 +478,7 @@ export default function AnnotationEditor({
             linkedCollectionId: '',
             linkedCollectionType: '' as '' | 'entity' | 'event',
           }
-          
+
           // Set the appropriate field based on object type
           if (object.type === 'entity') {
             setFormData({ ...clearedFormData, linkedEntityId: object.id })
@@ -529,7 +491,7 @@ export default function AnnotationEditor({
           } else if (object.type === 'event-collection') {
             setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'event' })
           }
-          
+
           setObjectPickerOpen(false)
         }}
         allowedTypes={[objectPickerType]}

@@ -1,22 +1,30 @@
+/**
+ * Editor component for video summaries with claims management.
+ */
+
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react'
+import { Plus } from 'lucide-react'
+
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription, AlertAction } from '@/components/ui/alert'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Box,
-  Paper,
-  CircularProgress,
-  Alert,
-  Tabs,
-  Tab,
-  Button,
-  Badge,
-  Stack,
-  TextField,
-  Typography,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+import {
   Tooltip,
-} from '@mui/material'
-import { Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import {
   usePersonaOntology,
   useVideoSummary,
@@ -36,9 +44,9 @@ import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { useQueryClient } from '@tanstack/react-query'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { GlossRenderer } from '@components/ontology'
-import ClaimsViewer from '@components/claims/ClaimsViewer'
-import ClaimEditor from '@components/claims/ClaimEditor'
-import ClaimsExtractionDialog from '@components/claims/ClaimsExtractionDialog'
+import { ClaimsViewer } from '@components/claims/ClaimsViewer'
+import { ClaimEditor } from '@components/claims/ClaimEditor'
+import { ClaimsExtractionDialog } from '@components/claims/ClaimsExtractionDialog'
 import { ClaimSpanHighlighter } from '@components/claims/ClaimSpanHighlighter'
 import { SaveStatusIndicator } from '@components/shared/SaveStatusIndicator'
 import { useAutoSave } from '@hooks/data/useAutoSave'
@@ -89,14 +97,14 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [localComment, setLocalComment] = useState<string>('')
-  const [activeTab, setActiveTab] = useState(1) // 0 = Summary, 1 = Claims (default to Claims)
+  const [activeTab, setActiveTab] = useState('claims') // default to Claims
   const [extractDialogOpen, setExtractDialogOpen] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
   const [editingClaim, setEditingClaim] = useState<Claim | undefined>(undefined)
   const [parentClaimId, setParentClaimId] = useState<string | undefined>(undefined)
   const [highlightedSpans, setHighlightedSpans] = useState<ClaimTextSpan[]>([])
   const [highlightedClaimId, setHighlightedClaimId] = useState<string | null>(null)
-  const [summaryPreviewExpanded, setSummaryPreviewExpanded] = useState(true)
+  const [summaryPreviewOpen, setSummaryPreviewOpen] = useState<string[]>(['preview'])
 
   // Track which video/persona combo we've initialized local state for
   // This prevents re-syncing localSummary when currentSummary updates after autosave
@@ -174,7 +182,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   // Only depends on summaryId so background refetches don't reset the tab
   useEffect(() => {
     if (summaryId && summaryId.trim() !== '') {
-      setActiveTab(1)
+      setActiveTab('claims')
     }
   }, [summaryId])
 
@@ -298,7 +306,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
       !draftRestoredRef.current
     ) {
       draftRestoredRef.current = true
-      setActiveTab(1)
+      setActiveTab('claims')
       setEditorDialogOpen(true)
     }
   }, [draftClaim, videoId, personaId])
@@ -354,7 +362,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
       // Invalidate claims queries to ensure subclaims appear immediately
       queryClient.invalidateQueries({ queryKey: claimsQueryKeys.bySummary(summaryId) })
       // Switch to Claims tab to show the new claim
-      setActiveTab(1)
+      setActiveTab('claims')
     }
   }
 
@@ -369,10 +377,10 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     startExtraction(result.jobId)
   }
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue)
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
     // Clear highlighting when switching tabs
-    if (newValue === 0) {
+    if (value === 'summary') {
       setHighlightedSpans([])
       setHighlightedClaimId(null)
     }
@@ -380,7 +388,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
 
   const handleClaimSelect = (claimId: string, sourceSpans: ClaimTextSpan[]) => {
     // Switch to Summary tab to show highlighted text
-    setActiveTab(0)
+    setActiveTab('summary')
     setHighlightedSpans(sourceSpans)
     setHighlightedClaimId(claimId)
   }
@@ -390,26 +398,26 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-        <CircularProgress size={24} />
-      </Box>
+      <div className="flex justify-center p-4">
+        <Spinner className="size-6" />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
+      <Alert variant="destructive" className="mb-4">
+        <AlertDescription>{error}</AlertDescription>
       </Alert>
     )
   }
 
   return (
-    <Box>
+    <div>
       {/* Header with save status */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {activeTab === 0 && (
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {activeTab === 'summary' && (
             <SaveStatusIndicator
               status={saveStatus}
               lastSavedAt={lastSavedAt}
@@ -418,153 +426,191 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
               onRetry={forceSave}
             />
           )}
-        </Box>
+        </div>
 
         {/* Action buttons for Claims tab */}
-        {activeTab === 1 && (
-          <Stack direction="row" spacing={1}>
-            <Tooltip title={modelsDisabled ? 'No AI models available for claim extraction' : ''}>
-              <span>
-                <Button
-                  variant="contained"
-                  onClick={() => setExtractDialogOpen(true)}
-                  disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
-                  size="small"
-                >
-                  Extract Claims
-                </Button>
-              </span>
-            </Tooltip>
+        {activeTab === 'claims' && (
+          <div className="flex gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <span>
+                    <Button
+                      onClick={() => setExtractDialogOpen(true)}
+                      disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
+                      size="sm"
+                    >
+                      Extract Claims
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {modelsDisabled && (
+                  <TooltipContent>
+                    No AI models available for claim extraction
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
             <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
+              variant="outline"
+              size="sm"
               onClick={() => handleAddClaim()}
               disabled={!summaryId}
-              size="small"
             >
+              <Plus className="size-4 mr-1" />
               Add Manual Claim
             </Button>
-          </Stack>
+          </div>
         )}
-      </Box>
+      </div>
 
       {/* Tabs */}
-      <Paper variant="outlined">
-        <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Summary" />
-          <Tab
-            label={
-              <Badge badgeContent={claims.length} color="primary">
-                <Box sx={{ pr: claims.length > 0 ? 2 : 0 }}>Claims</Box>
-              </Badge>
-            }
-          />
-        </Tabs>
-
-        <Box sx={{ p: 2 }}>
-          {/* Summary Tab */}
-          {activeTab === 0 && (
-            <>
-              {highlightedSpans.length > 0 ? (
-                <Box>
-                  <Alert severity="info" sx={{ mb: 2 }} onClose={() => {
-                    setHighlightedSpans([])
-                    setHighlightedClaimId(null)
-                  }}>
-                    Showing highlighted text for selected claim. Click to dismiss.
-                  </Alert>
-                  <ClaimSpanHighlighter
-                    text={summaryText}
-                    highlightedSpans={highlightedSpans}
-                    selectedClaimId={highlightedClaimId}
-                  />
-                </Box>
-              ) : (
-                <>
-                  <GlossEditor
-                    gloss={localSummary}
-                    onChange={handleSummaryChange}
-                    personaId={personaId}
-                    videoId={videoId}
-                    includeAnnotations={true}
-                    disabled={disabled}
-                    label="Video Summary"
-                  />
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Comment (optional)
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                      Add any additional notes or comments about this summary.
-                    </Typography>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={3}
-                      value={localComment}
-                      onChange={(e) => setLocalComment(e.target.value)}
-                      placeholder="Enter comment..."
-                      variant="outlined"
-                      size="small"
-                      disabled={disabled}
-                    />
-                  </Box>
-                </>
-              )}
-            </>
-          )}
-
-          {/* Claims Tab */}
-          {activeTab === 1 && (
-            <>
-              {localSummary.length > 0 && (
-                <Accordion
-                  expanded={summaryPreviewExpanded}
-                  onChange={(_event, isExpanded) => setSummaryPreviewExpanded(isExpanded)}
-                  sx={{ mb: 2 }}
-                >
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="body2" color="text.secondary">Summary Preview</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <GlossRenderer gloss={localSummary} personaId={personaId} />
-                  </AccordionDetails>
-                </Accordion>
-              )}
-              {!summaryId ? (
-                <Alert severity="info">
-                  Please create or select a summary first to view claims.
-                </Alert>
-              ) : (
-                <>
-                  {extractionError && (
-                    <Alert severity="error" sx={{ mb: 2 }} onClose={() => clearExtractionState()}>
-                      {extractionError}
-                    </Alert>
+      <Card>
+        <CardContent className="p-0">
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            <TabsList className="m-2">
+              <TabsTrigger value="summary">Summary</TabsTrigger>
+              <TabsTrigger value="claims">
+                <span className="flex items-center gap-1">
+                  Claims
+                  {claims.length > 0 && (
+                    <Badge variant="default" className="ml-1 h-5 min-w-5 px-1">
+                      {claims.length}
+                    </Badge>
                   )}
-                  {claimsError && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                      Error loading claims: {claimsError instanceof Error ? claimsError.message : String(claimsError)}
-                    </Alert>
+                </span>
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="p-4">
+              {/* Summary Tab */}
+              <TabsContent value="summary">
+                <>
+                  {highlightedSpans.length > 0 ? (
+                    <div>
+                      <Alert className="mb-4">
+                        <AlertDescription>
+                          Showing highlighted text for selected claim. Click to dismiss.
+                        </AlertDescription>
+                        <AlertAction>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => {
+                              setHighlightedSpans([])
+                              setHighlightedClaimId(null)
+                            }}
+                          >
+                            &times;
+                          </Button>
+                        </AlertAction>
+                      </Alert>
+                      <ClaimSpanHighlighter
+                        text={summaryText}
+                        highlightedSpans={highlightedSpans}
+                        selectedClaimId={highlightedClaimId}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <GlossEditor
+                        gloss={localSummary}
+                        onChange={handleSummaryChange}
+                        personaId={personaId}
+                        videoId={videoId}
+                        includeAnnotations={true}
+                        disabled={disabled}
+                        label="Video Summary"
+                      />
+                      <div className="mt-6">
+                        <Label className="mb-1 block text-sm font-medium">
+                          Comment (optional)
+                        </Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Add any additional notes or comments about this summary.
+                        </p>
+                        <Textarea
+                          value={localComment}
+                          onChange={(e) => setLocalComment(e.target.value)}
+                          placeholder="Enter comment..."
+                          rows={3}
+                          disabled={disabled}
+                        />
+                      </div>
+                    </>
                   )}
-                  <ClaimsViewer
-                    claims={claims}
-                    summaryId={summaryId}
-                    personaId={personaId}
-                    onEditClaim={handleEditClaim}
-                    onAddClaim={handleAddClaim}
-                    onDeleteClaim={handleDeleteClaim}
-                    selectedClaimId={selectedClaimId}
-                    onClaimSelect={handleClaimSelect}
-                    loading={claimsLoading}
-                    error={claimsError ? (claimsError instanceof Error ? claimsError.message : String(claimsError)) : null}
-                  />
                 </>
-              )}
-            </>
-          )}
-        </Box>
-      </Paper>
+              </TabsContent>
+
+              {/* Claims Tab */}
+              <TabsContent value="claims">
+                <>
+                  {localSummary.length > 0 && (
+                    <Accordion
+                      type="multiple"
+                      value={summaryPreviewOpen}
+                      onValueChange={setSummaryPreviewOpen}
+                      className="mb-4"
+                    >
+                      <AccordionItem value="preview">
+                        <AccordionTrigger>
+                          <span className="text-sm text-muted-foreground">Summary Preview</span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <GlossRenderer gloss={localSummary} personaId={personaId} />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                  {!summaryId ? (
+                    <Alert>
+                      <AlertDescription>
+                        Please create or select a summary first to view claims.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      {extractionError && (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertDescription>{extractionError}</AlertDescription>
+                          <AlertAction>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => clearExtractionState()}
+                            >
+                              &times;
+                            </Button>
+                          </AlertAction>
+                        </Alert>
+                      )}
+                      {claimsError && (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertDescription>
+                            Error loading claims: {claimsError instanceof Error ? claimsError.message : String(claimsError)}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <ClaimsViewer
+                        claims={claims}
+                        summaryId={summaryId}
+                        personaId={personaId}
+                        onEditClaim={handleEditClaim}
+                        onAddClaim={handleAddClaim}
+                        onDeleteClaim={handleDeleteClaim}
+                        selectedClaimId={selectedClaimId}
+                        onClaimSelect={handleClaimSelect}
+                        loading={claimsLoading}
+                        error={claimsError ? (claimsError instanceof Error ? claimsError.message : String(claimsError)) : null}
+                      />
+                    </>
+                  )}
+                </>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* Dialogs */}
       <ClaimEditor
@@ -590,7 +636,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
         progress={extractionProgress || undefined}
         error={extractionError}
       />
-    </Box>
+    </div>
   )
 })
 

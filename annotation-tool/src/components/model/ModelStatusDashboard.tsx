@@ -3,35 +3,27 @@
  * Displays real-time VRAM usage, performance metrics, and health indicators.
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Chip,
-  Stack,
-  LinearProgress,
-  Grid,
-  Paper,
-  Alert,
-  Skeleton,
-  IconButton,
-  Tooltip,
-  Switch,
-  FormControlLabel,
-  Divider,
-  Button,
-} from '@mui/material'
-import {
-  Memory as MemoryIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Refresh as RefreshIcon,
-  HourglassEmpty as LoadingIcon,
-  CloudOff as UnloadedIcon,
-  Schedule as ScheduleIcon,
-} from '@mui/icons-material'
+  MemoryStick,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Hourglass,
+  CloudOff,
+  Clock,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useModelStatus } from '@store/queries/useModelConfig'
 import { LoadedModelStatus, ModelHealth } from '@api/client'
 import { formatDistanceToNow } from 'date-fns'
@@ -63,66 +55,47 @@ export interface ModelStatusDashboardProps {
 }
 
 /**
- * Maps model health status to Material-UI color variant for badge display.
+ * Maps model health status to Badge variant for display.
  *
  * @param health - Current health status of the model
- * @returns Material-UI color variant for the health badge
- *
- * @example
- * ```tsx
- * const color = getHealthColor('loaded') // returns 'success'
- * const color = getHealthColor('failed') // returns 'error'
- * ```
+ * @returns Badge variant corresponding to the health status
  */
-function getHealthColor(
+function getHealthVariant(
   health: ModelHealth
-): 'success' | 'warning' | 'error' | 'default' {
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (health) {
     case 'loaded':
-      return 'success'
+      return 'secondary'
     case 'loading':
-      return 'warning'
+      return 'outline'
     case 'failed':
-      return 'error'
+      return 'destructive'
     case 'unloaded':
-      return 'default'
+      return 'outline'
   }
 }
 
 /**
- * Maps model health status to corresponding Material-UI icon component.
+ * Maps model health status to corresponding icon component.
  *
  * @param health - Current health status of the model
- * @returns Icon component representing the health status
- *
- * @example
- * ```tsx
- * const icon = getHealthIcon('loaded') // returns CheckCircleIcon
- * const icon = getHealthIcon('loading') // returns HourglassEmpty (LoadingIcon)
- * ```
+ * @returns Icon element representing the health status
  */
 function getHealthIcon(health: ModelHealth) {
   switch (health) {
     case 'loaded':
-      return <CheckCircleIcon fontSize="small" />
+      return <CheckCircle className="h-3 w-3" />
     case 'loading':
-      return <LoadingIcon fontSize="small" />
+      return <Hourglass className="h-3 w-3" />
     case 'failed':
-      return <ErrorIcon fontSize="small" />
+      return <XCircle className="h-3 w-3" />
     case 'unloaded':
-      return <UnloadedIcon fontSize="small" />
+      return <CloudOff className="h-3 w-3" />
   }
 }
 
 /**
  * Maps task type identifiers to human-readable display names.
- * Used to show friendly labels in the UI instead of technical keys.
- *
- * @example
- * ```tsx
- * const displayName = TASK_DISPLAY_NAMES['videoSummarization'] // 'Video Summarization'
- * const displayName = TASK_DISPLAY_NAMES['objectDetection'] // 'Object Detection'
- * ```
  */
 const TASK_DISPLAY_NAMES: Record<string, string> = {
   videoSummarization: 'Video Summarization',
@@ -151,22 +124,6 @@ const TASK_DISPLAY_NAMES: Record<string, string> = {
  *
  * @param props - Component properties
  * @returns ModelStatusDashboard component
- *
- * @example
- * ```tsx
- * // Basic usage with default auto-refresh
- * <ModelStatusDashboard />
- *
- * // Custom refresh interval
- * <ModelStatusDashboard refreshInterval={5000} />
- *
- * // With unload callback
- * <ModelStatusDashboard
- *   onUnloadModel={(modelId, taskType) => {
- *     console.log('Unload model:', modelId, taskType)
- *   }}
- * />
- * ```
  */
 export function ModelStatusDashboard({
   refreshInterval = 15000,
@@ -189,16 +146,16 @@ export function ModelStatusDashboard({
     refetch()
   }
 
-  const handleAutoRefreshToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setAutoRefresh(event.target.checked)
+  const handleAutoRefreshToggle = (checked: boolean) => {
+    setAutoRefresh(checked)
   }
 
   if (isLoading) {
     return (
       <Card>
         <CardContent>
-          <Skeleton variant="text" width="60%" height={32} />
-          <Skeleton variant="rectangular" height={200} sx={{ mt: 2 }} />
+          <Skeleton className="h-8 w-3/5 mb-2" />
+          <Skeleton className="h-[200px] w-full mt-4" />
         </CardContent>
       </Card>
     )
@@ -208,8 +165,11 @@ export function ModelStatusDashboard({
     return (
       <Card>
         <CardContent>
-          <Alert severity="error" icon={<ErrorIcon />}>
-            Failed to load model status: {error.message}
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load model status: {error.message}
+            </AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -220,7 +180,9 @@ export function ModelStatusDashboard({
     return (
       <Card>
         <CardContent>
-          <Alert severity="info">No model status available.</Alert>
+          <Alert>
+            <AlertDescription>No model status available.</AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     )
@@ -241,123 +203,123 @@ export function ModelStatusDashboard({
     <Card>
       <CardContent>
         {/* Header */}
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h5" component="div">
+        <div className="mb-6">
+          <div className="flex items-center mb-2">
+            <h5 className="text-lg font-semibold">
               Model Status Dashboard
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
+            </h5>
+            <div className="flex-grow" />
             {showAutoRefreshToggle && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={autoRefresh}
-                    onChange={handleAutoRefreshToggle}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2">Auto-refresh</Typography>}
-              />
+              <Label className="flex items-center gap-2 mr-2">
+                <Switch
+                  checked={autoRefresh}
+                  onCheckedChange={handleAutoRefreshToggle}
+                  size="sm"
+                />
+                <span className="text-sm">Auto-refresh</span>
+              </Label>
             )}
             {showRefreshButton && (
-              <Tooltip title="Refresh now">
-                <IconButton size="small" onClick={handleManualRefresh}>
-                  <RefreshIcon />
-                </IconButton>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button variant="ghost" size="icon-sm" onClick={handleManualRefresh} aria-label="Refresh now" />
+                  }
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </TooltipTrigger>
+                <TooltipContent>Refresh now</TooltipContent>
               </Tooltip>
             )}
-          </Box>
-          <Typography variant="body2" color="text.secondary">
+          </div>
+          <p className="text-sm text-muted-foreground">
             Monitor loaded models, VRAM usage, and performance metrics in real-time.
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
         {/* CPU Mode Info / No Models Warning */}
         {isCpuOnly && cpuModelsAvailable && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              CPU Mode
-            </Typography>
-            <Typography variant="body2">
+          <Alert className="mb-6">
+            <AlertTitle>CPU Mode</AlertTitle>
+            <AlertDescription>
               Running with CPU-optimized models (no GPU/CUDA detected).
               Performance may be slower than GPU mode.
-            </Typography>
+            </AlertDescription>
           </Alert>
         )}
         {modelsDisabled && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              No AI Models Available
-            </Typography>
-            <Typography variant="body2">
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>No AI Models Available</AlertTitle>
+            <AlertDescription>
               No GPU/CUDA detected and no CPU-compatible models are installed.
               AI features are disabled.
-            </Typography>
+            </AlertDescription>
           </Alert>
         )}
 
         {/* Overall VRAM Status */}
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <MemoryIcon sx={{ mr: 1 }} />
-            <Typography variant="subtitle1">Total VRAM Usage</Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <Chip
-              label={`${status.totalVramAllocatedGb.toFixed(1)} / ${status.totalVramAvailableGb.toFixed(1)} GB`}
-              color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-              icon={
-                isVramError ? (
-                  <ErrorIcon />
-                ) : isVramWarning ? (
-                  <ErrorIcon />
-                ) : (
-                  <CheckCircleIcon />
-                )
-              }
-              size="small"
-            />
-          </Box>
+        <div className="rounded-lg border bg-card p-4 mb-6">
+          <div className="flex items-center mb-2">
+            <MemoryStick className="mr-2 h-4 w-4" />
+            <span className="font-medium">Total VRAM Usage</span>
+            <div className="flex-grow" />
+            <Badge
+              variant={isVramError ? 'destructive' : isVramWarning ? 'outline' : 'secondary'}
+            >
+              {isVramError ? (
+                <XCircle className="mr-1 h-3 w-3" />
+              ) : isVramWarning ? (
+                <XCircle className="mr-1 h-3 w-3" />
+              ) : (
+                <CheckCircle className="mr-1 h-3 w-3" />
+              )}
+              {status.totalVramAllocatedGb.toFixed(1)} / {status.totalVramAvailableGb.toFixed(1)} GB
+            </Badge>
+          </div>
 
-          <LinearProgress
-            variant="determinate"
+          <Progress
             value={Math.min(vramUtilizationPercent, 100)}
-            color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-            sx={{ height: 8, borderRadius: 1 }}
+            className={cn(
+              'h-2',
+              isVramError && '[&>div]:bg-destructive',
+              isVramWarning && !isVramError && '[&>div]:bg-yellow-500',
+            )}
           />
 
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          <p className="text-xs text-muted-foreground mt-2">
             {status.loadedModels.length} model{status.loadedModels.length !== 1 ? 's' : ''} loaded
-            {' · '}
+            {' \u00b7 '}
             Utilization: {vramUtilizationPercent.toFixed(0)}%
-          </Typography>
-        </Paper>
+          </p>
+        </div>
 
         {/* Loaded Models */}
         {status.loadedModels.length === 0 ? (
-          <Alert severity={modelsDisabled ? "warning" : "info"}>
-            {modelsDisabled
-              ? "No models available. Install CPU-compatible models or add a GPU."
-              : "No models currently loaded. Models will load automatically when needed."}
+          <Alert variant={modelsDisabled ? 'destructive' : 'default'}>
+            <AlertDescription>
+              {modelsDisabled
+                ? "No models available. Install CPU-compatible models or add a GPU."
+                : "No models currently loaded. Models will load automatically when needed."}
+            </AlertDescription>
           </Alert>
         ) : (
-          <Grid container spacing={2}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {status.loadedModels.map((model) => (
-              <Grid item xs={12} md={6} lg={4} key={`${model.taskType}-${model.modelId}`}>
-                <ModelStatusCard
-                  model={model}
-                  onUnload={onUnloadModel}
-                />
-              </Grid>
+              <ModelStatusCard
+                key={`${model.taskType}-${model.modelId}`}
+                model={model}
+                onUnload={onUnloadModel}
+              />
             ))}
-          </Grid>
+          </div>
         )}
 
         {/* Footer with timestamp */}
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="caption" color="text.secondary">
+        <div className="mt-6 pt-4 border-t">
+          <p className="text-xs text-muted-foreground">
             Last updated: {formatDistanceToNow(new Date(status.timestamp), { addSuffix: true })}
-          </Typography>
-        </Box>
+          </p>
+        </div>
       </CardContent>
     </Card>
   )
@@ -365,9 +327,6 @@ export function ModelStatusDashboard({
 
 /**
  * Props for ModelStatusCard component.
- *
- * @property model - Loaded model status information including health, VRAM, and metrics
- * @property onUnload - Optional callback triggered when unload button is clicked
  */
 interface ModelStatusCardProps {
   model: LoadedModelStatus
@@ -376,19 +335,9 @@ interface ModelStatusCardProps {
 
 /**
  * Card component for displaying a single model's status information.
- * Shows health indicator, VRAM usage with progress bar, performance metrics,
- * warm-up status, and optional unload button.
  *
  * @param props - Component properties
  * @returns ModelStatusCard component
- *
- * @example
- * ```tsx
- * <ModelStatusCard
- *   model={loadedModelData}
- *   onUnload={(modelId, taskType) => console.log('Unload:', modelId)}
- * />
- * ```
  */
 function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
   const handleUnload = () => {
@@ -403,192 +352,154 @@ function ModelStatusCard({ model, onUnload }: ModelStatusCardProps) {
       : null
 
   return (
-    <Card variant="outlined">
+    <Card>
       <CardContent>
-        <Stack spacing={2}>
+        <div className="flex flex-col gap-4">
           {/* Header with task type and health */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography variant="h6" component="div">
+          <div className="flex items-center justify-between">
+            <h6 className="text-base font-semibold">
               {TASK_DISPLAY_NAMES[model.taskType] || model.taskType}
-            </Typography>
-            <Chip
-              label={model.health}
-              color={getHealthColor(model.health)}
-              icon={getHealthIcon(model.health)}
-              size="small"
-            />
-          </Box>
+            </h6>
+            <Badge variant={getHealthVariant(model.health)}>
+              {getHealthIcon(model.health)}
+              <span className="ml-1">{model.health}</span>
+            </Badge>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Model Information */}
-          <Box>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              Model
-            </Typography>
-            <Typography variant="body2" fontWeight="medium">
-              {model.modelName}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {model.modelId}
-            </Typography>
-          </Box>
+          <div>
+            <p className="text-sm text-muted-foreground mb-0.5">Model</p>
+            <p className="text-sm font-medium">{model.modelName}</p>
+            <p className="text-xs text-muted-foreground">{model.modelId}</p>
+          </div>
 
           {/* Framework and Quantization */}
-          <Grid container spacing={1}>
-            <Grid item xs={6}>
-              <Typography variant="body2" color="text.secondary">
-                Framework
-              </Typography>
-              <Typography variant="body2" fontWeight="medium">
-                {model.framework}
-              </Typography>
-            </Grid>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Framework</p>
+              <p className="text-sm font-medium">{model.framework}</p>
+            </div>
             {model.quantization && (
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Quantization
-                </Typography>
-                <Typography variant="body2" fontWeight="medium">
-                  {model.quantization}
-                </Typography>
-              </Grid>
+              <div>
+                <p className="text-sm text-muted-foreground">Quantization</p>
+                <p className="text-sm font-medium">{model.quantization}</p>
+              </div>
             )}
-          </Grid>
+          </div>
 
           {/* VRAM Usage */}
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-              <MemoryIcon sx={{ fontSize: 16, mr: 0.5 }} />
-              <Typography variant="body2" color="text.secondary">
-                VRAM Usage
-              </Typography>
-              <Box sx={{ flexGrow: 1 }} />
+          <div>
+            <div className="flex items-center mb-1">
+              <MemoryStick className="h-4 w-4 mr-1" />
+              <span className="text-sm text-muted-foreground">VRAM Usage</span>
+              <div className="flex-grow" />
               {model.vramUsedGb !== null ? (
-                <Typography variant="caption" fontWeight="medium">
+                <span className="text-xs font-medium">
                   {model.vramUsedGb.toFixed(1)} / {model.vramAllocatedGb.toFixed(1)} GB
-                </Typography>
+                </span>
               ) : (
-                <Typography variant="caption" color="text.secondary">
+                <span className="text-xs text-muted-foreground">
                   {model.vramAllocatedGb.toFixed(1)} GB allocated
-                </Typography>
+                </span>
               )}
-            </Box>
+            </div>
             {vramUsagePercent !== null && (
-              <LinearProgress
-                variant="determinate"
+              <Progress
                 value={Math.min(vramUsagePercent, 100)}
-                color={vramUsagePercent >= 90 ? 'warning' : 'primary'}
-                sx={{ height: 6, borderRadius: 1 }}
+                className={cn(
+                  'h-1.5',
+                  vramUsagePercent >= 90 && '[&>div]:bg-yellow-500',
+                )}
               />
             )}
-          </Box>
+          </div>
 
           {/* Warm-up Status */}
           {model.health === 'loaded' && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <div className="flex items-center gap-2">
               {model.warmUpComplete ? (
-                <Chip
-                  label="Warm-up complete"
-                  color="success"
-                  size="small"
-                  icon={<CheckCircleIcon />}
-                />
+                <Badge variant="secondary">
+                  <CheckCircle className="mr-1 h-3 w-3" />
+                  Warm-up complete
+                </Badge>
               ) : (
-                <Chip
-                  label="Warming up"
-                  color="warning"
-                  size="small"
-                  icon={<LoadingIcon />}
-                />
+                <Badge variant="outline">
+                  <Hourglass className="mr-1 h-3 w-3" />
+                  Warming up
+                </Badge>
               )}
-            </Box>
+            </div>
           )}
 
           {/* Performance Metrics */}
           {model.performanceMetrics && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
                 Performance Metrics
-              </Typography>
-              <Grid container spacing={1}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">
-                    Requests
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {model.performanceMetrics.totalRequests}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">
-                    Avg Latency
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {model.performanceMetrics.averageLatencyMs.toFixed(0)} ms
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">
-                    Req/sec
-                  </Typography>
-                  <Typography variant="body2" fontWeight="medium">
-                    {model.performanceMetrics.requestsPerSecond.toFixed(2)}
-                  </Typography>
-                </Grid>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Requests</p>
+                  <p className="text-sm font-medium">{model.performanceMetrics.totalRequests}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Avg Latency</p>
+                  <p className="text-sm font-medium">{model.performanceMetrics.averageLatencyMs.toFixed(0)} ms</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Req/sec</p>
+                  <p className="text-sm font-medium">{model.performanceMetrics.requestsPerSecond.toFixed(2)}</p>
+                </div>
                 {model.performanceMetrics.averageFps !== null && (
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">
-                      Avg FPS
-                    </Typography>
-                    <Typography variant="body2" fontWeight="medium">
-                      {model.performanceMetrics.averageFps.toFixed(1)}
-                    </Typography>
-                  </Grid>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Avg FPS</p>
+                    <p className="text-sm font-medium">{model.performanceMetrics.averageFps.toFixed(1)}</p>
+                  </div>
                 )}
-              </Grid>
-            </Box>
+              </div>
+            </div>
           )}
 
           {/* Last Used */}
           {model.lastUsed && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <ScheduleIcon sx={{ fontSize: 16 }} color="action" />
-              <Typography variant="caption" color="text.secondary">
+            <div className="flex items-center gap-1">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
                 Last used: {formatDistanceToNow(new Date(model.lastUsed), { addSuffix: true })}
-              </Typography>
-            </Box>
+              </span>
+            </div>
           )}
 
           {/* Load Time */}
           {model.loadTimeMs !== null && (
-            <Box>
-              <Typography variant="caption" color="text.secondary">
+            <div>
+              <span className="text-xs text-muted-foreground">
                 Load time: {(model.loadTimeMs / 1000).toFixed(1)}s
-              </Typography>
-            </Box>
+              </span>
+            </div>
           )}
 
           {/* Error Message */}
           {model.errorMessage && (
-            <Alert severity="error" sx={{ py: 0.5 }}>
-              <Typography variant="caption">{model.errorMessage}</Typography>
+            <Alert variant="destructive" className="py-1">
+              <AlertDescription className="text-xs">{model.errorMessage}</AlertDescription>
             </Alert>
           )}
 
           {/* Unload Button */}
           {onUnload && model.health === 'loaded' && (
             <Button
-              variant="outlined"
-              color="warning"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={handleUnload}
-              fullWidth
+              className="w-full text-yellow-600 border-yellow-600 hover:bg-yellow-50"
             >
               Unload Model
             </Button>
           )}
-        </Stack>
+        </div>
       </CardContent>
     </Card>
   )

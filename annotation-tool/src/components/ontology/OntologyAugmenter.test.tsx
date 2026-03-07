@@ -619,8 +619,9 @@ describe('OntologyAugmenter', () => {
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
 
       await waitFor(() => {
-        const chip = screen.getByText('95%').closest('.MuiChip-root')
-        expect(chip).toHaveClass('MuiChip-colorSuccess')
+        const badge = screen.getByText('95%').closest('[data-slot="badge"]')
+        expect(badge).toBeInTheDocument()
+        expect(badge).toHaveClass('bg-primary')
       })
     })
 
@@ -651,8 +652,9 @@ describe('OntologyAugmenter', () => {
       await user.click(screen.getByRole('button', { name: /generate suggestions/i }))
 
       await waitFor(() => {
-        const chip = screen.getByText('70%').closest('.MuiChip-root')
-        expect(chip).toHaveClass('MuiChip-colorWarning')
+        const badge = screen.getByText('70%').closest('[data-slot="badge"]')
+        expect(badge).toBeInTheDocument()
+        expect(badge).toHaveClass('bg-secondary')
       })
     })
   })

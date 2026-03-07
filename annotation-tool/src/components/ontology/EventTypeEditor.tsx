@@ -1,27 +1,18 @@
 import { useState, useEffect } from 'react'
+import { CalendarDays, Plus, Trash2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
   Select,
-  MenuItem,
-  FormControlLabel,
-  FormControl,
-  InputLabel,
-  Checkbox,
-  TextField,
-  Chip,
-} from '@mui/material'
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { generateId } from '@utils/uuid'
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Event as EventTypeIcon,
-} from '@mui/icons-material'
 import {
   usePersonas,
   usePersonaOntology,
@@ -198,137 +189,141 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
 
   // Additional fields for event types (roles management)
   const additionalFields = (
-    <Box>
+    <div>
       {/* Roles Management */}
-      <Typography variant="subtitle2" component="div" gutterBottom>Roles</Typography>
-      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <FormControl fullWidth size="small">
-          <InputLabel>Add Role</InputLabel>
+      <p className="text-sm font-medium mb-2">Roles</p>
+      <div className="flex gap-2 mb-4">
+        <div className="flex-1">
           <Select
             value={selectedRoleId}
-            onChange={(e) => setSelectedRoleId(e.target.value)}
-            label="Add Role"
+            onValueChange={(val) => val && setSelectedRoleId(val)}
           >
-            {ontology?.roles
-              .filter(r => !roles.find(er => er.roleTypeId === r.id))
-              .map(role => (
-                <MenuItem key={role.id} value={role.id}>
-                  {role.name}
-                </MenuItem>
-              ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Add Role" />
+            </SelectTrigger>
+            <SelectContent>
+              {ontology?.roles
+                .filter(r => !roles.find(er => er.roleTypeId === r.id))
+                .map(role => (
+                  <SelectItem key={role.id} value={role.id}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
           </Select>
-        </FormControl>
-        <IconButton onClick={handleAddRole} disabled={!selectedRoleId} aria-label="Add role">
-          <AddIcon />
-        </IconButton>
-      </Box>
-      
-      <List dense>
+        </div>
+        <Button variant="ghost" size="icon" onClick={handleAddRole} disabled={!selectedRoleId} aria-label="Add role">
+          <Plus className="size-4" />
+        </Button>
+      </div>
+
+      <ul className="space-y-1">
         {roles.map((eventRole) => {
           const role = ontology?.roles.find(r => r.id === eventRole.roleTypeId)
           if (!role) return null
-          
+
           return (
-            <ListItem key={eventRole.roleTypeId}>
-              <ListItemText
-                primary={role.name}
-                secondary={
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={eventRole.optional}
-                        onChange={() => handleToggleOptional(eventRole.roleTypeId)}
-                      />
-                    }
-                    label="Optional"
+            <li key={eventRole.roleTypeId} className="flex items-center justify-between py-1">
+              <div>
+                <span className="text-sm">{role.name}</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <Checkbox
+                    checked={eventRole.optional}
+                    onCheckedChange={() => handleToggleOptional(eventRole.roleTypeId)}
                   />
-                }
-              />
-              <ListItemSecondaryAction>
-                <IconButton
-                  edge="end"
-                  size="small"
-                  onClick={() => handleRemoveRole(eventRole.roleTypeId)}
-                  aria-label={`Remove role ${role.name}`}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </ListItemSecondaryAction>
-            </ListItem>
+                  <Label className="text-xs text-muted-foreground">Optional</Label>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleRemoveRole(eventRole.roleTypeId)}
+                aria-label={`Remove role ${role.name}`}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </li>
           )
         })}
-      </List>
+      </ul>
 
       {/* Examples */}
-      <Typography variant="subtitle2" component="div" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
-      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-        <TextField
-          size="small"
+      <p className="text-sm font-medium mb-2 mt-4">Examples</p>
+      <div className="flex gap-2 mb-2">
+        <Input
           placeholder="Add example..."
           value={exampleInput}
           onChange={(e) => setExampleInput(e.target.value)}
-          onKeyPress={(e) => {
+          onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
               handleAddExample()
             }
           }}
-          fullWidth
+          className="flex-1"
         />
-        <IconButton onClick={handleAddExample} size="small" aria-label="Add example">
-          <AddIcon />
-        </IconButton>
-      </Box>
-      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="icon" onClick={handleAddExample} aria-label="Add example">
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      <div className="flex gap-1 flex-wrap">
         {examples.map((example, index) => (
-          <Chip
-            key={index}
-            label={example}
-            onDelete={() => handleRemoveExample(index)}
-            size="small"
-          />
+          <Badge key={index} variant="secondary" className="gap-1">
+            {example}
+            <button onClick={() => handleRemoveExample(index)} className="ml-1 hover:text-destructive">
+              <X className="size-3" />
+            </button>
+          </Badge>
         ))}
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 
   // Source selector for copy mode
   const sourceSelector = mode === 'copy' && (
     <>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Source Persona</InputLabel>
+      <div className="mb-4">
+        <Label className="mb-2">Source Persona</Label>
         <Select
           value={sourcePersonaId}
-          onChange={(e) => {
-            setSourcePersonaId(e.target.value)
+          onValueChange={(val) => {
+            if (!val) return
+            setSourcePersonaId(val)
             setSourceEventId('')
           }}
-          label="Source Persona"
         >
-          {personas.filter(p => p.id !== personaId).map(persona => (
-            <MenuItem key={persona.id} value={persona.id}>
-              {persona.name}
-            </MenuItem>
-          ))}
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select source persona" />
+          </SelectTrigger>
+          <SelectContent>
+            {personas.filter(p => p.id !== personaId).map(persona => (
+              <SelectItem key={persona.id} value={persona.id}>
+                {persona.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-      </FormControl>
+      </div>
 
       {sourcePersonaId && sourceOntology && (
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Source Event Type</InputLabel>
+        <div className="mb-4">
+          <Label className="mb-2">Source Event Type</Label>
           <Select
             value={sourceEventId}
-            onChange={(e) => setSourceEventId(e.target.value)}
-            label="Source Event Type"
+            onValueChange={(val) => val && setSourceEventId(val)}
           >
-            {sourceOntology.events.map(event => (
-              <MenuItem key={event.id} value={event.id}>
-                {event.name}
-              </MenuItem>
-            ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select source event type" />
+            </SelectTrigger>
+            <SelectContent>
+              {sourceOntology.events.map(event => (
+                <SelectItem key={event.id} value={event.id}>
+                  {event.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
-        </FormControl>
+        </div>
       )}
     </>
   )
@@ -355,7 +350,7 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
       onSave={handleSave}
       onDelete={event ? handleDelete : undefined}
       title={event ? 'Edit Event Type' : 'Create Event Type'}
-      icon={<EventTypeIcon />}
+      icon={<CalendarDays className="size-5" />}
       additionalFields={additionalFields}
       sourceSelector={sourceSelector}
       isEditing={!!event}

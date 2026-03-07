@@ -6,37 +6,33 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  Alert,
-  CircularProgress,
-  LinearProgress,
-  Chip,
-  Skeleton,
-  Grid,
-  Paper,
-  Tooltip,
-  ToggleButtonGroup,
-  ToggleButton,
-  Stack,
-} from '@mui/material'
+  MemoryStick,
+  Monitor,
+  Gauge,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  RefreshCw,
+  CloudDownload,
+  Cloud,
+  CloudOff,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  Memory as MemoryIcon,
-  Computer as ComputerIcon,
-  Speed as SpeedIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Refresh as RefreshIcon,
-  CloudDownload as CloudDownloadIcon,
-  CloudDone as CloudDoneIcon,
-  CloudOff as CloudOffIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   useModelConfig,
   useSelectModel,
@@ -64,13 +60,13 @@ const TASK_DISPLAY_NAMES: Record<string, string> = {
 /**
  * Speed indicator color mapping.
  */
-const SPEED_COLORS: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
-  real_time: 'success',
-  very_fast: 'success',
-  fast: 'success',
-  moderate: 'warning',
-  medium: 'warning',
-  slow: 'error',
+const SPEED_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  real_time: 'secondary',
+  very_fast: 'secondary',
+  fast: 'secondary',
+  moderate: 'outline',
+  medium: 'outline',
+  slow: 'destructive',
 }
 
 /**
@@ -118,29 +114,29 @@ function isCompatible(option: ModelOption, device: 'cpu' | 'gpu'): boolean {
  * Sub-component showing download/cache status for a task type's selected model.
  * Each card manages its own task-ready query to avoid N queries in the parent.
  */
-function TaskDownloadStatus({ taskType }: { taskType: string }) {
+function TaskDownloadStatus({ taskType }: { taskType: string }): JSX.Element | null {
   const { data, isLoading, isFetching, error } = useTaskReady(taskType)
   const loadModelMutation = useLoadModel()
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CircularProgress size={16} />
-        <Typography variant="body2" color="text.secondary">
+      <div className="flex items-center gap-2">
+        <Spinner className="h-4 w-4" />
+        <span className="text-sm text-muted-foreground">
           Checking cache...
-        </Typography>
-      </Box>
+        </span>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CloudOffIcon fontSize="small" color="disabled" />
-        <Typography variant="body2" color="text.secondary">
+      <div className="flex items-center gap-2">
+        <CloudOff className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">
           Unable to check cache status
-        </Typography>
-      </Box>
+        </span>
+      </div>
     )
   }
 
@@ -149,23 +145,23 @@ function TaskDownloadStatus({ taskType }: { taskType: string }) {
   // External API models are always "ready"
   if (data.framework === 'external_api') {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CheckCircleIcon fontSize="small" color="success" />
-        <Typography variant="body2" color="text.secondary">
+      <div className="flex items-center gap-2">
+        <CheckCircle className="h-4 w-4 text-green-500" />
+        <span className="text-sm text-muted-foreground">
           External API (no download needed)
-        </Typography>
-      </Box>
+        </span>
+      </div>
     )
   }
 
   if (data.cached) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CloudDoneIcon fontSize="small" color="success" />
-        <Typography variant="body2" color="success.main">
+      <div className="flex items-center gap-2">
+        <Cloud className="h-4 w-4 text-green-500" />
+        <span className="text-sm text-green-600">
           Downloaded
-        </Typography>
-      </Box>
+        </span>
+      </div>
     )
   }
 
@@ -173,31 +169,38 @@ function TaskDownloadStatus({ taskType }: { taskType: string }) {
   const isDownloading = loadModelMutation.isPending || (loadModelMutation.isSuccess && isFetching)
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <CloudDownloadIcon fontSize="small" color="warning" />
-      <Typography variant="body2" color="warning.main">
+    <div className="flex items-center gap-2">
+      <CloudDownload className="h-4 w-4 text-yellow-500" />
+      <span className="text-sm text-yellow-600">
         Not downloaded
-      </Typography>
-      <Tooltip title="Download model to local cache. This may take several minutes.">
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={
-            isDownloading ? <CircularProgress size={14} /> : <CloudDownloadIcon />
-          }
-          disabled={isDownloading}
-          onClick={() => loadModelMutation.mutate(taskType)}
-          sx={{ ml: 1, textTransform: 'none' }}
-        >
-          {isDownloading ? 'Downloading...' : 'Download'}
-        </Button>
-      </Tooltip>
+      </span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isDownloading}
+                onClick={() => loadModelMutation.mutate(taskType)}
+                className="ml-2"
+              >
+                {isDownloading ? <Spinner className="mr-2 h-3 w-3" /> : <CloudDownload className="mr-2 h-3 w-3" />}
+                {isDownloading ? 'Downloading...' : 'Download'}
+              </Button>
+            }
+          />
+          <TooltipContent>
+            Download model to local cache. This may take several minutes.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {loadModelMutation.isError && (
-        <Typography variant="body2" color="error.main" sx={{ ml: 1 }}>
+        <span className="text-sm text-destructive ml-2">
           Failed: {loadModelMutation.error?.message}
-        </Typography>
+        </span>
       )}
-    </Box>
+    </div>
   )
 }
 
@@ -206,7 +209,7 @@ function TaskDownloadStatus({ taskType }: { taskType: string }) {
  * Displays device preference toggles, model selection dropdowns,
  * VRAM budget visualization, download status, and save/reset/refresh controls.
  */
-export default function ModelManagementPage() {
+export function ModelManagementPage(): JSX.Element {
   const { data: config, isLoading, error, refetch } = useModelConfig()
   const { data: validation, refetch: refetchValidation } = useMemoryValidation({
     enabled: !!config,
@@ -250,10 +253,11 @@ export default function ModelManagementPage() {
     [config],
   )
 
-  const handleDeviceChange = (taskType: string, newDevice: 'cpu' | 'gpu' | null) => {
+  const handleDeviceChange = (taskType: string, newDevice: string) => {
     if (!newDevice || !config) return
+    const device = newDevice as 'cpu' | 'gpu'
 
-    setDevicePreferences((prev) => ({ ...prev, [taskType]: newDevice }))
+    setDevicePreferences((prev) => ({ ...prev, [taskType]: device }))
 
     const taskConfig = config.models[taskType]
     if (!taskConfig) return
@@ -261,8 +265,8 @@ export default function ModelManagementPage() {
     const currentModel = pendingSelections[taskType]
     const currentOption = taskConfig.options.find((o) => o.name === currentModel)
 
-    if (!currentOption || !isCompatible(currentOption, newDevice)) {
-      const compatible = firstCompatibleModel(taskConfig.options, newDevice)
+    if (!currentOption || !isCompatible(currentOption, device)) {
+      const compatible = firstCompatibleModel(taskConfig.options, device)
       if (compatible) {
         const updated = { ...pendingSelections, [taskType]: compatible }
         setPendingSelections(updated)
@@ -361,33 +365,37 @@ export default function ModelManagementPage() {
   // Loading state
   if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Skeleton variant="text" width="40%" height={32} />
-        <Skeleton variant="text" width="60%" height={20} sx={{ mb: 3 }} />
-        <Skeleton variant="rectangular" height={120} sx={{ mb: 2 }} />
-        <Skeleton variant="rectangular" height={120} sx={{ mb: 2 }} />
-        <Skeleton variant="rectangular" height={120} />
-      </Box>
+      <div className="p-6">
+        <Skeleton className="h-8 w-2/5 mb-2" />
+        <Skeleton className="h-5 w-3/5 mb-6" />
+        <Skeleton className="h-[120px] w-full mb-4" />
+        <Skeleton className="h-[120px] w-full mb-4" />
+        <Skeleton className="h-[120px] w-full" />
+      </div>
     )
   }
 
   // Error state
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load model configuration: {error.message}
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load model configuration: {error.message}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   // No config state
   if (!config) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="info">No model configuration available.</Alert>
-      </Box>
+      <div className="p-6">
+        <Alert>
+          <AlertDescription>No model configuration available.</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
@@ -397,94 +405,98 @@ export default function ModelManagementPage() {
   const isVramError = vramCalculation != null && !vramCalculation.valid
 
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6">
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6">Model Configuration</Typography>
-        <Typography variant="body2" color="text.secondary">
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold">Model Configuration</h3>
+        <p className="text-sm text-muted-foreground">
           Select device preference and model for each task type. Models that are not yet
           downloaded can be pre-downloaded using the Download button.
-        </Typography>
-      </Box>
+        </p>
+      </div>
 
       {/* Alert banners */}
       {modelsDisabled && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }} gutterBottom>
+        <Alert variant="destructive" className="mb-6">
+          <AlertTitle className="font-bold">
             No AI Models Available
-          </Typography>
-          <Typography variant="body2">
+          </AlertTitle>
+          <AlertDescription>
             No GPU/CUDA detected and no CPU-compatible models are installed.
             Install CPU-compatible models or add a GPU to enable AI features.
-          </Typography>
+          </AlertDescription>
         </Alert>
       )}
 
       {!config.cudaAvailable && config.cpuModelsAvailable && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }} gutterBottom>
+        <Alert className="mb-6">
+          <AlertTitle className="font-bold">
             CPU Mode
-          </Typography>
-          <Typography variant="body2">
+          </AlertTitle>
+          <AlertDescription>
             No GPU/CUDA detected. Running with CPU-optimized models. Performance may be slower than
             GPU mode.
-          </Typography>
+          </AlertDescription>
         </Alert>
       )}
 
       {/* VRAM Budget bar */}
       {config.cudaAvailable && hasGpuTask && vramCalculation && validation && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <MemoryIcon sx={{ mr: 1 }} />
-            <Typography variant="subtitle1">VRAM Budget</Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <Chip
-              label={`${vramCalculation.totalRequired.toFixed(1)} / ${vramCalculation.maxAllowed.toFixed(1)} GB`}
-              color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-              icon={
-                isVramError ? (
-                  <ErrorIcon />
-                ) : isVramWarning ? (
-                  <WarningIcon />
-                ) : (
-                  <CheckCircleIcon />
-                )
-              }
-              size="small"
-            />
-          </Box>
+        <div className="rounded-lg border bg-card p-4 mb-6">
+          <div className="flex items-center mb-2">
+            <MemoryStick className="mr-2 h-4 w-4" />
+            <span className="font-medium">VRAM Budget</span>
+            <div className="flex-grow" />
+            <Badge
+              variant={isVramError ? 'destructive' : isVramWarning ? 'outline' : 'secondary'}
+            >
+              {isVramError ? (
+                <XCircle className="mr-1 h-3 w-3" />
+              ) : isVramWarning ? (
+                <AlertTriangle className="mr-1 h-3 w-3" />
+              ) : (
+                <CheckCircle className="mr-1 h-3 w-3" />
+              )}
+              {vramCalculation.totalRequired.toFixed(1)} / {vramCalculation.maxAllowed.toFixed(1)} GB
+            </Badge>
+          </div>
 
-          <LinearProgress
-            variant="determinate"
+          <Progress
             value={Math.min(vramCalculation.utilizationPercent, 100)}
-            color={isVramError ? 'error' : isVramWarning ? 'warning' : 'success'}
-            sx={{ height: 8, borderRadius: 1 }}
+            className={cn(
+              'h-2',
+              isVramError && '[&>div]:bg-destructive',
+              isVramWarning && !isVramError && '[&>div]:bg-yellow-500',
+            )}
           />
 
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          <p className="text-xs text-muted-foreground mt-2">
             Total available: {validation.totalVramGb.toFixed(1)} GB
-            {' · '}
+            {' \u00b7 '}
             Utilization: {vramCalculation.utilizationPercent.toFixed(0)}%
-          </Typography>
+          </p>
 
           {isVramError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              Configuration exceeds available VRAM budget. Please select smaller models.
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>
+                Configuration exceeds available VRAM budget. Please select smaller models.
+              </AlertDescription>
             </Alert>
           )}
 
           {isVramWarning && !isVramError && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Approaching VRAM limit. Consider smaller models if performance issues occur.
+            <Alert className="mt-4">
+              <AlertDescription>
+                Approaching VRAM limit. Consider smaller models if performance issues occur.
+              </AlertDescription>
             </Alert>
           )}
-        </Paper>
+        </div>
       )}
 
       {/* Task type cards */}
       {!modelsDisabled && (
-        <Stack spacing={3} sx={{ mb: 3 }}>
+        <div className="flex flex-col gap-6 mb-6">
           {Object.entries(config.models).map(([taskType, taskConfig]) => {
             const device = devicePreferences[taskType] || 'cpu'
             const selectedModelName = pendingSelections[taskType] || taskConfig.selected
@@ -497,181 +509,190 @@ export default function ModelManagementPage() {
             )
 
             return (
-              <Paper key={taskType} variant="outlined" sx={{ p: 2.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+              <div key={taskType} className="rounded-lg border bg-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="font-semibold">
                     {TASK_DISPLAY_NAMES[taskType] || taskType}
-                  </Typography>
+                  </span>
                   <TaskDownloadStatus taskType={taskType} />
-                </Box>
+                </div>
 
                 {/* Device toggle */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 50 }}>
+                <div className="flex items-center gap-4 mb-4">
+                  <span className="text-sm text-muted-foreground min-w-[50px]">
                     Device:
-                  </Typography>
-                  <ToggleButtonGroup
-                    value={device}
-                    exclusive
-                    size="small"
-                    onChange={(_, val) => handleDeviceChange(taskType, val)}
+                  </span>
+                  <ToggleGroup
+                    value={[device]}
+                    onValueChange={(val) => {
+                      const newDevice = val.find((v) => v !== device)
+                      if (newDevice) handleDeviceChange(taskType, newDevice)
+                    }}
+                    size="sm"
                   >
-                    <ToggleButton value="cpu">
-                      <ComputerIcon sx={{ mr: 0.5 }} fontSize="small" />
+                    <ToggleGroupItem value="cpu">
+                      <Monitor className="mr-1 h-4 w-4" />
                       CPU
-                    </ToggleButton>
-                    <ToggleButton value="gpu" disabled={!config.cudaAvailable}>
-                      <MemoryIcon sx={{ mr: 0.5 }} fontSize="small" />
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="gpu" disabled={!config.cudaAvailable}>
+                      <MemoryStick className="mr-1 h-4 w-4" />
                       GPU
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                </Box>
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
                 {/* Model dropdown */}
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel id={`${taskType}-model-label`}>Model</InputLabel>
+                <div className="mb-4">
                   <Select
-                    labelId={`${taskType}-model-label`}
                     value={selectedModelName}
-                    label="Model"
-                    onChange={(e) => handleModelChange(taskType, e.target.value)}
+                    onValueChange={(value) => { if (value !== null) handleModelChange(taskType, value) }}
                   >
-                    {filteredOptions.length === 0 ? (
-                      <MenuItem disabled value="">
-                        No compatible models
-                      </MenuItem>
-                    ) : (
-                      filteredOptions.map((option) => (
-                        <MenuItem key={option.name} value={option.name}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography>{option.name}</Typography>
-                            <Chip
-                              label={`${(device === 'cpu' ? option.cpuMemoryGb : option.vramGb).toFixed(1)} GB`}
-                              size="small"
-                              icon={<MemoryIcon />}
-                            />
-                            <Chip
-                              label={option.speed}
-                              size="small"
-                              color={SPEED_COLORS[option.speed] || 'default'}
-                              icon={<SpeedIcon />}
-                            />
-                          </Box>
-                        </MenuItem>
-                      ))
-                    )}
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredOptions.length === 0 ? (
+                        <SelectItem value="" disabled>
+                          No compatible models
+                        </SelectItem>
+                      ) : (
+                        filteredOptions.map((option) => (
+                          <SelectItem key={option.name} value={option.name}>
+                            <div className="flex items-center gap-2">
+                              <span>{option.name}</span>
+                              <Badge variant="outline">
+                                <MemoryStick className="mr-1 h-3 w-3" />
+                                {(device === 'cpu' ? option.cpuMemoryGb : option.vramGb).toFixed(1)} GB
+                              </Badge>
+                              <Badge variant={SPEED_VARIANTS[option.speed] || 'outline'}>
+                                <Gauge className="mr-1 h-3 w-3" />
+                                {option.speed}
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
                   </Select>
-                </FormControl>
+                </div>
 
                 {/* Model details */}
                 {selectedOption && (
-                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" color="text.secondary">
+                  <div className="rounded-lg border bg-muted p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="col-span-full">
+                        <p className="text-sm font-medium text-muted-foreground">
                           Model Details
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
                           Model ID
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
+                        </p>
+                        <p className="text-sm font-medium">
                           {selectedOption.modelId}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
                           Framework
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
+                        </p>
+                        <p className="text-sm font-medium">
                           {selectedOption.framework}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
                           {device === 'cpu' ? 'CPU Memory' : 'VRAM'}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
+                        </p>
+                        <p className="text-sm font-medium">
                           {(device === 'cpu'
                             ? selectedOption.cpuMemoryGb
                             : selectedOption.vramGb
                           ).toFixed(1)}{' '}
                           GB
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
                           Speed
-                        </Typography>
-                        <Chip
-                          label={selectedOption.speed}
-                          size="small"
-                          color={SPEED_COLORS[selectedOption.speed] || 'default'}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Typography variant="body2" color="text.secondary">
+                        </p>
+                        <Badge variant={SPEED_VARIANTS[selectedOption.speed] || 'outline'}>
+                          {selectedOption.speed}
+                        </Badge>
+                      </div>
+                      <div className="col-span-full">
+                        <p className="text-sm text-muted-foreground">
                           Description
-                        </Typography>
-                        <Typography variant="body2">
+                        </p>
+                        <p className="text-sm">
                           {selectedOption.description}
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </Paper>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </Paper>
+              </div>
             )
           })}
-        </Stack>
+        </div>
       )}
 
       {/* Action buttons */}
       {!modelsDisabled && (
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <div className="flex gap-4">
           <Button
-            variant="contained"
             onClick={handleSave}
             disabled={!hasChanges || selectModelMutation.isPending}
           >
             {selectModelMutation.isPending ? 'Saving...' : 'Save Configuration'}
           </Button>
           <Button
-            variant="outlined"
+            variant="outline"
             onClick={handleReset}
             disabled={!hasChanges || selectModelMutation.isPending}
           >
             Reset
           </Button>
-          <Box sx={{ flexGrow: 1 }} />
-          <Tooltip title="Refresh configuration">
-            <Button
-              variant="outlined"
-              onClick={() => {
-                refetch()
-                refetchValidation()
-              }}
-              startIcon={<RefreshIcon />}
-            >
-              Refresh
-            </Button>
-          </Tooltip>
-        </Box>
+          <div className="flex-grow" />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      refetch()
+                      refetchValidation()
+                    }}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Refresh
+                  </Button>
+                }
+              />
+              <TooltipContent>Refresh configuration</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       )}
 
       {/* Success/Error alerts */}
       {saveSuccess && (
-        <Alert severity="success" sx={{ mt: 2 }}>
-          Configuration saved successfully.
+        <Alert className="mt-4">
+          <AlertDescription>
+            Configuration saved successfully.
+          </AlertDescription>
         </Alert>
       )}
 
       {saveError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          Failed to save configuration: {saveError}
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>
+            Failed to save configuration: {saveError}
+          </AlertDescription>
         </Alert>
       )}
-    </Box>
+    </div>
   )
 }

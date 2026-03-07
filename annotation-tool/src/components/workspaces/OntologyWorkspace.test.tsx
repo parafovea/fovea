@@ -417,12 +417,7 @@ describe('OntologyWorkspace', () => {
       render(<OntologyWorkspace />, { wrapper: createWrapper() })
 
       await waitFor(() => {
-        const buttons = screen.getAllByRole('button')
-        const backButton = buttons.find(btn => {
-          const svg = btn.querySelector('[data-testid="ArrowBackIcon"]')
-          return svg !== null
-        })
-        expect(backButton).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /back to persona browser/i })).toBeInTheDocument()
       })
     })
 
@@ -436,15 +431,8 @@ describe('OntologyWorkspace', () => {
         expect(screen.getByText('Urban Traffic Analyst')).toBeInTheDocument()
       })
 
-      const buttons = screen.getAllByRole('button')
-      const backButton = buttons.find(btn => {
-        const svg = btn.querySelector('[data-testid="ArrowBackIcon"]')
-        return svg !== null
-      })
-
-      if (backButton) {
-        await user.click(backButton)
-      }
+      const backButton = screen.getByRole('button', { name: /back to persona browser/i })
+      await user.click(backButton)
 
       await waitFor(() => {
         expect(screen.getByTestId('persona-browser')).toBeInTheDocument()
@@ -847,7 +835,7 @@ describe('OntologyWorkspace', () => {
       await user.click(screen.getByText(/Relation Types/))
 
       await waitFor(() => {
-        expect(screen.getByText(/Vehicle → Vehicle, Pedestrian/)).toBeInTheDocument()
+        expect(screen.getByText(/Vehicle.*->.*Vehicle, Pedestrian/)).toBeInTheDocument()
       })
     })
   })

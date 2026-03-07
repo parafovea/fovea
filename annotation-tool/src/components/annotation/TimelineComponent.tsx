@@ -5,13 +5,10 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import { Box, Slider, IconButton, Typography, useTheme, Tooltip, Button } from '@mui/material'
-import {
-  SkipPrevious,
-  FastRewind,
-  FastForward,
-  SkipNext,
-} from '@mui/icons-material'
+import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { SkipBack, Rewind, FastForward, SkipForward } from 'lucide-react'
 import { Annotation, InterpolationType } from '@models/types'
 import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
 import { useMoveKeyframe } from '@store/queries'
@@ -32,6 +29,28 @@ export interface TimelineComponentProps {
 }
 
 /**
+ * Reads CSS custom properties from the document to pass to the canvas renderer.
+ * Falls back to sensible defaults if properties are not set.
+ */
+function getThemeColors(): RenderOptions['theme'] {
+  const style = getComputedStyle(document.documentElement)
+  const getCssVar = (name: string, fallback: string): string => {
+    const val = style.getPropertyValue(name).trim()
+    return val || fallback
+  }
+
+  return {
+    backgroundColor: getCssVar('--color-card', '#ffffff'),
+    textColor: getCssVar('--color-foreground', '#0a0a0a'),
+    textSecondary: getCssVar('--color-muted-foreground', '#737373'),
+    dividerColor: getCssVar('--color-border', '#e5e5e5'),
+    primaryMain: getCssVar('--color-primary', '#2563eb'),
+    primaryLight: getCssVar('--color-primary', '#60a5fa'),
+    errorMain: getCssVar('--color-destructive', '#dc2626'),
+  }
+}
+
+/**
  * Canvas-based timeline with keyboard navigation and keyframe management.
  */
 export const TimelineComponent: React.FC<TimelineComponentProps> = ({
@@ -47,7 +66,6 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   onUpdateInterpolationSegment,
   onClose,
 }) => {
-  const theme = useTheme()
   const moveKeyframe = useMoveKeyframe()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -149,21 +167,15 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       }
       lastRenderTime = timestamp
 
+      const themeColors = getThemeColors()
+
       const renderOptions: RenderOptions = {
         totalFrames,
         currentFrame: currentFrameRef.current,
         keyframes,
         interpolationSegments: annotation?.boundingBoxSequence?.interpolationSegments || [],
         zoom,
-        theme: {
-          backgroundColor: theme.palette.background.paper,
-          textColor: theme.palette.text.primary,
-          textSecondary: theme.palette.text.secondary,
-          dividerColor: theme.palette.divider,
-          primaryMain: theme.palette.primary.main,
-          primaryLight: theme.palette.primary.light,
-          errorMain: theme.palette.error.main,
-        },
+        theme: themeColors,
       }
 
       // Only invalidate if something actually changed
@@ -193,7 +205,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         cancelAnimationFrame(rafId)
       }
     }
-  }, [keyframes, annotation?.boundingBoxSequence?.interpolationSegments, zoom, totalFrames, theme, selectedKeyframes])
+  }, [keyframes, annotation?.boundingBoxSequence?.interpolationSegments, zoom, totalFrames, selectedKeyframes])
 
   // Handle mouse down on canvas
   const handleMouseDown = useCallback(
@@ -349,7 +361,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   }, [videoRef, videoFps, currentFrame, onSeek])
 
   // Zoom change handler
-  const handleZoomChange = (_event: Event, newValue: number | number[]) => {
+  const handleZoomChange = (newValue: number | readonly number[]) => {
     const zoomValue = Array.isArray(newValue) ? newValue[0] : newValue
     setZoom(zoomValue)
     if (rendererRef.current) {
@@ -380,22 +392,13 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   }
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        backgroundColor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 1,
-        p: 1,
-      }}
-    >
+    <div className="w-full bg-card border border-border rounded p-2">
       {/* Canvas */}
-      <Box
+      <div
         ref={containerRef}
-        sx={{
-          width: '100%',
+        className="w-full relative"
+        style={{
           height: 60,
-          position: 'relative',
           cursor: isDragging ? 'grabbing' : 'grab',
         }}
       >
@@ -417,42 +420,25 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
 
         {/* Tooltip for hovered frame and segment */}
         {hoveredFrame !== null && !isDragging && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              color: '#fff',
-              padding: '4px 8px',
-              borderRadius: 1,
-              fontSize: '12px',
-              pointerEvents: 'none',
-            }}
+          <div
+            className="absolute top-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs pointer-events-none"
           >
             Frame {hoveredFrame}
             {hoveredSegmentInfo && (
-              <span style={{ marginLeft: 8, opacity: 0.8 }}>
+              <span className="ml-2 opacity-80">
                 | {hoveredSegmentInfo}
               </span>
             )}
-          </Box>
+          </div>
         )}
-      </Box>
+      </div>
 
       {/* Controls */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          mt: 1,
-        }}
-      >
+      <div className="flex items-center gap-4 mt-2">
         {/* Hide Timeline Button */}
         <Button
-          variant="outlined"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={onClose}
           aria-label="Hide timeline and show standard controls"
         >
@@ -460,151 +446,120 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
         </Button>
 
         {/* Transport controls */}
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <IconButton size="small" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)" aria-label="Jump 10 frames back">
-            <SkipPrevious />
-          </IconButton>
-          <IconButton size="small" onClick={handleStepBackward} title="Step 1 frame back (←)" aria-label="Step 1 frame back">
-            <FastRewind />
-          </IconButton>
-          <IconButton size="small" onClick={handleStepForward} title="Step 1 frame forward (→)" aria-label="Step 1 frame forward">
-            <FastForward />
-          </IconButton>
-          <IconButton size="small" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)" aria-label="Jump 10 frames forward">
-            <SkipNext />
-          </IconButton>
-        </Box>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)" aria-label="Jump 10 frames back">
+            <SkipBack className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={handleStepBackward} title="Step 1 frame back (←)" aria-label="Step 1 frame back">
+            <Rewind className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={handleStepForward} title="Step 1 frame forward (→)" aria-label="Step 1 frame forward">
+            <FastForward className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)" aria-label="Jump 10 frames forward">
+            <SkipForward className="size-4" />
+          </Button>
+        </div>
 
         {/* Keyframe controls */}
-        <Box sx={{ display: 'flex', gap: 0.5, borderLeft: `1px solid ${theme.palette.divider}`, pl: 1 }}>
-          <Tooltip title="Add Keyframe (K)" arrow placement="top">
-            <Box>
-              <IconButton
-                size="small"
-                onClick={onAddKeyframe}
-                disabled={!annotation || isKeyframe}
-                aria-label="Add Keyframe"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 0.5,
-                  '&:disabled': {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
-                  🔑
-                </Typography>
-              </IconButton>
-            </Box>
+        <div className="flex gap-1 border-l border-border pl-2">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onAddKeyframe}
+                  disabled={!annotation || isKeyframe}
+                  aria-label="Add Keyframe"
+                />
+              }
+            >
+              <span className="text-base">🔑</span>
+            </TooltipTrigger>
+            <TooltipContent>Add Keyframe (K)</TooltipContent>
           </Tooltip>
 
-          <Tooltip
-            title={
-              !annotation
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onDeleteKeyframe}
+                  disabled={!annotation || !isKeyframe || isFirstOrLastKeyframe}
+                  aria-label="Delete Keyframe"
+                />
+              }
+            >
+              <span className="text-base">╳</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {!annotation
                 ? 'No annotation selected'
                 : !isKeyframe
                 ? 'Not a keyframe'
                 : isFirstOrLastKeyframe
                 ? 'Cannot delete first/last keyframe'
-                : 'Delete Keyframe (Del)'
-            }
-            arrow
-            placement="top"
-          >
-            <Box>
-              <IconButton
-                size="small"
-                onClick={onDeleteKeyframe}
-                disabled={!annotation || !isKeyframe || isFirstOrLastKeyframe}
-                aria-label="Delete Keyframe"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 0.5,
-                  '&:disabled': {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
-                  ╳
-                </Typography>
-              </IconButton>
-            </Box>
+                : 'Delete Keyframe (Del)'}
+            </TooltipContent>
           </Tooltip>
 
-          <Tooltip title="Copy Previous Frame (Ctrl+C)" arrow placement="top">
-            <Box>
-              <IconButton
-                size="small"
-                onClick={onCopyPreviousFrame}
-                disabled={!annotation || currentFrame === 0}
-                aria-label="Copy Previous Frame"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 0.5,
-                  '&:disabled': {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
-                  ↻
-                </Typography>
-              </IconButton>
-            </Box>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onCopyPreviousFrame}
+                  disabled={!annotation || currentFrame === 0}
+                  aria-label="Copy Previous Frame"
+                />
+              }
+            >
+              <span className="text-base">↻</span>
+            </TooltipTrigger>
+            <TooltipContent>Copy Previous Frame (Ctrl+C)</TooltipContent>
           </Tooltip>
 
-          <Tooltip title="Interpolation Mode (I)" arrow placement="top">
-            <Box>
-              <IconButton
-                size="small"
-                onClick={() => setInterpolationDialogOpen(true)}
-                disabled={!annotation || !canInterpolate}
-                aria-label="Interpolation Mode"
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 0.5,
-                  '&:disabled': {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <Typography variant="caption" sx={{ fontSize: '1rem' }}>
-                  ~
-                </Typography>
-              </IconButton>
-            </Box>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setInterpolationDialogOpen(true)}
+                  disabled={!annotation || !canInterpolate}
+                  aria-label="Interpolation Mode"
+                />
+              }
+            >
+              <span className="text-base">~</span>
+            </TooltipTrigger>
+            <TooltipContent>Interpolation Mode (I)</TooltipContent>
           </Tooltip>
-        </Box>
+        </div>
 
         {/* Zoom slider */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-          <Typography variant="caption" sx={{ minWidth: 40 }}>
+        <div className="flex items-center gap-2 flex-1">
+          <span className="text-xs min-w-[40px]">
             Zoom
-          </Typography>
+          </span>
           <Slider
-            value={zoom}
-            onChange={handleZoomChange}
+            value={[zoom]}
+            onValueChange={handleZoomChange}
             min={1}
             max={10}
             step={0.5}
-            size="small"
-            sx={{ flex: 1, maxWidth: 200 }}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(value) => `${value}x`}
+            className="flex-1 max-w-[200px]"
           />
-        </Box>
+        </div>
 
         {/* Current frame display */}
-        <Typography variant="body2" sx={{ minWidth: 120, textAlign: 'right', fontFamily: 'monospace' }}>
+        <span className="text-sm min-w-[120px] text-right font-mono">
           Frame {currentFrame} / {totalFrames - 1}
-        </Typography>
-      </Box>
+        </span>
+      </div>
 
       {/* Interpolation Mode Selector Dialog */}
       <InterpolationModeSelector
@@ -617,6 +572,6 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           setInterpolationDialogOpen(false)
         }}
       />
-    </Box>
+    </div>
   )
 }

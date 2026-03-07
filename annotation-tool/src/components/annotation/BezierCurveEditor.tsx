@@ -1,16 +1,17 @@
 /**
- * @module BezierCurveEditor
- * @description Visual editor for cubic bezier curves with draggable control points.
+ * Visual editor for cubic bezier curves with draggable control points.
  * Provides intuitive curve shaping for custom interpolation.
+ *
+ * @module
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Box, Button, Typography, Tabs, Tab } from '@mui/material'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BezierControlPoint } from '@models/types'
 
 /**
- * @interface BezierCurveEditorProps
- * @description Props for BezierCurveEditor component.
+ * Props for BezierCurveEditor component.
  */
 export interface BezierCurveEditorProps {
   /** Property being edited */
@@ -22,8 +23,7 @@ export interface BezierCurveEditorProps {
 }
 
 /**
- * @component BezierCurveEditor
- * @description SVG-based bezier curve editor with draggable handles.
+ * SVG-based bezier curve editor with draggable handles.
  */
 export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
   property: _property,
@@ -38,7 +38,7 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
     ]
   )
   const [draggingPoint, setDraggingPoint] = useState<number | null>(null)
-  const [selectedTab, setSelectedTab] = useState(0)
+  const [selectedTab, setSelectedTab] = useState('x')
 
   const width = 400
   const height = 300
@@ -128,18 +128,20 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
   }
 
   return (
-    <Box>
+    <div>
       {/* Property Tabs */}
-      <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)}>
-        <Tab label="X" />
-        <Tab label="Y" disabled />
-        <Tab label="Width" disabled />
-        <Tab label="Height" disabled />
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList>
+          <TabsTrigger value="x">X</TabsTrigger>
+          <TabsTrigger value="y" disabled>Y</TabsTrigger>
+          <TabsTrigger value="width" disabled>Width</TabsTrigger>
+          <TabsTrigger value="height" disabled>Height</TabsTrigger>
+        </TabsList>
       </Tabs>
 
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, mb: 1 }}>
+      <p className="text-xs text-muted-foreground block mt-2 mb-2">
         Drag the control points to shape the curve
-      </Typography>
+      </p>
 
       {/* SVG Canvas */}
       <svg
@@ -275,15 +277,15 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
       </svg>
 
       {/* Reset Button */}
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" color="text.secondary">
+      <div className="mt-4 flex justify-between items-center">
+        <span className="text-xs text-muted-foreground">
           P1: ({controlPoints[0].x.toFixed(2)}, {controlPoints[0].y.toFixed(2)}) | P2: (
           {controlPoints[1].x.toFixed(2)}, {controlPoints[1].y.toFixed(2)})
-        </Typography>
-        <Button size="small" onClick={handleReset}>
+        </span>
+        <Button variant="ghost" size="sm" onClick={handleReset}>
           Reset to Linear
         </Button>
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 }

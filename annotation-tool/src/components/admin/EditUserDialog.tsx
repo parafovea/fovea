@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect, FormEvent } from 'react'
-import { ChevronDown } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -282,7 +281,7 @@ export function EditUserDialog({ open, user, onClose }: EditUserDialogProps): JS
                 <Separator className="my-2" />
 
                 {/* Change Password Section */}
-                <Accordion type="single" collapsible>
+                <Accordion>
                   <AccordionItem value="password">
                     <AccordionTrigger className="text-sm font-medium">
                       Change Password

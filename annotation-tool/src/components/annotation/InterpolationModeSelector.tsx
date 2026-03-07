@@ -1,28 +1,26 @@
 /**
- * @module InterpolationModeSelector
- * @description Modal dialog for selecting interpolation modes between keyframes.
+ * Modal dialog for selecting interpolation modes between keyframes.
  * Provides preset options and real-time preview of interpolation effects.
+ *
+ * @module
  */
 
 import React, { useState, useMemo } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormControl,
-  Slider,
-  Typography,
-  Box,
-} from '@mui/material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
 import { Annotation, InterpolationType, INTERPOLATION_PRESETS, BezierControlPoint } from '@models/types'
 
 /**
- * @description Control points for bezier interpolation, organized by property.
+ * Control points for bezier interpolation, organized by property.
  */
 export interface BezierControlPointSet {
   x?: BezierControlPoint[]
@@ -33,8 +31,7 @@ export interface BezierControlPointSet {
 import { BezierCurveEditor } from './BezierCurveEditor'
 
 /**
- * @interface InterpolationModeSelectorProps
- * @description Props for InterpolationModeSelector component.
+ * Props for InterpolationModeSelector component.
  */
 export interface InterpolationModeSelectorProps {
   /** Annotation being edited (optional) */
@@ -50,8 +47,7 @@ export interface InterpolationModeSelectorProps {
 }
 
 /**
- * @component InterpolationModeSelector
- * @description Modal dialog for selecting and previewing interpolation modes.
+ * Modal dialog for selecting and previewing interpolation modes.
  */
 export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps> = ({
   annotation,
@@ -84,8 +80,8 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
   )
 
   // Handle mode change
-  const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const mode = event.target.value as InterpolationType
+  const handleModeChange = (value: string) => {
+    const mode = value as InterpolationType
     setSelectedMode(mode)
 
     // Show bezier editor if custom selected
@@ -117,140 +113,69 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
 
   if (!segment) {
     return (
-      <Dialog open={open} onClose={onClose}>
-        <DialogTitle>Interpolation Mode</DialogTitle>
+      <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
         <DialogContent>
-          <Typography>Current frame is not in an interpolation segment.</Typography>
+          <DialogHeader>
+            <DialogTitle>Interpolation Mode</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm">Current frame is not in an interpolation segment.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Close</Button>
-        </DialogActions>
       </Dialog>
     )
   }
 
+  const presets = [
+    { value: 'linear', preset: INTERPOLATION_PRESETS.linear },
+    { value: 'ease-in-out', preset: INTERPOLATION_PRESETS.easeInOut },
+    { value: 'ease-in', preset: INTERPOLATION_PRESETS.easeIn },
+    { value: 'ease-out', preset: INTERPOLATION_PRESETS.easeOut },
+    { value: 'hold', preset: INTERPOLATION_PRESETS.hold },
+  ]
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Interpolation Mode</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Interpolation Mode</DialogTitle>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">
           Segment: Frame {segment.startFrame} → {segment.endFrame}
-        </Typography>
+        </p>
 
         {/* Mode Selection */}
-        <FormControl component="fieldset" fullWidth sx={{ mt: 2 }}>
-          <RadioGroup value={selectedMode} onChange={handleModeChange}>
-            <FormControlLabel
-              value="linear"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>{INTERPOLATION_PRESETS.linear.icon}</Typography>
-                  <Box>
-                    <Typography variant="body1">
-                      {INTERPOLATION_PRESETS.linear.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {INTERPOLATION_PRESETS.linear.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
+        <RadioGroup value={selectedMode} onValueChange={handleModeChange} className="mt-4">
+          {presets.map(({ value, preset }) => (
+            <div key={value} className="flex items-center gap-3">
+              <RadioGroupItem value={value} id={`interp-${value}`} />
+              <Label htmlFor={`interp-${value}`} className="flex items-center gap-2 cursor-pointer">
+                <span>{preset.icon}</span>
+                <div>
+                  <p className="text-sm">{preset.name}</p>
+                  <p className="text-xs text-muted-foreground">{preset.description}</p>
+                </div>
+              </Label>
+            </div>
+          ))}
 
-            <FormControlLabel
-              value="ease-in-out"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>{INTERPOLATION_PRESETS.easeInOut.icon}</Typography>
-                  <Box>
-                    <Typography variant="body1">
-                      {INTERPOLATION_PRESETS.easeInOut.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {INTERPOLATION_PRESETS.easeInOut.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
-
-            <FormControlLabel
-              value="ease-in"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>{INTERPOLATION_PRESETS.easeIn.icon}</Typography>
-                  <Box>
-                    <Typography variant="body1">
-                      {INTERPOLATION_PRESETS.easeIn.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {INTERPOLATION_PRESETS.easeIn.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
-
-            <FormControlLabel
-              value="ease-out"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>{INTERPOLATION_PRESETS.easeOut.icon}</Typography>
-                  <Box>
-                    <Typography variant="body1">
-                      {INTERPOLATION_PRESETS.easeOut.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {INTERPOLATION_PRESETS.easeOut.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
-
-            <FormControlLabel
-              value="hold"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>{INTERPOLATION_PRESETS.hold.icon}</Typography>
-                  <Box>
-                    <Typography variant="body1">
-                      {INTERPOLATION_PRESETS.hold.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {INTERPOLATION_PRESETS.hold.description}
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
-
-            <FormControlLabel
-              value="bezier"
-              control={<Radio />}
-              label={
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography>⌢</Typography>
-                  <Box>
-                    <Typography variant="body1">Custom (Bezier)</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Custom curve with control points
-                    </Typography>
-                  </Box>
-                </Box>
-              }
-            />
-          </RadioGroup>
-        </FormControl>
+          <div className="flex items-center gap-3">
+            <RadioGroupItem value="bezier" id="interp-bezier" />
+            <Label htmlFor="interp-bezier" className="flex items-center gap-2 cursor-pointer">
+              <span>⌢</span>
+              <div>
+                <p className="text-sm">Custom (Bezier)</p>
+                <p className="text-xs text-muted-foreground">Custom curve with control points</p>
+              </div>
+            </Label>
+          </div>
+        </RadioGroup>
 
         {/* Bezier Editor (if custom selected) */}
         {showBezierEditor && (
-          <Box sx={{ mt: 3 }}>
+          <div className="mt-6">
             <BezierCurveEditor
               property="x"
               initialControlPoints={bezierControlPoints.x || [
@@ -267,37 +192,29 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
                 }))
               }}
             />
-          </Box>
+          </div>
         )}
 
         {/* Preview Slider */}
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="caption" gutterBottom>
-            Preview
-          </Typography>
+        <div className="mt-6">
+          <p className="text-xs font-medium mb-2">Preview</p>
           <Slider
-            value={previewFrame}
-            onChange={(_event, newValue) => setPreviewFrame(newValue as number)}
+            value={[previewFrame]}
+            onValueChange={(val) => setPreviewFrame(Array.isArray(val) ? val[0] : val)}
             min={segment.startFrame}
             max={segment.endFrame}
             step={1}
-            marks
-            valueLabelDisplay="auto"
-            size="small"
-            sx={{ mt: 1 }}
           />
-          <Typography variant="caption" color="text.secondary">
+          <p className="text-xs text-muted-foreground mt-1">
             Scrub to preview interpolation at different frames
-          </Typography>
-        </Box>
-      </DialogContent>
+          </p>
+        </div>
 
-      <DialogActions>
-        <Button onClick={handleCancel}>Cancel</Button>
-        <Button onClick={handleApply} variant="contained" color="primary">
-          Apply
-        </Button>
-      </DialogActions>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button onClick={handleApply}>Apply</Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   )
 }

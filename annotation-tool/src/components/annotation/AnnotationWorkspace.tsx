@@ -1,50 +1,40 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Slider } from '@/components/ui/slider'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
-  Box,
-  Paper,
-  Typography,
-  IconButton,
-  ToggleButtonGroup,
-  ToggleButton,
-  Slider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Divider,
-  Drawer,
-  Toolbar,
-  Chip,
-  Button,
-  Link,
-  Stack,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Fab,
-  Tooltip,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-} from '@mui/material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import {
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon,
-  SkipNext as NextFrameIcon,
-  SkipPrevious as PrevFrameIcon,
-  Delete as DeleteIcon,
-  Schedule as TimeIcon,
-  ThumbUp as LikeIcon,
-  Share as ShareIcon,
-  Comment as CommentIcon,
-  OpenInNew as ExternalLinkIcon,
-  Build as BuildIcon,
-  Search as DetectIcon,
-  ArrowBack as BackIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Trash2,
+  Clock,
+  ThumbsUp,
+  Share2,
+  MessageSquare,
+  ExternalLink,
+  Wrench,
+  Search,
+  ArrowLeft,
+  Pencil,
+} from 'lucide-react'
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './VideoPlayer'
 import { useExternalLinksConfig } from '@hooks/config'
@@ -69,7 +59,6 @@ import VideoSummaryDialog from '@components/video/VideoSummaryDialog'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
 import { DetectionDialog } from '@components/dialogs/DetectionDialog'
 import type { DetectionRequest } from '@components/dialogs/DetectionDialog'
-import { Edit as EditIcon } from '@mui/icons-material'
 import { formatTimestamp } from '@utils/formatters'
 import { Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment, getAnnotationTimeBounds } from '@models/types'
 import { useDetectObjects } from '@store/queries/useDetection'
@@ -474,13 +463,6 @@ export default function AnnotationWorkspace() {
   /**
    * Navigates to the ontology builder and saves current annotation context.
    * Stores the current video ID and timestamp for resuming annotation later.
-   *
-   * @example
-   * ```tsx
-   * <Fab onClick={handleGoToOntology}>
-   *   <BuildIcon />
-   * </Fab>
-   * ```
    */
   const handleGoToOntology = () => {
     // Save current annotation state before navigating
@@ -496,11 +478,6 @@ export default function AnnotationWorkspace() {
    * Triggers detection mutation and opens results dialog on success.
    *
    * @param request - Detection parameters including video ID, query, frames, and options
-   *
-   * @example
-   * ```tsx
-   * <DetectionDialog onDetect={handleRunDetection} />
-   * ```
    */
   const handleRunDetection = (request: DetectionRequest) => {
     detectMutation.mutate(request)
@@ -529,131 +506,149 @@ export default function AnnotationWorkspace() {
    *
    * @param annotation - Annotation with bounding box sequence
    * @returns True if current time falls within annotation's time bounds
-   *
-   * @example
-   * ```tsx
-   * <ListItem sx={{ borderLeft: isAnnotationActive(annotation) ? '3px solid' : 'none' }}>
-   * ```
    */
   const isAnnotationActive = (annotation: Annotation) => {
     const bounds = getAnnotationTimeBounds(annotation, fps)
     return bounds && bounds.startTime <= currentTime && bounds.endTime >= currentTime
   }
 
+  /**
+   * Returns badge variant for annotation type category.
+   */
+  const getTypeCategoryVariant = (category: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    if (category === 'entity') return 'default'
+    if (category === 'role') return 'secondary'
+    return 'outline'
+  }
+
+  /**
+   * Returns badge variant for object annotation kind.
+   */
+  const getObjectKindVariant = (objAnn: ObjectAnnotation): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    if (objAnn.linkedEntityId) return 'default'
+    if (objAnn.linkedEventId) return 'outline'
+    if (objAnn.linkedLocationId) return 'secondary'
+    return 'destructive' // collections
+  }
+
   return (
-    <Box sx={{ display: 'flex', height: '100%' }}>
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Stack spacing={1}>
+    <div className="flex h-full">
+      <div className="flex-1 flex flex-col">
+        <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-4 mb-4 shadow-sm">
+          <div className="flex flex-col gap-2">
             {/* Back button and uploader as main title */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => navigate('/')}
-                size="small"
                 aria-label="Back to video browser"
-                sx={{ flexShrink: 0 }}
+                className="shrink-0"
               >
-                <BackIcon />
-              </IconButton>
-              <Typography variant="h2" sx={{ fontSize: '1.25rem' }}>
+                <ArrowLeft className="size-4" />
+              </Button>
+              <h2 className="text-xl font-semibold">
                 {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
                 {currentVideo?.uploaderId && (
                   <>
                     {' '}(
                     {allowExternalVideoLinks && currentVideo?.uploaderUrl ? (
-                      <Link
+                      <a
                         href={currentVideo.uploaderUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        underline="hover"
+                        className="text-primary hover:underline"
                       >
                         @{currentVideo.uploaderId}
-                      </Link>
+                      </a>
                     ) : (
-                      <Typography component="span" color="text.secondary">
+                      <span className="text-muted-foreground">
                         @{currentVideo.uploaderId}
-                      </Typography>
+                      </span>
                     )}
                     )
                   </>
                 )}
-              </Typography>
-            </Box>
-            
-            {/* Description (no need for title since it duplicates uploader + description) */}
+              </h2>
+            </div>
+
+            {/* Description */}
             {currentVideo?.description && (
-              <Typography variant="body2">
+              <p className="text-sm">
                 {currentVideo.description}
-              </Typography>
+              </p>
             )}
 
             {/* Metadata Row */}
-            <Stack direction="row" spacing={2} alignItems="center">
+            <div className="flex items-center gap-4">
               {/* Timestamp */}
               {currentVideo?.timestamp && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <TimeIcon fontSize="small" color="action" />
-                  <Typography variant="caption" color="text.secondary">
+                <div className="flex items-center gap-1">
+                  <Clock className="size-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
                     {formatTimestamp(currentVideo.timestamp)}
-                  </Typography>
-                </Box>
+                  </span>
+                </div>
               )}
-              
+
               {/* Engagement Metrics */}
               {currentVideo && (currentVideo.likeCount || currentVideo.repostCount || currentVideo.commentCount) && (
                 <>
                   {currentVideo.likeCount !== undefined && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <LikeIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.likeCount.toLocaleString()}</Typography>
-                    </Box>
+                    <div className="flex items-center gap-1">
+                      <ThumbsUp className="size-4 text-muted-foreground" />
+                      <span className="text-xs">{currentVideo.likeCount.toLocaleString()}</span>
+                    </div>
                   )}
                   {currentVideo.repostCount !== undefined && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <ShareIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.repostCount.toLocaleString()}</Typography>
-                    </Box>
+                    <div className="flex items-center gap-1">
+                      <Share2 className="size-4 text-muted-foreground" />
+                      <span className="text-xs">{currentVideo.repostCount.toLocaleString()}</span>
+                    </div>
                   )}
                   {currentVideo.commentCount !== undefined && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CommentIcon fontSize="small" color="action" />
-                      <Typography variant="caption">{currentVideo.commentCount.toLocaleString()}</Typography>
-                    </Box>
+                    <div className="flex items-center gap-1">
+                      <MessageSquare className="size-4 text-muted-foreground" />
+                      <span className="text-xs">{currentVideo.commentCount.toLocaleString()}</span>
+                    </div>
                   )}
                 </>
               )}
 
-              {/* Source Link - More prominent */}
+              {/* Source Link */}
               {currentVideo?.webpageUrl && (
                 allowExternalVideoLinks ? (
                   <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={<ExternalLinkIcon />}
-                    href={currentVideo.webpageUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    size="sm"
+                    render={
+                      <a
+                        href={currentVideo.webpageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      />
+                    }
                   >
+                    <ExternalLink className="size-4 mr-1" />
                     View Original
                   </Button>
                 ) : (
-                  <Tooltip title="External video source links are disabled">
-                    <span>
+                  <Tooltip>
+                    <TooltipTrigger render={<span />}>
                       <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<ExternalLinkIcon />}
+                        size="sm"
                         disabled
                       >
+                        <ExternalLink className="size-4 mr-1" />
                         View Original
                       </Button>
-                    </span>
+                    </TooltipTrigger>
+                    <TooltipContent>External video source links are disabled</TooltipContent>
                   </Tooltip>
                 )
               )}
 
               {/* Auto-save status indicator */}
-              <Box sx={{ ml: 'auto' }}>
+              <div className="ml-auto">
                 <SaveStatusIndicator
                   status={saveStatus}
                   lastSavedAt={lastSavedAt}
@@ -662,10 +657,10 @@ export default function AnnotationWorkspace() {
                   onRetry={forceSave}
                   compact
                 />
-              </Box>
-            </Stack>
-          </Stack>
-        </Paper>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <VideoPlayer
           ref={videoPlayerRef}
@@ -688,122 +683,122 @@ export default function AnnotationWorkspace() {
           )}
         </VideoPlayer>
 
-        <Paper sx={{ p: 2, mt: 2 }}>
+        <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-4 mt-4 shadow-sm">
           {/* Container for sliding panels */}
-          <Box data-testid="dynamic-controls-wrapper" sx={{ position: 'relative', overflow: 'hidden', minHeight: '140px' }}>
+          <div data-testid="dynamic-controls-wrapper" className="relative overflow-hidden" style={{ minHeight: '140px' }}>
             {/* Standard Controls Panel - slides left */}
-            <Box
+            <div
               data-testid="standard-controls-panel"
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+              className="absolute top-0 left-0 right-0 transition-all duration-300 ease-in-out"
+              style={{
                 transform: timelineExpanded ? 'translateX(-100%)' : 'translateX(0)',
                 opacity: timelineExpanded ? 0 : 1,
                 pointerEvents: timelineExpanded ? 'none' : 'auto',
               }}
             >
               {/* Playback Controls Row */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <div className="flex items-center gap-4 mb-4">
                 {/* Mode Toggle */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2">Mode:</Typography>
-                  <ToggleButtonGroup
-                    value={annotationMode}
-                    exclusive
-                    onChange={(_, newMode) => {
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Mode:</span>
+                  <ToggleGroup
+                    value={[annotationMode]}
+                    onValueChange={(newValue) => {
+                      // base-ui ToggleGroup gives us the full array of pressed values
+                      const newMode = newValue[newValue.length - 1]
                       if (newMode) {
-                        setAnnotationMode(newMode)
+                        setAnnotationMode(newMode as 'type' | 'object')
                         if (newMode === 'object') {
                           setSelectedPersonaId(null)
                         }
                       }
                     }}
-                    size="small"
+                    variant="outline"
+                    size="sm"
                   >
-                    <ToggleButton value="type">
+                    <ToggleGroupItem value="type">
                       Type
-                    </ToggleButton>
-                    <ToggleButton value="object">
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="object">
                       Object
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                </Box>
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
                 {/* Play/pause controls */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton onClick={() => videoPlayerRef.current?.handlePlayPause()} aria-label={videoPlayerRef.current?.isPlaying ? "Pause video" : "Play video"}>
-                    {videoPlayerRef.current?.isPlaying ? <PauseIcon /> : <PlayIcon />}
-                  </IconButton>
-                  <IconButton onClick={() => videoPlayerRef.current?.handlePrevFrame()} aria-label="Previous frame">
-                    <PrevFrameIcon />
-                  </IconButton>
-                  <IconButton onClick={() => videoPlayerRef.current?.handleNextFrame()} aria-label="Next frame">
-                    <NextFrameIcon />
-                  </IconButton>
-                </Box>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePlayPause()} aria-label={videoPlayerRef.current?.isPlaying ? "Pause video" : "Play video"}>
+                    {videoPlayerRef.current?.isPlaying ? <Pause className="size-5" /> : <Play className="size-5" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePrevFrame()} aria-label="Previous frame">
+                    <SkipBack className="size-5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handleNextFrame()} aria-label="Next frame">
+                    <SkipForward className="size-5" />
+                  </Button>
+                </div>
 
                 {/* Time slider */}
-                <Box sx={{ flexGrow: 1, px: 2 }}>
+                <div className="flex-1 px-4">
                   <Slider
-                    value={currentTime}
+                    value={[currentTime]}
                     max={duration}
-                    onChange={(_event, value) => {
-                      const time = Array.isArray(value) ? value[0] : value
-                      videoPlayerRef.current?.handleSeek(time)
+                    onValueChange={(v) => { const val = Array.isArray(v) ? v[0] : v;
+                      videoPlayerRef.current?.handleSeek(val)
                     }}
-                    size="small"
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => formatTime(value)}
                   />
-                </Box>
+                </div>
 
                 {/* Current time display */}
-                <Typography variant="body2" sx={{ minWidth: 100, fontFamily: 'monospace' }}>
+                <span className="text-sm min-w-[100px] font-mono">
                   {formatTime(currentTime)} / {formatTime(duration)}
-                </Typography>
+                </span>
 
                 {/* Timeline Toggle Button */}
-                <Tooltip title={timelineExpanded ? 'Hide timeline' : 'Show timeline'}>
-                  <Button
-                    variant={timelineExpanded ? 'contained' : 'outlined'}
-                    onClick={() => setTimelineExpanded(!timelineExpanded)}
-                    size="small"
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant={timelineExpanded ? 'default' : 'outline'}
+                        onClick={() => setTimelineExpanded(!timelineExpanded)}
+                        size="sm"
+                      />
+                    }
                   >
                     {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
-                  </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{timelineExpanded ? 'Hide timeline' : 'Show timeline'}</TooltipContent>
                 </Tooltip>
-              </Box>
+              </div>
 
               {/* Second Row: Persona Selector and Type/Object Selection */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <div className="flex items-center gap-4">
                 {/* Persona Selector */}
-                <FormControl size="small" sx={{ width: 250 }} disabled={annotationMode === 'object'}>
-                  <InputLabel id="persona-select-label">Select Persona</InputLabel>
+                <div className="w-[250px]">
                   <Select
-                    labelId="persona-select-label"
-                    id="persona-select"
                     value={selectedPersonaId || ''}
-                    label="Select Persona"
-                    onChange={(e) => setSelectedPersonaId(e.target.value || null)}
+                    onValueChange={(val) => setSelectedPersonaId(val || null)}
                     disabled={annotationMode === 'object'}
                   >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {personas.map((persona) => (
-                      <MenuItem key={persona.id} value={persona.id}>
-                        {persona.name} - {persona.role}
-                      </MenuItem>
-                    ))}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Persona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">
+                        <em>None</em>
+                      </SelectItem>
+                      {personas.map((persona) => (
+                        <SelectItem key={persona.id} value={persona.id}>
+                          {persona.name} - {persona.role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
-                </FormControl>
+                </div>
 
                 {/* Type/Object Selection */}
                 {(annotationMode === 'type' || annotationMode === 'object') && (
-                  <Box sx={{ flex: 1, maxWidth: 400 }}>
+                  <div className="flex-1 max-w-[400px]">
                     <AnnotationAutocomplete
                       mode={annotationMode}
                       personaId={selectedPersonaId}
@@ -823,52 +818,51 @@ export default function AnnotationWorkspace() {
                       }}
                       disabled={annotationMode === 'type' && !selectedPersonaId}
                     />
-                  </Box>
+                  </div>
                 )}
 
                 {/* Right-aligned action buttons */}
-                <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+                <div className="ml-auto flex gap-2">
                   {/* Detect Objects Button */}
                   {currentVideo && videoId && (
-                    <Tooltip title={modelsDisabled ? 'No AI models available for object detection' : ''}>
-                      <span>
+                    <Tooltip>
+                      <TooltipTrigger render={<span />}>
                         <Button
-                          variant="outlined"
-                          startIcon={<DetectIcon />}
+                          variant="outline"
                           onClick={() => setDetectionDialogOpen(true)}
-                          size="small"
+                          size="sm"
                           disabled={modelsDisabled}
                         >
+                          <Search className="size-4 mr-1" />
                           Detect Objects
                         </Button>
-                      </span>
+                      </TooltipTrigger>
+                      {modelsDisabled && (
+                        <TooltipContent>No AI models available for object detection</TooltipContent>
+                      )}
                     </Tooltip>
                   )}
 
                   {/* Video Summary Button */}
                   {currentVideo && videoId && (
                     <Button
-                      variant="outlined"
-                      startIcon={<EditIcon />}
+                      variant="outline"
                       onClick={() => setSummaryDialogOpen(true)}
-                      size="small"
+                      size="sm"
                     >
+                      <Pencil className="size-4 mr-1" />
                       Edit Summary
                     </Button>
                   )}
-                </Box>
-              </Box>
-            </Box>
+                </div>
+              </div>
+            </div>
 
             {/* Timeline Panel - slides in from right to replace standard controls */}
-            <Box
+            <div
               data-testid="timeline-panel"
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+              className="absolute top-0 left-0 right-0 transition-all duration-300 ease-in-out"
+              style={{
                 transform: timelineExpanded ? 'translateX(0)' : 'translateX(100%)',
                 opacity: timelineExpanded ? 1 : 0,
                 pointerEvents: timelineExpanded ? 'auto' : 'none',
@@ -896,149 +890,121 @@ export default function AnnotationWorkspace() {
                   onClose={() => setTimelineExpanded(false)}
                 />
               )}
-            </Box>
-          </Box>
-        </Paper>
+            </div>
+          </div>
+        </div>
 
-      </Box>
+      </div>
 
-      <Drawer
-        variant="permanent"
-        anchor="right"
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
-          },
-        }}
+      {/* Right sidebar (replacing MUI Drawer) */}
+      <div
+        className="shrink-0 border-l border-border bg-card overflow-hidden"
+        style={{ width: DRAWER_WIDTH }}
       >
-        <Toolbar />
-        <Box sx={{ overflow: 'auto', p: 2 }}>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-            <Typography variant="h3" sx={{ fontSize: '1.25rem' }}>
+        {/* Spacer for toolbar height */}
+        <div className="h-16" />
+        <div className="overflow-auto p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">
               All Annotations ({sortedAnnotations.length})
-            </Typography>
-          </Stack>
-          <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block', mb: 2 }}>
-            Click to seek • Double-click to edit
-          </Typography>
-          <List dense>
+            </h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Click to seek, double-click to edit
+          </p>
+          <ul className="divide-y">
             {sortedAnnotations.length === 0 && (
-              <ListItem>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', width: '100%' }}>
+              <li className="py-2">
+                <p className="text-sm text-muted-foreground text-center">
                   No annotations yet. Select a mode above and draw on the video.
-                </Typography>
-              </ListItem>
+                </p>
+              </li>
             )}
             {sortedAnnotations.map((annotation) => {
               const isActive = isAnnotationActive(annotation)
               const isSelected = selectedAnnotation?.id === annotation.id
-              
+
               return (
-                <React.Fragment key={annotation.id}>
-                  <ListItem
-                    onClick={() => handleAnnotationClick(annotation)}
-                    onDoubleClick={() => {
-                      setEditingAnnotation(annotation)
-                      setEditorOpen(true)
+                <li
+                  key={annotation.id}
+                  className={`flex items-start justify-between py-2 px-2 cursor-pointer rounded-sm transition-colors ${
+                    isSelected ? 'bg-accent' : isActive ? 'bg-muted' : 'hover:bg-muted'
+                  }`}
+                  style={{
+                    borderLeft: isActive ? '3px solid hsl(var(--primary))' : '3px solid transparent',
+                  }}
+                  onClick={() => handleAnnotationClick(annotation)}
+                  onDoubleClick={() => {
+                    setEditingAnnotation(annotation)
+                    setEditorOpen(true)
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1">
+                      {annotation.annotationType === 'type' && (
+                        <>
+                          <Badge
+                            variant={getTypeCategoryVariant(annotation.typeCategory)}
+                            className="text-[0.75rem] h-5"
+                          >
+                            {annotation.typeCategory}
+                          </Badge>
+                          <span className="text-sm truncate">
+                            {getTypeName(annotation as TypeAnnotation)}
+                          </span>
+                        </>
+                      )}
+                      {annotation.annotationType === 'object' && (() => {
+                        const objAnn = annotation as ObjectAnnotation
+                        return (
+                          <>
+                            <Badge
+                              variant={getObjectKindVariant(objAnn)}
+                              className="text-[0.75rem] h-5"
+                            >
+                              {getObjectKind(objAnn)}
+                            </Badge>
+                            <span className="text-sm font-semibold truncate">
+                              {getObjectName(objAnn)}
+                            </span>
+                          </>
+                        )
+                      })()}
+                    </div>
+                    <div>
+                      {(() => {
+                        const bounds = getAnnotationTimeBounds(annotation, fps)
+                        return bounds && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatTime(bounds.startTime)} → {formatTime(bounds.endTime)}
+                          </span>
+                        )
+                      })()}
+                      {annotation.notes && (
+                        <p className="text-xs text-muted-foreground italic">
+                          {annotation.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteAnnotationMutation({ videoId: videoId || '', annotationId: annotation.id })
                     }}
-                    sx={{
-                      cursor: 'pointer',
-                      backgroundColor: isSelected ? 'action.selected' : (isActive ? 'action.hover' : 'transparent'),
-                      borderLeft: isActive ? '3px solid' : '3px solid transparent',
-                      borderLeftColor: isActive ? 'primary.main' : 'transparent',
-                      '&:hover': {
-                        backgroundColor: 'action.hover',
-                      },
-                    }}
+                    aria-label="Delete annotation"
                   >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {annotation.annotationType === 'type' && (
-                            <>
-                              <Chip
-                                label={annotation.typeCategory}
-                                size="small"
-                                color={
-                                  annotation.typeCategory === 'entity' ? 'success' :
-                                  annotation.typeCategory === 'role' ? 'primary' :
-                                  'warning'
-                                }
-                                sx={{ height: 20, fontSize: '0.75rem' }}
-                              />
-                              <Typography variant="body2" noWrap>
-                                {getTypeName(annotation as TypeAnnotation)}
-                              </Typography>
-                            </>
-                          )}
-                          {annotation.annotationType === 'object' && (() => {
-                            const objAnn = annotation as ObjectAnnotation
-                            return (
-                              <>
-                                <Chip
-                                  label={getObjectKind(objAnn)}
-                                  size="small"
-                                  color={
-                                    objAnn.linkedEntityId ? 'success' :
-                                    objAnn.linkedEventId ? 'warning' :
-                                    objAnn.linkedLocationId ? 'secondary' :
-                                    'error'  // collections
-                                  }
-                                  sx={{ height: 20, fontSize: '0.75rem' }}
-                                />
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                                  {getObjectName(objAnn)}
-                                </Typography>
-                              </>
-                            )
-                          })()}
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          {(() => {
-                            const bounds = getAnnotationTimeBounds(annotation, fps)
-                            return bounds && (
-                              <Typography variant="caption" color="text.secondary">
-                                {formatTime(bounds.startTime)} → {formatTime(bounds.endTime)}
-                              </Typography>
-                            )
-                          })()}
-                          {annotation.notes && (
-                            <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                              {annotation.notes}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                      primaryTypographyProps={{ component: 'div' }}
-                      secondaryTypographyProps={{ component: 'div' }}
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteAnnotationMutation({ videoId: videoId || '', annotationId: annotation.id })
-                        }}
-                        aria-label="Delete annotation"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  <Divider />
-                </React.Fragment>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </li>
               )
             })}
-          </List>
-        </Box>
-      </Drawer>
-      
+          </ul>
+        </div>
+      </div>
+
       <AnnotationEditor
         open={editorOpen}
         onClose={() => {
@@ -1048,7 +1014,7 @@ export default function AnnotationWorkspace() {
         annotation={editingAnnotation}
         videoFps={currentVideo?.fps}
       />
-      
+
       {/* Video Summary Dialog */}
       {videoId && (
         <VideoSummaryDialog
@@ -1076,19 +1042,16 @@ export default function AnnotationWorkspace() {
 
       {/* Detection Candidates Dialog */}
       {detectionResults && showDetectionCandidates && videoId && (
-        <Dialog
-          open={showDetectionCandidates}
-          onClose={() => setShowDetectionCandidates(false)}
-          maxWidth="lg"
-          fullWidth
-        >
-          <DialogTitle>
-            Detection Results
-            <Typography variant="body2" color="text.secondary">
-              Found {detectionResults.totalDetections} objects for query: "{detectionResults.query}"
-            </Typography>
-          </DialogTitle>
-          <DialogContent>
+        <Dialog open={showDetectionCandidates} onOpenChange={(isOpen) => { if (!isOpen) setShowDetectionCandidates(false) }}>
+          <DialogContent className="sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>
+                Detection Results
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Found {detectionResults.totalDetections} objects for query: "{detectionResults.query}"
+              </p>
+            </DialogHeader>
             <AnnotationCandidatesList
               videoId={videoId}
               frames={detectionResults.frames}
@@ -1097,36 +1060,36 @@ export default function AnnotationWorkspace() {
               typeCategory={annotationMode === 'type' ? 'entity' : undefined}
               initialConfidenceThreshold={detectionConfidenceThreshold}
             />
+            <DialogFooter>
+              <Button onClick={() => {
+                setShowDetectionCandidates(false)
+                clearDetectionState()
+              }}>
+                Close
+              </Button>
+            </DialogFooter>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => {
-              setShowDetectionCandidates(false)
-              clearDetectionState()
-            }}>
-              Close
-            </Button>
-          </DialogActions>
         </Dialog>
       )}
 
       {/* Floating Action Button to go to Ontology */}
-      <Box role="complementary" aria-label="Quick actions">
-        <Tooltip title="Go to Ontology Builder (Cmd/Ctrl + O)" placement="left">
-          <Fab
-            color="primary"
-            aria-label="go to ontology"
-            onClick={handleGoToOntology}
-            sx={{
-              position: 'fixed',
-              bottom: 24,
-              right: 24,
-              zIndex: 1000,
-            }}
+      <div role="complementary" aria-label="Quick actions">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="lg"
+                aria-label="go to ontology"
+                onClick={handleGoToOntology}
+                className="fixed bottom-6 right-6 z-[1000] rounded-full size-14 shadow-lg"
+              />
+            }
           >
-            <BuildIcon />
-          </Fab>
+            <Wrench className="size-6" />
+          </TooltipTrigger>
+          <TooltipContent side="left">Go to Ontology Builder (Cmd/Ctrl + O)</TooltipContent>
         </Tooltip>
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 }

@@ -1,23 +1,9 @@
 import { useState, useEffect } from 'react'
-import {
-  Box,
-  Stepper,
-  Step,
-  StepLabel,
-  Button,
-  Typography,
-  Alert,
-  Paper,
-  Chip,
-  Link,
-  CircularProgress,
-} from '@mui/material'
-import {
-  Language as WikidataIcon,
-  OpenInNew as OpenInNewIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-} from '@mui/icons-material'
+import { Globe, ExternalLink, CheckCircle, XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertTitle, AlertDescription, AlertAction } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import WikidataSearch from './WikidataSearch'
 import { useWikidataImport, ImportType, WikidataImportData } from '@hooks/wikidata'
 
@@ -41,7 +27,7 @@ interface WikidataImportFlowProps {
 /**
  * Stepper-based Wikidata import flow component.
  *
- * Provides an industry-standard import experience with search, preview, and success steps.
+ * Provides an import experience with search, preview, and success steps.
  * Implements one-click import with undo functionality (10-second window).
  *
  * @example
@@ -142,133 +128,141 @@ export default function WikidataImportFlow({
       case 0:
         // Step 1: Search
         return (
-          <Box sx={{ mt: 3 }}>
+          <div className="mt-6">
             <WikidataSearch
               onImport={handleDataSelect}
               entityType={entityType}
               objectSubtype={objectSubtype}
               importType={type}
             />
-          </Box>
+          </div>
         )
 
       case 1:
         // Step 2: Preview & Confirm
         if (!selectedData) return null
         return (
-          <Box sx={{ mt: 3 }}>
-            <Alert severity="info" icon={<WikidataIcon />} sx={{ mb: 2 }}>
-              Review the information below. Clicking "Import and Save" will immediately add this item to your {type.replace('-', ' ')}.
-              You will have 10 seconds to undo the import.
+          <div className="mt-6">
+            <Alert className="mb-4">
+              <Globe className="h-4 w-4" />
+              <AlertDescription>
+                Review the information below. Clicking "Import and Save" will immediately add this item to your {type.replace('-', ' ')}.
+                You will have 10 seconds to undo the import.
+              </AlertDescription>
             </Alert>
 
-            <Paper variant="outlined" sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h6">{selectedData.name}</Typography>
-                  <Link
+            <div className="rounded-lg border p-6">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h6 className="text-base font-semibold">{selectedData.name}</h6>
+                  <a
                     href={selectedData.wikidataUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                    className="flex items-center gap-1 text-primary hover:underline"
                   >
-                    <Typography variant="caption">{selectedData.wikidataId}</Typography>
-                    <OpenInNewIcon fontSize="small" />
-                  </Link>
-                </Box>
+                    <span className="text-xs">{selectedData.wikidataId}</span>
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
 
                 {selectedData.description && (
-                  <Typography variant="body2" color="text.secondary">
+                  <p className="text-sm text-muted-foreground">
                     {selectedData.description}
-                  </Typography>
+                  </p>
                 )}
 
                 {selectedData.aliases && selectedData.aliases.length > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
                       Also known as:
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                    </p>
+                    <div className="flex gap-1 flex-wrap mt-1">
                       {selectedData.aliases.map((alias, index) => (
-                        <Chip key={index} label={alias} size="small" variant="outlined" />
+                        <Badge key={index} variant="outline">{alias}</Badge>
                       ))}
-                    </Box>
-                  </Box>
+                    </div>
+                  </div>
                 )}
 
                 {selectedData.coordinates && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
                       Coordinates:
-                    </Typography>
-                    <Typography variant="body2">
+                    </p>
+                    <p className="text-sm">
                       {selectedData.coordinates.latitude}, {selectedData.coordinates.longitude}
                       {selectedData.coordinates.altitude && ` (${selectedData.coordinates.altitude}m)`}
-                    </Typography>
-                  </Box>
+                    </p>
+                  </div>
                 )}
 
                 {selectedData.temporalData && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
                       Temporal Information Available
-                    </Typography>
-                    <Chip label="Includes time data" size="small" color="info" variant="outlined" sx={{ ml: 1 }} />
-                  </Box>
+                    </p>
+                    <Badge variant="outline" className="mt-1">Includes time data</Badge>
+                  </div>
                 )}
-              </Box>
-            </Paper>
+              </div>
+            </div>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-              <Button onClick={handleBack}>
+            <div className="flex justify-between mt-6">
+              <Button variant="outline" onClick={handleBack}>
                 Back
               </Button>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button onClick={onCancel}>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onCancel}>
                   Cancel
                 </Button>
                 <Button
-                  variant="contained"
                   onClick={handleImport}
                   disabled={importing}
-                  startIcon={importing ? <CircularProgress size={16} /> : <WikidataIcon />}
                 >
+                  {importing ? (
+                    <Spinner className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Globe className="mr-2 h-4 w-4" />
+                  )}
                   {importing ? 'Importing...' : 'Import and Save'}
                 </Button>
-              </Box>
-            </Box>
-          </Box>
+              </div>
+            </div>
+          </div>
         )
 
       case 2:
         // Step 3: Success
         return (
-          <Box sx={{ mt: 3, textAlign: 'center' }}>
-            <SuccessIcon color="success" sx={{ fontSize: 64, mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
+          <div className="mt-6 text-center">
+            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+            <h6 className="text-base font-semibold mb-2">
               Successfully Imported!
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
+            </h6>
+            <p className="text-sm text-muted-foreground mb-4">
               "{selectedData?.name}" has been added to your {type.replace('-', ' ')}.
-            </Typography>
+            </p>
 
-            <Alert severity="success" sx={{ mt: 2, textAlign: 'left' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2">
-                  Import successful. You have 10 seconds to undo this action.
-                </Typography>
-                <Button onClick={handleUndo} size="small" variant="outlined">
-                  Undo
-                </Button>
-              </Box>
+            <Alert className="mt-4 text-left">
+              <AlertDescription>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">
+                    Import successful. You have 10 seconds to undo this action.
+                  </span>
+                  <Button onClick={handleUndo} size="sm" variant="outline">
+                    Undo
+                  </Button>
+                </div>
+              </AlertDescription>
             </Alert>
 
-            <Box sx={{ mt: 3 }}>
-              <Button variant="contained" onClick={onCancel}>
+            <div className="mt-6">
+              <Button onClick={onCancel}>
                 Done
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </div>
         )
 
       default:
@@ -279,46 +273,59 @@ export default function WikidataImportFlow({
   // Error state
   if (importError && activeStep !== 2) {
     return (
-      <Box sx={{ mt: 3 }}>
-        <Alert
-          severity="error"
-          icon={<ErrorIcon />}
-          action={
-            <Button color="inherit" size="small" onClick={handleRetry}>
+      <div className="mt-6">
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertTitle className="font-bold">Import Failed</AlertTitle>
+          <AlertDescription>
+            {importError.message}
+          </AlertDescription>
+          <AlertAction>
+            <Button variant="outline" size="sm" onClick={handleRetry}>
               Retry
             </Button>
-          }
-        >
-          <Typography variant="body2" fontWeight="bold">
-            Import Failed
-          </Typography>
-          <Typography variant="body2">
-            {importError.message}
-          </Typography>
+          </AlertAction>
         </Alert>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-          <Button onClick={handleBack} disabled={activeStep === 0}>
+        <div className="flex justify-between mt-6">
+          <Button variant="outline" onClick={handleBack} disabled={activeStep === 0}>
             Back
           </Button>
-          <Button onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-        </Box>
-      </Box>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Box>
-      <Stepper activeStep={activeStep} sx={{ mb: 2 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
+    <div>
+      {/* Step indicator */}
+      <div className="flex items-center gap-2 mb-4">
+        {steps.map((label, index) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className={`flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium ${
+              index <= activeStep
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              {index + 1}
+            </div>
+            <span className={`text-sm ${
+              index <= activeStep ? 'text-foreground' : 'text-muted-foreground'
+            }`}>
+              {label}
+            </span>
+            {index < steps.length - 1 && (
+              <div className={`h-px w-8 ${
+                index < activeStep ? 'bg-primary' : 'bg-muted'
+              }`} />
+            )}
+          </div>
         ))}
-      </Stepper>
+      </div>
 
       {renderStepContent()}
-    </Box>
+    </div>
   )
 }

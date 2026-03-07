@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Box, Typography } from '@mui/material'
+
+import { cn } from '@/lib/utils'
 import { ClaimSpan } from '@models/types'
 
 interface ClaimSpanHighlighterProps {
@@ -53,22 +54,20 @@ export function ClaimSpanHighlighter({
   }, [text, highlightedSpans])
 
   return (
-    <Box>
+    <div>
       {segments.map((segment, idx) => (
-        <Typography
+        <span
           key={idx}
-          component="span"
-          sx={{
-            backgroundColor: segment.highlighted ? 'primary.light' : 'transparent',
-            color: segment.highlighted ? 'primary.contrastText' : 'inherit',
-            padding: segment.highlighted ? '2px 4px' : 0,
-            borderRadius: segment.highlighted ? 1 : 0,
-            transition: 'all 0.2s',
-          }}
+          className={cn(
+            'transition-all duration-200',
+            segment.highlighted
+              ? 'bg-primary/20 text-primary px-1 py-0.5 rounded'
+              : 'bg-transparent text-inherit'
+          )}
         >
           {segment.text}
-        </Typography>
+        </span>
       ))}
-    </Box>
+    </div>
   )
 }

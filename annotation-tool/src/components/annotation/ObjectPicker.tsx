@@ -1,36 +1,18 @@
 import React, { useState, useMemo } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Tabs,
-  Tab,
-  Box,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  ListItemIcon,
-  Typography,
-  Chip,
-  InputAdornment,
-  IconButton,
-  Alert,
-  Divider,
-  Stack,
-} from '@mui/material'
-import {
-  Search as SearchIcon,
-  Person as EntityIcon,
-  Event as EventIcon,
-  LocationOn as LocationIcon,
-  Folder as CollectionIcon,
-  Clear as ClearIcon,
-  AccessTime as RecentIcon,
-} from '@mui/icons-material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Search, X, Clock, User, CalendarDays, MapPin, Folder } from 'lucide-react'
 import { WikidataChip } from '../shared/WikidataChip'
 import { useWorld, usePersonas } from '@store/queries'
 import { GlossItem, LocationPoint } from '@models/types'
@@ -72,28 +54,6 @@ interface ObjectPickerProps {
   recentIds?: string[]
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`object-tabpanel-${index}`}
-      aria-labelledby={`object-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
-    </div>
-  )
-}
-
 export default function ObjectPicker({
   open,
   onClose,
@@ -102,9 +62,9 @@ export default function ObjectPicker({
   recentIds = [],
 }: ObjectPickerProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedTab, setSelectedTab] = useState(0)
+  const [selectedTab, setSelectedTab] = useState('entities')
   const [selectedObject, setSelectedObject] = useState<any>(null)
-  
+
   // Get world objects from TanStack Query
   const { data: worldData } = useWorld()
   const entities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
@@ -113,20 +73,20 @@ export default function ObjectPicker({
   const eventCollections = useMemo(() => worldData?.eventCollections ?? [], [worldData?.eventCollections])
   const timeCollections = useMemo(() => worldData?.timeCollections ?? [], [worldData?.timeCollections])
   const { data: personas = [] } = usePersonas()
-  
+
   // Filter locations from entities
   const locations = useMemo(() =>
     entities.filter(e => 'locationType' in e) as unknown as LocationPoint[],
     [entities]
   )
-  
+
   // Filter non-location entities
-  const regularEntities = useMemo(() => 
+  const regularEntities = useMemo(() =>
     entities.filter(e => !('locationType' in e)),
     [entities]
   )
-  
-  // Search filtering - works with arrays of world objects
+
+  // Search filtering
   const filterBySearch = <T extends { name: string; description?: GlossItem[] | string }>(items: T[], query: string): T[] => {
     if (!query) return items
     const lowerQuery = query.toLowerCase()
@@ -150,7 +110,7 @@ export default function ObjectPicker({
   const filteredEntityCollections = filterBySearch(entityCollections, searchQuery)
   const filteredEventCollections = filterBySearch(eventCollections, searchQuery)
   const filteredTimeCollections = filterBySearch(timeCollections, searchQuery)
-  
+
   // Get recent objects
   const recentObjects = useMemo((): WorldObjectForDisplay[] => {
     const objects: WorldObjectForDisplay[] = []
@@ -177,16 +137,11 @@ export default function ObjectPicker({
     })
     return objects
   }, [recentIds, entities, events, entityCollections, eventCollections])
-  
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setSelectedTab(newValue)
-    setSelectedObject(null)
-  }
-  
+
   const handleObjectSelect = (object: { id: string; name: string }, type: WorldObjectType) => {
     setSelectedObject({ id: object.id, name: object.name, type })
   }
-  
+
   const handleConfirmSelection = () => {
     if (selectedObject) {
       onSelect({
@@ -199,244 +154,221 @@ export default function ObjectPicker({
       setSearchQuery('')
     }
   }
-  
+
   const handleClose = () => {
     onClose()
     setSelectedObject(null)
     setSearchQuery('')
   }
-  
+
   const renderObjectList = (items: WorldObjectForDisplay[], type: WorldObjectType, icon: React.ReactElement) => (
-    <List>
+    <ul className="divide-y">
       {items.length === 0 && (
-        <ListItem>
-          <Typography variant="body2" color="text.secondary">
+        <li className="py-3 px-2">
+          <p className="text-sm text-muted-foreground">
             No {type}s found. Create one in the Ontology Builder.
-          </Typography>
-        </ListItem>
+          </p>
+        </li>
       )}
       {items.map((item) => (
-        <ListItemButton
+        <li
           key={item.id}
-          selected={selectedObject?.id === item.id}
+          className={`flex items-start gap-3 py-2 px-3 cursor-pointer rounded-md ${
+            selectedObject?.id === item.id ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+          }`}
           onClick={() => handleObjectSelect(item, type)}
         >
-          <ListItemIcon>{icon}</ListItemIcon>
-          <ListItemText
-            primary={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body1">{item.name}</Typography>
-                <WikidataChip
-                  wikidataId={item.wikidataId}
-                  wikidataUrl={item.wikidataUrl}
-                  wikibaseId={item.wikibaseId}
-                  importedAt={item.importedAt}
-                  size="small"
-                  showTimestamp={false}
-                />
-              </Box>
-            }
-            secondary={
-              <Stack spacing={0.5}>
-                {item.description && (
-                  <Typography variant="caption" color="text.secondary">
-                    {typeof item.description === 'string'
-                      ? item.description
-                      : item.description[0]?.content}
-                  </Typography>
-                )}
-                {/* Show type assignments for entities */}
-                {type === 'entity' && item.typeAssignments && item.typeAssignments.length > 0 && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                    {item.typeAssignments.map((assignment) => {
-                      const persona = personas.find(p => p.id === assignment.personaId)
-                      const typeId = assignment.entityTypeId || assignment.eventTypeId || 'Unknown'
-                      return (
-                        <Chip
-                          key={assignment.personaId}
-                          label={`${persona?.name || 'Unknown'}: ${typeId}`}
-                          size="small"
-                          variant="outlined"
-                        />
-                      )
-                    })}
-                  </Box>
-                )}
-                {/* Show interpretations for events */}
-                {type === 'event' && item.personaInterpretations && item.personaInterpretations.length > 0 && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                    {item.personaInterpretations.map((interp) => {
-                      const persona = personas.find(p => p.id === interp.personaId)
-                      return (
-                        <Chip
-                          key={interp.personaId}
-                          label={`${persona?.name || 'Unknown'}: ${interp.eventTypeId}`}
-                          size="small"
-                          variant="outlined"
-                        />
-                      )
-                    })}
-                  </Box>
-                )}
-                {/* Show coordinates for locations */}
-                {type === 'location' && item.coordinates && (
-                  <Typography variant="caption" color="text.secondary">
-                    {item.coordinates.latitude && item.coordinates.longitude
-                      ? `${item.coordinates.latitude.toFixed(4)}, ${item.coordinates.longitude.toFixed(4)}`
-                      : `x: ${item.coordinates.x}, y: ${item.coordinates.y}`}
-                  </Typography>
-                )}
-                {/* Show member count for collections */}
-                {(type === 'entity-collection' || type === 'event-collection') && (
-                  <Typography variant="caption" color="text.secondary">
-                    {type === 'entity-collection' 
-                      ? `${item.entityIds?.length || 0} entities`
-                      : `${item.eventIds?.length || 0} events`}
-                  </Typography>
-                )}
-              </Stack>
-            }
-          />
-        </ListItemButton>
+          <span className="mt-0.5 shrink-0">{icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">{item.name}</span>
+              <WikidataChip
+                wikidataId={item.wikidataId}
+                wikidataUrl={item.wikidataUrl}
+                wikibaseId={item.wikibaseId}
+                importedAt={item.importedAt}
+                size="small"
+                showTimestamp={false}
+              />
+            </div>
+            <div className="flex flex-col gap-1 mt-0.5">
+              {item.description && (
+                <p className="text-xs text-muted-foreground">
+                  {typeof item.description === 'string'
+                    ? item.description
+                    : item.description[0]?.content}
+                </p>
+              )}
+              {/* Show type assignments for entities */}
+              {type === 'entity' && item.typeAssignments && item.typeAssignments.length > 0 && (
+                <div className="flex gap-1 flex-wrap mt-1">
+                  {item.typeAssignments.map((assignment) => {
+                    const persona = personas.find(p => p.id === assignment.personaId)
+                    const typeId = assignment.entityTypeId || assignment.eventTypeId || 'Unknown'
+                    return (
+                      <Badge key={assignment.personaId} variant="outline" className="text-[10px]">
+                        {persona?.name || 'Unknown'}: {typeId}
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Show interpretations for events */}
+              {type === 'event' && item.personaInterpretations && item.personaInterpretations.length > 0 && (
+                <div className="flex gap-1 flex-wrap mt-1">
+                  {item.personaInterpretations.map((interp) => {
+                    const persona = personas.find(p => p.id === interp.personaId)
+                    return (
+                      <Badge key={interp.personaId} variant="outline" className="text-[10px]">
+                        {persona?.name || 'Unknown'}: {interp.eventTypeId}
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Show coordinates for locations */}
+              {type === 'location' && item.coordinates && (
+                <p className="text-xs text-muted-foreground">
+                  {item.coordinates.latitude && item.coordinates.longitude
+                    ? `${item.coordinates.latitude.toFixed(4)}, ${item.coordinates.longitude.toFixed(4)}`
+                    : `x: ${item.coordinates.x}, y: ${item.coordinates.y}`}
+                </p>
+              )}
+              {/* Show member count for collections */}
+              {(type === 'entity-collection' || type === 'event-collection') && (
+                <p className="text-xs text-muted-foreground">
+                  {type === 'entity-collection'
+                    ? `${item.entityIds?.length || 0} entities`
+                    : `${item.eventIds?.length || 0} events`}
+                </p>
+              )}
+            </div>
+          </div>
+        </li>
       ))}
-    </List>
+    </ul>
   )
-  
+
   // Determine which tabs to show based on allowedTypes
   const showEntities = allowedTypes.includes('entity')
   const showEvents = allowedTypes.includes('event')
   const showLocations = allowedTypes.includes('location')
   const showCollections = allowedTypes.includes('collection')
-  
+
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{ sx: { height: '80vh', display: 'flex', flexDirection: 'column' } }}
-    >
-      <DialogTitle>
-        <Typography variant="h6">Select World Object</Typography>
-      </DialogTitle>
-      
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Search Bar */}
-        <TextField
-          fullWidth
-          placeholder="Search objects..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          sx={{ mb: 2 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-            endAdornment: searchQuery && (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setSearchQuery('')}>
-                  <ClearIcon />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-        
-        {/* Recent Objects */}
-        {recentObjects.length > 0 && !searchQuery && (
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <RecentIcon fontSize="small" />
-              Recently Used
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {recentObjects.slice(0, 5).filter(obj => obj.type).map((obj) => (
-                <Chip
-                  key={obj.id}
-                  label={obj.name}
-                  onClick={() => handleObjectSelect(obj, obj.type!)}
-                  icon={
-                    obj.type === 'entity' ? <EntityIcon /> :
-                    obj.type === 'event' ? <EventIcon /> :
-                    obj.type === 'location' ? <LocationIcon /> :
-                    <CollectionIcon />
-                  }
-                  variant={selectedObject?.id === obj.id ? 'filled' : 'outlined'}
-                />
-              ))}
-            </Box>
-            <Divider sx={{ mt: 2 }} />
-          </Box>
-        )}
-        
-        {/* Tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={selectedTab} onChange={handleTabChange}>
-            {showEntities && <Tab label={`Entities (${filteredEntities.length})`} />}
-            {showEvents && <Tab label={`Events (${filteredEvents.length})`} />}
-            {showLocations && <Tab label={`Locations (${filteredLocations.length})`} />}
-            {showCollections && <Tab label="Collections" />}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
+      <DialogContent className="sm:max-w-2xl h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Select World Object</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col flex-1 overflow-hidden">
+          {/* Search Bar */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search objects..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-9"
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="size-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* Recent Objects */}
+          {recentObjects.length > 0 && !searchQuery && (
+            <div className="mb-4">
+              <p className="text-sm font-medium flex items-center gap-2 mb-2">
+                <Clock className="size-4" />
+                Recently Used
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {recentObjects.slice(0, 5).filter(obj => obj.type).map((obj) => (
+                  <Badge
+                    key={obj.id}
+                    variant={selectedObject?.id === obj.id ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => handleObjectSelect(obj, obj.type!)}
+                  >
+                    {obj.type === 'entity' ? <User className="size-3 mr-1" /> :
+                     obj.type === 'event' ? <CalendarDays className="size-3 mr-1" /> :
+                     obj.type === 'location' ? <MapPin className="size-3 mr-1" /> :
+                     <Folder className="size-3 mr-1" />}
+                    {obj.name}
+                  </Badge>
+                ))}
+              </div>
+              <Separator className="mt-4" />
+            </div>
+          )}
+
+          {/* Tabs */}
+          <Tabs value={selectedTab} onValueChange={(val) => { setSelectedTab(val); setSelectedObject(null) }} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList>
+              {showEntities && <TabsTrigger value="entities">Entities ({filteredEntities.length})</TabsTrigger>}
+              {showEvents && <TabsTrigger value="events">Events ({filteredEvents.length})</TabsTrigger>}
+              {showLocations && <TabsTrigger value="locations">Locations ({filteredLocations.length})</TabsTrigger>}
+              {showCollections && <TabsTrigger value="collections">Collections</TabsTrigger>}
+            </TabsList>
+
+            <div className="flex-1 overflow-auto mt-2">
+              {showEntities && (
+                <TabsContent value="entities">
+                  {renderObjectList(filteredEntities, 'entity', <User className="size-4" />)}
+                </TabsContent>
+              )}
+              {showEvents && (
+                <TabsContent value="events">
+                  {renderObjectList(filteredEvents, 'event', <CalendarDays className="size-4" />)}
+                </TabsContent>
+              )}
+              {showLocations && (
+                <TabsContent value="locations">
+                  {renderObjectList(filteredLocations, 'location', <MapPin className="size-4" />)}
+                </TabsContent>
+              )}
+              {showCollections && (
+                <TabsContent value="collections">
+                  <p className="text-sm font-medium mb-2">Entity Collections</p>
+                  {renderObjectList(filteredEntityCollections, 'entity-collection', <Folder className="size-4" />)}
+
+                  <p className="text-sm font-medium mb-2 mt-4">Event Collections</p>
+                  {renderObjectList(filteredEventCollections, 'event-collection', <Folder className="size-4" />)}
+
+                  <p className="text-sm font-medium mb-2 mt-4">Time Collections</p>
+                  {renderObjectList(filteredTimeCollections, 'time-collection', <Folder className="size-4" />)}
+                </TabsContent>
+              )}
+            </div>
           </Tabs>
-        </Box>
-        
-        {/* Tab Panels */}
-        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-          {showEntities && (
-            <TabPanel value={selectedTab} index={0}>
-              {renderObjectList(filteredEntities, 'entity', <EntityIcon />)}
-            </TabPanel>
+
+          {/* Selected Object Info */}
+          {selectedObject && (
+            <Alert className="mt-4">
+              <AlertDescription>
+                Selected: <strong>{selectedObject.name}</strong> ({selectedObject.type})
+              </AlertDescription>
+            </Alert>
           )}
-          
-          {showEvents && (
-            <TabPanel value={selectedTab} index={showEntities ? 1 : 0}>
-              {renderObjectList(filteredEvents, 'event', <EventIcon />)}
-            </TabPanel>
-          )}
-          
-          {showLocations && (
-            <TabPanel value={selectedTab} index={
-              (showEntities ? 1 : 0) + (showEvents ? 1 : 0)
-            }>
-              {renderObjectList(filteredLocations, 'location', <LocationIcon />)}
-            </TabPanel>
-          )}
-          
-          {showCollections && (
-            <TabPanel value={selectedTab} index={
-              (showEntities ? 1 : 0) + (showEvents ? 1 : 0) + (showLocations ? 1 : 0)
-            }>
-              <Typography variant="subtitle2" gutterBottom>Entity Collections</Typography>
-              {renderObjectList(filteredEntityCollections, 'entity-collection', <CollectionIcon />)}
-              
-              <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Event Collections</Typography>
-              {renderObjectList(filteredEventCollections, 'event-collection', <CollectionIcon />)}
-              
-              <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Time Collections</Typography>
-              {renderObjectList(filteredTimeCollections, 'time-collection', <CollectionIcon />)}
-            </TabPanel>
-          )}
-        </Box>
-        
-        {/* Selected Object Info */}
-        {selectedObject && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Selected: <strong>{selectedObject.name}</strong> ({selectedObject.type})
-          </Alert>
-        )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+          <Button
+            onClick={handleConfirmSelection}
+            disabled={!selectedObject}
+          >
+            Select
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      
-      <DialogActions>
-        <Button onClick={handleClose}>Cancel</Button>
-        <Button
-          onClick={handleConfirmSelection}
-          variant="contained"
-          disabled={!selectedObject}
-        >
-          Select
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
