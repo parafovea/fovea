@@ -3,10 +3,15 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from 'next-themes'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/sonner'
 import App from './App'
 import './index.css'
+
+// MUI theme (kept during migration, will be removed in cleanup)
+import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 
 // Initialize command registry before React renders (must be before component mount effects)
 import { initializeCommands, initializeGlobalContext } from '@lib/commands/init-commands'
@@ -32,7 +37,8 @@ initErrorLogging({
 initializeCommands()
 initializeGlobalContext()
 
-const theme = createTheme({
+// MUI theme (kept during migration, will be removed when all MUI components are migrated)
+const muiTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
@@ -95,10 +101,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-          <ReactQueryDevtools initialIsOpen={false} />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <MuiThemeProvider theme={muiTheme}>
+            <CssBaseline />
+            <TooltipProvider>
+              <App />
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </MuiThemeProvider>
         </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>
