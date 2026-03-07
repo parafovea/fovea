@@ -133,7 +133,7 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
         <Label htmlFor="fusion-strategy">Fusion Strategy</Label>
         <Select
           value={config.fusionStrategy}
-          onValueChange={handleFusionStrategyChange}
+          onValueChange={(v) => v && handleFusionStrategyChange(v)}
           disabled={disabled || !config.enableAudio}
         >
           <SelectTrigger className="w-full" id="fusion-strategy">

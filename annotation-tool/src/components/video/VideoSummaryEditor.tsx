@@ -547,7 +547,6 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
                 <>
                   {localSummary.length > 0 && (
                     <Accordion
-                      type="multiple"
                       value={summaryPreviewOpen}
                       onValueChange={setSummaryPreviewOpen}
                       className="mb-4"

@@ -409,7 +409,7 @@ export default function VideoBrowser() {
             <div className="min-w-[200px]">
               <Select
                 value={activePersonaId || ''}
-                onValueChange={handlePersonaChange}
+                onValueChange={(v) => v && handlePersonaChange(v)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Persona" />

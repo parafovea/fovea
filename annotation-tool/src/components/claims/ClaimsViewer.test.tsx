@@ -387,7 +387,6 @@ describe('ClaimsViewer', () => {
       })
 
       expect(expandButton).toBeDefined()
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       await user.click(expandButton!)
 
       // Subclaim text should be removed from DOM after collapse (base-ui unmounts panel)
