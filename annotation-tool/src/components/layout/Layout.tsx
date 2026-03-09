@@ -36,6 +36,7 @@ import {
   SidebarProvider,
   Sidebar,
   SidebarContent,
+  SidebarHeader,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -43,6 +44,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarTrigger,
+  SidebarInset,
 } from '@/components/ui/sidebar'
 
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
@@ -244,6 +246,13 @@ export default function Layout() {
   return (
     <SidebarProvider defaultOpen={drawerOpen} onOpenChange={setDrawerOpen}>
       <Sidebar collapsible="icon" side="left">
+        <SidebarHeader className="p-3">
+          <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+            <img src={logo} alt="FOVEA Logo" className="h-8 w-8 shrink-0" />
+            <span className="font-bold tracking-wide text-lg group-data-[collapsible=icon]:hidden">FOVEA</span>
+          </Link>
+        </SidebarHeader>
+        <Separator />
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>Navigation</SidebarGroupLabel>
@@ -279,29 +288,19 @@ export default function Layout() {
         </SidebarContent>
       </Sidebar>
 
-      <div className="flex flex-1 flex-col h-screen">
-        <header className="fixed top-0 z-50 w-full h-16 border-b bg-toolbar text-toolbar-foreground">
-          <div className="flex h-16 items-center px-4 gap-2">
-            <SidebarTrigger />
-            <img
-              src={logo}
-              alt="FOVEA Logo"
-              className="h-10 w-10 mr-2"
-            />
-            <div className="flex-grow flex items-baseline gap-1">
-              <h1 className="font-bold tracking-wide text-xl">
-                FOVEA
-              </h1>
-              <span className="text-sm font-light hidden md:block">
-                Flexible Ontology Visual Event Analyzer
-              </span>
-            </div>
+      <SidebarInset>
+        <header className="sticky top-0 z-50 flex h-14 items-center gap-2 border-b bg-background px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="h-4" />
+          <BreadcrumbNavigation />
+
+          <div className="ml-auto flex items-center gap-1">
             {/* Project Context Selector */}
             <Select
               value={activeProjectId ?? ''}
               onValueChange={handleProjectChange}
             >
-              <SelectTrigger className="min-w-[180px] mr-2">
+              <SelectTrigger className="h-8 w-[180px] text-sm">
                 <SelectValue placeholder="Personal Workspace" />
               </SelectTrigger>
               <SelectContent>
@@ -314,14 +313,14 @@ export default function Layout() {
               </SelectContent>
             </Select>
             {activeProjectRole && (
-              <Badge variant="outline" className="mr-2">
+              <Badge variant="outline" className="text-xs">
                 {activeProjectRole}
               </Badge>
             )}
             {draftClaim && (
               <Badge
                 variant="outline"
-                className="mr-1 cursor-pointer border-amber-500 text-amber-600"
+                className="cursor-pointer border-amber-500 text-amber-600"
                 onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
               >
                 Draft Claim
@@ -339,21 +338,23 @@ export default function Layout() {
               </Badge>
             )}
             {unsavedChanges && (
-              <span className="mr-2 text-sm text-white">
+              <span className="text-sm text-muted-foreground">
                 Unsaved changes
               </span>
             )}
+            <Separator orientation="vertical" className="mx-1 h-4" />
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
                     variant="ghost"
+                    size="sm"
                     onClick={handleSave}
                     disabled={saving}
                   />
                 }
               >
-                {saving ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+                {saving ? <Spinner className="mr-1.5 h-4 w-4" /> : <Save className="mr-1.5 h-4 w-4" />}
                 Save
               </TooltipTrigger>
               <TooltipContent>Save (Cmd/Ctrl+S)</TooltipContent>
@@ -363,29 +364,39 @@ export default function Layout() {
                 render={
                   <Button
                     variant="ghost"
+                    size="sm"
                     onClick={handleExport}
                   />
                 }
               >
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-1.5 h-4 w-4" />
                 Export
               </TooltipTrigger>
               <TooltipContent>Export (Cmd/Ctrl+E)</TooltipContent>
             </Tooltip>
-            <Button
-              variant="ghost"
-              onClick={importDialog.openDialog}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Import
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={importDialog.openDialog}
+                  />
+                }
+              >
+                <Upload className="mr-1.5 h-4 w-4" />
+                Import
+              </TooltipTrigger>
+              <TooltipContent>Import Data</TooltipContent>
+            </Tooltip>
+            <Separator orientation="vertical" className="mx-1 h-4" />
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="ml-1"
+                    className="h-8 w-8"
                     onClick={shortcutsDialog.openDialog}
                     aria-label="Keyboard Shortcuts (?)"
                   />
@@ -404,13 +415,10 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-grow mt-16 h-[calc(100vh-4rem)] flex flex-col">
-          <BreadcrumbNavigation />
-          <div className="flex-grow p-3 overflow-auto">
-            <Outlet />
-          </div>
-        </main>
-      </div>
+        <div className="flex-1 overflow-auto p-3">
+          <Outlet />
+        </div>
+      </SidebarInset>
 
       <KeyboardShortcutsDialog
         open={shortcutsDialog.open}
