@@ -81,7 +81,6 @@ const collaborationItems = [
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Use Zustand dialogStore for dialog state management
@@ -244,7 +243,7 @@ export default function Layout() {
   })
 
   return (
-    <SidebarProvider defaultOpen={drawerOpen} onOpenChange={setDrawerOpen}>
+    <SidebarProvider defaultOpen>
       <Sidebar collapsible="icon" side="left">
         <SidebarHeader className="p-3">
           <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
@@ -260,7 +259,7 @@ export default function Layout() {
               <SidebarMenu>
                 {menuItems.map((item) => (
                   <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton isActive={location.pathname === item.path} tooltip={item.text} render={<Link to={item.path} onClick={() => setDrawerOpen(false)} />}>
+                    <SidebarMenuButton isActive={location.pathname === item.path} tooltip={item.text} render={<Link to={item.path} />}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.text}</span>
                     </SidebarMenuButton>
@@ -276,7 +275,7 @@ export default function Layout() {
               <SidebarMenu>
                 {collaborationItems.map((item) => (
                   <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton isActive={location.pathname.startsWith(item.path)} tooltip={item.text} render={<Link to={item.path} onClick={() => setDrawerOpen(false)} />}>
+                    <SidebarMenuButton isActive={location.pathname.startsWith(item.path)} tooltip={item.text} render={<Link to={item.path} />}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.text}</span>
                     </SidebarMenuButton>

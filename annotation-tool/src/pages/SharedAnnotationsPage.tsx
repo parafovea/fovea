@@ -113,7 +113,7 @@ export default function SharedAnnotationsPage(): JSX.Element {
 
         {/* Filter tabs */}
         <Tabs value={filter} onValueChange={setFilter}>
-          <TabsList variant="line" className="mb-4 w-full justify-start overflow-x-auto">
+          <TabsList variant="line" className="mb-4 w-full justify-start">
             {FILTER_OPTIONS.map((opt) => (
               <TabsTrigger key={opt} value={opt}>
                 {opt === 'all' ? 'All' : RESOURCE_TYPE_LABELS[opt] + 's'}
