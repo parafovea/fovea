@@ -1,0 +1,35 @@
+{
+  "name": "fovea",
+  "private": true,
+  "version": "0.4.0",
+  "description": "FOVEA - Flexible Ontology Visual Event Analyzer",
+  "scripts": {
+    "dev": "pnpm run dev:infra && pnpm run dev:services",
+    "dev:services": "pnpm --parallel --filter @fovea/server --filter @fovea/annotation-tool run dev",
+    "dev:frontend": "pnpm run --filter @fovea/annotation-tool dev",
+    "dev:backend": "pnpm run --filter @fovea/server dev",
+    "dev:infra": "docker compose -f server/docker-compose.dev.yml up -d redis postgres",
+    "dev:infra:full": "docker compose -f server/docker-compose.dev.yml up -d",
+    "dev:docker": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
+    "build": "pnpm run --filter @fovea/annotation-tool build && pnpm run --filter @fovea/server build",
+    "build:docker": "docker compose build",
+    "test": "pnpm run --filter @fovea/annotation-tool test -- --run && pnpm run --filter @fovea/server test -- --run",
+    "test:frontend": "pnpm run --filter @fovea/annotation-tool test",
+    "test:backend": "pnpm run --filter @fovea/server test",
+    "lint": "pnpm run --filter @fovea/annotation-tool lint && pnpm run --filter @fovea/server lint",
+    "type-check": "pnpm run --filter @fovea/annotation-tool type-check",
+    "stop": "docker compose -f server/docker-compose.dev.yml down",
+    "clean": "docker compose -f server/docker-compose.dev.yml down -v"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "bcrypt",
+      "esbuild",
+      "msw",
+      "prisma",
+      "protobufjs"
+    ]
+  }
+}

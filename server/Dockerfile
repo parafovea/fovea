@@ -4,47 +4,53 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files and lockfile
+COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies with cache mount for npm
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+# Install dependencies with cache mount for pnpm
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Copy Prisma schema first (if exists) for better layer caching
 COPY prisma ./prisma
 
 # Generate Prisma client
-RUN if [ -d "prisma" ]; then npx prisma generate; fi
+RUN if [ -d "prisma" ]; then pnpm exec prisma generate; fi
 
 # Copy source code
 COPY . .
 
 # Build TypeScript
-RUN npm run build
+RUN pnpm run build
 
 # Compile seed script for production use (tsx not available in production)
 # Use .cjs extension since package.json has "type": "module"
-RUN npx tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
+RUN pnpm exec tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
     mv prisma/seed.js prisma/seed.cjs
 
 # Production dependencies stage
 FROM node:20-alpine AS deps
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files and lockfile
+COPY package.json pnpm-lock.yaml ./
 
 # Install production dependencies with cache mount
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod
 
 # Copy Prisma schema and generate client
 COPY --link prisma ./prisma
-RUN npx prisma generate
+RUN pnpm exec prisma generate
 
 # Production stage
 FROM node:20-alpine AS production

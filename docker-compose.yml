@@ -24,7 +24,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    command: sh -c "npx prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
+    command: sh -c "pnpm exec prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
     ports:
       - "3001:3001"
     environment:

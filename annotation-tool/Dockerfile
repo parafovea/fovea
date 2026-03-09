@@ -4,6 +4,9 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app
 
 # Accept build arguments for Vite environment variables
@@ -20,18 +23,18 @@ ENV VITE_DATA_URL=$VITE_DATA_URL
 ENV VITE_WIKIDATA_URL=$VITE_WIKIDATA_URL
 ENV VITE_WIKIDATA_MODE=$VITE_WIKIDATA_MODE
 
-# Copy package files
-COPY package*.json ./
+# Copy package files and lockfile
+COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies with cache mount for npm
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+# Install dependencies with cache mount for pnpm
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build application with environment variables
-RUN npm run build
+RUN pnpm run build
 
 # Production stage
 FROM nginx:alpine AS production
