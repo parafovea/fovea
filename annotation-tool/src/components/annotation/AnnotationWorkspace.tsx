@@ -461,7 +461,7 @@ export default function AnnotationWorkspace() {
   }
 
   /**
-   * Navigates to the ontology builder and saves current annotation context.
+   * Navigates to the persona builder and saves current annotation context.
    * Stores the current video ID and timestamp for resuming annotation later.
    */
   const handleGoToOntology = () => {
@@ -1087,7 +1087,7 @@ export default function AnnotationWorkspace() {
           >
             <Wrench className="size-6" />
           </TooltipTrigger>
-          <TooltipContent side="left">Go to Ontology Builder (Cmd/Ctrl + O)</TooltipContent>
+          <TooltipContent side="left">Go to Persona Builder (P)</TooltipContent>
         </Tooltip>
       </div>
     </div>

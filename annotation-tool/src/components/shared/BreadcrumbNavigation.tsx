@@ -8,10 +8,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import {
   CalendarDays,
   Clock,
+  Fingerprint,
   Folder,
-  GraduationCap,
+  Globe,
   MapPin,
-  Package,
   Tag,
   User,
   Video,
@@ -74,9 +74,9 @@ export function BreadcrumbNavigation(): JSX.Element | null {
       }
     } else if (pathSegments[0] === 'ontology') {
       breadcrumbs.push({
-        label: 'Ontology Builder',
+        label: 'Persona Builder',
         path: '/ontology',
-        icon: <GraduationCap className="size-4" />,
+        icon: <Fingerprint className="size-4" />,
       })
 
       // Check if a persona is selected
@@ -112,7 +112,7 @@ export function BreadcrumbNavigation(): JSX.Element | null {
       breadcrumbs.push({
         label: 'World Builder',
         path: '/objects',
-        icon: <Package className="size-4" />,
+        icon: <Globe className="size-4" />,
       })
 
       // Check if a specific object tab is active
@@ -165,7 +165,7 @@ export function BreadcrumbNavigation(): JSX.Element | null {
   }
 
   return (
-    <div className="flex items-center border-b bg-background px-4 py-2">
+    <div className="flex items-center">
       <Breadcrumb className="flex-1">
         <BreadcrumbList>
           {breadcrumbs.map((crumb, index) => {

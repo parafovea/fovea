@@ -150,7 +150,7 @@ export function ClaimEditor({
     }
   }, [open, claim])
 
-  // Keyboard shortcut: 'o' for Ontology Builder, 'w' for Object Builder
+  // Keyboard shortcut: 'p' for Persona Builder, 'w' for Object Builder
   useEffect(() => {
     if (!open) return
 

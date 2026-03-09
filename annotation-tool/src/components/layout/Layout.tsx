@@ -2,8 +2,8 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Video,
-  Tag,
-  Package,
+  Fingerprint,
+  Globe,
   Users,
   Folder,
   Share2,
@@ -68,8 +68,8 @@ import AdminPanelDialog from '@components/settings/AdminPanelDialog'
 
 const menuItems = [
   { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
-  { text: 'Ontology Builder', icon: Tag, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
-  { text: 'World Builder', icon: Package, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+  { text: 'Persona Builder', icon: Fingerprint, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
+  { text: 'World Builder', icon: Globe, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
 ]
 
 const collaborationItems = [
@@ -202,13 +202,13 @@ export default function Layout() {
     'navigate.objectBuilder': () => navigate('/objects'),
     'navigate.toggleOntology': () => {
       const currentPath = window.location.pathname
-      // If we're in the ontology builder, go back to where we came from
+      // If we're in the persona builder, go back to where we came from
       if (currentPath === '/ontology') {
         const returnPath = ontologyReturnPathRef.current || '/'
         ontologyReturnPathRef.current = null
         navigate(returnPath)
       }
-      // Otherwise, store current path and go to ontology builder
+      // Otherwise, store current path and go to persona builder
       else {
         ontologyReturnPathRef.current = currentPath
         navigate('/ontology')

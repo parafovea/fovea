@@ -109,7 +109,7 @@ export function KeyboardShortcutsDialog({
         <Tabs defaultValue={defaultTab}>
           <TabsList>
             <TabsTrigger value="global">Global</TabsTrigger>
-            <TabsTrigger value="ontology">Ontology Builder</TabsTrigger>
+            <TabsTrigger value="ontology">Persona Builder</TabsTrigger>
             <TabsTrigger value="object">World Builder</TabsTrigger>
             <TabsTrigger value="annotation">Annotation Workspace</TabsTrigger>
           </TabsList>
@@ -123,7 +123,7 @@ export function KeyboardShortcutsDialog({
 
           <TabsContent value="ontology" className="space-y-2 pt-2">
             <p className="text-sm font-medium text-muted-foreground">
-              Available in the Ontology Builder workspace (including persona browser)
+              Available in the Persona Builder workspace (including persona browser)
             </p>
             <ShortcutTable commands={commandsByCategory.ontology} />
           </TabsContent>

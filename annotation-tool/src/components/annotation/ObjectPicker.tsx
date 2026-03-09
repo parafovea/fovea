@@ -166,7 +166,7 @@ export default function ObjectPicker({
       {items.length === 0 && (
         <li className="py-3 px-2">
           <p className="text-sm text-muted-foreground">
-            No {type}s found. Create one in the Ontology Builder.
+            No {type}s found. Create one in the Persona Builder.
           </p>
         </li>
       )}
