@@ -5,10 +5,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithProviders, createTestQueryClient } from '../utils/test-utils'
-import { QueryClient } from '@tanstack/react-query'
+import { renderWithProviders } from '../utils/test-utils'
 import { server } from '../setup'
 import { http, HttpResponse } from 'msw'
 import PersonaBrowser from '@components/browsers/PersonaBrowser'

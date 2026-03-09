@@ -189,6 +189,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('User Settings')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('User Settings'))
 
     expect(mockOnSettingsClick).toHaveBeenCalledOnce()
@@ -210,6 +215,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Admin Panel')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('Admin Panel'))
 
     expect(mockOnAdminPanelClick).toHaveBeenCalledOnce()
@@ -233,6 +243,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Logout')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('Logout'))
 
     // Logout endpoint should be called

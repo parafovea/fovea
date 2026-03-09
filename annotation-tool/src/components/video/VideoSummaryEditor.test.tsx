@@ -271,8 +271,8 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      // Should show loading indicator
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      // Should show loading indicator (base-ui Spinner uses role="status")
+      expect(screen.getByRole('status')).toBeInTheDocument()
 
       // Should NOT have tried to create a summary while loading
       expect(mockMutate).not.toHaveBeenCalled()
@@ -457,7 +457,10 @@ describe('VideoSummaryEditor', () => {
       })
 
       await waitFor(() => {
-        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        // base-ui Tooltip render prop creates two matching button elements;
+        // query only the one with data-slot="button" (the actual Button component).
+        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
+        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
         expect(extractButton).toBeDisabled()
       })
     })
@@ -501,7 +504,8 @@ describe('VideoSummaryEditor', () => {
       })
 
       await waitFor(() => {
-        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
+        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
         expect(extractButton).not.toBeDisabled()
       })
     })
@@ -545,7 +549,8 @@ describe('VideoSummaryEditor', () => {
       })
 
       await waitFor(() => {
-        const extractButton = screen.getByRole('button', { name: /extract claims/i })
+        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
+        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
         expect(extractButton).not.toBeDisabled()
       })
     })

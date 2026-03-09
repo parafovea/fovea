@@ -161,7 +161,7 @@ describe('ModelManagementPage', () => {
 
       renderWithQuery(<ModelManagementPage />)
 
-      const skeletons = document.querySelectorAll('.MuiSkeleton-root')
+      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletons.length).toBeGreaterThan(0)
     })
   })

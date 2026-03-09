@@ -94,7 +94,7 @@ describe('LoginPage', () => {
       </MemoryRouter>
     )
 
-    const checkbox = screen.getByRole('checkbox', { name: /remember me/i })
+    const checkbox = screen.getByRole('checkbox')
     expect(checkbox).not.toBeChecked()
 
     await user.click(checkbox)

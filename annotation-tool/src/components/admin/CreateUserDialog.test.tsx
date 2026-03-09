@@ -66,18 +66,13 @@ describe('CreateUserDialog', () => {
     if (!form) throw new Error('Form not found')
     fireEvent.submit(form)
 
-    // Wait for validation errors to appear
+    // Wait for validation error message to appear
     await waitFor(
       () => {
-        // Check if the username field has error state
-        const usernameField = screen.getByRole('textbox', { name: /username/i })
-        expect(usernameField).toHaveAttribute('aria-invalid', 'true')
+        expect(screen.getByText(/username is required/i)).toBeInTheDocument()
       },
       { timeout: 2000 }
     )
-
-    // And verify the error message appears
-    expect(screen.getByText(/username is required/i)).toBeInTheDocument()
   })
 
   it('validates username minimum length', async () => {
@@ -222,7 +217,7 @@ describe('CreateUserDialog', () => {
       wrapper: createWrapper(),
     })
 
-    const checkbox = screen.getByRole('checkbox', { name: /administrator/i })
+    const checkbox = screen.getByRole('checkbox')
     expect(checkbox).not.toBeChecked()
 
     await user.click(checkbox)

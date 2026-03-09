@@ -154,7 +154,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     // Get the first option's text before selecting
     const typeListbox = page.getByRole('listbox')
     const typeOption = typeListbox.getByRole('option').first()
-    const expectedTypeName = await typeOption.textContent()
+    await typeOption.textContent()
     await typeOption.click()
     await page.waitForTimeout(500)
 

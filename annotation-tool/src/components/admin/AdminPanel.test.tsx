@@ -11,11 +11,11 @@ import { useAuthStore } from '@store/zustand/authStore.js'
 
 // Mock child components
 vi.mock('./UserManagementPage.js', () => ({
-  default: () => <div>User Management Page</div>,
+  UserManagementPage: () => <div>User Management Page</div>,
 }))
 
 vi.mock('./SessionManagementPage.js', () => ({
-  default: () => (
+  SessionManagementPage: () => (
     <div>
       Session Management Page
       <button>Refresh</button>
@@ -24,29 +24,19 @@ vi.mock('./SessionManagementPage.js', () => ({
 }))
 
 vi.mock('./GroupManagementPage.js', () => ({
-  default: () => <div>Group Management Page</div>,
+  GroupManagementPage: () => <div>Group Management Page</div>,
 }))
 
 vi.mock('./ProjectManagementPage.js', () => ({
-  default: () => <div>Project Management Page</div>,
+  ProjectManagementPage: () => <div>Project Management Page</div>,
 }))
 
 vi.mock('./VideoAssignmentPage.js', () => ({
-  default: () => <div>Video Assignment Page</div>,
+  VideoAssignmentPage: () => <div>Video Assignment Page</div>,
 }))
 
 vi.mock('./PermissionsPage.js', () => ({
-  default: () => <div>Permissions Page</div>,
-}))
-
-vi.mock('./SessionManagementDialog.js', () => ({
-  default: ({ open, onClose }: { open: boolean; onClose: () => void }) => (
-    open ? (
-      <div role="dialog" aria-label="Session Management Dialog">
-        <button onClick={onClose}>Close Dialog</button>
-      </div>
-    ) : null
-  ),
+  PermissionsPage: () => <div>Permissions Page</div>,
 }))
 
 describe('AdminPanel', () => {

@@ -343,7 +343,7 @@ describe('AnnotationCandidatesList', () => {
       )
 
       // Find elephant card and accept it
-      const elephantCard = screen.getByText('elephant').closest('.MuiCard-root') as HTMLElement
+      const elephantCard = screen.getByText('elephant').closest('[data-slot="card"]') as HTMLElement
       const acceptButton = within(elephantCard).getByRole('button', {
         name: /accept/i,
       })
@@ -371,7 +371,7 @@ describe('AnnotationCandidatesList', () => {
       )
 
       // Find soccer ball card and reject it
-      const ballCard = screen.getByText('soccer ball').closest('.MuiCard-root') as HTMLElement
+      const ballCard = screen.getByText('soccer ball').closest('[data-slot="card"]') as HTMLElement
       const rejectButton = within(ballCard).getByRole('button', {
         name: /reject/i,
       })
@@ -416,7 +416,7 @@ describe('AnnotationCandidatesList', () => {
       )
 
       // Accept milk carton
-      const milkCard = screen.getByText('milk carton').closest('.MuiCard-root') as HTMLElement
+      const milkCard = screen.getByText('milk carton').closest('[data-slot="card"]') as HTMLElement
       const acceptButton = within(milkCard).getByRole('button', {
         name: /accept/i,
       })
@@ -461,7 +461,7 @@ describe('AnnotationCandidatesList', () => {
       )
 
       // Accept lion
-      const lionCard = screen.getByText('lion').closest('.MuiCard-root') as HTMLElement
+      const lionCard = screen.getByText('lion').closest('[data-slot="card"]') as HTMLElement
       const acceptButton = within(lionCard).getByRole('button', {
         name: /accept/i,
       })
@@ -548,15 +548,15 @@ describe('AnnotationCandidatesList', () => {
         />
       )
 
-      // Filter panel hidden initially
-      expect(screen.queryByLabelText('Confidence Threshold')).not.toBeVisible()
+      // Filter panel hidden initially (Collapsible does not render content when closed)
+      expect(screen.queryByLabelText('Confidence Threshold')).not.toBeInTheDocument()
 
       // Toggle filters
       const filterButton = screen.getByLabelText('toggle filters')
       fireEvent.click(filterButton)
 
       // Filter panel visible
-      expect(screen.getByLabelText('Confidence Threshold')).toBeVisible()
+      expect(screen.getByLabelText('Confidence Threshold')).toBeInTheDocument()
     })
 
     it('displays bounding box coordinates', () => {

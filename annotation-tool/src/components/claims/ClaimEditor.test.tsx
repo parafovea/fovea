@@ -155,7 +155,7 @@ describe('ClaimEditor', () => {
     })
 
     it('renders confidence slider', () => {
-      const { container } = render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/Confidence \*/i)).toBeInTheDocument()
       const slider = document.querySelector('[data-slot="slider"]')
@@ -256,7 +256,7 @@ describe('ClaimEditor', () => {
     })
 
     it('validates confidence range (0-1)', () => {
-      const { container } = render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
       const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()
       // Slider renders with min/max marks (0%, 50%, 100%)
@@ -355,7 +355,7 @@ describe('ClaimEditor', () => {
 
   describe('Confidence Slider', () => {
     it('renders confidence slider with initial value', () => {
-      const { container } = render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
       const slider = document.querySelector('[data-slot="slider"]')
 
       // Slider starts at 0.9 (90%) shown in display text
@@ -1138,7 +1138,7 @@ describe('ClaimEditor', () => {
 
   describe('Confidence Slider', () => {
     it('displays percentage inline above slider', () => {
-      const { container } = render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()
@@ -1148,7 +1148,7 @@ describe('ClaimEditor', () => {
     })
 
     it('renders slider with initial value', () => {
-      const { container } = render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()

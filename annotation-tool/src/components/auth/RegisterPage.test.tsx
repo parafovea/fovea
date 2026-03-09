@@ -122,7 +122,7 @@ describe('RegisterPage', () => {
     })
 
     // Strength indicator should be visible
-    const progressBar = document.querySelector('.MuiLinearProgress-root')
+    const progressBar = document.querySelector('[data-slot="progress"]')
     expect(progressBar).toBeInTheDocument()
   })
 

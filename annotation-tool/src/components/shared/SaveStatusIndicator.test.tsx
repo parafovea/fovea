@@ -102,7 +102,7 @@ describe('SaveStatusIndicator', () => {
       )
 
       expect(screen.getByText('Saving...')).toBeInTheDocument()
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeInTheDocument()
     })
 
     it('shows only progress indicator in compact mode', () => {
@@ -116,7 +116,7 @@ describe('SaveStatusIndicator', () => {
         />
       )
 
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeInTheDocument()
       expect(screen.queryByText('Saving...')).not.toBeInTheDocument()
     })
   })
@@ -193,6 +193,8 @@ describe('SaveStatusIndicator', () => {
         />
       )
 
+      // The retry button is rendered via TooltipTrigger render prop,
+      // so find it by its aria-label or by querying the button inside the tooltip
       const retryButton = screen.getByRole('button', { name: /retry/i })
       expect(retryButton).toBeInTheDocument()
 
@@ -243,7 +245,7 @@ describe('SaveStatusIndicator', () => {
       )
 
       expect(screen.getByText('Retrying (2/3)...')).toBeInTheDocument()
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeInTheDocument()
     })
 
     it('shows progress indicator with tooltip in compact mode', () => {
@@ -258,7 +260,7 @@ describe('SaveStatusIndicator', () => {
         />
       )
 
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeInTheDocument()
     })
 
     it('uses default maxRetries of 3', () => {

@@ -47,15 +47,14 @@ describe('ApiKeyDialog', () => {
       // Wait for submit button to ensure dialog is fully rendered
       await screen.findByRole('button', { name: /add key/i })
 
-      // Provider select
+      // Provider select (label associated via htmlFor)
       expect(screen.getByLabelText('Provider')).toBeInTheDocument()
 
       // Key name text field
-      expect(screen.getByRole('textbox', { name: /key name/i })).toBeInTheDocument()
+      expect(screen.getByLabelText('Key Name')).toBeInTheDocument()
 
-      // API key text field (password field) - query by placeholder or helper text context
-      const apiKeyFields = screen.getAllByLabelText(/API Key/i, { selector: 'input' })
-      expect(apiKeyFields[0]).toBeInTheDocument()
+      // API key text field (password field)
+      expect(screen.getByLabelText('API Key')).toBeInTheDocument()
     })
 
     it('validates key name required', async () => {
@@ -86,7 +85,7 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /add key/i })
 
       // Fill only key name
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
+      const keyNameField = screen.getByLabelText('Key Name')
       await user.type(keyNameField, 'Test Key')
 
       // Submit form
@@ -108,7 +107,7 @@ describe('ApiKeyDialog', () => {
       await screen.findByRole('dialog')
       await screen.findByRole('button', { name: /add key/i })
 
-      const apiKeyField = screen.getAllByLabelText(/API Key/i, { selector: 'input' })[0]
+      const apiKeyField = screen.getByLabelText('API Key')
       const toggleButton = screen.getByRole('button', { name: /toggle api key visibility/i })
 
       expect(apiKeyField).toHaveAttribute('type', 'password')
@@ -158,8 +157,8 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /add key/i })
 
       // Fill form
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
-      const apiKeyField = screen.getAllByLabelText(/API Key/i, { selector: 'input' })[0]
+      const keyNameField = screen.getByLabelText('Key Name')
+      const apiKeyField = screen.getByLabelText('API Key')
 
       await user.type(keyNameField, 'My Anthropic Key')
       await user.type(apiKeyField, 'sk-ant-test123')
@@ -193,8 +192,8 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /add key/i })
 
       // Fill form
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
-      const apiKeyField = screen.getAllByLabelText(/API Key/i, { selector: 'input' })[0]
+      const keyNameField = screen.getByLabelText('Key Name')
+      const apiKeyField = screen.getByLabelText('API Key')
 
       await user.type(keyNameField, 'Test Key')
       await user.type(apiKeyField, 'invalid-key')
@@ -230,8 +229,8 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /add key/i })
 
       // Fill form
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
-      const apiKeyField = screen.getAllByLabelText(/API Key/i, { selector: 'input' })[0]
+      const keyNameField = screen.getByLabelText('Key Name')
+      const apiKeyField = screen.getByLabelText('API Key')
 
       await user.type(keyNameField, 'Test Key')
       await user.type(apiKeyField, 'sk-test123')
@@ -242,7 +241,7 @@ describe('ApiKeyDialog', () => {
 
       await waitFor(() => {
         expect(submitButton).toBeDisabled()
-        expect(screen.getByRole('progressbar')).toBeInTheDocument()
+        expect(screen.getByRole('status')).toBeInTheDocument()
       })
 
       // Resolve request
@@ -288,11 +287,11 @@ describe('ApiKeyDialog', () => {
       await screen.findByRole('button', { name: /save changes/i })
 
       // Key name should be pre-filled
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
+      const keyNameField = screen.getByLabelText('Key Name')
       expect(keyNameField).toHaveValue('My OpenAI Key')
 
-      // Provider should be pre-filled
-      expect(screen.getByDisplayValue('openai')).toBeInTheDocument()
+      // Provider should show "openai" in the select trigger text
+      expect(screen.getByText('openai')).toBeInTheDocument()
     })
 
     it('disables provider field in edit mode', async () => {
@@ -308,9 +307,9 @@ describe('ApiKeyDialog', () => {
       await screen.findByRole('dialog')
       await screen.findByRole('button', { name: /save changes/i })
 
-      // Material-UI Select uses aria-disabled on the combobox role element
-      const providerSelect = screen.getByRole('combobox', { name: /provider/i })
-      expect(providerSelect).toHaveAttribute('aria-disabled', 'true')
+      // base-ui Select uses disabled attribute on the trigger button
+      const providerTrigger = screen.getByLabelText('Provider')
+      expect(providerTrigger).toBeDisabled()
     })
 
     it('shows helper text for optional API key', async () => {
@@ -360,7 +359,7 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /save changes/i })
 
       // Update key name
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
+      const keyNameField = screen.getByLabelText('Key Name')
       await user.clear(keyNameField)
       await user.type(keyNameField, 'Updated Key Name')
 
@@ -404,8 +403,8 @@ describe('ApiKeyDialog', () => {
       const submitButton = await screen.findByRole('button', { name: /save changes/i })
 
       // Update both fields
-      const keyNameField = screen.getByRole('textbox', { name: /key name/i })
-      const apiKeyField = screen.getAllByLabelText(/API Key/i, { selector: 'input' })[0]
+      const keyNameField = screen.getByLabelText('Key Name')
+      const apiKeyField = screen.getByLabelText('API Key')
 
       await user.clear(keyNameField)
       await user.type(keyNameField, 'New Name')

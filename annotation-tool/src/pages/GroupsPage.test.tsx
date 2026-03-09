@@ -53,7 +53,7 @@ describe('GroupsPage', () => {
 
     render(<GroupsPage />, { wrapper: createWrapper() })
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders groups after fetch', async () => {

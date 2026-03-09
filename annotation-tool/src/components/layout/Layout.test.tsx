@@ -22,6 +22,10 @@ vi.mock('@store/queries', () => ({
   useWorld: vi.fn(() => ({ data: undefined })),
 }))
 
+vi.mock('@store/queries/useProjects', () => ({
+  useMyProjects: vi.fn(() => ({ data: [] })),
+}))
+
 vi.mock('@hooks/commands', () => ({
   useCommands: vi.fn(),
   useCommandContext: vi.fn(),
@@ -32,23 +36,23 @@ vi.mock('@services/api', () => ({
 }))
 
 vi.mock('@components/shared/KeyboardShortcutsDialog', () => ({
-  default: () => null,
+  KeyboardShortcutsDialog: () => null,
 }))
 
 vi.mock('@components/shared/BreadcrumbNavigation', () => ({
-  default: () => null,
+  BreadcrumbNavigation: () => null,
 }))
 
 vi.mock('@components/data-management/ImportDataDialog', () => ({
-  default: () => null,
+  ImportDataDialog: () => null,
 }))
 
 vi.mock('@components/data-management/ExportDialog', () => ({
-  default: () => null,
+  ExportDialog: () => null,
 }))
 
 vi.mock('@components/auth/UserMenu', () => ({
-  default: () => <div data-testid="user-menu" />,
+  UserMenu: () => <div data-testid="user-menu" />,
 }))
 
 vi.mock('@components/settings/UserSettingsDialog', () => ({
@@ -133,9 +137,9 @@ describe('Layout', () => {
 
       expect(screen.getByText('Draft Claim')).toBeInTheDocument()
 
-      // The MUI Chip renders a delete icon as an SVG with data-testid="CancelIcon"
-      const deleteIcon = screen.getByTestId('CancelIcon')
-      await user.click(deleteIcon)
+      // The discard button has aria-label="Discard draft claim"
+      const deleteButton = screen.getByRole('button', { name: /discard draft claim/i })
+      await user.click(deleteButton)
 
       await waitFor(() => {
         expect(screen.queryByText('Draft Claim')).not.toBeInTheDocument()
@@ -150,8 +154,10 @@ describe('Layout', () => {
 
       render(<Layout />, { wrapper: createWrapper() })
 
-      const chip = screen.getByText('Draft Claim').closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-colorWarning')
+      // The Badge has amber/warning color classes
+      const chip = screen.getByText('Draft Claim').closest('[class]')
+      expect(chip).toHaveClass('border-amber-500')
+      expect(chip).toHaveClass('text-amber-600')
     })
   })
 })

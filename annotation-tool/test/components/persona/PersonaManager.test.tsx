@@ -112,9 +112,8 @@ describe('PersonaManager', () => {
         expect(screen.getByText('Baseball Scout')).toBeInTheDocument()
       })
 
-      // Look for the add persona icon button by its test id
-      const addButton = screen.getByTestId('PersonAddIcon')
-      expect(addButton).toBeInTheDocument()
+      // Look for the add persona icon button by its aria-label
+      expect(screen.getByRole('button', { name: /add persona/i })).toBeInTheDocument()
     })
   })
 
@@ -479,8 +478,9 @@ describe('PersonaManager', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument()
       })
 
-      // Verify it's showing Wildlife Researcher
-      expect(screen.getByText(/Wildlife Researcher/)).toBeInTheDocument()
+      // Verify the dialog mentions Wildlife Researcher
+      const dialog = screen.getByRole('dialog')
+      expect(within(dialog).getByText(/Wildlife Researcher/)).toBeInTheDocument()
 
       // Confirm deletion
       const confirmButton = screen.getByRole('button', { name: /^delete$/i })

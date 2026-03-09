@@ -13,7 +13,7 @@ import { server } from '@test/setup.js'
 
 // Mock child components
 vi.mock('./CreateUserDialog.js', () => ({
-  default: ({ open, onClose }: { open: boolean; onClose: () => void }) => (
+  CreateUserDialog: ({ open, onClose }: { open: boolean; onClose: () => void }) => (
     open ? (
       <div role="dialog" aria-label="Create User Dialog">
         <button onClick={onClose}>Close Create Dialog</button>
@@ -23,7 +23,7 @@ vi.mock('./CreateUserDialog.js', () => ({
 }))
 
 vi.mock('./EditUserDialog.js', () => ({
-  default: ({
+  EditUserDialog: ({
     open,
     user,
     onClose,
@@ -42,7 +42,7 @@ vi.mock('./EditUserDialog.js', () => ({
 }))
 
 vi.mock('../shared/ConfirmDialog.js', () => ({
-  default: ({
+  ConfirmDialog: ({
     open,
     title,
     message,
@@ -107,7 +107,7 @@ describe('UserManagementPage', () => {
       wrapper: createWrapper(),
     })
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('displays error message if fetch fails', async () => {

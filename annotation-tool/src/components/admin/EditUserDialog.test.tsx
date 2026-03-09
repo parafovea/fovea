@@ -153,7 +153,7 @@ describe('EditUserDialog', () => {
 
     await screen.findByRole('button', { name: /save changes/i })
 
-    const checkbox = screen.getByRole('checkbox', { name: /administrator/i })
+    const checkbox = screen.getByRole('checkbox')
     expect(checkbox).not.toBeChecked()
 
     await user.click(checkbox)

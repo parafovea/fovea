@@ -36,7 +36,7 @@ describe('SharedAnnotationsPage', () => {
 
     render(<SharedAnnotationsPage />, { wrapper: createWrapper() })
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders filter tabs', async () => {
