@@ -3,7 +3,7 @@
  * Provides access to model configuration, status monitoring, and application information.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Settings as SettingsIcon, LayoutDashboard, Info } from 'lucide-react'
 import { Alert, AlertDescription, AlertAction } from '@/components/ui/alert'
@@ -32,8 +32,8 @@ import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
  */
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tabNames = ['models', 'status', 'about'] as const
-  type TabName = typeof tabNames[number]
+  type TabName = 'models' | 'status' | 'about'
+  const tabNames: readonly TabName[] = useMemo(() => ['models', 'status', 'about'] as const, [])
   const [activeTab, setActiveTab] = useState<TabName>('models')
   const [notification, setNotification] = useState<{
     message: string
@@ -46,7 +46,7 @@ export default function Settings() {
     if (tabParam && tabNames.includes(tabParam as TabName)) {
       setActiveTab(tabParam as TabName)
     }
-  }, [searchParams])
+  }, [searchParams, tabNames])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as TabName)

@@ -20,7 +20,7 @@ export default defineConfig({
       '/api/telemetry/traces': {
         target: otelCollectorUrl,
         changeOrigin: true,
-        rewrite: (path) => '/v1/traces',
+        rewrite: (_path) => '/v1/traces',
       },
       // All other API requests go to backend
       '/api': {

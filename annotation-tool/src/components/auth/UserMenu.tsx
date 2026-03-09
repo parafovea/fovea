@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -84,12 +85,14 @@ export function UserMenu({
         />
 
         <DropdownMenuContent align="end" sideOffset={4}>
-          <DropdownMenuLabel>
-            <div>
-              <p className="text-sm font-semibold">{user.displayName}</p>
-              <p className="text-xs text-muted-foreground">@{user.username}</p>
-            </div>
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              <div>
+                <p className="text-sm font-semibold">{user.displayName}</p>
+                <p className="text-xs text-muted-foreground">@{user.username}</p>
+              </div>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
 

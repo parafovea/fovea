@@ -187,13 +187,13 @@ export default function ApiKeyDialog({ open, onClose, mode, existingKey }: ApiKe
 
           <div className="mt-4 flex flex-col gap-4">
             <div className="space-y-2">
-              <Label>Provider</Label>
+              <Label htmlFor="api-key-provider">Provider</Label>
               <Select
                 value={formData.provider}
                 onValueChange={(value) => updateField('provider', value as string)}
                 disabled={mode === 'edit'}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="api-key-provider" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -205,8 +205,9 @@ export default function ApiKeyDialog({ open, onClose, mode, existingKey }: ApiKe
             </div>
 
             <div className="space-y-2">
-              <Label>Key Name</Label>
+              <Label htmlFor="api-key-name">Key Name</Label>
               <Input
+                id="api-key-name"
                 value={formData.keyName}
                 onChange={(e) => updateField('keyName', e.target.value)}
                 aria-invalid={!!errors.keyName}
@@ -219,9 +220,10 @@ export default function ApiKeyDialog({ open, onClose, mode, existingKey }: ApiKe
             </div>
 
             <div className="space-y-2">
-              <Label>API Key</Label>
+              <Label htmlFor="api-key-value">API Key</Label>
               <div className="relative">
                 <Input
+                  id="api-key-value"
                   type={showApiKey ? 'text' : 'password'}
                   value={formData.apiKey}
                   onChange={(e) => updateField('apiKey', e.target.value)}

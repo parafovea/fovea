@@ -3,6 +3,7 @@
  * Provides tabs for profile settings, API key management, and preferences.
  */
 
+import { useState, useEffect } from 'react'
 import { User, KeyRound, Settings, X } from 'lucide-react'
 import { useAuthStore } from '@store/zustand/authStore'
 import {
@@ -35,6 +36,14 @@ interface UserSettingsDialogProps {
  */
 export default function UserSettingsDialog({ open, onClose }: UserSettingsDialogProps) {
   const mode = useAuthStore(state => state.mode)
+  const [activeTab, setActiveTab] = useState('profile')
+
+  // Reset to Profile tab when dialog opens
+  useEffect(() => {
+    if (open) {
+      setActiveTab('profile')
+    }
+  }, [open])
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
@@ -53,7 +62,7 @@ export default function UserSettingsDialog({ open, onClose }: UserSettingsDialog
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="profile">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList variant="line" className="w-full justify-start border-b px-0">
             <TabsTrigger value="profile">
               <User className="size-4" />

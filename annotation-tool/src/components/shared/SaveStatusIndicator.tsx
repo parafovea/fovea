@@ -99,13 +99,13 @@ export function SaveStatusIndicator({
       >
         {status === 'saving' && <Spinner className="size-3.5" />}
         {status === 'saved' && (
-          <Check className="size-3.5 text-green-600" />
+          <Check className="size-3.5 text-green-600" data-testid="CheckIcon" />
         )}
         {status === 'error' && (
           <Tooltip>
             <TooltipTrigger render={
               <span className="inline-flex">
-                <CircleAlert className="size-3.5 text-destructive" />
+                <CircleAlert className="size-3.5 text-destructive" data-testid="ErrorIcon" />
               </span>
             } />
             <TooltipContent>{errorMessage || 'Save failed'}</TooltipContent>
@@ -153,7 +153,7 @@ export function SaveStatusIndicator({
           {onRetry && (
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" size="icon-xs" onClick={onRetry}>
+                <Button variant="ghost" size="icon-xs" onClick={onRetry} aria-label="Retry">
                   <RefreshCw className="size-4" />
                 </Button>
               } />

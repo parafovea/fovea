@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Copy, Trash2, Pencil, ChevronDown, UserPlus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -351,15 +351,21 @@ export default function PersonaManager() {
                         {persona.role} &middot; {getOntologyStats(persona.id).entities} entities, {getOntologyStats(persona.id).events} events
                       </span>
                     </div>
-                    <div className="ml-4 flex gap-1">
+                    <div
+                      className="ml-4 flex gap-1"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <Tooltip>
                         <TooltipTrigger
                           render={
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                e.stopPropagation()
+                              aria-label="copy persona"
+                              onClick={() => {
                                 handleCopyPersona(persona.id)
                               }}
                             />
@@ -375,8 +381,8 @@ export default function PersonaManager() {
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                e.stopPropagation()
+                              aria-label="delete persona"
+                              onClick={() => {
                                 handleDeleteClick(persona)
                               }}
                             />
@@ -396,7 +402,7 @@ export default function PersonaManager() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="ghost" size="icon" onClick={handleCreateNew}>
+            <Button variant="ghost" size="icon" aria-label="add persona" onClick={handleCreateNew}>
               <Plus className="size-4" />
             </Button>
           </div>

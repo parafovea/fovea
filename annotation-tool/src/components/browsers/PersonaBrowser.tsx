@@ -179,6 +179,7 @@ export default function PersonaBrowser({
                           variant="ghost"
                           size="icon-sm"
                           className="ml-auto text-destructive"
+                          aria-label="delete persona"
                           onClick={(e) => handleDeleteClick(persona, e)}
                         />
                       }

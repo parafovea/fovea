@@ -245,8 +245,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
           <h3 className="text-lg font-semibold">Profile Information</h3>
 
           <div className="space-y-2">
-            <Label>Username</Label>
+            <Label htmlFor="profile-username">Username</Label>
             <Input
+              id="profile-username"
               value={currentUser.username}
               disabled
             />
@@ -254,8 +255,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Display Name</Label>
+            <Label htmlFor="profile-display-name">Display Name</Label>
             <Input
+              id="profile-display-name"
               value={formData.displayName}
               onChange={(e) => updateField('displayName', e.target.value)}
               aria-invalid={!!errors.displayName}
@@ -267,8 +269,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Email</Label>
+            <Label htmlFor="profile-email">Email</Label>
             <Input
+              id="profile-email"
               type="email"
               value={formData.email}
               onChange={(e) => updateField('email', e.target.value)}
@@ -302,8 +305,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
                 <form onSubmit={handlePasswordSubmit}>
                   <div className="flex flex-col gap-4">
                     <div className="space-y-2">
-                      <Label>Current Password</Label>
+                      <Label htmlFor="profile-current-password">Current Password</Label>
                       <Input
+                        id="profile-current-password"
                         type="password"
                         value={passwordData.oldPassword}
                         onChange={(e) => updateField('oldPassword', e.target.value)}
@@ -316,8 +320,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>New Password</Label>
+                      <Label htmlFor="profile-new-password">New Password</Label>
                       <Input
+                        id="profile-new-password"
                         type="password"
                         value={passwordData.newPassword}
                         onChange={(e) => updateField('newPassword', e.target.value)}
@@ -330,8 +335,9 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Confirm New Password</Label>
+                      <Label htmlFor="profile-confirm-password">Confirm New Password</Label>
                       <Input
+                        id="profile-confirm-password"
                         type="password"
                         value={passwordData.confirmPassword}
                         onChange={(e) => updateField('confirmPassword', e.target.value)}
