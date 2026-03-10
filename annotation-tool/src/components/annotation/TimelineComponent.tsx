@@ -1,5 +1,6 @@
 /**
- * Timeline component for bounding box sequence visualization and navigation.
+ * DOM-based timeline component for bounding box sequence visualization and navigation.
+ * Uses shadcn-ui components and Tailwind CSS instead of canvas rendering.
  *
  * @packageDocumentation
  */
@@ -7,19 +8,35 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { SkipBack, Rewind, FastForward, SkipForward } from 'lucide-react'
+import {
+  SkipBack,
+  ChevronLeft,
+  ChevronRight,
+  SkipForward,
+  KeyRound,
+  Trash2,
+  CopyCheck,
+  Spline,
+  EyeOff,
+} from 'lucide-react'
 import { Annotation, InterpolationType } from '@models/types'
-import { TimelineRenderer, RenderOptions } from './TimelineRenderer'
 import { useMoveKeyframe } from '@store/queries'
 import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
+import { cn } from '@/lib/utils'
 
 export interface TimelineComponentProps {
+  /** Currently selected annotation (shown with keyframe details) */
   annotation: Annotation | null
+  /** All annotations for this video (shown as track bars) */
+  annotations: Annotation[]
   currentFrame: number
   totalFrames: number
   videoFps: number
   onSeek: (frameNumber: number) => void
+  onAnnotationSelect: (annotation: Annotation) => void
   videoRef?: React.RefObject<HTMLVideoElement>
   onAddKeyframe: () => void
   onDeleteKeyframe: () => void
@@ -28,37 +45,104 @@ export interface TimelineComponentProps {
   onClose: () => void
 }
 
-/**
- * Reads CSS custom properties from the document to pass to the canvas renderer.
- * Falls back to sensible defaults if properties are not set.
- */
-function getThemeColors(): RenderOptions['theme'] {
-  const style = getComputedStyle(document.documentElement)
-  const getCssVar = (name: string, fallback: string): string => {
-    const val = style.getPropertyValue(name).trim()
-    return val || fallback
+// --- Viewport math (replaces TimelineRenderer coordinate logic) ---
+
+function getMajorTickInterval(zoom: number): number {
+  if (zoom >= 8) return 1
+  if (zoom >= 5) return 5
+  if (zoom >= 3) return 10
+  if (zoom >= 2) return 20
+  if (zoom >= 1) return 50
+  if (zoom >= 0.5) return 100
+  if (zoom >= 0.2) return 200
+  return 500
+}
+
+function computeViewport(
+  currentFrame: number,
+  totalFrames: number,
+  containerWidth: number,
+  pixelsPerFrame: number,
+) {
+  const visibleFrames = Math.floor(containerWidth / pixelsPerFrame)
+  const halfVisible = Math.floor(visibleFrames / 2)
+
+  let startFrame = currentFrame - halfVisible
+  let endFrame = currentFrame + halfVisible
+
+  if (startFrame < 0) {
+    startFrame = 0
+    endFrame = Math.min(totalFrames - 1, visibleFrames)
+  }
+  if (endFrame >= totalFrames) {
+    endFrame = totalFrames - 1
+    startFrame = Math.max(0, endFrame - visibleFrames)
   }
 
-  return {
-    backgroundColor: getCssVar('--color-card', '#ffffff'),
-    textColor: getCssVar('--color-foreground', '#0a0a0a'),
-    textSecondary: getCssVar('--color-muted-foreground', '#737373'),
-    dividerColor: getCssVar('--color-border', '#e5e5e5'),
-    primaryMain: getCssVar('--color-primary', '#2563eb'),
-    primaryLight: getCssVar('--color-primary', '#60a5fa'),
-    errorMain: getCssVar('--color-destructive', '#dc2626'),
-  }
+  return { startFrame, endFrame, visibleFrames }
+}
+
+function frameToX(frame: number, viewportStart: number, pixelsPerFrame: number): number {
+  return (frame - viewportStart) * pixelsPerFrame
+}
+
+function xToFrame(x: number, viewportStart: number, pixelsPerFrame: number): number {
+  return Math.round(viewportStart + x / pixelsPerFrame)
+}
+
+// --- Interpolation segment colors ---
+
+const SEGMENT_COLORS: Record<string, string> = {
+  linear: 'var(--color-primary)',
+  'ease-in': '#4caf50',
+  'ease-out': '#ff9800',
+  'ease-in-out': '#9c27b0',
+  hold: '#607d8b',
+  bezier: '#e91e63',
+  parametric: '#00bcd4',
+}
+
+const SEGMENT_LABELS: Record<string, string> = {
+  linear: 'Linear',
+  'ease-in': 'Ease In',
+  'ease-out': 'Ease Out',
+  'ease-in-out': 'Ease In-Out',
+  hold: 'Hold',
+  bezier: 'Bezier',
+  parametric: 'Parametric',
+}
+
+// Colors for annotation track bars (cycled)
+const ANNOTATION_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(210, 70%, 55%)',
+  'hsl(160, 60%, 45%)',
+  'hsl(280, 55%, 55%)',
+  'hsl(30, 70%, 50%)',
+  'hsl(340, 65%, 50%)',
+  'hsl(190, 60%, 45%)',
+]
+
+function getAnnotationFrameBounds(ann: Annotation): { startFrame: number; endFrame: number } | null {
+  const kfs = ann.boundingBoxSequence?.boxes?.filter(
+    b => b.isKeyframe || b.isKeyframe === undefined
+  ) ?? []
+  if (kfs.length === 0) return null
+  const sorted = [...kfs].sort((a, b) => a.frameNumber - b.frameNumber)
+  return { startFrame: sorted[0].frameNumber, endFrame: sorted[sorted.length - 1].frameNumber }
 }
 
 /**
- * Canvas-based timeline with keyboard navigation and keyframe management.
+ * DOM-based timeline with keyboard navigation and keyframe management.
  */
 export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   annotation,
+  annotations,
   currentFrame,
   totalFrames,
   videoFps,
   onSeek,
+  onAnnotationSelect,
   videoRef,
   onAddKeyframe,
   onDeleteKeyframe,
@@ -67,19 +151,13 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   onClose,
 }) => {
   const moveKeyframe = useMoveKeyframe()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rendererRef = useRef<TimelineRenderer | null>(null)
-  const currentFrameRef = useRef(currentFrame)
+  const [containerWidth, setContainerWidth] = useState(800)
   const [isDragging, setIsDragging] = useState(false)
-  const [zoom, setZoom] = useState(1)
+  const [zoomInitialized, setZoomInitialized] = useState(false)
+  const [zoom, setZoom] = useState(0.1) // Will be set to minZoom once container is measured
   const [hoveredFrame, setHoveredFrame] = useState<number | null>(null)
   const [hoveredSegmentInfo, setHoveredSegmentInfo] = useState<string | null>(null)
-
-  // Update ref without triggering re-render
-  useEffect(() => {
-    currentFrameRef.current = currentFrame
-  }, [currentFrame])
   const [selectedKeyframes, setLocalSelectedKeyframes] = useState<number[]>([])
   const [draggingKeyframe, setDraggingKeyframe] = useState<number | null>(null)
   const [dragStartFrame, setDragStartFrame] = useState<number | null>(null)
@@ -93,6 +171,11 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     [annotation]
   )
 
+  const interpolationSegments = useMemo(() =>
+    annotation?.boundingBoxSequence?.interpolationSegments || [],
+    [annotation?.boundingBoxSequence?.interpolationSegments]
+  )
+
   // Check if current frame is a keyframe
   const isKeyframe = keyframes.some(kf => kf.frameNumber === currentFrame)
 
@@ -103,215 +186,169 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
     currentFrame === keyframes[keyframes.length - 1].frameNumber
   )
 
-  // Interpolation requires at least 2 keyframes
   const canInterpolate = keyframes.length >= 2
 
-  // Initialize renderer
+  // Minimum zoom fits the entire timeline in the container
+  const minZoom = totalFrames > 0 ? containerWidth / (totalFrames * 10) : 0.1
+
+  // Derived viewport
+  const pixelsPerFrame = zoom * 10
+  const viewport = useMemo(
+    () => computeViewport(currentFrame, totalFrames, containerWidth, pixelsPerFrame),
+    [currentFrame, totalFrames, containerWidth, pixelsPerFrame]
+  )
+
+  // Measure container width
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return
-
-    const canvas = canvasRef.current
-    const container = containerRef.current
-
-    // Set canvas size to match container
-    const resizeCanvas = () => {
-      const rect = container.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = 60  // Fixed height for timeline
-    }
-
-    resizeCanvas()
-
-    // Create renderer
-    const renderer = new TimelineRenderer(canvas, totalFrames)
-    renderer.setZoom(zoom)
-    rendererRef.current = renderer
-
-    // Handle window resize
-    const handleResize = () => {
-      resizeCanvas()
-      if (rendererRef.current) {
-        const rect = container.getBoundingClientRect()
-        rendererRef.current.resize(rect.width, 60)
-        rendererRef.current.invalidate()
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width)
       }
-    }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      renderer.destroy()
-    }
-  }, [totalFrames, zoom])
-
-  // Track previous values to detect changes and gate invalidation
-  const prevFrameRef = useRef<number>(-1)
-  const prevKeyframesLengthRef = useRef<number>(0)
-  const prevZoomRef = useRef<number>(1)
-  const prevSelectedRef = useRef<number[]>([])
-
-  // Render loop - use ref to avoid triggering React re-renders on every frame
+  // Initialize zoom to fit entire timeline once container is measured
   useEffect(() => {
-    if (!rendererRef.current) return
-
-    const renderer = rendererRef.current
-    let lastRenderTime = 0
-    let rafId: number | null = null
-
-    const render = (timestamp: number) => {
-      // Throttle to max 15fps (66ms between frames) to avoid affecting video playback
-      if (timestamp - lastRenderTime < 66) {
-        rafId = requestAnimationFrame(render)
-        return
-      }
-      lastRenderTime = timestamp
-
-      const themeColors = getThemeColors()
-
-      const renderOptions: RenderOptions = {
-        totalFrames,
-        currentFrame: currentFrameRef.current,
-        keyframes,
-        interpolationSegments: annotation?.boundingBoxSequence?.interpolationSegments || [],
-        zoom,
-        theme: themeColors,
-      }
-
-      // Only invalidate if something actually changed
-      // This prevents unnecessary redraws and improves performance
-      const frameChanged = currentFrameRef.current !== prevFrameRef.current
-      const keyframesChanged = keyframes.length !== prevKeyframesLengthRef.current
-      const zoomChanged = zoom !== prevZoomRef.current
-      const selectedChanged = selectedKeyframes.length !== prevSelectedRef.current.length ||
-        selectedKeyframes.some((f, i) => f !== prevSelectedRef.current[i])
-
-      if (frameChanged || keyframesChanged || zoomChanged || selectedChanged) {
-        renderer.invalidate()
-        prevFrameRef.current = currentFrameRef.current
-        prevKeyframesLengthRef.current = keyframes.length
-        prevZoomRef.current = zoom
-        prevSelectedRef.current = [...selectedKeyframes]
-      }
-
-      renderer.render(renderOptions, selectedKeyframes)
-      rafId = requestAnimationFrame(render)
+    if (!zoomInitialized && containerWidth > 0 && totalFrames > 0) {
+      setZoom(minZoom)
+      setZoomInitialized(true)
     }
+  }, [containerWidth, totalFrames, minZoom, zoomInitialized])
 
-    rafId = requestAnimationFrame(render)
+  // Generate visible ticks
+  const ticks = useMemo(() => {
+    const majorInterval = getMajorTickInterval(zoom)
+    const minorInterval = Math.max(1, Math.floor(majorInterval / 5))
+    const result: { frame: number; isMajor: boolean }[] = []
 
-    return () => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
+    for (let frame = viewport.startFrame; frame <= viewport.endFrame; frame++) {
+      if (frame % majorInterval === 0) {
+        result.push({ frame, isMajor: true })
+      } else if (frame % minorInterval === 0) {
+        result.push({ frame, isMajor: false })
       }
     }
-  }, [keyframes, annotation?.boundingBoxSequence?.interpolationSegments, zoom, totalFrames, selectedKeyframes])
+    return result
+  }, [viewport.startFrame, viewport.endFrame, zoom])
 
-  // Handle mouse down on canvas
+  // Visible keyframes
+  const visibleKeyframes = useMemo(() =>
+    keyframes.filter(kf =>
+      kf.frameNumber >= viewport.startFrame && kf.frameNumber <= viewport.endFrame
+    ),
+    [keyframes, viewport.startFrame, viewport.endFrame]
+  )
+
+  // Visible interpolation segments
+  const visibleSegments = useMemo(() =>
+    interpolationSegments.filter(seg =>
+      seg.endFrame >= viewport.startFrame && seg.startFrame <= viewport.endFrame
+    ),
+    [interpolationSegments, viewport.startFrame, viewport.endFrame]
+  )
+
+  // --- Coordinate helpers that close over current viewport ---
+  const toX = useCallback(
+    (frame: number) => frameToX(frame, viewport.startFrame, pixelsPerFrame),
+    [viewport.startFrame, pixelsPerFrame]
+  )
+
+  const toFrame = useCallback(
+    (x: number) => xToFrame(x, viewport.startFrame, pixelsPerFrame),
+    [viewport.startFrame, pixelsPerFrame]
+  )
+
+  // Find keyframe near click position
+  const getKeyframeAtX = useCallback(
+    (x: number): number | null => {
+      const clickRadius = 10
+      for (const kf of keyframes) {
+        const kfX = frameToX(kf.frameNumber, viewport.startFrame, pixelsPerFrame)
+        if (Math.abs(x - kfX) <= clickRadius) return kf.frameNumber
+      }
+      return null
+    },
+    [keyframes, viewport.startFrame, pixelsPerFrame]
+  )
+
+  // --- Mouse handlers ---
+
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!canvasRef.current || !rendererRef.current) return
-
-      const canvas = canvasRef.current
-      const renderer = rendererRef.current
-      const rect = canvas.getBoundingClientRect()
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
-      const frame = renderer.xToFrame(x)
-
-      // Check if clicking on a keyframe
-      const clickedKeyframe = renderer.getKeyframeAtX(x, keyframes)
+      const frame = toFrame(x)
+      const clickedKeyframe = getKeyframeAtX(x)
 
       if (clickedKeyframe !== null) {
-        // Clicking on a keyframe
         if (e.ctrlKey || e.metaKey) {
-          // Multi-select with Ctrl/Cmd
           if (selectedKeyframes.includes(clickedKeyframe)) {
             setLocalSelectedKeyframes(selectedKeyframes.filter(f => f !== clickedKeyframe))
           } else {
             setLocalSelectedKeyframes([...selectedKeyframes, clickedKeyframe])
           }
         } else {
-          // Select single keyframe and prepare for drag
           setLocalSelectedKeyframes([clickedKeyframe])
           setDraggingKeyframe(clickedKeyframe)
           setDragStartFrame(clickedKeyframe)
         }
       } else {
-        // Clicking on timeline (not a keyframe)
         const clampedFrame = Math.max(0, Math.min(totalFrames - 1, frame))
         setIsDragging(true)
         setLocalSelectedKeyframes([])
         onSeek(clampedFrame)
       }
     },
-    [totalFrames, keyframes, selectedKeyframes, onSeek]
+    [totalFrames, selectedKeyframes, onSeek, toFrame, getKeyframeAtX]
   )
 
-  // Handle mouse move (for dragging playhead or keyframe)
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!canvasRef.current || !rendererRef.current) return
-
-      const canvas = canvasRef.current
-      const renderer = rendererRef.current
-      const rect = canvas.getBoundingClientRect()
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
-      const frame = renderer.xToFrame(x)
-
-      // Clamp to valid range
+      const frame = toFrame(x)
       const clampedFrame = Math.max(0, Math.min(totalFrames - 1, frame))
 
-      // Update hovered frame for tooltip
       setHoveredFrame(clampedFrame)
 
-      // Check if hovering over an interpolation segment
-      const segments = annotation?.boundingBoxSequence?.interpolationSegments || []
-      const segmentInfo = renderer.getSegmentAtX(x, segments)
-      setHoveredSegmentInfo(segmentInfo?.label || null)
+      // Check segment hover
+      const seg = interpolationSegments.find(
+        s => clampedFrame > s.startFrame && clampedFrame < s.endFrame
+      )
+      setHoveredSegmentInfo(seg ? (SEGMENT_LABELS[seg.type] || 'Linear') : null)
 
-      // If dragging keyframe, update preview position
-      if (draggingKeyframe !== null && dragStartFrame !== null) {
-        // Show preview at new position (actual move happens on mouse up)
-        // For now, just track the target frame
-        return
-      }
+      if (draggingKeyframe !== null && dragStartFrame !== null) return
 
-      // If dragging playhead, seek to frame
       if (isDragging) {
-        // Snap to nearest keyframe if within 3 frames
         let targetFrame = clampedFrame
         const nearestKeyframe = keyframes.find(
           kf => Math.abs(kf.frameNumber - clampedFrame) <= 3
         )
-        if (nearestKeyframe) {
-          targetFrame = nearestKeyframe.frameNumber
-        }
-
+        if (nearestKeyframe) targetFrame = nearestKeyframe.frameNumber
         onSeek(targetFrame)
       }
     },
-    [isDragging, draggingKeyframe, dragStartFrame, totalFrames, keyframes, onSeek, annotation?.boundingBoxSequence?.interpolationSegments]
+    [isDragging, draggingKeyframe, dragStartFrame, totalFrames, keyframes, onSeek, toFrame, interpolationSegments]
   )
 
-  // Handle mouse up
   const handleMouseUp = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      // Handle keyframe drag completion
-      if (draggingKeyframe !== null && dragStartFrame !== null && canvasRef.current && rendererRef.current && annotation) {
-        const canvas = canvasRef.current
-        const renderer = rendererRef.current
-        const rect = canvas.getBoundingClientRect()
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (draggingKeyframe !== null && dragStartFrame !== null && containerRef.current && annotation) {
+        const rect = containerRef.current.getBoundingClientRect()
         const x = e.clientX - rect.left
-        const newFrame = Math.max(0, Math.min(totalFrames - 1, renderer.xToFrame(x)))
+        const newFrame = Math.max(0, Math.min(totalFrames - 1, toFrame(x)))
 
-        // Only move if frame changed and not first/last keyframe
         if (newFrame !== dragStartFrame) {
           const isFirstOrLast =
             dragStartFrame === keyframes[0].frameNumber ||
             dragStartFrame === keyframes[keyframes.length - 1].frameNumber
 
           if (!isFirstOrLast) {
-            // Move keyframe
             moveKeyframe({
               videoId: annotation.videoId,
               annotationId: annotation.id,
@@ -327,10 +364,9 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
       setDraggingKeyframe(null)
       setDragStartFrame(null)
     },
-    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, moveKeyframe, videoFps]
+    [draggingKeyframe, dragStartFrame, totalFrames, keyframes, annotation, moveKeyframe, videoFps, toFrame]
   )
 
-  // Handle mouse leave
   const handleMouseLeave = useCallback(() => {
     setIsDragging(false)
     setDraggingKeyframe(null)
@@ -342,99 +378,187 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
   // Sync with video timeupdate
   useEffect(() => {
     if (!videoRef?.current) return
-
     const video = videoRef.current
-
     const handleTimeUpdate = () => {
       const frame = Math.floor(video.currentTime * videoFps)
-      // Only update if different to avoid infinite loop
-      if (frame !== currentFrame) {
-        onSeek(frame)
-      }
+      if (frame !== currentFrame) onSeek(frame)
     }
-
     video.addEventListener('timeupdate', handleTimeUpdate)
-
-    return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate)
-    }
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate)
   }, [videoRef, videoFps, currentFrame, onSeek])
 
   // Zoom change handler
   const handleZoomChange = (newValue: number | readonly number[]) => {
-    const zoomValue = Array.isArray(newValue) ? newValue[0] : newValue
-    setZoom(zoomValue)
-    if (rendererRef.current) {
-      rendererRef.current.setZoom(zoomValue)
-      rendererRef.current.invalidate()
-    }
+    setZoom(Array.isArray(newValue) ? newValue[0] : newValue)
   }
 
   // Transport control handlers
-  const handleStepBackward = () => {
-    const newFrame = Math.max(0, currentFrame - 1)
-    onSeek(newFrame)
-  }
+  const handleStepBackward = () => onSeek(Math.max(0, currentFrame - 1))
+  const handleStepForward = () => onSeek(Math.min(totalFrames - 1, currentFrame + 1))
+  const handleJumpBackward = () => onSeek(Math.max(0, currentFrame - 10))
+  const handleJumpForward = () => onSeek(Math.min(totalFrames - 1, currentFrame + 10))
 
-  const handleStepForward = () => {
-    const newFrame = Math.min(totalFrames - 1, currentFrame + 1)
-    onSeek(newFrame)
-  }
-
-  const handleJumpBackward = () => {
-    const newFrame = Math.max(0, currentFrame - 10)
-    onSeek(newFrame)
-  }
-
-  const handleJumpForward = () => {
-    const newFrame = Math.min(totalFrames - 1, currentFrame + 10)
-    onSeek(newFrame)
-  }
+  // Playhead position
+  const playheadX = toX(currentFrame)
 
   return (
-    <div className="w-full bg-card border border-border rounded p-2">
-      {/* Canvas */}
+    <div className="w-full rounded-md border bg-card p-2">
+      {/* Timeline visualization */}
       <div
         ref={containerRef}
-        className="w-full relative"
+        className="relative w-full select-none overflow-hidden rounded-sm bg-muted/30"
         style={{
-          height: 60,
-          cursor: isDragging ? 'grabbing' : 'grab',
+          height: Math.max(56, 20 + annotations.length * 14 + 26),
+          cursor: isDragging ? 'grabbing' : 'pointer',
         }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        role="slider"
+        aria-label="Video annotation timeline"
+        aria-valuemin={0}
+        aria-valuemax={totalFrames - 1}
+        aria-valuenow={currentFrame}
+        data-testid="timeline-track"
       >
-        <canvas
-          ref={canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%',
-          }}
-          aria-label="Video annotation timeline showing keyframes and interpolated positions"
-          role="img"
-          data-testid="timeline-canvas"
-        />
+        {/* Ruler row (20px) */}
+        <div className="absolute inset-x-0 top-0 h-5 border-b border-border/50">
+          {ticks.map(tick => {
+            const x = toX(tick.frame)
+            return (
+              <div key={tick.frame} className="absolute top-0 bottom-0" style={{ left: x }}>
+                {tick.isMajor && (
+                  <span className="absolute top-0 -translate-x-1/2 text-[10px] font-mono text-muted-foreground leading-none">
+                    {tick.frame}
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    'absolute bottom-0 w-px',
+                    tick.isMajor ? 'h-2 bg-border' : 'h-1 bg-border/50'
+                  )}
+                />
+              </div>
+            )
+          })}
+        </div>
 
-        {/* Tooltip for hovered frame and segment */}
-        {hoveredFrame !== null && !isDragging && (
+        {/* Annotation track bars */}
+        <div className="absolute inset-x-0 top-5" style={{ height: Math.max(14, annotations.length * 14) }}>
+          {annotations.map((ann, i) => {
+            const bounds = getAnnotationFrameBounds(ann)
+            if (!bounds) return null
+            const startX = Math.max(0, toX(bounds.startFrame))
+            const endX = Math.min(containerWidth, toX(bounds.endFrame))
+            const barWidth = Math.max(4, endX - startX) // min 4px so single-keyframe annotations are visible
+            const isSelected = annotation?.id === ann.id
+            const color = ANNOTATION_COLORS[i % ANNOTATION_COLORS.length]
+            return (
+              <Tooltip key={ann.id}>
+                <TooltipTrigger
+                  render={
+                    <div
+                      className={cn(
+                        'absolute h-2.5 rounded-sm cursor-pointer transition-opacity',
+                        isSelected ? 'opacity-100 ring-1 ring-foreground/30' : 'opacity-60 hover:opacity-90'
+                      )}
+                      style={{
+                        left: startX,
+                        width: barWidth,
+                        top: i * 14 + 1,
+                        backgroundColor: color,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAnnotationSelect(ann)
+                      }}
+                    />
+                  }
+                />
+                <TooltipContent side="top" className="text-xs">
+                  {ann.annotationType === 'type'
+                    ? `Type: ${(ann as any).typeId}`
+                    : `Object annotation`}
+                  {' '}(Frame {bounds.startFrame}-{bounds.endFrame})
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+
+        {/* Selected annotation keyframe detail track */}
+        <div
+          className="absolute inset-x-0 bottom-0"
+          style={{ height: 26 }}
+        >
+          {/* Interpolation segments */}
+          {visibleSegments.map((seg, i) => {
+            const startX = Math.max(0, toX(seg.startFrame))
+            const endX = Math.min(containerWidth, toX(seg.endFrame))
+            const width = endX - startX
+            const color = SEGMENT_COLORS[seg.type] || SEGMENT_COLORS.linear
+            return (
+              <div
+                key={i}
+                className="absolute top-1/2 h-0.5 -translate-y-px rounded-full"
+                style={{
+                  left: startX,
+                  width: Math.max(0, width),
+                  backgroundColor: color,
+                  opacity: 0.6,
+                }}
+              />
+            )
+          })}
+
+          {/* Keyframe dots */}
+          {visibleKeyframes.map(kf => {
+            const x = toX(kf.frameNumber)
+            const isSelected = selectedKeyframes.includes(kf.frameNumber)
+            return (
+              <div
+                key={kf.frameNumber}
+                className={cn(
+                  'absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-shadow',
+                  isSelected
+                    ? 'size-4 border-primary bg-primary shadow-[0_0_0_2px] shadow-primary/30'
+                    : 'size-3 border-primary bg-primary/80 hover:size-3.5'
+                )}
+                style={{ left: x }}
+              />
+            )
+          })}
+        </div>
+
+        {/* Playhead (spans full height) */}
+        {playheadX >= 0 && playheadX <= containerWidth && (
           <div
-            className="absolute top-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs pointer-events-none"
+            className="absolute top-0 bottom-0 w-0.5 bg-destructive z-10 pointer-events-none"
+            style={{ left: playheadX }}
+          >
+            <div
+              className="absolute -top-px left-1/2 -translate-x-1/2 size-0 border-x-[5px] border-x-transparent border-t-[6px] border-t-destructive"
+            />
+          </div>
+        )}
+
+        {/* Hovered frame badge */}
+        {hoveredFrame !== null && !isDragging && (
+          <Badge
+            variant="secondary"
+            className="absolute top-1 right-1 pointer-events-none font-mono text-[10px] py-0.5 px-1.5"
           >
             Frame {hoveredFrame}
             {hoveredSegmentInfo && (
-              <span className="ml-2 opacity-80">
-                | {hoveredSegmentInfo}
-              </span>
+              <span className="ml-1.5 opacity-70">{hoveredSegmentInfo}</span>
             )}
-          </div>
+          </Badge>
         )}
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-4 mt-2">
+      <div className="flex items-center gap-2 mt-2">
         {/* Hide Timeline Button */}
         <Button
           variant="outline"
@@ -442,27 +566,44 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
           onClick={onClose}
           aria-label="Hide timeline and show standard controls"
         >
+          <EyeOff className="size-3.5 mr-1" />
           Hide Timeline
         </Button>
 
+        <Separator orientation="vertical" className="mx-1 h-6" />
+
         {/* Transport controls */}
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon-sm" onClick={handleJumpBackward} title="Jump 10 frames back (Shift+←)" aria-label="Jump 10 frames back">
-            <SkipBack className="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={handleStepBackward} title="Step 1 frame back (←)" aria-label="Step 1 frame back">
-            <Rewind className="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={handleStepForward} title="Step 1 frame forward (→)" aria-label="Step 1 frame forward">
-            <FastForward className="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={handleJumpForward} title="Jump 10 frames forward (Shift+→)" aria-label="Jump 10 frames forward">
-            <SkipForward className="size-4" />
-          </Button>
+        <div className="flex gap-0.5">
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleJumpBackward} aria-label="Jump 10 frames back" />}>
+              <SkipBack className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Jump 10 frames back (Shift+Left)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleStepBackward} aria-label="Step 1 frame back" />}>
+              <ChevronLeft className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Step 1 frame back (Left)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleStepForward} aria-label="Step 1 frame forward" />}>
+              <ChevronRight className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Step 1 frame forward (Right)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleJumpForward} aria-label="Jump 10 frames forward" />}>
+              <SkipForward className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Jump 10 frames forward (Shift+Right)</TooltipContent>
+          </Tooltip>
         </div>
 
+        <Separator orientation="vertical" className="mx-1 h-6" />
+
         {/* Keyframe controls */}
-        <div className="flex gap-1 border-l border-border pl-2">
+        <div className="flex gap-0.5">
           <Tooltip>
             <TooltipTrigger
               render={
@@ -475,7 +616,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 />
               }
             >
-              <span className="text-base">🔑</span>
+              <KeyRound className="size-4" />
             </TooltipTrigger>
             <TooltipContent>Add Keyframe (K)</TooltipContent>
           </Tooltip>
@@ -492,7 +633,7 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 />
               }
             >
-              <span className="text-base">╳</span>
+              <Trash2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent>
               {!annotation
@@ -517,9 +658,9 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 />
               }
             >
-              <span className="text-base">↻</span>
+              <CopyCheck className="size-4" />
             </TooltipTrigger>
-            <TooltipContent>Copy Previous Frame (Ctrl+C)</TooltipContent>
+            <TooltipContent>Copy Previous Frame (C)</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -534,31 +675,31 @@ export const TimelineComponent: React.FC<TimelineComponentProps> = ({
                 />
               }
             >
-              <span className="text-base">~</span>
+              <Spline className="size-4" />
             </TooltipTrigger>
-            <TooltipContent>Interpolation Mode (I)</TooltipContent>
+            <TooltipContent>Interpolation Mode</TooltipContent>
           </Tooltip>
         </div>
 
+        <Separator orientation="vertical" className="mx-1 h-6" />
+
         {/* Zoom slider */}
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-xs min-w-[40px]">
-            Zoom
-          </span>
+          <span className="text-xs text-muted-foreground">Zoom</span>
           <Slider
             value={[zoom]}
             onValueChange={handleZoomChange}
-            min={1}
+            min={minZoom}
             max={10}
-            step={0.5}
+            step={minZoom < 0.5 ? 0.1 : 0.5}
             className="flex-1 max-w-[200px]"
           />
         </div>
 
         {/* Current frame display */}
-        <span className="text-sm min-w-[120px] text-right font-mono">
+        <Badge variant="outline" className="ml-auto font-mono text-xs">
           Frame {currentFrame} / {totalFrames - 1}
-        </span>
+        </Badge>
       </div>
 
       {/* Interpolation Mode Selector Dialog */}

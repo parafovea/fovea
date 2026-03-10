@@ -65,8 +65,12 @@ export function BreadcrumbNavigation(): JSX.Element | null {
         const videoId = pathSegments[1]
         const video = videos.find(v => v.id === videoId)
         if (video) {
+          // Truncate long titles for the breadcrumb
+          const title = video.title && video.title.length > 40
+            ? video.title.slice(0, 40) + '...'
+            : video.title
           breadcrumbs.push({
-            label: `Video: "${video.title}"`,
+            label: `Video: "${title}"`,
             path: `/videos/${videoId}`,
             isActive: true,
           })
@@ -165,8 +169,8 @@ export function BreadcrumbNavigation(): JSX.Element | null {
   }
 
   return (
-    <div className="flex items-center">
-      <Breadcrumb className="flex-1">
+    <div className="flex items-center min-w-0 flex-1">
+      <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList>
           {breadcrumbs.map((crumb, index) => {
             const isLast = index === breadcrumbs.length - 1

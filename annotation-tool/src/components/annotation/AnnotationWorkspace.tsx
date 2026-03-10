@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
+import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -168,6 +169,17 @@ export default function AnnotationWorkspace() {
     }
     return videoAnnotations || []
   }, [videoAnnotations, selectedPersonaId])
+
+  // Keep Zustand selectedAnnotation in sync with TanStack cache.
+  // Keyframe mutations update the cache but leave Zustand stale.
+  useEffect(() => {
+    if (selectedAnnotation && videoAnnotations.length > 0) {
+      const cachedVersion = videoAnnotations.find(a => a.id === selectedAnnotation.id)
+      if (cachedVersion && cachedVersion !== selectedAnnotation) {
+        setSelectedAnnotation(cachedVersion)
+      }
+    }
+  }, [videoAnnotations, selectedAnnotation, setSelectedAnnotation])
 
   // TanStack Query for world data
   const { data: worldData } = useWorld()
@@ -443,6 +455,9 @@ export default function AnnotationWorkspace() {
    * Highlights the annotation in the sidebar and moves playhead to annotation start.
    */
   const handleAnnotationClick = (annotation: Annotation) => {
+    // If already selected, don't seek to start
+    if (selectedAnnotation?.id === annotation.id) return
+
     // Select the annotation
     setSelectedAnnotation(annotation)
 
@@ -697,10 +712,10 @@ export default function AnnotationWorkspace() {
               }}
             >
               {/* Playback Controls Row */}
-              <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-2 mb-4">
                 {/* Mode Toggle */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">Mode:</span>
+                  <span className="text-xs text-muted-foreground">Mode:</span>
                   <ToggleGroup
                     value={[annotationMode]}
                     onValueChange={(newValue) => {
@@ -725,21 +740,32 @@ export default function AnnotationWorkspace() {
                   </ToggleGroup>
                 </div>
 
+                <Separator orientation="vertical" className="mx-1 h-6" />
+
                 {/* Play/pause controls */}
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePlayPause()} aria-label={videoPlayerRef.current?.isPlaying ? "Pause video" : "Play video"}>
-                    {videoPlayerRef.current?.isPlaying ? <Pause className="size-5" /> : <Play className="size-5" />}
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePrevFrame()} aria-label="Previous frame">
-                    <SkipBack className="size-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handleNextFrame()} aria-label="Next frame">
-                    <SkipForward className="size-5" />
-                  </Button>
+                <div className="flex items-center gap-0.5">
+                  <Tooltip>
+                    <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePlayPause()} aria-label={videoPlayerRef.current?.isPlaying ? "Pause video" : "Play video"} />}>
+                      {videoPlayerRef.current?.isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+                    </TooltipTrigger>
+                    <TooltipContent>{videoPlayerRef.current?.isPlaying ? 'Pause (Space)' : 'Play (Space)'}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handlePrevFrame()} aria-label="Previous frame" />}>
+                      <SkipBack className="size-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Previous frame (Left)</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => videoPlayerRef.current?.handleNextFrame()} aria-label="Next frame" />}>
+                      <SkipForward className="size-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Next frame (Right)</TooltipContent>
+                  </Tooltip>
                 </div>
 
                 {/* Time slider */}
-                <div className="flex-1 px-4">
+                <div className="flex-1 px-2">
                   <Slider
                     value={[currentTime]}
                     max={duration}
@@ -750,25 +776,20 @@ export default function AnnotationWorkspace() {
                 </div>
 
                 {/* Current time display */}
-                <span className="text-sm min-w-[100px] font-mono">
+                <Badge variant="outline" className="font-mono text-xs">
                   {formatTime(currentTime)} / {formatTime(duration)}
-                </span>
+                </Badge>
+
+                <Separator orientation="vertical" className="mx-1 h-6" />
 
                 {/* Timeline Toggle Button */}
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant={timelineExpanded ? 'default' : 'outline'}
-                        onClick={() => setTimelineExpanded(!timelineExpanded)}
-                        size="sm"
-                      />
-                    }
-                  >
-                    {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
-                  </TooltipTrigger>
-                  <TooltipContent>{timelineExpanded ? 'Hide timeline' : 'Show timeline'}</TooltipContent>
-                </Tooltip>
+                <Button
+                  variant={timelineExpanded ? 'default' : 'outline'}
+                  onClick={() => setTimelineExpanded(!timelineExpanded)}
+                  size="sm"
+                >
+                  {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
+                </Button>
               </div>
 
               {/* Second Row: Persona Selector and Type/Object Selection */}
@@ -872,6 +893,7 @@ export default function AnnotationWorkspace() {
               {timelineMounted && (
                 <TimelineComponent
                   annotation={selectedAnnotation}
+                  annotations={annotations}
                   currentFrame={currentFrame}
                   totalFrames={videoPlayerRef.current?.totalFrames || 0}
                   videoFps={currentVideo?.fps || 30}
@@ -882,6 +904,7 @@ export default function AnnotationWorkspace() {
                       videoPlayerRef.current.handleSeek(newTime)
                     }
                   }}
+                  onAnnotationSelect={setSelectedAnnotation}
                   videoRef={videoPlayerRef.current?.videoRef}
                   onAddKeyframe={handleAddKeyframe}
                   onDeleteKeyframe={handleDeleteKeyframe}
@@ -928,10 +951,10 @@ export default function AnnotationWorkspace() {
                 <li
                   key={annotation.id}
                   className={`flex items-start justify-between py-2 px-2 cursor-pointer rounded-sm transition-colors ${
-                    isSelected ? 'bg-accent' : isActive ? 'bg-muted' : 'hover:bg-muted'
+                    isSelected ? 'bg-accent ring-1 ring-primary/30' : isActive ? 'bg-muted' : 'hover:bg-muted'
                   }`}
                   style={{
-                    borderLeft: isActive ? '3px solid hsl(var(--primary))' : '3px solid transparent',
+                    borderLeft: (isSelected || isActive) ? '3px solid hsl(var(--primary))' : '3px solid transparent',
                   }}
                   onClick={() => handleAnnotationClick(annotation)}
                   onDoubleClick={() => {

@@ -288,12 +288,12 @@ export default function Layout() {
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-50 flex h-14 items-center gap-2 border-b bg-background px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="h-4" />
+        <header className="sticky top-0 z-50 flex h-14 items-center gap-2 border-b bg-background px-4 overflow-hidden">
+          <SidebarTrigger className="-ml-1 shrink-0" />
+          <Separator orientation="vertical" className="h-4 shrink-0" />
           <BreadcrumbNavigation />
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1 shrink-0">
             {/* Project Context Selector */}
             <Select
               value={activeProjectId ?? ''}
