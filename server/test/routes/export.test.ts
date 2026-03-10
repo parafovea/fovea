@@ -172,6 +172,7 @@ describe('Export API', () => {
           {
             videoId: testVideoId,
             personaId: null,
+            userId: testUserId,
             type: 'object',
             label: 'entity-2',
             frames: {
