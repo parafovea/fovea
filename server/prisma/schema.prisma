@@ -33,6 +33,7 @@ model User {
   apiKeys      ApiKey[]
   sessions     Session[]
   worldState   WorldState?
+  annotations  Annotation[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -285,6 +286,8 @@ model Annotation {
   video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
   personaId   String?
   persona     Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   type        String
   label       String
@@ -300,6 +303,7 @@ model Annotation {
   @@index([videoId])
   @@index([personaId])
   @@index([videoId, personaId])
+  @@index([userId])
   @@index([createdAt])
   @@map("annotations")
 }

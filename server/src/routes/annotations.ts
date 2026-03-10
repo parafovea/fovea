@@ -112,6 +112,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       data: {
         videoId: data.videoId,
         personaId: data.personaId ?? null,
+        userId: request.user?.id ?? null,
         type: data.type,
         label: data.label,
         frames: data.frames,

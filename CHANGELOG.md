@@ -5,6 +5,12 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-03-10
+
+### Fixed
+
+- Scopes export keyframe and interpolated frame statistics to the authenticated user's annotations
+
 ## [0.1.3] - 2026-03-06
 
 ### Fixed
@@ -140,6 +146,7 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
+[0.1.4]: https://github.com/parafovea/fovea/releases/tag/v0.1.4
 [0.1.3]: https://github.com/parafovea/fovea/releases/tag/v0.1.3
 [0.1.2]: https://github.com/parafovea/fovea/releases/tag/v0.1.2
 [0.1.1]: https://github.com/parafovea/fovea/releases/tag/v0.1.1
