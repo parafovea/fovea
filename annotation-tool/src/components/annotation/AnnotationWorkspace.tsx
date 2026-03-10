@@ -198,13 +198,17 @@ export default function AnnotationWorkspace() {
     },
   })
 
+  // Memoize the auto-save callback to prevent cascading effect resets
+  // that cause dropdown jitter when annotations exist
+  const handleAutoSave = useCallback(async (annotations: Annotation[]) => {
+    saveAnnotationsMutation({ videoId: videoId!, annotations })
+  }, [saveAnnotationsMutation, videoId])
+
   // Auto-save annotations to database using useAutoSave hook
   const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
     data: videoAnnotations,
     isEnabled: !!videoId && videoAnnotations.length > 0,
-    onSave: async (annotations) => {
-      saveAnnotationsMutation({ videoId: videoId!, annotations })
-    },
+    onSave: handleAutoSave,
     entityType: 'annotation',
     entityId: videoId,
   })
