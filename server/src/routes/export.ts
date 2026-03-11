@@ -119,7 +119,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // 4. Export annotations with optional filtering
-    // Include annotations belonging to the user's personas AND object annotations (personaId: null)
+    // Include annotations belonging to the user's personas AND the user's own object annotations
     const annotationWhere: Record<string, unknown> = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
@@ -128,7 +128,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     } else {
       annotationWhere.OR = [
         { personaId: { in: userPersonaIds } },
-        { personaId: null }
+        { personaId: null, userId: request.user!.id }
       ]
     }
     if (videoIdArray && videoIdArray.length > 0) {
@@ -345,7 +345,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     // 4. Count and analyze annotations (with optional filtering)
-    // Include annotations belonging to the user's personas AND object annotations (personaId: null)
+    // Include annotations belonging to the user's personas AND the user's own object annotations
     const annotationWhere: Record<string, unknown> = {}
 
     if (personaIdArray && personaIdArray.length > 0) {
@@ -354,7 +354,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     } else {
       annotationWhere.OR = [
         { personaId: { in: userPersonaIds } },
-        { personaId: null }
+        { personaId: null, userId: request.user!.id }
       ]
     }
     if (videoIdArray && videoIdArray.length > 0) {

@@ -983,7 +983,7 @@ export class AnnotationExporter {
       where: {
         OR: [
           { personaId: { in: personas.map(p => p.id) } },
-          { personaId: null } // Object annotations
+          { personaId: null, userId } // Object annotations scoped to user
         ]
       },
       orderBy: { createdAt: 'asc' }
