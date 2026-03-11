@@ -171,36 +171,100 @@ describe('Export API - User Scoping', () => {
       },
     })
 
-    // Create annotation for user A's persona (type annotation)
+    // Create annotation for user A's persona (type annotation with keyframes)
     await prisma.annotation.create({
       data: {
         videoId: sharedVideoId,
         personaId: userAPersonaId,
+        userId: userAId,
         type: 'type',
         label: 'e1',
-        frames: {},
+        frames: {
+          boxes: [
+            { x: 10, y: 10, width: 50, height: 50, frameNumber: 0, isKeyframe: true },
+            { x: 20, y: 20, width: 50, height: 50, frameNumber: 30, isKeyframe: true },
+          ],
+          interpolationSegments: [{ startFrame: 0, endFrame: 30, type: 'linear' }],
+          visibilityRanges: [{ startFrame: 0, endFrame: 30, visible: true }],
+          totalFrames: 31,
+          keyframeCount: 2,
+          interpolatedFrameCount: 0,
+        },
       },
     })
 
-    // Create annotation for user B's persona (type annotation)
+    // Create annotation for user B's persona (type annotation with keyframes)
     await prisma.annotation.create({
       data: {
         videoId: sharedVideoId,
         personaId: userBPersonaId,
+        userId: userBId,
         type: 'type',
         label: 'e2',
-        frames: {},
+        frames: {
+          boxes: [
+            { x: 100, y: 100, width: 50, height: 50, frameNumber: 0, isKeyframe: true },
+            { x: 110, y: 110, width: 50, height: 50, frameNumber: 15, isKeyframe: true },
+            { x: 120, y: 120, width: 50, height: 50, frameNumber: 30, isKeyframe: true },
+          ],
+          interpolationSegments: [
+            { startFrame: 0, endFrame: 15, type: 'linear' },
+            { startFrame: 15, endFrame: 30, type: 'linear' },
+          ],
+          visibilityRanges: [{ startFrame: 0, endFrame: 30, visible: true }],
+          totalFrames: 31,
+          keyframeCount: 3,
+          interpolatedFrameCount: 0,
+        },
       },
     })
 
-    // Create object annotation with null personaId (shared)
+    // Create object annotation for user A (null personaId, owned by user A)
     await prisma.annotation.create({
       data: {
         videoId: sharedVideoId,
         personaId: null,
+        userId: userAId,
         type: 'object',
         label: 'entity-a',
-        frames: {},
+        frames: {
+          boxes: [
+            { x: 50, y: 50, width: 30, height: 30, frameNumber: 0, isKeyframe: true },
+          ],
+          interpolationSegments: [],
+          visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+          totalFrames: 1,
+          keyframeCount: 1,
+          interpolatedFrameCount: 0,
+        },
+      },
+    })
+
+    // Create object annotation for user B (null personaId, owned by user B)
+    await prisma.annotation.create({
+      data: {
+        videoId: sharedVideoId,
+        personaId: null,
+        userId: userBId,
+        type: 'object',
+        label: 'entity-b',
+        frames: {
+          boxes: [
+            { x: 200, y: 200, width: 40, height: 40, frameNumber: 0, isKeyframe: true },
+            { x: 210, y: 210, width: 40, height: 40, frameNumber: 10, isKeyframe: true },
+            { x: 220, y: 220, width: 40, height: 40, frameNumber: 20, isKeyframe: true },
+            { x: 230, y: 230, width: 40, height: 40, frameNumber: 30, isKeyframe: true },
+          ],
+          interpolationSegments: [
+            { startFrame: 0, endFrame: 10, type: 'linear' },
+            { startFrame: 10, endFrame: 20, type: 'linear' },
+            { startFrame: 20, endFrame: 30, type: 'linear' },
+          ],
+          visibilityRanges: [{ startFrame: 0, endFrame: 30, visible: true }],
+          totalFrames: 31,
+          keyframeCount: 4,
+          interpolatedFrameCount: 0,
+        },
       },
     })
 
@@ -344,8 +408,24 @@ describe('Export API - User Scoping', () => {
       expect(stats.personaCount).toBe(1)
       expect(stats.ontologyCount).toBe(1)
       expect(stats.summaryCount).toBe(1)
-      // User A's annotation + shared null-persona annotation, not user B's
+      // User A's type annotation + user A's object annotation, not user B's
       expect(stats.annotationCount).toBe(2)
+    })
+
+    it('scopes keyframe counts to the authenticated user', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/export/stats',
+        cookies: { session_token: userASessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const stats = response.json()
+
+      // User A's type annotation has 2 keyframes + user A's object annotation has 1 keyframe = 3
+      // User B's type annotation (3 keyframes) and object annotation (4 keyframes) must NOT be counted
+      expect(stats.keyframeCount).toBe(3)
+      expect(stats.sequenceCount).toBe(2)
     })
   })
 

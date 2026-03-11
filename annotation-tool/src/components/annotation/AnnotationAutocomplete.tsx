@@ -13,6 +13,10 @@ interface AnnotationOption {
   icon: React.ReactNode
 }
 
+const DropdownPaper = (props: React.ComponentProps<typeof Paper>) => (
+  <Paper {...props} elevation={8} sx={{ overflow: 'hidden' }} />
+)
+
 interface AnnotationAutocompleteProps {
   mode: 'type' | 'object'
   personaId?: string | null

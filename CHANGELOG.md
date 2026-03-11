@@ -5,6 +5,56 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+#### Role-Based Access Control (RBAC)
+- CASL authorization engine with permission seed data
+- Role-based permission schema (admin, manager, annotator, viewer)
+- Permission checks integrated across all API routes
+
+#### Projects and Groups
+- Project entity with membership, ownership, and sharing controls
+- Group entity for organizing users into teams
+- Backend routes for CRUD operations on projects, groups, and memberships
+- Video assignment to projects with access scoping
+- Project sharing with configurable permission levels
+- User autocomplete for persona and member dialogs
+
+#### Frontend
+- Admin panel pages for project and group management
+- Frontend stores and TanStack Query hooks for RBAC entities
+- Project assignment and sharing dialogs in persona editor
+- Member management with role selection
+
+#### Observability
+- OTEL tracing spans for RBAC authorization checks
+- Prometheus alert rules for permission denied events
+- Grafana RBAC monitoring dashboard
+- Metrics for group, project, sharing, and video assignment operations
+
+#### Testing
+- Unit and integration tests for RBAC, groups, projects, sharing, and video assignments
+- Frontend tests for RBAC stores, query hooks, and user management pages
+
+#### Documentation
+- User guide for projects and groups workflow
+- RBAC architecture and permission model documentation
+- API reference for new endpoints
+
+## [0.1.5] - 2026-03-10
+
+### Fixed
+
+- Fixes object annotation dropdown jitter when creating a second bounding box on a video
+
+## [0.1.4] - 2026-03-10
+
+### Fixed
+
+- Scopes export keyframe and interpolated frame statistics to the authenticated user's annotations
+
 ## [0.1.3] - 2026-03-06
 
 ### Fixed
@@ -140,6 +190,9 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
+[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.5...v0.2.0
+[0.1.5]: https://github.com/parafovea/fovea/releases/tag/v0.1.5
+[0.1.4]: https://github.com/parafovea/fovea/releases/tag/v0.1.4
 [0.1.3]: https://github.com/parafovea/fovea/releases/tag/v0.1.3
 [0.1.2]: https://github.com/parafovea/fovea/releases/tag/v0.1.2
 [0.1.1]: https://github.com/parafovea/fovea/releases/tag/v0.1.1
