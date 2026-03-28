@@ -231,21 +231,41 @@ describe('Cross-user import ownership', () => {
       expect(conflicts[0].ownedByImporter).toBe(false)
     })
 
-    it('should produce no conflicts for IDs that do not exist yet', async () => {
+    it('should produce no conflicts for new IDs from the same user', async () => {
       const existingData = createEmptyExistingData()
 
       const lines: ImportLine[] = [
-        { type: 'persona', data: { id: 'new-persona' }, lineNumber: 1 },
+        { type: 'persona', data: { id: 'new-persona', userId: USER_B }, lineNumber: 1 },
         createAnnotationLine('new-ann', 'new-persona', 'vid-1', 2),
         { type: 'entity', data: { id: 'new-ent' }, lineNumber: 3 },
-        { type: 'summary', data: { id: 'new-sum', videoId: 'vid-1' }, lineNumber: 4 },
+        { type: 'summary', data: { id: 'new-sum', videoId: 'vid-1', personaId: 'new-persona' }, lineNumber: 4 },
       ]
 
       const conflicts = await handlerB.detectConflicts(lines, existingData)
 
-      // Only missing-dependency conflicts are possible (no duplicate IDs)
+      // Only missing-dependency conflicts are possible (same user, no duplicate IDs)
       const duplicateConflicts = conflicts.filter(c => !c.type.startsWith('missing'))
       expect(duplicateConflicts).toHaveLength(0)
+    })
+
+    it('should produce foreign-data conflicts for new IDs from a different user', async () => {
+      const existingData = createEmptyExistingData()
+
+      const lines: ImportLine[] = [
+        { type: 'persona', data: { id: 'new-persona', userId: USER_A }, lineNumber: 1 },
+        createAnnotationLine('new-ann', 'new-persona', 'vid-1', 2),
+        { type: 'entity', data: { id: 'new-ent' }, lineNumber: 3 },
+        { type: 'summary', data: { id: 'new-sum', videoId: 'vid-1', personaId: 'new-persona' }, lineNumber: 4 },
+      ]
+
+      const conflicts = await handlerB.detectConflicts(lines, existingData)
+
+      // Foreign persona, annotation, entity, and summary should all have conflicts
+      const foreignConflicts = conflicts.filter(c => c.ownedByImporter === false)
+      expect(foreignConflicts.length).toBeGreaterThanOrEqual(4)
+      for (const conflict of foreignConflicts) {
+        expect(conflict.ownedByImporter).toBe(false)
+      }
     })
   })
 
