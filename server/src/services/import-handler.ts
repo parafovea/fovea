@@ -53,6 +53,7 @@ interface AnnotationData {
 
 interface PersonaData {
   id: string
+  userId?: string
   [key: string]: unknown
 }
 
@@ -434,6 +435,19 @@ export class ImportHandler {
   async detectConflicts(lines: ImportLine[], existingData: ExistingData): Promise<Conflict[]> {
     const conflicts: Conflict[] = []
 
+    // Identify foreign persona IDs from import data: personas whose userId
+    // differs from the importing user. These need new UUIDs even if their IDs
+    // don't already exist in the database.
+    const foreignPersonaIds = new Set<string>()
+    for (const line of lines) {
+      if (line.type === 'persona') {
+        const personaData = line.data as PersonaData
+        if (personaData.userId && personaData.userId !== this.userId) {
+          foreignPersonaIds.add(personaData.id)
+        }
+      }
+    }
+
     for (const line of lines) {
       switch (line.type) {
         case 'persona': {
@@ -446,6 +460,14 @@ export class ImportHandler {
               existingId: personaData.id,
               details: `Persona with ID ${personaData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(personaData.id, 'persona', existingData)
+            })
+          } else if (foreignPersonaIds.has(personaData.id)) {
+            conflicts.push({
+              type: 'duplicate-persona',
+              line: line.lineNumber,
+              originalId: personaData.id,
+              details: `Persona from a different user requires new ID`,
+              ownedByImporter: false
             })
           }
           break
@@ -470,6 +492,14 @@ export class ImportHandler {
               frameRange,
               interpolationType: (sequence.interpolationSegments as Array<{ type?: string }>)[0]?.type,
               ownedByImporter: this.isOwnedByImporter(annotationData.id, 'annotation', existingData)
+            })
+          } else if (annotationData.personaId && foreignPersonaIds.has(annotationData.personaId)) {
+            conflicts.push({
+              type: 'duplicate-sequence',
+              line: line.lineNumber,
+              originalId: annotationData.id,
+              details: `Annotation from a different user requires new ID`,
+              ownedByImporter: false
             })
           }
 
@@ -505,6 +535,14 @@ export class ImportHandler {
               details: `Entity with ID ${entityData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(entityData.id, 'entity', existingData)
             })
+          } else if (foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: entityData.id,
+              details: `Entity from a different user requires new ID`,
+              ownedByImporter: false
+            })
           }
           break
         }
@@ -520,6 +558,14 @@ export class ImportHandler {
               details: `Event with ID ${eventData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(eventData.id, 'event', existingData)
             })
+          } else if (foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: eventData.id,
+              details: `Event from a different user requires new ID`,
+              ownedByImporter: false
+            })
           }
           break
         }
@@ -534,6 +580,14 @@ export class ImportHandler {
               existingId: timeData.id,
               details: `Time with ID ${timeData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(timeData.id, 'time', existingData)
+            })
+          } else if (foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: timeData.id,
+              details: `Time from a different user requires new ID`,
+              ownedByImporter: false
             })
           }
           break
@@ -555,6 +609,14 @@ export class ImportHandler {
               details: `Collection with ID ${collectionData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(collectionData.id, line.type, existingData)
             })
+          } else if (foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: collectionData.id,
+              details: `Collection from a different user requires new ID`,
+              ownedByImporter: false
+            })
           }
           break
         }
@@ -570,12 +632,20 @@ export class ImportHandler {
               details: `Relation with ID ${relationData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(relationData.id, 'relation', existingData)
             })
+          } else if (relationData.id && foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-object',
+              line: line.lineNumber,
+              originalId: relationData.id,
+              details: `Relation from a different user requires new ID`,
+              ownedByImporter: false
+            })
           }
           break
         }
 
         case 'summary': {
-          const summaryData = line.data as { id: string; [key: string]: unknown }
+          const summaryData = line.data as { id: string; personaId?: string; [key: string]: unknown }
           if (summaryData.id && existingData.summaryIds.has(summaryData.id)) {
             conflicts.push({
               type: 'duplicate-summary',
@@ -584,6 +654,14 @@ export class ImportHandler {
               existingId: summaryData.id,
               details: `Summary with ID ${summaryData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(summaryData.id, 'summary', existingData)
+            })
+          } else if (summaryData.id && summaryData.personaId && foreignPersonaIds.has(summaryData.personaId)) {
+            conflicts.push({
+              type: 'duplicate-summary',
+              line: line.lineNumber,
+              originalId: summaryData.id,
+              details: `Summary from a different user requires new ID`,
+              ownedByImporter: false
             })
           }
           break
@@ -600,6 +678,14 @@ export class ImportHandler {
               details: `Claim with ID ${claimData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(claimData.id, 'claim', existingData)
             })
+          } else if (claimData.id && foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-claim',
+              line: line.lineNumber,
+              originalId: claimData.id,
+              details: `Claim from a different user requires new ID`,
+              ownedByImporter: false
+            })
           }
           break
         }
@@ -614,6 +700,14 @@ export class ImportHandler {
               existingId: relationData.id,
               details: `Claim relation with ID ${relationData.id} already exists`,
               ownedByImporter: this.isOwnedByImporter(relationData.id, 'claim_relation', existingData)
+            })
+          } else if (relationData.id && foreignPersonaIds.size > 0) {
+            conflicts.push({
+              type: 'duplicate-claim-relation',
+              line: line.lineNumber,
+              originalId: relationData.id,
+              details: `Claim relation from a different user requires new ID`,
+              ownedByImporter: false
             })
           }
           break

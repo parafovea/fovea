@@ -256,6 +256,64 @@ describe('Cross-user import/export round-trip', () => {
     expect(userBExportedPersonas[0].data.userId).toBe(userBId)
   })
 
+  it('cross-user import generates new IDs even when original IDs are absent from DB', async () => {
+    // Step 1: User A exports
+    const exportResponse = await app.inject({
+      method: 'GET',
+      url: '/api/export',
+      cookies: { session_token: userASessionToken },
+    })
+    expect(exportResponse.statusCode).toBe(200)
+    const exportedJsonl = exportResponse.body
+
+    // Collect user A's original IDs from the export
+    const exportedLines = exportedJsonl.trim().split('\n').filter((l: string) => l).map((l: string) => JSON.parse(l))
+    const originalPersonaIds = exportedLines
+      .filter((e: { type: string }) => e.type === 'persona')
+      .map((e: { data: { id: string } }) => e.data.id)
+    const originalAnnotationIds = exportedLines
+      .filter((e: { type: string }) => e.type === 'annotation')
+      .map((e: { data: { id: string } }) => e.data.id)
+
+    // Step 2: Delete user A's data so IDs no longer exist in the DB
+    await prisma.claimRelation.deleteMany()
+    await prisma.claim.deleteMany()
+    await prisma.annotation.deleteMany({ where: { persona: { userId: userAId } } })
+    await prisma.videoSummary.deleteMany({ where: { persona: { userId: userAId } } })
+    await prisma.ontology.deleteMany({ where: { persona: { userId: userAId } } })
+    await prisma.worldState.deleteMany({ where: { userId: userAId } })
+    await prisma.persona.deleteMany({ where: { userId: userAId } })
+
+    // Step 3: User B imports user A's export (IDs no longer in DB)
+    const { body, contentType } = createImportForm(exportedJsonl)
+    const importResponse = await app.inject({
+      method: 'POST',
+      url: '/api/import',
+      cookies: { session_token: userBSessionToken },
+      headers: { 'content-type': contentType },
+      payload: body,
+    })
+
+    expect(importResponse.statusCode).toBe(200)
+    const result = importResponse.json()
+    expect(result.success).toBe(true)
+
+    // Step 4: Verify user B has new IDs (not the originals from user A)
+    const userBPersonas = await prisma.persona.findMany({ where: { userId: userBId } })
+    expect(userBPersonas.length).toBeGreaterThanOrEqual(1)
+    for (const persona of userBPersonas) {
+      expect(originalPersonaIds).not.toContain(persona.id)
+    }
+
+    const userBAnnotations = await prisma.annotation.findMany({
+      where: { personaId: { in: userBPersonas.map(p => p.id) } },
+    })
+    expect(userBAnnotations.length).toBeGreaterThanOrEqual(1)
+    for (const annotation of userBAnnotations) {
+      expect(originalAnnotationIds).not.toContain(annotation.id)
+    }
+  })
+
   it('user A re-importing own export does not create duplicates', async () => {
     // Step 1: User A exports
     const exportResponse = await app.inject({
