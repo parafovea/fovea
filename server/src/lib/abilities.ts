@@ -12,24 +12,39 @@ import {
   createMongoAbility,
   MongoAbility,
   RawRuleFrom,
+  InferSubjects,
 } from '@casl/ability'
-import type { MongoQuery } from '@casl/ability'
+import type { MongoQuery, ForcedSubject } from '@casl/ability'
+import type {
+  Annotation as PrismaAnnotation,
+  Claim as PrismaClaim,
+  Persona as PrismaPersona,
+  WorldState as PrismaWorldState,
+  Video as PrismaVideo,
+  VideoSummary as PrismaVideoSummary,
+  Project as PrismaProject,
+  UserGroup as PrismaUserGroup,
+  User as PrismaUser,
+} from '@prisma/client'
 
 /**
- * All resource subjects matching Prisma model names.
- * The special value 'all' is a CASL built-in that matches every subject.
+ * Resource subjects as Prisma row types branded with ForcedSubject so a
+ * plain record wrapped in `subject('Name', row)` carries its CASL type
+ * tag. `InferSubjects` lifts these into the string-or-object union CASL
+ * expects in `can()` calls and rule definitions.
  */
-export type Subjects =
-  | 'Annotation'
-  | 'Claim'
-  | 'Persona'
-  | 'WorldState'
-  | 'Video'
-  | 'VideoSummary'
-  | 'Project'
-  | 'UserGroup'
-  | 'User'
-  | 'all'
+type ResourceSubject =
+  | (PrismaAnnotation & ForcedSubject<'Annotation'>)
+  | (PrismaClaim & ForcedSubject<'Claim'>)
+  | (PrismaPersona & ForcedSubject<'Persona'>)
+  | (PrismaWorldState & ForcedSubject<'WorldState'>)
+  | (PrismaVideo & ForcedSubject<'Video'>)
+  | (PrismaVideoSummary & ForcedSubject<'VideoSummary'>)
+  | (PrismaProject & ForcedSubject<'Project'>)
+  | (PrismaUserGroup & ForcedSubject<'UserGroup'>)
+  | (PrismaUser & ForcedSubject<'User'>)
+
+export type Subjects = InferSubjects<ResourceSubject> | 'all'
 
 /**
  * All actions that can be performed on resources.
@@ -60,7 +75,7 @@ export type AppAbility = MongoAbility<[Actions, Subjects]>
  * type, we can construct rules with MongoDB-style conditions while keeping
  * action and subject strictly typed.
  */
-type AppRule = RawRuleFrom<[Actions, Subjects], MongoQuery>
+type AppRule = RawRuleFrom<[Actions, SubjectName], MongoQuery>
 
 /** Aggregated role information for a single user across all scopes. */
 export interface UserRoles {
@@ -178,8 +193,17 @@ export function defineAbilitiesFor(
  * @param resourceType - snake_case resource type from the database
  * @returns PascalCase CASL subject name, or null if unmapped
  */
-function mapResourceTypeToSubject(resourceType: string): Subjects | null {
-  const map: Record<string, Subjects> = {
+/**
+ * Narrow string-only form of Subjects, used when pushing rules (CASL
+ * rules' `subject` field accepts only the PascalCase name or 'all', not
+ * a branded record type).
+ */
+export type SubjectName =
+  | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
+  | 'VideoSummary' | 'Project' | 'UserGroup' | 'User' | 'all'
+
+function mapResourceTypeToSubject(resourceType: string): SubjectName | null {
+  const map: Record<string, SubjectName> = {
     annotation: 'Annotation',
     claim: 'Claim',
     persona: 'Persona',

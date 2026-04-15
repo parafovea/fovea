@@ -1,8 +1,24 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
-import { NotFoundError } from '../lib/errors.js'
+import { Prisma, Annotation as PrismaAnnotation } from '@prisma/client'
+import { accessibleBy } from '@casl/prisma'
+import { subject } from '@casl/ability'
+import type { PureAbility } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
+import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import type { AppAbility } from '../lib/abilities.js'
+
+/**
+ * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
+ * two libraries have different generic constraints that cannot be unified
+ * without a cast; runtime behaviour is identical because both operate on
+ * the same rule array.
+ */
+function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
+  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+}
 
 /**
  * TypeBox schema for Annotation response.
@@ -22,26 +38,22 @@ const AnnotationResponseSchema = Type.Object({
 
 /**
  * Fastify plugin for annotation-related routes.
- * Provides endpoints for retrieving and managing video annotations.
  *
- * Routes:
- * - GET /api/annotations/:videoId - Get annotations for a specific video
- * - POST /api/annotations - Create a new annotation
- * - PUT /api/annotations/:id - Update an annotation
- * - DELETE /api/annotations/:videoId/:id - Delete an annotation
+ * Every route requires authentication, builds the caller's CASL abilities,
+ * and filters/verifies access against them. List endpoints apply
+ * `accessibleBy(ability).Annotation` as a Prisma WHERE clause so the caller
+ * only sees annotations they can read. Single-record endpoints load the
+ * annotation first and run an instance-level `ability.can()` check before
+ * proceeding.
  */
 const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   /**
-   * Get all annotations for a specific video.
-   *
-   * @route GET /api/annotations/:videoId
-   * @param videoId - ID of the video
-   * @returns Array of annotations
+   * Get annotations for a specific video, filtered to what the caller can read.
    */
   fastify.get('/api/annotations/:videoId', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
-      description: 'Get annotations for a specific video',
+      description: 'Get annotations for a specific video that the caller is authorized to read',
       tags: ['annotations'],
       params: Type.Object({
         videoId: Type.String()
@@ -52,9 +64,15 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
 
     const annotations = await fastify.prisma.annotation.findMany({
-      where: { videoId },
+      where: {
+        AND: [
+          { videoId },
+          accessibleBy(prismaAbility(request.ability), 'read').Annotation,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -73,14 +91,12 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * Create a new annotation.
-   *
-   * @route POST /api/annotations
-   * @param annotation - Annotation data
-   * @returns Created annotation
+   * Create a new annotation. Inherits projectId from the linked persona's
+   * project (if any) so the new annotation is scoped consistently. Caller
+   * must have `create` permission on Annotation in the resulting scope.
    */
   fastify.post('/api/annotations', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Create a new annotation',
       tags: ['annotations'],
@@ -107,12 +123,40 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       confidence?: number
       source?: string
     }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const userId = request.user!.id
+
+    // Resolve the project context from the persona (if any). Annotations
+    // against a persona inherit that persona's project scope.
+    let projectId: string | null = null
+    if (data.personaId) {
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: data.personaId },
+        select: { projectId: true, userId: true },
+      })
+      if (!persona) throw new NotFoundError('Persona', data.personaId)
+      projectId = persona.projectId
+    }
+
+    // Pre-authorize the create in the resolved scope. Build a candidate
+    // shape carrying the final projectId and createdByUserId so CASL's
+    // MongoQuery conditions ({ projectId: { $in: memberProjects } } or
+    // { createdByUserId: userId }) resolve against actual field values.
+    const candidate = subject('Annotation', {
+      projectId,
+      createdByUserId: userId,
+    } as unknown as PrismaAnnotation)
+    if (!request.ability.can('create', candidate)) {
+      throw new ForbiddenError('Cannot create Annotation in this scope')
+    }
 
     const annotation = await fastify.prisma.annotation.create({
       data: {
         videoId: data.videoId,
         personaId: data.personaId ?? null,
-        userId: request.user?.id ?? null,
+        userId,
+        createdByUserId: userId,
+        projectId,
         type: data.type,
         label: data.label,
         frames: data.frames,
@@ -136,15 +180,11 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * Update an existing annotation.
-   *
-   * @route PUT /api/annotations/:id
-   * @param id - Annotation ID
-   * @param annotation - Updated annotation data
-   * @returns Updated annotation
+   * Update an annotation. Caller must have `update` permission on the
+   * specific annotation instance (not merely on Annotation in general).
    */
   fastify.put('/api/annotations/:id', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Update an annotation',
       tags: ['annotations'],
@@ -171,15 +211,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       confidence?: number
       source?: string
     }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
+    const existing = await fastify.prisma.annotation.findUnique({ where: { id } })
+    if (!existing) throw new NotFoundError('Annotation', id)
 
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
+    if (!request.ability.can('update', subject('Annotation', existing))) {
+      throw new ForbiddenError('Cannot update this Annotation')
     }
 
     const annotation = await fastify.prisma.annotation.update({
@@ -208,14 +246,11 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * Delete an annotation.
-   *
-   * @route DELETE /api/annotations/:videoId/:id
-   * @param videoId - Video ID
-   * @param id - Annotation ID
+   * Delete an annotation. Caller must have `delete` permission on the
+   * specific annotation instance.
    */
   fastify.delete('/api/annotations/:videoId/:id', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Delete an annotation',
       tags: ['annotations'],
@@ -229,20 +264,16 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
+    const existing = await fastify.prisma.annotation.findUnique({ where: { id } })
+    if (!existing) throw new NotFoundError('Annotation', id)
 
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
+    if (!request.ability.can('delete', subject('Annotation', existing))) {
+      throw new ForbiddenError('Cannot delete this Annotation')
     }
 
-    await fastify.prisma.annotation.delete({
-      where: { id }
-    })
+    await fastify.prisma.annotation.delete({ where: { id } })
 
     return reply.code(204).send()
   })
