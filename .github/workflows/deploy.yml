@@ -204,8 +204,9 @@ jobs:
             echo '📹 Syncing videos from S3 to database...'
             curl -X POST http://localhost:3001/api/videos/sync || echo '⚠️  Video sync failed, videos may need manual sync'
 
-            echo '🧹 Cleaning up old images...'
+            echo '🧹 Cleaning up old images and build cache...'
             docker image prune -f
+            docker builder prune -af
 
             echo '✅ Deployment complete!'
           "

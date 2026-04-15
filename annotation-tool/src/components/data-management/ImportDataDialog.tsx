@@ -117,10 +117,22 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
   }, [open])
 
   /**
-   * Get default resolution for a conflict type.
+   * Check if the preview contains foreign (cross-user) data.
    */
-  const getDefaultResolution = (conflictType: Conflict['type']): string => {
-    switch (conflictType) {
+  const hasForeignData = (previewData: ImportPreview): boolean => {
+    return previewData.conflicts.some(c => c.ownedByImporter === false)
+  }
+
+  /**
+   * Get default resolution for a conflict type.
+   * Foreign data defaults to 'create-new' so the import creates copies.
+   */
+  const getDefaultResolution = (conflict: Conflict): string => {
+    if (conflict.ownedByImporter === false) {
+      return 'create-new'
+    }
+
+    switch (conflict.type) {
       case 'duplicate-sequence':
         return 'skip'
       case 'overlapping-frames':
@@ -131,6 +143,9 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
         return 'skip-item'
       case 'duplicate-persona':
       case 'duplicate-object':
+      case 'duplicate-summary':
+      case 'duplicate-claim':
+      case 'duplicate-claim-relation':
       case 'id-conflict':
         return 'skip'
       default:
@@ -152,7 +167,7 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
 
       const resolutions = new Map<string, string>()
       for (const conflict of previewData.conflicts) {
-        resolutions.set(conflict.originalId, getDefaultResolution(conflict.type))
+        resolutions.set(conflict.originalId, getDefaultResolution(conflict))
       }
       setConflictResolutions(resolutions)
     } catch (error: unknown) {
@@ -234,12 +249,25 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
   }
 
   /**
-   * Update conflict resolution strategy.
+   * Update conflict resolution strategy for a single conflict.
    */
   const updateConflictResolution = (conflictId: string, resolution: string): void => {
     setConflictResolutions(prev => {
       const newMap = new Map(prev)
       newMap.set(conflictId, resolution)
+      return newMap
+    })
+  }
+
+  /**
+   * Apply a resolution strategy to all conflicts of a given type.
+   */
+  const applyToAllConflicts = (conflicts: Conflict[], resolution: string) => {
+    setConflictResolutions(prev => {
+      const newMap = new Map(prev)
+      for (const conflict of conflicts) {
+        newMap.set(conflict.originalId, resolution)
+      }
       return newMap
     })
   }
@@ -352,6 +380,27 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
    */
   const getResolutionOptions = (conflictType: Conflict['type']): Array<{ value: string; label: string }> => {
     switch (conflictType) {
+      case 'duplicate-persona':
+        return [
+          { value: 'skip', label: 'Skip (keep existing)' },
+          { value: 'replace', label: 'Replace with imported' },
+          { value: 'merge', label: 'Merge fields' },
+          { value: 'create-new', label: 'Create as new copy' },
+        ]
+      case 'duplicate-object':
+        return [
+          { value: 'skip', label: 'Skip (keep existing)' },
+          { value: 'replace', label: 'Replace with imported' },
+          { value: 'merge-assignments', label: 'Merge assignments' },
+          { value: 'create-new', label: 'Create as new copy' },
+        ]
+      case 'duplicate-summary':
+      case 'duplicate-claim':
+      case 'duplicate-claim-relation':
+        return [
+          { value: 'skip', label: 'Skip (keep existing)' },
+          { value: 'create-new', label: 'Create as new copy' },
+        ]
       case 'duplicate-sequence':
         return [
           { value: 'skip', label: 'Skip (keep existing)' },
@@ -445,6 +494,9 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
       case 'missing-dependency': return 'Missing Dependencies'
       case 'duplicate-persona': return 'Duplicate Personas'
       case 'duplicate-object': return 'Duplicate Objects'
+      case 'duplicate-summary': return 'Duplicate Summaries'
+      case 'duplicate-claim': return 'Duplicate Claims'
+      case 'duplicate-claim-relation': return 'Duplicate Claim Relations'
       case 'id-conflict': return 'ID Conflicts'
       default: return 'Other Conflicts'
     }
@@ -739,6 +791,17 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
                 {/* Conflicts */}
                 {preview.conflicts.length > 0 && (
                   <div>
+                    {hasForeignData(preview) && (
+                      <Alert className="mb-3">
+                        <Info className="size-4" />
+                        <AlertDescription>
+                          This file contains data from another user. Conflicting items
+                          default to &quot;Create as new copy&quot; so they are imported with new
+                          IDs under your account.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Alert className="mb-3">
                       <AlertTriangle className="size-4" />
                       <AlertDescription>
@@ -747,13 +810,36 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
                       </AlertDescription>
                     </Alert>
 
-                    <Accordion defaultValue={Array.from(groupConflictsByType(preview.conflicts).keys())}>
+                    <Accordion
+                      defaultValue={Array.from(groupConflictsByType(preview.conflicts).entries())
+                        .filter(([, conflicts]) => conflicts.length <= 10)
+                        .map(([type]) => type)}
+                    >
                       {Array.from(groupConflictsByType(preview.conflicts)).map(([type, conflicts]) => (
                         <AccordionItem key={type} value={type}>
                           <AccordionTrigger>
                             {getConflictTypeName(type)} ({conflicts.length})
                           </AccordionTrigger>
                           <AccordionContent>
+                            {conflicts.length > 1 && (
+                              <div className="mb-3 border-b pb-3">
+                                <p className="mb-2 text-xs text-muted-foreground">
+                                  Apply to all {conflicts.length} items:
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {getResolutionOptions(type).map(opt => (
+                                    <Button
+                                      key={opt.value}
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => applyToAllConflicts(conflicts, opt.value)}
+                                    >
+                                      {opt.label}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {conflicts.map(renderConflict)}
                           </AccordionContent>
                         </AccordionItem>
