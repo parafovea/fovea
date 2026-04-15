@@ -5,6 +5,61 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Unreleased
+
+### Added
+
+#### Model Service Clean Architecture
+
+- Domain layer with entities, value objects, and exception hierarchy
+- Application layer with service interfaces (ports) and use cases
+- Infrastructure layer with adapter pattern for all external dependencies
+- Dependency injection container with manual factory wiring
+- Pydantic StrictBaseModel with plugin for stricter validation
+- NumPy-style docstrings across all model service modules
+- Contract tests with fake model manager and VLM loader
+
+#### CPU Inference Support
+
+- ONNX Runtime detection loaders (YOLO-World, Florence-2, Grounding DINO)
+- llama.cpp LLM loader with GGUF quantization for fast CPU text generation
+- llama.cpp VLM loader with GGUF multimodal inference
+- SmallVLMLoader for Transformers-based CPU vision models (SmolVLM, Moondream)
+- Factory function dispatch for all loader types (detection, LLM, VLM)
+- CPU model configurations in models-cpu.yaml with GGUF entries
+- llama-cpp-python added to CPU optional dependency group
+
+#### Docker CPU Build
+
+- Automatic installation of CPU extras (onnxruntime, llama-cpp-python) when DEVICE=cpu
+- cmake added to builder stage for compiling native extensions
+- Model config auto-selection via symlink (models-cpu.yaml for CPU, models.yaml for GPU)
+
+#### Frontend CPU Mode
+
+- Backend config endpoint exposes `models_available` and `cpu_models_available` flags
+- Three-state UI: GPU mode, CPU mode with models (info), no models available (error)
+- All AI features (detection, summarization, ontology, claims) enabled when CPU models exist
+- Replaced binary `isCpuOnly` gating with `modelsDisabled` across all components
+
+### Changed
+
+- Model service restructured from flat module layout to Clean Architecture layers
+- Route handlers decomposed into domain-specific modules with DI
+- Use cases updated with corrected imports after architecture relocation
+- Claims route reads framework from config instead of hardcoding Transformers
+- Frontend `ModelConfig` interface extended with `modelsAvailable` and `cpuModelsAvailable`
+- ModelSettingsPanel shows CPU mode info banner instead of GPU-required error
+- ModelStatusDashboard uses severity-appropriate alerts for CPU mode
+
+### Fixed
+
+- Broken relative imports in use cases after architecture refactoring
+- Video module export mismatches (download_video vs download_video_if_needed)
+- Claims route hardcoding `LLMFramework.TRANSFORMERS` instead of reading config
+- ESLint warnings: missing hook dependencies, unused variables and imports
+- Ruff errors: unsorted `__all__` lists, import ordering, deferred import warnings
+
 ## [0.2.0] - Unreleased
 
 ### Added
@@ -42,6 +97,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User guide for projects and groups workflow
 - RBAC architecture and permission model documentation
 - API reference for new endpoints
+
+## [0.1.7] - 2026-04-15
+
+### Fixed
+
+- Regenerates IDs for cross-user imports whose exports contain no persona lines (for example, users who only create object annotations linked to world entities)
+- Remaps array-valued ID reference fields (`entityIds`, `eventIds`) on entity and event collections during cross-user imports
+- Remaps `GlossItem.content` for `objectRef`, `annotationRef`, `claimRef`, and instance-level `typeRef` items so claims citing regenerated objects follow their new UUIDs
+- Lets cross-user ID regeneration override non-regenerating resolutions (`skip`, `replace`, `merge`) so annotations referencing entities in the same import batch get new IDs
+
+### Added
+
+- Emits a provenance `metadata` line with `exporterUserId` at the start of every full export for reliable cross-user detection
+- Emits `userId` on exported object annotations so cross-user detection works for exports that contain no persona lines
+- Import dialog now shows a cross-user banner, per-conflict smart defaults, an "apply to all" bulk resolution, and auto-collapses large conflict groups
+
+## [0.1.6] - 2026-03-28
+
+### Fixed
+
+- Generates new UUIDs when importing annotations from a different user even when original IDs are absent from the database
 
 ## [0.1.5] - 2026-03-10
 
@@ -190,7 +266,10 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
-[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.5...v0.2.0
+[0.3.0]: https://github.com/parafovea/fovea/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.7...v0.2.0
+[0.1.7]: https://github.com/parafovea/fovea/releases/tag/v0.1.7
+[0.1.6]: https://github.com/parafovea/fovea/releases/tag/v0.1.6
 [0.1.5]: https://github.com/parafovea/fovea/releases/tag/v0.1.5
 [0.1.4]: https://github.com/parafovea/fovea/releases/tag/v0.1.4
 [0.1.3]: https://github.com/parafovea/fovea/releases/tag/v0.1.3
