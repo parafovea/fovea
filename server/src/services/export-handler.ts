@@ -78,6 +78,7 @@ interface Annotation {
   notes?: string
   metadata?: Record<string, unknown>
   createdBy?: string
+  userId?: string
   createdAt: string
   updatedAt: string
 }
