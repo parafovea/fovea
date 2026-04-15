@@ -175,6 +175,7 @@ export class AnnotationExporter {
         notes?: string
         metadata?: Record<string, unknown>
         createdBy?: string
+        userId?: string
       }
     }
 
@@ -204,6 +205,10 @@ export class AnnotationExporter {
         exportData.data.linkedCollectionId = annotation.linkedCollectionId
         exportData.data.linkedCollectionType = annotation.linkedCollectionType
       }
+      // Object annotations can exist without a persona; emit the owning
+      // userId so cross-user detection works for exports that contain
+      // no persona lines at all.
+      if (annotation.userId) exportData.data.userId = annotation.userId
     }
 
     // Add optional fields
@@ -268,6 +273,7 @@ export class AnnotationExporter {
         notes?: string
         metadata?: Record<string, unknown>
         createdBy?: string
+        userId?: string
       }
     }
 
@@ -297,6 +303,10 @@ export class AnnotationExporter {
         exportData.data.linkedCollectionId = annotation.linkedCollectionId
         exportData.data.linkedCollectionType = annotation.linkedCollectionType
       }
+      // Object annotations can exist without a persona; emit the owning
+      // userId so cross-user detection works for exports that contain
+      // no persona lines at all.
+      if (annotation.userId) exportData.data.userId = annotation.userId
     }
 
     // Add optional fields
@@ -929,6 +939,19 @@ export class AnnotationExporter {
    */
   async exportAll(prisma: PrismaClient, userId: string): Promise<string> {
     const lines: string[] = []
+
+    // 0. Provenance metadata. Importers rely on exporterUserId to detect
+    // cross-user imports even when the export contains no persona lines
+    // (e.g. users who only produce object annotations linked to world
+    // state, with no persona or ontology).
+    lines.push(JSON.stringify({
+      type: 'metadata',
+      data: {
+        exporterUserId: userId,
+        exportVersion: '1.0',
+        exportedAt: new Date().toISOString(),
+      },
+    }))
 
     // 1. Export personas with ontologies
     const personas = await prisma.persona.findMany({
