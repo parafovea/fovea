@@ -262,7 +262,8 @@ export interface ImportOptions {
 export interface Conflict {
   /** Type of conflict */
   type: 'duplicate-persona' | 'duplicate-object' | 'missing-dependency' | 'id-conflict' |
-        'duplicate-sequence' | 'overlapping-frames' | 'interpolation-conflict'
+        'duplicate-sequence' | 'overlapping-frames' | 'interpolation-conflict' |
+        'duplicate-summary' | 'duplicate-claim' | 'duplicate-claim-relation'
   /** Line number in the import file */
   line: number
   /** ID of the object being imported */
@@ -275,6 +276,8 @@ export interface Conflict {
   frameRange?: { start: number; end: number }
   /** Interpolation type involved (for interpolation conflicts) */
   interpolationType?: string
+  /** Whether the conflicting item is owned by the importing user */
+  ownedByImporter?: boolean
 }
 
 /**

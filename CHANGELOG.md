@@ -43,6 +43,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RBAC architecture and permission model documentation
 - API reference for new endpoints
 
+## [0.1.7] - 2026-04-15
+
+### Fixed
+
+- Regenerates IDs for cross-user imports whose exports contain no persona lines (for example, users who only create object annotations linked to world entities)
+- Remaps array-valued ID reference fields (`entityIds`, `eventIds`) on entity and event collections during cross-user imports
+- Remaps `GlossItem.content` for `objectRef`, `annotationRef`, `claimRef`, and instance-level `typeRef` items so claims citing regenerated objects follow their new UUIDs
+- Lets cross-user ID regeneration override non-regenerating resolutions (`skip`, `replace`, `merge`) so annotations referencing entities in the same import batch get new IDs
+
+### Added
+
+- Emits a provenance `metadata` line with `exporterUserId` at the start of every full export for reliable cross-user detection
+- Emits `userId` on exported object annotations so cross-user detection works for exports that contain no persona lines
+- Import dialog now shows a cross-user banner, per-conflict smart defaults, an "apply to all" bulk resolution, and auto-collapses large conflict groups
+
+## [0.1.6] - 2026-03-28
+
+### Fixed
+
+- Generates new UUIDs when importing annotations from a different user even when original IDs are absent from the database
+
 ## [0.1.5] - 2026-03-10
 
 ### Fixed
@@ -190,7 +211,9 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
-[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.5...v0.2.0
+[0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.7...v0.2.0
+[0.1.7]: https://github.com/parafovea/fovea/releases/tag/v0.1.7
+[0.1.6]: https://github.com/parafovea/fovea/releases/tag/v0.1.6
 [0.1.5]: https://github.com/parafovea/fovea/releases/tag/v0.1.5
 [0.1.4]: https://github.com/parafovea/fovea/releases/tag/v0.1.4
 [0.1.3]: https://github.com/parafovea/fovea/releases/tag/v0.1.3

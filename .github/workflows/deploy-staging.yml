@@ -128,8 +128,9 @@ jobs:
             echo "🔄 Running database migrations on staging..."
             docker compose -p fovea-staging exec -T backend npx prisma migrate deploy || exit 1
 
-            echo "🧹 Cleaning up old images..."
+            echo "🧹 Cleaning up old images and build cache..."
             docker image prune -f
+            docker builder prune -af
 
             echo "✅ Staging deployment complete!"
             echo "📍 Staging is running on alternate ports (configure nginx for staging subdomain)"
