@@ -5,6 +5,21 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-04-15
+
+### Fixed
+
+- Regenerates IDs for cross-user imports whose exports contain no persona lines (for example, users who only create object annotations linked to world entities)
+- Remaps array-valued ID reference fields (`entityIds`, `eventIds`) on entity and event collections during cross-user imports
+- Remaps `GlossItem.content` for `objectRef`, `annotationRef`, `claimRef`, and instance-level `typeRef` items so claims citing regenerated objects follow their new UUIDs
+- Lets cross-user ID regeneration override non-regenerating resolutions (`skip`, `replace`, `merge`) so annotations referencing entities in the same import batch get new IDs
+
+### Added
+
+- Emits a provenance `metadata` line with `exporterUserId` at the start of every full export for reliable cross-user detection
+- Emits `userId` on exported object annotations so cross-user detection works for exports that contain no persona lines
+- Import dialog now shows a cross-user banner, per-conflict smart defaults, an "apply to all" bulk resolution, and auto-collapses large conflict groups
+
 ## [0.1.6] - 2026-03-28
 
 ### Fixed

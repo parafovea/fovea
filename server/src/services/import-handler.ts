@@ -888,16 +888,38 @@ export class ImportHandler {
       return obj.map(item => this.remapObjectIds(item, idMap)) as unknown as ImportLine['data']
     } else if (obj && typeof obj === 'object') {
       const remapped: ImportLine['data'] = {}
+      // GlossItem references store the target ID in `content` rather than a
+      // *Id-suffixed key; detect these so the content is rewritten too.
+      const glossType = (obj as Record<string, unknown>).type
+      const glossRefType = (obj as Record<string, unknown>).refType
+      const isObjectRef = glossType === 'objectRef' || glossType === 'annotationRef' || glossType === 'claimRef'
+      const isInstanceTypeRef = glossType === 'typeRef' && typeof glossRefType === 'string' &&
+        (glossRefType === 'entity-object' || glossRefType === 'event-object' ||
+         glossRefType === 'time-object' || glossRefType === 'location-object' ||
+         glossRefType === 'annotation' || glossRefType === 'claim')
+
       for (const [key, value] of Object.entries(obj)) {
-        // Remap ID fields
+        // Scalar id field
         if (key === 'id' && typeof value === 'string' && idMap.has(value)) {
           remapped[key] = idMap.get(value)
         }
-        // Remap reference fields
-        else if ((key.endsWith('Id') || key.endsWith('Ids')) && typeof value === 'string' && idMap.has(value)) {
+        // Scalar *Id reference field
+        else if (key.endsWith('Id') && typeof value === 'string' && idMap.has(value)) {
           remapped[key] = idMap.get(value)
         }
-        // Recurse into nested objects
+        // Array of IDs (e.g. entityIds: string[], eventIds: string[])
+        else if (key.endsWith('Ids') && Array.isArray(value) && value.every(v => typeof v === 'string')) {
+          remapped[key] = (value as string[]).map(v => idMap.get(v) ?? v)
+        }
+        // Scalar *Ids stored as a single string (defensive)
+        else if (key.endsWith('Ids') && typeof value === 'string' && idMap.has(value)) {
+          remapped[key] = idMap.get(value)
+        }
+        // GlossItem content carrying a referenced ID
+        else if (key === 'content' && typeof value === 'string' && (isObjectRef || isInstanceTypeRef) && idMap.has(value)) {
+          remapped[key] = idMap.get(value)
+        }
+        // Recurse into nested objects and arrays
         else if (typeof value === 'object' && value !== null) {
           remapped[key] = this.remapObjectIds(value, idMap)
         }
@@ -1052,6 +1074,109 @@ export class ImportHandler {
    * @param options - Import options
    * @returns Import result
    */
+  /**
+   * Detect whether the import contains data from a different user.
+   *
+   * Priority order:
+   *   1. Provenance `metadata` line with `exporterUserId` (definitive,
+   *      present on exports from this version onward).
+   *   2. Any `persona` line whose `userId` differs from the importer
+   *      (legacy fallback for older exports).
+   *   3. Any annotation carrying a `userId` that differs (covers exports
+   *      containing only object annotations with no persona).
+   *
+   * Returning `true` forces regeneration of every ID in the batch. When
+   * the batch has no persona lines AND no metadata AND no userId-bearing
+   * annotations (i.e. a legacy export), we return `false` to preserve
+   * the existing same-user re-import UX.
+   */
+  isCrossUserImport(lines: ImportLine[]): boolean {
+    for (const line of lines) {
+      if (line.type === 'metadata') {
+        const exporterUserId = (line.data as { exporterUserId?: unknown }).exporterUserId
+        if (typeof exporterUserId === 'string' && exporterUserId.length > 0) {
+          return exporterUserId !== this.userId
+        }
+      }
+    }
+    for (const line of lines) {
+      if (line.type === 'persona' && typeof line.data.userId === 'string') {
+        if (line.data.userId !== this.userId) return true
+      }
+    }
+    for (const line of lines) {
+      if (line.type === 'annotation') {
+        const annUserId = (line.data as { userId?: unknown }).userId
+        if (typeof annUserId === 'string' && annUserId !== this.userId) return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Generate create-new resolutions for all items that don't already have
+   * a conflict resolution. Used for cross-user imports where ALL IDs must
+   * be regenerated regardless of whether they collide with existing data.
+   */
+  generateCrossUserResolutions(lines: ImportLine[], existingResolutions: Resolution[]): Resolution[] {
+    // Only treat items with an existing create-new resolution as already resolved.
+    // Skip/replace/merge resolutions from non-ID conflicts (e.g. missing-dependency)
+    // must not block ID regeneration for cross-user imports.
+    const resolvedIds = new Set(
+      existingResolutions.filter(r => r.action === 'create-new').map(r => r.originalId)
+    )
+    const additionalResolutions: Resolution[] = []
+
+    for (const line of lines) {
+      const id = line.data.id as string | undefined
+      if (!id || resolvedIds.has(id)) continue
+
+      let conflictType: Resolution['conflictType']
+      switch (line.type) {
+        case 'persona':
+          conflictType = 'duplicate-persona'
+          break
+        case 'annotation':
+          conflictType = 'duplicate-sequence'
+          break
+        case 'entity':
+        case 'event':
+        case 'time':
+        case 'entity_collection':
+        case 'entityCollection':
+        case 'event_collection':
+        case 'eventCollection':
+        case 'time_collection':
+        case 'timeCollection':
+        case 'relation':
+          conflictType = 'duplicate-object'
+          break
+        case 'summary':
+          conflictType = 'duplicate-summary'
+          break
+        case 'claim':
+          conflictType = 'duplicate-claim'
+          break
+        case 'claim_relation':
+          conflictType = 'duplicate-claim-relation'
+          break
+        default:
+          continue
+      }
+
+      additionalResolutions.push({
+        conflictType,
+        strategy: 'create-new',
+        originalId: id,
+        newId: randomUUID(),
+        action: 'create-new'
+      })
+      resolvedIds.add(id)
+    }
+
+    return additionalResolutions
+  }
+
   async executeImport(lines: ImportLine[], options: ImportOptions): Promise<ImportResult> {
     const result: ImportResult = {
       success: false,
@@ -1096,6 +1221,13 @@ export class ImportHandler {
     // Detect conflicts
     const conflicts = await this.detectConflicts(lines, existingData)
     const resolutions = this.resolveConflicts(conflicts, options)
+
+    // For cross-user imports, regenerate ALL IDs (not just conflicting ones)
+    const crossUser = this.isCrossUserImport(lines)
+    if (crossUser) {
+      const additionalResolutions = this.generateCrossUserResolutions(lines, resolutions)
+      resolutions.push(...additionalResolutions)
+    }
 
     // Check for fail actions
     const failResolutions = resolutions.filter(r => r.action === 'fail')
