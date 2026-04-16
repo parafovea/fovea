@@ -37,8 +37,9 @@ FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04 AS base-gpu
 # Select base based on DEVICE argument
 FROM base-${DEVICE} AS base
 
-# Install Python 3.12 and system dependencies
-RUN apt-get update && apt-get install -y \
+# Install Python 3.12 and system dependencies (retry apt-get update to handle transient mirror syncs)
+RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed (attempt $i/3), retrying in 30s..."; sleep 30; }; done \
+    && apt-get install -y \
     python3 \
     python3-dev \
     python3-pip \
@@ -73,8 +74,9 @@ ARG DEVICE=cpu
 # BUILD_MODE options: minimal (base only), recommended (+ bitsandbytes), full (+ all inference engines)
 # DEVICE options: cpu (local dev), gpu (production)
 
-# Install Python and build tools
-RUN apt-get update && apt-get install -y \
+# Install Python and build tools (retry apt-get update to handle transient mirror syncs)
+RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed (attempt $i/3), retrying in 30s..."; sleep 30; }; done \
+    && apt-get install -y \
     python3 \
     python3-dev \
     python3-pip \
