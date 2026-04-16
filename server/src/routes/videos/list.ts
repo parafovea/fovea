@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import { NotFoundError, InternalError } from '../../lib/errors.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
+import { VideoAccessService } from '../../services/video-access-service.js'
 import { VideoSchema } from './schemas.js'
 
 /**
@@ -62,21 +63,23 @@ function transformVideoWithMetadata(video: {
 
 /**
  * Video list and get-by-ID routes.
+ *
+ * Both routes filter results through VideoAccessService so authenticated
+ * users only see videos assigned to their projects (plus global/unassigned
+ * videos). System admins see everything.
  */
 export const listRoutes: FastifyPluginAsync<{
   videoRepository: VideoRepository
 }> = async (fastify, opts) => {
   const { videoRepository } = opts
+  const videoAccess = new VideoAccessService(fastify.prisma)
 
   /**
-   * List all available videos.
-   *
-   * @route GET /api/videos
-   * @returns Array of video metadata objects
+   * List videos accessible to the authenticated user.
    */
   fastify.get('/api/videos', {
     schema: {
-      description: 'List all available videos',
+      description: 'List videos accessible to the authenticated user',
       tags: ['videos'],
       response: {
         200: Type.Array(VideoSchema),
@@ -85,14 +88,20 @@ export const listRoutes: FastifyPluginAsync<{
         })
       }
     }
-  }, async (_request, reply) => {
+  }, async (request, reply) => {
     try {
-      // Query videos from database (database-first approach)
-      const dbVideos = await videoRepository.findAll()
+      const userId = request.user!.id
+      const systemRole = request.user!.systemRole || 'user'
+      const accessible = await videoAccess.getAccessibleVideoIds(userId, systemRole)
 
-      // Return videos from database
+      let dbVideos
+      if (accessible === 'all') {
+        dbVideos = await videoRepository.findAll()
+      } else {
+        dbVideos = await videoRepository.findByIds(accessible)
+      }
+
       const videos = dbVideos.map(transformVideoWithMetadata)
-
       return reply.send(videos)
     } catch (error) {
       fastify.log.error(error)
@@ -101,12 +110,8 @@ export const listRoutes: FastifyPluginAsync<{
   })
 
   /**
-   * Get video metadata by ID.
-   *
-   * @route GET /api/videos/:videoId
-   * @param videoId - MD5 hash of filename
-   * @returns Video metadata object
-   * @throws NotFoundError if video does not exist
+   * Get video metadata by ID. Returns 404 if the video does not exist or
+   * the caller is not authorized to see it (no existence leak).
    */
   fastify.get('/api/videos/:videoId', {
     schema: {
@@ -129,16 +134,19 @@ export const listRoutes: FastifyPluginAsync<{
     }
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
+    const userId = request.user!.id
+    const systemRole = request.user!.systemRole || 'user'
 
-    // Query video from database (database-first approach)
     const video = await videoRepository.findById(videoId)
+    if (!video) throw new NotFoundError('Video', videoId)
 
-    if (!video) {
+    // Verify the caller can access this video
+    const accessible = await videoAccess.getAccessibleVideoIds(userId, systemRole)
+    if (accessible !== 'all' && !accessible.includes(videoId)) {
       throw new NotFoundError('Video', videoId)
     }
 
     const transformedVideo = transformVideoWithMetadata(video)
-
     return reply.send(transformedVideo)
   })
 }

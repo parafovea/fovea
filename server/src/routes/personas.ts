@@ -1,8 +1,15 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { accessibleBy } from '@casl/prisma'
+import { subject } from '@casl/ability'
+import type { PureAbility } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
+import type { Persona as PrismaPersona } from '@prisma/client'
 import { requireAuth, optionalAuth } from '@middleware/auth.js'
-import { NotFoundError, UnauthorizedError, ForbiddenError, InternalError } from '@lib/errors.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import type { AppAbility } from '../lib/abilities.js'
+import { NotFoundError, ForbiddenError } from '@lib/errors.js'
 import { personaOperationCounter } from '../metrics.js'
 import {
   updateGlossesInTypes,
@@ -17,6 +24,16 @@ import {
   asEntities,
   asEvents,
 } from '@lib/prisma-json.js'
+
+/**
+ * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
+ * two libraries have different generic constraints that cannot be unified
+ * without a cast; runtime behaviour is identical because both operate on
+ * the same rule array.
+ */
+function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
+  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+}
 
 /**
  * Request body for ontology update endpoint.
@@ -94,7 +111,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Array of personas
    */
   fastify.get('/api/personas', {
-    onRequest: [optionalAuth],
+    onRequest: [optionalAuth, buildAbilities],
     schema: {
       description: 'Retrieve personas',
       tags: ['personas'],
@@ -105,21 +122,32 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const mode = process.env.FOVEA_MODE || 'multi-user'
 
-    let where: { userId?: string; isSystemGenerated?: boolean; hidden?: boolean } = {}
-
     if (mode === 'single-user') {
       // Single-user mode: return all non-hidden personas
-      where = { hidden: false }
-    } else if (request.user) {
-      // Multi-user mode with auth: return user's non-hidden personas
-      where = { userId: request.user.id, hidden: false }
-    } else {
-      // Multi-user mode without auth: return only non-hidden system personas
-      where = { isSystemGenerated: true, hidden: false }
+      const personas = await fastify.prisma.persona.findMany({
+        where: { hidden: false },
+        orderBy: { createdAt: 'desc' }
+      })
+      return reply.send(personas)
     }
 
+    if (!request.user || !request.ability) {
+      // Unauthenticated: return only non-hidden system personas
+      const personas = await fastify.prisma.persona.findMany({
+        where: { isSystemGenerated: true, hidden: false },
+        orderBy: { createdAt: 'desc' }
+      })
+      return reply.send(personas)
+    }
+
+    // Authenticated: filter by CASL abilities
     const personas = await fastify.prisma.persona.findMany({
-      where,
+      where: {
+        AND: [
+          { hidden: false },
+          accessibleBy(prismaAbility(request.ability), 'read').Persona,
+        ],
+      },
       orderBy: { createdAt: 'desc' }
     })
     return reply.send(personas)
@@ -136,7 +164,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Created persona
    */
   fastify.post('/api/personas', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Create a new persona',
       tags: ['personas'],
@@ -156,29 +184,20 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
-    // In multi-user mode, require authentication
-    if (mode !== 'single-user' && !request.user) {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    // Get user ID: use authenticated user or find default user in single-user mode
-    let userId: string
-    if (request.user) {
-      userId = request.user.id
-    } else {
-      // Single-user mode: find the default user (the one created at startup)
-      const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
-      })
-      if (!defaultUser) {
-        throw new InternalError('Default user not found in single-user mode')
-      }
-      userId = defaultUser.id
-    }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const userId = request.user!.id
 
     const validatedData = createPersonaSchema.parse(request.body)
+    const projectId = validatedData.projectId || null
+
+    // Pre-authorize: verify the caller can create a Persona in this scope
+    const candidate = subject('Persona', {
+      userId,
+      projectId,
+    } as unknown as PrismaPersona)
+    if (!request.ability.can('create', candidate)) {
+      throw new ForbiddenError('Cannot create Persona in this scope')
+    }
 
     const persona = await fastify.prisma.persona.create({
       data: {
@@ -189,7 +208,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         isSystemGenerated: validatedData.isSystemGenerated,
         hidden: validatedData.hidden,
         userId,
-        projectId: validatedData.projectId || null,
+        projectId,
         ontology: {
           create: {
             entityTypes: [],
@@ -214,7 +233,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Persona object
    */
   fastify.get<{ Params: { id: string } }>('/api/personas/:id', {
-    onRequest: [optionalAuth],
+    onRequest: [optionalAuth, buildAbilities],
     schema: {
       description: 'Get a specific persona by ID',
       tags: ['personas'],
@@ -233,7 +252,6 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
-    const mode = process.env.FOVEA_MODE || 'multi-user'
 
     const persona = await fastify.prisma.persona.findUnique({
       where: { id }
@@ -243,11 +261,17 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona', id)
     }
 
-    // In multi-user mode, verify access
-    if (mode === 'multi-user' && request.user) {
-      if (persona.userId !== request.user.id && !persona.isSystemGenerated) {
-        throw new ForbiddenError('Access denied')
+    // Unauthenticated callers can only see public system personas
+    if (!request.user || !request.ability) {
+      if (!persona.isSystemGenerated || persona.hidden) {
+        throw new NotFoundError('Persona', id)
       }
+      return reply.send(persona)
+    }
+
+    // Authenticated: CASL instance-level check
+    if (!request.ability.can('read', subject('Persona', persona))) {
+      throw new ForbiddenError('Access denied')
     }
 
     return reply.send(persona)
@@ -264,7 +288,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Updated persona
    */
   fastify.put<{ Params: { id: string } }>('/api/personas/:id', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Update a persona',
       tags: ['personas'],
@@ -291,9 +315,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
     const validatedData = updatePersonaSchema.parse(request.body)
 
-    // Verify ownership
     const existingPersona = await fastify.prisma.persona.findUnique({
       where: { id }
     })
@@ -302,8 +326,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona', id)
     }
 
-    if (existingPersona.userId !== request.user!.id) {
-      throw new ForbiddenError('Cannot update another user\'s persona')
+    if (!request.ability.can('update', subject('Persona', existingPersona))) {
+      throw new ForbiddenError('Cannot update this Persona')
     }
 
     try {
@@ -331,7 +355,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Counts of affected items
    */
   fastify.get<{ Params: { id: string } }>('/api/personas/:id/deletion-preview', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Get deletion preview for a persona',
       tags: ['personas'],
@@ -355,8 +379,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    // Verify persona exists and user owns it
     const persona = await fastify.prisma.persona.findUnique({
       where: { id },
       include: { ontology: true }
@@ -366,8 +390,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona', id)
     }
 
-    if (persona.userId !== request.user!.id) {
-      throw new ForbiddenError('Cannot access another user\'s persona')
+    if (!request.ability.can('delete', subject('Persona', persona))) {
+      throw new ForbiddenError('Cannot access this Persona')
     }
 
     // Count types in ontology
@@ -438,7 +462,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Success message
    */
   fastify.delete<{ Params: { id: string } }>('/api/personas/:id', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Delete a persona',
       tags: ['personas'],
@@ -459,8 +483,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    // Verify ownership
     const existingPersona = await fastify.prisma.persona.findUnique({
       where: { id }
     })
@@ -469,8 +493,8 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona', id)
     }
 
-    if (existingPersona.userId !== request.user!.id) {
-      throw new ForbiddenError('Cannot delete another user\'s persona')
+    if (!request.ability.can('delete', subject('Persona', existingPersona))) {
+      throw new ForbiddenError('Cannot delete this Persona')
     }
 
     // Clean up world state: remove type assignments and interpretations for this persona
@@ -555,7 +579,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * Get ontology for a specific persona.
    */
   fastify.get<{ Params: { id: string } }>('/api/personas/:id/ontology', {
-    onRequest: [optionalAuth],
+    onRequest: [optionalAuth, buildAbilities],
     schema: {
       description: 'Get ontology for a specific persona',
       tags: ['personas', 'ontology'],
@@ -589,6 +613,15 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona or ontology', id)
     }
 
+    // Unauthenticated: only system personas are visible
+    if (!request.user || !request.ability) {
+      if (!persona.isSystemGenerated || persona.hidden) {
+        throw new NotFoundError('Persona or ontology', id)
+      }
+    } else if (!request.ability.can('read', subject('Persona', persona))) {
+      throw new ForbiddenError('Access denied')
+    }
+
     // Map database field names to API field names
     return reply.send({
       id: persona.ontology.id,
@@ -607,7 +640,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
    * Update ontology for a specific persona.
    */
   fastify.put<{ Params: { id: string }; Body: OntologyUpdateBody }>('/api/personas/:id/ontology', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Update ontology for a specific persona',
       tags: ['personas', 'ontology'],
@@ -638,6 +671,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
     const updateData = request.body
 
     const persona = await fastify.prisma.persona.findUnique({
@@ -647,6 +681,10 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     if (!persona || !persona.ontology) {
       throw new NotFoundError('Persona or ontology', id)
+    }
+
+    if (!request.ability.can('update', subject('Persona', persona))) {
+      throw new ForbiddenError('Cannot update this Persona')
     }
 
     // Map API field names to database field names
@@ -691,7 +729,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/entities/:typeId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for an entity type',
         tags: ['personas', 'ontology'],
@@ -721,8 +759,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot access another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot access this Persona')
       }
 
       // Check if type exists
@@ -780,7 +819,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/entities/:typeId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete an entity type with reference cleanup',
         tags: ['personas', 'ontology'],
@@ -813,8 +852,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot modify another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('delete', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot modify this Persona')
       }
 
       // Find and remove the type
@@ -906,7 +946,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/roles/:typeId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for a role type',
         tags: ['personas', 'ontology'],
@@ -936,8 +976,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot access another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot access this Persona')
       }
 
       const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
@@ -994,7 +1035,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/roles/:typeId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete a role type with reference cleanup',
         tags: ['personas', 'ontology'],
@@ -1027,8 +1068,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot modify another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('delete', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot modify this Persona')
       }
 
       const roleTypes = asTypesWithGloss(persona.ontology.roleTypes)
@@ -1125,7 +1167,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/events/:typeId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for an event type',
         tags: ['personas', 'ontology'],
@@ -1155,8 +1197,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot access another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot access this Persona')
       }
 
       const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
@@ -1210,7 +1253,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/events/:typeId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete an event type with reference cleanup',
         tags: ['personas', 'ontology'],
@@ -1243,8 +1286,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot modify another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('delete', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot modify this Persona')
       }
 
       const eventTypes = asTypesWithGloss(persona.ontology.eventTypes)
@@ -1333,7 +1377,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/relation-types/:typeId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for a relation type',
         tags: ['personas', 'ontology'],
@@ -1362,8 +1406,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot access another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot access this Persona')
       }
 
       const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
@@ -1400,7 +1445,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { personaId: string; typeId: string } }>(
     '/api/personas/:personaId/ontology/relation-types/:typeId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete a relation type with reference cleanup',
         tags: ['personas', 'ontology'],
@@ -1431,8 +1476,9 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', personaId)
       }
 
-      if (persona.userId !== request.user!.id) {
-        throw new ForbiddenError('Cannot modify another user\'s persona')
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      if (!request.ability.can('delete', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot modify this Persona')
       }
 
       const relationTypes = asTypesWithGloss(persona.ontology.relationTypes)
