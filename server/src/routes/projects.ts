@@ -11,7 +11,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { requireAuth } from '@middleware/auth.js'
 import { projectOperationCounter } from '../metrics.js'
-import { buildAbilities } from '@middleware/abilities.js'
+import { buildAbilities, invalidateUserAbilities } from '@middleware/abilities.js'
 import {
   NotFoundError,
   ValidationError,
@@ -207,6 +207,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         return created
       })
 
+      // Creator is now a project_owner; their abilities have changed
+      invalidateUserAbilities(userId)
       projectOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(project)
     },
@@ -494,10 +496,20 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Only the project owner or a system admin can delete a project')
       }
 
+      // Snapshot member ids before the cascade deletes project memberships
+      const doomedMembers = await fastify.prisma.projectMembership.findMany({
+        where: { projectId },
+        select: { userId: true },
+      })
+
       // Cascade deletes are handled by Prisma's onDelete: Cascade on memberships
       // and assignments. Delete the project directly.
       await fastify.prisma.project.delete({ where: { id: projectId } })
 
+      // Every former member loses project-scope access
+      for (const { userId: memberId } of doomedMembers) {
+        invalidateUserAbilities(memberId)
+      }
       projectOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Project deleted successfully' })
     },
@@ -576,6 +588,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Newly added member picks up project-scope role permissions
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send({
         id: membership.id,
@@ -713,6 +727,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Role change alters the member's effective permissions
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send({
         id: updated.id,
@@ -781,6 +797,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         where: { userId_projectId: { userId: targetUserId, projectId } },
       })
 
+      // Removed member loses project-scope permissions immediately
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ message: 'Member removed successfully' })
     },

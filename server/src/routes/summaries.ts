@@ -1,15 +1,35 @@
 /**
  * API routes for video summarization operations.
  *
- * This module provides endpoints for creating, retrieving, updating, and deleting
- * video summaries. It integrates with BullMQ for async processing and Prisma for storage.
+ * Every route that touches VideoSummary runs `buildAbilities` after
+ * `requireAuth` so `request.ability` is populated. List endpoints filter
+ * through `accessibleBy(ability).VideoSummary`; single-record endpoints load
+ * the row first and run an instance-level `ability.can()` check before
+ * proceeding. This matches the IDOR-hardened pattern in annotations.ts.
  */
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { accessibleBy } from '@casl/prisma'
+import { subject } from '@casl/ability'
+import type { PureAbility } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
+import type { VideoSummary as PrismaVideoSummary } from '@prisma/client'
 import { videoSummarizationQueue } from '../queues/setup.js'
-import { NotFoundError } from '../lib/errors.js'
+import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import type { AppAbility } from '../lib/abilities.js'
+
+/**
+ * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
+ * two libraries have different generic constraints that cannot be unified
+ * without a cast; runtime behaviour is identical because both operate on
+ * the same rule array.
+ */
+function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
+  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+}
 
 /**
  * Job data for video summarization queue.
@@ -106,12 +126,12 @@ const SummaryJobSchema = Type.Object({
 
 const summariesRoute: FastifyPluginAsync = async (fastify) => {
   /**
-   * Get all summaries for a video.
+   * List summaries for a video, filtered to what the caller can read.
    */
   fastify.get<{ Params: { videoId: string } }>(
     '/api/videos/:videoId/summaries',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -122,20 +142,28 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+
       const summaries = await fastify.prisma.videoSummary.findMany({
-        where: { videoId: request.params.videoId },
+        where: {
+          AND: [
+            { videoId: request.params.videoId },
+            accessibleBy(prismaAbility(request.ability), 'read').VideoSummary,
+          ],
+        },
       })
       return reply.send(summaries)
     }
   )
 
   /**
-   * Get summary for a specific video and persona.
+   * Get summary for a specific video and persona. Caller must have `read`
+   * permission on the resulting row.
    */
   fastify.get<{ Params: { videoId: string; personaId: string } }>(
     '/api/videos/:videoId/summaries/:personaId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -148,6 +176,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+
       const summary = await fastify.prisma.videoSummary.findUnique({
         where: {
           videoId_personaId: {
@@ -161,17 +191,25 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Summary', `${request.params.videoId}-${request.params.personaId}`)
       }
 
+      if (!request.ability.can('read', subject('VideoSummary', summary))) {
+        throw new ForbiddenError('Cannot read this VideoSummary')
+      }
+
       return reply.send(summary)
     }
   )
 
   /**
-   * Request video summarization (queues job for async processing).
+   * Queue a video summarization job. Since this job produces (and upserts)
+   * a VideoSummary row scoped to the persona's project, we pre-authorize
+   * the caller with `can('update', ...)` on the candidate summary shape.
+   * If the row already exists, we also require `update` on the existing
+   * record; extraction modifies the stored summary in either case.
    */
   fastify.post<{ Body: Static<typeof CreateSummaryRequestSchema> }>(
     '/api/videos/summaries/generate',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         body: CreateSummaryRequestSchema,
         response: {
@@ -191,6 +229,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         fusionStrategy,
         audioLanguage,
       } = request.body
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      const userId = request.user!.id
 
       const video = await fastify.prisma.video.findUnique({
         where: { id: videoId },
@@ -200,12 +240,34 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Video', videoId)
       }
 
+      // Summaries inherit project scope from the persona they target.
       const persona = await fastify.prisma.persona.findUnique({
         where: { id: personaId },
+        select: { projectId: true },
       })
 
       if (!persona) {
         throw new NotFoundError('Persona', personaId)
+      }
+
+      // Pre-authorize as an update in the resolved scope. The candidate
+      // shape carries the final projectId and createdBy so CASL's MongoQuery
+      // conditions resolve against actual field values.
+      const candidate = subject('VideoSummary', {
+        projectId: persona.projectId,
+        createdBy: userId,
+      } as unknown as PrismaVideoSummary)
+      if (!request.ability.can('update', candidate)) {
+        throw new ForbiddenError('Cannot update this VideoSummary')
+      }
+
+      // If a row already exists, enforce instance-level update rights too:
+      // the existing createdBy may belong to another user.
+      const existing = await fastify.prisma.videoSummary.findUnique({
+        where: { videoId_personaId: { videoId, personaId } },
+      })
+      if (existing && !request.ability.can('update', subject('VideoSummary', existing))) {
+        throw new ForbiddenError('Cannot update this VideoSummary')
       }
 
       const jobData: SummarizeJobData = {
@@ -247,11 +309,16 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
   /**
    * Get status of summarization job.
+   *
+   * Jobs are keyed by `${videoId}-${personaId}-${timestamp}`; we parse the
+   * target summary coordinates out of the job id and authorize against the
+   * summary that the job mutates (or will mutate). This prevents job-status
+   * probing from leaking existence of other users' summaries.
    */
   fastify.get<{ Params: { jobId: string } }>(
     '/api/jobs/:jobId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         params: Type.Object({
           jobId: Type.String(),
@@ -269,10 +336,25 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+
       const job = await videoSummarizationQueue.getJob(request.params.jobId)
 
       if (!job) {
         throw new NotFoundError('Job', request.params.jobId)
+      }
+
+      // Authorize against the summary targeted by this job. Fall back to
+      // the job payload if the id format is unexpected.
+      const targetVideoId = (job.data as SummarizeJobData | undefined)?.videoId
+      const targetPersonaId = (job.data as SummarizeJobData | undefined)?.personaId
+      if (targetVideoId && targetPersonaId) {
+        const existing = await fastify.prisma.videoSummary.findUnique({
+          where: { videoId_personaId: { videoId: targetVideoId, personaId: targetPersonaId } },
+        })
+        if (existing && !request.ability.can('read', subject('VideoSummary', existing))) {
+          throw new ForbiddenError('Cannot read this VideoSummary')
+        }
       }
 
       const state = await job.getState()
@@ -299,11 +381,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
   /**
    * Save or update a video summary directly (from worker or manual entry).
+   *
+   * The row is scoped to the persona's project. Callers must be authorized
+   * to create/update a VideoSummary in the resolved scope. On update, the
+   * existing row must also pass an instance-level update check.
    */
   fastify.post<{ Body: Omit<Static<typeof VideoSummarySchema>, 'id' | 'createdAt' | 'updatedAt'> }>(
     '/api/summaries',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         body: Type.Intersect([
           Type.Object({
@@ -352,8 +438,37 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         processingTimeAudio,
         processingTimeVisual,
         processingTimeFusion,
-        createdBy,
       } = request.body
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+      const userId = request.user!.id
+
+      // Resolve project scope from the persona. Required for CASL's
+      // project-scoped conditions to evaluate correctly.
+      const persona = await fastify.prisma.persona.findUnique({
+        where: { id: personaId },
+        select: { projectId: true },
+      })
+      if (!persona) throw new NotFoundError('Persona', personaId)
+
+      // Load any existing row so we can distinguish create vs update and
+      // apply the correct instance-level check.
+      const existing = await fastify.prisma.videoSummary.findUnique({
+        where: { videoId_personaId: { videoId, personaId } },
+      })
+
+      if (existing) {
+        if (!request.ability.can('update', subject('VideoSummary', existing))) {
+          throw new ForbiddenError('Cannot update this VideoSummary')
+        }
+      } else {
+        const candidate = subject('VideoSummary', {
+          projectId: persona.projectId,
+          createdBy: userId,
+        } as unknown as PrismaVideoSummary)
+        if (!request.ability.can('create', candidate)) {
+          throw new ForbiddenError('Cannot create this VideoSummary')
+        }
+      }
 
       const savedSummary = await fastify.prisma.videoSummary.upsert({
         where: {
@@ -396,7 +511,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           processingTimeAudio: processingTimeAudio || undefined,
           processingTimeVisual: processingTimeVisual || undefined,
           processingTimeFusion: processingTimeFusion || undefined,
-          createdBy: createdBy || undefined,
+          createdBy: userId,
         },
       })
 
@@ -405,7 +520,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
-   * Update a video summary by ID.
+   * Update a video summary by ID. Caller must have `update` permission on
+   * the specific row.
    */
   fastify.put<{
     Params: { videoId: string; summaryId: string }
@@ -413,7 +529,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   }>(
     '/api/videos/:videoId/summaries/:summaryId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -431,6 +547,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { summaryId } = request.params
       const { summary } = request.body
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
 
       const existing = await fastify.prisma.videoSummary.findUnique({
         where: { id: summaryId },
@@ -438,6 +555,10 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!existing) {
         throw new NotFoundError('Summary', summaryId)
+      }
+
+      if (!request.ability.can('update', subject('VideoSummary', existing))) {
+        throw new ForbiddenError('Cannot update this VideoSummary')
       }
 
       const updated = await fastify.prisma.videoSummary.update({
@@ -450,12 +571,13 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
-   * Delete a video summary.
+   * Delete a video summary. Caller must have `delete` permission on the
+   * specific row.
    */
   fastify.delete<{ Params: { videoId: string; personaId: string } }>(
     '/api/videos/:videoId/summaries/:personaId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         params: Type.Object({
           videoId: Type.String(),
@@ -469,21 +591,25 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { videoId, personaId } = request.params
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-      try {
-        await fastify.prisma.videoSummary.delete({
-          where: {
-            videoId_personaId: {
-              videoId,
-              personaId,
-            },
-          },
-        })
+      const existing = await fastify.prisma.videoSummary.findUnique({
+        where: { videoId_personaId: { videoId, personaId } },
+      })
 
-        return reply.send({ success: true })
-      } catch (error) {
+      if (!existing) {
         throw new NotFoundError('Summary', `${videoId}-${personaId}`)
       }
+
+      if (!request.ability.can('delete', subject('VideoSummary', existing))) {
+        throw new ForbiddenError('Cannot delete this VideoSummary')
+      }
+
+      await fastify.prisma.videoSummary.delete({
+        where: { videoId_personaId: { videoId, personaId } },
+      })
+
+      return reply.send({ success: true })
     }
   )
 }

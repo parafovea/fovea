@@ -1,7 +1,14 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { accessibleBy } from '@casl/prisma'
+import { subject } from '@casl/ability'
+import type { PureAbility } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
+import type { WorldState as PrismaWorldState } from '@prisma/client'
 import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
-import { NotFoundError, UnauthorizedError, InternalError } from '@lib/errors.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import type { AppAbility } from '../lib/abilities.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '@lib/errors.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses } from '@lib/reference-cleanup.js'
 import {
   asEntityTypes,
@@ -14,6 +21,16 @@ import {
   asWorldRelations,
   asWorldCollections,
 } from '@lib/prisma-json.js'
+
+/**
+ * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
+ * two libraries have different generic constraints that cannot be unified
+ * without a cast; runtime behaviour is identical because both operate on
+ * the same rule array.
+ */
+function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
+  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+}
 
 /**
  * Request body for world state update endpoint.
@@ -30,14 +47,23 @@ interface WorldStateUpdateBody {
 
 /**
  * Fastify plugin for world state routes.
- * Provides GET and PUT operations for user's world state (entities, events, times, collections, relations).
- * World state is user-scoped and shared across all personas.
- * In single-user mode, uses the default user automatically.
+ *
+ * Every route requires authentication, builds the caller's CASL abilities,
+ * and filters/verifies access against them. WorldState rows are keyed by
+ * (userId, projectId); a user owns their personal state (projectId = null)
+ * and may access per-project states for projects they belong to. Single-row
+ * endpoints load the row first and run an instance-level `ability.can()`
+ * check before returning or mutating. If a row exists but the caller cannot
+ * read it, a ForbiddenError is thrown; if the row does not exist at all, a
+ * NotFoundError is thrown instead (existence privacy).
  *
  * Routes:
  * - GET /api/world - Get current user's world state
  * - PUT /api/world - Update current user's world state
- * - DELETE /api/admin/world/:userId - Clear specific user's world state (admin only, test mode)
+ * - DELETE /api/admin/world/:userId - Clear specific user's world state (admin only)
+ * - GET/DELETE /api/world/entities/:entityId[/deletion-preview]
+ * - GET/DELETE /api/world/events/:eventId[/deletion-preview]
+ * - GET/DELETE /api/world/times/:timeId[/deletion-preview]
  */
 const worldRoute: FastifyPluginAsync = async (fastify) => {
   /**
@@ -49,7 +75,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
    * @returns WorldState object with all entity, event, time, collection, and relation data
    */
   fastify.get('/api/world', {
-    onRequest: [optionalAuth],
+    onRequest: [optionalAuth, buildAbilities],
     schema: {
       description: 'Get world state for current user',
       tags: ['world'],
@@ -68,6 +94,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
           updatedAt: Type.String({ format: 'date-time' })
         }),
         401: Type.Object({ error: Type.String() }),
+        403: Type.Object({ error: Type.String() }),
         500: Type.Object({ error: Type.String() })
       }
     }
@@ -91,13 +118,25 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       throw new UnauthorizedError('Authentication required')
     }
 
-    // Find or create personal world state for this user (projectId: null)
+    // Find or create personal world state for this user (projectId: null).
+    // A user always owns their personal world state, so the findOrCreate
+    // semantics are preserved. Before creating, pre-authorize via CASL so
+    // future rule tightening cannot be bypassed.
     let worldState = await fastify.prisma.worldState.findFirst({
       where: { userId, projectId: null }
     })
 
-    if (!worldState) {
-      // Create empty world state for new user
+    if (worldState) {
+      if (request.ability && !request.ability.can('read', subject('WorldState', worldState))) {
+        throw new ForbiddenError('Cannot read this WorldState')
+      }
+    } else {
+      if (request.ability) {
+        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        if (!request.ability.can('create', candidate)) {
+          throw new ForbiddenError('Cannot create this WorldState')
+        }
+      }
       worldState = await fastify.prisma.worldState.create({
         data: {
           userId,
@@ -137,7 +176,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Updated WorldState object
    */
   fastify.put('/api/world', {
-    onRequest: [optionalAuth],
+    onRequest: [optionalAuth, buildAbilities],
     schema: {
       description: 'Update world state for current user',
       tags: ['world'],
@@ -165,6 +204,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
           updatedAt: Type.String({ format: 'date-time' })
         }),
         401: Type.Object({ error: Type.String() }),
+        403: Type.Object({ error: Type.String() }),
         500: Type.Object({ error: Type.String() })
       }
     }
@@ -190,13 +230,19 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
 
     const updateData = request.body as WorldStateUpdateBody
 
-    // Find or create personal world state, then update
+    // Find or create personal world state, then update. A user always owns
+    // their personal world state (projectId: null) so the existence check
+    // preserves the original semantics, but we still run CASL against the
+    // row before mutating it.
     const existing = await fastify.prisma.worldState.findFirst({
       where: { userId, projectId: null }
     })
 
     let worldState
     if (existing) {
+      if (request.ability && !request.ability.can('update', subject('WorldState', existing))) {
+        throw new ForbiddenError('Cannot update this WorldState')
+      }
       worldState = await fastify.prisma.worldState.update({
         where: { id: existing.id },
         data: {
@@ -217,6 +263,12 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         }
       })
     } else {
+      if (request.ability) {
+        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        if (!request.ability.can('create', candidate)) {
+          throw new ForbiddenError('Cannot create this WorldState')
+        }
+      }
       worldState = await fastify.prisma.worldState.create({
         data: {
           userId,
@@ -256,19 +308,12 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   /**
    * Clear world state for a specific user (admin only).
    *
-   * Use cases:
-   * - User support: Reset corrupted or problematic world state
-   * - Account management: User requests fresh start without account deletion
-   * - Demo accounts: Periodic cleanup of training/demo user data
-   * - Privacy compliance: Clear user's annotation data while preserving account
-   * - Troubleshooting: Admin needs to reset state for debugging
-   *
    * @route DELETE /api/admin/world/:userId
    * @param userId - ID of user whose WorldState should be cleared
    * @returns Success message
    */
   fastify.delete('/api/admin/world/:userId', {
-    onRequest: [requireAdmin],
+    onRequest: [requireAdmin, buildAbilities],
     schema: {
       description: 'Clear world state for specific user (admin only)',
       tags: ['admin', 'world'],
@@ -280,6 +325,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
           message: Type.String(),
           userId: Type.String({ format: 'uuid' })
         }),
+        403: Type.Object({ error: Type.String() }),
         404: Type.Object({ error: Type.String() }),
         500: Type.Object({ error: Type.String() })
       }
@@ -312,11 +358,20 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     if (existingWorldState) {
+      if (request.ability && !request.ability.can('delete', subject('WorldState', existingWorldState))) {
+        throw new ForbiddenError('Cannot delete this WorldState')
+      }
       await fastify.prisma.worldState.update({
         where: { id: existingWorldState.id },
         data: emptyData
       })
     } else {
+      if (request.ability) {
+        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        if (!request.ability.can('create', candidate)) {
+          throw new ForbiddenError('Cannot create this WorldState')
+        }
+      }
       await fastify.prisma.worldState.create({
         data: { userId, ...emptyData }
       })
@@ -354,6 +409,66 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   }
 
   /**
+   * Load the caller's personal WorldState enforcing CASL read access.
+   *
+   * Uses an accessibleBy filter so the row is only returned when the caller
+   * is entitled to read it. If a row exists but is not accessible, a
+   * ForbiddenError is thrown. If no row exists for this user at all, a
+   * NotFoundError is thrown. This preserves existence privacy: callers can
+   * neither distinguish "forbidden" from "not found" nor probe other users'
+   * world states.
+   */
+  async function loadAuthorizedPersonalWorldState(
+    request: { ability?: AppAbility },
+    userId: string,
+  ) {
+    const ability = request.ability
+    const accessible = ability
+      ? await fastify.prisma.worldState.findFirst({
+          where: {
+            AND: [
+              { userId, projectId: null },
+              accessibleBy(prismaAbility(ability), 'read').WorldState,
+            ],
+          },
+        })
+      : await fastify.prisma.worldState.findFirst({
+          where: { userId, projectId: null },
+        })
+
+    if (accessible) {
+      if (ability && !ability.can('read', subject('WorldState', accessible))) {
+        throw new ForbiddenError('Cannot read this WorldState')
+      }
+      return accessible
+    }
+
+    // Distinguish forbidden vs not-found without leaking existence to other
+    // users: only the owning user's row is ever considered here (userId is
+    // the caller's own id), so a missing row is safely 404.
+    const raw = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
+    })
+    if (raw) {
+      throw new ForbiddenError('Cannot read this WorldState')
+    }
+    throw new NotFoundError('World state', userId)
+  }
+
+  /**
+   * Authorize an action on a WorldState row before mutating it.
+   */
+  function authorizeWorldState(
+    request: { ability?: AppAbility },
+    action: 'read' | 'update' | 'delete',
+    ws: PrismaWorldState,
+  ): void {
+    if (request.ability && !request.ability.can(action, subject('WorldState', ws))) {
+      throw new ForbiddenError(`Cannot ${action} this WorldState`)
+    }
+  }
+
+  /**
    * Get deletion preview for a world entity.
    *
    * @route GET /api/world/entities/:entityId/deletion-preview
@@ -361,7 +476,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { entityId: string } }>(
     '/api/world/entities/:entityId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for a world entity',
         tags: ['world'],
@@ -375,6 +490,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
             relationCount: Type.Number(),
             collectionMemberships: Type.Number()
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -383,13 +499,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { entityId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
 
       const entities = asEntities(worldState.entities)
       const targetEntity = entities.find(e => e.id === entityId)
@@ -455,7 +565,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { entityId: string } }>(
     '/api/world/entities/:entityId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete a world entity with reference cleanup',
         tags: ['world'],
@@ -471,6 +581,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
               collectionMemberships: Type.Number()
             })
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -479,13 +590,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { entityId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
+      authorizeWorldState(request, 'update', worldState)
 
       const entities = asEntities(worldState.entities)
       const targetEntity = entities.find(e => e.id === entityId)
@@ -610,7 +716,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { eventId: string } }>(
     '/api/world/events/:eventId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for a world event',
         tags: ['world'],
@@ -624,6 +730,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
             relationCount: Type.Number(),
             collectionMemberships: Type.Number()
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -632,13 +739,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { eventId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
 
       const events = asEvents(worldState.events)
       const targetEvent = events.find(e => e.id === eventId)
@@ -699,7 +800,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { eventId: string } }>(
     '/api/world/events/:eventId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete a world event with reference cleanup',
         tags: ['world'],
@@ -715,6 +816,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
               collectionMemberships: Type.Number()
             })
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -723,13 +825,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { eventId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
+      authorizeWorldState(request, 'update', worldState)
 
       const events = asEvents(worldState.events)
       const targetEvent = events.find(e => e.id === eventId)
@@ -851,7 +948,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { timeId: string } }>(
     '/api/world/times/:timeId/deletion-preview',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Get deletion preview for a world time',
         tags: ['world'],
@@ -865,6 +962,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
             relationCount: Type.Number(),
             collectionMemberships: Type.Number()
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -873,13 +971,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { timeId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
 
       const times = asTimes(worldState.times)
       const targetTime = times.find(t => t.id === timeId)
@@ -940,7 +1032,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { timeId: string } }>(
     '/api/world/times/:timeId',
     {
-      onRequest: [requireAuth],
+      onRequest: [requireAuth, buildAbilities],
       schema: {
         description: 'Delete a world time with reference cleanup',
         tags: ['world'],
@@ -956,6 +1048,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
               collectionMemberships: Type.Number()
             })
           }),
+          403: Type.Object({ error: Type.String() }),
           404: Type.Object({ error: Type.String() })
         }
       }
@@ -964,13 +1057,8 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       const { timeId } = request.params
       const userId = await getUserId(request)
 
-      const worldState = await fastify.prisma.worldState.findFirst({
-        where: { userId, projectId: null }
-      })
-
-      if (!worldState) {
-        throw new NotFoundError('World state', userId)
-      }
+      const worldState = await loadAuthorizedPersonalWorldState(request, userId)
+      authorizeWorldState(request, 'update', worldState)
 
       const times = asTimes(worldState.times)
       const targetTime = times.find(t => t.id === timeId)

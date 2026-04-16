@@ -1,7 +1,20 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { accessibleBy } from '@casl/prisma'
+import type { PureAbility } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
 import { AnnotationExporter } from '../services/export-handler.js'
 import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import type { AppAbility } from '../lib/abilities.js'
+import { ForbiddenError } from '../lib/errors.js'
+
+/**
+ * Cast AppAbility to the shape @casl/prisma expects for accessibleBy.
+ */
+function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
+  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+}
 
 /**
  * Fastify plugin for export-related routes.
@@ -27,7 +40,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with all user data
    */
   fastify.get('/api/export', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Export all user data',
       tags: ['export'],
@@ -67,11 +80,19 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
       : undefined
 
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const ability = request.ability
+
     const lines: string[] = []
 
     // 1. Export personas with ontologies
     const personas = await fastify.prisma.persona.findMany({
-      where: { userId: request.user!.id },
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').Persona,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
     const userPersonaIds = personas.map(p => p.id)
@@ -85,7 +106,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 2. Export world state
     const worldState = await fastify.prisma.worldState.findFirst({
-      where: { userId: request.user!.id }
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').WorldState,
+        ],
+      },
     })
     if (worldState) {
       const worldLines = exporter.exportWorldState(worldState)
@@ -96,12 +122,22 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 3. Export summaries with claims
     const summaries = await fastify.prisma.videoSummary.findMany({
-      where: { personaId: { in: userPersonaIds } },
+      where: {
+        AND: [
+          { personaId: { in: userPersonaIds } },
+          accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
     const summaryIds = summaries.map(s => s.id)
     const claims = summaryIds.length > 0 ? await fastify.prisma.claim.findMany({
-      where: { summaryId: { in: summaryIds } },
+      where: {
+        AND: [
+          { summaryId: { in: summaryIds } },
+          accessibleBy(prismaAbility(ability), 'read').Claim,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     }) : []
     const claimIds = claims.map(c => c.id)
@@ -136,7 +172,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: annotationWhere,
+      where: {
+        AND: [
+          annotationWhere,
+          accessibleBy(prismaAbility(ability), 'read').Annotation,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -216,7 +257,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Export statistics for all data types
    */
   fastify.get('/api/export/stats', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Get export statistics for all data types',
       tags: ['export'],
@@ -280,9 +321,17 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
       : undefined
 
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const ability = request.ability
+
     // 1. Count personas and ontologies
     const personas = await fastify.prisma.persona.findMany({
-      where: { userId: request.user!.id },
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').Persona,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
     const systemPersonaCount = personas.filter(p => p.isSystemGenerated).length
@@ -306,7 +355,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // 2. Count world state objects
     const worldState = await fastify.prisma.worldState.findFirst({
-      where: { userId: request.user!.id }
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').WorldState,
+        ],
+      },
     })
     const worldCounts = worldState ? {
       entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
@@ -319,19 +373,27 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     } : { entities: 0, events: 0, times: 0, entityCollections: 0, eventCollections: 0, timeCollections: 0, relations: 0 }
 
     // 3. Count summaries and claims (scoped to user's personas)
-    const summaryCount = await fastify.prisma.videoSummary.count({
-      where: { personaId: { in: userPersonaIds } }
-    })
+    const summaryWhere = {
+      AND: [
+        { personaId: { in: userPersonaIds } },
+        accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+      ],
+    }
+    const summaryCount = await fastify.prisma.videoSummary.count({ where: summaryWhere })
     const userSummaries = await fastify.prisma.videoSummary.findMany({
-      where: { personaId: { in: userPersonaIds } },
+      where: summaryWhere,
       select: { id: true }
     })
     const userSummaryIds = userSummaries.map(s => s.id)
-    const claimCount = await fastify.prisma.claim.count({
-      where: { summaryId: { in: userSummaryIds } }
-    })
+    const claimWhere = {
+      AND: [
+        { summaryId: { in: userSummaryIds } },
+        accessibleBy(prismaAbility(ability), 'read').Claim,
+      ],
+    }
+    const claimCount = await fastify.prisma.claim.count({ where: claimWhere })
     const userClaims = await fastify.prisma.claim.findMany({
-      where: { summaryId: { in: userSummaryIds } },
+      where: claimWhere,
       select: { id: true }
     })
     const userClaimIds = userClaims.map(c => c.id)
@@ -362,7 +424,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: annotationWhere,
+      where: {
+        AND: [
+          annotationWhere,
+          accessibleBy(prismaAbility(ability), 'read').Annotation,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -455,7 +522,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with personas and ontologies
    */
   fastify.get('/api/export/personas', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Export personas with their ontologies',
       tags: ['export'],
@@ -471,10 +538,17 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const ability = request.ability
 
     // Fetch user's personas
     const personas = await fastify.prisma.persona.findMany({
-      where: { userId: request.user!.id },
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').Persona,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -510,7 +584,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with world state objects
    */
   fastify.get('/api/export/world', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Export world state objects',
       tags: ['export'],
@@ -530,10 +604,17 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const ability = request.ability
 
     // Fetch world state for the authenticated user
     const worldState = await fastify.prisma.worldState.findFirst({
-      where: { userId: request.user!.id }
+      where: {
+        AND: [
+          { userId: request.user!.id },
+          accessibleBy(prismaAbility(ability), 'read').WorldState,
+        ],
+      },
     })
 
     if (!worldState) {
@@ -571,7 +652,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
    * @returns JSON Lines file with summaries, claims, and claim relations
    */
   fastify.get('/api/export/summaries', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Export video summaries with claims',
       tags: ['export'],
@@ -597,6 +678,9 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       videoIds?: string
       personaIds?: string
     }
+
+    if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const ability = request.ability
 
     // Parse filter parameters
     const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
@@ -633,14 +717,24 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // Fetch summaries
     const summaries = await fastify.prisma.videoSummary.findMany({
-      where,
+      where: {
+        AND: [
+          where,
+          accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 
     // Fetch claims for these summaries
     const summaryIds = summaries.map(s => s.id)
     const claims = await fastify.prisma.claim.findMany({
-      where: { summaryId: { in: summaryIds } },
+      where: {
+        AND: [
+          { summaryId: { in: summaryIds } },
+          accessibleBy(prismaAbility(ability), 'read').Claim,
+        ],
+      },
       orderBy: { createdAt: 'asc' }
     })
 

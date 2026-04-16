@@ -269,6 +269,9 @@ export async function buildApp() {
   const usersRoute = await import('./routes/users.js')
   await app.register(usersRoute.default)
 
+  const adminPermissionsRoute = await import('./routes/admin-permissions.js')
+  await app.register(adminPermissionsRoute.default)
+
   const sessionsRoute = await import('./routes/sessions.js')
   await app.register(sessionsRoute.default)
 
