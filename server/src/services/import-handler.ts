@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, Annotation as PrismaAnnotation, Claim as PrismaClaim, Persona as PrismaPersona, VideoSummary as PrismaVideoSummary, WorldState as PrismaWorldState } from '@prisma/client'
+import { PrismaClient, Prisma, Annotation as PrismaAnnotation } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { subject } from '@casl/ability'
 import { NotFoundError, ValidationError } from '../lib/errors.js'
