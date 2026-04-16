@@ -1,7 +1,9 @@
-import { FastifyPluginAsync } from 'fastify'
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import { createVideoStorageProvider, loadStorageConfig } from '../../services/videoStorage.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
+import { VideoAccessService } from '../../services/video-access-service.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { NotFoundError } from '../../lib/errors.js'
 import { listRoutes } from './list.js'
 import { streamRoutes } from './stream.js'
 import { thumbnailRoutes } from './thumbnail.js'
@@ -33,6 +35,23 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   // Require authentication for all video routes
   fastify.addHook('onRequest', requireAuth)
+
+  // Per-video access check: any request with a :videoId param is verified
+  // against the caller's project/group memberships via VideoAccessService.
+  const videoAccess = new VideoAccessService(fastify.prisma)
+
+  fastify.addHook('preHandler', async (request: FastifyRequest, _reply: FastifyReply) => {
+    const params = request.params as Record<string, string>
+    if (!params.videoId || !request.user) return
+
+    const accessible = await videoAccess.getAccessibleVideoIds(
+      request.user.id,
+      request.user.systemRole || 'user'
+    )
+    if (accessible !== 'all' && !accessible.includes(params.videoId)) {
+      throw new NotFoundError('Video', params.videoId)
+    }
+  })
 
   // Register all sub-route modules
   await fastify.register(listRoutes, { videoRepository })

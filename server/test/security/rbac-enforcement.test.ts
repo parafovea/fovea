@@ -453,3 +453,111 @@ describe('Admin-only enforcement', () => {
     )
   })
 })
+
+// =============================================================================
+// 6. Cross-resource ownership conditions (VideoSummary, Claim, Persona)
+// =============================================================================
+
+describe('Cross-resource ownership conditions', () => {
+  const ANNOTATOR_PERMS: RolePermissionRow[] = [
+    { scope: 'system', role: 'user', resourceType: 'summary', action: 'read', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'summary', action: 'update', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'claim', action: 'read', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'claim', action: 'update', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'persona', action: 'read', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'persona', action: 'update', ownOnly: true },
+    { scope: 'system', role: 'user', resourceType: 'persona', action: 'delete', ownOnly: true },
+  ]
+
+  it('User can read their own VideoSummary but not another user\'s', () => {
+    const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
+    const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
+
+    expect(ability.can('read', subject('VideoSummary', { createdBy: 'user-a' } as any))).toBe(true)
+    expect(ability.can('read', subject('VideoSummary', { createdBy: 'user-b' } as any))).toBe(false)
+  })
+
+  it('User can read their own Claim but not another user\'s', () => {
+    const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
+    const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
+
+    expect(ability.can('read', subject('Claim', { createdBy: 'user-a' } as any))).toBe(true)
+    expect(ability.can('read', subject('Claim', { createdBy: 'user-b' } as any))).toBe(false)
+  })
+
+  it('User can read/update/delete their own Persona but not another user\'s', () => {
+    const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
+    const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
+
+    const own = subject('Persona', { userId: 'user-a', createdByUserId: 'user-a' } as any)
+    const foreign = subject('Persona', { userId: 'user-b', createdByUserId: 'user-b' } as any)
+
+    expect(ability.can('read', own)).toBe(true)
+    expect(ability.can('update', own)).toBe(true)
+    expect(ability.can('delete', own)).toBe(true)
+    expect(ability.can('read', foreign)).toBe(false)
+    expect(ability.can('update', foreign)).toBe(false)
+    expect(ability.can('delete', foreign)).toBe(false)
+  })
+
+  it('Project-scoped annotator can read summaries in their project', () => {
+    const perms: RolePermissionRow[] = [
+      { scope: 'project', role: 'annotator', resourceType: 'summary', action: 'read', ownOnly: false },
+    ]
+    const roles: UserRoles = {
+      systemRole: 'user',
+      groupRoles: [],
+      projectRoles: [{ projectId: 'proj-1', role: 'annotator' }],
+    }
+    const ability = defineAbilitiesFor('user-a', roles, perms)
+
+    const inProject = subject('VideoSummary', { createdBy: 'user-b', projectId: 'proj-1' } as any)
+    const otherProject = subject('VideoSummary', { createdBy: 'user-b', projectId: 'proj-2' } as any)
+
+    expect(ability.can('read', inProject)).toBe(true)
+    expect(ability.can('read', otherProject)).toBe(false)
+  })
+})
+
+// =============================================================================
+// 7. Import CASL integration
+// =============================================================================
+
+describe('Import CASL enforcement', () => {
+  it('Ability denies annotation create with no permissions', () => {
+    const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
+    const ability = defineAbilitiesFor('user-a', roles, [])
+
+    const candidate = subject('Annotation', { createdByUserId: 'user-a', projectId: null } as any)
+    expect(ability.can('create', candidate)).toBe(false)
+  })
+
+  it('Ability allows annotation create with system-level ownOnly permission', () => {
+    const perms: RolePermissionRow[] = [
+      { scope: 'system', role: 'user', resourceType: 'annotation', action: 'create', ownOnly: true },
+    ]
+    const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
+    const ability = defineAbilitiesFor('user-a', roles, perms)
+
+    const candidate = subject('Annotation', { createdByUserId: 'user-a', projectId: null } as any)
+    expect(ability.can('create', candidate)).toBe(true)
+  })
+
+  it('Ability denies create into a project the user is not a member of', () => {
+    const perms: RolePermissionRow[] = [
+      { scope: 'project', role: 'annotator', resourceType: 'annotation', action: 'create', ownOnly: false },
+    ]
+    const roles: UserRoles = {
+      systemRole: 'user',
+      groupRoles: [],
+      projectRoles: [{ projectId: 'proj-1', role: 'annotator' }],
+    }
+    const ability = defineAbilitiesFor('user-a', roles, perms)
+
+    const inProject = subject('Annotation', { createdByUserId: 'user-a', projectId: 'proj-1' } as any)
+    const wrongProject = subject('Annotation', { createdByUserId: 'user-a', projectId: 'proj-999' } as any)
+
+    expect(ability.can('create', inProject)).toBe(true)
+    expect(ability.can('create', wrongProject)).toBe(false)
+  })
+})
