@@ -20,6 +20,18 @@ import { NotFoundError, ValidationError, ForbiddenError, ErrorResponseSchema } f
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 
+/** Type guard for claim extraction job data. */
+function isClaimExtractionData(data: unknown): data is ClaimExtractionJobData {
+  if (typeof data !== 'object' || data === null) return false
+  return 'summaryId' in data && typeof data.summaryId === 'string'
+}
+
+/** Type guard for claim synthesis job data. */
+function isClaimSynthesisData(data: unknown): data is ClaimSynthesisJobData {
+  if (typeof data !== 'object' || data === null) return false
+  return 'summaryId' in data && typeof data.summaryId === 'string'
+}
+
 /**
  * Gloss item schema
  */
@@ -778,7 +790,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       return reply.status(202).send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status: 'queued',
         summaryId
       })
@@ -827,7 +839,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       // Authorize against the summary targeted by this job so job-status
       // probing can't leak existence of other users' summaries.
-      const targetSummaryId = (job.data as ClaimExtractionJobData | undefined)?.summaryId
+      const targetSummaryId = isClaimExtractionData(job.data) ? job.data.summaryId : undefined
       if (targetSummaryId) {
         const existing = await fastify.prisma.videoSummary.findUnique({
           where: { id: targetSummaryId },
@@ -864,7 +876,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status,
         progress,
         result,
@@ -972,7 +984,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       return reply.status(202).send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status: 'queued',
         summaryId
       })
@@ -1020,7 +1032,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Authorize against the summary targeted by this job.
-      const targetSummaryId = (job.data as ClaimSynthesisJobData | undefined)?.summaryId
+      const targetSummaryId = isClaimSynthesisData(job.data) ? job.data.summaryId : undefined
       if (targetSummaryId) {
         const existing = await fastify.prisma.videoSummary.findUnique({
           where: { id: targetSummaryId },
@@ -1057,7 +1069,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status,
         progress,
         result,
@@ -1180,19 +1192,27 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       // Validate relationTypeId against ontology
       if (summary.persona.ontology) {
-        const relationTypes = summary.persona.ontology.relationTypes as Array<Record<string, unknown>>
-        const relationType = relationTypes.find((rt) => rt.id === relationTypeId)
+        const rawRelationTypes = Array.isArray(summary.persona.ontology.relationTypes)
+          ? summary.persona.ontology.relationTypes
+          : []
+        const relationType = rawRelationTypes.find(
+          (rt): rt is Prisma.JsonObject =>
+            typeof rt === 'object' && rt !== null && !Array.isArray(rt) && 'id' in rt && rt.id === relationTypeId
+        )
 
         if (!relationType) {
           throw new ValidationError(`Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`)
         }
 
         // Check that this relation type allows claim→claim relations
-        const sourceTypes = relationType.sourceTypes as string[]
-        const targetTypes = relationType.targetTypes as string[]
+        const rawSource = relationType.sourceTypes
+        const rawTarget = relationType.targetTypes
+        const sourceTypes = Array.isArray(rawSource) ? rawSource.filter((s): s is string => typeof s === 'string') : []
+        const targetTypes = Array.isArray(rawTarget) ? rawTarget.filter((t): t is string => typeof t === 'string') : []
 
+        const rtName = typeof relationType.name === 'string' ? relationType.name : relationTypeId
         if (!sourceTypes.includes('claim') || !targetTypes.includes('claim')) {
-          throw new ValidationError(`Relation type '${relationType.name}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`)
+          throw new ValidationError(`Relation type '${rtName}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`)
         }
       }
 

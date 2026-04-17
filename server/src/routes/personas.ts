@@ -391,10 +391,10 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Count types in ontology
-    const entityTypes = (persona.ontology?.entityTypes as unknown[]) || []
-    const roleTypes = (persona.ontology?.roleTypes as unknown[]) || []
-    const eventTypes = (persona.ontology?.eventTypes as unknown[]) || []
-    const relationTypes = (persona.ontology?.relationTypes as unknown[]) || []
+    const entityTypes = Array.isArray(persona.ontology?.entityTypes) ? persona.ontology.entityTypes : []
+    const roleTypes = Array.isArray(persona.ontology?.roleTypes) ? persona.ontology.roleTypes : []
+    const eventTypes = Array.isArray(persona.ontology?.eventTypes) ? persona.ontology.eventTypes : []
+    const relationTypes = Array.isArray(persona.ontology?.relationTypes) ? persona.ontology.relationTypes : []
     const typeCount = entityTypes.length + roleTypes.length + eventTypes.length + relationTypes.length
 
     // Count annotations with this personaId

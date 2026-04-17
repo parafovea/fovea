@@ -26,7 +26,7 @@ import {
  * bridges the TypeScript gap without an unsafe cast.
  */
 function toJson(value: unknown): Prisma.InputJsonValue {
-  return value as Prisma.InputJsonValue
+  return JSON.parse(JSON.stringify(value))
 }
 
 /**
@@ -243,13 +243,13 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       worldState = await fastify.prisma.worldState.update({
         where: { id: existing.id },
         data: {
-          entities: updateData.entities !== undefined ? (updateData.entities as Prisma.InputJsonValue) : undefined,
-          events: updateData.events !== undefined ? (updateData.events as Prisma.InputJsonValue) : undefined,
-          times: updateData.times !== undefined ? (updateData.times as Prisma.InputJsonValue) : undefined,
-          entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as Prisma.InputJsonValue) : undefined,
-          eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as Prisma.InputJsonValue) : undefined,
-          timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as Prisma.InputJsonValue) : undefined,
-          relations: updateData.relations !== undefined ? (updateData.relations as Prisma.InputJsonValue) : undefined
+          entities: updateData.entities !== undefined ? toJson(updateData.entities) : undefined,
+          events: updateData.events !== undefined ? toJson(updateData.events) : undefined,
+          times: updateData.times !== undefined ? toJson(updateData.times) : undefined,
+          entityCollections: updateData.entityCollections !== undefined ? toJson(updateData.entityCollections) : undefined,
+          eventCollections: updateData.eventCollections !== undefined ? toJson(updateData.eventCollections) : undefined,
+          timeCollections: updateData.timeCollections !== undefined ? toJson(updateData.timeCollections) : undefined,
+          relations: updateData.relations !== undefined ? toJson(updateData.relations) : undefined
         }
       })
     } else {
@@ -262,13 +262,13 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       worldState = await fastify.prisma.worldState.create({
         data: {
           userId,
-          entities: (updateData.entities || []) as Prisma.InputJsonValue,
-          events: (updateData.events || []) as Prisma.InputJsonValue,
-          times: (updateData.times || []) as Prisma.InputJsonValue,
-          entityCollections: (updateData.entityCollections || []) as Prisma.InputJsonValue,
-          eventCollections: (updateData.eventCollections || []) as Prisma.InputJsonValue,
-          timeCollections: (updateData.timeCollections || []) as Prisma.InputJsonValue,
-          relations: (updateData.relations || []) as Prisma.InputJsonValue
+          entities: toJson(updateData.entities || []),
+          events: toJson(updateData.events || []),
+          times: toJson(updateData.times || []),
+          entityCollections: toJson(updateData.entityCollections || []),
+          eventCollections: toJson(updateData.eventCollections || []),
+          timeCollections: toJson(updateData.timeCollections || []),
+          relations: toJson(updateData.relations || [])
         }
       })
     }

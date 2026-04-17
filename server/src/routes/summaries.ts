@@ -20,6 +20,13 @@ import { buildAbilities } from '../middleware/abilities.js'
 /**
  * Job data for video summarization queue.
  */
+/** Type guard for BullMQ job.data payloads from the summarization queue. */
+function isSummarizeJobData(data: unknown): data is SummarizeJobData {
+  if (typeof data !== 'object' || data === null) return false
+  return 'videoId' in data && typeof data.videoId === 'string' &&
+         'personaId' in data && typeof data.personaId === 'string'
+}
+
 interface SummarizeJobData {
   videoId: string;
   personaId: string;
@@ -285,7 +292,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       )
 
       return reply.status(202).send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status: 'queued',
         videoId,
         personaId,
@@ -332,8 +339,9 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
       // Authorize against the summary targeted by this job. Fall back to
       // the job payload if the id format is unexpected.
-      const targetVideoId = (job.data as SummarizeJobData | undefined)?.videoId
-      const targetPersonaId = (job.data as SummarizeJobData | undefined)?.personaId
+      const jobData = isSummarizeJobData(job.data) ? job.data : null
+      const targetVideoId = jobData?.videoId
+      const targetPersonaId = jobData?.personaId
       if (targetVideoId && targetPersonaId) {
         const existing = await fastify.prisma.videoSummary.findUnique({
           where: { videoId_personaId: { videoId: targetVideoId, personaId: targetPersonaId } },
@@ -344,7 +352,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const state = await job.getState()
-      const progress = job.progress as number | null
+      const progress = typeof job.progress === 'number' ? job.progress : null
 
       let result = null
       let error = null
@@ -356,7 +364,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send({
-        jobId: job.id as string,
+        jobId: job.id ?? '',
         status: state,
         progress,
         result,

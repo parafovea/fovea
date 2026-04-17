@@ -205,9 +205,9 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
 
     // Get world state counts for headers
     const worldCounts = worldState ? {
-      entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
-      events: Array.isArray(worldState.events) ? (worldState.events as unknown[]).length : 0,
-      times: Array.isArray(worldState.times) ? (worldState.times as unknown[]).length : 0,
+      entities: Array.isArray(worldState.entities) ? worldState.entities.length : 0,
+      events: Array.isArray(worldState.events) ? worldState.events.length : 0,
+      times: Array.isArray(worldState.times) ? worldState.times.length : 0,
     } : { entities: 0, events: 0, times: 0 }
 
     // Set headers with export stats
@@ -337,10 +337,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     let roleTypeCount = 0
     let relationTypeCount = 0
     for (const ontology of ontologies) {
-      entityTypeCount += Array.isArray(ontology.entityTypes) ? (ontology.entityTypes as unknown[]).length : 0
-      eventTypeCount += Array.isArray(ontology.eventTypes) ? (ontology.eventTypes as unknown[]).length : 0
-      roleTypeCount += Array.isArray(ontology.roleTypes) ? (ontology.roleTypes as unknown[]).length : 0
-      relationTypeCount += Array.isArray(ontology.relationTypes) ? (ontology.relationTypes as unknown[]).length : 0
+      entityTypeCount += Array.isArray(ontology.entityTypes) ? ontology.entityTypes.length : 0
+      eventTypeCount += Array.isArray(ontology.eventTypes) ? ontology.eventTypes.length : 0
+      roleTypeCount += Array.isArray(ontology.roleTypes) ? ontology.roleTypes.length : 0
+      relationTypeCount += Array.isArray(ontology.relationTypes) ? ontology.relationTypes.length : 0
     }
 
     // 2. Count world state objects
@@ -353,13 +353,13 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       },
     })
     const worldCounts = worldState ? {
-      entities: Array.isArray(worldState.entities) ? (worldState.entities as unknown[]).length : 0,
-      events: Array.isArray(worldState.events) ? (worldState.events as unknown[]).length : 0,
-      times: Array.isArray(worldState.times) ? (worldState.times as unknown[]).length : 0,
-      entityCollections: Array.isArray(worldState.entityCollections) ? (worldState.entityCollections as unknown[]).length : 0,
-      eventCollections: Array.isArray(worldState.eventCollections) ? (worldState.eventCollections as unknown[]).length : 0,
-      timeCollections: Array.isArray(worldState.timeCollections) ? (worldState.timeCollections as unknown[]).length : 0,
-      relations: Array.isArray(worldState.relations) ? (worldState.relations as unknown[]).length : 0,
+      entities: Array.isArray(worldState.entities) ? worldState.entities.length : 0,
+      events: Array.isArray(worldState.events) ? worldState.events.length : 0,
+      times: Array.isArray(worldState.times) ? worldState.times.length : 0,
+      entityCollections: Array.isArray(worldState.entityCollections) ? worldState.entityCollections.length : 0,
+      eventCollections: Array.isArray(worldState.eventCollections) ? worldState.eventCollections.length : 0,
+      timeCollections: Array.isArray(worldState.timeCollections) ? worldState.timeCollections.length : 0,
+      relations: Array.isArray(worldState.relations) ? worldState.relations.length : 0,
     } : { entities: 0, events: 0, times: 0, entityCollections: 0, eventCollections: 0, timeCollections: 0, relations: 0 }
 
     // 3. Count summaries and claims (scoped to user's personas)

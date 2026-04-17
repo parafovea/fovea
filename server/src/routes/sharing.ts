@@ -11,6 +11,11 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma, PrismaClient } from '@prisma/client'
+
+/** Convert a value to Prisma JSON without type assertions. */
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'
 import { sharingOperationCounter } from '../metrics.js'
@@ -675,7 +680,7 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 personaId: source.personaId,
                 type: source.type,
                 label: source.label,
-                frames: source.frames as Prisma.InputJsonValue,
+                frames: toJson(source.frames),
                 confidence: source.confidence,
                 source: source.source,
                 createdByUserId: userId,
@@ -694,15 +699,15 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
               data: {
                 videoId: source.videoId,
                 personaId: source.personaId,
-                summary: (source.summary ?? []) as Prisma.InputJsonValue,
+                summary: toJson(source.summary ?? []),
                 visualAnalysis: source.visualAnalysis,
                 audioTranscript: source.audioTranscript,
                 keyFrames: source.keyFrames
-                  ? (source.keyFrames as Prisma.InputJsonValue)
+                  ? toJson(source.keyFrames)
                   : Prisma.JsonNull,
                 confidence: source.confidence,
                 transcriptJson: source.transcriptJson
-                  ? (source.transcriptJson as Prisma.InputJsonValue)
+                  ? toJson(source.transcriptJson)
                   : Prisma.JsonNull,
                 audioLanguage: source.audioLanguage,
                 speakerCount: source.speakerCount,
@@ -724,16 +729,16 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 summaryId: source.summaryId,
                 summaryType: source.summaryType,
                 text: source.text,
-                gloss: source.gloss as Prisma.InputJsonValue,
+                gloss: toJson(source.gloss),
                 textSpans: source.textSpans
-                  ? (source.textSpans as Prisma.InputJsonValue)
+                  ? toJson(source.textSpans)
                   : Prisma.JsonNull,
                 claimerType: source.claimerType,
                 claimerGloss: source.claimerGloss
-                  ? (source.claimerGloss as Prisma.InputJsonValue)
+                  ? toJson(source.claimerGloss)
                   : Prisma.JsonNull,
                 claimRelation: source.claimRelation
-                  ? (source.claimRelation as Prisma.InputJsonValue)
+                  ? toJson(source.claimRelation)
                   : Prisma.JsonNull,
                 claimEventId: source.claimEventId,
                 claimTimeId: source.claimTimeId,
@@ -741,13 +746,13 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 confidence: source.confidence,
                 extractionStrategy: source.extractionStrategy,
                 audio: source.audio
-                  ? (source.audio as Prisma.InputJsonValue)
+                  ? toJson(source.audio)
                   : Prisma.JsonNull,
                 video: source.video
-                  ? (source.video as Prisma.InputJsonValue)
+                  ? toJson(source.video)
                   : Prisma.JsonNull,
                 metadata: source.metadata
-                  ? (source.metadata as Prisma.InputJsonValue)
+                  ? (toJson(source.metadata))
                   : Prisma.JsonNull,
                 comment: source.comment,
                 createdBy: userId,
@@ -775,10 +780,10 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 ontology: source.ontology
                   ? {
                       create: {
-                        entityTypes: source.ontology.entityTypes as Prisma.InputJsonValue,
-                        eventTypes: source.ontology.eventTypes as Prisma.InputJsonValue,
-                        roleTypes: source.ontology.roleTypes as Prisma.InputJsonValue,
-                        relationTypes: source.ontology.relationTypes as Prisma.InputJsonValue,
+                        entityTypes: toJson(source.ontology.entityTypes),
+                        eventTypes: toJson(source.ontology.eventTypes),
+                        roleTypes: toJson(source.ontology.roleTypes),
+                        relationTypes: toJson(source.ontology.relationTypes),
                       },
                     }
                   : {
@@ -804,13 +809,13 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             return tx.worldState.create({
               data: {
                 userId,
-                entities: source.entities as Prisma.InputJsonValue,
-                events: source.events as Prisma.InputJsonValue,
-                times: source.times as Prisma.InputJsonValue,
-                entityCollections: source.entityCollections as Prisma.InputJsonValue,
-                eventCollections: source.eventCollections as Prisma.InputJsonValue,
-                timeCollections: source.timeCollections as Prisma.InputJsonValue,
-                relations: source.relations as Prisma.InputJsonValue,
+                entities: toJson(source.entities),
+                events: toJson(source.events),
+                times: toJson(source.times),
+                entityCollections: toJson(source.entityCollections),
+                eventCollections: toJson(source.eventCollections),
+                timeCollections: toJson(source.timeCollections),
+                relations: toJson(source.relations),
               },
             })
           }

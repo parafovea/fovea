@@ -106,7 +106,12 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const fileContent = fileBuffer.toString('utf-8')
 
       // Parse options from fields
-      const fields = data.fields as Record<string, { value: string }>
+      const fields: Record<string, { value: string }> = {}
+      for (const [key, field] of Object.entries(data.fields)) {
+        if (typeof field === 'object' && field !== null && 'value' in field && typeof field.value === 'string') {
+          fields[key] = { value: field.value }
+        }
+      }
       let options: ImportOptions = { ...DEFAULT_IMPORT_OPTIONS }
 
       if (fields.options) {
