@@ -1,10 +1,8 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { Prisma, type WorldState as PrismaWorldState } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
-import type { PureAbility } from '@casl/ability'
-import type { PrismaQuery } from '@casl/prisma'
-import type { WorldState as PrismaWorldState } from '@prisma/client'
 import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import type { AppAbility } from '../lib/abilities.js'
@@ -23,13 +21,12 @@ import {
 } from '@lib/prisma-json.js'
 
 /**
- * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
- * two libraries have different generic constraints that cannot be unified
- * without a cast; runtime behaviour is identical because both operate on
- * the same rule array.
+ * Converts a typed array to Prisma.InputJsonValue for storage in JSON columns.
+ * Prisma JSON columns accept any serializable value at runtime; this function
+ * bridges the TypeScript gap without an unsafe cast.
  */
-function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
-  return ability as unknown as PureAbility<[string, string], PrismaQuery>
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue
 }
 
 /**
@@ -132,7 +129,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       }
     } else {
       if (request.ability) {
-        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        const candidate = subject('WorldState', { userId, projectId: null })
         if (!request.ability.can('create', candidate)) {
           throw new ForbiddenError('Cannot create this WorldState')
         }
@@ -246,25 +243,18 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       worldState = await fastify.prisma.worldState.update({
         where: { id: existing.id },
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          entities: updateData.entities !== undefined ? (updateData.entities as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          events: updateData.events !== undefined ? (updateData.events as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          times: updateData.times !== undefined ? (updateData.times as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as any) : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          relations: updateData.relations !== undefined ? (updateData.relations as any) : undefined
+          entities: updateData.entities !== undefined ? (updateData.entities as Prisma.InputJsonValue) : undefined,
+          events: updateData.events !== undefined ? (updateData.events as Prisma.InputJsonValue) : undefined,
+          times: updateData.times !== undefined ? (updateData.times as Prisma.InputJsonValue) : undefined,
+          entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as Prisma.InputJsonValue) : undefined,
+          eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as Prisma.InputJsonValue) : undefined,
+          timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as Prisma.InputJsonValue) : undefined,
+          relations: updateData.relations !== undefined ? (updateData.relations as Prisma.InputJsonValue) : undefined
         }
       })
     } else {
       if (request.ability) {
-        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        const candidate = subject('WorldState', { userId, projectId: null })
         if (!request.ability.can('create', candidate)) {
           throw new ForbiddenError('Cannot create this WorldState')
         }
@@ -272,20 +262,13 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       worldState = await fastify.prisma.worldState.create({
         data: {
           userId,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          entities: (updateData.entities || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          events: (updateData.events || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          times: (updateData.times || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          entityCollections: (updateData.entityCollections || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          eventCollections: (updateData.eventCollections || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          timeCollections: (updateData.timeCollections || []) as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          relations: (updateData.relations || []) as any
+          entities: (updateData.entities || []) as Prisma.InputJsonValue,
+          events: (updateData.events || []) as Prisma.InputJsonValue,
+          times: (updateData.times || []) as Prisma.InputJsonValue,
+          entityCollections: (updateData.entityCollections || []) as Prisma.InputJsonValue,
+          eventCollections: (updateData.eventCollections || []) as Prisma.InputJsonValue,
+          timeCollections: (updateData.timeCollections || []) as Prisma.InputJsonValue,
+          relations: (updateData.relations || []) as Prisma.InputJsonValue
         }
       })
     }
@@ -367,7 +350,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       })
     } else {
       if (request.ability) {
-        const candidate = subject('WorldState', { userId, projectId: null } as unknown as PrismaWorldState)
+        const candidate = subject('WorldState', { userId, projectId: null })
         if (!request.ability.can('create', candidate)) {
           throw new ForbiddenError('Cannot create this WorldState')
         }
@@ -428,7 +411,7 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
           where: {
             AND: [
               { userId, projectId: null },
-              accessibleBy(prismaAbility(ability), 'read').WorldState,
+              accessibleBy(ability, 'read').WorldState,
             ],
           },
         })
@@ -633,12 +616,9 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.worldState.update({
         where: { id: worldState.id },
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          entities: updatedEntities as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          relations: updatedRelations as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          entityCollections: updatedEntityCollections as any
+          entities: toJson(updatedEntities),
+          relations: toJson(updatedRelations),
+          entityCollections: toJson(updatedEntityCollections)
         }
       })
 
@@ -685,14 +665,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.ontology.update({
           where: { personaId: persona.id },
           data: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            entityTypes: cleanedEntityTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            roleTypes: cleanedRoleTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            eventTypes: cleanedEventTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            relationTypes: cleanedRelationTypes as any
+            entityTypes: toJson(cleanedEntityTypes),
+            roleTypes: toJson(cleanedRoleTypes),
+            eventTypes: toJson(cleanedEventTypes),
+            relationTypes: toJson(cleanedRelationTypes)
           }
         })
       }
@@ -868,12 +844,9 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.worldState.update({
         where: { id: worldState.id },
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          events: updatedEvents as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          relations: updatedRelations as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          eventCollections: updatedEventCollections as any
+          events: toJson(updatedEvents),
+          relations: toJson(updatedRelations),
+          eventCollections: toJson(updatedEventCollections)
         }
       })
 
@@ -917,14 +890,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.ontology.update({
           where: { personaId: persona.id },
           data: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            entityTypes: cleanedEntityTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            roleTypes: cleanedRoleTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            eventTypes: cleanedEventTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            relationTypes: cleanedRelationTypes as any
+            entityTypes: toJson(cleanedEntityTypes),
+            roleTypes: toJson(cleanedRoleTypes),
+            eventTypes: toJson(cleanedEventTypes),
+            relationTypes: toJson(cleanedRelationTypes)
           }
         })
       }
@@ -1101,12 +1070,9 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.worldState.update({
         where: { id: worldState.id },
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          times: updatedTimes as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          relations: updatedRelations as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          timeCollections: updatedTimeCollections as any
+          times: toJson(updatedTimes),
+          relations: toJson(updatedRelations),
+          timeCollections: toJson(updatedTimeCollections)
         }
       })
 
@@ -1150,14 +1116,10 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.ontology.update({
           where: { personaId: persona.id },
           data: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            entityTypes: cleanedEntityTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            roleTypes: cleanedRoleTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            eventTypes: cleanedEventTypes as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            relationTypes: cleanedRelationTypes as any
+            entityTypes: toJson(cleanedEntityTypes),
+            roleTypes: toJson(cleanedRoleTypes),
+            eventTypes: toJson(cleanedEventTypes),
+            relationTypes: toJson(cleanedRelationTypes)
           }
         })
       }

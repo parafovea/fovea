@@ -5,46 +5,25 @@
  * assignments. System admins receive full access; all other users receive
  * permissions based on their system, group, and project roles.
  *
+ * Uses PrismaAbility from @casl/prisma so the ability type is natively
+ * compatible with accessibleBy() — no cast required at call sites.
+ *
  * @module
  */
 
-import {
-  createMongoAbility,
-  MongoAbility,
-  RawRuleFrom,
-  InferSubjects,
-} from '@casl/ability'
-import type { MongoQuery, ForcedSubject } from '@casl/ability'
-import type {
-  Annotation as PrismaAnnotation,
-  Claim as PrismaClaim,
-  Persona as PrismaPersona,
-  WorldState as PrismaWorldState,
-  Video as PrismaVideo,
-  VideoSummary as PrismaVideoSummary,
-  Project as PrismaProject,
-  UserGroup as PrismaUserGroup,
-  User as PrismaUser,
-} from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { createPrismaAbility } from '@casl/prisma'
+import type { ForcedSubject, PureAbility, RawRuleFrom } from '@casl/ability'
+import type { PrismaQuery } from '@casl/prisma'
 
 /**
- * Resource subjects as Prisma row types branded with ForcedSubject so a
- * plain record wrapped in `subject('Name', row)` carries its CASL type
- * tag. `InferSubjects` lifts these into the string-or-object union CASL
- * expects in `can()` calls and rule definitions.
+ * Narrow string-only form of subjects, used in rule definitions and
+ * class-level authorize() checks. Must match Prisma.ModelName values
+ * exactly so accessibleBy() can resolve them to Prisma WHERE clauses.
  */
-type ResourceSubject =
-  | (PrismaAnnotation & ForcedSubject<'Annotation'>)
-  | (PrismaClaim & ForcedSubject<'Claim'>)
-  | (PrismaPersona & ForcedSubject<'Persona'>)
-  | (PrismaWorldState & ForcedSubject<'WorldState'>)
-  | (PrismaVideo & ForcedSubject<'Video'>)
-  | (PrismaVideoSummary & ForcedSubject<'VideoSummary'>)
-  | (PrismaProject & ForcedSubject<'Project'>)
-  | (PrismaUserGroup & ForcedSubject<'UserGroup'>)
-  | (PrismaUser & ForcedSubject<'User'>)
-
-export type Subjects = InferSubjects<ResourceSubject> | 'all'
+export type SubjectName =
+  | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
+  | 'VideoSummary' | 'Project' | 'UserGroup' | 'User'
 
 /**
  * All actions that can be performed on resources.
@@ -63,19 +42,24 @@ export type Actions =
   | 'review'
   | 'manage'
 
-/** CASL ability type parameterized with Fovea actions and subjects. */
-export type AppAbility = MongoAbility<[Actions, Subjects]>
+/**
+ * Subject type for CASL abilities. Includes both string model names (for
+ * accessibleBy) and ForcedSubject-tagged objects (for subject() helper).
+ */
+type Subjects =
+  | Prisma.ModelName
+  | 'all'
+  | ForcedSubject<Prisma.ModelName>
 
 /**
- * A raw CASL rule for AppAbility using the unparameterized MongoQuery.
- *
- * CASL's AbilityBuilder.can() with string-only subjects resolves conditions
- * to MongoQuery<never>, which rejects all condition objects. By using the
- * base MongoQuery (equivalent to MongoQuery<AnyObject>) as the conditions
- * type, we can construct rules with MongoDB-style conditions while keeping
- * action and subject strictly typed.
+ * CASL ability parameterized with Fovea actions and Prisma model names.
+ * Uses PureAbility with PrismaQuery conditions so the type works with both
+ * accessibleBy() and subject()-tagged objects passed to can().
  */
-type AppRule = RawRuleFrom<[Actions, SubjectName], MongoQuery>
+export type AppAbility = PureAbility<[Actions, Subjects], PrismaQuery>
+
+/** Raw rule shape for building ability rule arrays. */
+type AppRule = RawRuleFrom<[Actions, Subjects], PrismaQuery>
 
 /** Aggregated role information for a single user across all scopes. */
 export interface UserRoles {
@@ -108,11 +92,6 @@ export interface RolePermissionRow {
  * System admins bypass all permission checks via `can('manage', 'all')`.
  * Other users receive permissions by matching their role assignments against
  * the RolePermission rows.
- *
- * @param userId - UUID of the authenticated user
- * @param roles - aggregated role assignments for the user
- * @param permissions - complete list of RolePermission rows
- * @returns CASL ability instance for authorization checks
  */
 export function defineAbilitiesFor(
   userId: string,
@@ -124,47 +103,44 @@ export function defineAbilitiesFor(
   // System admin gets full access
   if (roles.systemRole === 'system_admin') {
     rules.push({ action: 'manage', subject: 'all' })
-    return createMongoAbility<[Actions, Subjects], MongoQuery>(rules)
+    return createPrismaAbility(rules)
   }
 
   // Apply permissions based on role hierarchy
   for (const perm of permissions) {
-    const subject = mapResourceTypeToSubject(perm.resourceType)
-    if (!subject) continue
+    const modelName = mapResourceTypeToModelName(perm.resourceType)
+    if (!modelName) continue
 
     const action = perm.action as Actions
 
     if (perm.scope === 'system') {
-      // System-level permissions apply globally
       if (perm.ownOnly) {
-        rules.push({ action, subject, conditions: { createdByUserId: userId } })
+        rules.push({ action, subject: modelName, conditions: { createdByUserId: userId } })
       } else {
-        rules.push({ action, subject })
+        rules.push({ action, subject: modelName })
       }
     } else if (perm.scope === 'project') {
-      // Check if user has this role in any project
       const matchingProjects = roles.projectRoles
         .filter(pr => pr.role === perm.role)
         .map(pr => pr.projectId)
 
       if (matchingProjects.length > 0) {
         if (perm.ownOnly) {
-          rules.push({ action, subject, conditions: { projectId: { $in: matchingProjects }, createdByUserId: userId } })
+          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects }, createdByUserId: userId } })
         } else {
-          rules.push({ action, subject, conditions: { projectId: { $in: matchingProjects } } })
+          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects } } })
         }
       }
     } else if (perm.scope === 'group') {
-      // Group-level permissions apply when user holds this role in any group
       const matchingGroups = roles.groupRoles
         .filter(gr => gr.role === perm.role)
         .map(gr => gr.groupId)
 
       if (matchingGroups.length > 0) {
         if (perm.ownOnly) {
-          rules.push({ action, subject, conditions: { createdByUserId: userId } })
+          rules.push({ action, subject: modelName, conditions: { createdByUserId: userId } })
         } else {
-          rules.push({ action, subject })
+          rules.push({ action, subject: modelName })
         }
       }
     }
@@ -184,26 +160,15 @@ export function defineAbilitiesFor(
   // All authenticated users can read videos (filtered by VideoAccessService)
   rules.push({ action: 'read', subject: 'Video' })
 
-  return createMongoAbility<[Actions, Subjects], MongoQuery>(rules)
+  return createPrismaAbility(rules)
 }
 
 /**
- * Maps a RolePermission resourceType string to the corresponding CASL subject.
- *
- * @param resourceType - snake_case resource type from the database
- * @returns PascalCase CASL subject name, or null if unmapped
+ * Maps a RolePermission resourceType string to the corresponding Prisma
+ * model name. Returns null for unmapped types.
  */
-/**
- * Narrow string-only form of Subjects, used when pushing rules (CASL
- * rules' `subject` field accepts only the PascalCase name or 'all', not
- * a branded record type).
- */
-export type SubjectName =
-  | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
-  | 'VideoSummary' | 'Project' | 'UserGroup' | 'User' | 'all'
-
-function mapResourceTypeToSubject(resourceType: string): SubjectName | null {
-  const map: Record<string, SubjectName> = {
+function mapResourceTypeToModelName(resourceType: string): Prisma.ModelName | null {
+  const map: Record<string, Prisma.ModelName> = {
     annotation: 'Annotation',
     claim: 'Claim',
     persona: 'Persona',
@@ -220,9 +185,6 @@ function mapResourceTypeToSubject(resourceType: string): SubjectName | null {
 /**
  * Serializes a CASL ability instance to a plain array of rules suitable for
  * transmission to the frontend.
- *
- * @param ability - CASL ability instance to serialize
- * @returns array of raw CASL rule objects
  */
 export function serializeAbilities(ability: AppAbility): object[] {
   return ability.rules

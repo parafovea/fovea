@@ -1,24 +1,11 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { Prisma, Annotation as PrismaAnnotation } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
-import type { PureAbility } from '@casl/ability'
-import type { PrismaQuery } from '@casl/prisma'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import type { AppAbility } from '../lib/abilities.js'
-
-/**
- * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
- * two libraries have different generic constraints that cannot be unified
- * without a cast; runtime behaviour is identical because both operate on
- * the same rule array.
- */
-function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
-  return ability as unknown as PureAbility<[string, string], PrismaQuery>
-}
 
 /**
  * TypeBox schema for Annotation response.
@@ -70,7 +57,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { videoId },
-          accessibleBy(prismaAbility(request.ability), 'read').Annotation,
+          accessibleBy(request.ability, 'read').Annotation,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -145,7 +132,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const candidate = subject('Annotation', {
       projectId,
       createdByUserId: userId,
-    } as unknown as PrismaAnnotation)
+    })
     if (!request.ability.can('create', candidate)) {
       throw new ForbiddenError('Cannot create Annotation in this scope')
     }

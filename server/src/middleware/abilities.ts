@@ -19,13 +19,13 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { trace } from '@opentelemetry/api'
 
+import { Prisma } from '@prisma/client'
 import {
   defineAbilitiesFor,
   UserRoles,
   RolePermissionRow,
-  AppAbility,
 } from '../lib/abilities.js'
-import type { Actions, SubjectName } from '../lib/abilities.js'
+import type { Actions, AppAbility } from '../lib/abilities.js'
 import { prisma } from '../lib/prisma.js'
 import { rbacCheckCounter, rbacCheckDuration } from '../metrics.js'
 
@@ -195,7 +195,7 @@ export async function buildAbilities(
  * }, handler)
  * ```
  */
-export function authorize(action: Actions, subject: SubjectName) {
+export function authorize(action: Actions, subject: Prisma.ModelName | 'all') {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const start = Date.now()
     const span = tracer.startSpan('rbac.authorize')

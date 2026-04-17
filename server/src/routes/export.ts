@@ -1,20 +1,10 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { accessibleBy } from '@casl/prisma'
-import type { PureAbility } from '@casl/ability'
-import type { PrismaQuery } from '@casl/prisma'
 import { AnnotationExporter } from '../services/export-handler.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import type { AppAbility } from '../lib/abilities.js'
 import { ForbiddenError } from '../lib/errors.js'
-
-/**
- * Cast AppAbility to the shape @casl/prisma expects for accessibleBy.
- */
-function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
-  return ability as unknown as PureAbility<[string, string], PrismaQuery>
-}
 
 /**
  * Fastify plugin for export-related routes.
@@ -90,7 +80,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').Persona,
+          accessibleBy(ability, 'read').Persona,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -109,7 +99,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').WorldState,
+          accessibleBy(ability, 'read').WorldState,
         ],
       },
     })
@@ -125,7 +115,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { personaId: { in: userPersonaIds } },
-          accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+          accessibleBy(ability, 'read').VideoSummary,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -135,7 +125,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { summaryId: { in: summaryIds } },
-          accessibleBy(prismaAbility(ability), 'read').Claim,
+          accessibleBy(ability, 'read').Claim,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -175,7 +165,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           annotationWhere,
-          accessibleBy(prismaAbility(ability), 'read').Annotation,
+          accessibleBy(ability, 'read').Annotation,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -329,7 +319,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').Persona,
+          accessibleBy(ability, 'read').Persona,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -358,7 +348,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').WorldState,
+          accessibleBy(ability, 'read').WorldState,
         ],
       },
     })
@@ -376,7 +366,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     const summaryWhere = {
       AND: [
         { personaId: { in: userPersonaIds } },
-        accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+        accessibleBy(ability, 'read').VideoSummary,
       ],
     }
     const summaryCount = await fastify.prisma.videoSummary.count({ where: summaryWhere })
@@ -388,7 +378,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     const claimWhere = {
       AND: [
         { summaryId: { in: userSummaryIds } },
-        accessibleBy(prismaAbility(ability), 'read').Claim,
+        accessibleBy(ability, 'read').Claim,
       ],
     }
     const claimCount = await fastify.prisma.claim.count({ where: claimWhere })
@@ -427,7 +417,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           annotationWhere,
-          accessibleBy(prismaAbility(ability), 'read').Annotation,
+          accessibleBy(ability, 'read').Annotation,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -546,7 +536,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').Persona,
+          accessibleBy(ability, 'read').Persona,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -612,7 +602,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { userId: request.user!.id },
-          accessibleBy(prismaAbility(ability), 'read').WorldState,
+          accessibleBy(ability, 'read').WorldState,
         ],
       },
     })
@@ -720,7 +710,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           where,
-          accessibleBy(prismaAbility(ability), 'read').VideoSummary,
+          accessibleBy(ability, 'read').VideoSummary,
         ],
       },
       orderBy: { createdAt: 'asc' }
@@ -732,7 +722,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: {
         AND: [
           { summaryId: { in: summaryIds } },
-          accessibleBy(prismaAbility(ability), 'read').Claim,
+          accessibleBy(ability, 'read').Claim,
         ],
       },
       orderBy: { createdAt: 'asc' }

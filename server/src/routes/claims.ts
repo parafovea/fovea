@@ -10,9 +10,6 @@ import { FastifyPluginAsync } from 'fastify'
 import { PrismaClient, Prisma } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
-import type { PureAbility } from '@casl/ability'
-import type { PrismaQuery } from '@casl/prisma'
-import type { Claim as PrismaClaim } from '@prisma/client'
 import {
   claimExtractionQueue,
   ClaimExtractionJobData,
@@ -22,17 +19,6 @@ import {
 import { NotFoundError, ValidationError, ForbiddenError, ErrorResponseSchema } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import type { AppAbility } from '../lib/abilities.js'
-
-/**
- * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
- * two libraries have different generic constraints that cannot be unified
- * without a cast; runtime behaviour is identical because both operate on
- * the same rule array.
- */
-function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
-  return ability as unknown as PureAbility<[string, string], PrismaQuery>
-}
 
 /**
  * Gloss item schema
@@ -369,7 +355,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
               parentClaimId: null,
               ...(minConfidence && { confidence: { gte: minConfidence } })
             },
-            accessibleBy(prismaAbility(request.ability), 'read').Claim,
+            accessibleBy(request.ability, 'read').Claim,
           ],
         },
         include: includeConfig,
@@ -494,7 +480,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const candidate = subject('Claim', {
         projectId: summary.projectId,
         createdBy: userId,
-      } as unknown as PrismaClaim)
+      })
       if (!request.ability.can('create', candidate)) {
         throw new ForbiddenError('Cannot create this Claim')
       }
@@ -1194,10 +1180,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       // Validate relationTypeId against ontology
       if (summary.persona.ontology) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        const relationTypes = summary.persona.ontology.relationTypes as any[]
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-        const relationType = relationTypes.find((rt: any) => rt.id === relationTypeId)
+        const relationTypes = summary.persona.ontology.relationTypes as Array<Record<string, unknown>>
+        const relationType = relationTypes.find((rt) => rt.id === relationTypeId)
 
         if (!relationType) {
           throw new ValidationError(`Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`)
@@ -1278,7 +1262,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       // Filter relations to those whose OTHER endpoint claim is also
       // readable; otherwise we'd leak existence of claims the caller can't
       // see via relation payloads.
-      const accessibleClaims = accessibleBy(prismaAbility(request.ability), 'read').Claim
+      const accessibleClaims = accessibleBy(request.ability, 'read').Claim
 
       const asSource = await fastify.prisma.claimRelation.findMany({
         where: {
@@ -1445,7 +1429,7 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const candidate = subject('Claim', {
         projectId: persona.projectId,
         createdBy: userId,
-      } as unknown as PrismaClaim)
+      })
       if (!request.ability.can('create', candidate)) {
         throw new ForbiddenError('Cannot create this Claim')
       }

@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, Annotation as PrismaAnnotation } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { subject } from '@casl/ability'
 import { NotFoundError, ValidationError } from '../lib/errors.js'
@@ -121,12 +121,7 @@ export class ImportHandler {
     candidate: Record<string, unknown>
   ): boolean {
     if (!this.ability) return true
-    // CASL's `subject()` helper wraps the record with a `__caslSubjectType__`
-    // branded string; we drop into an unknown cast because Subjects is a
-    // discriminated union and each branch wants its own Prisma row type,
-    // which TypeScript cannot narrow from the runtime string argument.
-    const tagged = subject(subjectName, candidate as unknown as PrismaAnnotation) as unknown
-    return this.ability.can('create', tagged as Parameters<AppAbility['can']>[1])
+    return this.ability.can('create', subject(subjectName, candidate))
   }
 
   /**
@@ -910,7 +905,11 @@ export class ImportHandler {
    */
   private remapObjectIds(obj: unknown, idMap: Map<string, string>): ImportLine['data'] {
     if (Array.isArray(obj)) {
-      return obj.map(item => this.remapObjectIds(item, idMap)) as unknown as ImportLine['data']
+      // Array branches are only reached for nested values (not top-level data).
+      // The index signature [key: string]: unknown on ImportLine['data'] accepts
+      // the array at runtime; bridge the type gap via unknown.
+      const mapped: unknown = obj.map(item => this.remapObjectIds(item, idMap))
+      return mapped as ImportLine['data']
     } else if (obj && typeof obj === 'object') {
       const remapped: ImportLine['data'] = {}
       // GlossItem references store the target ID in `content` rather than a
@@ -1000,20 +999,16 @@ export class ImportHandler {
     const ownedTimeIds = new Set<string>()
     const ownedCollectionIds = new Set<string>()
     if (userWorldState) {
-      const uws = userWorldState as unknown as {
-        entities?: Prisma.JsonValue; events?: Prisma.JsonValue; times?: Prisma.JsonValue
-        entityCollections?: Prisma.JsonValue; eventCollections?: Prisma.JsonValue; timeCollections?: Prisma.JsonValue
-      }
-      for (const entity of (Array.isArray(uws.entities) ? uws.entities : [])) {
+      for (const entity of (Array.isArray(userWorldState.entities) ? userWorldState.entities : [])) {
         if (entity && typeof entity === 'object' && 'id' in entity) ownedEntityIds.add(entity.id as string)
       }
-      for (const event of (Array.isArray(uws.events) ? uws.events : [])) {
+      for (const event of (Array.isArray(userWorldState.events) ? userWorldState.events : [])) {
         if (event && typeof event === 'object' && 'id' in event) ownedEventIds.add(event.id as string)
       }
-      for (const time of (Array.isArray(uws.times) ? uws.times : [])) {
+      for (const time of (Array.isArray(userWorldState.times) ? userWorldState.times : [])) {
         if (time && typeof time === 'object' && 'id' in time) ownedTimeIds.add(time.id as string)
       }
-      for (const arr of [uws.entityCollections, uws.eventCollections, uws.timeCollections]) {
+      for (const arr of [userWorldState.entityCollections, userWorldState.eventCollections, userWorldState.timeCollections]) {
         if (Array.isArray(arr)) {
           for (const col of arr) {
             if (col && typeof col === 'object' && 'id' in col) ownedCollectionIds.add(col.id as string)
@@ -1048,37 +1043,28 @@ export class ImportHandler {
 
     // Extract IDs from ALL world states for global conflict detection
     for (const worldState of allWorldStates) {
-      const ws = worldState as unknown as {
-        entities?: Prisma.JsonValue
-        events?: Prisma.JsonValue
-        times?: Prisma.JsonValue
-        entityCollections?: Prisma.JsonValue
-        eventCollections?: Prisma.JsonValue
-        timeCollections?: Prisma.JsonValue
-      }
-
-      if (Array.isArray(ws.entities)) {
-        for (const entity of ws.entities) {
+      if (Array.isArray(worldState.entities)) {
+        for (const entity of worldState.entities) {
           if (entity && typeof entity === 'object' && 'id' in entity) {
             existingData.entityIds.add(entity.id as string)
           }
         }
       }
-      if (Array.isArray(ws.events)) {
-        for (const event of ws.events) {
+      if (Array.isArray(worldState.events)) {
+        for (const event of worldState.events) {
           if (event && typeof event === 'object' && 'id' in event) {
             existingData.eventIds.add(event.id as string)
           }
         }
       }
-      if (Array.isArray(ws.times)) {
-        for (const time of ws.times) {
+      if (Array.isArray(worldState.times)) {
+        for (const time of worldState.times) {
           if (time && typeof time === 'object' && 'id' in time) {
             existingData.timeIds.add(time.id as string)
           }
         }
       }
-      for (const collectionArray of [ws.entityCollections, ws.eventCollections, ws.timeCollections]) {
+      for (const collectionArray of [worldState.entityCollections, worldState.eventCollections, worldState.timeCollections]) {
         if (Array.isArray(collectionArray)) {
           for (const collection of collectionArray) {
             if (collection && typeof collection === 'object' && 'id' in collection) {

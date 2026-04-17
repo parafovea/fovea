@@ -12,24 +12,10 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
-import type { PureAbility } from '@casl/ability'
-import type { PrismaQuery } from '@casl/prisma'
-import type { VideoSummary as PrismaVideoSummary } from '@prisma/client'
 import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import type { AppAbility } from '../lib/abilities.js'
-
-/**
- * Cast AppAbility to the shape @casl/prisma expects for accessibleBy. The
- * two libraries have different generic constraints that cannot be unified
- * without a cast; runtime behaviour is identical because both operate on
- * the same rule array.
- */
-function prismaAbility(ability: AppAbility): PureAbility<[string, string], PrismaQuery> {
-  return ability as unknown as PureAbility<[string, string], PrismaQuery>
-}
 
 /**
  * Job data for video summarization queue.
@@ -148,7 +134,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         where: {
           AND: [
             { videoId: request.params.videoId },
-            accessibleBy(prismaAbility(request.ability), 'read').VideoSummary,
+            accessibleBy(request.ability, 'read').VideoSummary,
           ],
         },
       })
@@ -256,7 +242,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const candidate = subject('VideoSummary', {
         projectId: persona.projectId,
         createdBy: userId,
-      } as unknown as PrismaVideoSummary)
+      })
       if (!request.ability.can('update', candidate)) {
         throw new ForbiddenError('Cannot update this VideoSummary')
       }
@@ -464,7 +450,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         const candidate = subject('VideoSummary', {
           projectId: persona.projectId,
           createdBy: userId,
-        } as unknown as PrismaVideoSummary)
+        })
         if (!request.ability.can('create', candidate)) {
           throw new ForbiddenError('Cannot create this VideoSummary')
         }

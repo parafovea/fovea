@@ -8,6 +8,11 @@ import { ValidationError, InternalError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 
+/** Safely convert a value to Prisma JSON without type assertions. */
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
+
 /**
  * TypeBox schemas for import responses.
  */
@@ -136,8 +141,8 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
-            importOptions: options as unknown as Prisma.InputJsonValue,
-            result: result as unknown as Prisma.InputJsonValue,
+            importOptions: toJsonValue(options),
+            result: toJsonValue(result),
             success: result.success,
             itemsImported: result.summary.importedItems.annotations,
             itemsSkipped: result.summary.skippedItems.annotations,
