@@ -44,6 +44,7 @@ describe('Personas API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false
+        systemRole: 'system_admin',
       }
     })
     testUserId = user.id
@@ -679,6 +680,7 @@ describe('Personas API', () => {
           passwordHash: await hashPassword('testpass123'),
           displayName: 'Another User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 

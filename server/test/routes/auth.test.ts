@@ -43,6 +43,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -75,6 +76,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -104,6 +106,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -136,6 +139,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -200,6 +204,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -225,6 +230,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -263,6 +269,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -290,6 +297,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -372,6 +380,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -439,6 +448,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 
@@ -579,6 +589,7 @@ describe('Authentication Routes', () => {
           passwordHash,
           displayName: 'Existing User',
           isAdmin: false,
+        systemRole: 'system_admin',
         },
       })
 

@@ -61,6 +61,7 @@ describe('Video Assignments API', () => {
         passwordHash: ownerHash,
         displayName: 'Project Owner',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -81,6 +82,7 @@ describe('Video Assignments API', () => {
         passwordHash: memberHash,
         displayName: 'Member User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -101,6 +103,7 @@ describe('Video Assignments API', () => {
         passwordHash: adminHash,
         displayName: 'Admin User',
         isAdmin: true,
+        systemRole: 'system_admin',
         systemRole: 'system_admin',
       },
     })

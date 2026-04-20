@@ -46,6 +46,7 @@ describe('API Key Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Admin User',
         isAdmin: true
+        systemRole: 'system_admin',
       }
     })
     adminUserId = adminUser.id
@@ -59,6 +60,7 @@ describe('API Key Routes', () => {
         passwordHash: userPasswordHash,
         displayName: 'Regular User',
         isAdmin: false
+        systemRole: 'system_admin',
       }
     })
     regularUserId = regularUser.id

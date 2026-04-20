@@ -58,6 +58,7 @@ describe('Sharing API', () => {
         passwordHash: ownerHash,
         displayName: 'Owner User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -78,6 +79,7 @@ describe('Sharing API', () => {
         passwordHash: recipientHash,
         displayName: 'Recipient User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -98,6 +100,7 @@ describe('Sharing API', () => {
         passwordHash: adminHash,
         displayName: 'Admin User',
         isAdmin: true,
+        systemRole: 'system_admin',
         systemRole: 'system_admin',
       },
     })

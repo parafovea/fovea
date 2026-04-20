@@ -44,6 +44,7 @@ describe('User Management Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Administrator',
         isAdmin: true,
+        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -57,6 +58,7 @@ describe('User Management Routes', () => {
         passwordHash: regularPasswordHash,
         displayName: 'Regular User',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     regularUserId = regular.id
@@ -153,6 +155,7 @@ describe('User Management Routes', () => {
         password: 'newpass123',
         displayName: 'New User',
         isAdmin: false,
+        systemRole: 'system_admin',
       }
 
       const response = await app.inject({
@@ -189,6 +192,7 @@ describe('User Management Routes', () => {
         password: 'adminpass123',
         displayName: 'New Admin',
         isAdmin: true,
+        systemRole: 'system_admin',
       }
 
       const response = await app.inject({
@@ -391,6 +395,7 @@ describe('User Management Routes', () => {
     it('updates isAdmin flag', async () => {
       const updates = {
         isAdmin: true,
+        systemRole: 'system_admin',
       }
 
       const response = await app.inject({

@@ -152,6 +152,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true
+        systemRole: 'system_admin',
         }
       })
 
@@ -175,6 +176,7 @@ describe('Authentication Flow Integration', () => {
           password: 'analystpass',
           displayName: 'Analyst User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 
@@ -243,6 +245,7 @@ describe('Authentication Flow Integration', () => {
             passwordHash,
             displayName: 'Test User',
             isAdmin: false
+        systemRole: 'system_admin',
           }
         })
 
@@ -312,6 +315,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 
@@ -353,6 +357,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true
+        systemRole: 'system_admin',
         }
       })
 
@@ -364,6 +369,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 
@@ -434,6 +440,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 
@@ -522,6 +529,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true
+        systemRole: 'system_admin',
         }
       })
 
@@ -533,6 +541,7 @@ describe('Authentication Flow Integration', () => {
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 

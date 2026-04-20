@@ -58,6 +58,7 @@ describe('Projects API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -80,6 +81,7 @@ describe('Projects API', () => {
         displayName: 'Admin User',
         isAdmin: true,
         systemRole: 'system_admin',
+        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -100,6 +102,7 @@ describe('Projects API', () => {
         passwordHash: otherHash,
         displayName: 'Other User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })

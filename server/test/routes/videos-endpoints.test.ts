@@ -30,6 +30,7 @@ describe('Videos API - Route Registration', () => {
       id: 'video-test-admin',
       username: 'videotestadmin',
       isAdmin: true,
+        systemRole: 'system_admin',
     })
     await prisma.user.create({ data: adminUser })
 

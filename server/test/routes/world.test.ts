@@ -43,6 +43,7 @@ describe('World State API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false
+        systemRole: 'system_admin',
       }
     })
     testUserId = user.id
@@ -133,6 +134,7 @@ describe('World State API', () => {
           passwordHash,
           displayName: 'Test User 2',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 
@@ -386,6 +388,7 @@ describe('World State API', () => {
           passwordHash,
           displayName: 'Test User 2',
           isAdmin: false
+        systemRole: 'system_admin',
         }
       })
 

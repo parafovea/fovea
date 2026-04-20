@@ -56,6 +56,7 @@ describe('Groups API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false,
+        systemRole: 'system_admin',
         systemRole: 'user',
       },
     })
@@ -77,6 +78,7 @@ describe('Groups API', () => {
         passwordHash: adminHash,
         displayName: 'Admin User',
         isAdmin: true,
+        systemRole: 'system_admin',
         systemRole: 'system_admin',
       },
     })

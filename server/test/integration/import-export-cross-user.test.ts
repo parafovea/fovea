@@ -55,6 +55,7 @@ describe('Cross-user import/export round-trip', () => {
         passwordHash: hashA,
         displayName: 'User A',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     userAId = userA.id
@@ -68,6 +69,7 @@ describe('Cross-user import/export round-trip', () => {
         passwordHash: hashB,
         displayName: 'User B',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     userBId = userB.id

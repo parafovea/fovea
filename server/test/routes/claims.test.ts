@@ -49,6 +49,7 @@ describe('Claims API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false
+        systemRole: 'system_admin',
       }
     })
     testUserId = user.id

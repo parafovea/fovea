@@ -47,6 +47,7 @@ describe('Session Management Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Administrator',
         isAdmin: true,
+        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -60,6 +61,7 @@ describe('Session Management Routes', () => {
         passwordHash: regularPasswordHash,
         displayName: 'Regular User',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     regularUserId = regular.id

@@ -56,6 +56,7 @@ describe('Export API - User Scoping', () => {
         passwordHash: hashA,
         displayName: 'User A',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     userAId = userA.id
@@ -69,6 +70,7 @@ describe('Export API - User Scoping', () => {
         passwordHash: hashB,
         displayName: 'User B',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
     userBId = userB.id

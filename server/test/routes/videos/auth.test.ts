@@ -43,6 +43,7 @@ describe('Video Routes - Authentication', () => {
         passwordHash,
         displayName: 'Video Auth User',
         isAdmin: false,
+        systemRole: 'system_admin',
       },
     })
 
