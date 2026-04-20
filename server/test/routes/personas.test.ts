@@ -43,7 +43,7 @@ describe('Personas API', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
         systemRole: 'system_admin',
       }
     })
@@ -679,7 +679,7 @@ describe('Personas API', () => {
           email: 'another@example.com',
           passwordHash: await hashPassword('testpass123'),
           displayName: 'Another User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })

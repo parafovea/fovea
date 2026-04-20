@@ -45,7 +45,7 @@ describe('API Key Routes', () => {
         email: 'admin@example.com',
         passwordHash: adminPasswordHash,
         displayName: 'Admin User',
-        isAdmin: true
+        isAdmin: true,
         systemRole: 'system_admin',
       }
     })
@@ -59,7 +59,7 @@ describe('API Key Routes', () => {
         email: 'regular@example.com',
         passwordHash: userPasswordHash,
         displayName: 'Regular User',
-        isAdmin: false
+        isAdmin: false,
         systemRole: 'system_admin',
       }
     })

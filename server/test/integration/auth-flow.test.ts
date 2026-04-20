@@ -151,7 +151,7 @@ describe('Authentication Flow Integration', () => {
           email: 'admin@example.com',
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
-          isAdmin: true
+          isAdmin: true,
         systemRole: 'system_admin',
         }
       })
@@ -175,7 +175,7 @@ describe('Authentication Flow Integration', () => {
           email: 'analyst@example.com',
           password: 'analystpass',
           displayName: 'Analyst User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
@@ -244,7 +244,7 @@ describe('Authentication Flow Integration', () => {
             email: 'test@example.com',
             passwordHash,
             displayName: 'Test User',
-            isAdmin: false
+            isAdmin: false,
         systemRole: 'system_admin',
           }
         })
@@ -314,7 +314,7 @@ describe('Authentication Flow Integration', () => {
           email: 'test@example.com',
           passwordHash,
           displayName: 'Test User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
@@ -356,7 +356,7 @@ describe('Authentication Flow Integration', () => {
           email: 'admin@example.com',
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
-          isAdmin: true
+          isAdmin: true,
         systemRole: 'system_admin',
         }
       })
@@ -368,7 +368,7 @@ describe('Authentication Flow Integration', () => {
           email: 'regular@example.com',
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
@@ -439,7 +439,7 @@ describe('Authentication Flow Integration', () => {
           email: 'test@example.com',
           passwordHash,
           displayName: 'Test User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
@@ -528,7 +528,7 @@ describe('Authentication Flow Integration', () => {
           email: 'admin@example.com',
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
-          isAdmin: true
+          isAdmin: true,
         systemRole: 'system_admin',
         }
       })
@@ -540,7 +540,7 @@ describe('Authentication Flow Integration', () => {
           email: 'regular@example.com',
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })

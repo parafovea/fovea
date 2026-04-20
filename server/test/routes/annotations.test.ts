@@ -44,7 +44,7 @@ describe('Annotations API', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
         systemRole: 'system_admin',
       }
     })

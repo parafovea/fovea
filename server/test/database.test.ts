@@ -40,7 +40,7 @@ describe('Database Connection', () => {
         email: 'test@example.com',
         passwordHash: await hashPassword('testpass123'),
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
         systemRole: 'system_admin',
       }
     })

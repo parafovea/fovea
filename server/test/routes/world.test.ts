@@ -42,7 +42,7 @@ describe('World State API', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
         systemRole: 'system_admin',
       }
     })
@@ -133,7 +133,7 @@ describe('World State API', () => {
           email: 'test2@example.com',
           passwordHash,
           displayName: 'Test User 2',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
@@ -387,7 +387,7 @@ describe('World State API', () => {
           email: 'test2@example.com',
           passwordHash,
           displayName: 'Test User 2',
-          isAdmin: false
+          isAdmin: false,
         systemRole: 'system_admin',
         }
       })
