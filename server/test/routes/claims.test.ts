@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { claimExtractionQueue, claimSynthesisQueue } from '../../src/queues/setup.js'
@@ -39,6 +40,8 @@ describe('Claims API', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create test user
     const passwordHash = await hashPassword('testpass123')
@@ -49,7 +52,6 @@ describe('Claims API', () => {
         passwordHash,
         displayName: 'Test User',
         isAdmin: false,
-        systemRole: 'system_admin',
       }
     })
     testUserId = user.id

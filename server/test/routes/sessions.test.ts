@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Integration tests for Session Management API.
@@ -37,6 +38,8 @@ describe('Session Management Routes', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create admin user
     const adminPasswordHash = await hashPassword('admin123')
@@ -47,7 +50,6 @@ describe('Session Management Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Administrator',
         isAdmin: true,
-        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -61,7 +63,6 @@ describe('Session Management Routes', () => {
         passwordHash: regularPasswordHash,
         displayName: 'Regular User',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     regularUserId = regular.id

@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import FormData from 'form-data'
 
 /**
@@ -45,6 +46,8 @@ describe('Cross-user import/export round-trip', () => {
     await prisma.session.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create user A
     const hashA = await hashPassword('passwordA')
@@ -55,7 +58,6 @@ describe('Cross-user import/export round-trip', () => {
         passwordHash: hashA,
         displayName: 'User A',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     userAId = userA.id
@@ -69,7 +71,6 @@ describe('Cross-user import/export round-trip', () => {
         passwordHash: hashB,
         displayName: 'User B',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     userBId = userB.id

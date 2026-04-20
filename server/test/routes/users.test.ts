@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Integration tests for User Management API.
@@ -34,6 +35,8 @@ describe('User Management Routes', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create admin user
     const adminPasswordHash = await hashPassword('admin123')
@@ -44,7 +47,6 @@ describe('User Management Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Administrator',
         isAdmin: true,
-        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -58,7 +60,6 @@ describe('User Management Routes', () => {
         passwordHash: regularPasswordHash,
         displayName: 'Regular User',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     regularUserId = regular.id
@@ -155,7 +156,6 @@ describe('User Management Routes', () => {
         password: 'newpass123',
         displayName: 'New User',
         isAdmin: false,
-        systemRole: 'system_admin',
       }
 
       const response = await app.inject({
@@ -192,7 +192,6 @@ describe('User Management Routes', () => {
         password: 'adminpass123',
         displayName: 'New Admin',
         isAdmin: true,
-        systemRole: 'system_admin',
       }
 
       const response = await app.inject({
@@ -395,7 +394,6 @@ describe('User Management Routes', () => {
     it('updates isAdmin flag', async () => {
       const updates = {
         isAdmin: true,
-        systemRole: 'system_admin',
       }
 
       const response = await app.inject({

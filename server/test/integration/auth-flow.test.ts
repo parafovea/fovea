@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Integration tests for complete authentication flows.
@@ -30,6 +31,10 @@ describe('Authentication Flow Integration', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+
+    // Seed baseline RBAC permissions so API-registered users can operate
+    await seedBaselinePermissions(prisma)
   })
 
   describe('Complete registration to logout flow', () => {
@@ -152,7 +157,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true,
-        systemRole: 'system_admin',
         }
       })
 
@@ -176,7 +180,6 @@ describe('Authentication Flow Integration', () => {
           password: 'analystpass',
           displayName: 'Analyst User',
           isAdmin: false,
-        systemRole: 'system_admin',
         }
       })
 
@@ -245,7 +248,6 @@ describe('Authentication Flow Integration', () => {
             passwordHash,
             displayName: 'Test User',
             isAdmin: false,
-        systemRole: 'system_admin',
           }
         })
 
@@ -315,7 +317,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
-        systemRole: 'system_admin',
         }
       })
 
@@ -357,7 +358,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true,
-        systemRole: 'system_admin',
         }
       })
 
@@ -369,7 +369,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
           isAdmin: false,
-        systemRole: 'system_admin',
         }
       })
 
@@ -440,7 +439,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash,
           displayName: 'Test User',
           isAdmin: false,
-        systemRole: 'system_admin',
         }
       })
 
@@ -529,7 +527,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash: adminPasswordHash,
           displayName: 'Admin',
           isAdmin: true,
-        systemRole: 'system_admin',
         }
       })
 
@@ -541,7 +538,6 @@ describe('Authentication Flow Integration', () => {
           passwordHash: userPasswordHash,
           displayName: 'Regular User',
           isAdmin: false,
-        systemRole: 'system_admin',
         }
       })
 

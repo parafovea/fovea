@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { decryptApiKey } from '../../src/lib/encryption.js'
 
 /**
@@ -36,6 +37,8 @@ describe('API Key Routes', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create admin user
     const adminPasswordHash = await hashPassword('adminpass123')
@@ -46,7 +49,6 @@ describe('API Key Routes', () => {
         passwordHash: adminPasswordHash,
         displayName: 'Admin User',
         isAdmin: true,
-        systemRole: 'system_admin',
       }
     })
     adminUserId = adminUser.id
@@ -60,7 +62,6 @@ describe('API Key Routes', () => {
         passwordHash: userPasswordHash,
         displayName: 'Regular User',
         isAdmin: false,
-        systemRole: 'system_admin',
       }
     })
     regularUserId = regularUser.id

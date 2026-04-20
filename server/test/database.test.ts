@@ -12,6 +12,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/app.js'
 import { hashPassword } from '../src/lib/password.js'
 import type { FastifyInstance } from 'fastify'
+import { seedBaselinePermissions } from './helpers/rbac-test-setup.js'
 
 describe('Database Connection', () => {
   let app: FastifyInstance
@@ -32,6 +33,8 @@ describe('Database Connection', () => {
     await app.prisma.video.deleteMany()
     await app.prisma.persona.deleteMany()
     await app.prisma.user.deleteMany()
+    await app.prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(app.prisma)
 
     // Create test user for persona ownership
     const user = await app.prisma.user.create({
@@ -41,7 +44,6 @@ describe('Database Connection', () => {
         passwordHash: await hashPassword('testpass123'),
         displayName: 'Test User',
         isAdmin: false,
-        systemRole: 'system_admin',
       }
     })
     testUserId = user.id

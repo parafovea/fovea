@@ -3,6 +3,7 @@ import { buildApp } from '../../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../../src/lib/password.js'
+import { seedBaselinePermissions } from '../../helpers/rbac-test-setup.js'
 
 /**
  * Tests that video routes require authentication.
@@ -33,6 +34,8 @@ describe('Video Routes - Authentication', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create test user and login
     const passwordHash = await hashPassword('testpass123')
@@ -43,7 +46,6 @@ describe('Video Routes - Authentication', () => {
         passwordHash,
         displayName: 'Video Auth User',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
 

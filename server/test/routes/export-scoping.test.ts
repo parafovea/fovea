@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Tests that export routes scope data to the authenticated user.
@@ -46,6 +47,8 @@ describe('Export API - User Scoping', () => {
     await prisma.session.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create user A
     const hashA = await hashPassword('passwordA')
@@ -56,7 +59,6 @@ describe('Export API - User Scoping', () => {
         passwordHash: hashA,
         displayName: 'User A',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     userAId = userA.id
@@ -70,7 +72,6 @@ describe('Export API - User Scoping', () => {
         passwordHash: hashB,
         displayName: 'User B',
         isAdmin: false,
-        systemRole: 'system_admin',
       },
     })
     userBId = userB.id

@@ -14,6 +14,32 @@
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
 
+/**
+ * Seeds the minimum RolePermission rows so the default `user` system role
+ * can perform basic operations (create/read/update/delete own personas,
+ * annotations, summaries, claims, and world state). Call this in beforeEach
+ * after cleaning the database.
+ */
+export async function seedBaselinePermissions(prisma: PrismaClient): Promise<void> {
+  const resources = ['persona', 'annotation', 'summary', 'claim', 'world_state']
+  const actions = ['create', 'read', 'update', 'delete']
+
+  const rows = resources.flatMap(resourceType =>
+    actions.map(action => ({
+      scope: 'system',
+      role: 'user',
+      resourceType,
+      action,
+      ownOnly: true,
+    }))
+  )
+
+  // Add video read (not ownOnly) so users can see videos
+  rows.push({ scope: 'system', role: 'user', resourceType: 'video', action: 'read', ownOnly: false })
+
+  await prisma.rolePermission.createMany({ data: rows, skipDuplicates: true })
+}
+
 interface TestUser {
   id: string
   username: string
