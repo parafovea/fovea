@@ -10,11 +10,26 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { subject } from '@casl/ability'
+import type { Prisma } from '@prisma/client'
+import type { FastifyRequest, FastifyReply } from 'fastify'
 import {
   defineAbilitiesFor,
   type UserRoles,
   type RolePermissionRow,
+  type AppAbility,
 } from '../../src/lib/abilities.js'
+
+/**
+ * Build a partial Prisma model record for use with CASL's subject() helper.
+ * Avoids `as any` by satisfying the Record<string, unknown> shape that
+ * subject() accepts at runtime. The generic parameter is documentation-only
+ * (enforces the caller names the target model).
+ */
+function partial<_Model extends Prisma.ModelName>(
+  fields: Record<string, unknown>
+): Record<string, unknown> {
+  return fields
+}
 
 // ---------------------------------------------------------------------------
 // Mock prisma before importing the middleware (must be hoisted)
@@ -93,7 +108,7 @@ describe('Cross-tenant IDOR prevention', () => {
 
     const allowed = ability.can(
       'read',
-      subject('Annotation', { projectId: PROJECT_P1, createdByUserId: USER_A } as any),
+      subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P1, createdByUserId: USER_A })),
     )
     expect(allowed).toBe(true)
   })
@@ -108,7 +123,7 @@ describe('Cross-tenant IDOR prevention', () => {
 
     const allowed = ability.can(
       'read',
-      subject('Annotation', { projectId: PROJECT_P2, createdByUserId: USER_B } as any),
+      subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P2, createdByUserId: USER_B })),
     )
     expect(allowed).toBe(false)
   })
@@ -123,7 +138,7 @@ describe('Cross-tenant IDOR prevention', () => {
 
     const allowed = ability.can(
       'update',
-      subject('Annotation', { projectId: PROJECT_P1, createdByUserId: USER_B } as any),
+      subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P1, createdByUserId: USER_B })),
     )
     expect(allowed).toBe(false)
   })
@@ -136,9 +151,9 @@ describe('Cross-tenant IDOR prevention', () => {
     }
     const ability = defineAbilitiesFor(USER_A, roles, permissions)
 
-    expect(ability.can('read', subject('Annotation', { projectId: PROJECT_P2, createdByUserId: USER_B } as any))).toBe(true)
-    expect(ability.can('update', subject('Annotation', { projectId: PROJECT_P2, createdByUserId: USER_B } as any))).toBe(true)
-    expect(ability.can('delete', subject('Annotation', { projectId: PROJECT_P2, createdByUserId: USER_B } as any))).toBe(true)
+    expect(ability.can('read', subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P2, createdByUserId: USER_B })))).toBe(true)
+    expect(ability.can('update', subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P2, createdByUserId: USER_B })))).toBe(true)
+    expect(ability.can('delete', subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P2, createdByUserId: USER_B })))).toBe(true)
   })
 
   it('User with no project memberships CANNOT read project-scoped annotations', () => {
@@ -152,7 +167,7 @@ describe('Cross-tenant IDOR prevention', () => {
     // Project-scoped annotation from another user: denied
     const allowed = ability.can(
       'read',
-      subject('Annotation', { projectId: PROJECT_P1, createdByUserId: USER_B } as any),
+      subject('Annotation', partial<'Annotation'>({ projectId: PROJECT_P1, createdByUserId: USER_B })),
     )
     expect(allowed).toBe(false)
   })
@@ -168,7 +183,7 @@ describe('Cross-tenant IDOR prevention', () => {
     // Own annotation without projectId: allowed via baseline ownership rules
     const allowed = ability.can(
       'read',
-      subject('Annotation', { createdByUserId: USER_A } as any),
+      subject('Annotation', partial<'Annotation'>({ createdByUserId: USER_A })),
     )
     expect(allowed).toBe(true)
   })
@@ -191,7 +206,7 @@ describe('Ownership field enforcement', () => {
     // does not match null, so it should be denied.
     const allowed = ability.can(
       'read',
-      subject('Annotation', { createdByUserId: null } as any),
+      subject('Annotation', partial<'Annotation'>({ createdByUserId: null })),
     )
     expect(allowed).toBe(false)
   })
@@ -206,7 +221,7 @@ describe('Ownership field enforcement', () => {
 
     const allowed = ability.can(
       'read',
-      subject('Annotation', { createdByUserId: USER_A } as any),
+      subject('Annotation', partial<'Annotation'>({ createdByUserId: USER_A })),
     )
     expect(allowed).toBe(true)
   })
@@ -221,7 +236,7 @@ describe('Ownership field enforcement', () => {
 
     const allowed = ability.can(
       'read',
-      subject('Annotation', { createdByUserId: null } as any),
+      subject('Annotation', partial<'Annotation'>({ createdByUserId: null })),
     )
     expect(allowed).toBe(true)
   })
@@ -231,15 +246,24 @@ describe('Ownership field enforcement', () => {
 // 3. Cache invalidation correctness
 // ---------------------------------------------------------------------------
 
+/** Minimal request stub accepted by buildAbilities. */
+interface MockRequest {
+  user: { id: string; systemRole: string } | undefined
+  ability: AppAbility | undefined
+}
+
+/** Minimal reply stub accepted by buildAbilities. */
+type MockReply = Record<string, never>
+
 describe('Cache invalidation correctness', () => {
-  function createMockRequest(userId: string, systemRole = 'user') {
+  function createMockRequest(userId: string, systemRole = 'user'): MockRequest {
     return {
       user: { id: userId, systemRole },
-      ability: null as any,
-    } as any
+      ability: undefined,
+    }
   }
 
-  const mockReply = {} as any
+  const mockReply: MockReply = {}
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -293,11 +317,11 @@ describe('Cache invalidation correctness', () => {
   })
 
   it('buildAbilities skips processing when request has no user', async () => {
-    const req = { user: undefined, ability: null } as any
+    const req: MockRequest = { user: undefined, ability: undefined }
     await buildAbilities(req, mockReply)
 
     expect(prisma.groupMembership.findMany).not.toHaveBeenCalled()
-    expect(req.ability).toBeNull()
+    expect(req.ability).toBeUndefined()
   })
 })
 
@@ -388,19 +412,16 @@ describe('Admin-only enforcement', () => {
     // Import requireAdmin dynamically to avoid pulling in authService at module level
     const { requireAdmin } = await import('../../src/middleware/auth.js')
 
-    const request = {
+    const request: MockRequest & { cookies: Record<string, string> } = {
       user: {
         id: USER_A,
-        username: 'regular-user',
-        email: null,
-        displayName: 'Regular User',
-        isAdmin: false,
         systemRole: 'user',
       },
+      ability: undefined,
       cookies: { session_token: 'valid-token' },
-    } as any
+    }
 
-    const reply = {} as any
+    const reply: MockReply = {}
 
     // requireAdmin calls requireAuth first, which validates the session.
     // We mock authService.validateSession to return the user so requireAuth passes.
@@ -412,7 +433,7 @@ describe('Admin-only enforcement', () => {
       displayName: 'Regular User',
       isAdmin: false,
       systemRole: 'user',
-    } as any)
+    })
 
     await expect(requireAdmin(request, reply)).rejects.toThrow('Admin access required')
   })
@@ -439,11 +460,11 @@ describe('Admin-only enforcement', () => {
     const { authorize } = await import('../../src/middleware/abilities.js')
 
     const handler = authorize('create', 'Annotation')
-    const request = { ability: undefined, user: undefined } as any
+    const request: MockRequest = { ability: undefined, user: undefined }
     const reply = {
       code: vi.fn().mockReturnThis(),
       send: vi.fn().mockReturnThis(),
-    } as any
+    }
 
     await handler(request, reply)
 
@@ -473,24 +494,24 @@ describe('Cross-resource ownership conditions', () => {
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
 
-    expect(ability.can('read', subject('VideoSummary', { createdBy: 'user-a' } as any))).toBe(true)
-    expect(ability.can('read', subject('VideoSummary', { createdBy: 'user-b' } as any))).toBe(false)
+    expect(ability.can('read', subject('VideoSummary', partial<'VideoSummary'>({ createdBy: 'user-a' })))).toBe(true)
+    expect(ability.can('read', subject('VideoSummary', partial<'VideoSummary'>({ createdBy: 'user-b' })))).toBe(false)
   })
 
   it('User can read their own Claim but not another user\'s', () => {
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
 
-    expect(ability.can('read', subject('Claim', { createdBy: 'user-a' } as any))).toBe(true)
-    expect(ability.can('read', subject('Claim', { createdBy: 'user-b' } as any))).toBe(false)
+    expect(ability.can('read', subject('Claim', partial<'Claim'>({ createdBy: 'user-a' })))).toBe(true)
+    expect(ability.can('read', subject('Claim', partial<'Claim'>({ createdBy: 'user-b' })))).toBe(false)
   })
 
   it('User can read/update/delete their own Persona but not another user\'s', () => {
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, ANNOTATOR_PERMS)
 
-    const own = subject('Persona', { userId: 'user-a', createdByUserId: 'user-a' } as any)
-    const foreign = subject('Persona', { userId: 'user-b', createdByUserId: 'user-b' } as any)
+    const own = subject('Persona', partial<'Persona'>({ userId: 'user-a', createdByUserId: 'user-a' }))
+    const foreign = subject('Persona', partial<'Persona'>({ userId: 'user-b', createdByUserId: 'user-b' }))
 
     expect(ability.can('read', own)).toBe(true)
     expect(ability.can('update', own)).toBe(true)
@@ -511,8 +532,8 @@ describe('Cross-resource ownership conditions', () => {
     }
     const ability = defineAbilitiesFor('user-a', roles, perms)
 
-    const inProject = subject('VideoSummary', { createdBy: 'user-b', projectId: 'proj-1' } as any)
-    const otherProject = subject('VideoSummary', { createdBy: 'user-b', projectId: 'proj-2' } as any)
+    const inProject = subject('VideoSummary', partial<'VideoSummary'>({ createdBy: 'user-b', projectId: 'proj-1' }))
+    const otherProject = subject('VideoSummary', partial<'VideoSummary'>({ createdBy: 'user-b', projectId: 'proj-2' }))
 
     expect(ability.can('read', inProject)).toBe(true)
     expect(ability.can('read', otherProject)).toBe(false)
@@ -528,7 +549,7 @@ describe('Import CASL enforcement', () => {
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, [])
 
-    const candidate = subject('Annotation', { createdByUserId: 'user-a', projectId: null } as any)
+    const candidate = subject('Annotation', partial<'Annotation'>({ createdByUserId: 'user-a', projectId: null }))
     expect(ability.can('create', candidate)).toBe(false)
   })
 
@@ -539,7 +560,7 @@ describe('Import CASL enforcement', () => {
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, perms)
 
-    const candidate = subject('Annotation', { createdByUserId: 'user-a', projectId: null } as any)
+    const candidate = subject('Annotation', partial<'Annotation'>({ createdByUserId: 'user-a', projectId: null }))
     expect(ability.can('create', candidate)).toBe(true)
   })
 
@@ -554,8 +575,8 @@ describe('Import CASL enforcement', () => {
     }
     const ability = defineAbilitiesFor('user-a', roles, perms)
 
-    const inProject = subject('Annotation', { createdByUserId: 'user-a', projectId: 'proj-1' } as any)
-    const wrongProject = subject('Annotation', { createdByUserId: 'user-a', projectId: 'proj-999' } as any)
+    const inProject = subject('Annotation', partial<'Annotation'>({ createdByUserId: 'user-a', projectId: 'proj-1' }))
+    const wrongProject = subject('Annotation', partial<'Annotation'>({ createdByUserId: 'user-a', projectId: 'proj-999' }))
 
     expect(ability.can('create', inProject)).toBe(true)
     expect(ability.can('create', wrongProject)).toBe(false)
