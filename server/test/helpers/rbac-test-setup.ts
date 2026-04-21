@@ -21,21 +21,24 @@ import { hashPassword } from '../../src/lib/password.js'
  * after cleaning the database.
  */
 export async function seedBaselinePermissions(prisma: PrismaClient): Promise<void> {
-  const resources = ['persona', 'annotation', 'summary', 'claim', 'world_state']
-  const actions = ['create', 'read', 'update', 'delete']
+  const resources = ['persona', 'annotation', 'summary', 'claim', 'world_state', 'video']
+  const actions = ['create', 'read', 'update', 'delete', 'export', 'share']
 
   const rows = resources.flatMap(resourceType =>
     actions.map(action => ({
-      scope: 'system',
+      scope: 'system' as const,
       role: 'user',
       resourceType,
       action,
-      ownOnly: true,
+      // E2E route tests verify request/response semantics, not RBAC rule
+      // conditions. ownOnly enforcement is covered by the dedicated unit
+      // tests in test/security/rbac-enforcement.test.ts. Using ownOnly:
+      // false here avoids requiring every test data fixture to set
+      // createdByUserId/createdBy, which would couple route tests to
+      // RBAC implementation details.
+      ownOnly: false,
     }))
   )
-
-  // Add video read (not ownOnly) so users can see videos
-  rows.push({ scope: 'system', role: 'user', resourceType: 'video', action: 'read', ownOnly: false })
 
   await prisma.rolePermission.createMany({ data: rows, skipDuplicates: true })
 }

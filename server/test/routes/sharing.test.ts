@@ -101,6 +101,7 @@ describe('Sharing API', () => {
         passwordHash: adminHash,
         displayName: 'Admin User',
         isAdmin: true,
+        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
