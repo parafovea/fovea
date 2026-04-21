@@ -35,6 +35,10 @@ An entity type is a category definition in a persona's ontology. It describes wh
 
 An event represents something that happens in the world model. Events link entities through roles and have temporal extent. Like entities, events can span multiple videos and have persona-specific interpretations through event types.
 
+## Forking
+
+Forking creates a deep copy of a shared resource in the current user's workspace. The copy is independent: changes to the fork do not affect the original, and changes to the original do not affect the fork. Forking requires a share with `forkable` permission level. When forking a persona, the associated ontology is copied as well.
+
 ## Export
 
 Export creates a JSON Lines file containing personas, ontologies, world state, and annotations. You can export in keyframes-only mode (stores keyframes and interpolation configuration) or fully interpolated mode (stores every frame with a bounding box). Keyframes-only mode produces files 50-100x smaller.
@@ -59,9 +63,29 @@ A keyframe is a frame where you explicitly set the bounding box position and siz
 
 An ontology belongs to a persona and contains that persona's type definitions. This includes entity types, event types, role types, and relation types. Each persona has exactly one ontology. Ontologies allow different analysts to define their own conceptual frameworks for understanding video content.
 
+## Permission
+
+A permission is a single entry in the RolePermission table that grants a specific role the ability to perform a specific action on a specific resource type within a specific scope. Permissions are data-driven and stored in the database rather than hardcoded. See RBAC.
+
 ## Persona
 
 A persona represents an analyst with a specific perspective and information need. Each persona has their own ontology defining how they categorize and interpret video content. For example, a sports analyst and a biomechanics researcher might both watch the same game footage but create different types and annotations based on their distinct analytical goals.
+
+## Project
+
+A project organizes videos, annotations, personas, summaries, claims, and world state around a shared analytical goal. Projects can be personal (owned by a user) or group-owned (owned by a user group). Each project has members with specific roles (project_owner, project_manager, annotator, reviewer, viewer) that control what they can do within the project.
+
+## RBAC
+
+Role-Based Access Control. FOVEA uses a data-driven RBAC system built on the CASL authorization library. Permissions are stored in the RolePermission table and evaluated at runtime. Users receive permissions based on their system role, group memberships, and project memberships. The effective permission set is the union of all granted permissions across these scopes.
+
+## Resource Share
+
+A resource share grants another user or group access to a specific resource (annotation, summary, claim, persona, or world state). Shares have a permission level (read_only or forkable) and an optional expiration date. The original owner retains full control of the shared resource.
+
+## Role
+
+A role is a named set of permissions assigned to a user within a specific scope. System roles include system_admin and user. Group roles include group_owner, group_admin, and group_member. Project roles include project_owner, project_manager, annotator, reviewer, and viewer. A user can hold different roles in different groups and projects simultaneously.
 
 ## Sequence
 
@@ -79,9 +103,17 @@ Tracking confidence is a score between 0 and 1 indicating how certain the tracki
 
 When you accept a track as an annotation, the system preserves metadata about where it came from. This includes the tracking model used (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg), the track ID assigned by the model, and confidence scores. This metadata helps you audit which annotations came from automation versus manual work.
 
+## User Group
+
+A user group is a named collection of users who share access to projects and resources. Groups have roles (group_owner, group_admin, group_member) that control group management capabilities. Groups can own projects, and resources can be shared with an entire group rather than individual users.
+
 ## Type Assignment
 
 A type assignment links a world object (entity or event) to a type in a persona's ontology. One entity can have type assignments from multiple personas. For example, the same person might be typed as "Player" by a sports analyst and "Athlete" by a physiotherapist.
+
+## Video Assignment
+
+A video assignment links a video to a project. Assignments can be created manually by project managers or automatically through assignment rules that match videos based on metadata conditions. Each assignment optionally specifies a user responsible for annotating that video within the project.
 
 ## Visibility Range
 

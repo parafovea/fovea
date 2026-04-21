@@ -13,6 +13,7 @@ declare module 'fastify' {
       email: string | null
       displayName: string
       isAdmin: boolean
+      systemRole: string
     }
   }
 }
@@ -49,6 +50,7 @@ export async function requireAuth(
     email: user.email,
     displayName: user.displayName,
     isAdmin: user.isAdmin,
+    systemRole: user.systemRole,
   }
 }
 
@@ -78,7 +80,8 @@ export async function requireAdmin(
       username: 'test-admin',
       email: null,
       displayName: 'Test Admin',
-      isAdmin: true
+      isAdmin: true,
+      systemRole: 'system_admin',
     }
     return
   }
@@ -119,6 +122,7 @@ export async function optionalAuth(
       email: user.email,
       displayName: user.displayName,
       isAdmin: user.isAdmin,
+      systemRole: user.systemRole,
     }
   }
 }

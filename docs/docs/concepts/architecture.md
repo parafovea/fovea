@@ -170,8 +170,22 @@ All services emit OpenTelemetry traces and metrics:
 | OTEL Collector | 4318 | localhost:4318 | Telemetry ingestion (HTTP) |
 | OTEL Collector | 4317 | localhost:4317 | Telemetry ingestion (gRPC) |
 
+## Authorization and Access Control
+
+The backend implements role-based access control (RBAC) using the [CASL](https://casl.js.org/) library. On each authenticated request, the server:
+
+1. Loads the permission matrix from the RolePermission table in PostgreSQL
+2. Collects the user's roles across three scopes: system, group, and project
+3. Builds a CASL ability instance that encodes the union of all granted permissions
+4. Passes the ability to route handlers for authorization checks
+
+System administrators bypass all permission checks. For all other users, the permission matrix determines which actions (create, read, update, delete, share, fork, assign, export, review, manage_members) are allowed on which resources (Annotation, Claim, Persona, WorldState, Video, VideoSummary, Project, UserGroup, User).
+
+Resources are organized into projects, which are optionally owned by user groups. Project membership and group membership control who can access project-scoped data. See [Projects, Groups, and RBAC](./projects-groups.md) for details.
+
 ## Next Steps
 
+- Learn about [Projects, Groups, and RBAC](./projects-groups.md)
 - Learn about [Deployment Overview](../deployment/overview.md)
 - Understand [Service Architecture](../deployment/service-architecture.md)
 - Explore [Observability](./observability.md)

@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { AppAbility } from '../lib/abilities.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -25,5 +26,12 @@ declare module 'fastify' {
      * Set by onRequest hook, used by onResponse hook to calculate duration.
      */
     requestStartTime?: number
+
+    /**
+     * CASL ability instance for the authenticated user.
+     * Built by the buildAbilities middleware from the user's role assignments
+     * and the RolePermission table.
+     */
+    ability?: AppAbility
   }
 }

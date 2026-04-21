@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fovea-model-service"
-version = "0.1.5"
+version = "0.2.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
@@ -35,6 +35,7 @@ dependencies = [
     "tenacity>=8.5.0",
     "aiohttp>=3.9.0",
     "aiofiles>=23.2.0",
+    "setuptools>=61.0",
 ]
 
 [project.optional-dependencies]

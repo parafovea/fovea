@@ -27,13 +27,22 @@ model User {
   passwordHash String?   // Nullable for single-user mode default user
   displayName  String
   isAdmin      Boolean   @default(false)
+  systemRole   String    @default("user") // "system_admin" or "user"
 
   // Relationships
   personas     Persona[]
   apiKeys      ApiKey[]
   sessions     Session[]
-  worldState   WorldState?
+  worldStates  WorldState[]
   annotations  Annotation[]
+
+  // RBAC relationships
+  groupMemberships   GroupMembership[]
+  projectMemberships ProjectMembership[]
+  ownedProjects      Project[]                @relation("OwnedProjects")
+  videoAssignments   ProjectVideoAssignment[] @relation("VideoAssignments")
+  sharedByMe         ResourceShare[]          @relation("SharedByMe")
+  sharedWithMe       ResourceShare[]          @relation("SharedWithMe")
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -113,6 +122,10 @@ model Persona {
   details         String?
   isSystemGenerated Boolean @default(false)
   hidden          Boolean  @default(false)
+
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -120,6 +133,7 @@ model Persona {
   videoSummaries  VideoSummary[]
   annotations     Annotation[]
 
+  @@index([projectId])
   @@map("personas")
 }
 
@@ -146,10 +160,10 @@ model Ontology {
 
 /// WorldState stores the actual instances of entities, events, locations, times, and collections
 /// This is shared across all personas (personas assign types to these instances)
-/// Each user has their own world state
+/// Each user can have multiple world states (one per project + one personal)
 model WorldState {
   id                String   @id @default(uuid())
-  userId            String   @unique
+  userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// JSON structure: Entity[]
@@ -167,9 +181,14 @@ model WorldState {
   /// JSON structure: OntologyRelation[]
   relations         Json     @default("[]")
 
+  projectId         String?
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@unique([userId, projectId])
+  @@index([projectId])
   @@map("world_state")
 }
 
@@ -197,8 +216,9 @@ model Video {
   /// Metadata sync status: 'synced', 'failed', 'never'
   metadataSyncStatus String?
 
-  summaries   VideoSummary[]
-  annotations Annotation[]
+  summaries          VideoSummary[]
+  annotations        Annotation[]
+  projectAssignments ProjectVideoAssignment[]
 
   @@map("videos")
 }
@@ -266,6 +286,9 @@ model VideoSummary {
   /// User who created this summary (or service ID for automated summaries)
   createdBy       String?
 
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -274,6 +297,7 @@ model VideoSummary {
   @@index([personaId])
   @@index([createdAt])
   @@index([videoId, personaId])
+  @@index([projectId])
   @@map("video_summaries")
 }
 
@@ -281,30 +305,36 @@ model VideoSummary {
 /// Type annotations (persona-scoped ontology assignments) require personaId
 /// Object annotations (world object links) have null personaId as they are persona-agnostic
 model Annotation {
-  id          String   @id @default(uuid())
-  videoId     String
-  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  personaId   String?
-  persona     Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id              String   @id @default(uuid())
+  videoId         String
+  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  personaId       String?
+  persona         Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  type        String
-  label       String
+  type            String
+  label           String
   /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
-  frames      Json
-  confidence  Float?
+  frames          Json
+  confidence      Float?
   /// Source of annotation: manual, ai-assisted, automatic
-  source      String   @default("manual")
+  source          String   @default("manual")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdByUserId String?
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([videoId])
   @@index([personaId])
   @@index([videoId, personaId])
   @@index([userId])
   @@index([createdAt])
+  @@index([projectId])
+  @@index([createdByUserId])
   @@map("annotations")
 }
 
@@ -390,12 +420,16 @@ model Claim {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   // Relations to other claims (this claim as source or target)
   sourceClaimRelations ClaimRelation[] @relation("SourceClaim")
   targetClaimRelations ClaimRelation[] @relation("TargetClaim")
 
   @@index([summaryId, summaryType])
   @@index([parentClaimId])
+  @@index([projectId])
   @@map("claims")
 }
 
@@ -434,4 +468,162 @@ model ClaimRelation {
   @@index([targetClaimId])
   @@index([relationTypeId])
   @@map("claim_relations")
+}
+
+// =============================================================================
+// RBAC Models (Role-Based Access Control)
+// =============================================================================
+
+/// UserGroup represents a collection of users who share access to projects and resources
+model UserGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  slug        String   @unique
+
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members        GroupMembership[]
+  projects       Project[]
+  resourceShares ResourceShare[]
+
+  @@map("user_groups")
+}
+
+/// GroupMembership tracks user membership and role within a group
+model GroupMembership {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId  String
+  group    UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  role     String   // "group_owner", "group_admin", "group_member"
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+  @@map("group_memberships")
+}
+
+/// Project organizes videos, annotations, and team members around a shared goal
+model Project {
+  id           String    @id @default(uuid())
+  name         String
+  description  String?
+  slug         String    @unique
+  ownerUserId  String?
+  ownerUser    User?     @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerGroupId String?
+  ownerGroup   UserGroup? @relation(fields: [ownerGroupId], references: [id], onDelete: SetNull)
+  settings     Json      @default("{}")
+  isArchived   Boolean   @default(false)
+
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  members          ProjectMembership[]
+  videoAssignments ProjectVideoAssignment[]
+  personas         Persona[]
+  worldStates      WorldState[]
+  annotations      Annotation[]
+  videoSummaries   VideoSummary[]
+  claims           Claim[]
+
+  @@map("projects")
+}
+
+/// ProjectMembership tracks user membership and role within a project
+model ProjectMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role      String   // "project_owner", "project_manager", "annotator", "reviewer", "viewer"
+  joinedAt  DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("project_memberships")
+}
+
+/// ProjectVideoAssignment links videos to projects with optional user assignment
+model ProjectVideoAssignment {
+  id             String   @id @default(uuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  videoId        String
+  video          Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  assignedUserId String?
+  assignedUser   User?    @relation("VideoAssignments", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  source         String   @default("manual") // "manual" or "rule"
+  ruleDefinition Json?
+  assignedBy     String?
+  assignedAt     DateTime @default(now())
+
+  @@unique([projectId, videoId])
+  @@index([projectId])
+  @@index([videoId])
+  @@index([assignedUserId])
+  @@map("project_video_assignments")
+}
+
+/// VideoAssignmentRule defines automatic video-to-project/user/group assignment logic
+model VideoAssignmentRule {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  conditions  Json     // [{field, operator, value}]
+  targetType  String   // "user", "project", "group"
+  targetId    String
+  isActive    Boolean  @default(true)
+
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("video_assignment_rules")
+}
+
+/// ResourceShare tracks sharing of resources (annotations, summaries, claims, etc.) between users and groups
+model ResourceShare {
+  id               String   @id @default(uuid())
+  resourceType     String   // "annotation", "summary", "claim", "persona", "world_state"
+  resourceId       String
+  sharedByUserId   String
+  sharedByUser     User     @relation("SharedByMe", fields: [sharedByUserId], references: [id], onDelete: Cascade)
+  sharedWithUserId String?
+  sharedWithUser   User?    @relation("SharedWithMe", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  sharedWithGroupId String?
+  sharedWithGroup  UserGroup? @relation(fields: [sharedWithGroupId], references: [id], onDelete: Cascade)
+  permissionLevel  String   @default("read_only") // "read_only" or "forkable"
+  expiresAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([sharedByUserId])
+  @@index([sharedWithUserId])
+  @@index([sharedWithGroupId])
+  @@index([resourceType, resourceId])
+  @@map("resource_shares")
+}
+
+/// RolePermission defines what actions each role can perform on each resource type
+model RolePermission {
+  id           String   @id @default(uuid())
+  scope        String   // "system", "group", "project"
+  role         String   // e.g., "system_admin", "group_owner", "annotator"
+  resourceType String   // "video", "persona", "annotation", "summary", "claim", "world_state", "project", "group"
+  action       String   // "create", "read", "update", "delete", "share", "export", "assign", "manage_members", "fork", "review"
+  ownOnly      Boolean  @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([scope, role, resourceType, action])
+  @@map("role_permissions")
 }

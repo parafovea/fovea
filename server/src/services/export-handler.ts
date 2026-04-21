@@ -968,8 +968,8 @@ export class AnnotationExporter {
     }
 
     // 2. Export world state
-    const worldState = await prisma.worldState.findUnique({
-      where: { userId }
+    const worldState = await prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
     if (worldState) {
       const worldLines = this.exportWorldState(worldState)

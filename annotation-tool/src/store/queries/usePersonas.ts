@@ -175,6 +175,8 @@ export function useCreatePersona() {
     mutationFn: async (data: {
       persona: Omit<Persona, 'id' | 'createdAt' | 'updatedAt'>
       ontology: Omit<PersonaOntology, 'id' | 'personaId' | 'createdAt' | 'updatedAt'>
+      projectId?: string
+      shareWith?: Array<{ type: 'user' | 'group'; id: string; permission: string }>
     }) => {
       // Create persona
       const response = await fetch('/api/personas', {
@@ -186,6 +188,7 @@ export function useCreatePersona() {
           role: data.persona.role,
           informationNeed: data.persona.informationNeed,
           details: data.persona.details,
+          projectId: data.projectId || undefined,
         }),
       })
       if (!response.ok) {
@@ -220,6 +223,29 @@ export function useCreatePersona() {
         throw new Error('Failed to create persona ontology')
       }
       const ontology = await ontologyResponse.json()
+
+      // Share persona if requested
+      if (data.shareWith && data.shareWith.length > 0) {
+        for (const share of data.shareWith) {
+          try {
+            await fetch('/api/sharing', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                resourceType: 'persona',
+                resourceId: persona.id,
+                ...(share.type === 'user'
+                  ? { targetUserId: share.id }
+                  : { targetGroupId: share.id }),
+                permission: share.permission,
+              }),
+            })
+          } catch (err) {
+            console.error(`Failed to share persona with ${share.type} ${share.id}:`, err)
+          }
+        }
+      }
 
       return { persona, ontology: { personaId: persona.id, ...ontology } }
     },

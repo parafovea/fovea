@@ -37,7 +37,7 @@ describe('AuthService', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user.id
@@ -414,7 +414,7 @@ describe('AuthService', () => {
           email: 'other@example.com',
           passwordHash,
           displayName: 'Other User',
-          isAdmin: false
+          isAdmin: false,
         }
       })
 

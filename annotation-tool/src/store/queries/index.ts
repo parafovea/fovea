@@ -174,3 +174,59 @@ export {
 // Admin
 export { useUsers, useUser, useCreateUser, useUpdateUser, useDeleteUser } from './admin/useUsers'
 export { useSessions, useRevokeSession } from './admin/useSessions'
+
+// Abilities
+export { useAbilities, abilityKeys } from './useAbilities'
+
+// Groups
+export {
+  useMyGroups,
+  useGroup,
+  useGroupMembers,
+  useCreateGroup,
+  useUpdateGroup,
+  useDeleteGroup,
+  useAddGroupMember,
+  useUpdateGroupMember,
+  useRemoveGroupMember,
+  groupKeys,
+} from './useGroups'
+
+// Projects
+export {
+  useMyProjects,
+  useProject,
+  useProjectMembers,
+  useProjectPersonas,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useAddProjectMember,
+  useUpdateProjectMember,
+  useRemoveProjectMember,
+  projectKeys,
+} from './useProjects'
+
+// Sharing
+export {
+  useReceivedShares,
+  useSentShares,
+  useShareResource,
+  useRevokeShare,
+  useForkShare,
+  sharingKeys,
+} from './useSharing'
+
+// Video Assignments
+export {
+  useProjectVideos,
+  useAssignVideo,
+  useUnassignVideo,
+  useAssignmentRules,
+  useCreateAssignmentRule,
+  useUpdateAssignmentRule,
+  useDeleteAssignmentRule,
+  useEvaluateRule,
+  useEvaluateAllRules,
+  videoAssignmentKeys,
+} from './useVideoAssignments'

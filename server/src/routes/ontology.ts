@@ -1,8 +1,10 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { optionalAuth } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
+import { subject } from '@casl/ability'
+import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -59,7 +61,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Object with personas, personaOntologies, and world state
    */
   fastify.get('/api/ontology', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Retrieve all personas, their ontologies, and world state',
       tags: ['ontology'],
@@ -102,9 +104,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' }
     })
 
-    // Fetch world state for this user
-    const worldState = await fastify.prisma.worldState.findUnique({
-      where: { userId }
+    // Fetch personal world state for this user (projectId: null)
+    const worldState = await fastify.prisma.worldState.findFirst({
+      where: { userId, projectId: null }
     })
 
     // Transform to frontend format
@@ -168,7 +170,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Saved ontology data
    */
   fastify.put('/api/ontology', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Save ontology data including world state',
       tags: ['ontology'],
@@ -245,8 +247,14 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         const savedPersonas = []
         const savedOntologies = []
 
-      // Save all personas for this user
+      // Save all personas for this user, verifying RBAC on existing ones
       for (const persona of personas) {
+        const existing = await tx.persona.findUnique({ where: { id: persona.id } })
+        if (existing) {
+          if (!request.ability!.can('update', subject('Persona', existing))) {
+            throw new ForbiddenError('Cannot update persona ' + persona.id)
+          }
+        }
         const savedPersona = await tx.persona.upsert({
           where: { id: persona.id },
           update: {
@@ -267,8 +275,15 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         savedPersonas.push(savedPersona)
       }
 
-      // Save all ontologies
+      // Save all ontologies, verifying the caller can update the owning persona
       for (const ontology of personaOntologies) {
+        const owningPersona = await tx.persona.findUnique({ where: { id: ontology.personaId } })
+        if (!owningPersona) {
+          throw new NotFoundError('Persona', ontology.personaId)
+        }
+        if (!request.ability!.can('update', subject('Persona', owningPersona))) {
+          throw new ForbiddenError('Cannot modify ontology for persona ' + ontology.personaId)
+        }
         const savedOntology = await tx.ontology.upsert({
           where: { personaId: ontology.personaId },
           update: {
@@ -301,28 +316,30 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       // Save world state if provided (for this user)
       let savedWorldState = null
       if (world) {
-        savedWorldState = await tx.worldState.upsert({
-          where: { userId },
-          create: {
-            userId,
-            entities: world.entities || [],
-            events: world.events || [],
-            times: world.times || [],
-            entityCollections: world.entityCollections || [],
-            eventCollections: world.eventCollections || [],
-            timeCollections: world.timeCollections || [],
-            relations: world.relations || []
-          },
-          update: {
-            entities: world.entities || [],
-            events: world.events || [],
-            times: world.times || [],
-            entityCollections: world.entityCollections || [],
-            eventCollections: world.eventCollections || [],
-            timeCollections: world.timeCollections || [],
-            relations: world.relations || []
-          }
+        const existingWorld = await tx.worldState.findFirst({
+          where: { userId, projectId: null }
         })
+
+        const worldData = {
+          entities: world.entities || [],
+          events: world.events || [],
+          times: world.times || [],
+          entityCollections: world.entityCollections || [],
+          eventCollections: world.eventCollections || [],
+          timeCollections: world.timeCollections || [],
+          relations: world.relations || []
+        }
+
+        if (existingWorld) {
+          savedWorldState = await tx.worldState.update({
+            where: { id: existingWorld.id },
+            data: worldData
+          })
+        } else {
+          savedWorldState = await tx.worldState.create({
+            data: { userId, ...worldData }
+          })
+        }
       }
 
         return { savedPersonas, savedOntologies, savedWorldState }
@@ -358,12 +375,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         fastify.log.error(`Error message: ${error.message}`)
         // Log Prisma-specific error details if available
         if ('code' in error) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
-          fastify.log.error(`Prisma error code: ${(error as any).code}`)
+          fastify.log.error(`Prisma error code: ${(error as Record<string, unknown>).code}`)
         }
         if ('meta' in error) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Error type requires any for dynamic properties
-          fastify.log.error(`Prisma error meta: ${JSON.stringify((error as any).meta)}`)
+          fastify.log.error(`Prisma error meta: ${JSON.stringify((error as Record<string, unknown>).meta)}`)
         }
       }
       return reply.code(500).send({
@@ -381,7 +396,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Suggested ontology types with reasoning
    */
   fastify.post('/api/ontology/augment', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Generate AI-powered ontology type suggestions',
       tags: ['ontology'],
@@ -432,6 +447,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!persona) {
         throw new NotFoundError('Persona', personaId)
+      }
+
+      if (!request.ability!.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot access persona ' + personaId)
       }
 
       // Call model service

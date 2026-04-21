@@ -2049,4 +2049,229 @@ export const handlers = [
       annotationsDeleted: 3,
     })
   }),
+
+  // =============================================================================
+  // GROUPS ENDPOINTS
+  // =============================================================================
+
+  http.get('*/api/groups', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/groups', async ({ request }) => {
+    const body = await request.json() as { name: string; slug?: string; description?: string }
+    return HttpResponse.json({
+      id: 'grp-1',
+      name: body.name,
+      slug: body.slug ?? 'test-group',
+      description: body.description ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.get('*/api/groups/:groupId', ({ params }) => {
+    return HttpResponse.json({
+      id: params.groupId,
+      name: 'Test Group',
+      slug: 'test-group',
+      description: 'A test group',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.put('*/api/groups/:groupId', async ({ request, params }) => {
+    const body = await request.json() as { name?: string; description?: string }
+    return HttpResponse.json({
+      id: params.groupId,
+      name: body.name ?? 'Test Group',
+      slug: 'test-group',
+      description: body.description ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('*/api/groups/:groupId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('*/api/groups/:groupId/members', () => {
+    return HttpResponse.json([
+      {
+        id: 'membership-1',
+        userId: 'user-1',
+        role: 'group_owner',
+        joinedAt: new Date().toISOString(),
+        user: { displayName: 'Test User' },
+      },
+    ])
+  }),
+
+  http.post('*/api/groups/:groupId/members', () => {
+    return HttpResponse.json({ success: true }, { status: 201 })
+  }),
+
+  http.put('*/api/groups/:groupId/members/:userId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/groups/:groupId/members/:userId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  // =============================================================================
+  // PROJECTS ENDPOINTS
+  // =============================================================================
+
+  http.get('*/api/projects', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/projects', async ({ request }) => {
+    const body = await request.json() as { name: string; slug?: string; description?: string }
+    return HttpResponse.json({
+      id: 'proj-1',
+      name: body.name,
+      slug: body.slug ?? 'test-project',
+      description: body.description ?? null,
+      ownerUserId: 'user-1',
+      ownerGroupId: null,
+      isArchived: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+
+  http.get('*/api/projects/:projectId', ({ params }) => {
+    return HttpResponse.json({
+      id: params.projectId,
+      name: 'Test Project',
+      slug: 'test-project',
+      description: null,
+      ownerUserId: 'user-1',
+      ownerGroupId: null,
+      isArchived: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      videoAssignmentCount: 0,
+    })
+  }),
+
+  http.put('*/api/projects/:projectId', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>
+    return HttpResponse.json({
+      id: params.projectId,
+      name: body.name ?? 'Test Project',
+      slug: 'test-project',
+      description: body.description ?? null,
+      ownerUserId: 'user-1',
+      ownerGroupId: null,
+      isArchived: body.isArchived ?? false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.delete('*/api/projects/:projectId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('*/api/projects/:projectId/members', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/projects/:projectId/members', () => {
+    return HttpResponse.json({ success: true }, { status: 201 })
+  }),
+
+  http.put('*/api/projects/:projectId/members/:userId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/projects/:projectId/members/:userId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('*/api/projects/:projectId/personas', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.get('*/api/projects/:projectId/videos', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/projects/:projectId/videos', () => {
+    return HttpResponse.json({ success: true }, { status: 201 })
+  }),
+
+  http.delete('*/api/projects/:projectId/videos/:videoId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  // =============================================================================
+  // SHARING ENDPOINTS
+  // =============================================================================
+
+  http.get('*/api/sharing/received', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.get('*/api/sharing/sent', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/sharing', async () => {
+    return HttpResponse.json({ id: 'share-1' }, { status: 201 })
+  }),
+
+  http.delete('*/api/sharing/:shareId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.post('*/api/sharing/:shareId/fork', () => {
+    return HttpResponse.json(
+      { resourceType: 'annotation', resourceId: 'forked-1', resource: {} },
+      { status: 201 }
+    )
+  }),
+
+  // =============================================================================
+  // ABILITIES ENDPOINTS
+  // =============================================================================
+
+  http.get('*/api/auth/abilities', () => {
+    return HttpResponse.json({
+      rules: [{ action: 'manage', subject: 'all' }],
+    })
+  }),
+
+  // =============================================================================
+  // VIDEO ASSIGNMENT RULES (ADMIN)
+  // =============================================================================
+
+  http.get('*/api/admin/video-assignments/rules', () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/api/admin/video-assignments/rules', () => {
+    return HttpResponse.json({ id: 'rule-1' }, { status: 201 })
+  }),
+
+  http.put('*/api/admin/video-assignments/rules/:ruleId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/admin/video-assignments/rules/:ruleId', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/admin/video-assignments/rules/:ruleId/evaluate', () => {
+    return HttpResponse.json({ matchedVideos: [] })
+  }),
+
+  http.post('*/api/admin/video-assignments/rules/evaluate-all', () => {
+    return HttpResponse.json({ results: [] })
+  }),
 ]

@@ -35,7 +35,7 @@ describe('API Key Resolution Integration', () => {
         username: 'user1',
         email: 'user1@example.com',
         displayName: 'User One',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user1.id
@@ -45,7 +45,7 @@ describe('API Key Resolution Integration', () => {
         username: 'user2',
         email: 'user2@example.com',
         displayName: 'User Two',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     otherUserId = user2.id

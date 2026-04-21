@@ -897,7 +897,7 @@ describe('Cross-user import ownership', () => {
       const prismaStub = {
         persona: { findMany: vi.fn().mockResolvedValue([]) },
         ontology: { findMany: vi.fn().mockResolvedValue([]) },
-        worldState: { findUnique: vi.fn().mockResolvedValue(null) },
+        worldState: { findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null) },
         videoSummary: { findMany: vi.fn().mockResolvedValue([]) },
         claim: { findMany: vi.fn().mockResolvedValue([]) },
         claimRelation: { findMany: vi.fn().mockResolvedValue([]) },

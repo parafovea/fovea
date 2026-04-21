@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -34,6 +35,8 @@ describe('Personas API', () => {
     await prisma.worldState.deleteMany()
     await prisma.video.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create test user
     const passwordHash = await hashPassword('testpass123')
@@ -43,7 +46,7 @@ describe('Personas API', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user.id
@@ -591,8 +594,8 @@ describe('Personas API', () => {
       })
 
       // Verify type assignment was cleaned up
-      const worldState = await prisma.worldState.findUnique({
-        where: { userId: testUserId }
+      const worldState = await prisma.worldState.findFirst({
+        where: { userId: testUserId, projectId: null }
       })
       const entities = worldState?.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>
       const entity = entities[0]
@@ -642,8 +645,8 @@ describe('Personas API', () => {
       })
 
       // Verify persona interpretation was cleaned up
-      const worldState = await prisma.worldState.findUnique({
-        where: { userId: testUserId }
+      const worldState = await prisma.worldState.findFirst({
+        where: { userId: testUserId, projectId: null }
       })
       const events = worldState?.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>
       const event = events[0]
@@ -678,7 +681,7 @@ describe('Personas API', () => {
           email: 'another@example.com',
           passwordHash: await hashPassword('testpass123'),
           displayName: 'Another User',
-          isAdmin: false
+          isAdmin: false,
         }
       })
 
@@ -699,7 +702,7 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Should get 403 or 404 (implementation returns 403 for forbidden)
+      // Should get 403 (forbidden — not the owner)
       expect(response.statusCode).toBe(403)
     })
   })
