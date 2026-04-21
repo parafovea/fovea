@@ -6,6 +6,8 @@ This module defines the interface for language model adapters.
 from abc import ABC, abstractmethod
 from typing import Any
 
+from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
+
 
 class ILanguageModel(ABC):
     """Interface for language model adapters.
@@ -79,6 +81,33 @@ class ILanguageModel(ABC):
             If generation fails.
         ValueError
             If output doesn't match schema.
+        """
+        ...
+
+    @abstractmethod
+    async def generate_with_config(
+        self,
+        prompt: str,
+        config: GenerationConfigDTO,
+    ) -> GenerationResultDTO:
+        """Generate text using a structured generation config.
+
+        Parameters
+        ----------
+        prompt : str
+            Input prompt.
+        config : GenerationConfigDTO
+            Generation parameters.
+
+        Returns
+        -------
+        GenerationResultDTO
+            Generated text with usage metadata.
+
+        Raises
+        ------
+        InferenceError
+            If generation fails.
         """
         ...
 

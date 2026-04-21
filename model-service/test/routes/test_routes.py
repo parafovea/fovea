@@ -84,9 +84,21 @@ def test_client_with_mocks(mock_model_manager: Mock) -> Generator[TestClient, No
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 
     app.dependency_overrides[get_model_manager] = lambda: mock_model_manager
-    client = TestClient(app, base_url="http://testserver")
-    yield client
-    app.dependency_overrides.clear()
+    # Patch loader factories so routes do not attempt to download real weights
+    # when the use-case wrapper is itself mocked.
+    with (
+        patch(
+            "src.infrastructure.adapters.outbound.models.vlm.loader.create_vlm_loader",
+            return_value=Mock(),
+        ),
+        patch(
+            "src.infrastructure.adapters.outbound.models.llm.loader.create_llm_loader",
+            return_value=Mock(load=AsyncMock(), unload=AsyncMock()),
+        ),
+    ):
+        client = TestClient(app, base_url="http://testserver")
+        yield client
+        app.dependency_overrides.clear()
 
 
 class TestSummarizeEndpoint:

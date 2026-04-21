@@ -1,47 +1,33 @@
 """Ontology augmentation using language models.
 
 This module provides functionality to suggest new ontology types (EntityType,
-EventType, RoleType) based on existing types and domain descriptions using
-language models. It includes prompt templates, LLM integration, response parsing,
-and confidence scoring.
+EventType, RoleType, RelationType) based on existing types and domain
+descriptions using language models. The use case is framework-neutral: it
+depends only on DTOs and the ``ILanguageModel`` / ``IExternalAPIRouter`` ports.
 """
+
+from __future__ import annotations
 
 import json
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
-from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
-from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
-from src.infrastructure.adapters.outbound.models.llm.loader import (
-    GenerationConfig,
-    LLMConfig,
-    create_llm_loader,
-)
+from src.application.dto.generation import GenerationConfigDTO
+from src.application.dto.ontology import OntologyTypeDTO
+
+if TYPE_CHECKING:
+    from src.application.dto.external_api import ExternalAPIConfigDTO
+    from src.application.ports.outbound.external_api_router import IExternalAPIRouter
+    from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class AugmentationContext:
-    """Context for ontology augmentation.
-
-    Parameters
-    ----------
-    domain : str
-        Domain description (e.g., "Wildlife research tracking marine mammals").
-    existing_types : list[str]
-        List of existing type names in the ontology.
-    target_category : str
-        Category to augment ("entity", "event", "role", or "relation").
-    persona_role : str | None, default=None
-        Role of the persona (e.g., "Marine Biologist").
-    information_need : str | None, default=None
-        Specific information needs of the persona.
-    """
+    """Context for ontology augmentation."""
 
     domain: str
     existing_types: list[str]
@@ -56,20 +42,7 @@ HIGH_CONFIDENCE_THRESHOLD = 0.8
 
 
 def create_augmentation_prompt(context: AugmentationContext, max_suggestions: int = 10) -> str:
-    """Create a prompt for ontology type augmentation.
-
-    Parameters
-    ----------
-    context : AugmentationContext
-        Context containing domain, existing types, and target category.
-    max_suggestions : int, default=10
-        Maximum number of suggestions to request.
-
-    Returns
-    -------
-    str
-        Formatted prompt for the language model.
-    """
+    """Create a prompt for ontology type augmentation."""
     category_instructions = {
         "entity": {
             "definition": "Entity types represent categories of physical or abstract objects that can be observed, identified, and tracked in videos.",
@@ -101,7 +74,7 @@ def create_augmentation_prompt(context: AugmentationContext, max_suggestions: in
     if context.information_need:
         persona_context += f"\n- Information Need: {context.information_need}"
 
-    prompt = f"""You are an expert in ontology design for video annotation systems. Your task is to suggest new {context.target_category} types for a domain-specific ontology.
+    return f"""You are an expert in ontology design for video annotation systems. Your task is to suggest new {context.target_category} types for a domain-specific ontology.
 
 Domain: {context.domain}{persona_context}
 
@@ -140,27 +113,9 @@ Return a valid JSON array of objects with this structure:
 
 Return ONLY the JSON array, no additional text or explanation."""
 
-    return prompt  # noqa: RET504
-
 
 def parse_llm_response(response_text: str) -> list[dict[str, Any]]:
-    """Parse LLM response text into structured type suggestions.
-
-    Parameters
-    ----------
-    response_text : str
-        Raw text response from the language model.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        List of parsed type dictionaries with name, description, parent, examples.
-
-    Raises
-    ------
-    ValueError
-        If the response cannot be parsed or is invalid.
-    """
+    """Parse LLM response text into structured type suggestions."""
     text = response_text.strip()
 
     json_match = re.search(r"\[\s*\{.*?\}\s*\]", text, re.DOTALL)
@@ -177,7 +132,7 @@ def parse_llm_response(response_text: str) -> list[dict[str, Any]]:
     if not isinstance(parsed, list):
         raise ValueError("LLM response must be a JSON array")
 
-    validated_types = []
+    validated_types: list[dict[str, Any]] = []
     for item in parsed:
         if not isinstance(item, dict):
             logger.warning(f"Skipping non-dict item: {item}")
@@ -187,35 +142,22 @@ def parse_llm_response(response_text: str) -> list[dict[str, Any]]:
             logger.warning(f"Skipping item missing required fields: {item}")
             continue
 
-        validated_item = {
-            "name": str(item["name"]).strip(),
-            "description": str(item["description"]).strip(),
-            "parent": str(item["parent"]).strip() if item.get("parent") else None,
-            "examples": (
-                [str(ex).strip() for ex in item["examples"]] if "examples" in item else []
-            ),
-        }
-
-        validated_types.append(validated_item)
+        validated_types.append(
+            {
+                "name": str(item["name"]).strip(),
+                "description": str(item["description"]).strip(),
+                "parent": str(item["parent"]).strip() if item.get("parent") else None,
+                "examples": (
+                    [str(ex).strip() for ex in item["examples"]] if "examples" in item else []
+                ),
+            }
+        )
 
     return validated_types
 
 
 def calculate_confidence(suggestion: dict[str, Any], context: AugmentationContext) -> float:
-    """Calculate confidence score for a type suggestion.
-
-    Parameters
-    ----------
-    suggestion : dict[str, Any]
-        Parsed type suggestion with name, description, parent, examples.
-    context : AugmentationContext
-        Original augmentation context.
-
-    Returns
-    -------
-    float
-        Confidence score between 0.0 and 1.0.
-    """
+    """Calculate confidence score for a type suggestion."""
     confidence = 0.5
 
     if suggestion["name"] and len(suggestion["name"]) > 0:
@@ -244,18 +186,7 @@ def calculate_confidence(suggestion: dict[str, Any], context: AugmentationContex
 
 
 def extract_json_from_response(response_text: str) -> str:
-    """Extract JSON from LLM response, handling markdown code blocks.
-
-    Parameters
-    ----------
-    response_text : str
-        Raw text response from LLM.
-
-    Returns
-    -------
-    str
-        Extracted JSON string.
-    """
+    """Extract JSON from LLM response, handling markdown code blocks."""
     text = response_text.strip()
 
     json_code_block = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
@@ -269,174 +200,155 @@ def extract_json_from_response(response_text: str) -> str:
     return text
 
 
-async def augment_ontology_with_external_api(
-    context: AugmentationContext,
-    api_config: ExternalAPIConfig,
-    provider: str,
-    max_suggestions: int = 10,
-) -> list[OntologyType]:
-    """Suggest new ontology types using external LLM API.
+class AugmentOntologyUseCase:
+    """Use case for ontology augmentation via a language model or external API."""
 
-    Parameters
-    ----------
-    context : AugmentationContext
-        Context containing domain, existing types, and target category.
-    api_config : ExternalAPIConfig
-        Configuration for external API client.
-    provider : str
-        Provider name (anthropic, openai, google).
-    max_suggestions : int, default=10
-        Maximum number of type suggestions to generate.
+    def __init__(
+        self,
+        *,
+        language_model: ILanguageModel | None = None,
+        external_router: IExternalAPIRouter | None = None,
+    ) -> None:
+        """Initialize with at least one generation backend.
 
-    Returns
-    -------
-    list[OntologyType]
-        List of suggested ontology types with confidence scores.
+        Parameters
+        ----------
+        language_model : ILanguageModel | None
+            Local language model port. Used by ``execute_local``.
+        external_router : IExternalAPIRouter | None
+            External API router port. Used by ``execute_external``.
+        """
+        self._llm = language_model
+        self._router = external_router
 
-    Raises
-    ------
-    RuntimeError
-        If API call fails.
-    ValueError
-        If API response cannot be parsed.
-    """
-    try:
+    async def execute_local(
+        self,
+        *,
+        context: AugmentationContext,
+        max_suggestions: int = 10,
+    ) -> list[OntologyTypeDTO]:
+        """Suggest new types using the injected local language model."""
+        if self._llm is None:
+            raise RuntimeError("Local language model port not provided")
+
         prompt = create_augmentation_prompt(context, max_suggestions)
+        config = GenerationConfigDTO(max_tokens=2048, temperature=0.7, top_p=0.9)
+        result = await self._llm.generate_with_config(prompt=prompt, config=config)
+        return _suggestions_from_response(result.text, context, max_suggestions)
 
+    async def execute_external(
+        self,
+        *,
+        context: AugmentationContext,
+        api_config: ExternalAPIConfigDTO,
+        provider: str,
+        max_suggestions: int = 10,
+    ) -> list[OntologyTypeDTO]:
+        """Suggest new types using an external provider API."""
+        if self._router is None:
+            raise RuntimeError("External API router port not provided")
+
+        prompt = create_augmentation_prompt(context, max_suggestions)
         logger.info(f"Calling {provider} API for ontology augmentation")
-        router = ExternalModelRouter()
-
         try:
-            result = await router.generate_text(
+            result = await self._router.generate_text(
                 config=api_config,
                 provider=provider,
                 prompt=prompt,
                 max_tokens=2048,
                 temperature=0.7,
             )
-
-            response_text = result["text"]
+            response_text = str(result["text"])
             usage = result.get("usage", {})
-
             logger.info(
                 f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
             )
-
             json_text = extract_json_from_response(response_text)
-            parsed_suggestions = parse_llm_response(json_text)
-
-            suggestions = []
-            for suggestion_dict in parsed_suggestions:
-                confidence = calculate_confidence(suggestion_dict, context)
-
-                suggestion = OntologyType(
-                    name=suggestion_dict["name"],
-                    description=suggestion_dict["description"],
-                    parent=suggestion_dict.get("parent"),
-                    confidence=confidence,
-                    examples=suggestion_dict.get("examples", []),
-                )
-                suggestions.append(suggestion)
-
-            suggestions.sort(key=lambda x: x.confidence, reverse=True)
-
-            return suggestions[:max_suggestions]
-
+            return _suggestions_from_parsed(
+                parse_llm_response(json_text), context, max_suggestions
+            )
         finally:
-            await router.close_all()
+            await self._router.close()
 
-    except Exception as e:
-        logger.error(f"External API ontology augmentation failed: {e}")
-        raise RuntimeError(f"External API augmentation failed: {e}") from e
+
+def _suggestions_from_response(
+    response_text: str, context: AugmentationContext, max_suggestions: int
+) -> list[OntologyTypeDTO]:
+    """Parse a raw LLM response into ranked suggestion DTOs."""
+    parsed = parse_llm_response(response_text)
+    return _suggestions_from_parsed(parsed, context, max_suggestions)
+
+
+def _suggestions_from_parsed(
+    parsed: list[dict[str, Any]], context: AugmentationContext, max_suggestions: int
+) -> list[OntologyTypeDTO]:
+    """Convert parsed suggestion dicts into ranked DTOs."""
+    suggestions: list[OntologyTypeDTO] = []
+    for item in parsed:
+        confidence = calculate_confidence(item, context)
+        suggestions.append(
+            OntologyTypeDTO(
+                name=item["name"],
+                description=item["description"],
+                parent=item.get("parent"),
+                confidence=confidence,
+                examples=list(item.get("examples", [])),
+            )
+        )
+
+    suggestions.sort(key=lambda x: x.confidence, reverse=True)
+    return suggestions[:max_suggestions]
 
 
 async def augment_ontology_with_llm(
     context: AugmentationContext,
-    llm_config: LLMConfig,
+    language_model: ILanguageModel,
     max_suggestions: int = 10,
-    cache_dir: Path | None = None,
-) -> list[OntologyType]:
-    """Suggest new ontology types using a language model.
+) -> list[OntologyTypeDTO]:
+    """Functional entry point backed by a local language model port.
 
     Parameters
     ----------
     context : AugmentationContext
-        Context containing domain, existing types, and target category.
-    llm_config : LLMConfig
-        Configuration for the language model to use.
-    max_suggestions : int, default=10
-        Maximum number of type suggestions to generate.
-    cache_dir : Path | None, default=None
-        Directory for caching model weights.
+        Augmentation context.
+    language_model : ILanguageModel
+        Injected language model port. The model must already be loaded.
+    max_suggestions : int
+        Maximum number of suggestions to return.
 
     Returns
     -------
-    list[OntologyType]
-        List of suggested ontology types with confidence scores.
-
-    Raises
-    ------
-    RuntimeError
-        If LLM loading or generation fails.
-    ValueError
-        If LLM response cannot be parsed.
+    list[OntologyTypeDTO]
+        Ranked suggestion DTOs.
     """
-    loader = create_llm_loader(llm_config, cache_dir)
+    use_case = AugmentOntologyUseCase(language_model=language_model)
+    return await use_case.execute_local(
+        context=context,
+        max_suggestions=max_suggestions,
+    )
 
-    try:
-        await loader.load()
 
-        prompt = create_augmentation_prompt(context, max_suggestions)
-
-        generation_config = GenerationConfig(
-            max_tokens=2048,
-            temperature=0.7,
-            top_p=0.9,
-            stop_sequences=None,
-        )
-
-        result = await loader.generate(prompt, generation_config)
-
-        parsed_suggestions = parse_llm_response(result.text)
-
-        suggestions = []
-        for suggestion_dict in parsed_suggestions:
-            confidence = calculate_confidence(suggestion_dict, context)
-
-            suggestion = OntologyType(
-                name=suggestion_dict["name"],
-                description=suggestion_dict["description"],
-                parent=suggestion_dict.get("parent"),
-                confidence=confidence,
-                examples=suggestion_dict.get("examples", []),
-            )
-            suggestions.append(suggestion)
-
-        suggestions.sort(key=lambda x: x.confidence, reverse=True)
-
-        return suggestions[:max_suggestions]
-
-    finally:
-        await loader.unload()
+async def augment_ontology_with_external_api(
+    context: AugmentationContext,
+    api_config: ExternalAPIConfigDTO,
+    provider: str,
+    external_router: IExternalAPIRouter,
+    max_suggestions: int = 10,
+) -> list[OntologyTypeDTO]:
+    """Functional entry point backed by an external API router port."""
+    use_case = AugmentOntologyUseCase(external_router=external_router)
+    return await use_case.execute_external(
+        context=context,
+        api_config=api_config,
+        provider=provider,
+        max_suggestions=max_suggestions,
+    )
 
 
 def generate_augmentation_reasoning(
-    suggestions: list[OntologyType], context: AugmentationContext
+    suggestions: list[OntologyTypeDTO], context: AugmentationContext
 ) -> str:
-    """Generate explanation for why types were suggested.
-
-    Parameters
-    ----------
-    suggestions : list[OntologyType]
-        List of suggested types.
-    context : AugmentationContext
-        Original augmentation context.
-
-    Returns
-    -------
-    str
-        Human-readable explanation of the suggestions.
-    """
+    """Generate explanation for why types were suggested."""
     if not suggestions:
         return f"No suitable {context.target_category} types found for domain: {context.domain}"
 

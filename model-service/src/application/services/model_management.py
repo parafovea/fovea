@@ -3,61 +3,45 @@
 This module provides a ModelManager class that handles loading and unloading
 of AI models based on available GPU memory. Models are loaded on demand and
 automatically evicted when memory pressure occurs.
+
+All hardware-specific logic is delegated to an injected
+``IModelCapabilityProbe`` port. Concrete model construction for audio tasks is
+delegated to an injected ``TaskModelFactory`` mapping so that the service
+contains no ML framework imports.
 """
 
+from __future__ import annotations
+
 import logging
+import os
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import torch
+import psutil
 import yaml
 from opentelemetry import trace
+
+from src.application.dto.external_api import ExternalAPIConfigDTO
+
+if TYPE_CHECKING:
+    from src.application.ports.outbound.model_capability import IModelCapabilityProbe
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 
-class ModelConfig:
-    """Configuration for a single model variant.
+#: Factory that builds a task-specific loader from a ``ModelConfig``.
+TaskModelFactory = Callable[["ModelConfig"], Any]
 
-    Attributes
-    ----------
-    model_id : str
-        Hugging Face model identifier or external API model name.
-    framework : str
-        Inference framework (sglang, vllm, pytorch, onnx, external_api).
-    vram_gb : float
-        VRAM requirement in GB (0 for external APIs or CPU-only models).
-    cpu_memory_gb : float
-        RAM requirement in GB for CPU inference.
-    cpu_compatible : bool
-        Whether model can run on CPU without GPU.
-    quantization : str | None
-        Quantization method (4bit, 8bit, awq, int8, int4, etc).
-    speed : str
-        Speed category (fast, medium, slow).
-    description : str
-        Human-readable description.
-    fps : int | None
-        Processing speed in frames per second (for vision models).
-    provider : str | None
-        External API provider (anthropic, openai, google).
-    api_endpoint : str | None
-        API endpoint URL for external APIs.
-    requires_api_key : bool
-        Whether model requires API key authentication.
-    """
+
+class ModelConfig:
+    """Configuration for a single model variant."""
 
     def __init__(self, config_dict: dict[str, Any]) -> None:
-        """Initialize model configuration from dictionary.
-
-        Parameters
-        ----------
-        config_dict : dict[str, Any]
-            Dictionary containing model configuration parameters.
-        """
+        """Initialize model configuration from dictionary."""
         self.model_id: str = config_dict["model_id"]
         self.framework: str = config_dict["framework"]
         self.vram_gb: float = config_dict.get("vram_gb", 0)
@@ -73,50 +57,20 @@ class ModelConfig:
 
     @property
     def vram_bytes(self) -> int:
-        """Convert VRAM requirement from GB to bytes.
-
-        Returns
-        -------
-        int
-            VRAM requirement in bytes.
-        """
+        """Convert VRAM requirement from GB to bytes."""
         return int(self.vram_gb * 1024 * 1024 * 1024)
 
     @property
     def cpu_memory_bytes(self) -> int:
-        """Convert CPU memory requirement from GB to bytes.
-
-        Returns
-        -------
-        int
-            CPU memory requirement in bytes.
-        """
+        """Convert CPU memory requirement from GB to bytes."""
         return int(self.cpu_memory_gb * 1024 * 1024 * 1024)
 
 
 class TaskConfig:
-    """Configuration for a task type with multiple model options.
-
-    Attributes
-    ----------
-    task_name : str
-        Name of the task.
-    selected : str
-        Currently selected model name.
-    options : dict[str, ModelConfig]
-        Available model options for this task.
-    """
+    """Configuration for a task type with multiple model options."""
 
     def __init__(self, task_name: str, config_dict: dict[str, Any]) -> None:
-        """Initialize task configuration from dictionary.
-
-        Parameters
-        ----------
-        task_name : str
-            Name of the task (e.g., "video_summarization").
-        config_dict : dict[str, Any]
-            Dictionary containing task configuration.
-        """
+        """Initialize task configuration from dictionary."""
         self.task_name = task_name
         self.selected = config_dict["selected"]
         self.options: dict[str, ModelConfig] = {
@@ -124,41 +78,15 @@ class TaskConfig:
         }
 
     def get_selected_config(self) -> ModelConfig:
-        """Get the currently selected model configuration.
-
-        Returns
-        -------
-        ModelConfig
-            Configuration for the selected model.
-        """
+        """Get the currently selected model configuration."""
         return self.options[self.selected]
 
 
 class InferenceConfig:
-    """Global inference configuration settings.
-
-    Attributes
-    ----------
-    max_memory_per_model : str
-        Maximum memory per model ('auto' or specific value).
-    offload_threshold : float
-        Memory usage threshold for offloading (0.0 to 1.0).
-    warmup_on_startup : bool
-        Whether to load all models on startup.
-    default_batch_size : int
-        Default batch size for inference.
-    max_batch_size : int
-        Maximum batch size for inference.
-    """
+    """Global inference configuration settings."""
 
     def __init__(self, config_dict: dict[str, Any]) -> None:
-        """Initialize inference configuration from dictionary.
-
-        Parameters
-        ----------
-        config_dict : dict[str, Any]
-            Dictionary containing inference configuration.
-        """
+        """Initialize inference configuration from dictionary."""
         self.max_memory_per_model = config_dict.get("max_memory_per_model", "auto")
         self.offload_threshold: float = config_dict.get("offload_threshold", 0.85)
         self.warmup_on_startup: bool = config_dict.get("warmup_on_startup", False)
@@ -167,39 +95,34 @@ class InferenceConfig:
 
 
 class ModelManager:
-    """Manages loading, unloading, and memory management of AI models.
+    """Manages loading, unloading, and memory management of AI models."""
 
-    This class handles dynamic model loading based on memory availability,
-    implements LRU eviction when memory pressure occurs, and provides
-    utilities for VRAM monitoring.
-
-    Attributes
-    ----------
-    config_path : Path
-        Path to models.yaml configuration file.
-    config : dict[str, Any]
-        Parsed configuration dictionary.
-    loaded_models : OrderedDict[str, Any]
-        Currently loaded models (LRU ordered).
-    model_load_times : dict[str, float]
-        Timestamp when each model was loaded.
-    model_memory_usage : dict[str, int]
-        Actual memory usage per model in bytes.
-    tasks : dict[str, TaskConfig]
-        Task configurations.
-    inference_config : InferenceConfig
-        Global inference settings.
-    """
-
-    def __init__(self, config_path: str) -> None:
-        """Initialize ModelManager with configuration file.
+    def __init__(
+        self,
+        config_path: str,
+        *,
+        capability_probe: IModelCapabilityProbe | None = None,
+        task_factories: dict[str, TaskModelFactory] | None = None,
+    ) -> None:
+        """Initialize ModelManager.
 
         Parameters
         ----------
         config_path : str
             Path to models.yaml configuration file.
+        capability_probe : IModelCapabilityProbe | None
+            Hardware capability probe. If None, a default torch-backed probe
+            is resolved lazily from infrastructure. This fallback exists only
+            to keep the legacy call site working; production callers inject
+            the port explicitly.
+        task_factories : dict[str, TaskModelFactory] | None
+            Mapping from task type to a factory callable that builds the
+            corresponding loader. Tasks not in the mapping fall back to
+            placeholder dicts.
         """
         self.config_path = Path(config_path)
+        self._capability_probe: IModelCapabilityProbe | None = capability_probe
+        self._task_factories: dict[str, TaskModelFactory] = dict(task_factories or {})
         self.config = self._load_config()
         self.loaded_models: OrderedDict[str, Any] = OrderedDict()
         self.model_load_times: dict[str, float] = {}
@@ -211,21 +134,31 @@ class ModelManager:
         logger.info(f"ModelManager initialized with config from {config_path}")
         logger.info(f"Device: {self.device}, CPU-only mode: {self.cpu_only_mode}")
 
-    def _load_config(self) -> dict[str, Any]:
-        """Load configuration from YAML file.
+    # --- Capability probe plumbing -------------------------------------------------
 
-        Returns
-        -------
-        dict[str, Any]
-            Dictionary containing parsed configuration.
+    def _probe(self) -> IModelCapabilityProbe:
+        """Return the capability probe.
 
         Raises
         ------
-        FileNotFoundError
-            If configuration file does not exist.
-        yaml.YAMLError
-            If configuration file is invalid.
+        RuntimeError
+            If no probe was provided at construction time.
         """
+        if self._capability_probe is None:
+            raise RuntimeError(
+                "ModelManager requires an IModelCapabilityProbe. "
+                "Construct via the container or pass capability_probe explicitly."
+            )
+        return self._capability_probe
+
+    def register_task_factory(self, task_type: str, factory: TaskModelFactory) -> None:
+        """Register a factory for a task type."""
+        self._task_factories[task_type] = factory
+
+    # --- Config loading ------------------------------------------------------------
+
+    def _load_config(self) -> dict[str, Any]:
+        """Load configuration from YAML file."""
         if not self.config_path.exists():
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
@@ -242,61 +175,21 @@ class ModelManager:
         return config
 
     def _detect_device(self) -> str:
-        """Detect available compute device.
+        """Detect available compute device via the capability probe."""
+        return self._probe().detect_device()
 
-        Returns
-        -------
-        str
-            'cuda' if NVIDIA GPU available, 'mps' if Apple Silicon, else 'cpu'.
-        """
-        if torch.cuda.is_available():
-            return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+    # --- Memory accounting --------------------------------------------------------
 
     def get_available_ram(self) -> int:
-        """Get available system RAM in bytes.
-
-        Returns
-        -------
-        int
-            Available RAM in bytes.
-        """
-        import psutil
-
+        """Get available system RAM in bytes."""
         return int(psutil.virtual_memory().available)
 
     def get_total_ram(self) -> int:
-        """Get total system RAM in bytes.
-
-        Returns
-        -------
-        int
-            Total RAM in bytes.
-        """
-        import psutil
-
+        """Get total system RAM in bytes."""
         return int(psutil.virtual_memory().total)
 
     def get_cpu_compatible_models(self, task_type: str) -> dict[str, ModelConfig]:
-        """Get models that can run on CPU for a task type.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to get models for.
-
-        Returns
-        -------
-        dict[str, ModelConfig]
-            Dictionary of CPU-compatible model options.
-
-        Raises
-        ------
-        ValueError
-            If task type is invalid.
-        """
+        """Get models that can run on CPU for a task type."""
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
 
@@ -304,87 +197,37 @@ class ModelManager:
         return {name: config for name, config in task.options.items() if config.cpu_compatible}
 
     def get_available_vram(self) -> int:
-        """Get available GPU memory in bytes.
-
-        Returns
-        -------
-        int
-            Available VRAM in bytes.
-        """
-        if not torch.cuda.is_available():
-            return 0
-
-        device = torch.cuda.current_device()
-        total = torch.cuda.get_device_properties(device).total_memory
-        allocated = torch.cuda.memory_allocated(device)
-        return total - allocated
+        """Get available GPU memory in bytes."""
+        return self._probe().available_vram_bytes()
 
     def get_total_vram(self) -> int:
-        """Get total GPU memory in bytes.
-
-        Returns
-        -------
-        int
-            Total VRAM in bytes.
-        """
-        if not torch.cuda.is_available():
-            return 0
-
-        device = torch.cuda.current_device()
-        return torch.cuda.get_device_properties(device).total_memory
+        """Get total GPU memory in bytes."""
+        return self._probe().total_vram_bytes()
 
     def get_memory_usage_percentage(self) -> float:
-        """Get current GPU memory usage as percentage.
-
-        Returns
-        -------
-        float
-            Memory usage percentage (0.0 to 1.0).
-        """
+        """Get current GPU memory usage as percentage (0.0 to 1.0)."""
         total = self.get_total_vram()
         if total == 0:
             return 0.0
-
-        allocated = torch.cuda.memory_allocated()
+        allocated = self._probe().allocated_vram_bytes()
         return allocated / total
 
     def check_memory_available(self, required_bytes: int) -> bool:
-        """Check if sufficient memory is available for model loading.
-
-        Parameters
-        ----------
-        required_bytes : int
-            Required memory in bytes.
-
-        Returns
-        -------
-        bool
-            True if sufficient memory is available.
-        """
+        """Check if sufficient memory is available for model loading."""
         available = self.get_available_vram()
         return available >= required_bytes
 
     def get_lru_model(self) -> str | None:
-        """Get least recently used model identifier.
-
-        Returns
-        -------
-        str | None
-            Task name of LRU model, or None if no models loaded.
-        """
+        """Get least recently used model identifier."""
         if not self.loaded_models:
             return None
         return next(iter(self.loaded_models))
 
+    # --- Loading / unloading ------------------------------------------------------
+
     @tracer.start_as_current_span("evict_lru_model")
     async def evict_lru_model(self) -> str | None:
-        """Evict the least recently used model from memory.
-
-        Returns
-        -------
-        str | None
-            Task name of evicted model, or None if no models to evict.
-        """
+        """Evict the least recently used model from memory."""
         lru_task = self.get_lru_model()
         if lru_task is None:
             logger.warning("No models to evict")
@@ -396,13 +239,7 @@ class ModelManager:
 
     @tracer.start_as_current_span("unload_model")
     async def unload_model(self, task_type: str) -> None:
-        """Unload a model from memory.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type of model to unload.
-        """
+        """Unload a model from memory."""
         if task_type not in self.loaded_models:
             logger.warning(f"Model {task_type} not loaded")
             return
@@ -412,35 +249,12 @@ class ModelManager:
         del self.model_load_times[task_type]
         del self.model_memory_usage[task_type]
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
+        self._probe().empty_cache()
         logger.info(f"Model {task_type} unloaded successfully")
 
     @tracer.start_as_current_span("load_model")
     async def load_model(self, task_type: str) -> Any:
-        """Load a model for the specified task type.
-
-        Loads the selected model for the task, handling memory management
-        and eviction if necessary.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to load model for.
-
-        Returns
-        -------
-        Any
-            Loaded model object.
-
-        Raises
-        ------
-        ValueError
-            If task type is invalid or model cannot be loaded.
-        RuntimeError
-            If insufficient memory after eviction attempts.
-        """
+        """Load a model for the specified task type."""
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
 
@@ -460,16 +274,14 @@ class ModelManager:
         while not self.check_memory_available(model_config.vram_bytes):
             memory_usage = self.get_memory_usage_percentage()
             logger.info(f"Insufficient memory (usage: {memory_usage:.1%}), evicting LRU model")
-
             evicted = await self.evict_lru_model()
             if evicted is None:
                 raise RuntimeError(f"Insufficient memory for {task_type} and no models to evict")
 
-        memory_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
-
-        model = await self._load_model_implementation(task_type, model_config)
-
-        memory_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
+        probe = self._probe()
+        memory_before = probe.allocated_vram_bytes()
+        model = self._load_model_implementation(task_type, model_config)
+        memory_after = probe.allocated_vram_bytes()
         actual_memory = memory_after - memory_before
 
         self.loaded_models[task_type] = model
@@ -480,99 +292,17 @@ class ModelManager:
             f"Model {task_type} loaded successfully "
             f"(actual memory: {actual_memory / 1024**3:.2f}GB)"
         )
-
         return model
 
-    async def _load_model_implementation(self, task_type: str, model_config: ModelConfig) -> Any:
-        """Load model implementation based on framework and task type.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type being loaded (audio_transcription, speaker_diarization, vad, etc.).
-        model_config : ModelConfig
-            Model configuration.
-
-        Returns
-        -------
-        Any
-            Loaded model object (loader instance for audio models, placeholder dict for others).
-
-        Raises
-        ------
-        ImportError
-            If required audio dependencies are not installed.
-        ValueError
-            If framework or model configuration is invalid.
-        """
+    def _load_model_implementation(self, task_type: str, model_config: ModelConfig) -> Any:
+        """Build a loader via the registered task factory or return a stub."""
         logger.info(f"Loading {model_config.framework} model: {model_config.model_id}")
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        if task_type == "audio_transcription":
-            from src.infrastructure.adapters.outbound.models.audio.loader import (
-                AudioFramework,
-                FasterWhisperLoader,
-                TranscriptionConfig,
-                WhisperLoader,
-            )
-
-            framework_map = {
-                "whisper": AudioFramework.WHISPER,
-                "faster_whisper": AudioFramework.FASTER_WHISPER,
-                "transformers": AudioFramework.TRANSFORMERS,
-            }
-            framework = framework_map.get(model_config.framework, AudioFramework.WHISPER)
-
-            config = TranscriptionConfig(
-                model_id=model_config.model_id,
-                framework=framework,
-                device=device,
-                compute_type="float16" if device == "cuda" else "int8",
-            )
-
-            if framework == AudioFramework.WHISPER:
-                loader = WhisperLoader(config)
-            elif framework == AudioFramework.FASTER_WHISPER:
-                loader = FasterWhisperLoader(config)  # type: ignore[assignment]
-            else:
-                loader = WhisperLoader(config)
-
-            loader.load()
-            logger.info(f"Audio transcription model loaded: {model_config.model_id}")
+        factory = self._task_factories.get(task_type)
+        if factory is not None:
+            loader = factory(model_config)
+            logger.info(f"Loader for {task_type} built: {model_config.model_id}")
             return loader
-
-        if task_type == "speaker_diarization":
-            from src.infrastructure.adapters.outbound.models.audio.loader import (
-                DiarizationConfig,
-                PyannoteLoader,
-            )
-
-            diar_config = DiarizationConfig(  # type: ignore[assignment]
-                model_id=model_config.model_id,
-                device=device,
-            )
-
-            diar_loader = PyannoteLoader(diar_config)  # type: ignore[assignment]
-            diar_loader.load()
-            logger.info(f"Speaker diarization model loaded: {model_config.model_id}")
-            return diar_loader  # type: ignore[return-value]
-
-        if task_type == "voice_activity_detection":
-            from src.infrastructure.adapters.outbound.models.audio.loader import (
-                SileroVADLoader,
-                VADConfig,
-            )
-
-            vad_config = VADConfig(  # type: ignore[assignment]
-                model_id=model_config.model_id,
-                device=device,
-            )
-
-            vad_loader = SileroVADLoader(vad_config)  # type: ignore[assignment]
-            vad_loader.load()
-            logger.info(f"VAD model loaded: {model_config.model_id}")
-            return vad_loader  # type: ignore[return-value]
 
         return {
             "task_type": task_type,
@@ -582,18 +312,7 @@ class ModelManager:
         }
 
     async def get_model(self, task_type: str) -> Any:
-        """Get model for task type, loading if necessary.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to get model for.
-
-        Returns
-        -------
-        Any
-            Loaded model object.
-        """
+        """Get model for task type, loading if necessary."""
         if task_type in self.loaded_models:
             self.loaded_models.move_to_end(task_type)
             return self.loaded_models[task_type]
@@ -601,13 +320,7 @@ class ModelManager:
         return await self.load_model(task_type)
 
     def get_loaded_models(self) -> dict[str, dict[str, Any]]:
-        """Get information about currently loaded models.
-
-        Returns
-        -------
-        dict[str, dict[str, Any]]
-            Dictionary mapping task types to model information.
-        """
+        """Get information about currently loaded models."""
         result = {}
         for task_type in self.loaded_models:
             result[task_type] = {
@@ -618,38 +331,11 @@ class ModelManager:
         return result
 
     def get_model_config(self, task_type: str) -> TaskConfig | None:
-        """Get configuration for a task type.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to get configuration for.
-
-        Returns
-        -------
-        TaskConfig | None
-            Task configuration, or None if task type is invalid.
-        """
+        """Get configuration for a task type."""
         return self.tasks.get(task_type)
 
     async def set_selected_model(self, task_type: str, model_name: str) -> None:
-        """Change the selected model for a task type.
-
-        If the task's model is currently loaded, it will be unloaded and the
-        new model will be loaded.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to update.
-        model_name : str
-            Name of model option to select.
-
-        Raises
-        ------
-        ValueError
-            If task type or model name is invalid.
-        """
+        """Change the selected model for a task type."""
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
 
@@ -659,7 +345,6 @@ class ModelManager:
 
         old_selection = task_config.selected
         task_config.selected = model_name
-
         self.config["models"][task_type]["selected"] = model_name
 
         logger.info(f"Changed {task_type} model from {old_selection} to {model_name}")
@@ -669,19 +354,11 @@ class ModelManager:
             await self.load_model(task_type)
 
     def validate_memory_budget(self) -> dict[str, Any]:
-        """Validate that all selected models can fit in available memory.
-
-        Uses RAM for CPU mode, VRAM for GPU mode.
-
-        Returns
-        -------
-        dict[str, Any]
-            Dictionary with validation results including CPU/GPU memory info.
-        """
+        """Validate that all selected models fit in available memory."""
         total_memory = self.get_total_ram() if self.cpu_only_mode else self.get_total_vram()
 
         total_required = 0
-        model_requirements = {}
+        model_requirements: dict[str, dict[str, Any]] = {}
 
         for task_type, task_config in self.tasks.items():
             model_config = task_config.get_selected_config()
@@ -736,49 +413,15 @@ class ModelManager:
                 logger.error(f"Failed to warmup {task_type}: {e}")
 
     def is_external_api(self, task_type: str) -> bool:
-        """Check if a task uses an external API model.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to check.
-
-        Returns
-        -------
-        bool
-            True if task uses external API, False otherwise.
-
-        Raises
-        ------
-        ValueError
-            If task type is invalid.
-        """
+        """Check if a task uses an external API model."""
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
 
         model_config = self.tasks[task_type].get_selected_config()
         return model_config.framework == "external_api"
 
-    def get_external_api_config(self, task_type: str) -> Any:
-        """Get external API configuration for a task.
-
-        Parameters
-        ----------
-        task_type : str
-            Task type to get configuration for.
-
-        Returns
-        -------
-        ExternalAPIConfig
-            Configuration object for external API client.
-
-        Raises
-        ------
-        ValueError
-            If task type is invalid or doesn't use external API.
-        """
-        from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
-
+    def get_external_api_config(self, task_type: str) -> ExternalAPIConfigDTO:
+        """Get external API configuration for a task."""
         if not self.is_external_api(task_type):
             raise ValueError(f"Task {task_type} does not use external API")
 
@@ -787,18 +430,17 @@ class ModelManager:
         if not model_config.provider or not model_config.api_endpoint:
             raise ValueError(f"External API model {task_type} missing provider or endpoint")
 
-        import os
-
         api_key_var = f"{model_config.provider.upper()}_API_KEY"
         api_key = os.getenv(api_key_var)
 
         if model_config.requires_api_key and not api_key:
             raise ValueError(f"Missing API key: {api_key_var} environment variable not set")
 
-        return ExternalAPIConfig(
+        return ExternalAPIConfigDTO(
             api_key=api_key or "",
             api_endpoint=model_config.api_endpoint,
             model_id=model_config.model_id,
+            provider=model_config.provider,
             timeout=30,
             max_retries=3,
         )

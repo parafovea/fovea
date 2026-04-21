@@ -72,8 +72,18 @@ class Container:
         """
         if self._model_manager is None:
             from src.application.services.model_management import ModelManager  # noqa: PLC0415
+            from src.infrastructure.adapters.outbound.model_capability_torch import (  # noqa: PLC0415
+                TorchModelCapabilityProbe,
+            )
+            from src.infrastructure.config.task_factories import (  # noqa: PLC0415
+                build_default_task_factories,
+            )
 
-            self._model_manager = ModelManager(str(self.config.model_config_path))
+            self._model_manager = ModelManager(
+                str(self.config.model_config_path),
+                capability_probe=TorchModelCapabilityProbe(),
+                task_factories=build_default_task_factories(),
+            )
             logger.info("ModelManager initialized")
 
         return self._model_manager

@@ -7,58 +7,173 @@ from structured claim hierarchies. Supports:
 - Conflict detection and resolution
 - Hierarchical claim structure preservation
 - Claim relation integration (supports, conflicts, etc.)
+
+The use case is framework-neutral. It accepts DTOs and an injected
+``ILanguageModel`` port; the concrete adapter is wired at the composition
+root.
 """
 
-import logging
-from typing import Any
+from __future__ import annotations
 
-from src.infrastructure.adapters.inbound.fastapi.schemas import ClaimRelationship, ClaimSource
-from src.infrastructure.adapters.outbound.models.llm.loader import GenerationConfig, LLMLoader
+import logging
+import re
+from typing import TYPE_CHECKING, Any
+
+from src.application.dto.generation import GenerationConfigDTO
+
+if TYPE_CHECKING:
+    from src.application.dto.claims import ClaimRelationshipDTO, ClaimSourceDTO
+    from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
 
 
-async def synthesize_summary_from_claims(
-    claim_sources: list[ClaimSource],
-    claim_relations: list[ClaimRelationship] | None,
-    synthesis_strategy: str,
-    ontology_context: dict[str, Any] | None,
-    persona_context: dict[str, Any] | None,
-    llm_loader: LLMLoader,
-    max_length: int,
-    include_conflicts: bool,
-    include_citations: bool,
-) -> list[dict[str, Any]]:
-    """Synthesize narrative summary from claim hierarchies.
+# Reference marker parsing: #name = type, @name = object, ^name = annotation.
+# A marker name is alphanumeric, underscores, hyphens, or periods.
+_MARKER_PATTERN = re.compile(r"([#@^])([A-Za-z_][\w.\-]*)")
+
+_MARKER_TYPE: dict[str, str] = {
+    "#": "typeRef",
+    "@": "objectRef",
+    "^": "annotationRef",
+}
+
+
+def parse_reference_markers(text: str) -> list[dict[str, str]]:
+    """Parse ``#/@/^`` markers into a GlossItem array.
 
     Parameters
     ----------
-    claim_sources : list[ClaimSource]
-        Claim hierarchies from one or more videos/collections.
-    claim_relations : list[ClaimRelationship] | None
-        Relationships between claims (conflicts, support, etc.).
-    synthesis_strategy : str
-        Strategy: "hierarchical", "chronological", "narrative", "analytical".
-    ontology_context : dict[str, Any] | None
-        Ontology types and glosses for context.
-    persona_context : dict[str, Any] | None
-        Persona information for perspective.
-    llm_loader : LLMLoader
-        Loaded LLM for generation.
-    max_length : int
-        Maximum summary length in words.
-    include_conflicts : bool
-        Whether to explicitly mention conflicts.
-    include_citations : bool
-        Whether to include claim citations.
+    text : str
+        Raw text with inline reference markers.
 
     Returns
     -------
-    list[dict[str, Any]]
-        Summary as GlossItem array with # and @ references.
+    list[dict[str, str]]
+        Ordered list of gloss items. Each item has keys ``type`` and
+        ``content``. ``type`` is one of ``text``, ``typeRef``, ``objectRef``,
+        or ``annotationRef``.
     """
-    # Build synthesis prompt
-    prompt = build_synthesis_prompt(
+    if not text:
+        return []
+
+    items: list[dict[str, str]] = []
+    last_end = 0
+
+    for match in _MARKER_PATTERN.finditer(text):
+        start, end = match.span()
+        if start > last_end:
+            items.append({"type": "text", "content": text[last_end:start]})
+        marker, name = match.group(1), match.group(2)
+        items.append({"type": _MARKER_TYPE[marker], "content": name})
+        last_end = end
+
+    if last_end < len(text):
+        items.append({"type": "text", "content": text[last_end:]})
+
+    return items
+
+
+class SynthesizeSummaryUseCase:
+    """Use case for synthesizing narrative summaries from claim hierarchies."""
+
+    def __init__(self, language_model: ILanguageModel) -> None:
+        """Initialize the use case with required ports.
+
+        Parameters
+        ----------
+        language_model : ILanguageModel
+            Loaded language model port for text generation.
+        """
+        self._llm = language_model
+
+    async def execute(
+        self,
+        *,
+        claim_sources: list[ClaimSourceDTO],
+        claim_relations: list[ClaimRelationshipDTO] | None,
+        synthesis_strategy: str,
+        ontology_context: dict[str, Any] | None,
+        persona_context: dict[str, Any] | None,
+        max_length: int,
+        include_conflicts: bool,
+        include_citations: bool,
+    ) -> list[dict[str, str]]:
+        """Synthesize a narrative summary.
+
+        Parameters
+        ----------
+        claim_sources : list[ClaimSourceDTO]
+            Claim hierarchies from one or more sources.
+        claim_relations : list[ClaimRelationshipDTO] | None
+            Relationships between claims.
+        synthesis_strategy : str
+            Strategy: "hierarchical", "chronological", "narrative", or
+            "analytical".
+        ontology_context : dict[str, Any] | None
+            Ontology types and glosses.
+        persona_context : dict[str, Any] | None
+            Persona information.
+        max_length : int
+            Maximum summary length in words.
+        include_conflicts : bool
+            Whether to mention conflicts.
+        include_citations : bool
+            Whether to include citations.
+
+        Returns
+        -------
+        list[dict[str, str]]
+            GlossItem array.
+        """
+        prompt = build_synthesis_prompt(
+            claim_sources=claim_sources,
+            claim_relations=claim_relations,
+            synthesis_strategy=synthesis_strategy,
+            ontology_context=ontology_context,
+            persona_context=persona_context,
+            max_length=max_length,
+            include_conflicts=include_conflicts,
+            include_citations=include_citations,
+        )
+
+        config = GenerationConfigDTO(
+            max_tokens=8192,
+            temperature=0.8,
+            top_p=0.9,
+            stop_sequences=["---END---"],
+        )
+
+        logger.info(
+            "Synthesizing summary using strategy: %s from %d source(s)",
+            synthesis_strategy,
+            len(claim_sources),
+        )
+        result = await self._llm.generate_with_config(prompt=prompt, config=config)
+
+        summary_gloss = parse_reference_markers(result.text)
+        logger.info("Synthesized summary with %d gloss items", len(summary_gloss))
+        return summary_gloss
+
+
+async def synthesize_summary_from_claims(
+    claim_sources: list[ClaimSourceDTO],
+    claim_relations: list[ClaimRelationshipDTO] | None,
+    synthesis_strategy: str,
+    ontology_context: dict[str, Any] | None,
+    persona_context: dict[str, Any] | None,
+    language_model: ILanguageModel,
+    max_length: int,
+    include_conflicts: bool,
+    include_citations: bool,
+) -> list[dict[str, str]]:
+    """Functional entry point for summary synthesis.
+
+    Thin wrapper over :class:`SynthesizeSummaryUseCase` for call sites
+    and tests that prefer a function-style API.
+    """
+    use_case = SynthesizeSummaryUseCase(language_model=language_model)
+    return await use_case.execute(
         claim_sources=claim_sources,
         claim_relations=claim_relations,
         synthesis_strategy=synthesis_strategy,
@@ -69,32 +184,10 @@ async def synthesize_summary_from_claims(
         include_citations=include_citations,
     )
 
-    # Generate summary using LLM
-    generation_config = GenerationConfig(
-        max_tokens=8192,  # Larger for complex syntheses
-        temperature=0.8,
-        top_p=0.9,
-        stop_sequences=["---END---"],
-    )
-
-    logger.info(
-        "Synthesizing summary using strategy: %s from %d source(s)",
-        synthesis_strategy,
-        len(claim_sources),
-    )
-    result = await llm_loader.generate(prompt=prompt, generation_config=generation_config)
-
-    # For now, return summary as simple text GlossItem
-    # TODO: Parse #/@/^ references and convert to proper GlossItem structure
-    summary_gloss = [{"type": "text", "content": result.text}]
-
-    logger.info("Synthesized summary with %d gloss items", len(summary_gloss))
-    return summary_gloss
-
 
 def build_synthesis_prompt(
-    claim_sources: list[ClaimSource],
-    claim_relations: list[ClaimRelationship] | None,
+    claim_sources: list[ClaimSourceDTO],
+    claim_relations: list[ClaimRelationshipDTO] | None,
     synthesis_strategy: str,
     ontology_context: dict[str, Any] | None,
     persona_context: dict[str, Any] | None,
@@ -106,9 +199,9 @@ def build_synthesis_prompt(
 
     Parameters
     ----------
-    claim_sources : list[ClaimSource]
+    claim_sources : list[ClaimSourceDTO]
         Claim hierarchies from sources.
-    claim_relations : list[ClaimRelationship] | None
+    claim_relations : list[ClaimRelationshipDTO] | None
         Relationships between claims.
     synthesis_strategy : str
         Synthesis strategy.
@@ -133,7 +226,6 @@ def build_synthesis_prompt(
         "",
     ]
 
-    # Add persona context if provided
     if persona_context:
         role = persona_context.get("role", "")
         info_need = persona_context.get("information_need", "")
@@ -144,10 +236,9 @@ def build_synthesis_prompt(
         if role or info_need:
             prompt_parts.append("")
 
-    # Add ontology context if provided
     if ontology_context and ontology_context.get("types"):
         prompt_parts.append("ONTOLOGY TYPES (for reference):")
-        for type_def in ontology_context["types"][:20]:  # Limit to 20 types
+        for type_def in ontology_context["types"][:20]:
             type_name = type_def.get("name")
             type_gloss = ontology_context.get("glosses", {}).get(type_def.get("id"), "")
             if type_gloss:
@@ -156,7 +247,6 @@ def build_synthesis_prompt(
                 prompt_parts.append(f"  - #{type_name}")
         prompt_parts.append("")
 
-    # Add claim sources
     prompt_parts.append("CLAIMS TO SYNTHESIZE:")
     prompt_parts.append("")
     for i, source in enumerate(claim_sources, 1):
@@ -167,14 +257,13 @@ def build_synthesis_prompt(
         prompt_parts.extend(_format_claims_hierarchy(source.claims, indent=1))
         prompt_parts.append("")
 
-    # Add claim relationships if provided and conflicts should be included
     if claim_relations and include_conflicts:
         conflicts = [
             r for r in claim_relations if r.relation_type in ["conflicts_with", "contradicts"]
         ]
         if conflicts:
             prompt_parts.append("CONFLICTS DETECTED:")
-            for conflict in conflicts[:10]:  # Limit to 10
+            for conflict in conflicts[:10]:
                 prompt_parts.append(
                     f"  - Claim {conflict.source_claim_id} {conflict.relation_type} "
                     f"Claim {conflict.target_claim_id}"
@@ -183,7 +272,6 @@ def build_synthesis_prompt(
                     prompt_parts.append(f"    Note: {conflict.notes}")
             prompt_parts.append("")
 
-    # Add strategy-specific instructions
     if synthesis_strategy == "hierarchical":
         prompt_parts.extend(
             [
@@ -224,7 +312,7 @@ def build_synthesis_prompt(
                 f"5. Keep summary under {max_length} words",
             ]
         )
-    else:  # analytical
+    else:
         prompt_parts.extend(
             [
                 "TASK: Synthesize an analytical summary emphasizing evidence and conflicts.",
@@ -281,7 +369,6 @@ def _format_claims_hierarchy(claims: list[dict[str, Any]], indent: int = 0) -> l
         claim_id = claim.get("id", "")
         confidence = claim.get("confidence")
 
-        # Format claim line
         line = f"{prefix}- {claim_text}"
         if claim_id:
             line += f" [id: {claim_id}]"
@@ -289,7 +376,6 @@ def _format_claims_hierarchy(claims: list[dict[str, Any]], indent: int = 0) -> l
             line += f" (confidence: {confidence:.2f})"
         lines.append(line)
 
-        # Recursively add subclaims
         subclaims = claim.get("subclaims", [])
         if subclaims:
             lines.extend(_format_claims_hierarchy(subclaims, indent + 1))
