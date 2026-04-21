@@ -5,7 +5,7 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-04-21
 
 ### Added
 
@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CASL authorization engine with permission seed data
 - Role-based permission schema (admin, manager, annotator, viewer)
 - Row-level authorization on every data route (annotations, summaries, claims, world state, personas, ontology, export, import) using `accessibleBy()` list filters and `subject()`-based instance checks
+- Per-model ownership field resolution: `Persona`/`WorldState` use `userId`, `Annotation` uses `createdByUserId`, `VideoSummary`/`Claim`/`UserGroup` use `createdBy`, `Project` uses `ownerUserId`
 - Per-user ability cache with explicit invalidation on every membership add, remove, role change, and project deletion
 - Admin-editable `/api/admin/permissions` CRUD endpoints for runtime RolePermission management
 - Sharing privilege cap: re-shared resources cannot exceed the received permission level
-- VideoAccessService wired into all video routes so authenticated users only see videos assigned to their projects
+- VideoAccessService wired into all video routes so authenticated users only see videos assigned to their projects; non-existent videos pass through so route validation errors are not masked by 404
 - Backfill migration populating `createdByUserId` from legacy `userId` on existing annotations, and `createdBy` on existing summaries and claims from their owning persona's user
 - 29 negative RBAC security tests covering cross-tenant IDOR, null-ownership denial, cache invalidation timing, sharing escalation, and admin-only enforcement
+- `seedBaselinePermissions()` test helper module for E2E test setup
 
 #### Projects and Groups
 - Project entity with membership, ownership, and sharing controls
