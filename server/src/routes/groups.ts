@@ -14,7 +14,7 @@ import { PrismaClient } from '@prisma/client'
 
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { groupOperationCounter } from '../metrics.js'
-import { buildAbilities } from '../middleware/abilities.js'
+import { buildAbilities, invalidateUserAbilities } from '../middleware/abilities.js'
 import {
   NotFoundError,
   ValidationError,
@@ -251,6 +251,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         })
       })
 
+      // Creator's abilities changed (they are now a group_owner)
+      invalidateUserAbilities(userId)
       groupOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(group)
     },
@@ -547,6 +549,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Newly added member's abilities now include group-scope roles
+      invalidateUserAbilities(targetUserId)
       groupOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send(membership)
     },
@@ -654,6 +658,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Role change alters the member's effective permissions
+      invalidateUserAbilities(targetUserId)
       groupOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(updated)
     },
@@ -719,6 +725,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: targetMembership.id },
       })
 
+      // Removed member loses group-scope permissions immediately
+      invalidateUserAbilities(targetUserId)
       groupOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ success: true })
     },
@@ -849,6 +857,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         })
       })
 
+      // Admin-created group: the designated owner's abilities changed
+      invalidateUserAbilities(createdBy)
       groupOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(group)
     },
@@ -1021,6 +1031,8 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Admin-added member's abilities must pick up group-scope roles
+      invalidateUserAbilities(targetUserId)
       groupOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send(membership)
     },

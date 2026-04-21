@@ -10,8 +10,13 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { requireAuth } from '@middleware/auth.js'
+
+/** Convert a value to Prisma JSON without type assertions. */
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
 import { projectOperationCounter } from '../metrics.js'
-import { buildAbilities } from '@middleware/abilities.js'
+import { buildAbilities, invalidateUserAbilities } from '@middleware/abilities.js'
 import {
   NotFoundError,
   ValidationError,
@@ -207,6 +212,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         return created
       })
 
+      // Creator is now a project_owner; their abilities have changed
+      invalidateUserAbilities(userId)
       projectOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(project)
     },
@@ -446,7 +453,7 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         data: {
           ...(name !== undefined && { name }),
           ...(description !== undefined && { description }),
-          ...(settings !== undefined && { settings: settings as Prisma.InputJsonValue }),
+          ...(settings !== undefined && { settings: toJson(settings) }),
           ...(isArchived !== undefined && { isArchived }),
         },
       })
@@ -494,10 +501,20 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Only the project owner or a system admin can delete a project')
       }
 
+      // Snapshot member ids before the cascade deletes project memberships
+      const doomedMembers = await fastify.prisma.projectMembership.findMany({
+        where: { projectId },
+        select: { userId: true },
+      })
+
       // Cascade deletes are handled by Prisma's onDelete: Cascade on memberships
       // and assignments. Delete the project directly.
       await fastify.prisma.project.delete({ where: { id: projectId } })
 
+      // Every former member loses project-scope access
+      for (const { userId: memberId } of doomedMembers) {
+        invalidateUserAbilities(memberId)
+      }
       projectOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Project deleted successfully' })
     },
@@ -576,6 +593,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Newly added member picks up project-scope role permissions
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'add_member', status: 'success' })
       return reply.status(201).send({
         id: membership.id,
@@ -713,6 +732,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // Role change alters the member's effective permissions
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send({
         id: updated.id,
@@ -781,6 +802,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         where: { userId_projectId: { userId: targetUserId, projectId } },
       })
 
+      // Removed member loses project-scope permissions immediately
+      invalidateUserAbilities(targetUserId)
       projectOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ message: 'Member removed successfully' })
     },
@@ -965,13 +988,13 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
         worldState = await fastify.prisma.worldState.update({
           where: { userId_projectId: { userId, projectId } },
           data: {
-            entities: updateData.entities !== undefined ? (updateData.entities as Prisma.InputJsonValue) : undefined,
-            events: updateData.events !== undefined ? (updateData.events as Prisma.InputJsonValue) : undefined,
-            times: updateData.times !== undefined ? (updateData.times as Prisma.InputJsonValue) : undefined,
-            entityCollections: updateData.entityCollections !== undefined ? (updateData.entityCollections as Prisma.InputJsonValue) : undefined,
-            eventCollections: updateData.eventCollections !== undefined ? (updateData.eventCollections as Prisma.InputJsonValue) : undefined,
-            timeCollections: updateData.timeCollections !== undefined ? (updateData.timeCollections as Prisma.InputJsonValue) : undefined,
-            relations: updateData.relations !== undefined ? (updateData.relations as Prisma.InputJsonValue) : undefined,
+            entities: updateData.entities !== undefined ? toJson(updateData.entities) : undefined,
+            events: updateData.events !== undefined ? toJson(updateData.events) : undefined,
+            times: updateData.times !== undefined ? toJson(updateData.times) : undefined,
+            entityCollections: updateData.entityCollections !== undefined ? toJson(updateData.entityCollections) : undefined,
+            eventCollections: updateData.eventCollections !== undefined ? toJson(updateData.eventCollections) : undefined,
+            timeCollections: updateData.timeCollections !== undefined ? toJson(updateData.timeCollections) : undefined,
+            relations: updateData.relations !== undefined ? toJson(updateData.relations) : undefined,
           },
         })
       } else {
@@ -979,13 +1002,13 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
           data: {
             userId,
             projectId,
-            entities: (updateData.entities || []) as Prisma.InputJsonValue,
-            events: (updateData.events || []) as Prisma.InputJsonValue,
-            times: (updateData.times || []) as Prisma.InputJsonValue,
-            entityCollections: (updateData.entityCollections || []) as Prisma.InputJsonValue,
-            eventCollections: (updateData.eventCollections || []) as Prisma.InputJsonValue,
-            timeCollections: (updateData.timeCollections || []) as Prisma.InputJsonValue,
-            relations: (updateData.relations || []) as Prisma.InputJsonValue,
+            entities: toJson(updateData.entities || []),
+            events: toJson(updateData.events || []),
+            times: toJson(updateData.times || []),
+            entityCollections: toJson(updateData.entityCollections || []),
+            eventCollections: toJson(updateData.eventCollections || []),
+            timeCollections: toJson(updateData.timeCollections || []),
+            relations: toJson(updateData.relations || []),
           },
         })
       }

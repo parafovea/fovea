@@ -120,6 +120,20 @@ jobs:
               echo "ALLOW_EXTERNAL_LINKS=true" >> .env
             fi
 
+            echo "🧹 Pre-build cleanup to free disk space..."
+            docker image prune -f
+            docker builder prune -af
+            df -h /
+
+            echo "💾 Checking available disk space..."
+            AVAIL=$(df --output=avail / | tail -1)
+            if [ "$AVAIL" -lt 2097152 ]; then
+              echo "FATAL: Less than 2GB disk space available after cleanup"
+              df -h /
+              exit 1
+            fi
+            echo "Available: $(($AVAIL / 1024))MB"
+
             echo "🐳 Building and starting staging containers..."
             # Use different project name to avoid conflicts with production
             docker compose -p fovea-staging build --parallel
@@ -128,9 +142,8 @@ jobs:
             echo "🔄 Running database migrations on staging..."
             docker compose -p fovea-staging exec -T backend npx prisma migrate deploy || exit 1
 
-            echo "🧹 Cleaning up old images and build cache..."
+            echo "🧹 Post-deploy cleanup..."
             docker image prune -f
-            docker builder prune -af
 
             echo "✅ Staging deployment complete!"
             echo "📍 Staging is running on alternate ports (configure nginx for staging subdomain)"

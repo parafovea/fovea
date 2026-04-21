@@ -97,7 +97,7 @@ describe('Database Seed Integration', () => {
         username: 'admin',
         email: 'admin@example.com',
         displayName: 'Administrator',
-        isAdmin: true
+        isAdmin: true,
       })
     })
 

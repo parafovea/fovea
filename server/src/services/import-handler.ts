@@ -1,6 +1,8 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
+import { subject } from '@casl/ability'
 import { NotFoundError, ValidationError } from '../lib/errors.js'
+import type { AppAbility } from '../lib/abilities.js'
 import {
   ImportLine,
   ValidationResult,
@@ -97,11 +99,29 @@ export class ImportHandler {
   private validator: SequenceValidator
   private prisma: PrismaClient
   private userId: string
+  private ability: AppAbility | null
+  private projectId: string | null
 
-  constructor(prisma: PrismaClient, userId: string) {
+  constructor(prisma: PrismaClient, userId: string, ability: AppAbility | null = null, projectId: string | null = null) {
     this.validator = new SequenceValidator()
     this.prisma = prisma
     this.userId = userId
+    this.ability = ability
+    this.projectId = projectId
+  }
+
+  /**
+   * Check CASL create permission for a resource in the target scope. Returns
+   * true when no ability is configured (unit-test path) so legacy tests that
+   * construct `new ImportHandler(prisma, userId)` without an ability keep
+   * their existing behaviour.
+   */
+  private canCreate(
+    subjectName: 'Annotation' | 'VideoSummary' | 'Claim' | 'Persona' | 'WorldState',
+    candidate: Record<string, unknown>
+  ): boolean {
+    if (!this.ability) return true
+    return this.ability.can('create', subject(subjectName, candidate))
   }
 
   /**
@@ -885,7 +905,11 @@ export class ImportHandler {
    */
   private remapObjectIds(obj: unknown, idMap: Map<string, string>): ImportLine['data'] {
     if (Array.isArray(obj)) {
-      return obj.map(item => this.remapObjectIds(item, idMap)) as unknown as ImportLine['data']
+      // Array branches are only reached for nested values (not top-level data).
+      // The index signature [key: string]: unknown on ImportLine['data'] accepts
+      // the array at runtime; bridge the type gap via unknown.
+      const mapped: unknown = obj.map(item => this.remapObjectIds(item, idMap))
+      return mapped as ImportLine['data']
     } else if (obj && typeof obj === 'object') {
       const remapped: ImportLine['data'] = {}
       // GlossItem references store the target ID in `content` rather than a
@@ -975,20 +999,16 @@ export class ImportHandler {
     const ownedTimeIds = new Set<string>()
     const ownedCollectionIds = new Set<string>()
     if (userWorldState) {
-      const uws = userWorldState as unknown as {
-        entities?: Prisma.JsonValue; events?: Prisma.JsonValue; times?: Prisma.JsonValue
-        entityCollections?: Prisma.JsonValue; eventCollections?: Prisma.JsonValue; timeCollections?: Prisma.JsonValue
-      }
-      for (const entity of (Array.isArray(uws.entities) ? uws.entities : [])) {
+      for (const entity of (Array.isArray(userWorldState.entities) ? userWorldState.entities : [])) {
         if (entity && typeof entity === 'object' && 'id' in entity) ownedEntityIds.add(entity.id as string)
       }
-      for (const event of (Array.isArray(uws.events) ? uws.events : [])) {
+      for (const event of (Array.isArray(userWorldState.events) ? userWorldState.events : [])) {
         if (event && typeof event === 'object' && 'id' in event) ownedEventIds.add(event.id as string)
       }
-      for (const time of (Array.isArray(uws.times) ? uws.times : [])) {
+      for (const time of (Array.isArray(userWorldState.times) ? userWorldState.times : [])) {
         if (time && typeof time === 'object' && 'id' in time) ownedTimeIds.add(time.id as string)
       }
-      for (const arr of [uws.entityCollections, uws.eventCollections, uws.timeCollections]) {
+      for (const arr of [userWorldState.entityCollections, userWorldState.eventCollections, userWorldState.timeCollections]) {
         if (Array.isArray(arr)) {
           for (const col of arr) {
             if (col && typeof col === 'object' && 'id' in col) ownedCollectionIds.add(col.id as string)
@@ -1023,37 +1043,28 @@ export class ImportHandler {
 
     // Extract IDs from ALL world states for global conflict detection
     for (const worldState of allWorldStates) {
-      const ws = worldState as unknown as {
-        entities?: Prisma.JsonValue
-        events?: Prisma.JsonValue
-        times?: Prisma.JsonValue
-        entityCollections?: Prisma.JsonValue
-        eventCollections?: Prisma.JsonValue
-        timeCollections?: Prisma.JsonValue
-      }
-
-      if (Array.isArray(ws.entities)) {
-        for (const entity of ws.entities) {
+      if (Array.isArray(worldState.entities)) {
+        for (const entity of worldState.entities) {
           if (entity && typeof entity === 'object' && 'id' in entity) {
             existingData.entityIds.add(entity.id as string)
           }
         }
       }
-      if (Array.isArray(ws.events)) {
-        for (const event of ws.events) {
+      if (Array.isArray(worldState.events)) {
+        for (const event of worldState.events) {
           if (event && typeof event === 'object' && 'id' in event) {
             existingData.eventIds.add(event.id as string)
           }
         }
       }
-      if (Array.isArray(ws.times)) {
-        for (const time of ws.times) {
+      if (Array.isArray(worldState.times)) {
+        for (const time of worldState.times) {
           if (time && typeof time === 'object' && 'id' in time) {
             existingData.timeIds.add(time.id as string)
           }
         }
       }
-      for (const collectionArray of [ws.entityCollections, ws.eventCollections, ws.timeCollections]) {
+      for (const collectionArray of [worldState.entityCollections, worldState.eventCollections, worldState.timeCollections]) {
         if (Array.isArray(collectionArray)) {
           for (const collection of collectionArray) {
             if (collection && typeof collection === 'object' && 'id' in collection) {
@@ -1325,23 +1336,35 @@ export class ImportHandler {
     }
 
     // 3. Import world state objects
-    // Get or create world state for the importing user
-    let worldState = await tx.worldState.findFirst({ where: { userId: this.userId } })
+    // Get or create world state scoped to (importer, activeProject)
+    let worldState = await tx.worldState.findFirst({ where: { userId: this.userId, projectId: this.projectId } })
     if (!worldState) {
-      worldState = await tx.worldState.create({
-        data: {
-          userId: this.userId,
-          entities: [],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
-      })
+      if (!this.canCreate('WorldState', { userId: this.userId, projectId: this.projectId })) {
+        result.errors.push({
+          line: 0,
+          type: 'authorization',
+          message: 'Cannot create WorldState in this scope'
+        })
+        if (options.transaction.atomic) throw new ValidationError('Cannot create WorldState in this scope')
+      } else {
+        worldState = await tx.worldState.create({
+          data: {
+            userId: this.userId,
+            projectId: this.projectId,
+            entities: [],
+            events: [],
+            times: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+            relations: []
+          }
+        })
+      }
     }
-
+    // When worldState is still null (denied create), skip world-object loops
+    // but continue with summaries/claims/annotations below.
+    if (worldState) {
     // Import entities
     for (const line of entityLines) {
       await this.importWorldStateItem(line, 'entity', worldState.id, resolutionMap, result, options, tx)
@@ -1372,6 +1395,7 @@ export class ImportHandler {
     for (const line of relationLines) {
       await this.importWorldStateItem(line, 'relation', worldState.id, resolutionMap, result, options, tx)
     }
+    } // end if (worldState)
 
     // 4. Import summaries (depend on videos and personas)
     for (const line of summaryLines) {
@@ -1451,10 +1475,21 @@ export class ImportHandler {
           }
         })
       } else if (!existingPersona) {
+        if (!this.canCreate('Persona', { userId: this.userId, projectId: this.projectId })) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: 'Cannot create Persona in this scope',
+            data: line.data
+          })
+          if (options.transaction.atomic) throw new ValidationError('Cannot create Persona in this scope')
+          return
+        }
         await tx.persona.create({
           data: {
             id: personaId,
             userId: this.userId,
+            projectId: this.projectId,
             name: line.data.name as string,
             role: line.data.role as string,
             informationNeed: line.data.informationNeed as string,
@@ -1724,6 +1759,16 @@ export class ImportHandler {
           data: summaryData
         })
       } else if (!existingSummary) {
+        if (!this.canCreate('VideoSummary', { createdBy: this.userId, projectId: this.projectId })) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: 'Cannot create VideoSummary in this scope',
+            data: line.data
+          })
+          if (options.transaction.atomic) throw new ValidationError('Cannot create VideoSummary in this scope')
+          return
+        }
         await tx.videoSummary.create({
           data: {
             id: summaryId,
@@ -1741,7 +1786,8 @@ export class ImportHandler {
             visualModelUsed: (line.data.visualModelUsed as string) || undefined,
             fusionStrategy: (line.data.fusionStrategy as string) || undefined,
             comment: (line.data.comment as string) || undefined,
-            createdBy: (line.data.createdBy as string) || undefined,
+            createdBy: this.userId,
+            projectId: this.projectId,
             createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
           }
         })
@@ -1843,6 +1889,16 @@ export class ImportHandler {
           data: claimData
         })
       } else if (!existingClaim) {
+        if (!this.canCreate('Claim', { createdBy: this.userId, projectId: this.projectId })) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: 'Cannot create Claim in this scope',
+            data: line.data
+          })
+          if (options.transaction.atomic) throw new ValidationError('Cannot create Claim in this scope')
+          return
+        }
         await tx.claim.create({
           data: {
             id: claimId,
@@ -1871,7 +1927,8 @@ export class ImportHandler {
               ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
               : Prisma.JsonNull,
             comment: (line.data.comment as string) || undefined,
-            createdBy: (line.data.createdBy as string) || undefined,
+            createdBy: this.userId,
+            projectId: this.projectId,
             createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
           }
         })
@@ -1964,7 +2021,7 @@ export class ImportHandler {
             targetSpans: line.data.targetSpans ? (line.data.targetSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
             confidence: (line.data.confidence as number) || undefined,
             notes: (line.data.notes as string) || undefined,
-            createdBy: (line.data.createdBy as string) || undefined,
+            createdBy: this.userId,
             createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
           }
         })
@@ -2051,12 +2108,27 @@ export class ImportHandler {
         })
       }
 
-      // Store the boundingBoxSequence in the frames field
+      if (!this.canCreate('Annotation', { createdByUserId: this.userId, projectId: this.projectId })) {
+        result.errors.push({
+          line: line.lineNumber,
+          type: 'authorization',
+          message: 'Cannot create Annotation in this scope',
+          data: line.data
+        })
+        if (options.transaction.atomic) throw new ValidationError('Cannot create Annotation in this scope')
+        return
+      }
+
+      // Store the boundingBoxSequence in the frames field. Force ownership
+      // and project scope to the importer; never honour the payload's values.
       await tx.annotation.create({
         data: {
           id: annotation.id,
           videoId: annotation.videoId,
           personaId: annotation.personaId || null,
+          userId: this.userId,
+          createdByUserId: this.userId,
+          projectId: this.projectId,
           type: annotation.annotationType ?? 'type',
           label: annotation.typeId ?? annotation.linkedEntityId ?? '',
           frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,

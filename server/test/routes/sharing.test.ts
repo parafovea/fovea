@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -48,6 +49,8 @@ describe('Sharing API', () => {
     await prisma.video.deleteMany()
     await prisma.loginAttempt.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create owner user
     const ownerHash = await hashPassword('ownerpass123')

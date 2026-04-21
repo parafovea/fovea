@@ -41,7 +41,7 @@ describe('Query Builder', () => {
         email: 'test@example.com',
         passwordHash: await hashPassword('testpass123'),
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user.id
