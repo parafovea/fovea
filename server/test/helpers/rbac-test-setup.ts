@@ -22,23 +22,33 @@ import { hashPassword } from '../../src/lib/password.js'
  */
 export async function seedBaselinePermissions(prisma: PrismaClient): Promise<void> {
   const resources = ['persona', 'annotation', 'summary', 'claim', 'world_state', 'video']
-  const actions = ['create', 'read', 'update', 'delete', 'export', 'share']
+  // Grant broad access for non-destructive actions so E2E tests can exercise
+  // route logic without every fixture needing createdBy/createdByUserId set.
+  // Destructive actions (delete) are ownOnly so cross-user protection is
+  // exercised where tests specifically verify it.
+  const nonDestructive = ['create', 'read', 'update', 'export', 'share']
+  const destructive = ['delete']
 
-  const rows = resources.flatMap(resourceType =>
-    actions.map(action => ({
-      scope: 'system' as const,
-      role: 'user',
-      resourceType,
-      action,
-      // E2E route tests verify request/response semantics, not RBAC rule
-      // conditions. ownOnly enforcement is covered by the dedicated unit
-      // tests in test/security/rbac-enforcement.test.ts. Using ownOnly:
-      // false here avoids requiring every test data fixture to set
-      // createdByUserId/createdBy, which would couple route tests to
-      // RBAC implementation details.
-      ownOnly: false,
-    }))
-  )
+  const rows = [
+    ...resources.flatMap(resourceType =>
+      nonDestructive.map(action => ({
+        scope: 'system' as const,
+        role: 'user',
+        resourceType,
+        action,
+        ownOnly: false,
+      }))
+    ),
+    ...resources.flatMap(resourceType =>
+      destructive.map(action => ({
+        scope: 'system' as const,
+        role: 'user',
+        resourceType,
+        action,
+        ownOnly: true,
+      }))
+    ),
+  ]
 
   await prisma.rolePermission.createMany({ data: rows, skipDuplicates: true })
 }

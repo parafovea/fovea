@@ -837,7 +837,8 @@ describe('Claims API', () => {
           summaryId: testSummaryId,
           summaryType: 'video',
           text: 'Claim to delete',
-          gloss: []
+          gloss: [],
+          createdBy: testUserId
         }
       })
 
@@ -862,7 +863,8 @@ describe('Claims API', () => {
           summaryId: testSummaryId,
           summaryType: 'video',
           text: 'Parent claim',
-          gloss: []
+          gloss: [],
+          createdBy: testUserId
         }
       })
 
@@ -872,7 +874,8 @@ describe('Claims API', () => {
           summaryType: 'video',
           text: 'Subclaim',
           gloss: [],
-          parentClaimId: parentClaim.id
+          parentClaimId: parentClaim.id,
+          createdBy: testUserId
         }
       })
 

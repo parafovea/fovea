@@ -386,6 +386,7 @@ describe('Video Summaries API', () => {
           audioTranscript: 'Audio',
           audioLanguage: 'en',
           speakerCount: 2,
+          createdBy: testUserId,
         }
       })
 

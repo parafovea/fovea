@@ -44,6 +44,12 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
     const params = request.params as Record<string, string>
     if (!params.videoId || !request.user) return
 
+    // Only enforce access if the video actually exists. If it doesn't, let
+    // the route return its own error so validation errors (e.g. missing
+    // body fields) aren't masked by a 404.
+    const video = await videoRepository.findById(params.videoId)
+    if (!video) return
+
     const accessible = await videoAccess.getAccessibleVideoIds(
       request.user.id,
       request.user.systemRole || 'user'

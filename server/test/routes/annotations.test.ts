@@ -291,7 +291,8 @@ describe('Annotations API', () => {
           personaId: null,
           type: 'object',
           label: 'to-delete',
-          frames: { boxes: [] }
+          frames: { boxes: [] },
+          createdByUserId: testUserId
         }
       })
 

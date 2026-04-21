@@ -106,16 +106,39 @@ export function defineAbilitiesFor(
     return createPrismaAbility(rules)
   }
 
+  // Ownership field varies per model. CASL's MongoQuery conditions match
+  // against actual Prisma row fields, so we must use the correct column name.
+  const ownershipField = (modelName: Prisma.ModelName): string => {
+    switch (modelName) {
+      case 'Persona':
+      case 'WorldState':
+      case 'Annotation':
+        // Annotation has both userId (legacy) and createdByUserId (RBAC).
+        // Prefer createdByUserId; the backfill migration populates it from
+        // userId for historical rows.
+        return modelName === 'Annotation' ? 'createdByUserId' : 'userId'
+      case 'VideoSummary':
+      case 'Claim':
+      case 'UserGroup':
+        return 'createdBy'
+      case 'Project':
+        return 'ownerUserId'
+      default:
+        return 'createdByUserId'
+    }
+  }
+
   // Apply permissions based on role hierarchy
   for (const perm of permissions) {
     const modelName = mapResourceTypeToModelName(perm.resourceType)
     if (!modelName) continue
 
     const action = perm.action as Actions
+    const ownField = ownershipField(modelName)
 
     if (perm.scope === 'system') {
       if (perm.ownOnly) {
-        rules.push({ action, subject: modelName, conditions: { createdByUserId: userId } })
+        rules.push({ action, subject: modelName, conditions: { [ownField]: userId } })
       } else {
         rules.push({ action, subject: modelName })
       }
@@ -126,7 +149,7 @@ export function defineAbilitiesFor(
 
       if (matchingProjects.length > 0) {
         if (perm.ownOnly) {
-          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects }, createdByUserId: userId } })
+          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects }, [ownField]: userId } })
         } else {
           rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects } } })
         }
@@ -138,7 +161,7 @@ export function defineAbilitiesFor(
 
       if (matchingGroups.length > 0) {
         if (perm.ownOnly) {
-          rules.push({ action, subject: modelName, conditions: { createdByUserId: userId } })
+          rules.push({ action, subject: modelName, conditions: { [ownField]: userId } })
         } else {
           rules.push({ action, subject: modelName })
         }
@@ -146,7 +169,9 @@ export function defineAbilitiesFor(
     }
   }
 
-  // Resource ownership always grants full access to own resources
+  // Baseline ownership rules: every user can always act on resources they
+  // own, regardless of their role permissions. Uses the per-model ownership
+  // field so conditions resolve against real Prisma rows.
   rules.push({ action: 'read', subject: 'Annotation', conditions: { createdByUserId: userId } })
   rules.push({ action: 'update', subject: 'Annotation', conditions: { createdByUserId: userId } })
   rules.push({ action: 'delete', subject: 'Annotation', conditions: { createdByUserId: userId } })
@@ -156,6 +181,12 @@ export function defineAbilitiesFor(
   rules.push({ action: 'read', subject: 'Claim', conditions: { createdBy: userId } })
   rules.push({ action: 'update', subject: 'Claim', conditions: { createdBy: userId } })
   rules.push({ action: 'delete', subject: 'Claim', conditions: { createdBy: userId } })
+  rules.push({ action: 'read', subject: 'Persona', conditions: { userId } })
+  rules.push({ action: 'update', subject: 'Persona', conditions: { userId } })
+  rules.push({ action: 'delete', subject: 'Persona', conditions: { userId } })
+  rules.push({ action: 'read', subject: 'WorldState', conditions: { userId } })
+  rules.push({ action: 'update', subject: 'WorldState', conditions: { userId } })
+  rules.push({ action: 'delete', subject: 'WorldState', conditions: { userId } })
 
   // All authenticated users can read videos (filtered by VideoAccessService)
   rules.push({ action: 'read', subject: 'Video' })
