@@ -1,23 +1,28 @@
 """Object detection route.
 
-Provides the endpoint for detecting objects in video frames
-using open-vocabulary detection models.
+Thin FastAPI wrapper that delegates to :class:`DetectObjectsUseCase`.
 """
 
-import logging
-import time
-import uuid
+from __future__ import annotations
 
-import torch
+import logging
+
+import cv2
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
-from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.adapters.inbound.fastapi.dependencies import (  # noqa: TC001
+    ContainerDep,
+    ModelManagerDep,
+)
+from src.infrastructure.adapters.inbound.fastapi.mappers import (
+    detection_request_schema_to_dto,
+    detection_response_dto_to_schema,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas import (
     DetectionRequest,
     DetectionResponse,
     ErrorResponse,
-    FrameDetections,
 )
 
 router = APIRouter()
@@ -41,59 +46,27 @@ logger = logging.getLogger(__name__)
 async def detect_objects(
     request: DetectionRequest,
     manager: ModelManagerDep,
+    container: ContainerDep,
 ) -> DetectionResponse:
-    """Detect objects in video frames using open-vocabulary detection models.
-
-    Parameters
-    ----------
-    request : DetectionRequest
-        Detection request with video_id, query, and processing parameters.
-    manager : ModelManagerDep
-        Injected model manager instance.
-
-    Returns
-    -------
-    DetectionResponse
-        Detected objects with bounding boxes and confidence scores.
-
-    Raises
-    ------
-    HTTPException
-        If video_id is invalid, or if processing fails.
-    """
+    """Detect objects in video frames using open-vocabulary detection models."""
     with tracer.start_as_current_span("detect_objects") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("query", request.query)
         span.set_attribute("confidence_threshold", request.confidence_threshold)
 
-        from pathlib import Path as PathlibPath
-
-        import cv2
-        from PIL import Image
-
+        from src.application.use_cases.detect_objects import (
+            DetectObjectsExecutionInput,
+            DetectObjectsFrameInput,
+        )
         from src.application.use_cases.summarize_video import get_video_path_for_id
-        from src.infrastructure.adapters.inbound.fastapi.schemas import (
-            BoundingBox as APIBoundingBox,
-        )
-        from src.infrastructure.adapters.inbound.fastapi.schemas import (
-            Detection as APIDetection,
-        )
-        from src.infrastructure.adapters.outbound.models.detection.loader import (
-            DetectionConfig,
-            DetectionFramework,
-            create_detection_loader,
-        )
         from src.infrastructure.adapters.outbound.video.downloader import (
             cleanup_temp_video,
             download_video_if_needed,
         )
 
-        # Track if we downloaded a temporary file for cleanup
         temp_video_path: str | None = None
 
         try:
-            # Use provided video_path if available, otherwise resolve from video_id
-            video_path: str
             if request.video_path:
                 video_path = request.video_path
             else:
@@ -105,7 +78,6 @@ async def detect_objects(
                     )
                 video_path = resolved_path
 
-            # Download video if it's a URL (e.g., S3 pre-signed URL)
             video_path, is_temp = await download_video_if_needed(video_path)
             if is_temp:
                 temp_video_path = video_path
@@ -119,103 +91,51 @@ async def detect_objects(
 
             selected_model_config = task_config.get_selected_config()
 
-            framework_map = {
-                "pytorch": DetectionFramework.PYTORCH,
-                "ultralytics": DetectionFramework.ULTRALYTICS,
-                "transformers": DetectionFramework.TRANSFORMERS,
-                "onnx": DetectionFramework.ONNX,
-            }
-            framework = framework_map.get(
-                selected_model_config.framework,
-                DetectionFramework.PYTORCH,
-            )
-
-            detection_config = DetectionConfig(
+            use_case = container.build_detect_objects_use_case(
+                model_name=task_config.selected,
                 model_id=selected_model_config.model_id,
-                framework=framework,
+                framework=selected_model_config.framework,
                 confidence_threshold=request.confidence_threshold,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                cache_dir=PathlibPath.home() / ".cache" / "huggingface",
             )
-
-            loader = create_detection_loader(task_config.selected, detection_config)
-            loader.load()
 
             cap = cv2.VideoCapture(str(video_path))
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-            frame_numbers = request.frame_numbers
+            frame_numbers = list(request.frame_numbers)
             if not frame_numbers:
-                frame_numbers = [0, total_frames // 2, total_frames - 1]
+                frame_numbers = [0, total_frames // 2, max(total_frames - 1, 0)]
 
-            frame_results = []
-            total_detections = 0
-            start_time = time.time()
-
+            frame_inputs: list[DetectObjectsFrameInput] = []
             for frame_num in frame_numbers:
                 if frame_num >= total_frames:
                     continue
-
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
                 ret, frame = cap.read()
-
                 if not ret:
                     continue
-
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_image = Image.fromarray(frame_rgb)
-
-                result = loader.detect(pil_image, request.query)
-
-                detections_list = []
-                for det in result.detections:
-                    api_bbox = APIBoundingBox(
-                        x=det.bbox.x1,
-                        y=det.bbox.y1,
-                        width=det.bbox.x2 - det.bbox.x1,
-                        height=det.bbox.y2 - det.bbox.y1,
-                    )
-
-                    api_detection = APIDetection(
-                        label=det.label,
-                        bounding_box=api_bbox,
-                        confidence=det.confidence,
-                        track_id=None,
-                    )
-
-                    detections_list.append(api_detection)
-
                 timestamp = frame_num / fps if fps > 0 else 0.0
-
-                frame_detections = FrameDetections(
-                    frame_number=frame_num,
-                    timestamp=timestamp,
-                    detections=detections_list,
+                frame_inputs.append(
+                    DetectObjectsFrameInput(
+                        frame_number=frame_num,
+                        timestamp=timestamp,
+                        image=frame_rgb,
+                    )
                 )
-
-                frame_results.append(frame_detections)
-                total_detections += len(detections_list)
-
             cap.release()
-            loader.unload()
 
-            processing_time = time.time() - start_time
-
-            detection_id = str(uuid.uuid4())
-
-            span.set_attribute("total_detections", total_detections)
-            span.set_attribute("frames_processed", len(frame_results))
-            span.set_attribute("processing_time", processing_time)
-
-            return DetectionResponse(
-                id=detection_id,
-                video_id=request.video_id,
-                query=request.query,
-                frames=frame_results,
-                total_detections=total_detections,
-                processing_time=processing_time,
+            dto_request = detection_request_schema_to_dto(request, video_path)
+            execution_input = DetectObjectsExecutionInput(
+                request=dto_request, frames=frame_inputs
             )
+            response_dto = await use_case.execute(execution_input)
+
+            span.set_attribute("total_detections", response_dto.total_detections)
+            span.set_attribute("frames_processed", len(response_dto.frames))
+            span.set_attribute("processing_time", response_dto.processing_time)
+
+            return detection_response_dto_to_schema(response_dto)
 
         except HTTPException:
             raise
@@ -226,6 +146,5 @@ async def detect_objects(
                 detail=f"Internal server error: {e!s}",
             ) from e
         finally:
-            # Clean up temporary video file if downloaded
             if temp_video_path:
                 cleanup_temp_video(temp_video_path)
