@@ -60,8 +60,12 @@ class ExternalAPIClient(ABC):
         await self.client.aclose()
 
     @abstractmethod
-    async def generate_text(  # type: ignore[no-untyped-def]
-        self, prompt: str, max_tokens: int = 1024, temperature: float = 0.7, **kwargs
+    async def generate_text(
+        self,
+        prompt: str,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Generate text from prompt.
 
@@ -91,8 +95,12 @@ class ExternalAPIClient(ABC):
         pass
 
     @abstractmethod
-    async def generate_from_images(  # type: ignore[no-untyped-def]
-        self, images: list[bytes], prompt: str, max_tokens: int = 1024, **kwargs
+    async def generate_from_images(
+        self,
+        images: list[bytes],
+        prompt: str,
+        max_tokens: int = 1024,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Generate text from images and prompt.
 
