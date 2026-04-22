@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
+from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.ports.outbound.llm import ILanguageModel
 from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
@@ -14,6 +15,7 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
 from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
+    from src.application.dto.reasoning import ReasonedText
     from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
 
 LLMLoaderLike: TypeAlias = "LLMLoader | LlamaCppLLMLoader"  # noqa: UP040
@@ -43,6 +45,23 @@ class LLMLoaderAdapter(ILanguageModel):
         with record_inference(task="llm_generate", model_id=self.model_id):
             result = await self._loader.generate(prompt=prompt, generation_config=config)
         return str(result.text)
+
+    async def generate_reasoned(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> ReasonedText:
+        """Generate text and split any ``<think>`` blocks into a trace."""
+        raw = await self.generate(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs,
+        )
+        return parse_reasoned_output(raw, model_id=self.model_id)
 
     async def generate_structured(
         self,

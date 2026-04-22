@@ -292,15 +292,15 @@ class SummarizeVideoUseCase:
                     prompt = get_persona_prompt(persona_role, information_need)
                     logger.info(f"Generating summary with {len(images)} frames")
                     visual_start_time = time.time()
-                    response = self._vlm.generate(
-                        images=images,
-                        prompt=prompt,
+                    reasoned = self._vlm.generate_reasoned_from_images(
+                        images,
+                        prompt,
                         max_tokens=1024,
                         temperature=0.7,
                     )
                     processing_time_visual = time.time() - visual_start_time
 
-                    summary, visual_analysis = parse_vlm_response(response)
+                    summary, visual_analysis = parse_vlm_response(reasoned.text)
                     key_frames = identify_key_frames(
                         frames_with_indices,
                         metadata.fps,
@@ -348,6 +348,7 @@ class SummarizeVideoUseCase:
                         processing_time_fusion=(
                             processing_time_fusion if request.enable_audio else None
                         ),
+                        reasoning_trace=reasoned.thinking,
                     )
                 finally:
                     self._vlm.unload()
@@ -406,9 +407,7 @@ class SummarizeVideoUseCase:
                 timestamps: list[float] = []
                 for frame_idx, frame_array in frames_with_indices:
                     image = Image.fromarray(frame_array)
-                    image_bytes = convert_image_to_base64(
-                        image, format="JPEG", max_dimension=1024
-                    )
+                    image_bytes = convert_image_to_base64(image, format="JPEG", max_dimension=1024)
                     images_bytes.append(image_bytes)
                     timestamps.append(frame_idx / metadata.fps if metadata.fps > 0 else 0.0)
 
@@ -429,7 +428,7 @@ class SummarizeVideoUseCase:
                 logger.info(f"Calling {provider} API with {len(images_bytes)} frames")
                 try:
                     visual_start_time = time.time()
-                    result = await self._router.generate_from_images(
+                    reasoned = await self._router.generate_reasoned_from_images(
                         config=api_config,
                         provider=provider,
                         images=images_bytes,
@@ -438,8 +437,12 @@ class SummarizeVideoUseCase:
                     )
                     processing_time_visual = time.time() - visual_start_time
 
-                    response_text = str(result["text"])
-                    usage = result.get("usage", {})
+                    response_text = reasoned.text
+                    usage = (
+                        {"total_tokens": reasoned.tokens_used}
+                        if reasoned.tokens_used is not None
+                        else {}
+                    )
                     logger.info(
                         f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
                     )
@@ -452,7 +455,7 @@ class SummarizeVideoUseCase:
                     )
                     span.set_attribute("summary_length", len(summary))
                     span.set_attribute("key_frames_identified", len(key_frames))
-                    span.set_attribute("tokens_used", usage.get("total_tokens", 0))
+                    span.set_attribute("tokens_used", usage.get("total_tokens", 0) or 0)
 
                     (
                         summary,
@@ -493,6 +496,7 @@ class SummarizeVideoUseCase:
                         processing_time_fusion=(
                             processing_time_fusion if request.enable_audio else None
                         ),
+                        reasoning_trace=reasoned.thinking,
                     )
                 finally:
                     await self._router.close()
@@ -573,9 +577,7 @@ async def _apply_fusion(
         return summary, 0.0, None, None
 
     logger.info("Applying audio-visual fusion")
-    timestamps = [
-        frame_idx / fps if fps > 0 else 0.0 for frame_idx, _ in frames_with_indices
-    ]
+    timestamps = [frame_idx / fps if fps > 0 else 0.0 for frame_idx, _ in frames_with_indices]
     visual_frames = [
         VisualFrame(
             timestamp=timestamps[i],

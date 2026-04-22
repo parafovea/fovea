@@ -72,9 +72,7 @@ async def test_execute_with_vlm_raises_without_vlm_port() -> None:
     sampler = _sampler_with_frames(1)
     use_case = SummarizeVideoUseCase(frame_sampler=sampler)
     with pytest.raises(RuntimeError, match="Vision-language model"):
-        await use_case.execute_with_vlm(
-            request=_request(), video_path="/fake.mp4", model_name="m"
-        )
+        await use_case.execute_with_vlm(request=_request(), video_path="/fake.mp4", model_name="m")
 
 
 @pytest.mark.asyncio
@@ -86,9 +84,7 @@ async def test_execute_with_vlm_no_frames_raises() -> None:
     )
     use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
     with pytest.raises(SummarizationError, match="No frames"):
-        await use_case.execute_with_vlm(
-            request=_request(), video_path="/fake.mp4", model_name="m"
-        )
+        await use_case.execute_with_vlm(request=_request(), video_path="/fake.mp4", model_name="m")
 
 
 @pytest.mark.asyncio
@@ -97,9 +93,7 @@ async def test_execute_with_vlm_propagates_generation_error() -> None:
     sampler = _sampler_with_frames(2)
     use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
     with pytest.raises(SummarizationError, match="Summarization failed"):
-        await use_case.execute_with_vlm(
-            request=_request(), video_path="/fake.mp4", model_name="m"
-        )
+        await use_case.execute_with_vlm(request=_request(), video_path="/fake.mp4", model_name="m")
     assert not vlm.is_loaded
 
 
@@ -118,9 +112,7 @@ async def test_execute_with_vlm_audio_enabled_requires_transcriber() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_with_vlm_audio_enabled_full_pipeline() -> None:
-    vlm = FakeVisionLanguageModel(
-        canned_text="1. Summary: short.\n2. Visual Analysis: stuff."
-    )
+    vlm = FakeVisionLanguageModel(canned_text="1. Summary: short.\n2. Visual Analysis: stuff.")
     sampler = _sampler_with_frames(2)
     transcriber = FakeTranscriber(
         result=TranscriptionResultDTO(
@@ -151,9 +143,7 @@ async def test_execute_with_vlm_audio_enabled_full_pipeline() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_with_external_api_happy_path() -> None:
-    router = FakeExternalAPIRouter(
-        images_response="1. Summary: short.\n2. Visual Analysis: stuff."
-    )
+    router = FakeExternalAPIRouter(images_response="1. Summary: short.\n2. Visual Analysis: stuff.")
     sampler = _sampler_with_frames(3)
     use_case = SummarizeVideoUseCase(frame_sampler=sampler, external_router=router)
     config = ExternalAPIConfigDTO(
@@ -213,12 +203,8 @@ def test_identify_key_frames_few_frames() -> None:
 
 def test_calculate_frame_sample_count_respects_provider() -> None:
     assert calculate_frame_sample_count(total_frames=100, provider="openai", max_frames=50) == 10
-    assert (
-        calculate_frame_sample_count(total_frames=100, provider="anthropic", max_frames=50) == 20
-    )
-    assert (
-        calculate_frame_sample_count(total_frames=5, provider="google", max_frames=50) == 5
-    )
+    assert calculate_frame_sample_count(total_frames=100, provider="anthropic", max_frames=50) == 20
+    assert calculate_frame_sample_count(total_frames=5, provider="google", max_frames=50) == 5
 
 
 def test_get_persona_prompt_defaults() -> None:

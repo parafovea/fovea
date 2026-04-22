@@ -3,10 +3,14 @@
 This module defines the interface for language model adapters.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any
+from __future__ import annotations
 
-from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
+    from src.application.dto.reasoning import ReasonedText
 
 
 class ILanguageModel(ABC):
@@ -41,6 +45,44 @@ class ILanguageModel(ABC):
         -------
         str
             Generated text.
+
+        Raises
+        ------
+        InferenceError
+            If generation fails.
+        """
+        ...
+
+    @abstractmethod
+    async def generate_reasoned(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> ReasonedText:
+        """Generate text and return its optional reasoning trace.
+
+        For non-thinking models the returned :class:`ReasonedText` has
+        ``thinking=None``. Thinking-capable models populate it from the
+        underlying ``<think>...</think>`` blocks in the raw output.
+
+        Parameters
+        ----------
+        prompt : str
+            Input prompt for generation.
+        max_tokens : int, default=512
+            Maximum tokens to generate.
+        temperature : float, default=0.7
+            Sampling temperature.
+        **kwargs : Any
+            Additional generation parameters.
+
+        Returns
+        -------
+        ReasonedText
+            Visible text plus optional thinking trace.
 
         Raises
         ------

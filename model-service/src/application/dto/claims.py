@@ -8,7 +8,10 @@ web schemas, or infrastructure types.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.application.dto.reasoning import ThinkingTrace
 
 
 @dataclass
@@ -40,6 +43,7 @@ class ExtractedClaimDTO:
     char_end: int | None = None
     subclaims: list[ExtractedClaimDTO] = field(default_factory=list)
     claim_type: str | None = None
+    reasoning_trace: ThinkingTrace | None = None
 
 
 @dataclass

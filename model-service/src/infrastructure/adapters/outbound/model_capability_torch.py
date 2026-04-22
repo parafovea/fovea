@@ -17,9 +17,7 @@ class TorchModelCapabilityProbe(IModelCapabilityProbe):
 
     def is_mps_available(self) -> bool:
         """Return True if Apple Silicon MPS is available."""
-        return bool(
-            hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-        )
+        return bool(hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
 
     def device_count(self) -> int:
         """Return the number of CUDA devices available."""

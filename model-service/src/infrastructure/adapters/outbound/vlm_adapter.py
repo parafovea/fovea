@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
+from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.ports.outbound.vlm import IVisionLanguageModel
 from src.infrastructure.observability.telemetry import record_inference
 
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
+    from src.application.dto.reasoning import ReasonedText
     from src.infrastructure.adapters.outbound.models.vlm.loader import VLMLoader
 
 
@@ -43,6 +45,25 @@ class VLMLoaderAdapter(IVisionLanguageModel):
                 temperature=temperature,
             )
         return str(result)
+
+    def generate_reasoned_from_images(
+        self,
+        images: list[NDArray[np.uint8]],
+        prompt: str,
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> ReasonedText:
+        """Generate text from images and split ``<think>`` blocks into a trace."""
+        raw = self.generate(
+            images,
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs,
+        )
+        return parse_reasoned_output(raw, model_id=self.model_id)
 
     def load(self) -> None:
         """Load the model into memory."""

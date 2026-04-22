@@ -191,9 +191,7 @@ async def synthesize_summary(
             await language_model.aload()
 
             try:
-                claim_source_dtos = [
-                    claim_source_schema_to_dto(s) for s in request.claim_sources
-                ]
+                claim_source_dtos = [claim_source_schema_to_dto(s) for s in request.claim_sources]
                 claim_relation_dtos = (
                     [claim_relationship_schema_to_dto(r) for r in request.claim_relations]
                     if request.claim_relations is not None

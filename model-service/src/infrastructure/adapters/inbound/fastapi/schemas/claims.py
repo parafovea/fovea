@@ -15,6 +15,9 @@ from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     ProcessingTime,
     StrictBaseModel,
 )
+from src.infrastructure.adapters.inbound.fastapi.schemas.reasoning import (
+    ThinkingTraceSchema,  # noqa: TC001
+)
 
 
 class ExtractedClaim(StrictBaseModel):
@@ -51,6 +54,9 @@ class ExtractedClaim(StrictBaseModel):
     subclaims: list[ExtractedClaim] = Field(default_factory=list, description="Nested subclaims")
     confidence: ConfidenceScore = Field(..., description="Model confidence in claim extraction")
     claim_type: str | None = Field(default=None, description="Semantic type of claim")
+    thinking: ThinkingTraceSchema | None = Field(
+        default=None, description="Optional reasoning trace from a thinking-capable model"
+    )
 
 
 class ClaimExtractionRequest(StrictBaseModel):
@@ -276,4 +282,7 @@ class SummarySynthesisResponse(StrictBaseModel):
     claims_used: int = Field(..., ge=0, description="Total claims synthesized")
     synthesis_metadata: dict[str, Any] = Field(
         ..., description="Metadata about synthesis (strategy, conflicts, etc.)"
+    )
+    thinking: ThinkingTraceSchema | None = Field(
+        default=None, description="Optional reasoning trace from a thinking-capable model"
     )

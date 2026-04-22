@@ -23,9 +23,11 @@ from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
 from src.application.dto.generation import GenerationConfigDTO
+from src.application.dto.reasoning_parser import parse_reasoned_output
 
 if TYPE_CHECKING:
     from src.application.dto.claims import ClaimRelationshipDTO, ClaimSourceDTO
+    from src.application.dto.reasoning import ThinkingTrace
     from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
@@ -90,6 +92,7 @@ class SynthesizeSummaryUseCase:
             Loaded language model port for text generation.
         """
         self._llm = language_model
+        self.last_reasoning_trace: ThinkingTrace | None = None
 
     async def execute(
         self,
@@ -162,17 +165,17 @@ class SynthesizeSummaryUseCase:
                     synthesis_strategy,
                     len(claim_sources),
                 )
-                result = await self._llm.generate_with_config(
-                    prompt=prompt, config=config
-                )
+                result = await self._llm.generate_with_config(prompt=prompt, config=config)
 
-                summary_gloss = parse_reference_markers(result.text)
-                span.set_attribute(
-                    "use_case.output_gloss_items", len(summary_gloss)
+                reasoned = parse_reasoned_output(
+                    result.text,
+                    model_id=self._llm.model_id,
+                    tokens_used=result.tokens_used,
                 )
-                logger.info(
-                    "Synthesized summary with %d gloss items", len(summary_gloss)
-                )
+                self.last_reasoning_trace = reasoned.thinking
+                summary_gloss = parse_reference_markers(reasoned.text)
+                span.set_attribute("use_case.output_gloss_items", len(summary_gloss))
+                logger.info("Synthesized summary with %d gloss items", len(summary_gloss))
                 return summary_gloss
             except Exception as exc:
                 span.record_exception(exc)

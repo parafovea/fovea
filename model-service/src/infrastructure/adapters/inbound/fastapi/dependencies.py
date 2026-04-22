@@ -33,9 +33,7 @@ def get_container_dep() -> Container:
     try:
         return get_container()
     except RuntimeError:
-        return Container(
-            ContainerConfig(model_config_path=Path("config/models.yaml"))
-        )
+        return Container(ContainerConfig(model_config_path=Path("config/models.yaml")))
 
 
 def get_model_manager() -> ModelManager:

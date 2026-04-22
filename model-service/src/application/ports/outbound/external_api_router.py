@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.application.dto.external_api import ExternalAPIConfigDTO
+    from src.application.dto.reasoning import ReasonedText
 
 
 class IExternalAPIRouter(ABC):
@@ -79,6 +80,32 @@ class IExternalAPIRouter(ABC):
         dict[str, Any]
             Result with keys ``text`` (str) and ``usage`` (dict).
         """
+        ...
+
+    @abstractmethod
+    async def generate_reasoned_text(
+        self,
+        *,
+        config: ExternalAPIConfigDTO,
+        provider: str,
+        prompt: str,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+    ) -> ReasonedText:
+        """Generate text and split any ``<think>`` blocks into a reasoning trace."""
+        ...
+
+    @abstractmethod
+    async def generate_reasoned_from_images(
+        self,
+        *,
+        config: ExternalAPIConfigDTO,
+        provider: str,
+        images: list[bytes],
+        prompt: str,
+        max_tokens: int = 1024,
+    ) -> ReasonedText:
+        """Generate text from images with optional reasoning trace."""
         ...
 
     @abstractmethod

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.application.dto.reasoning import ReasonedText
 from src.application.ports.outbound.vlm import IVisionLanguageModel
 
 if TYPE_CHECKING:
@@ -21,13 +22,16 @@ class FakeVisionLanguageModel(IVisionLanguageModel):
         model_id: str = "fake-vlm",
         vram_gb: float = 4.0,
         raise_on_generate: Exception | None = None,
+        reasoned_response: ReasonedText | None = None,
     ) -> None:
         self._canned_text = canned_text
         self._model_id = model_id
         self._vram_gb = vram_gb
         self._raise_on_generate = raise_on_generate
+        self._reasoned_response = reasoned_response
         self._loaded = False
         self.generate_calls: list[tuple[int, str]] = []
+        self.generate_reasoned_calls: list[tuple[int, str]] = []
 
     def generate(
         self,
@@ -41,6 +45,22 @@ class FakeVisionLanguageModel(IVisionLanguageModel):
             raise self._raise_on_generate
         self.generate_calls.append((len(images), prompt))
         return self._canned_text
+
+    def generate_reasoned_from_images(
+        self,
+        images: list[NDArray[np.uint8]],
+        prompt: str,
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> ReasonedText:
+        if self._raise_on_generate is not None:
+            raise self._raise_on_generate
+        self.generate_reasoned_calls.append((len(images), prompt))
+        if self._reasoned_response is not None:
+            return self._reasoned_response
+        return ReasonedText(text=self._canned_text, thinking=None)
 
     def load(self) -> None:
         self._loaded = True

@@ -116,9 +116,7 @@ def _apply_diarization(
     diar_loader = PyannoteLoader(diar_config)
     diar_loader.load()
     try:
-        with record_inference(
-            task="diarize", model_id="pyannote/speaker-diarization-3.1"
-        ):
+        with record_inference(task="diarize", model_id="pyannote/speaker-diarization-3.1"):
             diar_result = diar_loader.diarize(audio_path)
         speaker_map: dict[tuple[float, float], str] = {}
         for diar_seg in diar_result.segments:

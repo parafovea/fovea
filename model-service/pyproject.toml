@@ -202,12 +202,16 @@ module = [
     "onnxruntime", "onnxruntime.*",
     "llama_cpp", "llama_cpp.*",
     "psutil", "psutil.*",
+    "sam3", "sam3.*",
+    "rfdetr", "rfdetr.*",
 ]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
     "whisper", "whisper.*",
+    "whisperx", "whisperx.*",
+    "nemo", "nemo.*",
     "faster_whisper", "faster_whisper.*",
     "pyannote", "pyannote.*",
     "torch_audiomentations", "torch_audiomentations.*",

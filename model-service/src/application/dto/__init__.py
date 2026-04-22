@@ -13,6 +13,8 @@ from src.application.dto.claims import (
 from src.application.dto.external_api import ExternalAPIConfigDTO
 from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
 from src.application.dto.ontology import OntologyTypeDTO
+from src.application.dto.reasoning import ReasonedText, ThinkingStep, ThinkingTrace
+from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.dto.summarization import (
     KeyFrameDTO,
     SummarizeRequestDTO,
@@ -43,7 +45,11 @@ __all__ = [
     "ModelConfigDict",
     "ModelRequirementDict",
     "OntologyTypeDTO",
+    "ReasonedText",
     "SummarizeRequestDTO",
     "SummarizeResponseDTO",
     "TaskConfigDict",
+    "ThinkingStep",
+    "ThinkingTrace",
+    "parse_reasoned_output",
 ]

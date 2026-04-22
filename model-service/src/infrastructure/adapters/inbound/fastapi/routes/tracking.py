@@ -115,9 +115,7 @@ async def track_objects(
             for mask_b64 in request.initial_masks:
                 try:
                     mask_bytes = base64.b64decode(mask_b64)
-                    mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(
-                        height, width
-                    )
+                    mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(height, width)
                     decoded_masks.append(mask_array.astype(np.bool_))
                 except Exception as e:
                     raise HTTPException(
@@ -142,9 +140,7 @@ async def track_objects(
             cap.release()
 
             if not frames_rgb:
-                raise HTTPException(
-                    status_code=400, detail="No valid frames to process"
-                )
+                raise HTTPException(status_code=400, detail="No valid frames to process")
 
             dto_request = tracking_request_schema_to_dto(request, video_path)
             execution_input = TrackObjectsExecutionInput(

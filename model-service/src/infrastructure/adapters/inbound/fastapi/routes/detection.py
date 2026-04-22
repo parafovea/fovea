@@ -126,9 +126,7 @@ async def detect_objects(
             cap.release()
 
             dto_request = detection_request_schema_to_dto(request, video_path)
-            execution_input = DetectObjectsExecutionInput(
-                request=dto_request, frames=frame_inputs
-            )
+            execution_input = DetectObjectsExecutionInput(request=dto_request, frames=frame_inputs)
             response_dto = await use_case.execute(execution_input)
 
             span.set_attribute("total_detections", response_dto.total_detections)

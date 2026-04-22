@@ -253,8 +253,7 @@ class SequentialFusion(BaseFusionStrategy):
 
                 if self.config.include_speaker_labels and speaker_count:
                     audio_part = (
-                        f"## Audio Transcript ({speaker_count} speakers)\n\n"
-                        f"{audio_transcript}"
+                        f"## Audio Transcript ({speaker_count} speakers)\n\n{audio_transcript}"
                     )
 
                 if self.config.audio_weight > self.config.visual_weight:
@@ -326,9 +325,7 @@ class TimestampAlignedFusion(BaseFusionStrategy):
         """
         import time
 
-        with tracer.start_as_current_span(
-            "use_case.fuse_modalities.timestamp_aligned"
-        ) as span:
+        with tracer.start_as_current_span("use_case.fuse_modalities.timestamp_aligned") as span:
             span.set_attribute("use_case.audio_segment_count", len(audio_segments))
             span.set_attribute("use_case.visual_frame_count", len(visual_frames))
             span.set_attribute("use_case.speaker_count", speaker_count or 0)
@@ -366,12 +363,8 @@ class TimestampAlignedFusion(BaseFusionStrategy):
                     timestamp_str = f"[{event['time']:.1f}s]"
 
                     if event["type"] == "audio":
-                        speaker_label = (
-                            f" ({event['speaker']})" if event.get("speaker") else ""
-                        )
-                        summary_parts.append(
-                            f"{timestamp_str}{speaker_label}: {event['content']}"
-                        )
+                        speaker_label = f" ({event['speaker']})" if event.get("speaker") else ""
+                        summary_parts.append(f"{timestamp_str}{speaker_label}: {event['content']}")
                     else:
                         objects_str = (
                             f" [Objects: {', '.join(event['objects'])}]"
@@ -447,9 +440,7 @@ class NativeMultimodalFusion(BaseFusionStrategy):
         """
         import time
 
-        with tracer.start_as_current_span(
-            "use_case.fuse_modalities.native_multimodal"
-        ) as span:
+        with tracer.start_as_current_span("use_case.fuse_modalities.native_multimodal") as span:
             span.set_attribute("use_case.audio_segment_count", len(audio_segments))
             span.set_attribute("use_case.visual_frame_count", len(visual_frames))
             try:
@@ -471,9 +462,7 @@ class NativeMultimodalFusion(BaseFusionStrategy):
                 processing_time = time.time() - start_time
                 span.set_attribute("use_case.processing_time", processing_time)
 
-                logger.info(
-                    f"Native multimodal fusion completed in {processing_time:.2f}s"
-                )
+                logger.info(f"Native multimodal fusion completed in {processing_time:.2f}s")
 
                 return FusionResult(
                     summary=summary,
@@ -538,9 +527,7 @@ class HybridFusion(BaseFusionStrategy):
                 start_time = time.time()
 
                 has_dense_audio = len(audio_segments) > len(visual_frames) * 2
-                has_multiple_speakers = (
-                    speaker_count is not None and speaker_count > 1
-                )
+                has_multiple_speakers = speaker_count is not None and speaker_count > 1
 
                 strategy: BaseFusionStrategy
                 if has_dense_audio or has_multiple_speakers:
@@ -548,9 +535,7 @@ class HybridFusion(BaseFusionStrategy):
                 else:
                     strategy = SequentialFusion(self.config)
 
-                span.set_attribute(
-                    "use_case.selected_strategy", strategy.__class__.__name__
-                )
+                span.set_attribute("use_case.selected_strategy", strategy.__class__.__name__)
                 result = await strategy.fuse(
                     audio_transcript,
                     audio_segments,

@@ -26,6 +26,9 @@ class AudioFramework(StrEnum):
     FASTER_WHISPER = "faster_whisper"
     TRANSFORMERS = "transformers"
     PYANNOTE = "pyannote"
+    NEMO_CANARY = "nemo_canary"  # NVIDIA Canary-Qwen SALM
+    NEMO_PARAKEET = "nemo_parakeet"  # NVIDIA Parakeet TDT streaming
+    WHISPERX = "whisperx"  # WhisperX unified transcribe+diarize
 
 
 @dataclass
@@ -195,13 +198,16 @@ class AudioTranscriptionLoader(ABC):
         pass
 
     @abstractmethod
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
         """Transcribe audio file to text with timestamps.
 
         Parameters
         ----------
         audio_path : str
             Path to audio file (WAV format, 16kHz recommended).
+        language : str | None
+            Optional override for the language hint. When ``None`` the
+            language configured on the loader (if any) is used.
 
         Returns
         -------
@@ -250,7 +256,7 @@ class WhisperLoader(AudioTranscriptionLoader):
             raise RuntimeError(f"Whisper model loading failed: {e}") from e
 
     @instrument_method(task="transcribe")
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
         """Transcribe audio file using Whisper."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -258,7 +264,7 @@ class WhisperLoader(AudioTranscriptionLoader):
         try:
             result = self.model.transcribe(
                 audio_path,
-                language=self.config.language,
+                language=language if language is not None else self.config.language,
                 task=self.config.task,
                 beam_size=self.config.beam_size,
                 word_timestamps=False,
@@ -319,7 +325,7 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
             raise RuntimeError(f"faster-whisper model loading failed: {e}") from e
 
     @instrument_method(task="transcribe")
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
         """Transcribe audio file using faster-whisper."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -327,7 +333,7 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
         try:
             segments_iter, info = self.model.transcribe(
                 audio_path,
-                language=self.config.language,
+                language=language if language is not None else self.config.language,
                 task=self.config.task,
                 beam_size=self.config.beam_size,
                 word_timestamps=False,
@@ -671,12 +677,50 @@ def create_transcription_loader(
     ValueError
         If model_name is not recognized.
     """
+    if config.framework == AudioFramework.NEMO_CANARY:
+        from src.infrastructure.adapters.outbound.models.audio.canary import (
+            CanaryQwenLoader,
+        )
+
+        return CanaryQwenLoader(config)
+    if config.framework == AudioFramework.NEMO_PARAKEET:
+        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
+            ParakeetTDTLoader,
+        )
+
+        return ParakeetTDTLoader(config)
+    if config.framework == AudioFramework.WHISPERX:
+        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
+            WhisperXLoader,
+        )
+
+        return WhisperXLoader(config)
+
     model_name_lower = model_name.lower()
 
+    if "canary" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.canary import (
+            CanaryQwenLoader,
+        )
+
+        return CanaryQwenLoader(config)
+    if "parakeet" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
+            ParakeetTDTLoader,
+        )
+
+        return ParakeetTDTLoader(config)
+    if "whisperx" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
+            WhisperXLoader,
+        )
+
+        return WhisperXLoader(config)
     if "faster-whisper" in model_name_lower:
         return FasterWhisperLoader(config)
     if "whisper" in model_name_lower:
         return WhisperLoader(config)
     raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: whisper-*, faster-whisper-*"
+        f"Unknown model name: {model_name}. Supported models: "
+        "whisper-*, faster-whisper-*, canary-*, parakeet-*, whisperx-*"
     )

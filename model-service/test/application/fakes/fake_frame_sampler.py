@@ -40,6 +40,4 @@ class FakeFrameSampler(IFrameSampler):
         self.extract_calls.append((video_path, num_frames))
         if self._frames is not None:
             return list(self._frames[:num_frames])
-        return [
-            (i, np.zeros((32, 32, 3), dtype=np.uint8)) for i in range(num_frames)
-        ]
+        return [(i, np.zeros((32, 32, 3), dtype=np.uint8)) for i in range(num_frames)]

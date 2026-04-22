@@ -90,9 +90,7 @@ class YamlModelRepository(IModelRepository):
         if task is None:
             raise ValueError(f"Unknown task: {task_name}")
         if model_name not in task.options:
-            raise ValueError(
-                f"Model '{model_name}' is not a valid option for task '{task_name}'"
-            )
+            raise ValueError(f"Model '{model_name}' is not a valid option for task '{task_name}'")
         task.selected = model_name
 
     @property

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.ports.outbound.external_api_router import IExternalAPIRouter
 
 if TYPE_CHECKING:
     from src.application.dto.external_api import ExternalAPIConfigDTO
+    from src.application.dto.reasoning import ReasonedText
 
 
 class FakeExternalAPIRouter(IExternalAPIRouter):
@@ -64,6 +66,50 @@ class FakeExternalAPIRouter(IExternalAPIRouter):
             "text": self._images_response,
             "usage": {"total_tokens": self._tokens_used},
         }
+
+    async def generate_reasoned_text(
+        self,
+        *,
+        config: ExternalAPIConfigDTO,
+        provider: str,
+        prompt: str,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+    ) -> ReasonedText:
+        result = await self.generate_text(
+            config=config,
+            provider=provider,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return parse_reasoned_output(
+            str(result["text"]),
+            model_id=config.model_id,
+            tokens_used=self._tokens_used,
+        )
+
+    async def generate_reasoned_from_images(
+        self,
+        *,
+        config: ExternalAPIConfigDTO,
+        provider: str,
+        images: list[bytes],
+        prompt: str,
+        max_tokens: int = 1024,
+    ) -> ReasonedText:
+        result = await self.generate_from_images(
+            config=config,
+            provider=provider,
+            images=images,
+            prompt=prompt,
+            max_tokens=max_tokens,
+        )
+        return parse_reasoned_output(
+            str(result["text"]),
+            model_id=config.model_id,
+            tokens_used=self._tokens_used,
+        )
 
     async def close(self) -> None:
         self.closed = True

@@ -59,9 +59,7 @@ class TrackObjectsUseCase:
         """Initialize with the tracking model port."""
         self._model = tracking_model
 
-    async def execute(
-        self, input: TrackObjectsExecutionInput
-    ) -> TrackObjectsResponseDTO:
+    async def execute(self, input: TrackObjectsExecutionInput) -> TrackObjectsResponseDTO:
         """Run tracking across the provided frames.
 
         Parameters
@@ -111,14 +109,8 @@ class TrackObjectsUseCase:
             tracking_frames: list[TrackingFrameDTO] = []
 
             for idx, mask_map in enumerate(per_frame_masks):
-                frame_num = (
-                    input.frame_numbers[idx]
-                    if idx < len(input.frame_numbers)
-                    else idx
-                )
-                timestamp = (
-                    input.timestamps[idx] if idx < len(input.timestamps) else 0.0
-                )
+                frame_num = input.frame_numbers[idx] if idx < len(input.frame_numbers) else idx
+                timestamp = input.timestamps[idx] if idx < len(input.timestamps) else 0.0
 
                 masks_out: list[TrackingMaskDTO] = []
                 for obj_id, tmask in mask_map.items():
@@ -141,9 +133,7 @@ class TrackObjectsUseCase:
                 )
 
             total_processed = len(tracking_frames)
-            fps_processing = (
-                total_processed / processing_time if processing_time > 0 else 0.0
-            )
+            fps_processing = total_processed / processing_time if processing_time > 0 else 0.0
 
             span.set_attribute("total_frames", total_processed)
             span.set_attribute("processing_time", processing_time)

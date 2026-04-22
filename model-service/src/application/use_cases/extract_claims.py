@@ -21,8 +21,10 @@ from opentelemetry.trace import Status, StatusCode
 
 from src.application.dto.claims import ExtractedClaimDTO
 from src.application.dto.generation import GenerationConfigDTO
+from src.application.dto.reasoning_parser import parse_reasoned_output
 
 if TYPE_CHECKING:
+    from src.application.dto.reasoning import ThinkingTrace
     from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
@@ -75,17 +77,23 @@ class ExtractClaimsUseCase:
                 )
 
                 logger.info("Extracting claims using strategy: %s", strategy)
-                result = await self._llm.generate_with_config(
-                    prompt=prompt, config=config
+                result = await self._llm.generate_with_config(prompt=prompt, config=config)
+
+                reasoned = parse_reasoned_output(
+                    result.text,
+                    model_id=self._llm.model_id,
+                    tokens_used=result.tokens_used,
                 )
 
                 claims = parse_claims_response(
-                    response=result.text,
+                    response=reasoned.text,
                     summary_text=summary_text,
                     sentences=sentences,
                     min_confidence=min_confidence,
                 )
                 claims = claims[:max_claims]
+                if reasoned.thinking is not None:
+                    claims = [_attach_trace(claim, reasoned.thinking) for claim in claims]
                 span.set_attribute("use_case.output_claim_count", len(claims))
                 logger.info("Extracted %d claims", len(claims))
                 return claims
@@ -297,6 +305,20 @@ def parse_single_claim(
         char_end=claim_data.get("char_end"),
         subclaims=subclaims,
         claim_type=claim_data.get("claim_type"),
+    )
+
+
+def _attach_trace(claim: ExtractedClaimDTO, trace: ThinkingTrace) -> ExtractedClaimDTO:
+    """Return a claim DTO with the given thinking trace attached."""
+    return ExtractedClaimDTO(
+        text=claim.text,
+        confidence=claim.confidence,
+        sentence_index=claim.sentence_index,
+        char_start=claim.char_start,
+        char_end=claim.char_end,
+        subclaims=[_attach_trace(sc, trace) for sc in claim.subclaims],
+        claim_type=claim.claim_type,
+        reasoning_trace=trace,
     )
 
 

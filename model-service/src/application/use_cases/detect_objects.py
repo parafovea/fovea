@@ -65,9 +65,7 @@ class DetectObjectsUseCase:
         """Initialize with the detection model port."""
         self._model = detection_model
 
-    async def execute(
-        self, input: DetectObjectsExecutionInput
-    ) -> DetectObjectsResponseDTO:
+    async def execute(self, input: DetectObjectsExecutionInput) -> DetectObjectsResponseDTO:
         """Run detection across the provided frames.
 
         Parameters

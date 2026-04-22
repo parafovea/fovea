@@ -45,8 +45,7 @@ class TrackingLoaderAdapter(ITrackingModel):
         """Store initialization parameters for the first frame."""
         if len(masks) != len(object_ids):
             raise ValueError(
-                f"Number of masks ({len(masks)}) must match "
-                f"object_ids length ({len(object_ids)})"
+                f"Number of masks ({len(masks)}) must match object_ids length ({len(object_ids)})"
             )
         self._initial_frame = frame
         self._initial_masks = [m.astype(np.uint8) for m in masks]
@@ -58,9 +57,7 @@ class TrackingLoaderAdapter(ITrackingModel):
         result = self.track_batch([frame])
         return result[0] if result else {}
 
-    def track_batch(
-        self, frames: list[NDArray[np.uint8]]
-    ) -> list[dict[int, TrackingMask]]:
+    def track_batch(self, frames: list[NDArray[np.uint8]]) -> list[dict[int, TrackingMask]]:
         """Track objects across multiple frames."""
         if not self._initialized:
             raise RuntimeError("Tracker must be initialized before track_batch")

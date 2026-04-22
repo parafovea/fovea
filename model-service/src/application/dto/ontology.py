@@ -8,6 +8,10 @@ web schemas, or infrastructure types.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.application.dto.reasoning import ThinkingTrace
 
 
 @dataclass
@@ -33,3 +37,4 @@ class OntologyTypeDTO:
     parent: str | None = None
     confidence: float = 0.0
     examples: list[str] = field(default_factory=list)
+    reasoning_trace: ThinkingTrace | None = None

@@ -7,6 +7,9 @@ from src.application.dto.claims import (
     ClaimSourceDTO,
     ExtractedClaimDTO,
 )
+from src.infrastructure.adapters.inbound.fastapi.mappers.reasoning import (
+    thinking_trace_dto_to_schema,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas.claims import (
     ClaimRelationship,
     ClaimSource,
@@ -45,4 +48,9 @@ def extracted_claim_dto_to_schema(dto: ExtractedClaimDTO) -> ExtractedClaim:
         subclaims=[extracted_claim_dto_to_schema(sc) for sc in dto.subclaims],
         confidence=dto.confidence,
         claim_type=dto.claim_type,
+        thinking=(
+            thinking_trace_dto_to_schema(dto.reasoning_trace)
+            if dto.reasoning_trace is not None
+            else None
+        ),
     )

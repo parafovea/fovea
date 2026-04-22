@@ -7,6 +7,9 @@ from src.application.dto.summarization import (
     SummarizeRequestDTO,
     SummarizeResponseDTO,
 )
+from src.infrastructure.adapters.inbound.fastapi.mappers.reasoning import (
+    thinking_trace_dto_to_schema,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas.summarization import (
     KeyFrame,
     SummarizeRequest,
@@ -61,4 +64,9 @@ def summarize_response_dto_to_schema(dto: SummarizeResponseDTO) -> SummarizeResp
         processing_time_audio=dto.processing_time_audio,
         processing_time_visual=dto.processing_time_visual,
         processing_time_fusion=dto.processing_time_fusion,
+        thinking=(
+            thinking_trace_dto_to_schema(dto.reasoning_trace)
+            if dto.reasoning_trace is not None
+            else None
+        ),
     )

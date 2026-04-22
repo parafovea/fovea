@@ -103,9 +103,7 @@ class Container:
 
     def video_processor(self) -> IVideoProcessor:
         """Build an :class:`IVideoProcessor` adapter."""
-        raise NotImplementedError(
-            "No IVideoProcessor adapter is currently registered"
-        )
+        raise NotImplementedError("No IVideoProcessor adapter is currently registered")
 
     def transcriber(self) -> ITranscriber:
         """Build an :class:`ITranscriber` adapter."""
@@ -191,7 +189,9 @@ class Container:
 
         return ExternalAPIRouterAdapter()
 
-    def language_model(self, *, model_id: str = "meta-llama/Llama-3.2-3B-Instruct") -> ILanguageModel:
+    def language_model(
+        self, *, model_id: str = "meta-llama/Llama-3.2-3B-Instruct"
+    ) -> ILanguageModel:
         """Build an :class:`ILanguageModel` adapter for a given model id."""
         from src.infrastructure.adapters.outbound.llm_adapter import (  # noqa: PLC0415
             LLMLoaderAdapter,
@@ -211,9 +211,7 @@ class Container:
         )
         return LLMLoaderAdapter(loader)
 
-    def vision_language_model(
-        self, *, model_name: str, model_id: str
-    ) -> IVisionLanguageModel:
+    def vision_language_model(self, *, model_name: str, model_id: str) -> IVisionLanguageModel:
         """Build an :class:`IVisionLanguageModel` adapter for a given model id."""
         from src.infrastructure.adapters.outbound.models.vlm.loader import (  # noqa: PLC0415
             VLMConfig,
@@ -403,9 +401,7 @@ class Container:
             create_fusion_strategy,
         )
 
-        return create_fusion_strategy(
-            FusionConfig(strategy=FusionStrategy(strategy))
-        )
+        return create_fusion_strategy(FusionConfig(strategy=FusionStrategy(strategy)))
 
     def get_external_api_config(self, task: str) -> ExternalAPIConfigDTO:
         """Resolve an :class:`ExternalAPIConfigDTO` for the given task."""

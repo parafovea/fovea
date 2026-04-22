@@ -7,7 +7,10 @@ use cases. No dependencies on FastAPI, Pydantic schemas, or infrastructure.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.application.dto.reasoning import ThinkingTrace
 
 
 @dataclass
@@ -134,3 +137,4 @@ class SummarizeResponseDTO:
     processing_time_audio: float | None = None
     processing_time_visual: float | None = None
     processing_time_fusion: float | None = None
+    reasoning_trace: ThinkingTrace | None = None

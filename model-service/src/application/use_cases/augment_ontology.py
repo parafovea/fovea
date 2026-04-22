@@ -19,9 +19,11 @@ from opentelemetry.trace import Status, StatusCode
 
 from src.application.dto.generation import GenerationConfigDTO
 from src.application.dto.ontology import OntologyTypeDTO
+from src.application.dto.reasoning_parser import parse_reasoned_output
 
 if TYPE_CHECKING:
     from src.application.dto.external_api import ExternalAPIConfigDTO
+    from src.application.dto.reasoning import ThinkingTrace
     from src.application.ports.outbound.external_api_router import IExternalAPIRouter
     from src.application.ports.outbound.llm import ILanguageModel
 
@@ -244,9 +246,16 @@ class AugmentOntologyUseCase:
                 prompt = create_augmentation_prompt(context, max_suggestions)
                 config = GenerationConfigDTO(max_tokens=2048, temperature=0.7, top_p=0.9)
                 result = await self._llm.generate_with_config(prompt=prompt, config=config)
-                suggestions = _suggestions_from_response(
-                    result.text, context, max_suggestions
+                reasoned = parse_reasoned_output(
+                    result.text,
+                    model_id=self._llm.model_id,
+                    tokens_used=result.tokens_used,
                 )
+                suggestions = _suggestions_from_response(reasoned.text, context, max_suggestions)
+                if reasoned.thinking is not None:
+                    suggestions = [
+                        _attach_ontology_trace(s, reasoned.thinking) for s in suggestions
+                    ]
                 span.set_attribute("use_case.suggestions_count", len(suggestions))
                 return suggestions
             except Exception as exc:
@@ -290,13 +299,20 @@ class AugmentOntologyUseCase:
                     logger.info(
                         f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
                     )
-                    json_text = extract_json_from_response(response_text)
+                    reasoned = parse_reasoned_output(
+                        response_text,
+                        model_id=api_config.model_id,
+                        tokens_used=int(usage.get("total_tokens", 0) or 0) or None,
+                    )
+                    json_text = extract_json_from_response(reasoned.text)
                     suggestions = _suggestions_from_parsed(
                         parse_llm_response(json_text), context, max_suggestions
                     )
-                    span.set_attribute(
-                        "use_case.suggestions_count", len(suggestions)
-                    )
+                    if reasoned.thinking is not None:
+                        suggestions = [
+                            _attach_ontology_trace(s, reasoned.thinking) for s in suggestions
+                        ]
+                    span.set_attribute("use_case.suggestions_count", len(suggestions))
                     return suggestions
                 finally:
                     await self._router.close()
@@ -304,6 +320,18 @@ class AugmentOntologyUseCase:
                 span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
                 raise
+
+
+def _attach_ontology_trace(suggestion: OntologyTypeDTO, trace: ThinkingTrace) -> OntologyTypeDTO:
+    """Return a suggestion DTO with the given thinking trace attached."""
+    return OntologyTypeDTO(
+        name=suggestion.name,
+        description=suggestion.description,
+        parent=suggestion.parent,
+        confidence=suggestion.confidence,
+        examples=list(suggestion.examples),
+        reasoning_trace=trace,
+    )
 
 
 def _suggestions_from_response(

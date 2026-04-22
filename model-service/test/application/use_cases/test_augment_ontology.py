@@ -87,9 +87,7 @@ async def test_execute_external_without_router_raises() -> None:
         api_key="k", api_endpoint="http://x", model_id="m", provider="anthropic"
     )
     with pytest.raises(RuntimeError, match="External API router"):
-        await use_case.execute_external(
-            context=_context(), api_config=config, provider="anthropic"
-        )
+        await use_case.execute_external(context=_context(), api_config=config, provider="anthropic")
 
 
 @pytest.mark.asyncio

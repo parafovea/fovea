@@ -44,6 +44,7 @@ class InferenceFramework(StrEnum):
     VLLM = "vllm"
     TRANSFORMERS = "transformers"
     LLAMA_CPP = "llama_cpp"
+    NEMO = "nemo"  # NVIDIA NeMo (Canary, Parakeet)
 
 
 @dataclass

@@ -20,11 +20,14 @@ from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.domain.value_objects import TimeRange
+    from src.infrastructure.adapters.outbound.models.audio.canary import CanaryQwenLoader
     from src.infrastructure.adapters.outbound.models.audio.loader import (
         AudioTranscriptionLoader,
         PyannoteLoader,
         SileroVADLoader,
     )
+    from src.infrastructure.adapters.outbound.models.audio.parakeet import ParakeetTDTLoader
+    from src.infrastructure.adapters.outbound.models.audio.whisperx import WhisperXLoader
 
 
 class WhisperTranscriberAdapter(IAudioTranscriber):
@@ -199,6 +202,244 @@ class SileroVADAdapter(IVoiceActivityDetector):
     @property
     def is_loaded(self) -> bool:
         """Return True if the VAD model is loaded."""
+        return self._loaded
+
+    @property
+    def model_id(self) -> str:
+        """Return the underlying model identifier."""
+        return str(self._loader.config.model_id)
+
+
+class CanaryTranscriberAdapter(IAudioTranscriber):
+    """Adapts :class:`CanaryQwenLoader` to :class:`IAudioTranscriber`."""
+
+    def __init__(self, loader: CanaryQwenLoader) -> None:
+        """Initialize with an already-constructed Canary loader."""
+        self._loader = loader
+        self._loaded = False
+
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+    ) -> dict[str, Any]:
+        """Transcribe audio and convert the Canary output to the port shape."""
+        with record_inference(task="transcribe", model_id=self.model_id):
+            result = self._loader.transcribe(audio_path, language=language)
+        segments: list[dict[str, Any]] = [
+            {
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": str(seg.text),
+                "confidence": float(seg.confidence),
+            }
+            for seg in result.segments
+        ]
+        return {
+            "text": str(result.text),
+            "segments": segments,
+            "language": str(result.language),
+            "duration": float(result.duration),
+        }
+
+    def transcribe_segment(
+        self,
+        audio_path: str,
+        time_range: TimeRange,
+        language: str | None = None,
+    ) -> str:
+        """Transcribe a time-range by filtering segments from a full pass."""
+        full = self.transcribe(audio_path, language=language)
+        start = float(time_range.start.seconds)
+        end = float(time_range.end.seconds)
+        chunks: list[str] = []
+        for seg in full["segments"]:
+            if float(seg["end"]) < start or float(seg["start"]) > end:
+                continue
+            chunks.append(str(seg["text"]))
+        return " ".join(chunks).strip()
+
+    def load(self) -> None:
+        """Load the underlying model."""
+        if self._loaded:
+            return
+        self._loader.load()
+        self._loaded = True
+
+    def unload(self) -> None:
+        """Unload the underlying model."""
+        if not self._loaded:
+            return
+        self._loader.unload()
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        """Return True if the model is loaded."""
+        return self._loaded
+
+    @property
+    def model_id(self) -> str:
+        """Return the underlying model identifier."""
+        return str(self._loader.config.model_id)
+
+
+class ParakeetTranscriberAdapter(IAudioTranscriber):
+    """Adapts :class:`ParakeetTDTLoader` to :class:`IAudioTranscriber`."""
+
+    def __init__(self, loader: ParakeetTDTLoader) -> None:
+        """Initialize with an already-constructed Parakeet loader."""
+        self._loader = loader
+        self._loaded = False
+
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+    ) -> dict[str, Any]:
+        """Transcribe audio using Parakeet TDT."""
+        with record_inference(task="transcribe", model_id=self.model_id):
+            result = self._loader.transcribe(audio_path, language=language)
+        segments: list[dict[str, Any]] = [
+            {
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": str(seg.text),
+                "confidence": float(seg.confidence),
+            }
+            for seg in result.segments
+        ]
+        return {
+            "text": str(result.text),
+            "segments": segments,
+            "language": str(result.language),
+            "duration": float(result.duration),
+        }
+
+    def transcribe_segment(
+        self,
+        audio_path: str,
+        time_range: TimeRange,
+        language: str | None = None,
+    ) -> str:
+        """Transcribe a time-range by filtering segments from a full pass."""
+        full = self.transcribe(audio_path, language=language)
+        start = float(time_range.start.seconds)
+        end = float(time_range.end.seconds)
+        chunks: list[str] = []
+        for seg in full["segments"]:
+            if float(seg["end"]) < start or float(seg["start"]) > end:
+                continue
+            chunks.append(str(seg["text"]))
+        return " ".join(chunks).strip()
+
+    def load(self) -> None:
+        """Load the underlying model."""
+        if self._loaded:
+            return
+        self._loader.load()
+        self._loaded = True
+
+    def unload(self) -> None:
+        """Unload the underlying model."""
+        if not self._loaded:
+            return
+        self._loader.unload()
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        """Return True if the model is loaded."""
+        return self._loaded
+
+    @property
+    def model_id(self) -> str:
+        """Return the underlying model identifier."""
+        return str(self._loader.config.model_id)
+
+
+class WhisperXTranscriberAdapter(IAudioTranscriber, ISpeakerDiarizer):
+    """Adapts :class:`WhisperXLoader` to both transcription and diarization ports."""
+
+    def __init__(self, loader: WhisperXLoader) -> None:
+        """Initialize with an already-constructed WhisperX loader."""
+        self._loader = loader
+        self._loaded = False
+
+    def transcribe(
+        self,
+        audio_path: str,
+        language: str | None = None,
+    ) -> dict[str, Any]:
+        """Transcribe, align, and diarize the audio at ``audio_path``."""
+        with record_inference(task="transcribe", model_id=self.model_id):
+            result = self._loader.transcribe(audio_path, language=language)
+        segments: list[dict[str, Any]] = [
+            {
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": str(seg.text),
+                "confidence": float(seg.confidence),
+            }
+            for seg in result.segments
+        ]
+        return {
+            "text": str(result.text),
+            "segments": segments,
+            "language": str(result.language),
+            "duration": float(result.duration),
+        }
+
+    def transcribe_segment(
+        self,
+        audio_path: str,
+        time_range: TimeRange,
+        language: str | None = None,
+    ) -> str:
+        """Transcribe a time-range by filtering segments from a full pass."""
+        full = self.transcribe(audio_path, language=language)
+        start = float(time_range.start.seconds)
+        end = float(time_range.end.seconds)
+        chunks: list[str] = []
+        for seg in full["segments"]:
+            if float(seg["end"]) < start or float(seg["start"]) > end:
+                continue
+            chunks.append(str(seg["text"]))
+        return " ".join(chunks).strip()
+
+    def diarize(
+        self,
+        audio_path: str,
+        num_speakers: int | None = None,
+        min_speakers: int | None = None,
+        max_speakers: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return speaker segments using WhisperX's built-in diarization."""
+        with record_inference(task="diarize", model_id=self.model_id):
+            return self._loader.diarize(
+                audio_path,
+                num_speakers=num_speakers,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+            )
+
+    def load(self) -> None:
+        """Load the underlying model."""
+        if self._loaded:
+            return
+        self._loader.load()
+        self._loaded = True
+
+    def unload(self) -> None:
+        """Unload the underlying model."""
+        if not self._loaded:
+            return
+        self._loader.unload()
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        """Return True if the model is loaded."""
         return self._loaded
 
     @property
