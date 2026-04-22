@@ -45,6 +45,8 @@ class WhisperXLoader(AudioTranscriptionLoader):
         """Transcribe, align, and diarize the audio at ``audio_path``."""
         if self.model is None:
             self.load()
+        if self.model is None:
+            raise RuntimeError("WhisperX model failed to load")
         try:
             import whisperx
         except ImportError as exc:

@@ -41,6 +41,8 @@ class ParakeetTDTLoader(AudioTranscriptionLoader):
         """Transcribe an entire audio file using Parakeet TDT."""
         if self.model is None:
             self.load()
+        if self.model is None:
+            raise RuntimeError("Parakeet model failed to load")
         with record_inference(task="transcribe", model_id=self.config.model_id):
             raw = self.model.transcribe([audio_path], batch_size=1, return_hypotheses=True)
         return _result_from_nemo(raw, language=language or self.config.language or "en")

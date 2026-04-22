@@ -51,6 +51,8 @@ class CanaryQwenLoader(AudioTranscriptionLoader):
         """
         if self.model is None:
             self.load()
+        if self.model is None:
+            raise RuntimeError("Canary model failed to load")
 
         lang = language if language is not None else self.config.language
         prompt: dict[str, Any] = {

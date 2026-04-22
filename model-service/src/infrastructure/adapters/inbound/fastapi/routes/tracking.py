@@ -133,7 +133,7 @@ async def track_objects(
                 ret, frame = cap.read()
                 if not ret:
                     continue
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
                 frames_rgb.append(frame_rgb)
                 processed_frame_numbers.append(frame_num)
                 timestamps.append(frame_num / fps if fps > 0 else 0.0)
