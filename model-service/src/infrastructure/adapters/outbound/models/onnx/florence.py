@@ -20,6 +20,7 @@ from src.infrastructure.adapters.outbound.models.detection.loader import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
     import onnxruntime as ort
@@ -108,6 +109,7 @@ class Florence2ONNXLoader(ONNXModelLoader, DetectionModelLoader):
             logger.error("Failed to load Florence-2 ONNX model: %s", e)
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,

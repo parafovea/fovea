@@ -14,6 +14,8 @@ from typing import Any
 import torch
 from numpy.typing import NDArray
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 logger = logging.getLogger(__name__)
 
 
@@ -247,6 +249,7 @@ class WhisperLoader(AudioTranscriptionLoader):
             logger.error(f"Failed to load Whisper model: {e}")
             raise RuntimeError(f"Whisper model loading failed: {e}") from e
 
+    @instrument_method(task="transcribe")
     def transcribe(self, audio_path: str) -> TranscriptionResult:
         """Transcribe audio file using Whisper."""
         if self.model is None:
@@ -315,6 +318,7 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
             logger.error(f"Failed to load faster-whisper model: {e}")
             raise RuntimeError(f"faster-whisper model loading failed: {e}") from e
 
+    @instrument_method(task="transcribe")
     def transcribe(self, audio_path: str) -> TranscriptionResult:
         """Transcribe audio file using faster-whisper."""
         if self.model is None:
@@ -462,6 +466,7 @@ class SileroVADLoader:
             logger.error(f"Failed to load Silero VAD model: {e}")
             raise RuntimeError(f"Silero VAD model loading failed: {e}") from e
 
+    @instrument_method(task="vad")
     def detect(self, audio: NDArray[Any] | str, sample_rate: int = 16000) -> VADResult:
         """Detect speech segments in audio.
 
@@ -581,6 +586,7 @@ class PyannoteLoader:
             logger.error(f"Failed to load Pyannote pipeline: {e}")
             raise RuntimeError(f"Pyannote pipeline loading failed: {e}") from e
 
+    @instrument_method(task="diarize")
     def diarize(self, audio_path: str) -> DiarizationResult:
         """Perform speaker diarization on audio file.
 

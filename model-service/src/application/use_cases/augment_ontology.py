@@ -14,6 +14,9 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 from src.application.dto.generation import GenerationConfigDTO
 from src.application.dto.ontology import OntologyTypeDTO
 
@@ -23,6 +26,7 @@ if TYPE_CHECKING:
     from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 @dataclass
@@ -228,13 +232,27 @@ class AugmentOntologyUseCase:
         max_suggestions: int = 10,
     ) -> list[OntologyTypeDTO]:
         """Suggest new types using the injected local language model."""
-        if self._llm is None:
-            raise RuntimeError("Local language model port not provided")
+        with tracer.start_as_current_span("use_case.augment_ontology.local") as span:
+            span.set_attribute("use_case.domain", context.domain)
+            span.set_attribute("use_case.target_category", context.target_category)
+            span.set_attribute("use_case.existing_types_count", len(context.existing_types))
+            span.set_attribute("use_case.max_suggestions", max_suggestions)
+            try:
+                if self._llm is None:
+                    raise RuntimeError("Local language model port not provided")
 
-        prompt = create_augmentation_prompt(context, max_suggestions)
-        config = GenerationConfigDTO(max_tokens=2048, temperature=0.7, top_p=0.9)
-        result = await self._llm.generate_with_config(prompt=prompt, config=config)
-        return _suggestions_from_response(result.text, context, max_suggestions)
+                prompt = create_augmentation_prompt(context, max_suggestions)
+                config = GenerationConfigDTO(max_tokens=2048, temperature=0.7, top_p=0.9)
+                result = await self._llm.generate_with_config(prompt=prompt, config=config)
+                suggestions = _suggestions_from_response(
+                    result.text, context, max_suggestions
+                )
+                span.set_attribute("use_case.suggestions_count", len(suggestions))
+                return suggestions
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
     async def execute_external(
         self,
@@ -245,30 +263,47 @@ class AugmentOntologyUseCase:
         max_suggestions: int = 10,
     ) -> list[OntologyTypeDTO]:
         """Suggest new types using an external provider API."""
-        if self._router is None:
-            raise RuntimeError("External API router port not provided")
+        with tracer.start_as_current_span("use_case.augment_ontology.external") as span:
+            span.set_attribute("use_case.domain", context.domain)
+            span.set_attribute("use_case.target_category", context.target_category)
+            span.set_attribute("use_case.provider", provider)
+            span.set_attribute("use_case.max_suggestions", max_suggestions)
+            try:
+                if self._router is None:
+                    raise RuntimeError("External API router port not provided")
 
-        prompt = create_augmentation_prompt(context, max_suggestions)
-        logger.info(f"Calling {provider} API for ontology augmentation")
-        try:
-            result = await self._router.generate_text(
-                config=api_config,
-                provider=provider,
-                prompt=prompt,
-                max_tokens=2048,
-                temperature=0.7,
-            )
-            response_text = str(result["text"])
-            usage = result.get("usage", {})
-            logger.info(
-                f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
-            )
-            json_text = extract_json_from_response(response_text)
-            return _suggestions_from_parsed(
-                parse_llm_response(json_text), context, max_suggestions
-            )
-        finally:
-            await self._router.close()
+                prompt = create_augmentation_prompt(context, max_suggestions)
+                logger.info(f"Calling {provider} API for ontology augmentation")
+                try:
+                    result = await self._router.generate_text(
+                        config=api_config,
+                        provider=provider,
+                        prompt=prompt,
+                        max_tokens=2048,
+                        temperature=0.7,
+                    )
+                    response_text = str(result["text"])
+                    usage = result.get("usage", {})
+                    span.set_attribute(
+                        "use_case.tokens_used", int(usage.get("total_tokens", 0) or 0)
+                    )
+                    logger.info(
+                        f"External API response received. Tokens: {usage.get('total_tokens', 'unknown')}"
+                    )
+                    json_text = extract_json_from_response(response_text)
+                    suggestions = _suggestions_from_parsed(
+                        parse_llm_response(json_text), context, max_suggestions
+                    )
+                    span.set_attribute(
+                        "use_case.suggestions_count", len(suggestions)
+                    )
+                    return suggestions
+                finally:
+                    await self._router.close()
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 def _suggestions_from_response(

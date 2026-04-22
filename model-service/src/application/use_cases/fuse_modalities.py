@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class FusionStrategy(StrEnum):
@@ -237,35 +241,49 @@ class SequentialFusion(BaseFusionStrategy):
         """
         import time
 
-        start_time = time.time()
+        with tracer.start_as_current_span("use_case.fuse_modalities.sequential") as span:
+            span.set_attribute("use_case.audio_segment_count", len(audio_segments))
+            span.set_attribute("use_case.visual_frame_count", len(visual_frames))
+            span.set_attribute("use_case.speaker_count", speaker_count or 0)
+            try:
+                start_time = time.time()
 
-        visual_part = f"## Visual Analysis\n\n{visual_summary}"
-        audio_part = f"## Audio Transcript\n\n{audio_transcript}"
+                visual_part = f"## Visual Analysis\n\n{visual_summary}"
+                audio_part = f"## Audio Transcript\n\n{audio_transcript}"
 
-        if self.config.include_speaker_labels and speaker_count:
-            audio_part = f"## Audio Transcript ({speaker_count} speakers)\n\n{audio_transcript}"
+                if self.config.include_speaker_labels and speaker_count:
+                    audio_part = (
+                        f"## Audio Transcript ({speaker_count} speakers)\n\n"
+                        f"{audio_transcript}"
+                    )
 
-        if self.config.audio_weight > self.config.visual_weight:
-            summary = f"{audio_part}\n\n{visual_part}"
-        else:
-            summary = f"{visual_part}\n\n{audio_part}"
+                if self.config.audio_weight > self.config.visual_weight:
+                    summary = f"{audio_part}\n\n{visual_part}"
+                else:
+                    summary = f"{visual_part}\n\n{audio_part}"
 
-        processing_time = time.time() - start_time
+                processing_time = time.time() - start_time
+                span.set_attribute("use_case.processing_time", processing_time)
 
-        logger.info(
-            f"Sequential fusion completed in {processing_time:.2f}s "
-            f"(audio_weight={self.config.audio_weight}, visual_weight={self.config.visual_weight})"
-        )
+                logger.info(
+                    f"Sequential fusion completed in {processing_time:.2f}s "
+                    f"(audio_weight={self.config.audio_weight}, "
+                    f"visual_weight={self.config.visual_weight})"
+                )
 
-        return FusionResult(
-            summary=summary,
-            audio_segments=audio_segments,
-            visual_frames=visual_frames,
-            fusion_strategy="sequential",
-            audio_language=audio_language,
-            speaker_count=speaker_count,
-            processing_time_fusion=processing_time,
-        )
+                return FusionResult(
+                    summary=summary,
+                    audio_segments=audio_segments,
+                    visual_frames=visual_frames,
+                    fusion_strategy="sequential",
+                    audio_language=audio_language,
+                    speaker_count=speaker_count,
+                    processing_time_fusion=processing_time,
+                )
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 class TimestampAlignedFusion(BaseFusionStrategy):
@@ -308,65 +326,85 @@ class TimestampAlignedFusion(BaseFusionStrategy):
         """
         import time
 
-        start_time = time.time()
+        with tracer.start_as_current_span(
+            "use_case.fuse_modalities.timestamp_aligned"
+        ) as span:
+            span.set_attribute("use_case.audio_segment_count", len(audio_segments))
+            span.set_attribute("use_case.visual_frame_count", len(visual_frames))
+            span.set_attribute("use_case.speaker_count", speaker_count or 0)
+            try:
+                start_time = time.time()
+                aligned_events: list[dict[str, Any]] = []
 
-        aligned_events: list[dict[str, Any]] = []
+                for segment in audio_segments:
+                    aligned_events.append(
+                        {
+                            "time": segment.start,
+                            "type": "audio",
+                            "content": segment.text,
+                            "speaker": segment.speaker,
+                            "confidence": segment.confidence,
+                        }
+                    )
 
-        for segment in audio_segments:
-            aligned_events.append(
-                {
-                    "time": segment.start,
-                    "type": "audio",
-                    "content": segment.text,
-                    "speaker": segment.speaker,
-                    "confidence": segment.confidence,
-                }
-            )
+                for frame in visual_frames:
+                    aligned_events.append(
+                        {
+                            "time": frame.timestamp,
+                            "type": "visual",
+                            "content": frame.description,
+                            "objects": frame.objects,
+                            "confidence": frame.confidence,
+                        }
+                    )
 
-        for frame in visual_frames:
-            aligned_events.append(
-                {
-                    "time": frame.timestamp,
-                    "type": "visual",
-                    "content": frame.description,
-                    "objects": frame.objects,
-                    "confidence": frame.confidence,
-                }
-            )
+                aligned_events.sort(key=lambda x: x["time"])
 
-        aligned_events.sort(key=lambda x: x["time"])
+                summary_parts = ["## Timestamp-Aligned Analysis\n"]
 
-        summary_parts = ["## Timestamp-Aligned Analysis\n"]
+                for event in aligned_events:
+                    timestamp_str = f"[{event['time']:.1f}s]"
 
-        for event in aligned_events:
-            timestamp_str = f"[{event['time']:.1f}s]"
+                    if event["type"] == "audio":
+                        speaker_label = (
+                            f" ({event['speaker']})" if event.get("speaker") else ""
+                        )
+                        summary_parts.append(
+                            f"{timestamp_str}{speaker_label}: {event['content']}"
+                        )
+                    else:
+                        objects_str = (
+                            f" [Objects: {', '.join(event['objects'])}]"
+                            if event.get("objects")
+                            else ""
+                        )
+                        summary_parts.append(
+                            f"{timestamp_str} Visual: {event['content']}{objects_str}"
+                        )
 
-            if event["type"] == "audio":
-                speaker_label = f" ({event['speaker']})" if event.get("speaker") else ""
-                summary_parts.append(f"{timestamp_str}{speaker_label}: {event['content']}")
-            else:
-                objects_str = (
-                    f" [Objects: {', '.join(event['objects'])}]" if event.get("objects") else ""
+                summary = "\n".join(summary_parts)
+                processing_time = time.time() - start_time
+                span.set_attribute("use_case.aligned_events", len(aligned_events))
+                span.set_attribute("use_case.processing_time", processing_time)
+
+                logger.info(
+                    f"Timestamp-aligned fusion completed in {processing_time:.2f}s "
+                    f"({len(aligned_events)} events)"
                 )
-                summary_parts.append(f"{timestamp_str} Visual: {event['content']}{objects_str}")
 
-        summary = "\n".join(summary_parts)
-        processing_time = time.time() - start_time
-
-        logger.info(
-            f"Timestamp-aligned fusion completed in {processing_time:.2f}s "
-            f"({len(aligned_events)} events)"
-        )
-
-        return FusionResult(
-            summary=summary,
-            audio_segments=audio_segments,
-            visual_frames=visual_frames,
-            fusion_strategy="timestamp_aligned",
-            audio_language=audio_language,
-            speaker_count=speaker_count,
-            processing_time_fusion=processing_time,
-        )
+                return FusionResult(
+                    summary=summary,
+                    audio_segments=audio_segments,
+                    visual_frames=visual_frames,
+                    fusion_strategy="timestamp_aligned",
+                    audio_language=audio_language,
+                    speaker_count=speaker_count,
+                    processing_time_fusion=processing_time,
+                )
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 class NativeMultimodalFusion(BaseFusionStrategy):
@@ -409,34 +447,47 @@ class NativeMultimodalFusion(BaseFusionStrategy):
         """
         import time
 
-        start_time = time.time()
+        with tracer.start_as_current_span(
+            "use_case.fuse_modalities.native_multimodal"
+        ) as span:
+            span.set_attribute("use_case.audio_segment_count", len(audio_segments))
+            span.set_attribute("use_case.visual_frame_count", len(visual_frames))
+            try:
+                start_time = time.time()
 
-        prompt_parts = [
-            "# Multimodal Video Analysis",
-            "",
-            "## Audio Transcript",
-            audio_transcript,
-            "",
-            "## Visual Analysis",
-            visual_summary,
-            "",
-            "Synthesize the audio and visual information into a comprehensive summary.",
-        ]
+                prompt_parts = [
+                    "# Multimodal Video Analysis",
+                    "",
+                    "## Audio Transcript",
+                    audio_transcript,
+                    "",
+                    "## Visual Analysis",
+                    visual_summary,
+                    "",
+                    "Synthesize the audio and visual information into a comprehensive summary.",
+                ]
 
-        summary = "\n".join(prompt_parts)
-        processing_time = time.time() - start_time
+                summary = "\n".join(prompt_parts)
+                processing_time = time.time() - start_time
+                span.set_attribute("use_case.processing_time", processing_time)
 
-        logger.info(f"Native multimodal fusion completed in {processing_time:.2f}s")
+                logger.info(
+                    f"Native multimodal fusion completed in {processing_time:.2f}s"
+                )
 
-        return FusionResult(
-            summary=summary,
-            audio_segments=audio_segments,
-            visual_frames=visual_frames,
-            fusion_strategy="native_multimodal",
-            audio_language=audio_language,
-            speaker_count=speaker_count,
-            processing_time_fusion=processing_time,
-        )
+                return FusionResult(
+                    summary=summary,
+                    audio_segments=audio_segments,
+                    visual_frames=visual_frames,
+                    fusion_strategy="native_multimodal",
+                    audio_language=audio_language,
+                    speaker_count=speaker_count,
+                    processing_time_fusion=processing_time,
+                )
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 class HybridFusion(BaseFusionStrategy):
@@ -479,43 +530,51 @@ class HybridFusion(BaseFusionStrategy):
         """
         import time
 
-        start_time = time.time()
+        with tracer.start_as_current_span("use_case.fuse_modalities.hybrid") as span:
+            span.set_attribute("use_case.audio_segment_count", len(audio_segments))
+            span.set_attribute("use_case.visual_frame_count", len(visual_frames))
+            span.set_attribute("use_case.speaker_count", speaker_count or 0)
+            try:
+                start_time = time.time()
 
-        has_dense_audio = len(audio_segments) > len(visual_frames) * 2
-        has_multiple_speakers = speaker_count is not None and speaker_count > 1
+                has_dense_audio = len(audio_segments) > len(visual_frames) * 2
+                has_multiple_speakers = (
+                    speaker_count is not None and speaker_count > 1
+                )
 
-        strategy: BaseFusionStrategy
-        if has_dense_audio or has_multiple_speakers:
-            strategy = TimestampAlignedFusion(self.config)
-            result = await strategy.fuse(
-                audio_transcript,
-                audio_segments,
-                visual_summary,
-                visual_frames,
-                audio_language,
-                speaker_count,
-            )
-        else:
-            strategy = SequentialFusion(self.config)
-            result = await strategy.fuse(
-                audio_transcript,
-                audio_segments,
-                visual_summary,
-                visual_frames,
-                audio_language,
-                speaker_count,
-            )
+                strategy: BaseFusionStrategy
+                if has_dense_audio or has_multiple_speakers:
+                    strategy = TimestampAlignedFusion(self.config)
+                else:
+                    strategy = SequentialFusion(self.config)
 
-        processing_time = time.time() - start_time
-        result.fusion_strategy = "hybrid"
-        result.processing_time_fusion = processing_time
+                span.set_attribute(
+                    "use_case.selected_strategy", strategy.__class__.__name__
+                )
+                result = await strategy.fuse(
+                    audio_transcript,
+                    audio_segments,
+                    visual_summary,
+                    visual_frames,
+                    audio_language,
+                    speaker_count,
+                )
 
-        logger.info(
-            f"Hybrid fusion completed in {processing_time:.2f}s "
-            f"(selected: {strategy.__class__.__name__})"
-        )
+                processing_time = time.time() - start_time
+                result.fusion_strategy = "hybrid"
+                result.processing_time_fusion = processing_time
+                span.set_attribute("use_case.processing_time", processing_time)
 
-        return result
+                logger.info(
+                    f"Hybrid fusion completed in {processing_time:.2f}s "
+                    f"(selected: {strategy.__class__.__name__})"
+                )
+
+                return result
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 def create_fusion_strategy(config: FusionConfig) -> BaseFusionStrategy:

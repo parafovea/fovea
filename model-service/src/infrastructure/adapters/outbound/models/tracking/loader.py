@@ -17,6 +17,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 logger = logging.getLogger(__name__)
 
 # Detection thresholds
@@ -238,6 +240,7 @@ class SAMURAILoader(TrackingModelLoader):
             logger.error(f"Failed to load SAMURAI: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="track")
     def track(
         self,
         frames: list[Image.Image],
@@ -375,6 +378,7 @@ class SAM2LongLoader(TrackingModelLoader):
             logger.error(f"Failed to load SAM2Long: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="track")
     def track(
         self,
         frames: list[Image.Image],
@@ -516,6 +520,7 @@ class SAM2Loader(TrackingModelLoader):
             logger.error(f"Failed to load SAM2.1: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="track")
     def track(
         self,
         frames: list[Image.Image],
@@ -641,6 +646,7 @@ class YOLO11SegLoader(TrackingModelLoader):
             logger.error(f"Failed to load YOLO11n-seg: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="track")
     def track(
         self,
         frames: list[Image.Image],

@@ -11,6 +11,7 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     LLMLoader,
 )
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
@@ -39,7 +40,8 @@ class LLMLoaderAdapter(ILanguageModel):
             temperature=temperature,
             top_p=float(kwargs.get("top_p", 0.9)),
         )
-        result = await self._loader.generate(prompt=prompt, generation_config=config)
+        with record_inference(task="llm_generate", model_id=self.model_id):
+            result = await self._loader.generate(prompt=prompt, generation_config=config)
         return str(result.text)
 
     async def generate_structured(
@@ -64,7 +66,8 @@ class LLMLoaderAdapter(ILanguageModel):
             top_p=config.top_p,
             stop_sequences=config.stop_sequences,
         )
-        result = await self._loader.generate(prompt=prompt, generation_config=internal)
+        with record_inference(task="llm_generate", model_id=self.model_id):
+            result = await self._loader.generate(prompt=prompt, generation_config=internal)
         return GenerationResultDTO(
             text=str(result.text),
             tokens_used=int(getattr(result, "tokens_used", 0) or 0),

@@ -20,6 +20,7 @@ from src.application.ports.outbound.transcriber import (
     TranscriptSegmentDTO,
 )
 from src.application.services.audio_processing import extract_audio_track, has_audio_stream
+from src.infrastructure.observability.telemetry import record_inference
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,8 @@ class WhisperTranscriberAdapter(ITranscriber):
             loader = WhisperLoader(config)
             loader.load()
             try:
-                result = loader.transcribe(audio_path)
+                with record_inference(task="transcribe", model_id=self._model_id):
+                    result = loader.transcribe(audio_path)
                 segments = [
                     TranscriptSegmentDTO(
                         start=float(seg.start),
@@ -114,7 +116,10 @@ def _apply_diarization(
     diar_loader = PyannoteLoader(diar_config)
     diar_loader.load()
     try:
-        diar_result = diar_loader.diarize(audio_path)
+        with record_inference(
+            task="diarize", model_id="pyannote/speaker-diarization-3.1"
+        ):
+            diar_result = diar_loader.diarize(audio_path)
         speaker_map: dict[tuple[float, float], str] = {}
         for diar_seg in diar_result.segments:
             speaker_map[(float(diar_seg.start), float(diar_seg.end))] = str(diar_seg.speaker)

@@ -16,6 +16,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 from src.application.dto.claims import ExtractedClaimDTO
 from src.application.dto.generation import GenerationConfigDTO
 
@@ -23,6 +26,7 @@ if TYPE_CHECKING:
     from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class ExtractClaimsUseCase:
@@ -44,37 +48,51 @@ class ExtractClaimsUseCase:
         annotation_context: list[dict[str, Any]] | None = None,
     ) -> list[ExtractedClaimDTO]:
         """Extract claims from summary text."""
-        if sentences is None:
-            sentences = split_into_sentences(summary_text)
+        with tracer.start_as_current_span("use_case.extract_claims") as span:
+            span.set_attribute("use_case.strategy", strategy)
+            span.set_attribute("use_case.max_claims", max_claims)
+            span.set_attribute("use_case.min_confidence", min_confidence)
+            span.set_attribute("use_case.summary_length", len(summary_text))
+            try:
+                if sentences is None:
+                    sentences = split_into_sentences(summary_text)
+                span.set_attribute("use_case.input_sentence_count", len(sentences))
 
-        prompt = build_extraction_prompt(
-            summary_text=summary_text,
-            sentences=sentences,
-            strategy=strategy,
-            ontology_context=ontology_context,
-            annotation_context=annotation_context,
-            max_claims=max_claims,
-        )
+                prompt = build_extraction_prompt(
+                    summary_text=summary_text,
+                    sentences=sentences,
+                    strategy=strategy,
+                    ontology_context=ontology_context,
+                    annotation_context=annotation_context,
+                    max_claims=max_claims,
+                )
 
-        config = GenerationConfigDTO(
-            max_tokens=4096,
-            temperature=0.7,
-            top_p=0.9,
-            stop_sequences=["---END---"],
-        )
+                config = GenerationConfigDTO(
+                    max_tokens=4096,
+                    temperature=0.7,
+                    top_p=0.9,
+                    stop_sequences=["---END---"],
+                )
 
-        logger.info("Extracting claims using strategy: %s", strategy)
-        result = await self._llm.generate_with_config(prompt=prompt, config=config)
+                logger.info("Extracting claims using strategy: %s", strategy)
+                result = await self._llm.generate_with_config(
+                    prompt=prompt, config=config
+                )
 
-        claims = parse_claims_response(
-            response=result.text,
-            summary_text=summary_text,
-            sentences=sentences,
-            min_confidence=min_confidence,
-        )
-        claims = claims[:max_claims]
-        logger.info("Extracted %d claims", len(claims))
-        return claims
+                claims = parse_claims_response(
+                    response=result.text,
+                    summary_text=summary_text,
+                    sentences=sentences,
+                    min_confidence=min_confidence,
+                )
+                claims = claims[:max_claims]
+                span.set_attribute("use_case.output_claim_count", len(claims))
+                logger.info("Extracted %d claims", len(claims))
+                return claims
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 async def extract_claims_from_summary(

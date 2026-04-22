@@ -15,6 +15,7 @@ from PIL import Image
 from src.application.ports.outbound.tracking_model import ITrackingModel
 from src.domain.entities import TrackingMask
 from src.domain.value_objects import ConfidenceScore
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.tracking.loader import (
@@ -65,11 +66,12 @@ class TrackingLoaderAdapter(ITrackingModel):
             raise RuntimeError("Tracker must be initialized before track_batch")
 
         pil_frames = [Image.fromarray(arr) for arr in frames]
-        tracking_result = self._loader.track(
-            frames=pil_frames,
-            initial_masks=self._initial_masks,
-            object_ids=self._object_ids,
-        )
+        with record_inference(task="track", model_id=self._model_id):
+            tracking_result = self._loader.track(
+                frames=pil_frames,
+                initial_masks=self._initial_masks,
+                object_ids=self._object_ids,
+            )
 
         results: list[dict[int, TrackingMask]] = []
         for tframe in tracking_result.frames:

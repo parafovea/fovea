@@ -22,6 +22,8 @@ from transformers import (
     PreTrainedTokenizer,
 )
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -203,6 +205,7 @@ class LLMLoader:
             except Exception as e:
                 raise RuntimeError(f"Failed to load model {self.config.model_id}: {e}") from e
 
+    @instrument_method(task="llm_generate")
     async def generate(
         self,
         prompt: str,

@@ -20,6 +20,7 @@ from src.infrastructure.adapters.outbound.models.detection.loader import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -98,6 +99,7 @@ class GroundingDINOONNXLoader(ONNXModelLoader, DetectionModelLoader):
             logger.error("Failed to load GroundingDINO ONNX model: %s", e)
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from src.application.ports.outbound.external_api_router import IExternalAPIRouter
 from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.application.dto.external_api import ExternalAPIConfigDTO
@@ -51,13 +52,18 @@ class ExternalAPIRouterAdapter(IExternalAPIRouter):
         temperature: float = 0.7,
     ) -> dict[str, Any]:
         """Generate text via the underlying router."""
-        result: dict[str, Any] = await self._router.generate_text(
-            config=_to_internal(config),
-            provider=provider,
-            prompt=prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        with record_inference(
+            task="external_generate_text",
+            model_id=config.model_id,
+            extra={"provider": provider},
+        ):
+            result: dict[str, Any] = await self._router.generate_text(
+                config=_to_internal(config),
+                provider=provider,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
         return result
 
     async def generate_from_images(
@@ -70,13 +76,18 @@ class ExternalAPIRouterAdapter(IExternalAPIRouter):
         max_tokens: int = 1024,
     ) -> dict[str, Any]:
         """Generate text from images via the underlying router."""
-        result: dict[str, Any] = await self._router.generate_from_images(
-            config=_to_internal(config),
-            provider=provider,
-            images=images,
-            prompt=prompt,
-            max_tokens=max_tokens,
-        )
+        with record_inference(
+            task="external_generate_from_images",
+            model_id=config.model_id,
+            extra={"provider": provider},
+        ):
+            result: dict[str, Any] = await self._router.generate_from_images(
+                config=_to_internal(config),
+                provider=provider,
+                images=images,
+                prompt=prompt,
+                max_tokens=max_tokens,
+            )
         return result
 
     async def close(self) -> None:

@@ -19,6 +19,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 from src.application.dto.generation import GenerationConfigDTO
 
 if TYPE_CHECKING:
@@ -26,6 +29,7 @@ if TYPE_CHECKING:
     from src.application.ports.outbound.llm import ILanguageModel
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 # Reference marker parsing: #name = type, @name = object, ^name = annotation.
@@ -126,34 +130,54 @@ class SynthesizeSummaryUseCase:
         list[dict[str, str]]
             GlossItem array.
         """
-        prompt = build_synthesis_prompt(
-            claim_sources=claim_sources,
-            claim_relations=claim_relations,
-            synthesis_strategy=synthesis_strategy,
-            ontology_context=ontology_context,
-            persona_context=persona_context,
-            max_length=max_length,
-            include_conflicts=include_conflicts,
-            include_citations=include_citations,
-        )
+        with tracer.start_as_current_span("use_case.synthesize_summary") as span:
+            span.set_attribute("use_case.synthesis_strategy", synthesis_strategy)
+            span.set_attribute("use_case.source_count", len(claim_sources))
+            span.set_attribute("use_case.max_length", max_length)
+            span.set_attribute(
+                "use_case.relation_count",
+                len(claim_relations) if claim_relations else 0,
+            )
+            try:
+                prompt = build_synthesis_prompt(
+                    claim_sources=claim_sources,
+                    claim_relations=claim_relations,
+                    synthesis_strategy=synthesis_strategy,
+                    ontology_context=ontology_context,
+                    persona_context=persona_context,
+                    max_length=max_length,
+                    include_conflicts=include_conflicts,
+                    include_citations=include_citations,
+                )
 
-        config = GenerationConfigDTO(
-            max_tokens=8192,
-            temperature=0.8,
-            top_p=0.9,
-            stop_sequences=["---END---"],
-        )
+                config = GenerationConfigDTO(
+                    max_tokens=8192,
+                    temperature=0.8,
+                    top_p=0.9,
+                    stop_sequences=["---END---"],
+                )
 
-        logger.info(
-            "Synthesizing summary using strategy: %s from %d source(s)",
-            synthesis_strategy,
-            len(claim_sources),
-        )
-        result = await self._llm.generate_with_config(prompt=prompt, config=config)
+                logger.info(
+                    "Synthesizing summary using strategy: %s from %d source(s)",
+                    synthesis_strategy,
+                    len(claim_sources),
+                )
+                result = await self._llm.generate_with_config(
+                    prompt=prompt, config=config
+                )
 
-        summary_gloss = parse_reference_markers(result.text)
-        logger.info("Synthesized summary with %d gloss items", len(summary_gloss))
-        return summary_gloss
+                summary_gloss = parse_reference_markers(result.text)
+                span.set_attribute(
+                    "use_case.output_gloss_items", len(summary_gloss)
+                )
+                logger.info(
+                    "Synthesized summary with %d gloss items", len(summary_gloss)
+                )
+                return summary_gloss
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                raise
 
 
 async def synthesize_summary_from_claims(

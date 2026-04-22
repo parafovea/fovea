@@ -17,6 +17,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 logger = logging.getLogger(__name__)
 
 
@@ -226,6 +228,7 @@ class YOLOWorldLoader(DetectionModelLoader):
             logger.error(f"Failed to load YOLO-World v2.1: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -307,6 +310,7 @@ class GroundingDINOLoader(DetectionModelLoader):
             logger.error(f"Failed to load Grounding DINO 1.5: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -395,6 +399,7 @@ class OWLv2Loader(DetectionModelLoader):
             logger.error(f"Failed to load OWLv2: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -497,6 +502,7 @@ class Florence2Loader(DetectionModelLoader):
             logger.error(f"Failed to load Florence-2: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,

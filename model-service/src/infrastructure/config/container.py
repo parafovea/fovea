@@ -15,7 +15,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from src.application.dto.external_api import ExternalAPIConfigDTO
-    from src.application.ports.outbound.audio_model import IAudioTranscriber
+    from src.application.ports.outbound.audio_model import (
+        IAudioTranscriber,
+        ISpeakerDiarizer,
+        IVoiceActivityDetector,
+    )
     from src.application.ports.outbound.detection_model import IDetectionModel
     from src.application.ports.outbound.external_api_router import IExternalAPIRouter
     from src.application.ports.outbound.frame_sampler import IFrameSampler
@@ -111,11 +115,73 @@ class Container:
 
         return WhisperTranscriberAdapter()
 
-    def audio_transcriber(self) -> IAudioTranscriber:
-        """Build an :class:`IAudioTranscriber` adapter."""
-        raise NotImplementedError(
-            "No IAudioTranscriber adapter is currently registered"
+    def audio_transcriber(
+        self,
+        *,
+        model_id: str = "openai/whisper-large-v3-turbo",
+        framework: str = "whisper",
+        language: str | None = None,
+    ) -> IAudioTranscriber:
+        """Build an :class:`IAudioTranscriber` adapter backed by Whisper."""
+        from src.infrastructure.adapters.outbound.models.audio.adapters import (  # noqa: PLC0415
+            WhisperTranscriberAdapter,
         )
+        from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
+            AudioFramework,
+            TranscriptionConfig,
+            create_transcription_loader,
+        )
+
+        framework_enum = (
+            AudioFramework.FASTER_WHISPER
+            if framework == "faster_whisper"
+            else AudioFramework.WHISPER
+        )
+        device = "cuda" if self.model_capability_probe().is_cuda_available() else "cpu"
+        config = TranscriptionConfig(
+            model_id=model_id,
+            framework=framework_enum,
+            language=language,
+            device=device,
+        )
+        loader = create_transcription_loader(model_id, config)
+        return WhisperTranscriberAdapter(loader)
+
+    def speaker_diarizer(
+        self,
+        *,
+        model_id: str = "pyannote/speaker-diarization-3.1",
+    ) -> ISpeakerDiarizer:
+        """Build an :class:`ISpeakerDiarizer` adapter backed by pyannote."""
+        from src.infrastructure.adapters.outbound.models.audio.adapters import (  # noqa: PLC0415
+            PyannoteDiarizerAdapter,
+        )
+        from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
+            DiarizationConfig,
+            PyannoteLoader,
+        )
+
+        device = "cuda" if self.model_capability_probe().is_cuda_available() else "cpu"
+        loader = PyannoteLoader(DiarizationConfig(model_id=model_id, device=device))
+        return PyannoteDiarizerAdapter(loader)
+
+    def voice_activity_detector(
+        self,
+        *,
+        model_id: str = "silero_vad",
+    ) -> IVoiceActivityDetector:
+        """Build an :class:`IVoiceActivityDetector` adapter backed by Silero VAD."""
+        from src.infrastructure.adapters.outbound.models.audio.adapters import (  # noqa: PLC0415
+            SileroVADAdapter,
+        )
+        from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
+            SileroVADLoader,
+            VADConfig,
+        )
+
+        device = "cuda" if self.model_capability_probe().is_cuda_available() else "cpu"
+        loader = SileroVADLoader(VADConfig(model_id=model_id, device=device))
+        return SileroVADAdapter(loader)
 
     def external_api_router(self) -> IExternalAPIRouter:
         """Build an :class:`IExternalAPIRouter` adapter."""

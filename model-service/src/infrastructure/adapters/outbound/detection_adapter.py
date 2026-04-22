@@ -15,6 +15,7 @@ from PIL import Image
 from src.application.ports.outbound.detection_model import IDetectionModel
 from src.domain.entities import Detection
 from src.domain.value_objects import ConfidenceScore, NormalizedBBox
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.detection.loader import (
@@ -41,7 +42,8 @@ class DetectionLoaderAdapter(IDetectionModel):
         """Detect objects in a single image."""
         self._loader.config.confidence_threshold = confidence_threshold
         pil_image = Image.fromarray(image)
-        result = self._loader.detect(pil_image, query)
+        with record_inference(task="detect", model_id=self._model_id):
+            result = self._loader.detect(pil_image, query)
 
         detections: list[Detection] = []
         for det in result.detections:

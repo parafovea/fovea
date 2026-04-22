@@ -13,6 +13,7 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     GenerationResult,
 )
+from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
@@ -72,6 +73,7 @@ class LlamaCppLLMLoader:
             self.config.n_threads,
         )
 
+    @instrument_method(task="llm_generate")
     async def generate(
         self,
         prompt: str,

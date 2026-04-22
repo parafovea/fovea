@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from src.application.ports.outbound.frame_sampler import IFrameSampler, VideoMetadataDTO
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -21,7 +22,8 @@ class OpenCVFrameSampler(IFrameSampler):
 
     def get_video_metadata(self, video_path: str) -> VideoMetadataDTO:
         """Read minimal video metadata."""
-        info = get_video_info(video_path)
+        with record_inference(task="video_metadata", model_id="opencv"):
+            info = get_video_info(video_path)
         return VideoMetadataDTO(
             frame_count=int(info.frame_count),
             fps=float(info.fps),
@@ -36,9 +38,10 @@ class OpenCVFrameSampler(IFrameSampler):
         max_dimension: int = 1024,
     ) -> list[tuple[int, NDArray[np.uint8]]]:
         """Extract uniformly sampled frames."""
-        frames = extract_frames_uniform(
-            video_path, num_frames=num_frames, max_dimension=max_dimension
-        )
+        with record_inference(task="frame_sample", model_id="opencv"):
+            frames = extract_frames_uniform(
+                video_path, num_frames=num_frames, max_dimension=max_dimension
+            )
         result: list[tuple[int, NDArray[np.uint8]]] = []
         for idx, arr in frames:
             result.append((int(idx), arr.astype(np.uint8)))

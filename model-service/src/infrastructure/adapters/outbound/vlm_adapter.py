@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image
 
 from src.application.ports.outbound.vlm import IVisionLanguageModel
+from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     import numpy as np
@@ -34,12 +35,13 @@ class VLMLoaderAdapter(IVisionLanguageModel):
     ) -> str:
         """Generate text from images and a prompt."""
         pil_images = [Image.fromarray(arr) for arr in images]
-        result = self._loader.generate(
-            images=pil_images,
-            prompt=prompt,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-        )
+        with record_inference(task="vlm_generate", model_id=self.model_id):
+            result = self._loader.generate(
+                images=pil_images,
+                prompt=prompt,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+            )
         return str(result)
 
     def load(self) -> None:
