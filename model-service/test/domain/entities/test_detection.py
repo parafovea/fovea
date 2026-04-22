@@ -15,7 +15,9 @@ from src.domain.entities.detection import (
 from src.domain.value_objects import ConfidenceScore, NormalizedBBox, Timestamp
 
 
-def _make_detection(label: str = "cat", conf: float = 0.9, track_id: str | None = None) -> Detection:
+def _make_detection(
+    label: str = "cat", conf: float = 0.9, track_id: str | None = None
+) -> Detection:
     return Detection(
         label=label,
         bounding_box=NormalizedBBox(x=0.1, y=0.1, width=0.2, height=0.2),
@@ -169,7 +171,10 @@ class TestDetectionResult:
             FrameDetections(
                 frame_number=1,
                 timestamp=Timestamp(1.0),
-                detections=[_make_detection("a", track_id="t1"), _make_detection("c", track_id="t2")],
+                detections=[
+                    _make_detection("a", track_id="t1"),
+                    _make_detection("c", track_id="t2"),
+                ],
             ),
         ]
         r = DetectionResult(
@@ -299,7 +304,10 @@ class TestTrackingResult:
         mask_b = TrackingMask(object_id=2, mask_rle={}, confidence=ConfidenceScore(0.5))
         frames = [
             TrackingFrameResult(
-                frame_number=0, timestamp=Timestamp(0.0), masks=[mask_a1, mask_b], processing_time=0.0
+                frame_number=0,
+                timestamp=Timestamp(0.0),
+                masks=[mask_a1, mask_b],
+                processing_time=0.0,
             ),
             TrackingFrameResult(
                 frame_number=1, timestamp=Timestamp(1.0), masks=[mask_a2], processing_time=0.0

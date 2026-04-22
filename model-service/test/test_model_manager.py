@@ -222,9 +222,7 @@ class TestModelManager:
     def test_load_config_file_not_found(self):
         """Test loading config from non-existent file."""
         with pytest.raises(FileNotFoundError):
-            ModelManager(
-                "/nonexistent/config.yaml", capability_probe=TorchModelCapabilityProbe()
-            )
+            ModelManager("/nonexistent/config.yaml", capability_probe=TorchModelCapabilityProbe())
 
     def test_load_config_invalid_yaml(self):
         """Test loading invalid YAML configuration."""
@@ -628,9 +626,7 @@ class TestExternalAPISupport:
     @pytest.fixture
     def external_api_manager(self, external_api_config_file):
         """Create ModelManager instance with external API configuration."""
-        return ModelManager(
-            external_api_config_file, capability_probe=TorchModelCapabilityProbe()
-        )
+        return ModelManager(external_api_config_file, capability_probe=TorchModelCapabilityProbe())
 
     def test_is_external_api_true(self, external_api_manager):
         """Test is_external_api returns True for external API models."""

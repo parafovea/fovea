@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 from src.application.dto.external_api import ExternalAPIConfigDTO
+from src.application.dto.reasoning import ReasonedText
 from src.application.dto.summarization import SummarizeRequestDTO
 from src.application.ports.outbound.frame_sampler import VideoMetadataDTO
 from src.application.use_cases.summarize_video import (
@@ -25,45 +26,32 @@ class TestFrameSampling:
     def test_calculate_frame_sample_count_respects_anthropic_limit(self) -> None:
         """Test that Anthropic provider limit of 20 frames is respected."""
         assert (
-            calculate_frame_sample_count(
-                total_frames=1000, provider="anthropic", max_frames=50
-            )
+            calculate_frame_sample_count(total_frames=1000, provider="anthropic", max_frames=50)
             == 20
         )
 
     def test_calculate_frame_sample_count_respects_openai_limit(self) -> None:
         """Test that OpenAI provider limit of 10 frames is respected."""
         assert (
-            calculate_frame_sample_count(
-                total_frames=1000, provider="openai", max_frames=50
-            )
-            == 10
+            calculate_frame_sample_count(total_frames=1000, provider="openai", max_frames=50) == 10
         )
 
     def test_calculate_frame_sample_count_respects_google_limit(self) -> None:
         """Test that Google provider limit of 50 frames is respected."""
         assert (
-            calculate_frame_sample_count(
-                total_frames=1000, provider="google", max_frames=100
-            )
-            == 50
+            calculate_frame_sample_count(total_frames=1000, provider="google", max_frames=100) == 50
         )
 
     def test_calculate_frame_sample_count_respects_total_frames(self) -> None:
         """Test that total frames is respected when below provider limit."""
         assert (
-            calculate_frame_sample_count(
-                total_frames=5, provider="anthropic", max_frames=20
-            )
-            == 5
+            calculate_frame_sample_count(total_frames=5, provider="anthropic", max_frames=20) == 5
         )
 
     def test_calculate_frame_sample_count_respects_user_max(self) -> None:
         """Test that user-requested max is respected when below provider limit."""
         assert (
-            calculate_frame_sample_count(
-                total_frames=1000, provider="anthropic", max_frames=15
-            )
+            calculate_frame_sample_count(total_frames=1000, provider="anthropic", max_frames=15)
             == 15
         )
 
@@ -134,9 +122,7 @@ class TestPromptGeneration:
 
     def test_get_external_api_prompt_includes_timestamps(self) -> None:
         """Test that prompt includes frame timestamps."""
-        prompt = get_external_api_prompt(
-            frame_count=3, duration=15.0, timestamps=[0.0, 5.5, 11.0]
-        )
+        prompt = get_external_api_prompt(frame_count=3, duration=15.0, timestamps=[0.0, 5.5, 11.0])
         assert "0.0s" in prompt
         assert "5.5s" in prompt
         assert "11.0s" in prompt
@@ -153,9 +139,7 @@ class TestPromptGeneration:
         assert "Scene changes" in prompt
 
 
-def _make_frame_sampler(
-    metadata: VideoMetadataDTO, frames: list[tuple[int, np.ndarray]]
-) -> Mock:
+def _make_frame_sampler(metadata: VideoMetadataDTO, frames: list[tuple[int, np.ndarray]]) -> Mock:
     """Build a frame sampler mock with canned metadata and frames."""
     sampler = Mock()
     sampler.get_video_metadata.return_value = metadata
@@ -198,6 +182,14 @@ class TestExternalAPISummarization:
                 "model": "test-model",
             }
         )
+        router.generate_reasoned_from_images = AsyncMock(
+            return_value=ReasonedText(
+                text="Summary: This video shows a person walking. "
+                "Visual Analysis: The person is wearing blue clothes.",
+                thinking=None,
+                tokens_used=150,
+            )
+        )
         router.close = AsyncMock()
 
         use_case = SummarizeVideoUseCase(frame_sampler=sampler, external_router=router)
@@ -213,7 +205,7 @@ class TestExternalAPISummarization:
         assert "person walking" in response.summary.lower()
         assert len(response.key_frames) > 0
         assert response.confidence > 0
-        router.generate_from_images.assert_called_once()
+        router.generate_reasoned_from_images.assert_called_once()
         router.close.assert_called_once()
 
     @pytest.mark.asyncio
@@ -240,6 +232,13 @@ class TestExternalAPISummarization:
                 "usage": {"total_tokens": 100},
                 "model": "gpt-4o",
             }
+        )
+        router.generate_reasoned_from_images = AsyncMock(
+            return_value=ReasonedText(
+                text="Summary: Video content.",
+                thinking=None,
+                tokens_used=100,
+            )
         )
         router.close = AsyncMock()
 
@@ -271,7 +270,8 @@ class TestExternalAPISummarization:
         sampler = _make_frame_sampler(metadata, frames)
 
         router = Mock()
-        router.generate_from_images = AsyncMock(
+        router.generate_from_images = AsyncMock(side_effect=Exception("API authentication failed"))
+        router.generate_reasoned_from_images = AsyncMock(
             side_effect=Exception("API authentication failed")
         )
         router.close = AsyncMock()

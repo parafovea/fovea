@@ -25,9 +25,7 @@ def _make_language_model(response_text: str) -> MagicMock:
     """Build a mock ``ILanguageModel`` that returns a fixed generation."""
     model = MagicMock()
     model.generate_with_config = AsyncMock(
-        return_value=GenerationResultDTO(
-            text=response_text, tokens_used=250, finish_reason="eos"
-        )
+        return_value=GenerationResultDTO(text=response_text, tokens_used=250, finish_reason="eos")
     )
     return model
 

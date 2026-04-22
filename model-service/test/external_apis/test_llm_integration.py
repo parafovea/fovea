@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.application.dto.external_api import ExternalAPIConfigDTO
+from src.application.dto.reasoning import ReasonedText
 from src.application.use_cases.augment_ontology import (
     AugmentationContext,
     augment_ontology_with_external_api,
@@ -65,6 +66,13 @@ def _make_router(result: dict) -> MagicMock:
     """Build a mock IExternalAPIRouter returning a fixed result."""
     router = MagicMock()
     router.generate_text = AsyncMock(return_value=result)
+    router.generate_reasoned_text = AsyncMock(
+        return_value=ReasonedText(
+            text=result["text"],
+            thinking=None,
+            tokens_used=result.get("usage", {}).get("total_tokens"),
+        )
+    )
     router.close = AsyncMock()
     return router
 
@@ -166,7 +174,12 @@ class TestExternalAPIOntologyAugmentation:
         )
         payload = json.dumps(
             [
-                {"name": f"Type{i}", "description": f"Description {i}", "parent": None, "examples": []}
+                {
+                    "name": f"Type{i}",
+                    "description": f"Description {i}",
+                    "parent": None,
+                    "examples": [],
+                }
                 for i in range(10)
             ]
         )
@@ -194,6 +207,9 @@ class TestExternalAPIOntologyAugmentation:
         )
         router = MagicMock()
         router.generate_text = AsyncMock(side_effect=RuntimeError("API authentication failed"))
+        router.generate_reasoned_text = AsyncMock(
+            side_effect=RuntimeError("API authentication failed")
+        )
         router.close = AsyncMock()
 
         with pytest.raises(RuntimeError, match="API authentication failed"):
@@ -284,9 +300,7 @@ class TestExternalAPIOntologyAugmentation:
             persona_role="School Administrator",
             information_need="Track enrollment patterns",
         )
-        router = _make_router(
-            {"text": "[]", "usage": {"total_tokens": 50}, "model": "test-model"}
-        )
+        router = _make_router({"text": "[]", "usage": {"total_tokens": 50}, "model": "test-model"})
 
         await augment_ontology_with_external_api(
             context=context,

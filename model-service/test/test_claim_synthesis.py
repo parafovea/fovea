@@ -390,9 +390,7 @@ class TestSynthesizeSummaryFromClaims:
         sample_persona_context,
     ):
         """Test synthesis with all configuration options."""
-        language_model = _make_language_model(
-            "A comprehensive analysis of the rocket launch."
-        )
+        language_model = _make_language_model("A comprehensive analysis of the rocket launch.")
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source],

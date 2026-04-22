@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import pytest
 
+from src.application.dto.reasoning import ReasonedText
 from src.application.dto.summarization import SummarizeRequestDTO
 from src.application.ports.outbound.frame_sampler import VideoMetadataDTO
 from src.application.use_cases.summarize_video import (
@@ -225,8 +226,14 @@ async def test_summarize_video_with_vlm_success():
         vlm = MagicMock()
         vlm.is_loaded = False
         vlm.generate.return_value = (
-            "Summary: Test video shows random frames. "
-            "Visual Analysis: Contains RGB noise patterns."
+            "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
+        )
+        vlm.generate_reasoned_from_images = MagicMock(
+            return_value=ReasonedText(
+                text="Summary: Test video shows random frames. "
+                "Visual Analysis: Contains RGB noise patterns.",
+                thinking=None,
+            )
         )
 
         request = SummarizeRequestDTO(
@@ -236,9 +243,7 @@ async def test_summarize_video_with_vlm_success():
             max_frames=10,
         )
 
-        use_case = SummarizeVideoUseCase(
-            frame_sampler=sampler, vision_language_model=vlm
-        )
+        use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
         result = await use_case.execute_with_vlm(
             request=request,
             video_path=str(Path(tmpdir) / "test.mp4"),
@@ -263,9 +268,7 @@ async def test_summarize_video_with_vlm_success():
 async def test_summarize_video_with_vlm_video_not_found():
     """Test summarization with nonexistent video file."""
     sampler = MagicMock()
-    sampler.get_video_metadata.side_effect = FileNotFoundError(
-        "Video file not found"
-    )
+    sampler.get_video_metadata.side_effect = FileNotFoundError("Video file not found")
     vlm = MagicMock()
 
     request = SummarizeRequestDTO(

@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType, SummarizeResponse
+from src.application.dto.ontology import OntologyTypeDTO
+from src.application.dto.summarization import SummarizeResponseDTO
 from src.main import app
 
 
@@ -117,7 +118,7 @@ class TestSummarizeEndpoint:
         """Test successful video summarization request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
         mock_download.return_value = ("/videos/test-video-123.mp4", False)  # Not a temp file
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-123",
             video_id="test-video-123",
             persona_id="test-persona-456",
@@ -159,7 +160,7 @@ class TestSummarizeEndpoint:
         """Test summarization with default parameters."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
         mock_download.return_value = ("/videos/test-video-789.mp4", False)
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-789",
             video_id="test-video-789",
             persona_id="test-persona-012",
@@ -217,7 +218,7 @@ class TestSummarizeEndpoint:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
         mock_download.return_value = ("/videos/test-video-123.mp4", False)
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-456",
             video_id="test-video-123",
             persona_id="test-persona-456",
@@ -269,7 +270,7 @@ class TestSummarizeEndpoint:
         # Mock download to return temp file path
         mock_download.return_value = ("/tmp/video_abc123.mp4", True)
 
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-789",
             video_id="test-video-456",
             persona_id="test-persona-789",
@@ -311,7 +312,7 @@ class TestSummarizeEndpoint:
         # Mock download to return same path (not a temp file)
         mock_download.return_value = ("/videos/local-video.mp4", False)
 
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-012",
             video_id="test-video-012",
             persona_id="test-persona-012",
@@ -347,13 +348,13 @@ class TestAugmentEndpoint:
     ) -> None:
         """Test successful ontology augmentation request."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Reptile",
                 description="Cold-blooded vertebrate animal",
                 confidence=0.92,
                 examples=["Snake", "Lizard"],
             ),
-            OntologyType(
+            OntologyTypeDTO(
                 name="Amphibian",
                 description="Animal that lives both on land and in water",
                 confidence=0.88,
@@ -389,7 +390,7 @@ class TestAugmentEndpoint:
     ) -> None:
         """Test augmentation for event category."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Goal",
                 description="Scoring event in a game",
                 confidence=0.95,
@@ -429,7 +430,7 @@ class TestAugmentEndpoint:
     ) -> None:
         """Test augmentation with default max_suggestions."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name=f"Type{i}",
                 description="Test description",
                 confidence=0.8,
@@ -457,7 +458,7 @@ class TestAugmentEndpoint:
     ) -> None:
         """Test that suggestions have correct structure."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Infrastructure",
                 description="Built environment",
                 confidence=0.9,

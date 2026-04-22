@@ -28,9 +28,7 @@ class TestOntologyType:
         assert not t.has_parent
 
     def test_default_examples_empty(self) -> None:
-        t = OntologyType(
-            name="X", description="d", confidence=ConfidenceScore(0.5)
-        )
+        t = OntologyType(name="X", description="d", confidence=ConfidenceScore(0.5))
         assert t.examples == []
         assert t.example_count == 0
 

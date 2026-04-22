@@ -167,9 +167,7 @@ class TestClaimExtractionResult:
 
 class TestClaimRelationship:
     def test_defaults(self) -> None:
-        rel = ClaimRelationship(
-            source_claim_id="a", target_claim_id="b", relation_type="supports"
-        )
+        rel = ClaimRelationship(source_claim_id="a", target_claim_id="b", relation_type="supports")
         assert rel.confidence.value == 0.8
         assert rel.notes is None
 
