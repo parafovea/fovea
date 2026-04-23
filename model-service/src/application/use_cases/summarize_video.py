@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import re
 import time
 import uuid
@@ -719,24 +718,29 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
     video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm"]
     data_path_resolved = data_path.resolve()
 
-    for ext in video_extensions:
-        video_path = data_path / f"{video_id}{ext}"
-        video_path_resolved = video_path.resolve()
-        if (
-            os.path.commonpath([str(video_path_resolved), str(data_path_resolved)])
-            == str(data_path_resolved)
-            and video_path_resolved.exists()
-        ):
-            return str(video_path_resolved)
+    def _safe_resolve_inside(candidate: Path) -> Path | None:
+        """Resolve ``candidate`` and return it only if it stays inside
+        ``data_path_resolved``. Defends against path traversal by validating
+        the resolved candidate against the sanitized root before any further
+        filesystem I/O is performed."""
+        try:
+            resolved = candidate.resolve(strict=False)
+        except (OSError, RuntimeError):
+            return None
+        try:
+            resolved.relative_to(data_path_resolved)
+        except ValueError:
+            return None
+        return resolved
 
-    potential_matches = list(data_path.glob(f"{video_id}.*"))
-    for match in potential_matches:
-        resolved_match = match.resolve()
-        if (
-            os.path.commonpath([str(resolved_match), str(data_path_resolved)])
-            == str(data_path_resolved)
-            and resolved_match.exists()
-        ):
-            return str(resolved_match)
+    for ext in video_extensions:
+        candidate = _safe_resolve_inside(data_path / f"{video_id}{ext}")
+        if candidate is not None and candidate.is_file():
+            return str(candidate)
+
+    for match in data_path.glob(f"{video_id}.*"):
+        candidate = _safe_resolve_inside(match)
+        if candidate is not None and candidate.is_file():
+            return str(candidate)
 
     return None
