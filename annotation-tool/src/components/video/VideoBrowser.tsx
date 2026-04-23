@@ -49,14 +49,7 @@ import { formatTimestamp, formatDuration } from '@utils/formatters'
 import { VideoMetadata, Persona } from '@models/types'
 import { useCommands, useCommandContext } from '@hooks/commands'
 import { useVideos, useGenerateSummary, useVideoSummary, useModelConfig } from '@store/queries'
-import {
-  useInferencePreferences,
-  compactPreferences,
-} from '@/store/preferences/useInferencePreferences'
-import type {
-  AudioOverridesRequest,
-  GenerationOverridesRequest,
-} from '@/api/client'
+import { useMergedOverrides } from '@/store/preferences/useInferencePreferences'
 import { useVideoUiStore } from '@store/zustand'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from '@components/shared/JobStatusIndicator'
@@ -94,25 +87,11 @@ export default function VideoBrowser() {
 
   const { mutate: generateSummary } = useGenerateSummary()
   const { data: modelConfig } = useModelConfig()
-  const { preferences } = useInferencePreferences()
+  // Merge user-level + persona-level preferences into a single wire payload.
+  // Persona overrides win over user defaults; null/absent fields fall back
+  // to backend dataclass defaults.
+  const { generationOverrides, audioOverrides } = useMergedOverrides(activePersonaId)
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
-
-  // Turn the user-saved overrides into wire-ready override blocks, dropping
-  // null/unset fields so the backend falls back to its dataclass defaults.
-  const generationOverrides = compactPreferences<GenerationOverridesRequest>({
-    temperature: preferences.generation.temperature ?? undefined,
-    topP: preferences.generation.topP ?? undefined,
-    maxTokens: preferences.generation.maxTokens ?? undefined,
-  } as GenerationOverridesRequest)
-
-  const audioOverrides = compactPreferences<AudioOverridesRequest>({
-    beamSize: preferences.audio.beamSize ?? undefined,
-    computeType: preferences.audio.computeType ?? undefined,
-    numSpeakers: preferences.audio.numSpeakers ?? undefined,
-    minSpeakers: preferences.audio.minSpeakers ?? undefined,
-    maxSpeakers: preferences.audio.maxSpeakers ?? undefined,
-    vadThreshold: preferences.audio.vadThreshold ?? undefined,
-  } as AudioOverridesRequest)
 
   /**
    * Updates search filter for video list.

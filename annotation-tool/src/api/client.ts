@@ -485,6 +485,118 @@ export interface ModelDefaultsResponse {
 }
 
 /**
+ * Per-user inference preferences (full shape with explicit nulls for
+ * "defer to backend default"). Written atomically — sending a field as
+ * ``null`` clears any prior override.
+ */
+export interface UserInferencePreferences {
+  generation: {
+    temperature: number | null
+    topP: number | null
+    maxTokens: number | null
+  }
+  audio: {
+    beamSize: number | null
+    computeType: 'float16' | 'float32' | 'int8' | 'int8_float16' | null
+    numSpeakers: number | null
+    minSpeakers: number | null
+    maxSpeakers: number | null
+    vadThreshold: number | null
+  }
+  detection: {
+    confidenceThreshold: number | null
+  }
+}
+
+export interface UserPreferencesResponse {
+  inferencePreferences: UserInferencePreferences
+  updatedAt: string
+}
+
+export interface UserPreferencesUpdate {
+  inferencePreferences: UserInferencePreferences
+}
+
+/**
+ * Partial per-persona preferences. Any subgroup may be omitted; within a
+ * subgroup any field may be omitted — undefined fields inherit from the
+ * user-level document at merge time.
+ */
+export interface PersonaInferenceOverrides {
+  generation?: Partial<{
+    temperature: number
+    topP: number
+    maxTokens: number
+  }>
+  audio?: Partial<{
+    beamSize: number
+    computeType: 'float16' | 'float32' | 'int8' | 'int8_float16'
+    numSpeakers: number
+    minSpeakers: number
+    maxSpeakers: number
+    vadThreshold: number
+  }>
+  detection?: Partial<{
+    confidenceThreshold: number
+  }>
+}
+
+export interface PersonaPreferencesResponse {
+  personaId: string
+  inferencePreferences: PersonaInferenceOverrides
+  updatedAt: string
+}
+
+export interface PersonaPreferencesUpdate {
+  inferencePreferences: PersonaInferenceOverrides
+}
+
+/**
+ * SystemConfig key-value rows. The row shape is a discriminated union on
+ * ``key``; ``value`` is constrained by the key.
+ */
+export type SystemConfigRow =
+  | {
+      key: 'storagePaths'
+      value: {
+        videoDataRoot: string
+        thumbnailOutputRoot: string
+        audioOutputRoot: string
+      }
+    }
+  | {
+      key: 'runtime'
+      value: {
+        cudaDevice: string
+        warmupOnStartup: boolean
+        defaultBatchSize: number
+        maxBatchSize: number
+        offloadThreshold: number
+      }
+    }
+  | {
+      key: 'externalApis'
+      value: {
+        providers: Array<{
+          provider: 'anthropic' | 'openai' | 'google'
+          endpoint: string
+          timeoutSeconds: number
+          maxRetries: number
+        }>
+      }
+    }
+
+export type SystemConfigRowStored = SystemConfigRow & {
+  version: number
+  updatedAt: string
+  updatedByUserId: string | null
+}
+
+export interface SystemConfigListResponse {
+  rows: SystemConfigRowStored[]
+}
+
+/**
  * Response shape for ``GET /api/models/frameworks``.
  *
  * Each field is the list of string values from the corresponding StrEnum
@@ -909,6 +1021,97 @@ export class ApiClient {
     try {
       const response = await this.client.get<ModelFrameworksResponse>(
         '/api/models/frameworks'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the authenticated user's stored inference preferences. */
+  async getMyPreferences(): Promise<UserPreferencesResponse> {
+    try {
+      const response = await this.client.get<UserPreferencesResponse>('/api/me/preferences')
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Upsert the authenticated user's inference preferences. */
+  async updateMyPreferences(
+    payload: UserPreferencesUpdate
+  ): Promise<UserPreferencesResponse> {
+    try {
+      const response = await this.client.put<UserPreferencesResponse>(
+        '/api/me/preferences',
+        payload
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the per-persona inference-preferences overrides for a given persona. */
+  async getPersonaPreferences(personaId: string): Promise<PersonaPreferencesResponse> {
+    try {
+      const response = await this.client.get<PersonaPreferencesResponse>(
+        `/api/personas/${personaId}/preferences`
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Upsert the per-persona inference-preferences overrides. */
+  async updatePersonaPreferences(
+    personaId: string,
+    payload: PersonaPreferencesUpdate
+  ): Promise<PersonaPreferencesResponse> {
+    try {
+      const response = await this.client.put<PersonaPreferencesResponse>(
+        `/api/personas/${personaId}/preferences`,
+        payload
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the full SystemConfig row set (admin-only). */
+  async listSystemConfig(): Promise<SystemConfigListResponse> {
+    try {
+      const response = await this.client.get<SystemConfigListResponse>('/api/admin/config')
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Upsert a SystemConfig row. Server propagates the change to the
+   * model-service before responding.
+   */
+  async updateSystemConfig(row: SystemConfigRow): Promise<SystemConfigRowStored> {
+    try {
+      const response = await this.client.put<SystemConfigRowStored>(
+        `/api/admin/config/${row.key}`,
+        row
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Replay every stored SystemConfig row to the model-service (admin-only). */
+  async replaySystemConfig(): Promise<{ replayed: string[] }> {
+    try {
+      const response = await this.client.post<{ replayed: string[] }>(
+        '/api/admin/config/replay'
       )
       return response.data
     } catch (error) {

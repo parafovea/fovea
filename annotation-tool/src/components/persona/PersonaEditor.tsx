@@ -38,6 +38,7 @@ import { useCreatePersona, useUpdatePersona } from '@store/queries'
 import { useMyProjects } from '@store/queries/useProjects'
 import { useMyGroups } from '@store/queries/useGroups'
 import { useUsers } from '@store/queries/admin/useUsers'
+import { PersonaPreferencesSection } from './PersonaPreferencesSection'
 import { useProjectContextStore } from '@store/zustand/projectContextStore'
 import { Persona, User } from '@models/types'
 
@@ -250,6 +251,14 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
                   </SelectContent>
                 </Select>
               </div>
+            </>
+          )}
+
+          {/* Inference overrides - only when editing an existing persona */}
+          {!isCreateMode && persona && (
+            <>
+              <Separator className="my-2" />
+              <PersonaPreferencesSection personaId={persona.id} />
             </>
           )}
 

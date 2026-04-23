@@ -5,11 +5,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Settings as SettingsIcon, LayoutDashboard, Info, Sliders } from 'lucide-react'
+import { Settings as SettingsIcon, LayoutDashboard, Info, Sliders, Shield } from 'lucide-react'
 import { Alert, AlertDescription, AlertAction } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { SystemConfigPanel } from '@/components/admin/SystemConfigPanel'
+import { useCurrentUser } from '@/hooks/auth/useCurrentUser'
 import { InferenceSettingsPanel } from '@components/model/InferenceSettingsPanel'
 import { ModelSettingsPanel } from '@components/model/ModelSettingsPanel'
 import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
@@ -33,10 +35,14 @@ import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
  */
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams()
-  type TabName = 'models' | 'inference' | 'status' | 'about'
+  const { isAdmin } = useCurrentUser()
+  type TabName = 'models' | 'inference' | 'status' | 'system' | 'about'
   const tabNames: readonly TabName[] = useMemo(
-    () => ['models', 'inference', 'status', 'about'] as const,
-    []
+    () =>
+      isAdmin
+        ? (['models', 'inference', 'status', 'system', 'about'] as const)
+        : (['models', 'inference', 'status', 'about'] as const),
+    [isAdmin]
   )
   const [activeTab, setActiveTab] = useState<TabName>('models')
   const [notification, setNotification] = useState<{
@@ -110,6 +116,12 @@ export default function Settings() {
               <LayoutDashboard className="size-4" />
               Status
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="system">
+                <Shield className="size-4" />
+                System
+              </TabsTrigger>
+            )}
             <TabsTrigger value="about">
               <Info className="size-4" />
               About
@@ -135,6 +147,12 @@ export default function Settings() {
                 showAutoRefreshToggle={true}
               />
             </TabsContent>
+
+            {isAdmin && (
+              <TabsContent value="system">
+                <SystemConfigPanel />
+              </TabsContent>
+            )}
 
             <TabsContent value="about">
               <div>
