@@ -58,6 +58,14 @@ _AUDIO_OUTPUT_ROOT: Path = _resolve_root(
     "/tmp/audio",  # noqa: S108
 )
 
+# Prefix constants with the trailing separator baked in. Each file-system
+# sink guards on ``realpath(user_input).startswith(<prefix>)`` — a single
+# ``startswith`` call with a module-level argument that CodeQL's
+# ``StartswithCall`` barrier guard recognises unambiguously.
+_VIDEO_DATA_PREFIX: str = os.path.realpath(str(_VIDEO_DATA_ROOT)) + os.sep
+_THUMBNAIL_OUTPUT_PREFIX: str = os.path.realpath(str(_THUMBNAIL_OUTPUT_ROOT)) + os.sep
+_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(str(_AUDIO_OUTPUT_ROOT)) + os.sep
+
 
 def reconfigure_roots(
     *,
@@ -71,12 +79,16 @@ def reconfigure_roots(
     untouched. Values are resolved so later validation is symlink-safe.
     """
     global _VIDEO_DATA_ROOT, _THUMBNAIL_OUTPUT_ROOT, _AUDIO_OUTPUT_ROOT
+    global _VIDEO_DATA_PREFIX, _THUMBNAIL_OUTPUT_PREFIX, _AUDIO_OUTPUT_PREFIX
     if video_root is not None:
         _VIDEO_DATA_ROOT = Path(video_root).resolve(strict=False)
+        _VIDEO_DATA_PREFIX = os.path.realpath(str(_VIDEO_DATA_ROOT)) + os.sep
     if thumbnail_root is not None:
         _THUMBNAIL_OUTPUT_ROOT = Path(thumbnail_root).resolve(strict=False)
+        _THUMBNAIL_OUTPUT_PREFIX = os.path.realpath(str(_THUMBNAIL_OUTPUT_ROOT)) + os.sep
     if audio_root is not None:
         _AUDIO_OUTPUT_ROOT = Path(audio_root).resolve(strict=False)
+        _AUDIO_OUTPUT_PREFIX = os.path.realpath(str(_AUDIO_OUTPUT_ROOT)) + os.sep
 
 
 class VideoInfo:
@@ -401,13 +413,13 @@ async def extract_audio(
         span.set_attribute("audio.sample_rate", sample_rate)
         span.set_attribute("audio.channels", channels)
 
-        # CodeQL sanitizer: inline ``os.path.realpath`` + ``startswith`` check
-        # on the trusted root. Must be inline in the same function as the
-        # subprocess sink — CodeQL barrier guards do not cross call
-        # boundaries.
-        video_root_real = os.path.realpath(str(_VIDEO_DATA_ROOT))
+        # CodeQL sanitizer chain at the subprocess sink:
+        #   1. ``os.path.realpath`` — ``PathNormalization`` (Stdlib.qll:1128)
+        #   2. ``x.startswith(const_prefix)`` — ``StartswithCall`` barrier
+        #      guard (Stdlib.qll:5153). Single-clause guard, module-level
+        #      prefix constant that already includes ``os.sep``.
         video_real = os.path.realpath(video_path)
-        if not (video_real == video_root_real or video_real.startswith(video_root_real + os.sep)):
+        if not video_real.startswith(_VIDEO_DATA_PREFIX):
             raise VideoProcessingError(f"Video file not found: {video_path!r}")
         if not Path(video_real).exists():
             raise VideoProcessingError(f"Video file not found: {video_path!r}")
@@ -417,9 +429,8 @@ async def extract_audio(
         else:
             output_candidate = output_path
 
-        audio_root_real = os.path.realpath(str(_AUDIO_OUTPUT_ROOT))
         output_real = os.path.realpath(output_candidate)
-        if not output_real.startswith(audio_root_real + os.sep):
+        if not output_real.startswith(_AUDIO_OUTPUT_PREFIX):
             raise VideoProcessingError(f"Invalid output path: {output_candidate!r}")
         os.makedirs(os.path.dirname(output_real), exist_ok=True)  # noqa: PTH103, PTH120
 
@@ -523,16 +534,15 @@ async def extract_thumbnail(
         span.set_attribute("thumbnail.timestamp", timestamp)
         span.set_attribute("thumbnail.size", f"{size[0]}x{size[1]}")
 
-        video_root_real = os.path.realpath(str(_VIDEO_DATA_ROOT))
+        # CodeQL sanitizer chain: realpath + startswith(const prefix).
         video_real = os.path.realpath(video_path)
-        if not (video_real == video_root_real or video_real.startswith(video_root_real + os.sep)):
+        if not video_real.startswith(_VIDEO_DATA_PREFIX):
             raise VideoProcessingError(f"Video file not found: {video_path!r}")
         if not Path(video_real).exists():
             raise VideoProcessingError(f"Video file not found: {video_path!r}")
 
-        thumb_root_real = os.path.realpath(str(_THUMBNAIL_OUTPUT_ROOT))
         output_real = os.path.realpath(output_path)
-        if not output_real.startswith(thumb_root_real + os.sep):
+        if not output_real.startswith(_THUMBNAIL_OUTPUT_PREFIX):
             raise VideoProcessingError(f"Invalid output path: {output_path!r}")
         os.makedirs(os.path.dirname(output_real), exist_ok=True)  # noqa: PTH103, PTH120
 
