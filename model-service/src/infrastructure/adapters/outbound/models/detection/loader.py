@@ -7,201 +7,33 @@ for detecting objects without pre-defined class vocabularies.
 """
 
 import logging
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
+from src.infrastructure.adapters.outbound.models.detection.base import (
+    BoundingBox,
+    Detection,
+    DetectionConfig,
+    DetectionFramework,
+    DetectionModelLoader,
+    DetectionResult,
+)
 from src.infrastructure.observability.telemetry import instrument_method
 
+__all__ = [
+    "BoundingBox",
+    "Detection",
+    "DetectionConfig",
+    "DetectionFramework",
+    "DetectionModelLoader",
+    "DetectionResult",
+    "create_detection_loader",
+]
+
 logger = logging.getLogger(__name__)
-
-
-class DetectionFramework(StrEnum):
-    """Supported detection frameworks for model execution."""
-
-    PYTORCH = "pytorch"
-    ULTRALYTICS = "ultralytics"
-    TRANSFORMERS = "transformers"
-    ONNX = "onnx"
-
-
-@dataclass
-class DetectionConfig:
-    """Configuration for object detection model loading and inference.
-
-    Parameters
-    ----------
-    model_id : str
-        HuggingFace model identifier or Ultralytics model name.
-    framework : DetectionFramework
-        Framework to use for model execution.
-    confidence_threshold : float, default=0.25
-        Minimum confidence score for detections (0.0 to 1.0).
-    device : str, default="cuda"
-        Device to load the model on.
-    cache_dir : Path | None, default=None
-        Directory for caching model weights.
-    """
-
-    model_id: str
-    framework: DetectionFramework = DetectionFramework.PYTORCH
-    confidence_threshold: float = 0.25
-    device: str = "cuda"
-    cache_dir: Path | None = None
-
-
-@dataclass
-class BoundingBox:
-    """Bounding box in normalized coordinates.
-
-    Parameters
-    ----------
-    x1 : float
-        Left coordinate (0.0 to 1.0, normalized by image width).
-    y1 : float
-        Top coordinate (0.0 to 1.0, normalized by image height).
-    x2 : float
-        Right coordinate (0.0 to 1.0, normalized by image width).
-    y2 : float
-        Bottom coordinate (0.0 to 1.0, normalized by image height).
-    """
-
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-
-    def to_absolute(self, width: int, height: int) -> tuple[int, int, int, int]:
-        """Convert normalized coordinates to absolute pixel coordinates.
-
-        Parameters
-        ----------
-        width : int
-            Image width in pixels.
-        height : int
-            Image height in pixels.
-
-        Returns
-        -------
-        tuple[int, int, int, int]
-            Bounding box in absolute coordinates (x1, y1, x2, y2).
-        """
-        return (
-            int(self.x1 * width),
-            int(self.y1 * height),
-            int(self.x2 * width),
-            int(self.y2 * height),
-        )
-
-
-@dataclass
-class Detection:
-    """Single object detection result.
-
-    Parameters
-    ----------
-    bbox : BoundingBox
-        Bounding box in normalized coordinates.
-    confidence : float
-        Detection confidence score (0.0 to 1.0).
-    label : str
-        Detected object class or description.
-    """
-
-    bbox: BoundingBox
-    confidence: float
-    label: str
-
-
-@dataclass
-class DetectionResult:
-    """Detection results for a single image.
-
-    Parameters
-    ----------
-    detections : list[Detection]
-        List of detected objects with bounding boxes and scores.
-    image_width : int
-        Original image width in pixels.
-    image_height : int
-        Original image height in pixels.
-    processing_time : float
-        Processing time in seconds.
-    """
-
-    detections: list[Detection]
-    image_width: int
-    image_height: int
-    processing_time: float
-
-
-class DetectionModelLoader(ABC):
-    """Abstract base class for object detection model loaders.
-
-    All detection loaders must implement the load and detect methods.
-    """
-
-    def __init__(self, config: DetectionConfig) -> None:
-        """Initialize the detection model loader with configuration.
-
-        Parameters
-        ----------
-        config : DetectionConfig
-            Configuration for model loading and inference.
-        """
-        self.config = config
-        self.model: Any = None
-
-    @abstractmethod
-    def load(self) -> None:
-        """Load the detection model into memory with configured settings.
-
-        Raises
-        ------
-        RuntimeError
-            If model loading fails.
-        """
-
-    @abstractmethod
-    def detect(
-        self,
-        image: Image.Image,
-        text_prompt: str,
-    ) -> DetectionResult:
-        """Detect objects in an image based on text prompt.
-
-        Parameters
-        ----------
-        image : Image.Image
-            PIL Image to process.
-        text_prompt : str
-            Text description of objects to detect (e.g., "person. car. dog.").
-
-        Returns
-        -------
-        DetectionResult
-            Detection results with bounding boxes in normalized coordinates.
-
-        Raises
-        ------
-        RuntimeError
-            If detection fails or model is not loaded.
-        """
-
-    def unload(self) -> None:
-        """Unload the model from memory to free GPU resources."""
-        if self.model is not None:
-            del self.model
-            self.model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        logger.info("Detection model unloaded and memory cleared")
 
 
 class YOLOWorldLoader(DetectionModelLoader):

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.infrastructure.adapters.outbound.models.llm.loader import (
+from src.infrastructure.adapters.outbound.models.llm.base import (
     GenerationConfig,
     GenerationResult,
 )

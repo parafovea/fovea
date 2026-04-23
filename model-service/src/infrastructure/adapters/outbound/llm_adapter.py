@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
 from src.application.dto.reasoning_parser import parse_reasoned_output
@@ -13,16 +13,17 @@ from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.application.dto.reasoning import ReasonedText
-    from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
-    from src.infrastructure.adapters.outbound.models.llm.loader import LLMLoader
-
-LLMLoaderLike: TypeAlias = "LLMLoader | LlamaCppLLMLoader"  # noqa: UP040
 
 
 class LLMLoaderAdapter(ILanguageModel):
-    """Adapts an LLM loader to the :class:`ILanguageModel` port."""
+    """Adapts an LLM loader to the :class:`ILanguageModel` port.
 
-    def __init__(self, loader: LLMLoaderLike) -> None:
+    The concrete loader may be the transformers-based ``LLMLoader`` or the
+    llama.cpp-based ``LlamaCppLLMLoader``; the adapter only depends on the
+    shape of their ``load``/``generate``/``unload`` methods.
+    """
+
+    def __init__(self, loader: Any) -> None:
         """Initialize with an already-constructed loader."""
         self._loader = loader
         self._loaded = False

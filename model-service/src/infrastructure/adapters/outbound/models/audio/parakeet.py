@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterable
 
-from src.infrastructure.adapters.outbound.models.audio.loader import (
+from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
     TranscriptionSegment,

@@ -10,7 +10,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from src.infrastructure.adapters.outbound.models.detection.loader import (
+from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
     DetectionConfig,

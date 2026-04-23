@@ -6,104 +6,41 @@ inference backends for CPU and GPU deployment.
 """
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 import torch
 from numpy.typing import NDArray
 
+from src.infrastructure.adapters.outbound.models.audio.base import (
+    AudioFramework,
+    AudioTranscriptionLoader,
+    TranscriptionConfig,
+    TranscriptionResult,
+    TranscriptionSegment,
+)
 from src.infrastructure.observability.telemetry import instrument_method
 
+__all__ = [
+    "AudioFramework",
+    "AudioTranscriptionLoader",
+    "DiarizationConfig",
+    "DiarizationResult",
+    "FasterWhisperLoader",
+    "PyannoteLoader",
+    "SileroVADLoader",
+    "SpeakerSegment",
+    "TranscriptionConfig",
+    "TranscriptionResult",
+    "TranscriptionSegment",
+    "VADConfig",
+    "VADResult",
+    "VADSegment",
+    "WhisperLoader",
+    "create_transcription_loader",
+]
+
 logger = logging.getLogger(__name__)
-
-
-class AudioFramework(StrEnum):
-    """Supported frameworks for audio model execution."""
-
-    WHISPER = "whisper"
-    FASTER_WHISPER = "faster_whisper"
-    TRANSFORMERS = "transformers"
-    PYANNOTE = "pyannote"
-    NEMO_CANARY = "nemo_canary"  # NVIDIA Canary-Qwen SALM
-    NEMO_PARAKEET = "nemo_parakeet"  # NVIDIA Parakeet TDT streaming
-    WHISPERX = "whisperx"  # WhisperX unified transcribe+diarize
-
-
-@dataclass
-class TranscriptionConfig:
-    """Configuration for audio transcription model loading and inference.
-
-    Parameters
-    ----------
-    model_id : str
-        Model identifier (e.g., "openai/whisper-large-v3").
-    framework : AudioFramework
-        Framework to use for transcription.
-    language : str | None, default=None
-        Target language code (e.g., "en"). If None, auto-detects.
-    task : str, default="transcribe"
-        Task type ("transcribe" or "translate").
-    device : str, default="cuda"
-        Device to load the model on.
-    compute_type : str, default="float16"
-        Compute precision (float16, int8, int8_float16).
-    beam_size : int, default=5
-        Beam size for decoding.
-    """
-
-    model_id: str
-    framework: AudioFramework = AudioFramework.WHISPER
-    language: str | None = None
-    task: str = "transcribe"
-    device: str = "cuda"
-    compute_type: str = "float16"
-    beam_size: int = 5
-
-
-@dataclass
-class TranscriptionSegment:
-    """Single transcription segment with timing information.
-
-    Parameters
-    ----------
-    start : float
-        Start time in seconds.
-    end : float
-        End time in seconds.
-    text : str
-        Transcribed text for this segment.
-    confidence : float
-        Average confidence score (0.0 to 1.0).
-    """
-
-    start: float
-    end: float
-    text: str
-    confidence: float
-
-
-@dataclass
-class TranscriptionResult:
-    """Complete transcription result for an audio file.
-
-    Parameters
-    ----------
-    text : str
-        Full transcription text.
-    segments : list[TranscriptionSegment]
-        List of transcription segments with timestamps.
-    language : str
-        Detected or specified language code.
-    duration : float
-        Audio duration in seconds.
-    """
-
-    text: str
-    segments: list[TranscriptionSegment]
-    language: str
-    duration: float
 
 
 @dataclass
@@ -167,68 +104,6 @@ class DiarizationResult:
     segments: list[SpeakerSegment]
     num_speakers: int
     speakers: list[str]
-
-
-class AudioTranscriptionLoader(ABC):
-    """Abstract base class for audio transcription loaders.
-
-    All transcription loaders must implement the load and transcribe methods.
-    """
-
-    def __init__(self, config: TranscriptionConfig) -> None:
-        """Initialize the transcription loader with configuration.
-
-        Parameters
-        ----------
-        config : TranscriptionConfig
-            Configuration for model loading and transcription.
-        """
-        self.config = config
-        self.model: Any = None
-
-    @abstractmethod
-    def load(self) -> None:
-        """Load the transcription model into memory.
-
-        Raises
-        ------
-        RuntimeError
-            If model loading fails.
-        """
-        pass
-
-    @abstractmethod
-    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
-        """Transcribe audio file to text with timestamps.
-
-        Parameters
-        ----------
-        audio_path : str
-            Path to audio file (WAV format, 16kHz recommended).
-        language : str | None
-            Optional override for the language hint. When ``None`` the
-            language configured on the loader (if any) is used.
-
-        Returns
-        -------
-        TranscriptionResult
-            Transcription with segments and timing information.
-
-        Raises
-        ------
-        RuntimeError
-            If transcription fails or model is not loaded.
-        """
-        pass
-
-    def unload(self) -> None:
-        """Unload the model from memory to free GPU resources."""
-        if self.model is not None:
-            del self.model
-            self.model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        logger.info("Model unloaded and memory cleared")
 
 
 class WhisperLoader(AudioTranscriptionLoader):

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.infrastructure.adapters.outbound.models.detection.loader import (
+from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
     DetectionConfig,

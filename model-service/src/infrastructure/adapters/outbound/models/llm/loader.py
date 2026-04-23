@@ -9,8 +9,6 @@ automatic fallback handling.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -22,7 +20,21 @@ from transformers import (
     PreTrainedTokenizer,
 )
 
+from src.infrastructure.adapters.outbound.models.llm.base import (
+    GenerationConfig,
+    GenerationResult,
+    LLMConfig,
+    LLMFramework,
+)
 from src.infrastructure.observability.telemetry import instrument_method
+
+__all__ = [
+    "GenerationConfig",
+    "GenerationResult",
+    "LLMConfig",
+    "LLMFramework",
+    "LLMLoader",
+]
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,86 +42,6 @@ if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.llama_cpp.llm import (
         LlamaCppLLMLoader,
     )
-
-
-class LLMFramework(StrEnum):
-    """Inference framework options for LLM models."""
-
-    SGLANG = "sglang"
-    TRANSFORMERS = "transformers"
-    LLAMA_CPP = "llama_cpp"
-
-
-@dataclass
-class LLMConfig:
-    """Configuration for a language model.
-
-    Parameters
-    ----------
-    model_id : str
-        HuggingFace model identifier (e.g., "meta-llama/Llama-4-Scout").
-    quantization : str
-        Quantization mode (e.g., "4bit", "8bit", "none").
-    framework : LLMFramework
-        Inference framework to use (sglang or transformers).
-    max_tokens : int, default=4096
-        Maximum number of tokens to generate.
-    temperature : float, default=0.7
-        Sampling temperature for generation.
-    top_p : float, default=0.9
-        Nucleus sampling parameter.
-    context_length : int, default=131072
-        Maximum context length in tokens.
-    """
-
-    model_id: str
-    quantization: str
-    framework: LLMFramework
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 0.9
-    context_length: int = 131072
-
-
-@dataclass
-class GenerationConfig:
-    """Configuration for text generation.
-
-    Parameters
-    ----------
-    max_tokens : int, default=4096
-        Maximum number of tokens to generate.
-    temperature : float, default=0.7
-        Sampling temperature (0.0 for greedy, higher for more randomness).
-    top_p : float, default=0.9
-        Nucleus sampling parameter.
-    stop_sequences : list[str] | None, default=None
-        List of sequences that stop generation when encountered.
-    """
-
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 0.9
-    stop_sequences: list[str] | None = None
-
-
-@dataclass
-class GenerationResult:
-    """Result from text generation.
-
-    Parameters
-    ----------
-    text : str
-        Generated text.
-    tokens_used : int
-        Number of tokens used in generation.
-    finish_reason : str
-        Reason generation stopped (e.g., "length", "stop_sequence", "eos").
-    """
-
-    text: str
-    tokens_used: int
-    finish_reason: str
 
 
 class LLMLoader:

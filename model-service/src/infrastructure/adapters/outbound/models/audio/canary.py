@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.infrastructure.adapters.outbound.models.audio.loader import (
+from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
     TranscriptionSegment,
