@@ -5,11 +5,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Settings as SettingsIcon, LayoutDashboard, Info } from 'lucide-react'
+import { Settings as SettingsIcon, LayoutDashboard, Info, Sliders } from 'lucide-react'
 import { Alert, AlertDescription, AlertAction } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { InferenceSettingsPanel } from '@components/model/InferenceSettingsPanel'
 import { ModelSettingsPanel } from '@components/model/ModelSettingsPanel'
 import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
 
@@ -32,8 +33,11 @@ import { ModelStatusDashboard } from '@components/model/ModelStatusDashboard'
  */
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams()
-  type TabName = 'models' | 'status' | 'about'
-  const tabNames: readonly TabName[] = useMemo(() => ['models', 'status', 'about'] as const, [])
+  type TabName = 'models' | 'inference' | 'status' | 'about'
+  const tabNames: readonly TabName[] = useMemo(
+    () => ['models', 'inference', 'status', 'about'] as const,
+    []
+  )
   const [activeTab, setActiveTab] = useState<TabName>('models')
   const [notification, setNotification] = useState<{
     message: string
@@ -98,6 +102,10 @@ export default function Settings() {
               <SettingsIcon className="size-4" />
               Models
             </TabsTrigger>
+            <TabsTrigger value="inference">
+              <Sliders className="size-4" />
+              Inference
+            </TabsTrigger>
             <TabsTrigger value="status">
               <LayoutDashboard className="size-4" />
               Status
@@ -114,6 +122,10 @@ export default function Settings() {
                 onSaveSuccess={handleSaveSuccess}
                 onSaveError={handleSaveError}
               />
+            </TabsContent>
+
+            <TabsContent value="inference">
+              <InferenceSettingsPanel />
             </TabsContent>
 
             <TabsContent value="status">
