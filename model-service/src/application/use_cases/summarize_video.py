@@ -293,11 +293,20 @@ class SummarizeVideoUseCase:
                     prompt = get_persona_prompt(persona_role, information_need)
                     logger.info(f"Generating summary with {len(images)} frames")
                     visual_start_time = time.time()
+                    overrides = request.generation_overrides
                     reasoned = self._vlm.generate_reasoned_from_images(
                         images,
                         prompt,
-                        max_tokens=1024,
-                        temperature=0.7,
+                        max_tokens=(
+                            overrides.max_tokens
+                            if overrides and overrides.max_tokens is not None
+                            else 1024
+                        ),
+                        temperature=(
+                            overrides.temperature
+                            if overrides and overrides.temperature is not None
+                            else 0.7
+                        ),
                     )
                     processing_time_visual = time.time() - visual_start_time
 

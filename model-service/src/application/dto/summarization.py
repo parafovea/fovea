@@ -36,6 +36,31 @@ class KeyFrameDTO:
 
 
 @dataclass
+class GenerationOverridesDTO:
+    """Optional generation-time overrides for LLM/VLM sampling.
+
+    All fields default to ``None``; a ``None`` field means "use the backend
+    default". Populated from the settings UI or per-request Advanced panel.
+    """
+
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+
+
+@dataclass
+class AudioOverridesDTO:
+    """Optional transcription/diarization overrides for a single request."""
+
+    beam_size: int | None = None
+    compute_type: str | None = None
+    num_speakers: int | None = None
+    min_speakers: int | None = None
+    max_speakers: int | None = None
+    vad_threshold: float | None = None
+
+
+@dataclass
 class SummarizeRequestDTO:
     """Request parameters for video summarization.
 
@@ -63,6 +88,12 @@ class SummarizeRequestDTO:
         Whether to perform diarization.
     fusion_strategy : str | None
         Audio-visual fusion strategy.
+    generation_overrides : GenerationOverridesDTO | None
+        Per-request overrides for sampling parameters. When provided, the
+        corresponding fields on the VLM's ``GenerationConfig`` are replaced;
+        omitted fields fall back to backend defaults.
+    audio_overrides : AudioOverridesDTO | None
+        Per-request overrides for transcription and diarization.
     """
 
     video_id: str
@@ -76,6 +107,8 @@ class SummarizeRequestDTO:
     audio_language: str | None = None
     enable_speaker_diarization: bool = False
     fusion_strategy: str | None = "sequential"
+    generation_overrides: GenerationOverridesDTO | None = None
+    audio_overrides: AudioOverridesDTO | None = None
 
 
 @dataclass
