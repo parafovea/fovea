@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Integration tests for Authentication API.
@@ -30,6 +31,8 @@ describe('Authentication Routes', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
   })
 
   describe('POST /api/auth/login', () => {

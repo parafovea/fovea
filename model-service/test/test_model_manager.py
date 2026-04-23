@@ -18,6 +18,9 @@ from src.application.services.model_management import (
     ModelManager,
     TaskConfig,
 )
+from src.infrastructure.adapters.outbound.model_capability_torch import (
+    TorchModelCapabilityProbe,
+)
 
 
 @pytest.fixture
@@ -84,7 +87,7 @@ def config_file(sample_config):
 @pytest.fixture
 def model_manager(config_file):
     """Create ModelManager instance with test configuration."""
-    return ModelManager(config_file)
+    return ModelManager(config_file, capability_probe=TorchModelCapabilityProbe())
 
 
 class TestModelConfig:
@@ -219,7 +222,7 @@ class TestModelManager:
     def test_load_config_file_not_found(self):
         """Test loading config from non-existent file."""
         with pytest.raises(FileNotFoundError):
-            ModelManager("/nonexistent/config.yaml")
+            ModelManager("/nonexistent/config.yaml", capability_probe=TorchModelCapabilityProbe())
 
     def test_load_config_invalid_yaml(self):
         """Test loading invalid YAML configuration."""
@@ -229,7 +232,7 @@ class TestModelManager:
 
         try:
             with pytest.raises(yaml.YAMLError):
-                ModelManager(config_path)
+                ModelManager(config_path, capability_probe=TorchModelCapabilityProbe())
         finally:
             Path(config_path).unlink()
 
@@ -623,7 +626,7 @@ class TestExternalAPISupport:
     @pytest.fixture
     def external_api_manager(self, external_api_config_file):
         """Create ModelManager instance with external API configuration."""
-        return ModelManager(external_api_config_file)
+        return ModelManager(external_api_config_file, capability_probe=TorchModelCapabilityProbe())
 
     def test_is_external_api_true(self, external_api_manager):
         """Test is_external_api returns True for external API models."""

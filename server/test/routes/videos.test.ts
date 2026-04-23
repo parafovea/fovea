@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -33,6 +34,8 @@ describe('Videos API - Detection', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create test user
     const user = await prisma.user.create({
@@ -41,7 +44,7 @@ describe('Videos API - Detection', () => {
         email: 'test@example.com',
         passwordHash: await hashPassword('testpass123'),
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user.id

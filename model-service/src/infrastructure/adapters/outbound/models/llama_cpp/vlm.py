@@ -11,6 +11,8 @@ import io
 import logging
 from typing import TYPE_CHECKING, Any
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
 
@@ -110,6 +112,7 @@ class LlamaCppVLMLoader:
 
         return self.clip_model_path
 
+    @instrument_method(task="vlm_generate")
     async def generate(
         self,
         images: list[Any],

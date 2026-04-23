@@ -77,14 +77,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ESLint warnings: missing hook dependencies, unused variables and imports
 - Ruff errors: unsorted `__all__` lists, import ordering, deferred import warnings
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-04-21
 
 ### Added
 
 #### Role-Based Access Control (RBAC)
 - CASL authorization engine with permission seed data
 - Role-based permission schema (admin, manager, annotator, viewer)
-- Permission checks integrated across all API routes
+- Row-level authorization on every data route (annotations, summaries, claims, world state, personas, ontology, export, import) using `accessibleBy()` list filters and `subject()`-based instance checks
+- Per-model ownership field resolution: `Persona`/`WorldState` use `userId`, `Annotation` uses `createdByUserId`, `VideoSummary`/`Claim`/`UserGroup` use `createdBy`, `Project` uses `ownerUserId`
+- Per-user ability cache with explicit invalidation on every membership add, remove, role change, and project deletion
+- Admin-editable `/api/admin/permissions` CRUD endpoints for runtime RolePermission management
+- Sharing privilege cap: re-shared resources cannot exceed the received permission level
+- VideoAccessService wired into all video routes so authenticated users only see videos assigned to their projects; non-existent videos pass through so route validation errors are not masked by 404
+- Backfill migration populating `createdByUserId` from legacy `userId` on existing annotations, and `createdBy` on existing summaries and claims from their owning persona's user
+- 29 negative RBAC security tests covering cross-tenant IDOR, null-ownership denial, cache invalidation timing, sharing escalation, and admin-only enforcement
+- `seedBaselinePermissions()` test helper module for E2E test setup
 
 #### Projects and Groups
 - Project entity with membership, ownership, and sharing controls
@@ -114,6 +122,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User guide for projects and groups workflow
 - RBAC architecture and permission model documentation
 - API reference for new endpoints
+
+### Changed
+
+- All data-mutating routes now populate `createdByUserId` (annotations) and `createdBy` (summaries, claims, claim relations) from the authenticated session, never from the request body
+- All Prisma JSON field handling uses runtime `toJson()` conversion and `Prisma.JsonObject` type guards instead of type assertion casts
 
 ## [0.1.7] - 2026-04-15
 

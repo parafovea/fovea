@@ -6,99 +6,41 @@ inference backends for CPU and GPU deployment.
 """
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 import torch
 from numpy.typing import NDArray
 
+from src.infrastructure.adapters.outbound.models.audio.base import (
+    AudioFramework,
+    AudioTranscriptionLoader,
+    TranscriptionConfig,
+    TranscriptionResult,
+    TranscriptionSegment,
+)
+from src.infrastructure.observability.telemetry import instrument_method
+
+__all__ = [
+    "AudioFramework",
+    "AudioTranscriptionLoader",
+    "DiarizationConfig",
+    "DiarizationResult",
+    "FasterWhisperLoader",
+    "PyannoteLoader",
+    "SileroVADLoader",
+    "SpeakerSegment",
+    "TranscriptionConfig",
+    "TranscriptionResult",
+    "TranscriptionSegment",
+    "VADConfig",
+    "VADResult",
+    "VADSegment",
+    "WhisperLoader",
+    "create_transcription_loader",
+]
+
 logger = logging.getLogger(__name__)
-
-
-class AudioFramework(StrEnum):
-    """Supported frameworks for audio model execution."""
-
-    WHISPER = "whisper"
-    FASTER_WHISPER = "faster_whisper"
-    TRANSFORMERS = "transformers"
-    PYANNOTE = "pyannote"
-
-
-@dataclass
-class TranscriptionConfig:
-    """Configuration for audio transcription model loading and inference.
-
-    Parameters
-    ----------
-    model_id : str
-        Model identifier (e.g., "openai/whisper-large-v3").
-    framework : AudioFramework
-        Framework to use for transcription.
-    language : str | None, default=None
-        Target language code (e.g., "en"). If None, auto-detects.
-    task : str, default="transcribe"
-        Task type ("transcribe" or "translate").
-    device : str, default="cuda"
-        Device to load the model on.
-    compute_type : str, default="float16"
-        Compute precision (float16, int8, int8_float16).
-    beam_size : int, default=5
-        Beam size for decoding.
-    """
-
-    model_id: str
-    framework: AudioFramework = AudioFramework.WHISPER
-    language: str | None = None
-    task: str = "transcribe"
-    device: str = "cuda"
-    compute_type: str = "float16"
-    beam_size: int = 5
-
-
-@dataclass
-class TranscriptionSegment:
-    """Single transcription segment with timing information.
-
-    Parameters
-    ----------
-    start : float
-        Start time in seconds.
-    end : float
-        End time in seconds.
-    text : str
-        Transcribed text for this segment.
-    confidence : float
-        Average confidence score (0.0 to 1.0).
-    """
-
-    start: float
-    end: float
-    text: str
-    confidence: float
-
-
-@dataclass
-class TranscriptionResult:
-    """Complete transcription result for an audio file.
-
-    Parameters
-    ----------
-    text : str
-        Full transcription text.
-    segments : list[TranscriptionSegment]
-        List of transcription segments with timestamps.
-    language : str
-        Detected or specified language code.
-    duration : float
-        Audio duration in seconds.
-    """
-
-    text: str
-    segments: list[TranscriptionSegment]
-    language: str
-    duration: float
 
 
 @dataclass
@@ -164,65 +106,6 @@ class DiarizationResult:
     speakers: list[str]
 
 
-class AudioTranscriptionLoader(ABC):
-    """Abstract base class for audio transcription loaders.
-
-    All transcription loaders must implement the load and transcribe methods.
-    """
-
-    def __init__(self, config: TranscriptionConfig) -> None:
-        """Initialize the transcription loader with configuration.
-
-        Parameters
-        ----------
-        config : TranscriptionConfig
-            Configuration for model loading and transcription.
-        """
-        self.config = config
-        self.model: Any = None
-
-    @abstractmethod
-    def load(self) -> None:
-        """Load the transcription model into memory.
-
-        Raises
-        ------
-        RuntimeError
-            If model loading fails.
-        """
-        pass
-
-    @abstractmethod
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
-        """Transcribe audio file to text with timestamps.
-
-        Parameters
-        ----------
-        audio_path : str
-            Path to audio file (WAV format, 16kHz recommended).
-
-        Returns
-        -------
-        TranscriptionResult
-            Transcription with segments and timing information.
-
-        Raises
-        ------
-        RuntimeError
-            If transcription fails or model is not loaded.
-        """
-        pass
-
-    def unload(self) -> None:
-        """Unload the model from memory to free GPU resources."""
-        if self.model is not None:
-            del self.model
-            self.model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        logger.info("Model unloaded and memory cleared")
-
-
 class WhisperLoader(AudioTranscriptionLoader):
     """Loader for OpenAI Whisper transcription models.
 
@@ -247,7 +130,8 @@ class WhisperLoader(AudioTranscriptionLoader):
             logger.error(f"Failed to load Whisper model: {e}")
             raise RuntimeError(f"Whisper model loading failed: {e}") from e
 
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    @instrument_method(task="transcribe")
+    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
         """Transcribe audio file using Whisper."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -255,7 +139,7 @@ class WhisperLoader(AudioTranscriptionLoader):
         try:
             result = self.model.transcribe(
                 audio_path,
-                language=self.config.language,
+                language=language if language is not None else self.config.language,
                 task=self.config.task,
                 beam_size=self.config.beam_size,
                 word_timestamps=False,
@@ -315,7 +199,8 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
             logger.error(f"Failed to load faster-whisper model: {e}")
             raise RuntimeError(f"faster-whisper model loading failed: {e}") from e
 
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    @instrument_method(task="transcribe")
+    def transcribe(self, audio_path: str, language: str | None = None) -> TranscriptionResult:
         """Transcribe audio file using faster-whisper."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -323,7 +208,7 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
         try:
             segments_iter, info = self.model.transcribe(
                 audio_path,
-                language=self.config.language,
+                language=language if language is not None else self.config.language,
                 task=self.config.task,
                 beam_size=self.config.beam_size,
                 word_timestamps=False,
@@ -462,6 +347,7 @@ class SileroVADLoader:
             logger.error(f"Failed to load Silero VAD model: {e}")
             raise RuntimeError(f"Silero VAD model loading failed: {e}") from e
 
+    @instrument_method(task="vad")
     def detect(self, audio: NDArray[Any] | str, sample_rate: int = 16000) -> VADResult:
         """Detect speech segments in audio.
 
@@ -581,6 +467,7 @@ class PyannoteLoader:
             logger.error(f"Failed to load Pyannote pipeline: {e}")
             raise RuntimeError(f"Pyannote pipeline loading failed: {e}") from e
 
+    @instrument_method(task="diarize")
     def diarize(self, audio_path: str) -> DiarizationResult:
         """Perform speaker diarization on audio file.
 
@@ -665,12 +552,50 @@ def create_transcription_loader(
     ValueError
         If model_name is not recognized.
     """
+    if config.framework == AudioFramework.NEMO_CANARY:
+        from src.infrastructure.adapters.outbound.models.audio.canary import (
+            CanaryQwenLoader,
+        )
+
+        return CanaryQwenLoader(config)
+    if config.framework == AudioFramework.NEMO_PARAKEET:
+        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
+            ParakeetTDTLoader,
+        )
+
+        return ParakeetTDTLoader(config)
+    if config.framework == AudioFramework.WHISPERX:
+        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
+            WhisperXLoader,
+        )
+
+        return WhisperXLoader(config)
+
     model_name_lower = model_name.lower()
 
+    if "canary" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.canary import (
+            CanaryQwenLoader,
+        )
+
+        return CanaryQwenLoader(config)
+    if "parakeet" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
+            ParakeetTDTLoader,
+        )
+
+        return ParakeetTDTLoader(config)
+    if "whisperx" in model_name_lower:
+        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
+            WhisperXLoader,
+        )
+
+        return WhisperXLoader(config)
     if "faster-whisper" in model_name_lower:
         return FasterWhisperLoader(config)
     if "whisper" in model_name_lower:
         return WhisperLoader(config)
     raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: whisper-*, faster-whisper-*"
+        f"Unknown model name: {model_name}. Supported models: "
+        "whisper-*, faster-whisper-*, canary-*, parakeet-*, whisperx-*"
     )

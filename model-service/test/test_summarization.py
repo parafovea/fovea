@@ -3,26 +3,23 @@
 import tempfile
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import cv2
 import numpy as np
 import pytest
 
+from src.application.dto.reasoning import ReasonedText
+from src.application.dto.summarization import SummarizeRequestDTO
+from src.application.ports.outbound.frame_sampler import VideoMetadataDTO
 from src.application.use_cases.summarize_video import (
     SummarizationError,
+    SummarizeVideoUseCase,
     get_default_prompt_template,
     get_persona_prompt,
     get_video_path_for_id,
     identify_key_frames,
     parse_vlm_response,
-    summarize_video_with_vlm,
-)
-from src.infrastructure.adapters.inbound.fastapi.schemas import SummarizeRequest
-from src.infrastructure.adapters.outbound.models.vlm.loader import (
-    InferenceFramework,
-    QuantizationType,
-    VLMConfig,
 )
 
 
@@ -196,80 +193,94 @@ def test_get_video_path_for_id_directory_not_exists():
     assert result is None
 
 
+def _make_video_file(tmpdir: str, frame_count: int) -> Path:
+    """Write a small synthetic video with ``frame_count`` frames."""
+    video_path = Path(tmpdir) / "test.mp4"
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(str(video_path), fourcc, 30.0, (640, 480))
+    for _ in range(frame_count):
+        frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        out.write(frame)
+    out.release()
+    return video_path
+
+
+def _make_sampler(metadata: VideoMetadataDTO, frames) -> MagicMock:
+    """Build a frame-sampler mock with canned return values."""
+    sampler = MagicMock()
+    sampler.get_video_metadata.return_value = metadata
+    sampler.extract_frames_uniform.return_value = frames
+    return sampler
+
+
 @pytest.mark.asyncio
 async def test_summarize_video_with_vlm_success():
     """Test successful video summarization with VLM."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        video_path = Path(tmpdir) / "test.mp4"
+        _make_video_file(tmpdir, frame_count=90)
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(str(video_path), fourcc, 30.0, (640, 480))
-        for _ in range(90):
-            frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-            out.write(frame)
-        out.release()
+        metadata = VideoMetadataDTO(frame_count=90, fps=30.0, duration=3.0)
+        frames = [(i * 10, np.zeros((100, 100, 3), dtype=np.uint8)) for i in range(6)]
+        sampler = _make_sampler(metadata, frames)
 
-        mock_loader = MagicMock()
-        mock_loader.generate.return_value = (
+        vlm = MagicMock()
+        vlm.is_loaded = False
+        vlm.generate.return_value = (
             "Summary: Test video shows random frames. Visual Analysis: Contains RGB noise patterns."
         )
-
-        with patch(
-            "src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader
-        ):
-            request = SummarizeRequest(
-                video_id="test-video",
-                persona_id=str(uuid.uuid4()),
-                frame_sample_rate=1,
-                max_frames=10,
+        vlm.generate_reasoned_from_images = MagicMock(
+            return_value=ReasonedText(
+                text="Summary: Test video shows random frames. "
+                "Visual Analysis: Contains RGB noise patterns.",
+                thinking=None,
             )
+        )
 
-            config = VLMConfig(
-                model_id="test/model",
-                quantization=QuantizationType.FOUR_BIT,
-                framework=InferenceFramework.TRANSFORMERS,
-            )
+        request = SummarizeRequestDTO(
+            video_id="test-video",
+            persona_id=str(uuid.uuid4()),
+            frame_sample_rate=1,
+            max_frames=10,
+        )
 
-            result = await summarize_video_with_vlm(
-                request=request,
-                video_path=str(video_path),
-                model_config=config,
-                model_name="test-model",
-                persona_role="Analyst",
-                information_need="Testing",
-            )
+        use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
+        result = await use_case.execute_with_vlm(
+            request=request,
+            video_path=str(Path(tmpdir) / "test.mp4"),
+            model_name="test-model",
+            persona_role="Analyst",
+            information_need="Testing",
+        )
 
-            assert result.video_id == "test-video"
-            assert result.persona_id == request.persona_id
-            assert "test video" in result.summary.lower()
-            assert result.visual_analysis is not None
-            assert "rgb noise" in result.visual_analysis.lower()
-            assert len(result.key_frames) > 0
-            assert result.confidence > 0
+        assert result.video_id == "test-video"
+        assert result.persona_id == request.persona_id
+        assert "test video" in result.summary.lower()
+        assert result.visual_analysis is not None
+        assert "rgb noise" in result.visual_analysis.lower()
+        assert len(result.key_frames) > 0
+        assert result.confidence > 0
 
-            mock_loader.load.assert_called_once()
-            mock_loader.unload.assert_called_once()
+        vlm.load.assert_called_once()
+        vlm.unload.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_summarize_video_with_vlm_video_not_found():
     """Test summarization with nonexistent video file."""
-    request = SummarizeRequest(
+    sampler = MagicMock()
+    sampler.get_video_metadata.side_effect = FileNotFoundError("Video file not found")
+    vlm = MagicMock()
+
+    request = SummarizeRequestDTO(
         video_id="test-video",
         persona_id=str(uuid.uuid4()),
     )
 
-    config = VLMConfig(
-        model_id="test/model",
-        quantization=QuantizationType.FOUR_BIT,
-        framework=InferenceFramework.TRANSFORMERS,
-    )
-
+    use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
     with pytest.raises(SummarizationError):
-        await summarize_video_with_vlm(
+        await use_case.execute_with_vlm(
             request=request,
             video_path="/nonexistent/video.mp4",
-            model_config=config,
             model_name="test-model",
         )
 
@@ -277,37 +288,22 @@ async def test_summarize_video_with_vlm_video_not_found():
 @pytest.mark.asyncio
 async def test_summarize_video_with_vlm_model_error():
     """Test summarization when VLM loading fails."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        video_path = Path(tmpdir) / "test.mp4"
+    metadata = VideoMetadataDTO(frame_count=30, fps=30.0, duration=1.0)
+    frames = [(0, np.zeros((100, 100, 3), dtype=np.uint8))]
+    sampler = _make_sampler(metadata, frames)
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(str(video_path), fourcc, 30.0, (640, 480))
-        for _ in range(30):
-            frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-            out.write(frame)
-        out.release()
+    vlm = MagicMock()
+    vlm.load.side_effect = RuntimeError("Model loading failed")
 
-        mock_loader = MagicMock()
-        mock_loader.load.side_effect = RuntimeError("Model loading failed")
+    request = SummarizeRequestDTO(
+        video_id="test-video",
+        persona_id=str(uuid.uuid4()),
+    )
 
-        with patch(
-            "src.application.use_cases.summarize_video.create_vlm_loader", return_value=mock_loader
-        ):
-            request = SummarizeRequest(
-                video_id="test-video",
-                persona_id=str(uuid.uuid4()),
-            )
-
-            config = VLMConfig(
-                model_id="test/model",
-                quantization=QuantizationType.FOUR_BIT,
-                framework=InferenceFramework.TRANSFORMERS,
-            )
-
-            with pytest.raises(SummarizationError):
-                await summarize_video_with_vlm(
-                    request=request,
-                    video_path=str(video_path),
-                    model_config=config,
-                    model_name="test-model",
-                )
+    use_case = SummarizeVideoUseCase(frame_sampler=sampler, vision_language_model=vlm)
+    with pytest.raises(SummarizationError):
+        await use_case.execute_with_vlm(
+            request=request,
+            video_path="/videos/unused.mp4",
+            model_name="test-model",
+        )

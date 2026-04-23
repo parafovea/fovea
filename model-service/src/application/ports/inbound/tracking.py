@@ -111,4 +111,4 @@ class ITrackingService(ABC):
         InferenceError
             If tracking fails.
         """
-        ...
+        pass

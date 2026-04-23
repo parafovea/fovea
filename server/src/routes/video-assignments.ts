@@ -120,6 +120,28 @@ interface RuleCondition {
   value: string
 }
 
+/** Type guard: narrows a Prisma Json value to a record. */
+function isRecord(json: unknown): json is Record<string, unknown> {
+  return typeof json === 'object' && json !== null && !Array.isArray(json)
+}
+
+/** Narrow a Prisma Json value to a record or null. */
+function toRecord(json: unknown): Record<string, unknown> | null {
+  return isRecord(json) ? json : null
+}
+
+/** Parse a Prisma Json value into a typed RuleCondition array. */
+function parseRuleConditions(json: unknown): RuleCondition[] {
+  if (!Array.isArray(json)) return []
+  return json.filter(
+    (item): item is RuleCondition =>
+      typeof item === 'object' && item !== null &&
+      typeof item.field === 'string' &&
+      typeof item.operator === 'string' &&
+      typeof item.value === 'string'
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Helper: project membership check
 // ---------------------------------------------------------------------------
@@ -647,13 +669,13 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('VideoAssignmentRule', ruleId)
       }
 
-      const conditions = rule.conditions as unknown as RuleCondition[]
+      const conditions = parseRuleConditions(rule.conditions)
       const videos = await fastify.prisma.video.findMany({
         select: { id: true, metadata: true },
       })
 
       const matchingVideoIds = videos
-        .filter(v => videoMatchesConditions(v.metadata as Record<string, unknown> | null, conditions))
+        .filter(v => videoMatchesConditions(toRecord(v.metadata), conditions))
         .map(v => v.id)
 
       videoAssignmentCounter.add(1, { operation: 'rule_evaluate', source: 'rule' })
@@ -703,9 +725,9 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
       let assignmentsCreated = 0
 
       for (const rule of activeRules) {
-        const conditions = rule.conditions as unknown as RuleCondition[]
+        const conditions = parseRuleConditions(rule.conditions)
         const matchingVideoIds = videos
-          .filter(v => videoMatchesConditions(v.metadata as Record<string, unknown> | null, conditions))
+          .filter(v => videoMatchesConditions(toRecord(v.metadata), conditions))
           .map(v => v.id)
 
         if (matchingVideoIds.length === 0) continue

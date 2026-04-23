@@ -13,6 +13,9 @@ from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     ProcessingTime,
     StrictBaseModel,
 )
+from src.infrastructure.adapters.inbound.fastapi.schemas.reasoning import (
+    ThinkingTraceSchema,
+)
 
 
 class KeyFrame(StrictBaseModel):
@@ -141,4 +144,7 @@ class SummarizeResponse(StrictBaseModel):
     )
     processing_time_fusion: ProcessingTime | None = Field(
         default=None, description="Fusion processing time in seconds"
+    )
+    thinking: ThinkingTraceSchema | None = Field(
+        default=None, description="Optional reasoning trace from a thinking-capable model"
     )

@@ -12,6 +12,9 @@ from src.infrastructure.adapters.inbound.fastapi.schemas.common import (
     NonEmptyStr,
     StrictBaseModel,
 )
+from src.infrastructure.adapters.inbound.fastapi.schemas.reasoning import (
+    ThinkingTraceSchema,
+)
 
 
 class OntologyType(StrictBaseModel):
@@ -36,6 +39,9 @@ class OntologyType(StrictBaseModel):
     parent: str | None = Field(default=None, description="Parent type name")
     confidence: ConfidenceScore = Field(default=0.0, description="Confidence score")
     examples: list[str] = Field(default_factory=list, description="Example instances")
+    thinking: ThinkingTraceSchema | None = Field(
+        default=None, description="Optional reasoning trace from a thinking-capable model"
+    )
 
 
 class AugmentRequest(StrictBaseModel):

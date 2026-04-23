@@ -5,10 +5,12 @@ and end-to-end ontology augmentation across diverse domains.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.application.dto.generation import GenerationResultDTO
+from src.application.dto.ontology import OntologyTypeDTO
 from src.application.use_cases.augment_ontology import (
     AugmentationContext,
     augment_ontology_with_llm,
@@ -17,14 +19,15 @@ from src.application.use_cases.augment_ontology import (
     generate_augmentation_reasoning,
     parse_llm_response,
 )
-from src.infrastructure.adapters.inbound.fastapi.schemas import OntologyType
-from src.infrastructure.adapters.outbound.models.llm.loader import (
-    GenerationResult,
-    LLMConfig,
-    LLMFramework,
-)
 
-# Note: parse_llm_response signature changed - removed unused target_category parameter
+
+def _make_language_model(response_text: str) -> MagicMock:
+    """Build a mock ``ILanguageModel`` that returns a fixed generation."""
+    model = MagicMock()
+    model.generate_with_config = AsyncMock(
+        return_value=GenerationResultDTO(text=response_text, tokens_used=250, finish_reason="eos")
+    )
+    return model
 
 
 @pytest.fixture
@@ -84,19 +87,6 @@ def film_production_context() -> AugmentationContext:
         target_category="relation",
         persona_role="Continuity Editor",
         information_need="Track relationships between objects and their states",
-    )
-
-
-@pytest.fixture
-def mock_llm_config() -> LLMConfig:
-    """Mock LLM configuration for testing."""
-    return LLMConfig(
-        model_id="test-model",
-        quantization="4bit",
-        framework=LLMFramework.TRANSFORMERS,
-        max_tokens=2048,
-        temperature=0.7,
-        top_p=0.9,
     )
 
 
@@ -404,14 +394,14 @@ class TestReasoningGeneration:
     ) -> None:
         """Test reasoning generation with valid suggestions."""
         suggestions = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Calf",
                 description="Young whale",
                 parent="Whale",
                 confidence=0.85,
                 examples=["Humpback Calf"],
             ),
-            OntologyType(
+            OntologyTypeDTO(
                 name="Breach",
                 description="Jumping behavior",
                 parent=None,
@@ -432,7 +422,7 @@ class TestReasoningGeneration:
     ) -> None:
         """Test reasoning mentions high confidence top suggestion."""
         suggestions = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Splitter",
                 description="Split-finger pitch",
                 parent=None,
@@ -450,7 +440,7 @@ class TestReasoningGeneration:
         self, retail_analysis_context: AugmentationContext
     ) -> None:
         """Test reasoning with no suggestions."""
-        suggestions: list[OntologyType] = []
+        suggestions: list[OntologyTypeDTO] = []
 
         reasoning = generate_augmentation_reasoning(suggestions, retail_analysis_context)
 
@@ -466,7 +456,7 @@ class TestReasoningGeneration:
         )
 
         suggestions = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Prop",
                 description="Physical object",
                 parent=None,
@@ -487,152 +477,100 @@ class TestEndToEndAugmentation:
     async def test_augment_ontology_success(
         self,
         wildlife_research_context: AugmentationContext,
-        mock_llm_config: LLMConfig,
     ) -> None:
         """Test successful ontology augmentation."""
-        mock_response = GenerationResult(
-            text=json.dumps(
-                [
-                    {
-                        "name": "Calf",
-                        "description": "Young whale offspring traveling with pod.",
-                        "parent": "Whale",
-                        "examples": ["Humpback Calf", "Orca Calf"],
-                    },
-                    {
-                        "name": "ResearchVessel",
-                        "description": "Scientific vessel observing whale behavior.",
-                        "parent": "Vessel",
-                        "examples": ["Research Ship", "Survey Boat"],
-                    },
-                ]
-            ),
-            tokens_used=250,
-            finish_reason="eos",
+        payload = json.dumps(
+            [
+                {
+                    "name": "Calf",
+                    "description": "Young whale offspring traveling with pod.",
+                    "parent": "Whale",
+                    "examples": ["Humpback Calf", "Orca Calf"],
+                },
+                {
+                    "name": "ResearchVessel",
+                    "description": "Scientific vessel observing whale behavior.",
+                    "parent": "Vessel",
+                    "examples": ["Research Ship", "Survey Boat"],
+                },
+            ]
+        )
+        language_model = _make_language_model(payload)
+
+        suggestions = await augment_ontology_with_llm(
+            wildlife_research_context, language_model, max_suggestions=5
         )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.create_llm_loader"
-        ) as mock_loader_class:
-            mock_loader = AsyncMock()
-            mock_loader.load = AsyncMock()
-            mock_loader.generate = AsyncMock(return_value=mock_response)
-            mock_loader.unload = AsyncMock()
-            mock_loader_class.return_value = mock_loader
+        assert len(suggestions) == 2
+        names = {s.name for s in suggestions}
+        assert names == {"Calf", "ResearchVessel"}
+        for suggestion in suggestions:
+            assert 0.0 <= suggestion.confidence <= 1.0
 
-            suggestions = await augment_ontology_with_llm(
-                wildlife_research_context, mock_llm_config, max_suggestions=5
-            )
-
-            assert len(suggestions) == 2
-            assert suggestions[0].name == "Calf"
-            assert suggestions[0].description == "Young whale offspring traveling with pod."
-            assert suggestions[0].parent == "Whale"
-            assert len(suggestions[0].examples) == 2
-            assert 0.0 <= suggestions[0].confidence <= 1.0
-
-            assert suggestions[1].name == "ResearchVessel"
-            assert suggestions[1].parent == "Vessel"
-
-            mock_loader.load.assert_called_once()
-            mock_loader.generate.assert_called_once()
-            mock_loader.unload.assert_called_once()
+        language_model.generate_with_config.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_augment_ontology_sorts_by_confidence(
         self,
         sports_analytics_context: AugmentationContext,
-        mock_llm_config: LLMConfig,
     ) -> None:
         """Test that suggestions are sorted by confidence."""
-        mock_response = GenerationResult(
-            text=json.dumps(
-                [
-                    {
-                        "name": "MinimalPitch",
-                        "description": "Low quality",
-                        "parent": None,
-                        "examples": [],
-                    },
-                    {
-                        "name": "Changeup",
-                        "description": "Off-speed pitch with deceptive arm action mimicking fastball delivery.",
-                        "parent": "Fastball",
-                        "examples": ["Circle Change", "Vulcan Change", "Palm Ball"],
-                    },
-                ]
-            ),
-            tokens_used=200,
-            finish_reason="eos",
+        payload = json.dumps(
+            [
+                {
+                    "name": "MinimalPitch",
+                    "description": "Low quality",
+                    "parent": None,
+                    "examples": [],
+                },
+                {
+                    "name": "Changeup",
+                    "description": "Off-speed pitch with deceptive arm action mimicking fastball delivery.",
+                    "parent": "Fastball",
+                    "examples": ["Circle Change", "Vulcan Change", "Palm Ball"],
+                },
+            ]
+        )
+        language_model = _make_language_model(payload)
+
+        suggestions = await augment_ontology_with_llm(
+            sports_analytics_context, language_model, max_suggestions=10
         )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.create_llm_loader"
-        ) as mock_loader_class:
-            mock_loader = AsyncMock()
-            mock_loader.load = AsyncMock()
-            mock_loader.generate = AsyncMock(return_value=mock_response)
-            mock_loader.unload = AsyncMock()
-            mock_loader_class.return_value = mock_loader
-
-            suggestions = await augment_ontology_with_llm(
-                sports_analytics_context, mock_llm_config, max_suggestions=10
-            )
-
-            assert suggestions[0].confidence >= suggestions[1].confidence
+        assert suggestions[0].confidence >= suggestions[1].confidence
 
     @pytest.mark.asyncio
     async def test_augment_ontology_limits_suggestions(
         self,
         retail_analysis_context: AugmentationContext,
-        mock_llm_config: LLMConfig,
     ) -> None:
         """Test that suggestions are limited to max_suggestions."""
-        mock_response = GenerationResult(
-            text=json.dumps(
-                [{"name": f"Event{i}", "description": f"Description {i}"} for i in range(20)]
-            ),
-            tokens_used=500,
-            finish_reason="eos",
+        payload = json.dumps(
+            [{"name": f"Event{i}", "description": f"Description {i}"} for i in range(20)]
+        )
+        language_model = _make_language_model(payload)
+
+        suggestions = await augment_ontology_with_llm(
+            retail_analysis_context, language_model, max_suggestions=5
         )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.create_llm_loader"
-        ) as mock_loader_class:
-            mock_loader = AsyncMock()
-            mock_loader.load = AsyncMock()
-            mock_loader.generate = AsyncMock(return_value=mock_response)
-            mock_loader.unload = AsyncMock()
-            mock_loader_class.return_value = mock_loader
-
-            suggestions = await augment_ontology_with_llm(
-                retail_analysis_context, mock_llm_config, max_suggestions=5
-            )
-
-            assert len(suggestions) == 5
+        assert len(suggestions) == 5
 
     @pytest.mark.asyncio
-    async def test_augment_ontology_unloads_on_error(
+    async def test_augment_ontology_propagates_errors(
         self,
         medical_training_context: AugmentationContext,
-        mock_llm_config: LLMConfig,
     ) -> None:
-        """Test that model is unloaded even if generation fails."""
-        with patch(
-            "src.application.use_cases.augment_ontology.create_llm_loader"
-        ) as mock_loader_class:
-            mock_loader = AsyncMock()
-            mock_loader.load = AsyncMock()
-            mock_loader.generate = AsyncMock(side_effect=RuntimeError("Generation failed"))
-            mock_loader.unload = AsyncMock()
-            mock_loader_class.return_value = mock_loader
+        """Errors from the language model propagate to the caller."""
+        language_model = MagicMock()
+        language_model.generate_with_config = AsyncMock(
+            side_effect=RuntimeError("Generation failed")
+        )
 
-            with pytest.raises(RuntimeError, match="Generation failed"):
-                await augment_ontology_with_llm(
-                    medical_training_context, mock_llm_config, max_suggestions=10
-                )
-
-            mock_loader.unload.assert_called_once()
+        with pytest.raises(RuntimeError, match="Generation failed"):
+            await augment_ontology_with_llm(
+                medical_training_context, language_model, max_suggestions=10
+            )
 
 
 class TestDiverseDomainCoverage:

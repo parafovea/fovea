@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { createUserWithPassword } from '../fixtures/users.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 
 /**
  * Route registration smoke tests for video endpoints.
@@ -24,6 +25,9 @@ describe('Videos API - Route Registration', () => {
   beforeAll(async () => {
     app = await buildApp()
     prisma = app.prisma
+
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create admin user for authenticated endpoints
     const adminUser = await createUserWithPassword('admin123', {
@@ -55,6 +59,8 @@ describe('Videos API - Route Registration', () => {
   beforeEach(async () => {
     // Clean database
     await prisma.video.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
   })
 
   describe('GET /api/videos', () => {

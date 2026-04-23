@@ -105,7 +105,7 @@ class IClaimExtractionService(ABC):
         ClaimExtractionError
             If extraction fails.
         """
-        ...
+        pass
 
 
 @dataclass
@@ -219,4 +219,4 @@ class IClaimSynthesisService(ABC):
         ClaimSynthesisError
             If synthesis fails.
         """
-        ...
+        pass

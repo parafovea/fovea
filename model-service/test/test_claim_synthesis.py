@@ -1,18 +1,20 @@
-"""
-Tests for claim synthesis module.
+"""Tests for claim synthesis module.
+
 Tests the synthesis of narrative summaries from claim hierarchies.
 """
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.application.dto.claims import ClaimRelationshipDTO, ClaimSourceDTO
+from src.application.dto.generation import GenerationResultDTO
 from src.application.use_cases.synthesize_summary import (
     _format_claims_hierarchy,
     build_synthesis_prompt,
+    parse_reference_markers,
     synthesize_summary_from_claims,
 )
-from src.infrastructure.adapters.inbound.fastapi.schemas import ClaimRelationship, ClaimSource
 
 
 @pytest.fixture
@@ -49,8 +51,8 @@ def sample_claims():
 
 @pytest.fixture
 def sample_claim_source(sample_claims):
-    """Sample ClaimSource for testing."""
-    return ClaimSource(
+    """Sample ClaimSourceDTO for testing."""
+    return ClaimSourceDTO(
         source_id="video-123",
         source_type="video",
         claims=sample_claims,
@@ -62,7 +64,7 @@ def sample_claim_source(sample_claims):
 def sample_claim_relations():
     """Sample claim relations for testing."""
     return [
-        ClaimRelationship(
+        ClaimRelationshipDTO(
             source_claim_id="claim-3",
             target_claim_id="claim-4",
             relation_type="conflicts_with",
@@ -96,12 +98,21 @@ def sample_persona_context():
     }
 
 
+def _make_language_model(response_text: str) -> MagicMock:
+    """Build a mock language model returning a fixed generation."""
+    model = MagicMock()
+    model.generate_with_config = AsyncMock(
+        return_value=GenerationResultDTO(text=response_text, tokens_used=100)
+    )
+    return model
+
+
 class TestFormatClaimsHierarchy:
     """Tests for _format_claims_hierarchy function."""
 
     def test_format_flat_claims(self, sample_claims):
         """Test formatting claims without subclaims."""
-        flat_claims = [sample_claims[1]]  # "The rocket reached orbit"
+        flat_claims = [sample_claims[1]]
         result = _format_claims_hierarchy(flat_claims, indent=0)
 
         assert len(result) == 1
@@ -113,11 +124,8 @@ class TestFormatClaimsHierarchy:
         """Test formatting claims with subclaims."""
         result = _format_claims_hierarchy(sample_claims, indent=0)
 
-        # Should have parent + 2 children + 1 other
         assert len(result) == 4
-        # Check parent
         assert "The rocket was launched successfully" in result[0]
-        # Check children are indented
         assert result[1].startswith("  ")
         assert "The rocket was launched" in result[1]
 
@@ -125,9 +133,7 @@ class TestFormatClaimsHierarchy:
         """Test that indentation increases for subclaims."""
         result = _format_claims_hierarchy(sample_claims, indent=1)
 
-        # Base claims should have 1 indent level
         assert result[0].startswith("  ")
-        # Subclaims should have 2 indent levels
         assert result[1].startswith("    ")
 
 
@@ -300,7 +306,7 @@ class TestBuildSynthesisPrompt:
 
     def test_multiple_sources(self, sample_claim_source):
         """Test prompt with multiple claim sources."""
-        source2 = ClaimSource(
+        source2 = ClaimSourceDTO(
             source_id="video-456",
             source_type="video",
             claims=[{"id": "claim-10", "text": "Another claim", "confidence": 0.88}],
@@ -324,17 +330,39 @@ class TestBuildSynthesisPrompt:
         assert "Second Video" in prompt
 
 
+class TestReferenceMarkerParsing:
+    """Tests for parse_reference_markers."""
+
+    def test_parses_plain_text(self) -> None:
+        """Plain text yields a single text gloss item."""
+        items = parse_reference_markers("Just plain text.")
+        assert items == [{"type": "text", "content": "Just plain text."}]
+
+    def test_parses_type_reference(self) -> None:
+        """``#Name`` markers become typeRef items."""
+        items = parse_reference_markers("The #Rocket launched.")
+        assert {"type": "typeRef", "content": "Rocket"} in items
+
+    def test_parses_object_reference(self) -> None:
+        """``@Name`` markers become objectRef items."""
+        items = parse_reference_markers("Subject @Alice observed.")
+        assert {"type": "objectRef", "content": "Alice"} in items
+
+    def test_parses_annotation_reference(self) -> None:
+        """``^Name`` markers become annotationRef items."""
+        items = parse_reference_markers("See ^note1 for details.")
+        assert {"type": "annotationRef", "content": "note1"} in items
+
+
 class TestSynthesizeSummaryFromClaims:
     """Tests for synthesize_summary_from_claims function."""
 
     @pytest.mark.asyncio
     async def test_basic_synthesis(self, sample_claim_source):
         """Test basic synthesis without errors."""
-        # Mock LLM loader
-        mock_loader = Mock()
-        mock_result = Mock()
-        mock_result.text = "The rocket was launched successfully and reached orbit."
-        mock_loader.generate = AsyncMock(return_value=mock_result)
+        language_model = _make_language_model(
+            "The rocket was launched successfully and reached orbit."
+        )
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source],
@@ -342,13 +370,12 @@ class TestSynthesizeSummaryFromClaims:
             synthesis_strategy="hierarchical",
             ontology_context=None,
             persona_context=None,
-            llm_loader=mock_loader,
+            language_model=language_model,
             max_length=500,
             include_conflicts=True,
             include_citations=False,
         )
 
-        # Should return GlossItem array
         assert isinstance(result, list)
         assert len(result) > 0
         assert result[0]["type"] == "text"
@@ -363,10 +390,7 @@ class TestSynthesizeSummaryFromClaims:
         sample_persona_context,
     ):
         """Test synthesis with all configuration options."""
-        mock_loader = Mock()
-        mock_result = Mock()
-        mock_result.text = "A comprehensive analysis of the rocket launch."
-        mock_loader.generate = AsyncMock(return_value=mock_result)
+        language_model = _make_language_model("A comprehensive analysis of the rocket launch.")
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source],
@@ -374,44 +398,37 @@ class TestSynthesizeSummaryFromClaims:
             synthesis_strategy="analytical",
             ontology_context=sample_ontology_context,
             persona_context=sample_persona_context,
-            llm_loader=mock_loader,
+            language_model=language_model,
             max_length=750,
             include_conflicts=True,
             include_citations=True,
         )
 
-        # Verify generate was called
-        assert mock_loader.generate.called
-        call_args = mock_loader.generate.call_args
+        assert language_model.generate_with_config.called
+        call_kwargs = language_model.generate_with_config.call_args.kwargs
 
-        # Check that prompt includes all contexts
-        prompt = call_args[1]["prompt"]
+        prompt = call_kwargs["prompt"]
         assert "Aerospace Analyst" in prompt
         assert "ONTOLOGY TYPES" in prompt
         assert "CONFLICTS DETECTED" in prompt
 
-        # Check generation config
-        config = call_args[1]["generation_config"]
+        config = call_kwargs["config"]
         assert config.max_tokens == 8192
         assert config.temperature == 0.8
 
-        # Check result
         assert isinstance(result, list)
         assert "comprehensive" in result[0]["content"]
 
     @pytest.mark.asyncio
     async def test_synthesis_multiple_sources(self, sample_claim_source):
         """Test synthesis with multiple claim sources."""
-        source2 = ClaimSource(
+        source2 = ClaimSourceDTO(
             source_id="video-789",
             source_type="video",
             claims=[{"id": "claim-20", "text": "Follow-up observation"}],
         )
 
-        mock_loader = Mock()
-        mock_result = Mock()
-        mock_result.text = "Multi-source analysis."
-        mock_loader.generate = AsyncMock(return_value=mock_result)
+        language_model = _make_language_model("Multi-source analysis.")
 
         result = await synthesize_summary_from_claims(
             claim_sources=[sample_claim_source, source2],
@@ -419,15 +436,14 @@ class TestSynthesizeSummaryFromClaims:
             synthesis_strategy="hierarchical",
             ontology_context=None,
             persona_context=None,
-            llm_loader=mock_loader,
+            language_model=language_model,
             max_length=500,
             include_conflicts=False,
             include_citations=False,
         )
 
-        # Verify multiple sources mentioned in prompt
-        call_args = mock_loader.generate.call_args
-        prompt = call_args[1]["prompt"]
+        call_kwargs = language_model.generate_with_config.call_args.kwargs
+        prompt = call_kwargs["prompt"]
         assert "Source 1:" in prompt
         assert "Source 2:" in prompt
 

@@ -149,4 +149,4 @@ class ISummarizationService(ABC):
         InferenceError
             If summarization fails.
         """
-        ...
+        pass

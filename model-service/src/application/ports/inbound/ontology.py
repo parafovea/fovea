@@ -93,4 +93,4 @@ class IOntologyService(ABC):
         InferenceError
             If augmentation fails.
         """
-        ...
+        pass

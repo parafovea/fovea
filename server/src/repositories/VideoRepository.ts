@@ -121,6 +121,23 @@ export class VideoRepository {
   }
 
   /**
+   * Finds videos whose IDs are in the given list.
+   *
+   * Used by the video list endpoint when results must be scoped to the set
+   * of videos the caller is authorized to access (via VideoAccessService).
+   *
+   * @param ids - array of video IDs to fetch
+   * @returns matching videos, ordered by creation date descending
+   */
+  async findByIds(ids: string[]): Promise<Video[]> {
+    if (ids.length === 0) return []
+    return this.prisma.video.findMany({
+      where: { id: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  /**
    * Finds a video by its ID.
    *
    * This method returns the complete video record with all fields.

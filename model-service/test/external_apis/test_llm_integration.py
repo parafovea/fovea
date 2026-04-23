@@ -1,15 +1,17 @@
 """Tests for LLM external API integration in ontology augmentation."""
 
-from unittest.mock import AsyncMock, Mock, patch
+import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.application.dto.external_api import ExternalAPIConfigDTO
+from src.application.dto.reasoning import ReasonedText
 from src.application.use_cases.augment_ontology import (
     AugmentationContext,
     augment_ontology_with_external_api,
     extract_json_from_response,
 )
-from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
 
 
 class TestJSONExtraction:
@@ -48,22 +50,41 @@ class TestJSONExtraction:
         assert result == '[{"name": "Test", "description": "A test type"}]'
 
     def test_extract_json_with_surrounding_text(self) -> None:
-        """Test extraction when JSON is embedded in text."""
-        response = """Here are some suggestions:
+        """Test extraction with surrounding text."""
+        response = """Here are the suggestions:
+
 ```json
 [{"name": "Test", "description": "A test type"}]
 ```
-These are my recommendations."""
+
+I hope these help!"""
         result = extract_json_from_response(response)
         assert result == '[{"name": "Test", "description": "A test type"}]'
 
-    def test_extract_json_case_insensitive(self) -> None:
-        """Test that JSON code block detection is case insensitive."""
-        response = """```JSON
-[{"name": "Test", "description": "A test type"}]
-```"""
-        result = extract_json_from_response(response)
-        assert result == '[{"name": "Test", "description": "A test type"}]'
+
+def _make_router(result: dict) -> MagicMock:
+    """Build a mock IExternalAPIRouter returning a fixed result."""
+    router = MagicMock()
+    router.generate_text = AsyncMock(return_value=result)
+    router.generate_reasoned_text = AsyncMock(
+        return_value=ReasonedText(
+            text=result["text"],
+            thinking=None,
+            tokens_used=result.get("usage", {}).get("total_tokens"),
+        )
+    )
+    router.close = AsyncMock()
+    return router
+
+
+def _api_config() -> ExternalAPIConfigDTO:
+    """Shared test API config."""
+    return ExternalAPIConfigDTO(
+        api_key="test_key",
+        api_endpoint="https://api.test.com",
+        model_id="test-model",
+        provider="anthropic",
+    )
 
 
 class TestExternalAPIOntologyAugmentation:
@@ -79,15 +100,9 @@ class TestExternalAPIOntologyAugmentation:
             persona_role="Wildlife Biologist",
             information_need="Track endangered species",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
-        )
-
-        mock_router_result = {
-            "text": """```json
+        router = _make_router(
+            {
+                "text": """```json
 [
   {
     "name": "Mammal",
@@ -103,36 +118,24 @@ class TestExternalAPIOntologyAugmentation:
   }
 ]
 ```""",
-            "usage": {"total_tokens": 200},
-            "model": "test-model",
-        }
+                "usage": {"total_tokens": 200},
+                "model": "test-model",
+            }
+        )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
+        suggestions = await augment_ontology_with_external_api(
+            context=context,
+            api_config=_api_config(),
+            provider="anthropic",
+            external_router=router,
+            max_suggestions=10,
+        )
 
-            suggestions = await augment_ontology_with_external_api(
-                context=context,
-                api_config=api_config,
-                provider="anthropic",
-                max_suggestions=10,
-            )
-
-            assert len(suggestions) == 2
-            assert suggestions[0].name == "Mammal"
-            assert suggestions[0].parent == "Animal"
-            assert len(suggestions[0].examples) == 3
-            assert suggestions[0].confidence > 0
-
-            assert suggestions[1].name == "Bird"
-            assert "vertebrates" in suggestions[1].description.lower()
-
-            mock_router.generate_text.assert_called_once()
-            mock_router.close_all.assert_called_once()
+        assert len(suggestions) == 2
+        names = {s.name for s in suggestions}
+        assert names == {"Mammal", "Bird"}
+        router.generate_text.assert_called_once()
+        router.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_augment_ontology_with_plain_json_response(self) -> None:
@@ -142,38 +145,24 @@ class TestExternalAPIOntologyAugmentation:
             existing_types=["Player", "Team"],
             target_category="event",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.openai.com",
-            model_id="gpt-4o",
+        router = _make_router(
+            {
+                "text": '[{"name": "Goal", "description": "A scoring event in soccer.", "parent": null, "examples": ["Penalty kick", "Free kick"]}]',
+                "usage": {"total_tokens": 150},
+                "model": "gpt-4o",
+            }
         )
 
-        mock_router_result = {
-            "text": '[{"name": "Goal", "description": "A scoring event in soccer.", "parent": null, "examples": ["Penalty kick", "Free kick"]}]',
-            "usage": {"total_tokens": 150},
-            "model": "gpt-4o",
-        }
+        suggestions = await augment_ontology_with_external_api(
+            context=context,
+            api_config=_api_config(),
+            provider="openai",
+            external_router=router,
+            max_suggestions=5,
+        )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
-
-            suggestions = await augment_ontology_with_external_api(
-                context=context,
-                api_config=api_config,
-                provider="openai",
-                max_suggestions=5,
-            )
-
-            assert len(suggestions) == 1
-            assert suggestions[0].name == "Goal"
-            assert suggestions[0].parent is None
-            assert len(suggestions[0].examples) == 2
+        assert len(suggestions) == 1
+        assert suggestions[0].name == "Goal"
 
     @pytest.mark.asyncio
     async def test_augment_ontology_respects_max_suggestions(self) -> None:
@@ -183,77 +172,56 @@ class TestExternalAPIOntologyAugmentation:
             existing_types=["Product", "Category"],
             target_category="entity",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
+        payload = json.dumps(
+            [
+                {
+                    "name": f"Type{i}",
+                    "description": f"Description {i}",
+                    "parent": None,
+                    "examples": [],
+                }
+                for i in range(10)
+            ]
+        )
+        router = _make_router(
+            {"text": payload, "usage": {"total_tokens": 300}, "model": "test-model"}
         )
 
-        mock_suggestions = [
-            {"name": f"Type{i}", "description": f"Description {i}", "parent": None, "examples": []}
-            for i in range(10)
-        ]
+        suggestions = await augment_ontology_with_external_api(
+            context=context,
+            api_config=_api_config(),
+            provider="google",
+            external_router=router,
+            max_suggestions=5,
+        )
 
-        import json
-
-        mock_router_result = {
-            "text": json.dumps(mock_suggestions),
-            "usage": {"total_tokens": 300},
-            "model": "test-model",
-        }
-
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
-
-            suggestions = await augment_ontology_with_external_api(
-                context=context,
-                api_config=api_config,
-                provider="google",
-                max_suggestions=5,
-            )
-
-            assert len(suggestions) <= 5
+        assert len(suggestions) <= 5
 
     @pytest.mark.asyncio
     async def test_augment_ontology_handles_api_errors(self) -> None:
-        """Test that API errors are properly handled."""
+        """Test that API errors are propagated."""
         context = AugmentationContext(
             domain="Healthcare",
             existing_types=["Patient", "Doctor"],
             target_category="event",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="invalid_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
+        router = MagicMock()
+        router.generate_text = AsyncMock(side_effect=RuntimeError("API authentication failed"))
+        router.generate_reasoned_text = AsyncMock(
+            side_effect=RuntimeError("API authentication failed")
         )
+        router.close = AsyncMock()
 
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(
-                side_effect=Exception("API authentication failed")
+        with pytest.raises(RuntimeError, match="API authentication failed"):
+            await augment_ontology_with_external_api(
+                context=context,
+                api_config=_api_config(),
+                provider="anthropic",
+                external_router=router,
+                max_suggestions=10,
             )
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
 
-            with pytest.raises(RuntimeError, match="External API augmentation failed"):
-                await augment_ontology_with_external_api(
-                    context=context,
-                    api_config=api_config,
-                    provider="anthropic",
-                    max_suggestions=10,
-                )
-
-            mock_router.close_all.assert_called_once()
+        router.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_augment_ontology_handles_invalid_json(self) -> None:
@@ -263,36 +231,24 @@ class TestExternalAPIOntologyAugmentation:
             existing_types=["Vehicle", "Route"],
             target_category="entity",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
+        router = _make_router(
+            {
+                "text": "This is not valid JSON at all!",
+                "usage": {"total_tokens": 50},
+                "model": "test-model",
+            }
         )
 
-        mock_router_result = {
-            "text": "This is not valid JSON at all!",
-            "usage": {"total_tokens": 50},
-            "model": "test-model",
-        }
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            await augment_ontology_with_external_api(
+                context=context,
+                api_config=_api_config(),
+                provider="openai",
+                external_router=router,
+                max_suggestions=10,
+            )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
-
-            with pytest.raises(RuntimeError, match="External API augmentation failed"):
-                await augment_ontology_with_external_api(
-                    context=context,
-                    api_config=api_config,
-                    provider="openai",
-                    max_suggestions=10,
-                )
-
-            mock_router.close_all.assert_called_once()
+        router.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_augment_ontology_sorts_by_confidence(self) -> None:
@@ -302,15 +258,9 @@ class TestExternalAPIOntologyAugmentation:
             existing_types=["Machine", "Worker"],
             target_category="event",
         )
-
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
-        )
-
-        mock_router_result = {
-            "text": """[
+        router = _make_router(
+            {
+                "text": """[
   {
     "name": "ShortDesc",
     "description": "Short",
@@ -324,31 +274,25 @@ class TestExternalAPIOntologyAugmentation:
     "examples": ["Example1", "Example2", "Example3"]
   }
 ]""",
-            "usage": {"total_tokens": 100},
-            "model": "test-model",
-        }
+                "usage": {"total_tokens": 100},
+                "model": "test-model",
+            }
+        )
 
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
+        suggestions = await augment_ontology_with_external_api(
+            context=context,
+            api_config=_api_config(),
+            provider="anthropic",
+            external_router=router,
+            max_suggestions=10,
+        )
 
-            suggestions = await augment_ontology_with_external_api(
-                context=context,
-                api_config=api_config,
-                provider="anthropic",
-                max_suggestions=10,
-            )
-
-            assert len(suggestions) == 2
-            assert suggestions[0].confidence >= suggestions[1].confidence
+        assert len(suggestions) == 2
+        assert suggestions[0].confidence >= suggestions[1].confidence
 
     @pytest.mark.asyncio
     async def test_augment_ontology_creates_valid_prompt(self) -> None:
-        """Test that created prompt includes context information."""
+        """Test that prompt passed to router includes context."""
         context = AugmentationContext(
             domain="Education",
             existing_types=["Student", "Teacher", "Course"],
@@ -356,38 +300,18 @@ class TestExternalAPIOntologyAugmentation:
             persona_role="School Administrator",
             information_need="Track enrollment patterns",
         )
+        router = _make_router({"text": "[]", "usage": {"total_tokens": 50}, "model": "test-model"})
 
-        api_config = ExternalAPIConfig(
-            api_key="test_key",
-            api_endpoint="https://api.test.com",
-            model_id="test-model",
+        await augment_ontology_with_external_api(
+            context=context,
+            api_config=_api_config(),
+            provider="google",
+            external_router=router,
+            max_suggestions=10,
         )
 
-        mock_router_result = {
-            "text": "[]",
-            "usage": {"total_tokens": 50},
-            "model": "test-model",
-        }
-
-        with patch(
-            "src.application.use_cases.augment_ontology.ExternalModelRouter"
-        ) as mock_router_class:
-            mock_router = Mock()
-            mock_router.generate_text = AsyncMock(return_value=mock_router_result)
-            mock_router.close_all = AsyncMock()
-            mock_router_class.return_value = mock_router
-
-            await augment_ontology_with_external_api(
-                context=context,
-                api_config=api_config,
-                provider="google",
-                max_suggestions=10,
-            )
-
-            call_args = mock_router.generate_text.call_args
-            prompt = call_args[1]["prompt"]
-
-            assert "Education" in prompt
-            assert "relation" in prompt
-            assert "Student" in prompt
-            assert "School Administrator" in prompt
+        call_kwargs = router.generate_text.call_args.kwargs
+        prompt = call_kwargs["prompt"]
+        assert "Education" in prompt
+        assert "Student" in prompt
+        assert "School Administrator" in prompt

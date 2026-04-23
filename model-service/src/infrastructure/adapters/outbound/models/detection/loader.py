@@ -7,199 +7,33 @@ for detecting objects without pre-defined class vocabularies.
 """
 
 import logging
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
+from src.infrastructure.adapters.outbound.models.detection.base import (
+    BoundingBox,
+    Detection,
+    DetectionConfig,
+    DetectionFramework,
+    DetectionModelLoader,
+    DetectionResult,
+)
+from src.infrastructure.observability.telemetry import instrument_method
+
+__all__ = [
+    "BoundingBox",
+    "Detection",
+    "DetectionConfig",
+    "DetectionFramework",
+    "DetectionModelLoader",
+    "DetectionResult",
+    "create_detection_loader",
+]
+
 logger = logging.getLogger(__name__)
-
-
-class DetectionFramework(StrEnum):
-    """Supported detection frameworks for model execution."""
-
-    PYTORCH = "pytorch"
-    ULTRALYTICS = "ultralytics"
-    TRANSFORMERS = "transformers"
-    ONNX = "onnx"
-
-
-@dataclass
-class DetectionConfig:
-    """Configuration for object detection model loading and inference.
-
-    Parameters
-    ----------
-    model_id : str
-        HuggingFace model identifier or Ultralytics model name.
-    framework : DetectionFramework
-        Framework to use for model execution.
-    confidence_threshold : float, default=0.25
-        Minimum confidence score for detections (0.0 to 1.0).
-    device : str, default="cuda"
-        Device to load the model on.
-    cache_dir : Path | None, default=None
-        Directory for caching model weights.
-    """
-
-    model_id: str
-    framework: DetectionFramework = DetectionFramework.PYTORCH
-    confidence_threshold: float = 0.25
-    device: str = "cuda"
-    cache_dir: Path | None = None
-
-
-@dataclass
-class BoundingBox:
-    """Bounding box in normalized coordinates.
-
-    Parameters
-    ----------
-    x1 : float
-        Left coordinate (0.0 to 1.0, normalized by image width).
-    y1 : float
-        Top coordinate (0.0 to 1.0, normalized by image height).
-    x2 : float
-        Right coordinate (0.0 to 1.0, normalized by image width).
-    y2 : float
-        Bottom coordinate (0.0 to 1.0, normalized by image height).
-    """
-
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-
-    def to_absolute(self, width: int, height: int) -> tuple[int, int, int, int]:
-        """Convert normalized coordinates to absolute pixel coordinates.
-
-        Parameters
-        ----------
-        width : int
-            Image width in pixels.
-        height : int
-            Image height in pixels.
-
-        Returns
-        -------
-        tuple[int, int, int, int]
-            Bounding box in absolute coordinates (x1, y1, x2, y2).
-        """
-        return (
-            int(self.x1 * width),
-            int(self.y1 * height),
-            int(self.x2 * width),
-            int(self.y2 * height),
-        )
-
-
-@dataclass
-class Detection:
-    """Single object detection result.
-
-    Parameters
-    ----------
-    bbox : BoundingBox
-        Bounding box in normalized coordinates.
-    confidence : float
-        Detection confidence score (0.0 to 1.0).
-    label : str
-        Detected object class or description.
-    """
-
-    bbox: BoundingBox
-    confidence: float
-    label: str
-
-
-@dataclass
-class DetectionResult:
-    """Detection results for a single image.
-
-    Parameters
-    ----------
-    detections : list[Detection]
-        List of detected objects with bounding boxes and scores.
-    image_width : int
-        Original image width in pixels.
-    image_height : int
-        Original image height in pixels.
-    processing_time : float
-        Processing time in seconds.
-    """
-
-    detections: list[Detection]
-    image_width: int
-    image_height: int
-    processing_time: float
-
-
-class DetectionModelLoader(ABC):
-    """Abstract base class for object detection model loaders.
-
-    All detection loaders must implement the load and detect methods.
-    """
-
-    def __init__(self, config: DetectionConfig) -> None:
-        """Initialize the detection model loader with configuration.
-
-        Parameters
-        ----------
-        config : DetectionConfig
-            Configuration for model loading and inference.
-        """
-        self.config = config
-        self.model: Any = None
-
-    @abstractmethod
-    def load(self) -> None:
-        """Load the detection model into memory with configured settings.
-
-        Raises
-        ------
-        RuntimeError
-            If model loading fails.
-        """
-
-    @abstractmethod
-    def detect(
-        self,
-        image: Image.Image,
-        text_prompt: str,
-    ) -> DetectionResult:
-        """Detect objects in an image based on text prompt.
-
-        Parameters
-        ----------
-        image : Image.Image
-            PIL Image to process.
-        text_prompt : str
-            Text description of objects to detect (e.g., "person. car. dog.").
-
-        Returns
-        -------
-        DetectionResult
-            Detection results with bounding boxes in normalized coordinates.
-
-        Raises
-        ------
-        RuntimeError
-            If detection fails or model is not loaded.
-        """
-
-    def unload(self) -> None:
-        """Unload the model from memory to free GPU resources."""
-        if self.model is not None:
-            del self.model
-            self.model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        logger.info("Detection model unloaded and memory cleared")
 
 
 class YOLOWorldLoader(DetectionModelLoader):
@@ -226,6 +60,7 @@ class YOLOWorldLoader(DetectionModelLoader):
             logger.error(f"Failed to load YOLO-World v2.1: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -307,6 +142,7 @@ class GroundingDINOLoader(DetectionModelLoader):
             logger.error(f"Failed to load Grounding DINO 1.5: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -395,6 +231,7 @@ class OWLv2Loader(DetectionModelLoader):
             logger.error(f"Failed to load OWLv2: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -497,6 +334,7 @@ class Florence2Loader(DetectionModelLoader):
             logger.error(f"Failed to load Florence-2: {e}")
             raise RuntimeError(f"Model loading failed: {e}") from e
 
+    @instrument_method(task="detect")
     def detect(
         self,
         image: Image.Image,
@@ -590,6 +428,214 @@ class Florence2Loader(DetectionModelLoader):
         return detections
 
 
+YOLOE_INSTALL_HINT = "YOLOE (open-vocab YOLO) required; install with: pip install ultralytics"
+RFDETR_INSTALL_HINT = "rfdetr package required; install with: pip install rfdetr"
+
+
+class YOLOv12Loader(DetectionModelLoader):
+    """Loader for YOLOv12 closed-set detection via Ultralytics."""
+
+    def load(self) -> None:
+        """Load the YOLOv12 weights using ``ultralytics.YOLO``."""
+        try:
+            from ultralytics import YOLO  # type: ignore[attr-defined]
+        except ImportError as exc:
+            raise ImportError(
+                "ultralytics required for YOLOv12; install with: pip install ultralytics"
+            ) from exc
+
+        logger.info("Loading YOLOv12 from %s", self.config.model_id)
+        self.model = YOLO(self.config.model_id)
+        if torch.cuda.is_available():
+            self.model.to(self.config.device)
+
+    @instrument_method(task="detect")
+    def detect(
+        self,
+        image: Image.Image,
+        text_prompt: str,
+    ) -> DetectionResult:
+        """Run YOLOv12 detection on a single image."""
+        if self.model is None:
+            raise RuntimeError("Model not loaded. Call load() first.")
+
+        import time
+
+        start_time = time.time()
+        image_array = np.array(image)
+        height, width = image_array.shape[:2]
+
+        results = self.model(image_array, verbose=False)[0]
+        detections: list[Detection] = []
+        if results.boxes is not None:
+            for box in results.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = float(box.conf[0].cpu().numpy())
+                if conf < self.config.confidence_threshold:
+                    continue
+                cls_id = int(box.cls[0].cpu().numpy())
+                label = self.model.names[cls_id]
+                bbox = BoundingBox(
+                    x1=float(x1) / width,
+                    y1=float(y1) / height,
+                    x2=float(x2) / width,
+                    y2=float(y2) / height,
+                )
+                detections.append(Detection(bbox=bbox, confidence=conf, label=label))
+
+        return DetectionResult(
+            detections=detections,
+            image_width=width,
+            image_height=height,
+            processing_time=time.time() - start_time,
+        )
+
+
+class YOLOE26Loader(DetectionModelLoader):
+    """Loader for YOLOE-26 open-vocabulary detection."""
+
+    def load(self) -> None:
+        """Load YOLOE-26 via ``ultralytics.YOLOE``."""
+        try:
+            import ultralytics
+        except ImportError as exc:
+            raise ImportError(YOLOE_INSTALL_HINT) from exc
+
+        yoloe_cls = getattr(ultralytics, "YOLOE", None)
+        if yoloe_cls is None:
+            raise ImportError(YOLOE_INSTALL_HINT)
+
+        logger.info("Loading YOLOE-26 from %s", self.config.model_id)
+        self.model = yoloe_cls(self.config.model_id)
+        if torch.cuda.is_available():
+            self.model.to(self.config.device)
+
+    @instrument_method(task="detect")
+    def detect(
+        self,
+        image: Image.Image,
+        text_prompt: str,
+    ) -> DetectionResult:
+        """Run YOLOE-26 open-vocabulary detection."""
+        if self.model is None:
+            raise RuntimeError("Model not loaded. Call load() first.")
+
+        import time
+
+        start_time = time.time()
+        image_array = np.array(image)
+        height, width = image_array.shape[:2]
+
+        classes = [c.strip() for c in text_prompt.split(".") if c.strip()]
+        if classes and hasattr(self.model, "set_classes"):
+            self.model.set_classes(classes)
+
+        results = self.model(image_array, verbose=False)[0]
+        detections: list[Detection] = []
+        if results.boxes is not None:
+            for box in results.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = float(box.conf[0].cpu().numpy())
+                if conf < self.config.confidence_threshold:
+                    continue
+                cls_id = int(box.cls[0].cpu().numpy())
+                label = (
+                    classes[cls_id]
+                    if classes and 0 <= cls_id < len(classes)
+                    else str(self.model.names.get(cls_id, cls_id))
+                )
+                bbox = BoundingBox(
+                    x1=float(x1) / width,
+                    y1=float(y1) / height,
+                    x2=float(x2) / width,
+                    y2=float(y2) / height,
+                )
+                detections.append(Detection(bbox=bbox, confidence=conf, label=label))
+
+        return DetectionResult(
+            detections=detections,
+            image_width=width,
+            image_height=height,
+            processing_time=time.time() - start_time,
+        )
+
+
+class RFDETRLoader(DetectionModelLoader):
+    """Loader for Roboflow RF-DETR detection models."""
+
+    def load(self) -> None:
+        """Load an RF-DETR model from the ``rfdetr`` package."""
+        try:
+            import rfdetr
+        except ImportError as exc:
+            raise ImportError(RFDETR_INSTALL_HINT) from exc
+
+        logger.info("Loading RF-DETR from %s", self.config.model_id)
+        model_cls = getattr(rfdetr, "RFDETR", None) or getattr(rfdetr, "Model", None)
+        if model_cls is None:
+            raise ImportError(RFDETR_INSTALL_HINT)
+        self.model = model_cls(self.config.model_id)
+        if hasattr(self.model, "to") and torch.cuda.is_available():
+            self.model.to(self.config.device)
+
+    @instrument_method(task="detect")
+    def detect(
+        self,
+        image: Image.Image,
+        text_prompt: str,
+    ) -> DetectionResult:
+        """Run RF-DETR detection on a single image."""
+        if self.model is None:
+            raise RuntimeError("Model not loaded. Call load() first.")
+
+        import time
+
+        start_time = time.time()
+        width, height = image.size
+        raw = self.model.predict(
+            image,
+            confidence=self.config.confidence_threshold,
+        )
+
+        detections: list[Detection] = []
+        for item in _iter_rfdetr_detections(raw):
+            x1, y1, x2, y2 = item["bbox"]
+            conf = float(item.get("confidence", item.get("score", 0.0)))
+            if conf < self.config.confidence_threshold:
+                continue
+            bbox = BoundingBox(
+                x1=float(x1) / width,
+                y1=float(y1) / height,
+                x2=float(x2) / width,
+                y2=float(y2) / height,
+            )
+            detections.append(
+                Detection(
+                    bbox=bbox,
+                    confidence=conf,
+                    label=str(item.get("label", "")),
+                )
+            )
+
+        return DetectionResult(
+            detections=detections,
+            image_width=width,
+            image_height=height,
+            processing_time=time.time() - start_time,
+        )
+
+
+def _iter_rfdetr_detections(raw: Any) -> list[dict[str, Any]]:
+    """Normalize an RF-DETR prediction payload into a list of dicts."""
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    if isinstance(raw, dict):
+        inner = raw.get("detections") or raw.get("predictions") or []
+        if isinstance(inner, list):
+            return [item for item in inner if isinstance(item, dict)]
+    return []
+
+
 def _create_onnx_loader(config: DetectionConfig) -> DetectionModelLoader:
     """Create an ONNX detection loader based on the model ID.
 
@@ -662,6 +708,12 @@ def create_detection_loader(model_name: str, config: DetectionConfig) -> Detecti
 
     if "yolo-world" in model_name_lower or "yoloworld" in model_name_lower:
         return YOLOWorldLoader(config)
+    if "yoloe" in model_name_lower:
+        return YOLOE26Loader(config)
+    if "yolov12" in model_name_lower or "yolo12" in model_name_lower:
+        return YOLOv12Loader(config)
+    if "rf-detr" in model_name_lower or "rfdetr" in model_name_lower:
+        return RFDETRLoader(config)
     if "grounding-dino" in model_name_lower or "groundingdino" in model_name_lower:
         return GroundingDINOLoader(config)
     if "owl" in model_name_lower:
@@ -671,5 +723,5 @@ def create_detection_loader(model_name: str, config: DetectionConfig) -> Detecti
 
     raise ValueError(
         f"Unknown model name: {model_name}. Supported models: "
-        "yolo-world-v2, grounding-dino-1-5, owlv2, florence-2"
+        "yolo-world-v2, yolov12, yoloe-26, rf-detr, grounding-dino-1-5, owlv2, florence-2"
     )

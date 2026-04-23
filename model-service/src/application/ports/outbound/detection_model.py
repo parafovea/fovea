@@ -46,7 +46,7 @@ class IDetectionModel(ABC):
         InferenceError
             If detection fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def detect_batch(
@@ -76,7 +76,7 @@ class IDetectionModel(ABC):
         InferenceError
             If detection fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def set_classes(self, class_names: list[str]) -> None:
@@ -87,32 +87,32 @@ class IDetectionModel(ABC):
         class_names : list[str]
             List of class names to detect.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
         """Load the model into memory."""
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def supports_tracking(self) -> bool:
         """Check if model supports object tracking."""
-        ...
+        pass

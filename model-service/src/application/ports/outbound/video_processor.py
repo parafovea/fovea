@@ -38,7 +38,7 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If video cannot be read.
         """
-        ...
+        pass
 
     @abstractmethod
     def extract_frames(
@@ -73,7 +73,7 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If frame extraction fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def iterate_frames(
@@ -108,7 +108,7 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If frame iteration fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def extract_audio(
@@ -140,7 +140,7 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If audio extraction fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def generate_thumbnail(
@@ -178,7 +178,7 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If thumbnail generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def extract_segment(
@@ -210,4 +210,4 @@ class IVideoProcessor(ABC):
         VideoProcessingError
             If segment extraction fails.
         """
-        ...
+        pass

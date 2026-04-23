@@ -1,8 +1,11 @@
 """Claim extraction and synthesis routes.
 
 Provides endpoints for extracting atomic claims from video summaries
-and synthesizing narrative summaries from claim hierarchies.
+and synthesizing narrative summaries from claim hierarchies. Routes wire
+concrete infrastructure adapters to application use cases.
 """
+
+from __future__ import annotations
 
 import logging
 import time
@@ -11,7 +14,12 @@ from typing import NotRequired, TypedDict, cast
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
-from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.adapters.inbound.fastapi.mappers import (
+    claim_relationship_schema_to_dto,
+    claim_source_schema_to_dto,
+    extracted_claim_dto_to_schema,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas import (
     ClaimExtractionRequest,
     ClaimExtractionResponse,
@@ -28,22 +36,11 @@ logger = logging.getLogger(__name__)
 class ClaimDict(TypedDict):
     """Recursive claim structure with optional subclaims."""
 
-    subclaims: NotRequired[list["ClaimDict"]]
+    subclaims: NotRequired[list[ClaimDict]]
 
 
 def _count_claims_recursive(claims: list[ClaimDict]) -> int:
-    """Count claims recursively including subclaims.
-
-    Parameters
-    ----------
-    claims : list[ClaimDict]
-        List of claim dictionaries.
-
-    Returns
-    -------
-    int
-        Total count of claims and subclaims.
-    """
+    """Count claims recursively including subclaims."""
     count = len(claims)
     for claim in claims:
         subclaims = claim.get("subclaims", [])
@@ -67,30 +64,13 @@ async def extract_claims(
     request: ClaimExtractionRequest,
     manager: ModelManagerDep,
 ) -> ClaimExtractionResponse:
-    """Extract atomic claims from video summary.
-
-    Parameters
-    ----------
-    request : ClaimExtractionRequest
-        Extraction request with summary text, context, and configuration.
-    manager : ModelManagerDep
-        Injected model manager instance.
-
-    Returns
-    -------
-    ClaimExtractionResponse
-        Extracted claims with hierarchical structure.
-
-    Raises
-    ------
-    HTTPException
-        If extraction fails or configuration is invalid.
-    """
+    """Extract atomic claims from video summary."""
     with tracer.start_as_current_span("extract_claims") as span:
         span.set_attribute("summary_id", request.summary_id)
         span.set_attribute("strategy", request.extraction_strategy)
 
-        from src.application.use_cases.extract_claims import extract_claims_from_summary
+        from src.application.use_cases.extract_claims import ExtractClaimsUseCase
+        from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
             LLMFramework,
@@ -105,7 +85,6 @@ async def extract_claims(
                     detail="Claim extraction task not configured",
                 )
 
-            # Get LLM configuration
             selected_config = task_config.get_selected_config()
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
@@ -115,12 +94,11 @@ async def extract_claims(
                 temperature=0.7,
             )
 
-            # Load LLM
             loader = create_llm_loader(llm_config)
-            await loader.load()
+            language_model = LLMLoaderAdapter(loader)
+            await language_model.aload()
 
             try:
-                # Build context from request
                 ontology_context = None
                 if request.ontology_types:
                     ontology_context = {
@@ -128,19 +106,20 @@ async def extract_claims(
                         "glosses": request.ontology_glosses or {},
                     }
 
-                # Extract claims
                 start_time = time.time()
-                claims = await extract_claims_from_summary(
+                use_case = ExtractClaimsUseCase(language_model=language_model)
+                claim_dtos = await use_case.execute(
                     summary_text=request.summary_text,
                     sentences=request.sentences,
                     strategy=request.extraction_strategy,
                     max_claims=request.max_claims,
                     min_confidence=request.min_confidence,
-                    llm_loader=loader,  # type: ignore[arg-type]
                     ontology_context=ontology_context,
                     annotation_context=request.annotations,
                 )
                 processing_time = time.time() - start_time
+
+                claims = [extracted_claim_dto_to_schema(c) for c in claim_dtos]
 
                 span.set_attribute("claims_extracted", len(claims))
                 span.set_attribute("processing_time", processing_time)
@@ -153,7 +132,7 @@ async def extract_claims(
                 )
 
             finally:
-                await loader.unload()
+                await language_model.aunload()
 
         except Exception as e:
             logger.error("Claim extraction failed: %s", e)
@@ -176,33 +155,14 @@ async def synthesize_summary(
     request: SummarySynthesisRequest,
     manager: ModelManagerDep,
 ) -> SummarySynthesisResponse:
-    """Synthesize summary from claim hierarchies.
-
-    Parameters
-    ----------
-    request : SummarySynthesisRequest
-        Synthesis request with claim hierarchies, relations, and configuration.
-    manager : ModelManagerDep
-        Injected model manager instance.
-
-    Returns
-    -------
-    SummarySynthesisResponse
-        Generated summary with metadata.
-
-    Raises
-    ------
-    HTTPException
-        If synthesis fails or configuration is invalid.
-    """
+    """Synthesize summary from claim hierarchies."""
     with tracer.start_as_current_span("synthesize_summary") as span:
         span.set_attribute("summary_id", request.summary_id)
         span.set_attribute("num_sources", len(request.claim_sources))
         span.set_attribute("synthesis_strategy", request.synthesis_strategy)
 
-        from src.application.use_cases.synthesize_summary import (
-            synthesize_summary_from_claims,
-        )
+        from src.application.use_cases.synthesize_summary import SynthesizeSummaryUseCase
+        from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
             LLMFramework,
@@ -217,30 +177,35 @@ async def synthesize_summary(
                     detail="Claim synthesis task not configured",
                 )
 
-            # Get LLM configuration (needs larger context for multi-source)
             selected_config = task_config.get_selected_config()
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
                 framework=LLMFramework(selected_config.framework),
-                max_tokens=8192,  # Larger for complex syntheses
+                max_tokens=8192,
                 temperature=0.8,
             )
 
-            # Load LLM
             loader = create_llm_loader(llm_config)
-            await loader.load()
+            language_model = LLMLoaderAdapter(loader)
+            await language_model.aload()
 
             try:
-                # Synthesize summary
+                claim_source_dtos = [claim_source_schema_to_dto(s) for s in request.claim_sources]
+                claim_relation_dtos = (
+                    [claim_relationship_schema_to_dto(r) for r in request.claim_relations]
+                    if request.claim_relations is not None
+                    else None
+                )
+
                 start_time = time.time()
-                summary_gloss = await synthesize_summary_from_claims(
-                    claim_sources=request.claim_sources,
-                    claim_relations=request.claim_relations,
+                use_case = SynthesizeSummaryUseCase(language_model=language_model)
+                summary_gloss = await use_case.execute(
+                    claim_sources=claim_source_dtos,
+                    claim_relations=claim_relation_dtos,
                     synthesis_strategy=request.synthesis_strategy,
                     ontology_context=request.ontology_context,
                     persona_context=request.persona_context,
-                    llm_loader=loader,  # type: ignore[arg-type]
                     max_length=request.max_length,
                     include_conflicts=request.include_conflicts,
                     include_citations=request.include_citations,
@@ -250,13 +215,11 @@ async def synthesize_summary(
                 span.set_attribute("summary_length", len(summary_gloss))
                 span.set_attribute("processing_time", processing_time)
 
-                # Calculate claims used
                 claims_used = sum(
                     _count_claims_recursive(cast(list[ClaimDict], src.claims))
                     for src in request.claim_sources
                 )
 
-                # Build metadata
                 conflicts_detected = 0
                 if request.claim_relations:
                     conflicts_detected = len(
@@ -281,7 +244,7 @@ async def synthesize_summary(
                 )
 
             finally:
-                await loader.unload()
+                await language_model.aunload()
 
         except Exception as e:
             logger.error("Summary synthesis failed: %s", e)

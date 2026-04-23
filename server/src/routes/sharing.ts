@@ -11,10 +11,19 @@
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma, PrismaClient } from '@prisma/client'
+
+/** Convert a value to Prisma JSON without type assertions. */
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'
 import { sharingOperationCounter } from '../metrics.js'
-import { buildAbilities } from '@middleware/abilities.js'
+import {
+  buildAbilities,
+  invalidateUserAbilities,
+  invalidateGroupMembers,
+} from '@middleware/abilities.js'
 import {
   NotFoundError,
   ValidationError,
@@ -159,13 +168,40 @@ async function verifyResourceExists(
 }
 
 /**
+ * Permission lattice for ResourceShare.
+ *
+ * Fovea's schema defines two levels: `read_only` and `forkable`. Higher values
+ * in this map mean strictly greater privilege. Use {@link permissionRank} to
+ * compare levels when capping re-share escalation.
+ */
+const PERMISSION_RANK: Record<string, number> = {
+  read_only: 1,
+  forkable: 2,
+}
+
+/** Returns the numeric rank of a permission level, or 0 if unknown. */
+function permissionRank(level: string): number {
+  return PERMISSION_RANK[level] ?? 0
+}
+
+/**
+ * Result of a share-permission check: whether the caller is the resource
+ * owner and, if not, the permission level granted to them via an existing
+ * ResourceShare. Callers use this to cap re-share privilege escalation.
+ */
+interface SharePermissionResult {
+  isOwner: boolean
+  receivedPermission: string | null
+}
+
+/**
  * Checks whether the user owns the resource or has share permission on it.
  *
  * @param prisma - the Prisma client instance from Fastify
  * @param resourceType - the type of resource to check
  * @param resourceId - the UUID of the resource
  * @param userId - the UUID of the user to authorize
- * @returns true if the user has permission
+ * @returns ownership flag and the received permission level (if re-sharing)
  * @throws {ForbiddenError} when the user lacks permission to share the resource
  */
 async function verifySharePermission(
@@ -173,7 +209,7 @@ async function verifySharePermission(
   resourceType: string,
   resourceId: string,
   userId: string,
-): Promise<boolean> {
+): Promise<SharePermissionResult> {
   let isOwner = false
 
   switch (resourceType) {
@@ -204,23 +240,55 @@ async function verifySharePermission(
     }
   }
 
-  if (!isOwner) {
-    // Check if user has a forkable share that grants share-forward ability
-    const existingShare = await prisma.resourceShare.findFirst({
-      where: {
-        resourceType,
-        resourceId,
-        sharedWithUserId: userId,
-        permissionLevel: 'forkable',
-      },
-    })
-
-    if (!existingShare) {
-      throw new ForbiddenError('You do not have permission to share this resource')
-    }
+  if (isOwner) {
+    return { isOwner: true, receivedPermission: null }
   }
 
-  return true
+  // Non-owner: locate the user's best direct or group-mediated share. A
+  // forkable share is required to re-share; its permissionLevel caps the
+  // level at which the caller may re-share downstream.
+  const memberships = await prisma.groupMembership.findMany({
+    where: { userId },
+    select: { groupId: true },
+  })
+  const groupIds = memberships.map(m => m.groupId)
+
+  const recipientConditions: Array<Record<string, unknown>> = [
+    { sharedWithUserId: userId },
+  ]
+  if (groupIds.length > 0) {
+    recipientConditions.push({ sharedWithGroupId: { in: groupIds } })
+  }
+
+  const candidateShares = await prisma.resourceShare.findMany({
+    where: {
+      resourceType,
+      resourceId,
+      permissionLevel: 'forkable',
+      OR: recipientConditions,
+      AND: [
+        {
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      ],
+    },
+  })
+
+  if (candidateShares.length === 0) {
+    throw new ForbiddenError('You do not have permission to share this resource')
+  }
+
+  // Pick the strongest permission the caller holds on this resource.
+  const bestPermission = candidateShares.reduce<string>((best, share) => {
+    return permissionRank(share.permissionLevel) > permissionRank(best)
+      ? share.permissionLevel
+      : best
+  }, candidateShares[0].permissionLevel)
+
+  return { isOwner: false, receivedPermission: bestPermission }
 }
 
 /**
@@ -285,8 +353,20 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
       // Verify the resource exists
       await verifyResourceExists(fastify.prisma, resourceType, resourceId)
 
-      // Verify the user has permission to share
-      await verifySharePermission(fastify.prisma, resourceType, resourceId, userId)
+      // Verify the user has permission to share. Non-owners may only re-share
+      // at a permission level no higher than the one they received, preventing
+      // privilege escalation through the fork-and-re-share chain.
+      const { isOwner, receivedPermission } = await verifySharePermission(
+        fastify.prisma,
+        resourceType,
+        resourceId,
+        userId,
+      )
+      if (!isOwner && receivedPermission !== null) {
+        if (permissionRank(permissionLevel) > permissionRank(receivedPermission)) {
+          throw new ForbiddenError('Cannot re-share above granted permission')
+        }
+      }
 
       // Verify the target user or group exists
       if (sharedWithUserId) {
@@ -317,6 +397,15 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
           permissionLevel,
         },
       })
+
+      // Invalidate ability caches for the new grantee so access takes effect
+      // immediately. Caches are keyed per user, so we expand group targets.
+      if (sharedWithUserId) {
+        invalidateUserAbilities(sharedWithUserId)
+      }
+      if (sharedWithGroupId) {
+        await invalidateGroupMembers(sharedWithGroupId)
+      }
 
       sharingOperationCounter.add(1, {
         operation: 'share',
@@ -477,6 +566,15 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         where: { id: shareId },
       })
 
+      // Invalidate ability caches for the previous grantee so the revocation
+      // takes effect immediately rather than after the TTL expires.
+      if (share.sharedWithUserId) {
+        invalidateUserAbilities(share.sharedWithUserId)
+      }
+      if (share.sharedWithGroupId) {
+        await invalidateGroupMembers(share.sharedWithGroupId)
+      }
+
       sharingOperationCounter.add(1, {
         operation: 'revoke',
         resourceType: share.resourceType,
@@ -582,7 +680,7 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 personaId: source.personaId,
                 type: source.type,
                 label: source.label,
-                frames: source.frames as Prisma.InputJsonValue,
+                frames: toJson(source.frames),
                 confidence: source.confidence,
                 source: source.source,
                 createdByUserId: userId,
@@ -601,15 +699,15 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
               data: {
                 videoId: source.videoId,
                 personaId: source.personaId,
-                summary: (source.summary ?? []) as Prisma.InputJsonValue,
+                summary: toJson(source.summary ?? []),
                 visualAnalysis: source.visualAnalysis,
                 audioTranscript: source.audioTranscript,
                 keyFrames: source.keyFrames
-                  ? (source.keyFrames as Prisma.InputJsonValue)
+                  ? toJson(source.keyFrames)
                   : Prisma.JsonNull,
                 confidence: source.confidence,
                 transcriptJson: source.transcriptJson
-                  ? (source.transcriptJson as Prisma.InputJsonValue)
+                  ? toJson(source.transcriptJson)
                   : Prisma.JsonNull,
                 audioLanguage: source.audioLanguage,
                 speakerCount: source.speakerCount,
@@ -631,16 +729,16 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 summaryId: source.summaryId,
                 summaryType: source.summaryType,
                 text: source.text,
-                gloss: source.gloss as Prisma.InputJsonValue,
+                gloss: toJson(source.gloss),
                 textSpans: source.textSpans
-                  ? (source.textSpans as Prisma.InputJsonValue)
+                  ? toJson(source.textSpans)
                   : Prisma.JsonNull,
                 claimerType: source.claimerType,
                 claimerGloss: source.claimerGloss
-                  ? (source.claimerGloss as Prisma.InputJsonValue)
+                  ? toJson(source.claimerGloss)
                   : Prisma.JsonNull,
                 claimRelation: source.claimRelation
-                  ? (source.claimRelation as Prisma.InputJsonValue)
+                  ? toJson(source.claimRelation)
                   : Prisma.JsonNull,
                 claimEventId: source.claimEventId,
                 claimTimeId: source.claimTimeId,
@@ -648,13 +746,13 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 confidence: source.confidence,
                 extractionStrategy: source.extractionStrategy,
                 audio: source.audio
-                  ? (source.audio as Prisma.InputJsonValue)
+                  ? toJson(source.audio)
                   : Prisma.JsonNull,
                 video: source.video
-                  ? (source.video as Prisma.InputJsonValue)
+                  ? toJson(source.video)
                   : Prisma.JsonNull,
                 metadata: source.metadata
-                  ? (source.metadata as Prisma.InputJsonValue)
+                  ? (toJson(source.metadata))
                   : Prisma.JsonNull,
                 comment: source.comment,
                 createdBy: userId,
@@ -682,10 +780,10 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 ontology: source.ontology
                   ? {
                       create: {
-                        entityTypes: source.ontology.entityTypes as Prisma.InputJsonValue,
-                        eventTypes: source.ontology.eventTypes as Prisma.InputJsonValue,
-                        roleTypes: source.ontology.roleTypes as Prisma.InputJsonValue,
-                        relationTypes: source.ontology.relationTypes as Prisma.InputJsonValue,
+                        entityTypes: toJson(source.ontology.entityTypes),
+                        eventTypes: toJson(source.ontology.eventTypes),
+                        roleTypes: toJson(source.ontology.roleTypes),
+                        relationTypes: toJson(source.ontology.relationTypes),
                       },
                     }
                   : {
@@ -711,13 +809,13 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             return tx.worldState.create({
               data: {
                 userId,
-                entities: source.entities as Prisma.InputJsonValue,
-                events: source.events as Prisma.InputJsonValue,
-                times: source.times as Prisma.InputJsonValue,
-                entityCollections: source.entityCollections as Prisma.InputJsonValue,
-                eventCollections: source.eventCollections as Prisma.InputJsonValue,
-                timeCollections: source.timeCollections as Prisma.InputJsonValue,
-                relations: source.relations as Prisma.InputJsonValue,
+                entities: toJson(source.entities),
+                events: toJson(source.events),
+                times: toJson(source.times),
+                entityCollections: toJson(source.entityCollections),
+                eventCollections: toJson(source.eventCollections),
+                timeCollections: toJson(source.timeCollections),
+                relations: toJson(source.relations),
               },
             })
           }
@@ -726,6 +824,10 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             throw new ValidationError(`Cannot fork resource type: ${share.resourceType}`)
         }
       })
+
+      // The forker now owns a new resource; invalidate their ability cache
+      // so the newly-created resource is immediately visible to them.
+      invalidateUserAbilities(userId)
 
       span.setAttribute('sharing.fork_success', true)
       sharingOperationCounter.add(1, {

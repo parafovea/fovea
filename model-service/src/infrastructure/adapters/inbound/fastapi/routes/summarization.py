@@ -4,12 +4,18 @@ Provides the endpoint for generating AI-powered video summaries
 using vision language models.
 """
 
+from __future__ import annotations
+
 import logging
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
-from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.adapters.inbound.fastapi.mappers import (
+    summarize_request_schema_to_dto,
+    summarize_response_dto_to_schema,
+)
 from src.infrastructure.adapters.inbound.fastapi.schemas import (
     ErrorResponse,
     SummarizeRequest,
@@ -36,51 +42,40 @@ async def summarize_video(
     request: SummarizeRequest,
     manager: ModelManagerDep,
 ) -> SummarizeResponse:
-    """Summarize video content using vision language models.
-
-    Parameters
-    ----------
-    request : SummarizeRequest
-        Video summarization request with video_id, persona_id, and sampling parameters.
-    manager : ModelManagerDep
-        Injected model manager instance.
-
-    Returns
-    -------
-    SummarizeResponse
-        Generated summary with key frame analysis.
-
-    Raises
-    ------
-    HTTPException
-        If video_id or persona_id is invalid, or if processing fails.
-    """
+    """Summarize video content using vision language models."""
     with tracer.start_as_current_span("summarize_video") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("persona_id", request.persona_id)
         span.set_attribute("frame_sample_rate", request.frame_sample_rate)
 
+        from src.application.use_cases import summarize_video as summarize_module
         from src.application.use_cases.summarize_video import (
             SummarizationError,
             get_video_path_for_id,
-            summarize_video_with_external_api,
-            summarize_video_with_vlm,
         )
+        from src.infrastructure.adapters.outbound.external_api_router_adapter import (
+            ExternalAPIRouterAdapter,
+        )
+        from src.infrastructure.adapters.outbound.frame_sampler_opencv import OpenCVFrameSampler
         from src.infrastructure.adapters.outbound.models.vlm.loader import (
             InferenceFramework,
             QuantizationType,
             VLMConfig,
+            create_vlm_loader,
+        )
+        from src.infrastructure.adapters.outbound.transcriber_whisper import (
+            WhisperTranscriberAdapter,
         )
         from src.infrastructure.adapters.outbound.video.downloader import (
             cleanup_temp_video,
             download_video_if_needed,
         )
+        from src.infrastructure.adapters.outbound.vlm_adapter import VLMLoaderAdapter
 
-        # Track if we downloaded a temporary file for cleanup
         temp_video_path: str | None = None
+        dto_request = summarize_request_schema_to_dto(request)
 
         try:
-            # Use provided video_path if available, otherwise resolve from video_id
             video_path: str
             if request.video_path:
                 video_path = request.video_path
@@ -93,7 +88,6 @@ async def summarize_video(
                     )
                 video_path = resolved_path
 
-            # Download video if it's a URL (e.g., S3 pre-signed URL)
             video_path, is_temp = await download_video_if_needed(video_path)
             if is_temp:
                 temp_video_path = video_path
@@ -105,7 +99,9 @@ async def summarize_video(
                     detail="Video summarization task not configured",
                 )
 
-            # Check if using external API
+            frame_sampler = OpenCVFrameSampler()
+            transcriber = WhisperTranscriberAdapter() if request.enable_audio else None
+
             if manager.is_external_api("video_summarization"):
                 selected_model_config = task_config.get_selected_config()
                 provider = selected_model_config.provider
@@ -119,19 +115,18 @@ async def summarize_video(
                 try:
                     api_config = manager.get_external_api_config("video_summarization")
                 except ValueError as e:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=str(e),
-                    ) from e
+                    raise HTTPException(status_code=400, detail=str(e)) from e
 
-                response = await summarize_video_with_external_api(
-                    request=request,
+                response_dto = await summarize_module.summarize_video_with_external_api(
+                    request=dto_request,
                     video_path=video_path,
+                    frame_sampler=frame_sampler,
+                    external_router=ExternalAPIRouterAdapter(),
                     api_config=api_config,
                     provider=provider,
+                    transcriber=transcriber,
                 )
             else:
-                # Use self-hosted model
                 selected_model_config = task_config.get_selected_config()
 
                 quantization_map = {
@@ -162,26 +157,28 @@ async def summarize_video(
                     framework=framework,
                 )
 
-                response = await summarize_video_with_vlm(
-                    request=request,
+                vlm_loader = create_vlm_loader(task_config.selected, model_config)
+                vlm = VLMLoaderAdapter(vlm_loader)
+
+                response_dto = await summarize_module.summarize_video_with_vlm(
+                    request=dto_request,
                     video_path=video_path,
-                    model_config=model_config,
+                    frame_sampler=frame_sampler,
+                    vision_language_model=vlm,
                     model_name=task_config.selected,
+                    transcriber=transcriber,
                     persona_role=request.persona_role,
                     information_need=request.information_need,
                 )
 
             span.set_attribute("summary_generated", True)
-            return response
+            return summarize_response_dto_to_schema(response_dto)
 
         except HTTPException:
             raise
         except SummarizationError as e:
             logger.error("Summarization error: %s", e)
-            raise HTTPException(
-                status_code=500,
-                detail=str(e),
-            ) from e
+            raise HTTPException(status_code=500, detail=str(e)) from e
         except Exception as e:
             logger.error("Unexpected error in summarization: %s", e)
             raise HTTPException(
@@ -189,6 +186,5 @@ async def summarize_video(
                 detail=f"Internal server error: {e!s}",
             ) from e
         finally:
-            # Clean up temporary video file if downloaded
             if temp_video_path:
                 cleanup_temp_video(temp_video_path)

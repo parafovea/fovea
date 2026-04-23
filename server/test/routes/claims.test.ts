@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
+import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { claimExtractionQueue, claimSynthesisQueue } from '../../src/queues/setup.js'
@@ -39,6 +40,8 @@ describe('Claims API', () => {
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.rolePermission.deleteMany()
+    await seedBaselinePermissions(prisma)
 
     // Create test user
     const passwordHash = await hashPassword('testpass123')
@@ -48,7 +51,7 @@ describe('Claims API', () => {
         email: 'test@example.com',
         passwordHash,
         displayName: 'Test User',
-        isAdmin: false
+        isAdmin: false,
       }
     })
     testUserId = user.id
@@ -834,7 +837,8 @@ describe('Claims API', () => {
           summaryId: testSummaryId,
           summaryType: 'video',
           text: 'Claim to delete',
-          gloss: []
+          gloss: [],
+          createdBy: testUserId
         }
       })
 
@@ -859,7 +863,8 @@ describe('Claims API', () => {
           summaryId: testSummaryId,
           summaryType: 'video',
           text: 'Parent claim',
-          gloss: []
+          gloss: [],
+          createdBy: testUserId
         }
       })
 
@@ -869,7 +874,8 @@ describe('Claims API', () => {
           summaryType: 'video',
           text: 'Subclaim',
           gloss: [],
-          parentClaimId: parentClaim.id
+          parentClaimId: parentClaim.id,
+          createdBy: testUserId
         }
       })
 

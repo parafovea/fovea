@@ -6,6 +6,12 @@ import { ImportHandler } from '../services/import-handler.js'
 import { DEFAULT_IMPORT_OPTIONS, ImportOptions } from '../services/import-types.js'
 import { ValidationError, InternalError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
+import { buildAbilities } from '../middleware/abilities.js'
+
+/** Safely convert a value to Prisma JSON without type assertions. */
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
 
 /**
  * TypeBox schemas for import responses.
@@ -50,7 +56,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Import result with statistics
    */
   fastify.post('/api/import', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Import data from JSON Lines file',
       tags: ['import'],
@@ -85,7 +91,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma, request.user!.id)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id, request.ability ?? null)
 
     try {
       // Parse multipart data
@@ -100,7 +106,12 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const fileContent = fileBuffer.toString('utf-8')
 
       // Parse options from fields
-      const fields = data.fields as Record<string, { value: string }>
+      const fields: Record<string, { value: string }> = {}
+      for (const [key, field] of Object.entries(data.fields)) {
+        if (typeof field === 'object' && field !== null && 'value' in field && typeof field.value === 'string') {
+          fields[key] = { value: field.value }
+        }
+      }
       let options: ImportOptions = { ...DEFAULT_IMPORT_OPTIONS }
 
       if (fields.options) {
@@ -135,8 +146,8 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
-            importOptions: options as unknown as Prisma.InputJsonValue,
-            result: result as unknown as Prisma.InputJsonValue,
+            importOptions: toJsonValue(options),
+            result: toJsonValue(result),
             success: result.success,
             itemsImported: result.summary.importedItems.annotations,
             itemsSkipped: result.summary.skippedItems.annotations,
@@ -166,7 +177,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Import preview with counts and conflicts
    */
   fastify.post('/api/import/preview', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Preview import without committing changes',
       tags: ['import'],
@@ -192,7 +203,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const handler = new ImportHandler(fastify.prisma, request.user!.id)
+    const handler = new ImportHandler(fastify.prisma, request.user!.id, request.ability ?? null)
 
     try {
       // Parse multipart data
@@ -284,7 +295,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Array of import history records
    */
   fastify.get('/api/import/history', {
-    onRequest: [requireAuth],
+    onRequest: [requireAuth, buildAbilities],
     schema: {
       description: 'Get import history',
       tags: ['import'],

@@ -23,6 +23,8 @@ from transformers import (
     Qwen2VLForConditionalGeneration,
 )
 
+from src.infrastructure.observability.telemetry import instrument_method
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +44,7 @@ class InferenceFramework(StrEnum):
     VLLM = "vllm"
     TRANSFORMERS = "transformers"
     LLAMA_CPP = "llama_cpp"
+    NEMO = "nemo"  # NVIDIA NeMo (Canary, Parakeet)
 
 
 @dataclass
@@ -272,6 +275,7 @@ class Llama4MaverickLoader(VLMLoader):
         )
         logger.info("Model loaded with Transformers")
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],
@@ -446,6 +450,7 @@ class Gemma3Loader(VLMLoader):
         )
         logger.info("Model loaded with Transformers")
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],
@@ -568,6 +573,7 @@ class InternVL3Loader(VLMLoader):
         )
         logger.info("Model loaded with Transformers")
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],
@@ -671,6 +677,7 @@ class PixtralLargeLoader(VLMLoader):
         )
         logger.info("Model loaded with Transformers")
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],
@@ -827,6 +834,7 @@ class Qwen25VLLoader(VLMLoader):
         )
         logger.info("Model loaded with Transformers")
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],
@@ -961,6 +969,7 @@ class SmallVLMLoader(VLMLoader):
         )
         logger.info("Loaded small VLM: %s", self.config.model_id)
 
+    @instrument_method(task="vlm_generate")
     def generate(
         self,
         images: list[Image.Image],

@@ -1,8 +1,10 @@
 """Ontology augmentation route.
 
-Provides the endpoint for generating ontology type suggestions
-using language models.
+Provides the endpoint for generating ontology type suggestions using
+language models or external provider APIs.
 """
+
+from __future__ import annotations
 
 import logging
 import uuid
@@ -10,7 +12,8 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
-from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.adapters.inbound.fastapi.mappers import ontology_type_dto_to_schema
 from src.infrastructure.adapters.inbound.fastapi.schemas import (
     AugmentRequest,
     AugmentResponse,
@@ -37,39 +40,25 @@ async def augment_ontology(
     request: AugmentRequest,
     manager: ModelManagerDep,
 ) -> AugmentResponse:
-    """Suggest new ontology types using language models.
-
-    Parameters
-    ----------
-    request : AugmentRequest
-        Ontology augmentation request with persona_id, domain, and target category.
-    manager : ModelManagerDep
-        Injected model manager instance.
-
-    Returns
-    -------
-    AugmentResponse
-        Suggested types with descriptions and reasoning.
-
-    Raises
-    ------
-    HTTPException
-        If persona_id is invalid, or if generation fails.
-    """
+    """Suggest new ontology types using language models."""
     with tracer.start_as_current_span("augment_ontology") as span:
         span.set_attribute("persona_id", request.persona_id)
         span.set_attribute("target_category", request.target_category)
         span.set_attribute("max_suggestions", request.max_suggestions)
 
+        from src.application.use_cases import augment_ontology as augment_module
         from src.application.use_cases.augment_ontology import (
             AugmentationContext,
-            augment_ontology_with_external_api,
-            augment_ontology_with_llm,
             generate_augmentation_reasoning,
         )
+        from src.infrastructure.adapters.outbound.external_api_router_adapter import (
+            ExternalAPIRouterAdapter,
+        )
+        from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
             LLMFramework,
+            create_llm_loader,
         )
 
         try:
@@ -88,7 +77,6 @@ async def augment_ontology(
                 information_need=None,
             )
 
-            # Check if using external API
             if manager.is_external_api("ontology_augmentation"):
                 selected_model_config = task_config.get_selected_config()
                 provider = selected_model_config.provider
@@ -102,19 +90,16 @@ async def augment_ontology(
                 try:
                     api_config = manager.get_external_api_config("ontology_augmentation")
                 except ValueError as e:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=str(e),
-                    ) from e
+                    raise HTTPException(status_code=400, detail=str(e)) from e
 
-                suggestions = await augment_ontology_with_external_api(
+                suggestion_dtos = await augment_module.augment_ontology_with_external_api(
                     context=context,
                     api_config=api_config,
                     provider=provider,
+                    external_router=ExternalAPIRouterAdapter(),
                     max_suggestions=request.max_suggestions,
                 )
             else:
-                # Use self-hosted LLM
                 selected_model_config = task_config.get_selected_config()
 
                 llm_config = LLMConfig(
@@ -125,22 +110,31 @@ async def augment_ontology(
                     temperature=0.7,
                     top_p=0.9,
                 )
+                loader = create_llm_loader(llm_config)
+                language_model = LLMLoaderAdapter(loader)
+                await language_model.aload()
+                try:
+                    suggestion_dtos = await augment_module.augment_ontology_with_llm(
+                        context=context,
+                        language_model=language_model,
+                        max_suggestions=request.max_suggestions,
+                    )
+                finally:
+                    await language_model.aunload()
 
-                suggestions = await augment_ontology_with_llm(
-                    context=context,
-                    llm_config=llm_config,
-                    max_suggestions=request.max_suggestions,
-                    cache_dir=None,
-                )
-
-            reasoning = generate_augmentation_reasoning(suggestions, context)
+            reasoning = generate_augmentation_reasoning(suggestion_dtos, context)
+            suggestions = [ontology_type_dto_to_schema(s) for s in suggestion_dtos]
 
             augmentation_id = str(uuid.uuid4())
 
             span.set_attribute("suggestions_generated", len(suggestions))
             span.set_attribute(
                 "avg_confidence",
-                sum(s.confidence for s in suggestions) / len(suggestions) if suggestions else 0.0,
+                (
+                    sum(s.confidence for s in suggestion_dtos) / len(suggestion_dtos)
+                    if suggestion_dtos
+                    else 0.0
+                ),
             )
 
             return AugmentResponse(
@@ -155,10 +149,7 @@ async def augment_ontology(
             raise
         except ValueError as e:
             logger.error("Validation error in augmentation: %s", e)
-            raise HTTPException(
-                status_code=400,
-                detail=str(e),
-            ) from e
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             logger.error("Unexpected error in augmentation: %s", e)
             raise HTTPException(
