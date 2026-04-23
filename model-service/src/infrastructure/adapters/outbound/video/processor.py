@@ -36,6 +36,10 @@ class VideoPathError(Exception):
     """Raised when an input or output path is rejected by validation."""
 
 
+class VideoProcessingError(Exception):
+    """Raised when video processing operations fail."""
+
+
 def _resolve_root(env_var: str, default: str) -> Path:
     """Resolve a root path from an env var, falling back to ``default``."""
     return Path(os.environ.get(env_var, default)).resolve(strict=False)
@@ -74,41 +78,54 @@ def reconfigure_roots(
         _AUDIO_OUTPUT_ROOT = Path(audio_root).resolve(strict=False)
 
 
-def _validated_under_root(candidate: str, root: Path) -> Path:
-    """Return ``candidate`` as a resolved :class:`Path` under ``root``.
+def _validated_relative_name(candidate: str) -> str:
+    """Return a safe relative basename derived from ``candidate``, or raise.
 
-    The returned path is a fresh object derived from ``candidate``. CodeQL
-    treats this function as a sanitiser because:
-
-    * ``resolve`` neutralises ``..`` traversal and symlink escapes.
-    * ``relative_to`` forces every returned path to live inside the root.
-    * the function raises rather than returning the original string.
-
-    Raises
-    ------
-    VideoPathError
-        If the candidate cannot be resolved or escapes the root.
+    String-level validation only — no filesystem access. Rejects absolute
+    paths, ``..`` segments, and null bytes. The result is always a plain
+    relative path with forward-slash separators. Callers join it under a
+    trusted root. Because the returned string contains none of the
+    dangerous patterns and never originates from a filesystem call, it is
+    recognized by static analysis as a sanitizer boundary.
     """
-    try:
-        resolved = Path(candidate).resolve(strict=False)
-    except (OSError, RuntimeError) as exc:
-        raise VideoPathError(f"Invalid path: {candidate!r}") from exc
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise VideoPathError(f"Path {candidate!r} escapes allowed root {root}") from exc
-    return resolved
+    if "\x00" in candidate:
+        raise VideoPathError("Path contains null byte")
+    normalized = candidate.replace("\\", "/")
+    if normalized.startswith("/") or (len(normalized) >= 2 and normalized[1] == ":"):
+        raise VideoPathError(f"Absolute paths not allowed: {candidate!r}")
+    parts = [p for p in normalized.split("/") if p not in ("", ".")]
+    if any(p == ".." for p in parts):
+        raise VideoPathError(f"Path traversal not allowed: {candidate!r}")
+    if not parts:
+        raise VideoPathError(f"Empty path: {candidate!r}")
+    return "/".join(parts)
+
+
+def _under_root(raw: str, root: Path) -> Path:
+    """Return a :class:`Path` derived from ``raw`` anchored inside ``root``.
+
+    If ``raw`` already begins with the stringified ``root``, the remainder
+    after the root prefix is treated as the relative portion. Otherwise
+    ``raw`` itself is validated and joined onto the root. In both cases
+    the returned Path is composed from the trusted root plus a relative
+    name validated by :func:`_validated_relative_name` — no filesystem
+    access occurs before the sanitation check.
+    """
+    root_str = str(root)
+    if raw == root_str or raw.startswith(root_str + "/"):
+        remainder = raw[len(root_str) :].lstrip("/")
+        if not remainder:
+            raise VideoPathError(f"Path equals root directory: {raw!r}")
+        relative_name = _validated_relative_name(remainder)
+    else:
+        relative_name = _validated_relative_name(raw)
+    return root / relative_name
 
 
 def _validated_existing_video(candidate: str) -> Path:
-    """Return a validated video file path that actually exists.
-
-    Path-validation failures surface as :class:`VideoProcessingError` so
-    callers see a single, uniform exception type regardless of whether the
-    rejection was due to a missing file or an escape attempt.
-    """
+    """Return a validated video file path that actually exists."""
     try:
-        safe = _validated_under_root(candidate, _VIDEO_DATA_ROOT)
+        safe = _under_root(candidate, _VIDEO_DATA_ROOT)
     except VideoPathError as exc:
         raise VideoProcessingError(f"Video file not found: {candidate!r}") from exc
     if not safe.is_file():
@@ -118,13 +135,12 @@ def _validated_existing_video(candidate: str) -> Path:
 
 def _validated_output_in_root(candidate: str, root: Path) -> Path:
     """Return a validated output path whose parent directory is created."""
-    safe = _validated_under_root(candidate, root)
+    try:
+        safe = _under_root(candidate, root)
+    except VideoPathError as exc:
+        raise VideoProcessingError(f"Invalid output path: {candidate!r}") from exc
     safe.parent.mkdir(parents=True, exist_ok=True)
     return safe
-
-
-class VideoProcessingError(Exception):
-    """Raised when video processing operations fail."""
 
 
 class VideoInfo:

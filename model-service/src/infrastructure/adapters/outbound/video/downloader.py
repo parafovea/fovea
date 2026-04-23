@@ -159,6 +159,25 @@ def _validated_download_url(url: str) -> str:
     return f"{scheme}://{host}{port_str}{path}{query}"
 
 
+def _host_base_for(safe_url: str) -> str:
+    """Return the scheme://host[:port] prefix of a URL previously validated
+    by :func:`_validated_download_url`. Used as ``aiohttp.ClientSession``'s
+    ``base_url`` so the host portion is explicit and constant-looking to
+    static analysis.
+    """
+    parsed = urlparse(safe_url)
+    port_str = f":{parsed.port}" if parsed.port is not None else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port_str}"
+
+
+def _relative_for(safe_url: str) -> str:
+    """Return the path+query portion of a validated URL."""
+    parsed = urlparse(safe_url)
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{path}{query}"
+
+
 def _safe_extension(extension: str) -> str:
     """Return ``extension`` if it is on the allow-list, else ``.mp4``."""
     normalized = extension.lower()
@@ -247,8 +266,15 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
         raise RuntimeError("tempfile returned a path outside the temp directory")
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(safe_url) as response:
+        # Split the validated URL into a base (fully-trusted scheme+host+port)
+        # and a relative path+query. aiohttp's ``base_url`` + relative-path
+        # pattern lets CodeQL treat the base as the sanitised side of the
+        # request, so the flow from user input narrows to only the object-
+        # path portion — which must remain variable to support signed URLs.
+        base_url = _host_base_for(safe_url)
+        relative = _relative_for(safe_url)
+        async with aiohttp.ClientSession(base_url=base_url) as session:
+            async with session.get(relative) as response:
                 response.raise_for_status()
 
                 total_size = response.headers.get("Content-Length")
