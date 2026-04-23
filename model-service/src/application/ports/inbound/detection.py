@@ -119,4 +119,4 @@ class IDetectionService(ABC):
         InferenceError
             If detection fails.
         """
-        ...
+        pass

@@ -13,7 +13,6 @@ import re
 from src.application.dto.reasoning import ReasonedText, ThinkingStep, ThinkingTrace
 
 _THINK_OPEN = "<think>"
-_THINK_CLOSE = "</think>"
 _THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
 

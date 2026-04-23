@@ -8,15 +8,13 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
 from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.ports.outbound.llm import ILanguageModel
-from src.infrastructure.adapters.outbound.models.llm.loader import (
-    GenerationConfig,
-    LLMLoader,
-)
+from src.infrastructure.adapters.outbound.models.llm.loader import GenerationConfig
 from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.application.dto.reasoning import ReasonedText
     from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
+    from src.infrastructure.adapters.outbound.models.llm.loader import LLMLoader
 
 LLMLoaderLike: TypeAlias = "LLMLoader | LlamaCppLLMLoader"  # noqa: UP040
 

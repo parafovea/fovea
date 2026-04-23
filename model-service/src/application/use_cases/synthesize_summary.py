@@ -160,9 +160,10 @@ class SynthesizeSummaryUseCase:
                     stop_sequences=["---END---"],
                 )
 
+                safe_strategy = str(synthesis_strategy).replace("\r", "").replace("\n", "")
                 logger.info(
                     "Synthesizing summary using strategy: %s from %d source(s)",
-                    synthesis_strategy,
+                    safe_strategy,
                     len(claim_sources),
                 )
                 result = await self._llm.generate_with_config(prompt=prompt, config=config)

@@ -51,7 +51,7 @@ class ILanguageModel(ABC):
         InferenceError
             If generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_reasoned(
@@ -89,7 +89,7 @@ class ILanguageModel(ABC):
         InferenceError
             If generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_structured(
@@ -124,7 +124,7 @@ class ILanguageModel(ABC):
         ValueError
             If output doesn't match schema.
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_with_config(
@@ -151,7 +151,7 @@ class ILanguageModel(ABC):
         InferenceError
             If generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
@@ -162,21 +162,21 @@ class ILanguageModel(ABC):
         ModelLoadError
             If model loading fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass

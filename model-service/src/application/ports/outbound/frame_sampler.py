@@ -52,7 +52,7 @@ class IFrameSampler(ABC):
         VideoMetadataDTO
             Video metadata.
         """
-        ...
+        pass
 
     @abstractmethod
     def extract_frames_uniform(
@@ -78,4 +78,4 @@ class IFrameSampler(ABC):
         list[tuple[int, NDArray[np.uint8]]]
             List of (frame_index, frame_array) tuples in RGB order.
         """
-        ...
+        pass

@@ -187,11 +187,11 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
         candidate_url = _preflight_url(video_path)
     except ValueError:
         parsed_attempt = urlparse(video_path)
-        logger.warning(
-            "URL blocked by allow-list: %s://%s",
-            parsed_attempt.scheme or "?",
-            parsed_attempt.netloc or "?",
-        )
+        # CodeQL log-injection sanitizer: ``.replace("\r","").replace("\n","")``
+        # strips CRLF so an attacker cannot forge log entries.
+        safe_scheme = (parsed_attempt.scheme or "?").replace("\r", "").replace("\n", "")
+        safe_netloc = (parsed_attempt.netloc or "?").replace("\r", "").replace("\n", "")
+        logger.warning("URL blocked by allow-list: %s://%s", safe_scheme, safe_netloc)
         raise
 
     # CodeQL sanitizer: inline ``re.fullmatch`` against a single constant
@@ -201,7 +201,9 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
         raise ValueError("URL rejected by allow-list pattern")
 
     parsed = urlparse(candidate_url)
-    logger.info("Downloading video from %s://%s...", parsed.scheme, parsed.hostname or "?")
+    safe_scheme = (parsed.scheme or "?").replace("\r", "").replace("\n", "")
+    safe_host = (parsed.hostname or "?").replace("\r", "").replace("\n", "")
+    logger.info("Downloading video from %s://%s...", safe_scheme, safe_host)
 
     # CodeQL sanitizer: every assignment to ``extension`` is from a string
     # literal. Taint from ``raw_ext`` never flows into the variable that

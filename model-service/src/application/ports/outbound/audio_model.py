@@ -46,7 +46,7 @@ class IAudioTranscriber(ABC):
         AudioProcessingError
             If transcription fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def transcribe_segment(
@@ -76,29 +76,29 @@ class IAudioTranscriber(ABC):
         AudioProcessingError
             If transcription fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
         """Load the model into memory."""
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass
 
 
 class ISpeakerDiarizer(ABC):
@@ -141,29 +141,29 @@ class ISpeakerDiarizer(ABC):
         AudioProcessingError
             If diarization fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
         """Load the model into memory."""
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass
 
 
 class IVoiceActivityDetector(ABC):
@@ -194,26 +194,26 @@ class IVoiceActivityDetector(ABC):
         AudioProcessingError
             If detection fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
         """Load the model into memory."""
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass

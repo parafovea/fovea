@@ -164,7 +164,7 @@ class IModelManagementService(ABC):
         ConfigurationError
             If configuration cannot be loaded.
         """
-        ...
+        pass
 
     @abstractmethod
     async def validate_memory(self) -> MemoryValidationOutput:
@@ -175,7 +175,7 @@ class IModelManagementService(ABC):
         MemoryValidationOutput
             Validation results.
         """
-        ...
+        pass
 
     @abstractmethod
     async def get_status(self) -> ModelStatusOutput:
@@ -186,7 +186,7 @@ class IModelManagementService(ABC):
         ModelStatusOutput
             Status with loaded models and memory info.
         """
-        ...
+        pass
 
     @abstractmethod
     async def select_model(self, task_type: str, model_name: str) -> None:
@@ -206,7 +206,7 @@ class IModelManagementService(ABC):
         ValueError
             If model name is not a valid option.
         """
-        ...
+        pass
 
     @abstractmethod
     async def load_model(self, task_type: str) -> None:
@@ -226,7 +226,7 @@ class IModelManagementService(ABC):
         InsufficientMemoryError
             If not enough memory.
         """
-        ...
+        pass
 
     @abstractmethod
     async def unload_model(self, task_type: str) -> None:
@@ -237,4 +237,4 @@ class IModelManagementService(ABC):
         task_type : str
             Task type to unload model for.
         """
-        ...
+        pass

@@ -79,7 +79,7 @@ class IExternalAPIClient(ABC):
         ExternalAPIError
             If API call fails.
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_with_images(
@@ -115,7 +115,7 @@ class IExternalAPIClient(ABC):
         ExternalAPIError
             If API call fails.
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -127,7 +127,7 @@ class IExternalAPIClient(ABC):
         str
             Provider name (anthropic, openai, google, etc.).
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -139,7 +139,7 @@ class IExternalAPIClient(ABC):
         str
             Model identifier string.
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -151,4 +151,4 @@ class IExternalAPIClient(ABC):
         bool
             True if model accepts images.
         """
-        ...
+        pass

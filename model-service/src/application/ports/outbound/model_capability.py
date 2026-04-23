@@ -16,47 +16,47 @@ class IModelCapabilityProbe(ABC):
     @abstractmethod
     def is_cuda_available(self) -> bool:
         """Return True if a CUDA GPU is available."""
-        ...
+        pass
 
     @abstractmethod
     def is_mps_available(self) -> bool:
         """Return True if Apple Silicon MPS is available."""
-        ...
+        pass
 
     @abstractmethod
     def device_count(self) -> int:
         """Return the number of CUDA devices available (0 if none)."""
-        ...
+        pass
 
     @abstractmethod
     def total_vram_bytes(self) -> int:
         """Return total VRAM in bytes (0 if no GPU)."""
-        ...
+        pass
 
     @abstractmethod
     def available_vram_bytes(self) -> int:
         """Return available VRAM in bytes (0 if no GPU)."""
-        ...
+        pass
 
     @abstractmethod
     def allocated_vram_bytes(self) -> int:
         """Return currently allocated VRAM in bytes (0 if no GPU)."""
-        ...
+        pass
 
     @abstractmethod
     def total_ram_bytes(self) -> int:
         """Return total system RAM in bytes."""
-        ...
+        pass
 
     @abstractmethod
     def available_ram_bytes(self) -> int:
         """Return available system RAM in bytes."""
-        ...
+        pass
 
     @abstractmethod
     def empty_cache(self) -> None:
         """Release cached memory on the accelerator (no-op if no GPU)."""
-        ...
+        pass
 
     @abstractmethod
     def detect_device(self) -> str:
@@ -67,4 +67,4 @@ class IModelCapabilityProbe(ABC):
         str
             One of "cuda", "mps", or "cpu".
         """
-        ...
+        pass

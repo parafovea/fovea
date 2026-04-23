@@ -56,7 +56,7 @@ class IVisionLanguageModel(ABC):
         InferenceError
             If generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def generate_reasoned_from_images(
@@ -97,7 +97,7 @@ class IVisionLanguageModel(ABC):
         InferenceError
             If generation fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
@@ -110,12 +110,12 @@ class IVisionLanguageModel(ABC):
         InsufficientMemoryError
             If not enough memory available.
         """
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -127,7 +127,7 @@ class IVisionLanguageModel(ABC):
         bool
             True if model is loaded.
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -139,7 +139,7 @@ class IVisionLanguageModel(ABC):
         str
             Model identifier string.
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -151,4 +151,4 @@ class IVisionLanguageModel(ABC):
         float
             VRAM requirement.
         """
-        ...
+        pass

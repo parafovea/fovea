@@ -76,7 +76,8 @@ class ExtractClaimsUseCase:
                     stop_sequences=["---END---"],
                 )
 
-                logger.info("Extracting claims using strategy: %s", strategy)
+                safe_strategy = str(strategy).replace("\r", "").replace("\n", "")
+                logger.info("Extracting claims using strategy: %s", safe_strategy)
                 result = await self._llm.generate_with_config(prompt=prompt, config=config)
 
                 reasoned = parse_reasoned_output(

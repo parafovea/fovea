@@ -43,7 +43,7 @@ class ITrackingModel(ABC):
         InferenceError
             If initialization fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def track(
@@ -67,7 +67,7 @@ class ITrackingModel(ABC):
         InferenceError
             If tracking fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def track_batch(
@@ -91,37 +91,37 @@ class ITrackingModel(ABC):
         InferenceError
             If tracking fails.
         """
-        ...
+        pass
 
     @abstractmethod
     def reset(self) -> None:
         """Reset tracking state for new video."""
-        ...
+        pass
 
     @abstractmethod
     def load(self) -> None:
         """Load the model into memory."""
-        ...
+        pass
 
     @abstractmethod
     def unload(self) -> None:
         """Unload the model from memory."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_loaded(self) -> bool:
         """Check if model is currently loaded."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def model_id(self) -> str:
         """Get the model identifier."""
-        ...
+        pass
 
     @property
     @abstractmethod
     def is_initialized(self) -> bool:
         """Check if tracking has been initialized with a video."""
-        ...
+        pass

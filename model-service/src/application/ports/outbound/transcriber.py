@@ -87,4 +87,4 @@ class ITranscriber(ABC):
         TranscriptionResultDTO
             Transcription result. ``text`` is empty if no audio present.
         """
-        ...
+        pass

@@ -47,7 +47,7 @@ class IExternalGenerator(ABC):
         dict[str, Any]
             Result with keys ``text`` (str) and ``usage`` (dict).
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_from_images(
@@ -76,9 +76,9 @@ class IExternalGenerator(ABC):
         dict[str, Any]
             Result with keys ``text`` (str) and ``usage`` (dict).
         """
-        ...
+        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Release underlying resources."""
-        ...
+        pass

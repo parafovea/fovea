@@ -48,7 +48,7 @@ class IExternalAPIRouter(ABC):
         dict[str, Any]
             Result with keys ``text`` (str) and ``usage`` (dict).
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_from_images(
@@ -80,7 +80,7 @@ class IExternalAPIRouter(ABC):
         dict[str, Any]
             Result with keys ``text`` (str) and ``usage`` (dict).
         """
-        ...
+        pass
 
     @abstractmethod
     async def generate_reasoned_text(
@@ -93,7 +93,7 @@ class IExternalAPIRouter(ABC):
         temperature: float = 0.7,
     ) -> ReasonedText:
         """Generate text and split any ``<think>`` blocks into a reasoning trace."""
-        ...
+        pass
 
     @abstractmethod
     async def generate_reasoned_from_images(
@@ -106,9 +106,9 @@ class IExternalAPIRouter(ABC):
         max_tokens: int = 1024,
     ) -> ReasonedText:
         """Generate text from images with optional reasoning trace."""
-        ...
+        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Release underlying resources."""
-        ...
+        pass

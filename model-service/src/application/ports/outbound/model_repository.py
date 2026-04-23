@@ -29,7 +29,7 @@ class IModelRepository(ABC):
         ConfigurationError
             If configuration cannot be loaded.
         """
-        ...
+        pass
 
     @abstractmethod
     def get_task(self, task_name: str) -> TaskConfig | None:
@@ -45,7 +45,7 @@ class IModelRepository(ABC):
         TaskConfig | None
             Task configuration, or None if not found.
         """
-        ...
+        pass
 
     @abstractmethod
     def get_model(self, task_name: str, model_name: str) -> ModelConfig | None:
@@ -63,7 +63,7 @@ class IModelRepository(ABC):
         ModelConfig | None
             Model configuration, or None if not found.
         """
-        ...
+        pass
 
     @abstractmethod
     def get_inference_config(self) -> InferenceConfig:
@@ -79,7 +79,7 @@ class IModelRepository(ABC):
         ConfigurationError
             If configuration cannot be loaded.
         """
-        ...
+        pass
 
     @abstractmethod
     def set_selected_model(self, task_name: str, model_name: str) -> None:
@@ -99,7 +99,7 @@ class IModelRepository(ABC):
         ValueError
             If model name is not a valid option.
         """
-        ...
+        pass
 
     @abstractmethod
     def reload(self) -> None:
@@ -110,7 +110,7 @@ class IModelRepository(ABC):
         ConfigurationError
             If configuration cannot be reloaded.
         """
-        ...
+        pass
 
     @property
     @abstractmethod
@@ -122,4 +122,4 @@ class IModelRepository(ABC):
         str
             Path to configuration file.
         """
-        ...
+        pass
