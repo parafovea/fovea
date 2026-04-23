@@ -23,6 +23,9 @@ thumbnails
 
 from fastapi import APIRouter
 
+from src.infrastructure.adapters.inbound.fastapi.routes.admin import (
+    router as admin_router,
+)
 from src.infrastructure.adapters.inbound.fastapi.routes.claims import (
     router as claims_router,
 )
@@ -53,5 +56,6 @@ router.include_router(ontology_router)
 router.include_router(claims_router)
 router.include_router(models_router)
 router.include_router(thumbnails_router)
+router.include_router(admin_router)
 
 __all__ = ["router"]
