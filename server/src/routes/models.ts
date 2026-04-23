@@ -402,6 +402,83 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       throw new InternalError('Internal server error')
     }
   })
+
+  /**
+   * Get default inference config values.
+   *
+   * Returns the dataclass defaults the model-service uses to construct each
+   * inference config (generation, transcription, diarization, VAD, detection,
+   * tracking). The settings UI binds form controls to these so what the user
+   * sees matches what the backend will use when a field is left unset.
+   *
+   * @route GET /api/models/defaults
+   *
+   * @returns Object keyed by config group. Each group is a flat object of
+   *   scalar defaults. See ModelDefaultsResponse in the model-service's
+   *   `routes/models.py` for the exact field list.
+   *
+   * @throws {503} Service unavailable if model service cannot be reached
+   */
+  fastify.get('/api/models/defaults', {
+    schema: {
+      description: 'Get default inference config values per task group',
+      tags: ['models']
+    }
+  }, async (_request, reply) => {
+    try {
+      const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/defaults`, {
+        timeout: 10000
+      })
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Get framework enum values per task group.
+   *
+   * Enumerates the string values of LLMFramework, AudioFramework,
+   * DetectionFramework, TrackingFramework, VLM InferenceFramework, and
+   * QuantizationType so the UI can render selectors without duplicating the
+   * lists.
+   *
+   * @route GET /api/models/frameworks
+   *
+   * @returns `{ llm, audio, detection, tracking, vlmInference, quantization }`,
+   *   each a string[] of enum values.
+   *
+   * @throws {503} Service unavailable if model service cannot be reached
+   */
+  fastify.get('/api/models/frameworks', {
+    schema: {
+      description: 'Get framework enum values per task group',
+      tags: ['models']
+    }
+  }, async (_request, reply) => {
+    try {
+      const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/frameworks`, {
+        timeout: 10000
+      })
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
 }
 
 export default modelsRoute

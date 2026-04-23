@@ -363,6 +363,118 @@ export interface ModelLoadResponse {
 }
 
 /**
+ * Default sampling parameters for LLM/VLM text generation, returned from
+ * ``GET /api/models/defaults``.
+ */
+export interface GenerationDefaults {
+  maxTokens: number
+  temperature: number
+  topP: number
+  stopSequences: string[] | null
+}
+
+/**
+ * Default loading parameters for a language model.
+ */
+export interface LLMDefaults {
+  quantization: string
+  framework: string
+  maxTokens: number
+  temperature: number
+  topP: number
+  contextLength: number
+}
+
+/**
+ * Default loading parameters for audio transcription.
+ */
+export interface TranscriptionDefaults {
+  framework: string
+  language: string | null
+  task: string
+  device: string
+  computeType: string
+  beamSize: number
+}
+
+/**
+ * Default parameters for voice-activity detection.
+ */
+export interface VADDefaults {
+  threshold: number
+  minSpeechDurationMs: number
+  minSilenceDurationMs: number
+  device: string
+}
+
+/**
+ * Default parameters for speaker diarization.
+ */
+export interface DiarizationDefaults {
+  numSpeakers: number | null
+  minSpeakers: number
+  maxSpeakers: number
+  device: string
+}
+
+/**
+ * Default parameters for object detection.
+ */
+export interface DetectionDefaults {
+  framework: string
+  confidenceThreshold: number
+  device: string
+}
+
+/**
+ * Default parameters for object tracking.
+ */
+export interface TrackingDefaults {
+  framework: string
+  device: string
+}
+
+/**
+ * Default loading parameters for a vision-language model.
+ */
+export interface VLMDefaults {
+  quantization: string
+  framework: string
+  device: string
+  trustRemoteCode: boolean
+}
+
+/**
+ * Response shape for ``GET /api/models/defaults``. Each field maps to the
+ * defaults of one dataclass in the Python model-service.
+ */
+export interface ModelDefaultsResponse {
+  generation: GenerationDefaults
+  llm: LLMDefaults
+  transcription: TranscriptionDefaults
+  vad: VADDefaults
+  diarization: DiarizationDefaults
+  detection: DetectionDefaults
+  tracking: TrackingDefaults
+  vlm: VLMDefaults
+}
+
+/**
+ * Response shape for ``GET /api/models/frameworks``.
+ *
+ * Each field is the list of string values from the corresponding StrEnum
+ * in the Python model-service, so UI selectors don't hardcode the lists.
+ */
+export interface ModelFrameworksResponse {
+  llm: string[]
+  audio: string[]
+  detection: string[]
+  tracking: string[]
+  vlmInference: string[]
+  quantization: string[]
+}
+
+/**
  * Category of ontology type to augment.
  */
 export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
@@ -731,6 +843,47 @@ export class ApiClient {
     try {
       const response = await this.client.post<ModelLoadResponse>(
         `/api/models/load/${taskType}`
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Fetch default values for every inference config dataclass.
+   *
+   * The settings UI binds form controls to these so what the user sees
+   * matches what the backend will use when a request field is unset.
+   *
+   * @returns Defaults keyed by config group (generation, llm, transcription,
+   *   vad, diarization, detection, tracking, vlm)
+   * @throws ApiError if request fails
+   */
+  async getModelDefaults(): Promise<ModelDefaultsResponse> {
+    try {
+      const response = await this.client.get<ModelDefaultsResponse>(
+        '/api/models/defaults'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Fetch the allowed framework/quantization enum values per task group.
+   *
+   * Used to render framework selectors without hardcoding the lists in the
+   * frontend.
+   *
+   * @returns Enum value arrays keyed by task group
+   * @throws ApiError if request fails
+   */
+  async getModelFrameworks(): Promise<ModelFrameworksResponse> {
+    try {
+      const response = await this.client.get<ModelFrameworksResponse>(
+        '/api/models/frameworks'
       )
       return response.data
     } catch (error) {
