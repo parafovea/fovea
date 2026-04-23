@@ -21,8 +21,22 @@ from src.infrastructure.adapters.outbound.video.processor import (
     extract_frames_by_rate,
     extract_frames_uniform,
     get_video_info,
+    reconfigure_roots,
     resize_frame,
 )
+
+
+@pytest.fixture(autouse=True)
+def _relaxed_processor_roots(tmp_path):
+    """Point the processor's validation roots at pytest's tmp_path so
+    fixtures that write files under tmp_path pass path validation.
+    """
+    reconfigure_roots(video_root=tmp_path, thumbnail_root=tmp_path, audio_root=tmp_path)
+    yield
+    # Restore real defaults after the test
+    reconfigure_roots(
+        video_root="/videos", thumbnail_root="/tmp/thumbnails", audio_root="/tmp/audio"
+    )
 
 
 @pytest.fixture
