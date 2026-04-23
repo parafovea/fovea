@@ -33,6 +33,21 @@ interface ModelSummarizeResponse {
 /**
  * Request type for model service /api/summarize endpoint.
  */
+interface ModelGenerationOverrides {
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+}
+
+interface ModelAudioOverrides {
+  beam_size?: number;
+  compute_type?: 'float16' | 'float32' | 'int8' | 'int8_float16';
+  num_speakers?: number;
+  min_speakers?: number;
+  max_speakers?: number;
+  vad_threshold?: number;
+}
+
 interface ModelSummarizeRequest {
   video_id: string;
   video_path?: string;
@@ -45,6 +60,8 @@ interface ModelSummarizeRequest {
   enable_speaker_diarization?: boolean;
   fusion_strategy?: string;
   audio_language?: string;
+  generation_overrides?: ModelGenerationOverrides;
+  audio_overrides?: ModelAudioOverrides;
 }
 
 /**
@@ -125,6 +142,21 @@ const prisma = new PrismaClient();
 /**
  * Job data structure for video summarization tasks.
  */
+export interface GenerationOverridesJobData {
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+}
+
+export interface AudioOverridesJobData {
+  beamSize?: number;
+  computeType?: 'float16' | 'float32' | 'int8' | 'int8_float16';
+  numSpeakers?: number;
+  minSpeakers?: number;
+  maxSpeakers?: number;
+  vadThreshold?: number;
+}
+
 export interface VideoSummarizationJobData {
   videoId: string;
   personaId: string;
@@ -134,6 +166,8 @@ export interface VideoSummarizationJobData {
   enableSpeakerDiarization?: boolean;
   fusionStrategy?: string;
   audioLanguage?: string;
+  generationOverrides?: GenerationOverridesJobData;
+  audioOverrides?: AudioOverridesJobData;
 }
 
 /**
@@ -173,6 +207,8 @@ export const videoWorker = new Worker<
       enableSpeakerDiarization,
       fusionStrategy,
       audioLanguage,
+      generationOverrides,
+      audioOverrides,
     } = job.data;
 
     await job.updateProgress(10);
@@ -227,6 +263,8 @@ export const videoWorker = new Worker<
       ...(enableSpeakerDiarization !== undefined && { enableSpeakerDiarization }),
       ...(fusionStrategy !== undefined && { fusionStrategy }),
       ...(audioLanguage !== undefined && { audioLanguage }),
+      ...(generationOverrides !== undefined && { generationOverrides }),
+      ...(audioOverrides !== undefined && { audioOverrides }),
     };
 
     const requestBody = snakecaseKeys(camelCaseRequest) as ModelSummarizeRequest;

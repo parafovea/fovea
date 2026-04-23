@@ -73,6 +73,29 @@ export interface SaveSummaryRequest {
 /**
  * Request payload for generating a video summary.
  */
+/**
+ * Per-request sampling overrides for the VLM call backing summarization.
+ * Every field is optional; omitted keys defer to the backend dataclass default
+ * (exposed via ``GET /api/models/defaults``).
+ */
+export interface GenerationOverridesRequest {
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+}
+
+/**
+ * Per-request transcription / diarization overrides.
+ */
+export interface AudioOverridesRequest {
+  beamSize?: number
+  computeType?: 'float16' | 'float32' | 'int8' | 'int8_float16'
+  numSpeakers?: number
+  minSpeakers?: number
+  maxSpeakers?: number
+  vadThreshold?: number
+}
+
 export interface GenerateSummaryRequest {
   videoId: string
   personaId: string
@@ -82,6 +105,8 @@ export interface GenerateSummaryRequest {
   enableSpeakerDiarization?: boolean
   fusionStrategy?: string
   audioLanguage?: string
+  generationOverrides?: GenerationOverridesRequest
+  audioOverrides?: AudioOverridesRequest
 }
 
 /**

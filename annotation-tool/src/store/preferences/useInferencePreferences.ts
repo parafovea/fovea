@@ -140,18 +140,19 @@ export function useInferencePreferences(): {
 }
 
 /**
- * Drop ``null`` entries from a preferences record so the wire payload only
- * carries explicit overrides. Useful when building a request body that
- * includes the override blocks.
+ * Drop ``null``/``undefined`` entries from a preferences object so the wire
+ * payload only carries explicit overrides. Returns ``undefined`` if every
+ * field is absent (so the caller can skip sending the block entirely).
+ *
+ * ``T`` may be any object type; the generic return keeps per-field types
+ * intact without widening them to ``unknown``.
  */
-export function compactPreferences<T extends Record<string, unknown>>(
-  preferences: T
-): Partial<T> | undefined {
+export function compactPreferences<T extends object>(preferences: T): Partial<T> | undefined {
   const out: Partial<T> = {}
   let hasAny = false
-  for (const [key, value] of Object.entries(preferences)) {
+  for (const [key, value] of Object.entries(preferences) as Array<[keyof T, T[keyof T]]>) {
     if (value !== null && value !== undefined) {
-      out[key as keyof T] = value as T[keyof T]
+      out[key] = value
       hasAny = true
     }
   }
