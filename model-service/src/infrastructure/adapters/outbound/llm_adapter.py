@@ -3,27 +3,59 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.application.dto.generation import GenerationConfigDTO, GenerationResultDTO
 from src.application.dto.reasoning_parser import parse_reasoned_output
 from src.application.ports.outbound.llm import ILanguageModel
-from src.infrastructure.adapters.outbound.models.llm.loader import GenerationConfig
+from src.infrastructure.adapters.outbound.models.llm.base import (
+    GenerationConfig,
+    GenerationResult,
+)
 from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.application.dto.reasoning import ReasonedText
 
 
+class _LoaderConfig(Protocol):
+    """Structural view of the config attribute both LLM loaders expose."""
+
+    model_id: str
+
+
+class _LLMLoaderLike(Protocol):
+    """Structural contract implemented by every concrete LLM loader.
+
+    Captures exactly the surface :class:`LLMLoaderAdapter` uses: async
+    ``load``/``unload``/``generate`` and a ``config`` attribute carrying the
+    model id. Both ``LLMLoader`` and ``LlamaCppLLMLoader`` satisfy this shape
+    without a runtime import dependency between the adapter and either
+    concrete class.
+    """
+
+    config: _LoaderConfig
+
+    async def load(self) -> None: ...
+
+    async def unload(self) -> None: ...
+
+    async def generate(
+        self,
+        prompt: str,
+        generation_config: GenerationConfig | None = ...,
+    ) -> GenerationResult: ...
+
+
 class LLMLoaderAdapter(ILanguageModel):
     """Adapts an LLM loader to the :class:`ILanguageModel` port.
 
     The concrete loader may be the transformers-based ``LLMLoader`` or the
-    llama.cpp-based ``LlamaCppLLMLoader``; the adapter only depends on the
-    shape of their ``load``/``generate``/``unload`` methods.
+    llama.cpp-based ``LlamaCppLLMLoader``; both satisfy :class:`_LLMLoaderLike`
+    structurally, so the adapter depends only on the Protocol.
     """
 
-    def __init__(self, loader: Any) -> None:
+    def __init__(self, loader: _LLMLoaderLike) -> None:
         """Initialize with an already-constructed loader."""
         self._loader = loader
         self._loaded = False
