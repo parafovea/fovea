@@ -66,8 +66,6 @@ _REGIONAL_S3_HOST = re.compile(r"^(?:[A-Za-z0-9.\-_]+\.)?s3[.\-][a-z0-9\-]+\.ama
 
 _ALLOWED_PORTS = {"https": frozenset({443}), "http": frozenset({80, 8000, 8080})}
 
-_ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"})
-
 # Temp directory for video downloads - intentionally using /tmp for ephemeral video storage
 TEMP_VIDEO_DIR = "/tmp"  # noqa: S108
 
@@ -205,12 +203,23 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
     parsed = urlparse(candidate_url)
     logger.info("Downloading video from %s://%s...", parsed.scheme, parsed.hostname or "?")
 
-    # CodeQL sanitizer: explicit ``in`` test against a constant frozenset in
-    # an ``if``/``else`` statement (not a ternary) so the guarded branch is
-    # recognised by ``ConstCompareAsSanitizerGuard``.
+    # CodeQL sanitizer: every assignment to ``extension`` is from a string
+    # literal. Taint from ``raw_ext`` never flows into the variable that
+    # reaches ``NamedTemporaryFile(suffix=...)`` — ``extension`` is
+    # constant-sourced in every branch, so ``py/path-injection`` cannot fire.
     raw_ext = Path(parsed.path).suffix.lower()
-    if raw_ext in _ALLOWED_EXTENSIONS:  # noqa: SIM108
-        extension = raw_ext
+    if raw_ext == ".mp4":
+        extension = ".mp4"
+    elif raw_ext == ".avi":
+        extension = ".avi"
+    elif raw_ext == ".mov":
+        extension = ".mov"
+    elif raw_ext == ".mkv":
+        extension = ".mkv"
+    elif raw_ext == ".webm":
+        extension = ".webm"
+    elif raw_ext == ".m4v":
+        extension = ".m4v"
     else:
         extension = ".mp4"
 
