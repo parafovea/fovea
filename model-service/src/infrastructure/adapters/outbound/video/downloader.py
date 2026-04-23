@@ -3,23 +3,25 @@
 Supports downloading videos from HTTP/HTTPS URLs (including S3 pre-signed URLs)
 to temporary local files for processing.
 
-Security properties enforced here:
+Security model
+--------------
+Every sink (``aiohttp.ClientSession.get``, ``tempfile.NamedTemporaryFile``,
+``aiofiles.open``, ``Path.unlink``) is guarded by an inline check in the same
+function as the sink. The guards are shapes CodeQL's taint tracker
+recognises as sanitizers:
 
-* **SSRF prevention.** Only HTTPS URLs are accepted (except explicit localhost
-  dev exceptions). The host must match a strict allow-list of known cloud
-  storage suffixes. The host is resolved via ``socket.getaddrinfo`` and any
-  response IP in a private, loopback, link-local, multicast, or reserved
-  range is rejected (the localhost exception allows 127.0.0.1/::1 only).
-* **Path-injection prevention.** The temporary file suffix is restricted to a
-  fixed allow-list of video extensions. Any cleanup operation first validates
-  the target resolves inside the configured temp directory and operates on
-  the validated ``pathlib.Path`` object rather than the original user string.
+* ``re.fullmatch(constant_regex, url)`` right before the HTTP request;
+* ``in`` comparison against a constant set for the temp-file extension;
+* ``os.path.realpath(path).startswith(trusted_root + os.sep)`` before any
+  filesystem I/O on the temp file.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import logging
+import os
+import os.path
 import re
 import socket
 import tempfile
@@ -32,8 +34,31 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 
-# Exact and suffix-match host allow-list. CodeQL sees these as constant sources
-# of trust that dominate every reachable URL used by ``session.get``.
+# Inline allowlist regex used directly at the aiohttp sink. CodeQL's
+# ``StringRestrictionSanitizerGuard`` recognises ``re.fullmatch(pat, x)`` on
+# the matched branch, clearing taint for ``py/(partial-|full-)ssrf``.
+_TRUSTED_URL_RE = re.compile(
+    r"https://"
+    r"(?:"
+    r"(?:[A-Za-z0-9][-A-Za-z0-9._]*\.)?s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com"
+    r"|(?:[A-Za-z0-9][-A-Za-z0-9._]*\.)?cloudfront\.net"
+    r"|(?:[A-Za-z0-9][-A-Za-z0-9._]*\.)?storage\.googleapis\.com"
+    r"|[A-Za-z0-9][-A-Za-z0-9._]*\.blob\.core\.windows\.net"
+    r")"
+    r"(?::443)?"
+    r"/[A-Za-z0-9._~%!$&'()*+,;=:@/\-]*"
+    r"(?:\?[A-Za-z0-9._~%!$&'()*+,;=:@/?\-]*)?"
+)
+
+_LOCAL_URL_RE = re.compile(
+    r"https?://(?:localhost|127\.0\.0\.1)(?::(?:80|443|8000|8080))?"
+    r"/[A-Za-z0-9._~%!$&'()*+,;=:@/\-]*"
+    r"(?:\?[A-Za-z0-9._~%!$&'()*+,;=:@/?\-]*)?"
+)
+
+# Defense-in-depth host allow-list. The inline regex above is what clears
+# CodeQL; the host check below is an extra validator run before DNS resolution
+# to avoid wasting a syscall on bogus hosts.
 _ALLOWED_HOST_EXACT: frozenset[str] = frozenset(
     {
         "s3.amazonaws.com",
@@ -50,21 +75,18 @@ _ALLOWED_HOST_SUFFIXES: tuple[str, ...] = (
     ".storage.googleapis.com",
 )
 
-# Additional pattern for region-qualified S3 hosts that don't match the simple
-# suffix check (e.g. ``mybucket.s3.us-east-1.amazonaws.com``).
 _REGIONAL_S3_HOST = re.compile(r"^(?:[A-Za-z0-9.\-_]+\.)?s3[.\-][a-z0-9\-]+\.amazonaws\.com$")
 
-# Allowed ports per scheme. Everything else is rejected.
 _ALLOWED_PORTS = {"https": frozenset({443}), "http": frozenset({80, 8000, 8080})}
 
-# Video extensions the caller may observe on the disk-side temp file. Anything
-# else collapses to ``.mp4`` so CodeQL sees the filename as constant.
 _ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"})
 
 # Temp directory for video downloads - intentionally using /tmp for ephemeral video storage
 TEMP_VIDEO_DIR = "/tmp"  # noqa: S108
 
-_TEMP_VIDEO_DIR_RESOLVED: Path = Path(TEMP_VIDEO_DIR).resolve()
+# Resolved trusted root. Used as the constant prefix in the inline
+# ``realpath(x).startswith(root + os.sep)`` sanitizer at each file-system sink.
+_TEMP_VIDEO_DIR_REAL: str = os.path.realpath(TEMP_VIDEO_DIR)
 
 
 def _is_allowed_host(host: str) -> bool:
@@ -78,12 +100,7 @@ def _is_allowed_host(host: str) -> bool:
 
 
 def _is_public_ip(address: str) -> bool:
-    """Return True if the IP address is safely routable to a public host.
-
-    Private, loopback, link-local, multicast, reserved, and unspecified
-    addresses are rejected. Loopback is handled separately — callers allow
-    it only for localhost development hosts.
-    """
+    """Return True if the IP address is safely routable to a public host."""
     try:
         ip = ipaddress.ip_address(address)
     except ValueError:
@@ -107,18 +124,17 @@ def _resolve_host_addresses(host: str) -> list[str]:
     addresses: list[str] = []
     for info in infos:
         sockaddr = info[4]
-        # sockaddr is (ip, port) for IPv4 or (ip, port, flowinfo, scopeid) for IPv6
         if isinstance(sockaddr, tuple) and sockaddr and isinstance(sockaddr[0], str):
             addresses.append(sockaddr[0])
     return addresses
 
 
-def _validated_download_url(url: str) -> str:
-    """Return a URL that has passed every SSRF check, or raise ``ValueError``.
+def _preflight_url(url: str) -> str:
+    """Run defense-in-depth URL checks (scheme, host allow-list, DNS, IP).
 
-    The returned string is a fresh value threaded through validators so the
-    taint tracker can see a clean data-flow boundary between user input and
-    the ``aiohttp`` call site.
+    This is *not* the CodeQL-recognised sanitizer — the inline regex
+    fullmatch at the sink is. This helper runs first so bad URLs fail fast
+    with a descriptive error before any network I/O.
     """
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()
@@ -140,9 +156,6 @@ def _validated_download_url(url: str) -> str:
     if port is not None and port not in _ALLOWED_PORTS.get(scheme, frozenset()):
         raise ValueError(f"URL not allowed: port {port} is not permitted")
 
-    # For localhost exceptions we skip IP validation (loopback is allowed only
-    # here). For every other host we require at least one public IP and every
-    # resolved address must be public.
     if host not in {"localhost", "127.0.0.1"}:
         addresses = _resolve_host_addresses(host)
         if not addresses:
@@ -150,58 +163,10 @@ def _validated_download_url(url: str) -> str:
         if not all(_is_public_ip(addr) for addr in addresses):
             raise ValueError("URL not allowed: host resolves to a private or reserved IP")
 
-    # Rebuild the URL from validated components to prevent userinfo smuggling
-    # (``https://evil@trusted.example/``) and to discard fragments. We keep
-    # path and query so pre-signed S3 URLs remain intact.
-    query = f"?{parsed.query}" if parsed.query else ""
     port_str = f":{port}" if port is not None else ""
+    query = f"?{parsed.query}" if parsed.query else ""
     path = parsed.path or ""
     return f"{scheme}://{host}{port_str}{path}{query}"
-
-
-def _host_base_for(safe_url: str) -> str:
-    """Return the scheme://host[:port] prefix of a URL previously validated
-    by :func:`_validated_download_url`. Used as ``aiohttp.ClientSession``'s
-    ``base_url`` so the host portion is explicit and constant-looking to
-    static analysis.
-    """
-    parsed = urlparse(safe_url)
-    port_str = f":{parsed.port}" if parsed.port is not None else ""
-    return f"{parsed.scheme}://{parsed.hostname}{port_str}"
-
-
-def _relative_for(safe_url: str) -> str:
-    """Return the path+query portion of a validated URL."""
-    parsed = urlparse(safe_url)
-    path = parsed.path or "/"
-    query = f"?{parsed.query}" if parsed.query else ""
-    return f"{path}{query}"
-
-
-def _safe_extension(extension: str) -> str:
-    """Return ``extension`` if it is on the allow-list, else ``.mp4``."""
-    normalized = extension.lower()
-    if normalized in _ALLOWED_EXTENSIONS:
-        return normalized
-    return ".mp4"
-
-
-def _safe_temp_file(candidate: str) -> Path | None:
-    """Resolve ``candidate`` and return a Path only if it lives under
-    ``TEMP_VIDEO_DIR``. Returns ``None`` otherwise.
-
-    Validation uses ``resolve`` + ``relative_to`` against the resolved temp
-    directory to neutralise ``..`` segments and symlink tricks.
-    """
-    try:
-        resolved = Path(candidate).resolve(strict=False)
-    except (OSError, RuntimeError):
-        return None
-    try:
-        resolved.relative_to(_TEMP_VIDEO_DIR_RESOLVED)
-    except ValueError:
-        return None
-    return resolved
 
 
 async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
@@ -229,11 +194,8 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
     if not video_path.startswith(("http://", "https://")):
         return video_path, False
 
-    # Fully validate the URL before any network I/O. The return value is the
-    # only string passed to ``session.get`` — CodeQL's taint tracker follows
-    # this rebinding and recognises the sanitizer.
     try:
-        safe_url = _validated_download_url(video_path)
+        candidate_url = _preflight_url(video_path)
     except ValueError:
         parsed_attempt = urlparse(video_path)
         logger.warning(
@@ -243,13 +205,20 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
         )
         raise
 
+    # CodeQL sanitizer: inline ``re.fullmatch`` against constant patterns.
+    # Only URLs matching one of these exact shapes reach ``session.get``.
+    if not (_TRUSTED_URL_RE.fullmatch(candidate_url) or _LOCAL_URL_RE.fullmatch(candidate_url)):
+        raise ValueError("URL rejected by allow-list pattern")
+    safe_url = candidate_url
+
     parsed = urlparse(safe_url)
     logger.info("Downloading video from %s://%s...", parsed.scheme, parsed.hostname or "?")
 
-    # Constrain the temp-file extension to a known allow-list.
-    extension = _safe_extension(Path(parsed.path).suffix)
+    # CodeQL sanitizer: constant-set ``in`` comparison. Only extensions from
+    # the constant allow-list may be passed as the NamedTemporaryFile suffix.
+    raw_ext = Path(parsed.path).suffix.lower()
+    extension = raw_ext if raw_ext in _ALLOWED_EXTENSIONS else ".mp4"
 
-    # Using NamedTemporaryFile without context manager because we need the file to persist
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=extension,
@@ -258,23 +227,17 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
     ) as temp_file:
         temp_path_str = temp_file.name
 
-    # Re-validate the tempfile path against the temp directory. This turns a
-    # string return value from tempfile into a Path that CodeQL can track as
-    # sanitized.
-    temp_target = _safe_temp_file(temp_path_str)
-    if temp_target is None:
+    # CodeQL sanitizer: ``os.path.realpath`` normalization followed by inline
+    # ``startswith(TRUSTED_ROOT + os.sep)``.
+    temp_real = os.path.realpath(temp_path_str)
+    if not (
+        temp_real == _TEMP_VIDEO_DIR_REAL or temp_real.startswith(_TEMP_VIDEO_DIR_REAL + os.sep)
+    ):
         raise RuntimeError("tempfile returned a path outside the temp directory")
 
     try:
-        # Split the validated URL into a base (fully-trusted scheme+host+port)
-        # and a relative path+query. aiohttp's ``base_url`` + relative-path
-        # pattern lets CodeQL treat the base as the sanitised side of the
-        # request, so the flow from user input narrows to only the object-
-        # path portion — which must remain variable to support signed URLs.
-        base_url = _host_base_for(safe_url)
-        relative = _relative_for(safe_url)
-        async with aiohttp.ClientSession(base_url=base_url) as session:
-            async with session.get(relative) as response:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(safe_url) as response:
                 response.raise_for_status()
 
                 total_size = response.headers.get("Content-Length")
@@ -282,7 +245,7 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
                     size_mb = int(total_size) / (1024 * 1024)
                     logger.info("Downloading %.2f MB...", size_mb)
 
-                async with aiofiles.open(temp_target, "wb") as f:
+                async with aiofiles.open(temp_real, "wb") as f:
                     bytes_downloaded = 0
                     async for chunk in response.content.iter_chunked(8192):
                         await f.write(chunk)
@@ -291,12 +254,11 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
                 downloaded_mb = bytes_downloaded / (1024 * 1024)
                 logger.info("Downloaded %.2f MB to temporary file", downloaded_mb)
 
-        return str(temp_target), True
+        return temp_real, True
 
     except Exception as exc:
-        # Clean up the temp file via the validated Path, never the raw input.
         try:
-            temp_target.unlink(missing_ok=True)
+            Path(temp_real).unlink(missing_ok=True)
         except OSError as cleanup_err:
             logger.debug("Failed to clean up temp file: %s", cleanup_err)
         raise RuntimeError(f"Failed to download video: {exc}") from exc
@@ -310,13 +272,14 @@ def cleanup_temp_video(video_path: str) -> None:
     video_path : str
         Path to temporary video file to remove
     """
-    resolved = _safe_temp_file(video_path)
-    if resolved is None:
+    # CodeQL sanitizer: inline ``os.path.realpath`` + ``startswith`` guard.
+    real = os.path.realpath(video_path)
+    if not (real == _TEMP_VIDEO_DIR_REAL or real.startswith(_TEMP_VIDEO_DIR_REAL + os.sep)):
         logger.warning("Refusing to delete path outside temp directory")
         return
 
     try:
-        resolved.unlink(missing_ok=True)
+        Path(real).unlink(missing_ok=True)
         logger.info("Cleaned up temporary video file")
     except OSError as exc:
         logger.warning("Failed to clean up temporary video file: %s", type(exc).__name__)

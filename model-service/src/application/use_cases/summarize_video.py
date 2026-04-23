@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import io
 import logging
+import os
+import os.path
 import re
 import time
 import uuid
@@ -704,43 +706,36 @@ def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | Non
     str | None
         Full path to video file, or None if not found.
     """
-    if not re.match(r"^[\w\-]+$", video_id):
+    # CodeQL sanitizer: ``re.fullmatch`` with a constant pattern restricts
+    # ``video_id`` to a safe character set. The matched branch clears the
+    # taint tracker's path-injection flag.
+    if not re.fullmatch(r"[\w\-]+", video_id):
         sanitized_video_id = video_id.replace("\r", "").replace("\n", "")
         logger.warning(f"Invalid video_id format: {sanitized_video_id!r}")
         return None
 
-    data_path = Path(data_dir)
-
-    if not data_path.exists():
-        logger.warning(f"Video directory does not exist: {data_dir}")
+    if not Path(data_dir).is_dir():
+        logger.warning(f"Video directory does not exist: {_safe(data_dir)}")
         return None
 
     video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm"]
-    data_path_resolved = data_path.resolve()
-
-    def _safe_resolve_inside(candidate: Path) -> Path | None:
-        """Resolve ``candidate`` and return it only if it stays inside
-        ``data_path_resolved``. Defends against path traversal by validating
-        the resolved candidate against the sanitized root before any further
-        filesystem I/O is performed."""
-        try:
-            resolved = candidate.resolve(strict=False)
-        except (OSError, RuntimeError):
-            return None
-        try:
-            resolved.relative_to(data_path_resolved)
-        except ValueError:
-            return None
-        return resolved
+    data_dir_real = os.path.realpath(data_dir)
 
     for ext in video_extensions:
-        candidate = _safe_resolve_inside(data_path / f"{video_id}{ext}")
-        if candidate is not None and candidate.is_file():
-            return str(candidate)
+        # CodeQL sanitizer: ``os.path.realpath`` normalization + inline
+        # ``startswith(data_dir_real + os.sep)`` guard. Barrier guards must
+        # live in the same function as the sink — inline is required.
+        candidate = os.path.realpath(str(Path(data_dir_real) / f"{video_id}{ext}"))
+        if not candidate.startswith(data_dir_real + os.sep):
+            continue
+        if Path(candidate).is_file():
+            return candidate
 
-    for match in data_path.glob(f"{video_id}.*"):
-        candidate = _safe_resolve_inside(match)
-        if candidate is not None and candidate.is_file():
-            return str(candidate)
+    for match in Path(data_dir_real).glob(f"{video_id}.*"):
+        candidate = os.path.realpath(str(match))
+        if not candidate.startswith(data_dir_real + os.sep):
+            continue
+        if Path(candidate).is_file():
+            return candidate
 
     return None

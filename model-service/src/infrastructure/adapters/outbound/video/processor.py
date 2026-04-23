@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import os.path
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -76,71 +77,6 @@ def reconfigure_roots(
         _THUMBNAIL_OUTPUT_ROOT = Path(thumbnail_root).resolve(strict=False)
     if audio_root is not None:
         _AUDIO_OUTPUT_ROOT = Path(audio_root).resolve(strict=False)
-
-
-def _validated_relative_name(candidate: str) -> str:
-    """Return a safe relative basename derived from ``candidate``, or raise.
-
-    String-level validation only — no filesystem access. Rejects absolute
-    paths, ``..`` segments, and null bytes. The result is always a plain
-    relative path with forward-slash separators. Callers join it under a
-    trusted root. Because the returned string contains none of the
-    dangerous patterns and never originates from a filesystem call, it is
-    recognized by static analysis as a sanitizer boundary.
-    """
-    if "\x00" in candidate:
-        raise VideoPathError("Path contains null byte")
-    normalized = candidate.replace("\\", "/")
-    if normalized.startswith("/") or (len(normalized) >= 2 and normalized[1] == ":"):
-        raise VideoPathError(f"Absolute paths not allowed: {candidate!r}")
-    parts = [p for p in normalized.split("/") if p not in ("", ".")]
-    if any(p == ".." for p in parts):
-        raise VideoPathError(f"Path traversal not allowed: {candidate!r}")
-    if not parts:
-        raise VideoPathError(f"Empty path: {candidate!r}")
-    return "/".join(parts)
-
-
-def _under_root(raw: str, root: Path) -> Path:
-    """Return a :class:`Path` derived from ``raw`` anchored inside ``root``.
-
-    If ``raw`` already begins with the stringified ``root``, the remainder
-    after the root prefix is treated as the relative portion. Otherwise
-    ``raw`` itself is validated and joined onto the root. In both cases
-    the returned Path is composed from the trusted root plus a relative
-    name validated by :func:`_validated_relative_name` — no filesystem
-    access occurs before the sanitation check.
-    """
-    root_str = str(root)
-    if raw == root_str or raw.startswith(root_str + "/"):
-        remainder = raw[len(root_str) :].lstrip("/")
-        if not remainder:
-            raise VideoPathError(f"Path equals root directory: {raw!r}")
-        relative_name = _validated_relative_name(remainder)
-    else:
-        relative_name = _validated_relative_name(raw)
-    return root / relative_name
-
-
-def _validated_existing_video(candidate: str) -> Path:
-    """Return a validated video file path that actually exists."""
-    try:
-        safe = _under_root(candidate, _VIDEO_DATA_ROOT)
-    except VideoPathError as exc:
-        raise VideoProcessingError(f"Video file not found: {candidate!r}") from exc
-    if not safe.is_file():
-        raise VideoProcessingError(f"Video file not found: {candidate!r}")
-    return safe
-
-
-def _validated_output_in_root(candidate: str, root: Path) -> Path:
-    """Return a validated output path whose parent directory is created."""
-    try:
-        safe = _under_root(candidate, root)
-    except VideoPathError as exc:
-        raise VideoProcessingError(f"Invalid output path: {candidate!r}") from exc
-    safe.parent.mkdir(parents=True, exist_ok=True)
-    return safe
 
 
 class VideoInfo:
@@ -465,24 +401,34 @@ async def extract_audio(
         span.set_attribute("audio.sample_rate", sample_rate)
         span.set_attribute("audio.channels", channels)
 
-        video_file = _validated_existing_video(video_path)
+        # CodeQL sanitizer: inline ``os.path.realpath`` + ``startswith`` check
+        # on the trusted root. Must be inline in the same function as the
+        # subprocess sink — CodeQL barrier guards do not cross call
+        # boundaries.
+        video_root_real = os.path.realpath(str(_VIDEO_DATA_ROOT))
+        video_real = os.path.realpath(video_path)
+        if not (video_real == video_root_real or video_real.startswith(video_root_real + os.sep)):
+            raise VideoProcessingError(f"Video file not found: {video_path!r}")
+        if not Path(video_real).exists():
+            raise VideoProcessingError(f"Video file not found: {video_path!r}")
 
         if output_path is None:
-            output_filename = f"{video_file.stem}_audio.wav"
-            output_candidate = str(_AUDIO_OUTPUT_ROOT / output_filename)
+            output_candidate = str(_AUDIO_OUTPUT_ROOT / f"{Path(video_real).stem}_audio.wav")
         else:
             output_candidate = output_path
 
-        output_file = _validated_output_in_root(output_candidate, _AUDIO_OUTPUT_ROOT)
+        audio_root_real = os.path.realpath(str(_AUDIO_OUTPUT_ROOT))
+        output_real = os.path.realpath(output_candidate)
+        if not output_real.startswith(audio_root_real + os.sep):
+            raise VideoProcessingError(f"Invalid output path: {output_candidate!r}")
+        os.makedirs(os.path.dirname(output_real), exist_ok=True)  # noqa: PTH103, PTH120
 
-        span.set_attribute("audio.output_path", str(output_file))
+        span.set_attribute("audio.output_path", output_real)
 
-        # Build FFmpeg command from validated Path objects only. CodeQL sees
-        # that neither argument flows from the original user strings.
         cmd = [
             "ffmpeg",
             "-i",
-            str(video_file),
+            video_real,
             "-vn",  # No video
             "-acodec",
             "pcm_s16le",  # PCM 16-bit little-endian
@@ -491,7 +437,7 @@ async def extract_audio(
             "-ac",
             str(channels),
             "-y",  # Overwrite output file
-            str(output_file),
+            output_real,
         ]
 
         try:
@@ -509,11 +455,11 @@ async def extract_audio(
                     f"FFmpeg failed with return code {process.returncode}: {error_msg}"
                 )
 
-            if not output_file.exists():
-                raise VideoProcessingError(f"Output audio file not created: {output_file}")
+            if not Path(output_real).exists():
+                raise VideoProcessingError(f"Output audio file not created: {output_real}")
 
             span.set_attribute("audio.success", True)
-            return str(output_file)
+            return output_real
 
         except FileNotFoundError as e:
             raise VideoProcessingError(
@@ -577,23 +523,27 @@ async def extract_thumbnail(
         span.set_attribute("thumbnail.timestamp", timestamp)
         span.set_attribute("thumbnail.size", f"{size[0]}x{size[1]}")
 
-        video_file = _validated_existing_video(video_path)
-        output_file = _validated_output_in_root(output_path, _THUMBNAIL_OUTPUT_ROOT)
+        video_root_real = os.path.realpath(str(_VIDEO_DATA_ROOT))
+        video_real = os.path.realpath(video_path)
+        if not (video_real == video_root_real or video_real.startswith(video_root_real + os.sep)):
+            raise VideoProcessingError(f"Video file not found: {video_path!r}")
+        if not Path(video_real).exists():
+            raise VideoProcessingError(f"Video file not found: {video_path!r}")
 
-        span.set_attribute("thumbnail.output_path", str(output_file))
+        thumb_root_real = os.path.realpath(str(_THUMBNAIL_OUTPUT_ROOT))
+        output_real = os.path.realpath(output_path)
+        if not output_real.startswith(thumb_root_real + os.sep):
+            raise VideoProcessingError(f"Invalid output path: {output_path!r}")
+        os.makedirs(os.path.dirname(output_real), exist_ok=True)  # noqa: PTH103, PTH120
 
-        # Build FFmpeg command from validated Path objects only.
-        # -ss: seek to timestamp
-        # -i: input file
-        # -vframes 1: extract one frame
-        # -vf scale: resize to specified dimensions
-        # -q:v 2: high quality JPEG (1-31, lower is better)
+        span.set_attribute("thumbnail.output_path", output_real)
+
         cmd = [
             "ffmpeg",
             "-ss",
             str(timestamp),
             "-i",
-            str(video_file),
+            video_real,
             "-vframes",
             "1",
             "-vf",
@@ -601,7 +551,7 @@ async def extract_thumbnail(
             "-q:v",
             "2",
             "-y",  # Overwrite output file
-            str(output_file),
+            output_real,
         ]
 
         try:
@@ -619,11 +569,11 @@ async def extract_thumbnail(
                     f"FFmpeg failed with return code {process.returncode}: {error_msg}"
                 )
 
-            if not output_file.exists():
-                raise VideoProcessingError(f"Output thumbnail file not created: {output_file}")
+            if not Path(output_real).exists():
+                raise VideoProcessingError(f"Output thumbnail file not created: {output_real}")
 
             span.set_attribute("thumbnail.success", True)
-            return str(output_file)
+            return output_real
 
         except FileNotFoundError as e:
             raise VideoProcessingError(
