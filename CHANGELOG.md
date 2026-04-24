@@ -7,20 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - Unreleased
 
+### Added
+
+#### Annotation Timeline Rewrite
+
+- Rewrote the annotation timeline as a composition of small DOM primitives under `src/components/annotation/timeline`
+- `TimelineRoot` orchestrates a fixed-width track-header column and a flexible right column containing `TimelineRuler`, `TimelinePlayhead`, and stacked `TimelineTrack` lanes
+- `TimelineTrack` lanes render `InterpolationSegment` gradients and `KeyframeMarker` diamonds with selection, current, and locked states
+- `TransportBar` carries the SMPTE timecode readout, keyframe-edit cluster, and zoom controls
+- `useTimelineViewport` manages `ResizeObserver`-backed container width plus zoom clamped between fit-to-view and `MAX_ZOOM`
+- `useKeyframeDrag` installs window-level pointer listeners to reposition keyframes with obstruction nudging
+- `useTimelineKeyboard` wires J/K/L playback shortcuts and the `ShortcutPalette` surfaces the binding table via `?`
+- `TimelineComponent.tsx` remains as a drop-in shim that threads `useMoveKeyframe` through
+
+#### Bounding-Box Editing Polish
+
+- `BoundingBoxHUD` renders a float W×H and x,y readout with monospace tabular-nums in a `foreignObject` anchored below the box during drag/resize
+- `useBoundingBoxKeyboard` hook nudges the active box by 1 px (10 px with shift) on arrow keys and calls `onUpdate` + `onEditComplete` through the existing persistence pipeline
+- Shift-hold aspect-ratio lock for corner resize handles honours whichever axis drifted farther and anchors the opposite edge so the box grows from its corner
+
+#### Tooling and Build
+
+- Monorepo switched to a pnpm workspace with ergonomic dev commands
+- All Dockerfiles updated for the pnpm workspace layout
+- `jsdom` pinned to `^26.1.0` for Node 18 ESM compatibility
+
+#### Backend Reliability
+
+- `services/system-config-propagator.ts` factors model-service propagation out of the admin-config route
+- Server startup now auto-replays every persisted `SystemConfig` row so a fresh model-service picks up admin settings without operator intervention
+
 ### Changed
 
 #### UI Framework Migration
 
-- Migrated the entire annotation tool frontend from Material UI to shadcn-ui
+- Migrated the entire annotation-tool frontend from Material UI to shadcn-ui
 - Replaced MUI `Box`, `Typography`, `Button`, `Alert`, `Accordion`, `Dialog`, `Menu`, and form primitives with shadcn equivalents
 - Switched from Emotion-based theming to Tailwind CSS v4 with a Fovea-specific design-token layer
 - Replaced MUI icons with Lucide React icons via a barrel export
-- Layout rebuilt around the shadcn sidebar composition pattern with fixed dialog overflow handling
+- Rebuilt the Layout around the shadcn sidebar composition pattern with fixed dialog overflow handling
+- Fixed sidebar toggle, narrowed the dropdown menu, resolved tab overflow, and reduced the sidebar width
+- Renamed **Ontology Builder** to **Persona Builder** with updated icons and keyboard shortcut
 - Updated all component tests for the new shadcn DOM structure, ARIA roles, and named exports
+
+#### Schema Hardening
+
+- Replaced vitest-broken `Type.Union` nullable response schemas on `/api/me/preferences` with the `fast-json-stringify`-safe `Type.Unsafe` array-type pattern so null values serialize correctly
+- Resolved `SystemConfig` audit `updatedByUserId` through the users table so phantom test-bypass ids and real deleted-user races no longer violate the FK
 
 ### Removed
 
 - `@mui/material`, `@mui/icons-material`, `@mui/x-*`, `@emotion/react`, and `@emotion/styled` dependencies
+- Unused `DropdownPaper` helper left over from the MUI migration
+
+### Fixed
+
+- Shimmed `PointerEvent` + `Element` pointer-capture in `test/setup.ts` so Base UI's checkbox/dialog handlers no longer throw `PointerEvent is not defined` under jsdom
+- Updated `TimelineComponent` tests to pass the full `TimelineComponentProps` via a `makeProps` helper and query buttons by `aria-label` instead of the canvas-era emoji placeholders
+- Swapped the workspace integration test's `querySelector('canvas')` probe for `getByLabelText('Video annotation timeline')`
+- Annotation-drawing duplication during keyframe edits
+- Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed)
 
 ## [0.3.0] - 2026-04-24
 
