@@ -411,9 +411,10 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
       fireEvent.click(toggleButton)
 
       await waitFor(() => {
-        // Timeline canvas should be rendered
-        const canvases = document.querySelectorAll('canvas')
-        expect(canvases.length).toBeGreaterThan(0)
+        // The timeline root exposes an aria-label on the outer div. The
+        // older canvas-based implementation was migrated to shadcn DOM so
+        // ``document.querySelector('canvas')`` no longer finds anything.
+        expect(screen.getByLabelText('Video annotation timeline')).toBeInTheDocument()
       })
     })
   })
