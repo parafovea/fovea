@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '@store/queries'
 import { BoundingBox, Annotation, TypeAnnotation, ObjectAnnotation } from '@models/types'
+import { BoundingBoxHUD } from './BoundingBoxHUD'
+import { useBoundingBoxKeyboard } from './useBoundingBoxKeyboard'
 
 /**
  * Type guard to check if annotation is a TypeAnnotation.
@@ -358,6 +360,31 @@ export default function InteractiveBoundingBox({
           newBox.width = originalBox.width - (newBox.x - originalBox.x)
           break
       }
+
+      // Shift-lock aspect ratio when resizing from a corner — the smaller
+      // of the two dimension deltas wins so the ratio of the original box
+      // is preserved. The anchored edge of the corner handle determines
+      // which direction the constraint grows.
+      if (e.shiftKey && (activeHandle === 'nw' || activeHandle === 'ne' ||
+          activeHandle === 'se' || activeHandle === 'sw')) {
+        const aspect = originalBox.width / originalBox.height
+        const wFromH = newBox.height * aspect
+        const hFromW = newBox.width / aspect
+        // Honour whichever axis drifted farther.
+        if (Math.abs(newBox.width - originalBox.width) > Math.abs(newBox.height - originalBox.height)) {
+          const nextHeight = hFromW
+          if (activeHandle === 'nw' || activeHandle === 'ne') {
+            newBox.y = originalBox.y + originalBox.height - nextHeight
+          }
+          newBox.height = nextHeight
+        } else {
+          const nextWidth = wFromH
+          if (activeHandle === 'nw' || activeHandle === 'sw') {
+            newBox.x = originalBox.x + originalBox.width - nextWidth
+          }
+          newBox.width = nextWidth
+        }
+      }
     }
 
     // Update the annotation with the new bounding box
@@ -409,6 +436,31 @@ export default function InteractiveBoundingBox({
       }
     }
   }, [interactionMode, handleMouseMove, handleMouseUp])
+
+  // Arrow-key nudging. Enabled only for the currently selected box in an
+  // editable mode; shift multiplies the step to 10 pixels per press. Uses
+  // onUpdate so the caller's persistence pipeline runs on every nudge.
+  useBoundingBoxKeyboard({
+    enabled: isActive && isEditable,
+    box: currentBox,
+    videoWidth,
+    videoHeight,
+    onNudge: (patch) => {
+      if (onUpdate) {
+        onUpdate(patch)
+      } else if (mode === 'keyframe' && currentBox) {
+        updateKeyframe({
+          videoId: annotation.videoId,
+          annotationId: annotation.id,
+          frameNumber: currentFrame,
+          box: { ...currentBox, ...patch },
+        })
+      }
+    },
+    onCommit: () => {
+      onEditComplete?.()
+    },
+  })
 
 
   // Safety check: return null if no box available (after all hooks have been called)
@@ -583,6 +635,26 @@ export default function InteractiveBoundingBox({
               {badgeLabel}
             </Badge>
           </div>
+        </foreignObject>
+      )}
+
+      {/* Dimension HUD — only while interacting, anchored below the box. */}
+      {interactionMode !== 'none' && (
+        <foreignObject
+          x={currentBox.x}
+          y={currentBox.y + currentBox.height}
+          width={240}
+          height={36}
+          style={{ pointerEvents: 'none', overflow: 'visible' }}
+        >
+          <BoundingBoxHUD
+            width={currentBox.width}
+            height={currentBox.height}
+            x={currentBox.x}
+            y={currentBox.y}
+            anchor="bottom"
+            accent={strokeColor}
+          />
         </foreignObject>
       )}
 
