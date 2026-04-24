@@ -18,6 +18,23 @@ from src.application.ports.outbound.model_repository import IModelRepository
 from src.domain.entities import InferenceConfig, ModelConfig, TaskConfig
 
 
+def _build_task_config(task_name: str, raw: dict[str, Any]) -> TaskConfig:
+    """Translate a YAML task block into a typed ``TaskConfig``.
+
+    The YAML shape is ``{selected: str, options: {name: {...model fields}}}``;
+    each option maps to ``ModelConfig.from_dict`` so downstream callers see
+    real domain entities instead of raw dicts.
+    """
+    selected = str(raw.get("selected", ""))
+    options_raw = raw.get("options", {})
+    options: dict[str, ModelConfig] = {}
+    if isinstance(options_raw, dict):
+        for name, payload in options_raw.items():
+            if isinstance(payload, dict):
+                options[str(name)] = ModelConfig.from_dict(payload)
+    return TaskConfig(task_name=task_name, selected=selected, options=options)
+
+
 class YamlModelRepository(IModelRepository):
     """Load and persist model configuration from a YAML file."""
 
@@ -52,11 +69,16 @@ class YamlModelRepository(IModelRepository):
             raise ValueError(f"Invalid config format in {self._config_path}: expected mapping")
 
         self._raw = raw
+        models_raw = raw.get("models", {})
         self._tasks = {
-            task_name: TaskConfig(task_name, task_config)
-            for task_name, task_config in raw.get("models", {}).items()
+            task_name: _build_task_config(task_name, task_block)
+            for task_name, task_block in models_raw.items()
+            if isinstance(task_block, dict)
         }
-        self._inference = InferenceConfig(raw.get("inference", {}))
+        inference_raw = raw.get("inference", {})
+        if not isinstance(inference_raw, dict):
+            inference_raw = {}
+        self._inference = InferenceConfig.from_dict(inference_raw)
 
     def get_all_tasks(self) -> dict[str, TaskConfig]:
         """Return all configured tasks."""

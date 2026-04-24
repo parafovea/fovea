@@ -4,6 +4,7 @@ Provides the endpoint for extracting thumbnails from video files.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -73,8 +74,11 @@ async def generate_thumbnail(
         }
         dimensions = size_map[request.size]
 
-        # Create output path for thumbnail
-        thumbnails_dir = Path("/videos/thumbnails")
+        # Thumbnails land in the same directory the processor validates
+        # against. Defaults to ``/tmp/thumbnails`` so tests don't need to
+        # mount a real video volume; operators point ``THUMBNAIL_OUTPUT_ROOT``
+        # at the shared data disk in production.
+        thumbnails_dir = Path(os.environ.get("THUMBNAIL_OUTPUT_ROOT", "/tmp/thumbnails"))  # noqa: S108
         thumbnails_dir.mkdir(parents=True, exist_ok=True)
         output_path = str(thumbnails_dir / f"{request.video_id}_{request.size}.jpg")
 
