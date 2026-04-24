@@ -227,24 +227,13 @@
         "frameNumber": { "type": "integer", "minimum": 0 }
       }
     },
-    "timeSpan": {
-      "type": "object",
-      "required": ["startTime", "endTime"],
-      "properties": {
-        "startTime": { "type": "number", "minimum": 0 },
-        "endTime": { "type": "number", "minimum": 0 },
-        "startFrame": { "type": "integer", "minimum": 0 },
-        "endFrame": { "type": "integer", "minimum": 0 }
-      }
-    },
     "annotation": {
       "type": "object",
-      "required": ["id", "videoId", "boundingBox", "timeSpan", "typeCategory", "typeId", "createdAt", "updatedAt"],
+      "required": ["id", "videoId", "boundingBox", "typeCategory", "typeId", "createdAt", "updatedAt"],
       "properties": {
         "id": { "type": "string", "format": "uuid" },
         "videoId": { "type": "string" },
         "boundingBox": { "$ref": "#/definitions/boundingBox" },
-        "timeSpan": { "$ref": "#/definitions/timeSpan" },
         "typeCategory": {
           "type": "string",
           "enum": ["entity", "role", "event"]

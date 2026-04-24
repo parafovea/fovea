@@ -199,7 +199,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       if (entity) {
         // Get the base URL for wiki links (may be local Wikibase)
         const baseUrl = await getWikidataBaseUrl()
-        const info = extractWikidataInfo(entity, baseUrl)
+        const info = extractWikidataInfo(entity, { baseUrl })
         setEntityDetails(info as WikidataEntityDetails)
       }
     } finally {

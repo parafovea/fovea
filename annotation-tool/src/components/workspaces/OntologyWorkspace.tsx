@@ -62,7 +62,7 @@ import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@model
 type OntologyTypeItem = {
   id: string
   name: string
-  gloss: GlossItem[] | string
+  gloss: GlossItem[]
   wikidataId?: string
 }
 
@@ -228,15 +228,8 @@ export default function OntologyWorkspace() {
     // Check name
     if (item.name?.toLowerCase().includes(searchLower)) return true
 
-    // Check gloss - handle both array (correct format) and string (legacy)
-    if (Array.isArray(item.gloss)) {
-      // Convert gloss array to searchable text using the helper
-      const glossText = glossToText(item.gloss, selectedOntology, { entities, events, times })
-      if (glossText.toLowerCase().includes(searchLower)) return true
-    } else if (typeof item.gloss === 'string' && item.gloss.toLowerCase().includes(searchLower)) {
-      // Handle legacy string glosses if they exist
-      return true
-    }
+    const glossText = glossToText(item.gloss, selectedOntology, { entities, events, times })
+    if (glossText.toLowerCase().includes(searchLower)) return true
 
     // Check wikidataId
     if (item.wikidataId?.toLowerCase().includes(searchLower)) return true

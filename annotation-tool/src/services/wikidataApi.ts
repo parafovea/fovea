@@ -373,14 +373,10 @@ interface ExtractWikidataInfoOptions {
  * @param options - Optional extraction options including baseUrl and wikidataId
  * @returns Extracted entity information including labels, types, coordinates, and temporal data
  */
-export function extractWikidataInfo(entity: WikidataEntity, options?: ExtractWikidataInfoOptions | string) {
-  // Handle legacy signature where second param is baseUrl string
-  const opts: ExtractWikidataInfoOptions = typeof options === 'string'
-    ? { baseUrl: options }
-    : options || {}
+export function extractWikidataInfo(entity: WikidataEntity, options?: ExtractWikidataInfoOptions) {
+  const opts = options ?? {}
 
   const wikidataBaseUrl = opts.baseUrl || 'https://www.wikidata.org'
-  // Use provided wikidataId or fall back to entity.id
   const wikidataId = opts.wikidataId || entity.id
   const label = entity.labels?.en?.value || entity.id
   const description = entity.descriptions?.en?.value || ''
