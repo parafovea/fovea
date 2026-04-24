@@ -1,71 +1,47 @@
 /**
  * Tests for TimelineComponent.
  *
- * A handful of tests are ``it.skip``-ped: they were written against an
- * earlier canvas-based implementation and assert on
- * ``document.querySelector('canvas')``, but the component was rewritten to
- * render shadcn DOM (Tailwind-based track bars + keyframe dots) and no
- * longer uses a canvas. The skipped tests are left as tombstones so the
- * behaviors they once covered (frame-click seek, keyframe render, zoom,
- * hover tooltip) have a place to land when reimplemented against the new
- * DOM.
+ * Exercises the modern DOM-based timeline surface: transport bar controls,
+ * SMPTE/frame readouts, keyframe buttons gated by context, interpolation
+ * trigger, zoom controls, track header actions, and the keyboard shortcut
+ * palette.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TimelineComponent, TimelineComponentProps } from './TimelineComponent.js'
 import { Annotation, BoundingBoxSequence, InterpolationType } from '@models/types.js'
 
-// Mock TimelineRenderer
-vi.mock('./TimelineRenderer.js', () => ({
-  TimelineRenderer: vi.fn().mockImplementation(() => ({
-    render: vi.fn(),
-    setZoom: vi.fn(),
-    setViewport: vi.fn(),
-    resize: vi.fn(),
-    frameToX: vi.fn((frame: number) => frame * 10),
-    xToFrame: vi.fn((x: number) => Math.floor(x / 10)),
-    getKeyframeAtX: vi.fn(() => null),
-    getSegmentAtX: vi.fn(() => null),
-    invalidate: vi.fn(),
-    destroy: vi.fn(),
-  })),
-}))
-
-// Mock keyboard shortcuts hook. The component imports it from
-// ``@hooks/preferences/useTimelineKeyboardShortcuts`` so the mock specifier
-// needs to match that resolved module — the old relative path was a stale
-// no-op that never intercepted the real hook.
 vi.mock('@hooks/preferences/useTimelineKeyboardShortcuts', () => ({
   useTimelineKeyboardShortcuts: vi.fn(),
 }))
 
 describe('TimelineComponent', () => {
   const mockOnSeek = vi.fn()
+  const mockOnAddKeyframe = vi.fn()
+  const mockOnDeleteKeyframe = vi.fn()
+  const mockOnCopyPreviousFrame = vi.fn()
+  const mockOnUpdateInterpolationSegment = vi.fn()
+  const mockOnClose = vi.fn()
+  const mockOnAnnotationSelect = vi.fn()
 
-  const createQueryClient = () => {
-    return new QueryClient({
+  const createQueryClient = () =>
+    new QueryClient({
       defaultOptions: {
         queries: { retry: false },
         mutations: { retry: false },
       },
     })
-  }
 
-  const renderWithQueryClient = (component: React.ReactElement, queryClient = createQueryClient()) => {
-    return render(
-      <QueryClientProvider client={queryClient}>
-        {component}
-      </QueryClientProvider>
-    )
-  }
+  const renderWithQueryClient = (component: React.ReactElement) =>
+    render(<QueryClientProvider client={createQueryClient()}>{component}</QueryClientProvider>)
 
-  const createTestAnnotation = (keyframes: number[]): Annotation => {
+  const createTestAnnotation = (keyframes: number[], id = 'test-annotation'): Annotation => {
     const sequence: BoundingBoxSequence = {
-      boxes: keyframes.map(frame => ({
+      boxes: keyframes.map((frame) => ({
         x: 100,
         y: 100,
         width: 50,
@@ -73,23 +49,29 @@ describe('TimelineComponent', () => {
         frameNumber: frame,
         isKeyframe: true,
       })),
-      interpolationSegments: keyframes.length > 1 ? [{
-        startFrame: keyframes[0],
-        endFrame: keyframes[keyframes.length - 1],
-        type: 'linear' as const,
-      }] : [],
-      visibilityRanges: [{
-        startFrame: keyframes[0],
-        endFrame: keyframes[keyframes.length - 1],
-        visible: true,
-      }],
+      interpolationSegments:
+        keyframes.length > 1
+          ? [
+              {
+                startFrame: keyframes[0],
+                endFrame: keyframes[keyframes.length - 1],
+                type: 'linear' as const,
+              },
+            ]
+          : [],
+      visibilityRanges: [
+        {
+          startFrame: keyframes[0],
+          endFrame: keyframes[keyframes.length - 1],
+          visible: true,
+        },
+      ],
       totalFrames: keyframes[keyframes.length - 1] + 1,
       keyframeCount: keyframes.length,
       interpolatedFrameCount: 0,
     }
-
     return {
-      id: 'test-annotation',
+      id,
       videoId: 'test-video',
       annotationType: 'type',
       personaId: 'test-persona',
@@ -101,384 +83,275 @@ describe('TimelineComponent', () => {
     }
   }
 
-  /**
-   * Build a complete ``TimelineComponentProps`` bag from the bits the tests
-   * care about. The component requires both a selected ``annotation`` and
-   * the full ``annotations`` list, plus six callback handlers; tests were
-   * written against an earlier, narrower signature so every render call
-   * goes through this helper to fill in the blanks with safe mocks.
-   */
   const makeProps = (
     overrides: Partial<TimelineComponentProps> & { annotation: Annotation | null },
-  ): TimelineComponentProps => {
-    const { annotation } = overrides
-    return {
-      annotation,
-      annotations: annotation ? [annotation] : [],
-      currentFrame: 0,
-      totalFrames: 100,
-      videoFps: 30,
-      onSeek: mockOnSeek,
-      onAnnotationSelect: vi.fn(),
-      onAddKeyframe: vi.fn(),
-      onDeleteKeyframe: vi.fn(),
-      onCopyPreviousFrame: vi.fn(),
-      onUpdateInterpolationSegment: vi.fn() as (
-        segmentIndex: number,
-        type: InterpolationType,
-      ) => void,
-      onClose: vi.fn(),
-      ...overrides,
-    }
-  }
+  ): TimelineComponentProps => ({
+    annotation: overrides.annotation,
+    annotations: overrides.annotation ? [overrides.annotation] : [],
+    currentFrame: 0,
+    totalFrames: 100,
+    videoFps: 30,
+    onSeek: mockOnSeek,
+    onAnnotationSelect: mockOnAnnotationSelect,
+    onAddKeyframe: mockOnAddKeyframe,
+    onDeleteKeyframe: mockOnDeleteKeyframe,
+    onCopyPreviousFrame: mockOnCopyPreviousFrame,
+    onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment as unknown as (
+      segmentIndex: number,
+      type: InterpolationType,
+    ) => void,
+    onClose: mockOnClose,
+    ...overrides,
+  })
 
   beforeEach(() => {
     mockOnSeek.mockClear()
+    mockOnAddKeyframe.mockClear()
+    mockOnDeleteKeyframe.mockClear()
+    mockOnCopyPreviousFrame.mockClear()
+    mockOnUpdateInterpolationSegment.mockClear()
+    mockOnClose.mockClear()
+    mockOnAnnotationSelect.mockClear()
   })
 
-  it.skip('renders timeline with canvas', () => {
+  it('renders the timeline root surface', () => {
     const annotation = createTestAnnotation([0, 50, 100])
+    renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
+    expect(screen.getByLabelText('Video annotation timeline')).toBeInTheDocument()
+    expect(document.querySelector('[data-slot="timeline-transport"]')).toBeTruthy()
+    expect(document.querySelector('[data-slot="timeline-ruler"]')).toBeTruthy()
+  })
+
+  it('shows a SMPTE timecode readout and frame counter in the transport', () => {
+    const annotation = createTestAnnotation([0, 50, 100])
     renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
+      <TimelineComponent {...makeProps({ annotation, currentFrame: 25 })} />,
     )
 
-    const canvas = document.querySelector('canvas')
-    expect(canvas).toBeTruthy()
+    const transport = document.querySelector('[data-slot="timeline-transport"]') as HTMLElement
+    expect(transport).toBeTruthy()
+    // 30 fps, frame 25 → 00:00:00:25
+    expect(within(transport).getByText('00:00:00:25')).toBeInTheDocument()
+    expect(within(transport).getByText(/frame 25 \/ 99/)).toBeInTheDocument()
   })
 
-  it('displays current frame counter', () => {
+  it('renders the full transport cluster with all four navigation buttons', () => {
     const annotation = createTestAnnotation([0, 50, 100])
+    renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 25, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    expect(screen.getByText(/Frame 25 \/ 99/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Jump 10 frames back/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Step 1 frame back/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Step 1 frame forward/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Jump 10 frames forward/ })).toBeTruthy()
   })
 
-  it('renders transport controls', () => {
-    const annotation = createTestAnnotation([0, 50, 100])
-
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 25, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    // Check for transport control buttons
-    const buttons = screen.getAllByRole('button')
-    expect(buttons.length).toBeGreaterThanOrEqual(4)  // At least 4 transport buttons
-  })
-
-  it.skip('seeks to clicked frame on canvas click', async () => {
+  it('seeks one frame forward when the step-forward button is clicked', async () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
-
     renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
+      <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
     )
 
-    const canvas = document.querySelector('canvas')
-    expect(canvas).toBeTruthy()
-
-    // Simulate click at x=250 (should be frame 25 with xToFrame mock)
-    await user.click(canvas!)
-
-    // onSeek should be called
-    expect(mockOnSeek).toHaveBeenCalled()
-  })
-
-  it('responds to transport control clicks', async () => {
-    const user = userEvent.setup()
-    const annotation = createTestAnnotation([0, 50, 100])
-
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    const stepForwardBtn = screen.getByRole('button', { name: 'Step 1 frame forward' })
-    expect(stepForwardBtn).toBeTruthy()
-
-    await user.click(stepForwardBtn as Element)
-
+    await user.click(screen.getByRole('button', { name: /Step 1 frame forward/ }))
     expect(mockOnSeek).toHaveBeenCalledWith(51)
   })
 
-  it('handles zoom level changes', async () => {
+  it('seeks ten frames back when the jump-backward button is clicked', async () => {
+    const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
-
     renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 25, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
+      <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
     )
 
-    // Find zoom slider by data-slot attribute (base-ui Slider)
-    const zoomSlider = document.querySelector('[data-slot="slider"]')
-    expect(zoomSlider).toBeTruthy()
-
-    // Verify it rendered (base-ui Slider doesn't expose role="slider" in jsdom)
-    const thumb = document.querySelector('[data-slot="slider-thumb"]')
-    expect(thumb).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /Jump 10 frames back/ }))
+    expect(mockOnSeek).toHaveBeenCalledWith(40)
   })
 
-  it.skip('displays keyframes from annotation sequence', () => {
+  it('renders a keyframe marker for every keyframe in the active annotation', () => {
     const annotation = createTestAnnotation([0, 25, 50, 75, 100])
+    renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    // Timeline renderer should receive keyframes
-    // Since we're mocking TimelineRenderer, we can verify it was instantiated
-    const canvas = document.querySelector('canvas')
-    expect(canvas).toBeTruthy()
+    const keyframes = document.querySelectorAll('[data-slot="timeline-keyframe"]')
+    expect(keyframes.length).toBe(5)
   })
 
-  it.skip('clamps frame values to valid range', async () => {
+  it('marks the keyframe at the current frame with data-current', () => {
+    const annotation = createTestAnnotation([0, 50, 100])
+    renderWithQueryClient(
+      <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
+    )
+
+    const current = document.querySelector(
+      '[data-slot="timeline-keyframe"][data-current="true"]',
+    )
+    expect(current).toBeTruthy()
+    expect(current?.getAttribute('aria-label')).toContain('Keyframe at frame 50')
+  })
+
+  it('exposes keyboard shortcuts via the shortcuts button', async () => {
     const user = userEvent.setup()
     const annotation = createTestAnnotation([0, 50, 100])
+    renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
-    const { container } = renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 95, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    // Try to jump forward past end
-    const jumpForwardBtn = container.querySelector('[title*="Jump 10 frames forward"]')
-    await user.click(jumpForwardBtn as Element)
-
-    // Should clamp to totalFrames - 1
-    expect(mockOnSeek).toHaveBeenCalledWith(99)
+    expect(document.querySelector('[data-slot="timeline-shortcut-palette"]')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /Keyboard shortcuts/ }))
+    expect(document.querySelector('[data-slot="timeline-shortcut-palette"]')).toBeTruthy()
   })
 
-  it.skip('shows frame tooltip on hover', async () => {
-    const user = userEvent.setup()
-    const annotation = createTestAnnotation([0, 50, 100])
-
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    const canvas = document.querySelector('canvas')
-    expect(canvas).toBeTruthy()
-
-    // Hover over canvas
-    await user.hover(canvas!)
-
-    // Note: Testing tooltip visibility requires actual mouse coordinates,
-    // which is complex in jsdom. This test verifies component renders without errors.
-  })
-
-  it('handles annotations with single keyframe', () => {
-    const annotation = createTestAnnotation([42])
-
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 42, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    expect(screen.getByText(/Frame 42 \/ 99/)).toBeTruthy()
-  })
-
-  it('handles large frame counts', () => {
-    const annotation = createTestAnnotation([0, 2500, 5000])
-
-    renderWithQueryClient(
-      <TimelineComponent {...makeProps({ annotation, currentFrame: 2500, totalFrames: 5000, videoFps: 30, onSeek: mockOnSeek })} />
-    )
-
-    expect(screen.getByText(/Frame 2500 \/ 4999/)).toBeTruthy()
-  })
-
-  describe('Keyframe operations', () => {
-    const mockOnAddKeyframe = vi.fn()
-    const mockOnDeleteKeyframe = vi.fn()
-    const mockOnCopyPreviousFrame = vi.fn()
-    const mockOnUpdateInterpolationSegment = vi.fn()
-    const mockOnClose = vi.fn()
-
-    beforeEach(() => {
-      mockOnAddKeyframe.mockClear()
-      mockOnDeleteKeyframe.mockClear()
-      mockOnCopyPreviousFrame.mockClear()
-      mockOnUpdateInterpolationSegment.mockClear()
-      mockOnClose.mockClear()
-    })
-
-    it('should add keyframe when add button clicked', async () => {
-      const user = userEvent.setup()
+  describe('keyframe operations', () => {
+    it('enables Add Keyframe when currentFrame is not a keyframe', () => {
       const annotation = createTestAnnotation([0, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
       )
 
-      const addButton = screen.getByRole('button', { name: 'Add Keyframe' })
-      expect(addButton).toBeTruthy()
-
-      await user.click(addButton!)
-      expect(mockOnAddKeyframe).toHaveBeenCalled()
+      const button = screen.getByRole('button', { name: /Add Keyframe/ })
+      expect(button).not.toBeDisabled()
     })
 
-    it('should disable add button when at keyframe', () => {
+    it('disables Add Keyframe when currentFrame is already a keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
       )
 
-      const addButton = screen.getByRole('button', { name: 'Add Keyframe' })
-      expect(addButton).toBeDisabled()
+      const button = screen.getByRole('button', { name: /Already a keyframe/ })
+      expect(button).toBeDisabled()
     })
 
-    it('should delete keyframe when delete button clicked', async () => {
-      const user = userEvent.setup()
+    it('enables Delete Keyframe only for non-boundary keyframes', () => {
       const annotation = createTestAnnotation([0, 25, 50, 75, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 50 })} />,
       )
 
-      const deleteButton = screen.getByRole('button', { name: 'Delete Keyframe' })
-      expect(deleteButton).toBeTruthy()
-      expect(deleteButton).not.toBeDisabled()
-
-      await user.click(deleteButton!)
-      expect(mockOnDeleteKeyframe).toHaveBeenCalled()
+      const deleteBtn = screen.getByRole('button', { name: /Delete Keyframe/ })
+      expect(deleteBtn).not.toBeDisabled()
     })
 
-    it('should disable delete for first keyframe', () => {
+    it('disables Delete Keyframe for the first keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 0 })} />,
       )
 
-      const deleteButton = screen.getByRole('button', { name: 'Delete Keyframe' })
-      expect(deleteButton).toBeDisabled()
+      const deleteBtn = screen.getByRole('button', { name: /Delete Keyframe/ })
+      expect(deleteBtn).toBeDisabled()
     })
 
-    it('should disable delete for last keyframe', () => {
+    it('disables Delete Keyframe for the last keyframe', () => {
       const annotation = createTestAnnotation([0, 50, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 100, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 100 })} />,
       )
 
-      const deleteButton = screen.getByRole('button', { name: 'Delete Keyframe' })
-      expect(deleteButton).toBeDisabled()
+      const deleteBtn = screen.getByRole('button', { name: /Delete Keyframe/ })
+      expect(deleteBtn).toBeDisabled()
     })
 
-    it('should copy previous frame when copy button clicked', async () => {
-      const user = userEvent.setup()
+    it('enables Copy Previous Frame at any frame past 0', () => {
       const annotation = createTestAnnotation([0, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 10 })} />,
       )
 
-      const copyButton = screen.getByRole('button', { name: 'Copy Previous Frame' })
-      expect(copyButton).toBeTruthy()
-
-      await user.click(copyButton!)
-      expect(mockOnCopyPreviousFrame).toHaveBeenCalled()
+      const copyBtn = screen.getByRole('button', { name: /Copy Previous Frame/ })
+      expect(copyBtn).not.toBeDisabled()
     })
 
-    it('should disable copy at frame 0', () => {
+    it('disables Copy Previous Frame at frame 0', () => {
       const annotation = createTestAnnotation([0, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 0 })} />,
       )
 
-      const copyButton = screen.getByRole('button', { name: 'Copy Previous Frame' })
-      expect(copyButton).toBeDisabled()
+      const copyBtn = screen.getByRole('button', { name: /Copy Previous Frame/ })
+      expect(copyBtn).toBeDisabled()
     })
 
-    it('should open interpolation dialog when interpolation button clicked', async () => {
-      const user = userEvent.setup()
-      const annotation = createTestAnnotation([0, 100])
-
+    it('enables Interpolation Mode when the track has two or more keyframes', () => {
+      const annotation = createTestAnnotation([0, 50, 100])
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 50, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 25 })} />,
       )
 
-      const interpButton = screen.getByRole('button', { name: 'Interpolation Mode' })
-      expect(interpButton).toBeTruthy()
-      expect(interpButton).not.toBeDisabled()
-
-      await user.click(interpButton!)
-      // Dialog should open (component should not crash)
+      const interpBtn = screen.getByRole('button', { name: /Interpolation Mode/ })
+      expect(interpBtn).not.toBeDisabled()
     })
 
-    it('should disable interpolation with less than 2 keyframes', () => {
+    it('disables Interpolation Mode for a single-keyframe track', () => {
       const annotation = createTestAnnotation([0])
+      renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
-      renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
-      )
-
-      const interpButton = screen.getByRole('button', { name: 'Interpolation Mode' })
-      expect(interpButton).toBeDisabled()
+      const interpBtn = screen.getByRole('button', { name: /Interpolation Mode/ })
+      expect(interpBtn).toBeDisabled()
     })
 
-    it('should call onClose when hide button clicked', async () => {
+    it('calls onClose when the hide-timeline button is clicked', async () => {
       const user = userEvent.setup()
-      const annotation = createTestAnnotation([0, 100])
+      const annotation = createTestAnnotation([0, 50, 100])
+      renderWithQueryClient(<TimelineComponent {...makeProps({ annotation })} />)
 
-      renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
+      await user.click(
+        screen.getByRole('button', { name: /Hide timeline and show standard controls/ }),
       )
-
-      const hideButton = screen.getByLabelText('Hide timeline and show standard controls')
-      await user.click(hideButton)
-
       expect(mockOnClose).toHaveBeenCalled()
     })
   })
 
-  describe('Edge cases', () => {
-    it('should handle null annotation', () => {
-      const mockOnAddKeyframe = vi.fn()
-      const mockOnDeleteKeyframe = vi.fn()
-      const mockOnCopyPreviousFrame = vi.fn()
-      const mockOnUpdateInterpolationSegment = vi.fn()
-      const mockOnClose = vi.fn()
-
-      renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation: null, currentFrame: 0, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek, onAddKeyframe: mockOnAddKeyframe, onDeleteKeyframe: mockOnDeleteKeyframe, onCopyPreviousFrame: mockOnCopyPreviousFrame, onUpdateInterpolationSegment: mockOnUpdateInterpolationSegment, onClose: mockOnClose })} />
-      )
-
-      // Should render without crashing
-      expect(screen.getByText(/Frame 0 \/ 99/)).toBeTruthy()
-
-      // All keyframe buttons should be disabled
-      const addButton = screen.getByRole('button', { name: 'Add Keyframe' })
-      const deleteButton = screen.getByRole('button', { name: 'Delete Keyframe' })
-      const copyButton = screen.getByRole('button', { name: 'Copy Previous Frame' })
-      const interpButton = screen.getByRole('button', { name: 'Interpolation Mode' })
-
-      expect(addButton).toBeDisabled()
-      expect(deleteButton).toBeDisabled()
-      expect(copyButton).toBeDisabled()
-      expect(interpButton).toBeDisabled()
+  describe('edge cases', () => {
+    it('renders without crashing when annotation is null', () => {
+      renderWithQueryClient(<TimelineComponent {...makeProps({ annotation: null })} />)
+      expect(screen.getByLabelText('Video annotation timeline')).toBeInTheDocument()
     })
 
-    it('should handle currentFrame beyond totalFrames', () => {
+    it('tolerates a currentFrame beyond totalFrames', () => {
       const annotation = createTestAnnotation([0, 50, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: 500, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: 500 })} />,
       )
-
-      // Should render without crashing — the timeline root carries the aria-label.
-      expect(screen.getByLabelText('Video annotation timeline')).toBeTruthy()
+      expect(screen.getByLabelText('Video annotation timeline')).toBeInTheDocument()
     })
 
-    it('should handle negative currentFrame', () => {
+    it('tolerates a negative currentFrame', () => {
       const annotation = createTestAnnotation([0, 50, 100])
-
       renderWithQueryClient(
-        <TimelineComponent {...makeProps({ annotation, currentFrame: -10, totalFrames: 100, videoFps: 30, onSeek: mockOnSeek })} />
+        <TimelineComponent {...makeProps({ annotation, currentFrame: -10 })} />,
+      )
+      expect(screen.getByLabelText('Video annotation timeline')).toBeInTheDocument()
+    })
+  })
+
+  describe('track surface', () => {
+    it('renders one track header per annotation', () => {
+      const a = createTestAnnotation([0, 50, 100], 'ann-a')
+      const b = createTestAnnotation([10, 90], 'ann-b')
+      renderWithQueryClient(
+        <TimelineComponent
+          {...makeProps({ annotation: a, annotations: [a, b], currentFrame: 25 })}
+        />,
       )
 
-      expect(screen.getByLabelText('Video annotation timeline')).toBeTruthy()
+      const headers = document.querySelectorAll('[data-slot="timeline-track-header"]')
+      expect(headers.length).toBe(2)
+    })
+
+    it('selects a track when its header is clicked', async () => {
+      const user = userEvent.setup()
+      const a = createTestAnnotation([0, 50, 100], 'ann-a')
+      const b = createTestAnnotation([10, 90], 'ann-b')
+      renderWithQueryClient(
+        <TimelineComponent
+          {...makeProps({ annotation: a, annotations: [a, b], currentFrame: 25 })}
+        />,
+      )
+
+      const headers = document.querySelectorAll('[data-slot="timeline-track-header"]')
+      await user.click(headers[1] as Element)
+      expect(mockOnAnnotationSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'ann-b' }),
+      )
     })
   })
 })

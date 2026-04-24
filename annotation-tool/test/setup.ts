@@ -116,13 +116,18 @@ if (typeof globalThis.PointerEvent === 'undefined') {
  * inside their pointerdown handler; both are no-ops here.
  */
 if (typeof Element !== 'undefined') {
-  if (!('hasPointerCapture' in Element.prototype)) {
-    Element.prototype.hasPointerCapture = (): boolean => false
+  const proto = Element.prototype as unknown as {
+    hasPointerCapture?: (pointerId: number) => boolean
+    setPointerCapture?: (pointerId: number) => void
+    releasePointerCapture?: (pointerId: number) => void
   }
-  if (!('setPointerCapture' in Element.prototype)) {
-    Element.prototype.setPointerCapture = (): void => {}
+  if (!proto.hasPointerCapture) {
+    proto.hasPointerCapture = () => false
   }
-  if (!('releasePointerCapture' in Element.prototype)) {
-    Element.prototype.releasePointerCapture = (): void => {}
+  if (!proto.setPointerCapture) {
+    proto.setPointerCapture = () => {}
+  }
+  if (!proto.releasePointerCapture) {
+    proto.releasePointerCapture = () => {}
   }
 }
