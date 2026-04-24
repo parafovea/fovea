@@ -9,30 +9,39 @@ import { ErrorResponseSchema } from '../lib/errors.js'
  * Mirrors the frontend's ``InferencePreferences`` type verbatim. Fields may
  * be ``null``, meaning "use the backend dataclass default" — omitted keys
  * from the DB fall back through the same path.
+ *
+ * The nullable fields use ``Type.Unsafe`` with a JSON-Schema array type so
+ * fast-json-stringify serializes ``null`` correctly on the response path
+ * (TypeBox's ``Type.Union([..., Type.Null()])`` silently coerces to ``0`` /
+ * ``""``). Request AJV accepts either shape, but the two-sided invariant
+ * only holds with the array-type form.
  */
+const NullableNumber = Type.Unsafe<number | null>({ type: ['number', 'null'] })
+const NullableInt = Type.Unsafe<number | null>({ type: ['integer', 'null'] })
+const NullableComputeType = Type.Unsafe<
+  'float16' | 'float32' | 'int8' | 'int8_float16' | null
+>({
+  type: ['string', 'null'],
+  enum: ['float16', 'float32', 'int8', 'int8_float16', null],
+})
+
 const GenerationPreferencesSchema = Type.Object({
-  temperature: Type.Union([Type.Number({ minimum: 0, maximum: 2 }), Type.Null()]),
-  topP: Type.Union([Type.Number({ minimum: 0, maximum: 1 }), Type.Null()]),
-  maxTokens: Type.Union([Type.Integer({ minimum: 1, maximum: 32768 }), Type.Null()]),
+  temperature: NullableNumber,
+  topP: NullableNumber,
+  maxTokens: NullableInt,
 })
 
 const AudioPreferencesSchema = Type.Object({
-  beamSize: Type.Union([Type.Integer({ minimum: 1, maximum: 10 }), Type.Null()]),
-  computeType: Type.Union([
-    Type.Literal('float16'),
-    Type.Literal('float32'),
-    Type.Literal('int8'),
-    Type.Literal('int8_float16'),
-    Type.Null(),
-  ]),
-  numSpeakers: Type.Union([Type.Integer({ minimum: 1, maximum: 20 }), Type.Null()]),
-  minSpeakers: Type.Union([Type.Integer({ minimum: 1, maximum: 20 }), Type.Null()]),
-  maxSpeakers: Type.Union([Type.Integer({ minimum: 1, maximum: 20 }), Type.Null()]),
-  vadThreshold: Type.Union([Type.Number({ minimum: 0, maximum: 1 }), Type.Null()]),
+  beamSize: NullableInt,
+  computeType: NullableComputeType,
+  numSpeakers: NullableInt,
+  minSpeakers: NullableInt,
+  maxSpeakers: NullableInt,
+  vadThreshold: NullableNumber,
 })
 
 const DetectionPreferencesSchema = Type.Object({
-  confidenceThreshold: Type.Union([Type.Number({ minimum: 0, maximum: 1 }), Type.Null()]),
+  confidenceThreshold: NullableNumber,
 })
 
 const InferencePreferencesSchema = Type.Object({

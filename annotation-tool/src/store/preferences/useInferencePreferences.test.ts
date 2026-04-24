@@ -1,4 +1,3 @@
-// @vitest-environment happy-dom
 /**
  * Unit tests for the pure merge helpers in ``useInferencePreferences``.
  *

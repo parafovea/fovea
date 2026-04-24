@@ -1,8 +1,8 @@
 import { Type, Static } from '@sinclair/typebox'
-import axios, { AxiosError } from 'axios'
 import { FastifyPluginAsync } from 'fastify'
 import { requireAdmin } from '../middleware/auth.js'
 import { ErrorResponseSchema, ConflictError, InternalError } from '../lib/errors.js'
+import { pushSystemConfigRow } from '../services/system-config-propagator.js'
 
 /**
  * Admin-only key-value configuration surface.
@@ -109,29 +109,17 @@ function isKnownKey(value: string): value is ConfigKey {
   return (KNOWN_KEYS as readonly string[]).includes(value)
 }
 
-async function pushToModelService(
-  fastify: { log: { warn: (msg: string, obj?: object) => void } },
-  payload: unknown
+/**
+ * Wrap ``pushSystemConfigRow`` so a failed write surfaces as an
+ * InternalError to the HTTP client, while the startup replay path can
+ * tolerate per-row failures silently.
+ */
+async function pushOrRaise(
+  log: { warn: (msg: string) => void; info: (msg: string) => void },
+  payload: { key: string; value: unknown }
 ): Promise<void> {
-  const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
-  const token = process.env.MODEL_SERVICE_ADMIN_TOKEN
-  if (!token) {
-    fastify.log.warn(
-      'MODEL_SERVICE_ADMIN_TOKEN not set; skipping propagation of admin config change'
-    )
-    return
-  }
-  try {
-    await axios.post(`${modelServiceUrl}/api/admin/reconfigure`, payload, {
-      timeout: 15000,
-      headers: { 'X-Admin-Token': token, 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    const error = err as AxiosError
-    const detail = (error.response?.data as { detail?: string } | undefined)?.detail
-    fastify.log.warn(`Failed to propagate admin config: ${detail ?? error.message}`, {
-      status: error.response?.status,
-    })
+  const ok = await pushSystemConfigRow(log, payload)
+  if (!ok) {
     throw new InternalError('Model-service refused the new configuration')
   }
 }
@@ -206,21 +194,36 @@ const adminConfigRoute: FastifyPluginAsync = async (fastify) => {
         )
       }
 
+      // Resolve the caller's user row before writing. The SystemConfig
+      // audit FK must point at a real users row or be null — the
+      // ALLOW_TEST_ADMIN_BYPASS mode injects a synthetic id that isn't in
+      // the table, and a user could in principle be deleted between auth
+      // and this write in production.
+      const callerId = request.user?.id ?? null
+      let auditUserId: string | null = null
+      if (callerId) {
+        const caller = await fastify.prisma.user.findUnique({
+          where: { id: callerId },
+          select: { id: true },
+        })
+        auditUserId = caller?.id ?? null
+      }
+
       const row = await fastify.prisma.systemConfig.upsert({
         where: { key },
         create: {
           key,
           value: request.body.value,
-          updatedByUserId: request.user?.id ?? null,
+          updatedByUserId: auditUserId,
         },
         update: {
           value: request.body.value,
           version: { increment: 1 },
-          updatedByUserId: request.user?.id ?? null,
+          updatedByUserId: auditUserId,
         },
       })
 
-      await pushToModelService(fastify, { key, value: request.body.value })
+      await pushOrRaise(fastify.log, { key, value: request.body.value })
 
       return reply.send({
         key,
@@ -252,7 +255,7 @@ const adminConfigRoute: FastifyPluginAsync = async (fastify) => {
     async (_request, reply) => {
       const rows = await fastify.prisma.systemConfig.findMany()
       for (const row of rows) {
-        await pushToModelService(fastify, { key: row.key, value: row.value })
+        await pushOrRaise(fastify.log, { key: row.key, value: row.value })
       }
       return reply.send({ replayed: rows.map((r) => r.key) })
     }

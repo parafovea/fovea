@@ -118,6 +118,26 @@ async function connectDatabase(maxRetries = 5, delayMs = 2000) {
  * Starts the Fastify server.
  * Initializes the data directory, user mode, starts listening, then syncs videos.
  */
+/**
+ * Replays persisted SystemConfig rows to the model-service after startup.
+ *
+ * Runs after ``app.listen`` so the server is healthy even when the
+ * model-service isn't reachable yet. Per-row failures are logged but do
+ * not abort the server — an operator can hit "Replay" from the admin UI
+ * once the model-service is back.
+ */
+async function initializeSystemConfigReplay(app: Awaited<ReturnType<typeof buildApp>>) {
+  try {
+    const { replaySystemConfigOnStartup } = await import(
+      './services/system-config-propagator.js'
+    )
+    await replaySystemConfigOnStartup(app.prisma, app.log)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    app.log.warn(`SystemConfig startup replay failed: ${message}`)
+  }
+}
+
 async function start() {
   const app = await buildApp()
   const PORT = parseInt(process.env.PORT || '3001', 10)
@@ -129,6 +149,9 @@ async function start() {
     await app.listen({ port: PORT, host: '0.0.0.0' })
     // Sync videos AFTER server is listening to ensure all subsystems are initialized
     await initializeVideoSync(app)
+    // Push every persisted admin-config row to the model-service so a
+    // fresh model-service process picks up operator settings automatically.
+    await initializeSystemConfigReplay(app)
   } catch (err) {
     app.log.error(err)
     process.exit(1)
