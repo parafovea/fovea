@@ -210,14 +210,6 @@ export interface TimeCollection {
   metadata?: Record<string, unknown>
 }
 
-// Legacy TimeSpan for backward compatibility
-export interface TimeSpan {
-  startTime: number
-  endTime: number
-  startFrame?: number
-  endFrame?: number
-}
-
 export interface RelationType {
   id: string
   sharedTypeId?: string
@@ -387,7 +379,6 @@ interface BaseAnnotation {
   
   // Temporal
   time?: Time
-  timeSpan?: TimeSpan  // Deprecated, for backward compatibility
   
   // Common metadata
   confidence?: number

@@ -204,7 +204,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       const entity = await getWikidataEntity(value.id)
       if (entity) {
         const baseUrl = await getWikidataBaseUrl()
-        const info = extractWikidataInfo(entity, baseUrl)
+        const info = extractWikidataInfo(entity, { baseUrl })
         setEntityDetails(info as WikidataEntityDetails)
       }
     } finally {

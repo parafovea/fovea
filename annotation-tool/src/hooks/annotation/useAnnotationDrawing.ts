@@ -268,10 +268,6 @@ export function useAnnotationDrawing({
           keyframeCount: 1,
           interpolatedFrameCount: endFrame - currentFrame,
         },
-        timeSpan: {
-          startTime: currentTime,
-          endTime: currentTime + 1,
-        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }

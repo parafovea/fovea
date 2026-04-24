@@ -113,9 +113,6 @@ export function defineAbilitiesFor(
       case 'Persona':
       case 'WorldState':
       case 'Annotation':
-        // Annotation has both userId (legacy) and createdByUserId (RBAC).
-        // Prefer createdByUserId; the backfill migration populates it from
-        // userId for historical rows.
         return modelName === 'Annotation' ? 'createdByUserId' : 'userId'
       case 'VideoSummary':
       case 'Claim':

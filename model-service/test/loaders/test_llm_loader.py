@@ -578,13 +578,11 @@ class TestFallbackLoading:
                 "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 side_effect=mock_from_pretrained,
             ),
-            patch("builtins.print") as mock_print,
         ):
             loader = await create_llm_loader_with_fallback(primary, [fallback])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "google/gemma-3-27b-it"
-            mock_print.assert_any_call("Loaded fallback model: google/gemma-3-27b-it")
 
     @pytest.mark.asyncio
     async def test_create_llm_loader_with_fallback_all_fail(self) -> None:

@@ -86,7 +86,7 @@ class TestLlama4MaverickLoader:
         assert loader.processor is None
         assert loader.tokenizer is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
     def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
@@ -109,7 +109,7 @@ class TestLlama4MaverickLoader:
         mock_processor.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
         mock_tokenizer.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
     def test_generate_with_transformers(
@@ -222,7 +222,7 @@ class TestGemma3Loader:
         assert loader.model is None
 
     @patch(
-        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained"
+        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText.from_pretrained"
     )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
@@ -304,7 +304,7 @@ class TestPixtralLargeLoader:
         assert loader.model is None
 
     @patch(
-        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForVision2Seq.from_pretrained"
+        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText.from_pretrained"
     )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")

@@ -837,12 +837,6 @@ describe('wikidataApi', () => {
       expect(info.wikidataUrl).toBe('https://www.wikidata.org/wiki/Q42')
     })
 
-    it('accepts custom base URL as string (legacy signature)', () => {
-      const info = extractWikidataInfo(sampleEntity, 'http://localhost:8181')
-
-      expect(info.wikidataUrl).toBe('http://localhost:8181/wiki/Q42')
-    })
-
     it('accepts options object with baseUrl', () => {
       const info = extractWikidataInfo(sampleEntity, {
         baseUrl: 'http://localhost:8181',

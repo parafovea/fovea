@@ -101,7 +101,7 @@ class ModelManager:
         self,
         config_path: str,
         *,
-        capability_probe: IModelCapabilityProbe | None = None,
+        capability_probe: IModelCapabilityProbe,
         task_factories: dict[str, TaskModelFactory] | None = None,
     ) -> None:
         """Initialize ModelManager.
@@ -110,18 +110,16 @@ class ModelManager:
         ----------
         config_path : str
             Path to models.yaml configuration file.
-        capability_probe : IModelCapabilityProbe | None
-            Hardware capability probe. If None, a default torch-backed probe
-            is resolved lazily from infrastructure. This fallback exists only
-            to keep the legacy call site working; production callers inject
-            the port explicitly.
+        capability_probe : IModelCapabilityProbe
+            Hardware capability probe used to detect device, VRAM, and other
+            platform characteristics.
         task_factories : dict[str, TaskModelFactory] | None
             Mapping from task type to a factory callable that builds the
             corresponding loader. Tasks not in the mapping fall back to
             placeholder dicts.
         """
         self.config_path = Path(config_path)
-        self._capability_probe: IModelCapabilityProbe | None = capability_probe
+        self._capability_probe: IModelCapabilityProbe = capability_probe
         self._task_factories: dict[str, TaskModelFactory] = dict(task_factories or {})
         self.config = self._load_config()
         self.loaded_models: OrderedDict[str, Any] = OrderedDict()
@@ -137,18 +135,7 @@ class ModelManager:
     # --- Capability probe plumbing -------------------------------------------------
 
     def _probe(self) -> IModelCapabilityProbe:
-        """Return the capability probe.
-
-        Raises
-        ------
-        RuntimeError
-            If no probe was provided at construction time.
-        """
-        if self._capability_probe is None:
-            raise RuntimeError(
-                "ModelManager requires an IModelCapabilityProbe. "
-                "Construct via the container or pass capability_probe explicitly."
-            )
+        """Return the capability probe."""
         return self._capability_probe
 
     def register_task_factory(self, task_type: str, factory: TaskModelFactory) -> None:
