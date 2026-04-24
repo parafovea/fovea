@@ -36,13 +36,9 @@ class TestAssemblyAIClient:
         transcript = MagicMock()
         transcript.status = "completed"
         transcript.error = None
-        utterance = MagicMock(
-            start=1000, end=2000, text="hello", confidence=0.9, speaker="A"
-        )
+        utterance = MagicMock(start=1000, end=2000, text="hello", confidence=0.9, speaker="A")
         transcript.utterances = [utterance]
-        transcript.words = [
-            MagicMock(text="hello", start=1000, end=2000, confidence=0.9)
-        ]
+        transcript.words = [MagicMock(text="hello", start=1000, end=2000, confidence=0.9)]
         transcript.text = "hello"
         transcript.language_code = "en"
         transcript.audio_duration = 2000
@@ -111,9 +107,7 @@ class TestDeepgramClient:
         response = MagicMock(results=results)
 
         dg = MagicMock()
-        dg.listen.asyncprerecorded.v.return_value.transcribe_file = AsyncMock(
-            return_value=response
-        )
+        dg.listen.asyncprerecorded.v.return_value.transcribe_file = AsyncMock(return_value=response)
 
         with (
             patch.object(deepgram_client, "DGClient", return_value=dg),

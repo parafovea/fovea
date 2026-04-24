@@ -81,9 +81,7 @@ class TestGladiaTranscribe:
             return_value=fake,
         ):
             client = GladiaClient("api-key")
-            result = await client.transcribe(
-                tmp_audio, language="en", enable_diarization=True
-            )
+            result = await client.transcribe(tmp_audio, language="en", enable_diarization=True)
 
         assert result.text == "hi there"
         assert len(result.segments) == 2

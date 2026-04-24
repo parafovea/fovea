@@ -58,9 +58,21 @@ class TestRevAITranscribe:
                     {
                         "speaker": 0,
                         "elements": [
-                            {"type": "text", "ts": 0.0, "end_ts": 0.5, "value": "hello", "confidence": 0.9},
+                            {
+                                "type": "text",
+                                "ts": 0.0,
+                                "end_ts": 0.5,
+                                "value": "hello",
+                                "confidence": 0.9,
+                            },
                             {"type": "punct", "value": ","},
-                            {"type": "text", "ts": 0.5, "end_ts": 1.0, "value": "world", "confidence": 0.8},
+                            {
+                                "type": "text",
+                                "ts": 0.5,
+                                "end_ts": 1.0,
+                                "value": "world",
+                                "confidence": 0.8,
+                            },
                         ],
                     }
                 ]
@@ -92,7 +104,13 @@ class TestRevAITranscribe:
                             {
                                 "speaker": 0,
                                 "elements": [
-                                    {"type": "text", "ts": 0, "end_ts": 1, "value": "hi", "confidence": 1.0}
+                                    {
+                                        "type": "text",
+                                        "ts": 0,
+                                        "end_ts": 1,
+                                        "value": "hi",
+                                        "confidence": 1.0,
+                                    }
                                 ],
                             }
                         ]

@@ -149,9 +149,7 @@ class TestTempFileCleanup:
         patched_video_helpers: dict[str, MagicMock],
     ) -> None:
         patched_video_helpers["download"].return_value = ("/tmp/video_abc.mp4", True)
-        patched_video_helpers["extract"].side_effect = VideoProcessingError(
-            "Could not open video"
-        )
+        patched_video_helpers["extract"].side_effect = VideoProcessingError("Could not open video")
         response = client.post(
             "/api/thumbnails/generate",
             json={
@@ -173,9 +171,7 @@ class TestErrorPaths:
         client: TestClient,
         patched_video_helpers: dict[str, MagicMock],
     ) -> None:
-        patched_video_helpers["extract"].side_effect = VideoProcessingError(
-            "Could not open video"
-        )
+        patched_video_helpers["extract"].side_effect = VideoProcessingError("Could not open video")
         response = client.post(
             "/api/thumbnails/generate",
             json={

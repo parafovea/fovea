@@ -33,9 +33,7 @@ class TestTranscriptSegment:
 
 class TestTranscriptResult:
     def test_defaults_words_to_none(self) -> None:
-        res = TranscriptResult(
-            text="hi", segments=[], language="en", duration=0.0, confidence=0.0
-        )
+        res = TranscriptResult(text="hi", segments=[], language="en", duration=0.0, confidence=0.0)
         assert res.words is None
 
     def test_holds_segments_and_words(self) -> None:

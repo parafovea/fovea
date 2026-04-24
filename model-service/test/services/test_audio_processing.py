@@ -108,9 +108,7 @@ class TestGetAudioInfo:
 
     @pytest.mark.asyncio
     async def test_nonzero_rc_raises(self, patch_subprocess: AsyncMock) -> None:
-        patch_subprocess.return_value = _fake_process(
-            returncode=1, stderr=b"unknown codec"
-        )
+        patch_subprocess.return_value = _fake_process(returncode=1, stderr=b"unknown codec")
         with pytest.raises(AudioProcessingError, match="ffprobe failed"):
             await get_audio_info("video.mp4")
 
@@ -129,17 +127,13 @@ class TestChunkAudioFile:
         assert chunks == [(0.0, 30.0), (30.0, 30.0), (60.0, 30.0)]
 
     @pytest.mark.asyncio
-    async def test_short_audio_returns_single_chunk(
-        self, patch_subprocess: AsyncMock
-    ) -> None:
+    async def test_short_audio_returns_single_chunk(self, patch_subprocess: AsyncMock) -> None:
         patch_subprocess.return_value = _fake_process(stdout=b"5.0\n")
         chunks = await chunk_audio_file("a.wav", chunk_duration=30.0, overlap=1.0)
         assert chunks == [(0.0, 5.0)]
 
     @pytest.mark.asyncio
-    async def test_overlap_produces_staggered_starts(
-        self, patch_subprocess: AsyncMock
-    ) -> None:
+    async def test_overlap_produces_staggered_starts(self, patch_subprocess: AsyncMock) -> None:
         patch_subprocess.return_value = _fake_process(stdout=b"60.0\n")
         chunks = await chunk_audio_file("a.wav", chunk_duration=30.0, overlap=5.0)
         assert chunks[0] == (0.0, 30.0)
@@ -152,9 +146,7 @@ class TestChunkAudioFile:
             await chunk_audio_file("a.wav")
 
     @pytest.mark.asyncio
-    async def test_unparseable_duration_raises(
-        self, patch_subprocess: AsyncMock
-    ) -> None:
+    async def test_unparseable_duration_raises(self, patch_subprocess: AsyncMock) -> None:
         patch_subprocess.return_value = _fake_process(stdout=b"not-a-number")
         with pytest.raises(AudioProcessingError, match="parse audio duration"):
             await chunk_audio_file("a.wav")
@@ -225,9 +217,7 @@ class TestExtractAudioSegment:
         assert result == str(output)
 
     @pytest.mark.asyncio
-    async def test_no_audio_stream_raises(
-        self, patch_subprocess: AsyncMock
-    ) -> None:
+    async def test_no_audio_stream_raises(self, patch_subprocess: AsyncMock) -> None:
         patch_subprocess.return_value = _fake_process(stdout=b"")
         with pytest.raises(AudioProcessingError, match="no audio stream"):
             await extract_audio_segment("video.mp4", 0.0, 1.0, output_path="/tmp/x.wav")
@@ -244,9 +234,7 @@ class TestExtractAudioSegment:
             _fake_process(returncode=1, stderr=b"ffmpeg died"),
         ]
         with pytest.raises(AudioProcessingError, match="FFmpeg segment extraction failed"):
-            await extract_audio_segment(
-                "video.mp4", 0.0, 1.0, output_path=str(output)
-            )
+            await extract_audio_segment("video.mp4", 0.0, 1.0, output_path=str(output))
 
 
 class TestExtractAudioTrack:
@@ -296,16 +284,12 @@ class TestExtractAudioTrack:
 
 class TestFfmpegAvailability:
     def test_ffmpeg_available_when_rc_zero(self) -> None:
-        with patch(
-            "src.application.services.audio_processing.subprocess.run"
-        ) as mock:
+        with patch("src.application.services.audio_processing.subprocess.run") as mock:
             mock.return_value = MagicMock(returncode=0)
             assert check_ffmpeg_available() is True
 
     def test_ffmpeg_missing_when_rc_nonzero(self) -> None:
-        with patch(
-            "src.application.services.audio_processing.subprocess.run"
-        ) as mock:
+        with patch("src.application.services.audio_processing.subprocess.run") as mock:
             mock.return_value = MagicMock(returncode=1)
             assert check_ffmpeg_available() is False
 
@@ -324,9 +308,7 @@ class TestFfmpegAvailability:
             assert check_ffmpeg_available() is False
 
     def test_ffprobe_available_when_rc_zero(self) -> None:
-        with patch(
-            "src.application.services.audio_processing.subprocess.run"
-        ) as mock:
+        with patch("src.application.services.audio_processing.subprocess.run") as mock:
             mock.return_value = MagicMock(returncode=0)
             assert check_ffprobe_available() is True
 

@@ -59,9 +59,7 @@ def client_with_full_manager() -> Generator[TestClient, None, None]:
             "src.infrastructure.adapters.outbound.models.llm.loader.create_llm_loader",
             return_value=Mock(load=AsyncMock(), unload=AsyncMock()),
         ),
-        patch(
-            "src.infrastructure.adapters.outbound.llm_adapter.LLMLoaderAdapter"
-        ) as adapter_cls,
+        patch("src.infrastructure.adapters.outbound.llm_adapter.LLMLoaderAdapter") as adapter_cls,
     ):
         adapter = Mock()
         adapter.aload = AsyncMock()
@@ -85,9 +83,7 @@ def client_with_no_tasks() -> Generator[TestClient, None, None]:
 class TestExtractClaims:
     """Coverage of ``POST /api/extract-claims``."""
 
-    def test_success_returns_claims(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_success_returns_claims(self, client_with_full_manager: TestClient) -> None:
         claim_dto = ExtractedClaimDTO(
             text="The JWST is a telescope",
             sentence_index=0,
@@ -97,9 +93,7 @@ class TestExtractClaims:
             claim_type="entity",
             subclaims=[],
         )
-        with patch(
-            "src.application.use_cases.extract_claims.ExtractClaimsUseCase"
-        ) as uc_cls:
+        with patch("src.application.use_cases.extract_claims.ExtractClaimsUseCase") as uc_cls:
             uc = Mock()
             uc.execute = AsyncMock(return_value=[claim_dto])
             uc_cls.return_value = uc
@@ -125,9 +119,7 @@ class TestExtractClaims:
     def test_threads_ontology_context_when_provided(
         self, client_with_full_manager: TestClient
     ) -> None:
-        with patch(
-            "src.application.use_cases.extract_claims.ExtractClaimsUseCase"
-        ) as uc_cls:
+        with patch("src.application.use_cases.extract_claims.ExtractClaimsUseCase") as uc_cls:
             uc = Mock()
             uc.execute = AsyncMock(return_value=[])
             uc_cls.return_value = uc
@@ -149,9 +141,7 @@ class TestExtractClaims:
             "glosses": {"t1": "a human individual"},
         }
 
-    def test_missing_task_returns_500(
-        self, client_with_no_tasks: TestClient
-    ) -> None:
+    def test_missing_task_returns_500(self, client_with_no_tasks: TestClient) -> None:
         response = client_with_no_tasks.post(
             "/api/extract-claims",
             json={"summary_id": "sum-1", "summary_text": "Hello."},
@@ -159,12 +149,8 @@ class TestExtractClaims:
         assert response.status_code == 500
         assert "Claim extraction" in response.json()["detail"]
 
-    def test_use_case_exception_returns_500(
-        self, client_with_full_manager: TestClient
-    ) -> None:
-        with patch(
-            "src.application.use_cases.extract_claims.ExtractClaimsUseCase"
-        ) as uc_cls:
+    def test_use_case_exception_returns_500(self, client_with_full_manager: TestClient) -> None:
+        with patch("src.application.use_cases.extract_claims.ExtractClaimsUseCase") as uc_cls:
             uc = Mock()
             uc.execute = AsyncMock(side_effect=RuntimeError("LLM timed out"))
             uc_cls.return_value = uc
@@ -177,21 +163,15 @@ class TestExtractClaims:
         assert response.status_code == 500
         assert "LLM timed out" in response.json()["detail"]
 
-    def test_missing_required_field_returns_422(
-        self, client_with_full_manager: TestClient
-    ) -> None:
-        response = client_with_full_manager.post(
-            "/api/extract-claims", json={"summary_text": "x"}
-        )
+    def test_missing_required_field_returns_422(self, client_with_full_manager: TestClient) -> None:
+        response = client_with_full_manager.post("/api/extract-claims", json={"summary_text": "x"})
         assert response.status_code == 422
 
 
 class TestSynthesizeSummary:
     """Coverage of ``POST /api/synthesize-summary``."""
 
-    def test_success_returns_summary(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_success_returns_summary(self, client_with_full_manager: TestClient) -> None:
         summary_gloss = [{"type": "text", "content": "Two astronauts tour JWST."}]
         with patch(
             "src.application.use_cases.synthesize_summary.SynthesizeSummaryUseCase"
@@ -222,9 +202,7 @@ class TestSynthesizeSummary:
         assert body["claims_used"] == 1
         assert body["synthesis_metadata"]["num_sources"] == 1
 
-    def test_counts_claims_recursively(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_counts_claims_recursively(self, client_with_full_manager: TestClient) -> None:
         with patch(
             "src.application.use_cases.synthesize_summary.SynthesizeSummaryUseCase"
         ) as uc_cls:
@@ -258,9 +236,7 @@ class TestSynthesizeSummary:
         # 1 root + 2 subclaims.
         assert response.json()["claims_used"] == 3
 
-    def test_counts_conflicts_from_relations(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_counts_conflicts_from_relations(self, client_with_full_manager: TestClient) -> None:
         with patch(
             "src.application.use_cases.synthesize_summary.SynthesizeSummaryUseCase"
         ) as uc_cls:
@@ -302,9 +278,7 @@ class TestSynthesizeSummary:
         assert response.status_code == 200
         assert response.json()["synthesis_metadata"]["conflicts_detected"] == 2
 
-    def test_missing_task_returns_500(
-        self, client_with_no_tasks: TestClient
-    ) -> None:
+    def test_missing_task_returns_500(self, client_with_no_tasks: TestClient) -> None:
         response = client_with_no_tasks.post(
             "/api/synthesize-summary",
             json={
@@ -321,9 +295,7 @@ class TestSynthesizeSummary:
         assert response.status_code == 500
         assert "Claim synthesis" in response.json()["detail"]
 
-    def test_use_case_exception_returns_500(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_use_case_exception_returns_500(self, client_with_full_manager: TestClient) -> None:
         with patch(
             "src.application.use_cases.synthesize_summary.SynthesizeSummaryUseCase"
         ) as uc_cls:
@@ -348,9 +320,7 @@ class TestSynthesizeSummary:
         assert response.status_code == 500
         assert "LLM error" in response.json()["detail"]
 
-    def test_empty_claim_sources_returns_422(
-        self, client_with_full_manager: TestClient
-    ) -> None:
+    def test_empty_claim_sources_returns_422(self, client_with_full_manager: TestClient) -> None:
         response = client_with_full_manager.post(
             "/api/synthesize-summary",
             json={"summary_id": "sum-9", "claim_sources": []},

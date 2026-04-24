@@ -251,9 +251,7 @@ inference: {}
 
         assert "video_tracking" in repo.get_all_tasks()
 
-    def test_reload_resets_in_memory_selection_to_disk_value(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reload_resets_in_memory_selection_to_disk_value(self, tmp_path: Path) -> None:
         cfg = tmp_path / "models.yaml"
         _write_yaml(
             cfg,
