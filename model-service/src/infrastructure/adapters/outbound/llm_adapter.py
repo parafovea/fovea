@@ -11,30 +11,27 @@ from src.application.ports.outbound.llm import ILanguageModel
 from src.infrastructure.adapters.outbound.models.llm.base import (
     GenerationConfig,
     GenerationResult,
+    LLMConfig,
 )
 from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
     from src.application.dto.reasoning import ReasonedText
-
-
-class _LoaderConfig(Protocol):
-    """Structural view of the config attribute both LLM loaders expose."""
-
-    model_id: str
+    from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
 
 
 class _LLMLoaderLike(Protocol):
     """Structural contract implemented by every concrete LLM loader.
 
     Captures exactly the surface :class:`LLMLoaderAdapter` uses: async
-    ``load``/``unload``/``generate`` and a ``config`` attribute carrying the
-    model id. Both ``LLMLoader`` and ``LlamaCppLLMLoader`` satisfy this shape
-    without a runtime import dependency between the adapter and either
-    concrete class.
+    ``load``/``unload``/``generate`` and a ``config`` attribute whose
+    ``model_id`` field is read at the adapter boundary. Both ``LLMLoader``
+    and ``LlamaCppLLMLoader`` satisfy this shape without a runtime import
+    dependency between the adapter and either concrete loader class.
     """
 
-    config: _LoaderConfig
+    @property
+    def config(self) -> LLMConfig | LlamaCppConfig: ...
 
     async def load(self) -> None: ...
 

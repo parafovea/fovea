@@ -78,7 +78,6 @@ class LlamaCppLLMLoader:
         self,
         prompt: str,
         generation_config: GenerationConfig | None = None,
-        **kwargs: Any,
     ) -> GenerationResult:
         """Generate text using the GGUF model.
 
@@ -88,9 +87,6 @@ class LlamaCppLLMLoader:
             Input prompt text.
         generation_config : GenerationConfig | None
             Generation parameters. If None, uses defaults.
-        **kwargs : Any
-            Additional keyword arguments (unused, accepted for interface
-            compatibility).
 
         Returns
         -------
