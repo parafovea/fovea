@@ -62,7 +62,7 @@ import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@model
 type OntologyTypeItem = {
   id: string
   name: string
-  gloss: GlossItem[] | string
+  gloss: GlossItem[]
   wikidataId?: string
 }
 
@@ -128,8 +128,8 @@ export default function OntologyWorkspace() {
   const events = world?.events || []
   const times = world?.times || []
   const { data: modelConfig, error: modelConfigError } = useModelConfig()
-  // Treat model service as CPU-only if unavailable (e.g., in E2E tests)
-  const isCpuOnly = !!modelConfigError || !modelConfig?.cudaAvailable
+  // Treat AI models as disabled if model service is unavailable (e.g., in E2E tests)
+  const modelsDisabled = !!modelConfigError || (!modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable)
 
   // TanStack Query mutations
   const { mutate: deleteEntityMutation } = useDeleteEntityFromPersona()
@@ -228,15 +228,8 @@ export default function OntologyWorkspace() {
     // Check name
     if (item.name?.toLowerCase().includes(searchLower)) return true
 
-    // Check gloss - handle both array (correct format) and string (legacy)
-    if (Array.isArray(item.gloss)) {
-      // Convert gloss array to searchable text using the helper
-      const glossText = glossToText(item.gloss, selectedOntology, { entities, events, times })
-      if (glossText.toLowerCase().includes(searchLower)) return true
-    } else if (typeof item.gloss === 'string' && item.gloss.toLowerCase().includes(searchLower)) {
-      // Handle legacy string glosses if they exist
-      return true
-    }
+    const glossText = glossToText(item.gloss, selectedOntology, { entities, events, times })
+    if (glossText.toLowerCase().includes(searchLower)) return true
 
     // Check wikidataId
     if (item.wikidataId?.toLowerCase().includes(searchLower)) return true
@@ -501,14 +494,14 @@ export default function OntologyWorkspace() {
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <TabPanel value={tabValue} index={0}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
               <span>
                 <Button
                   variant="outlined"
                   startIcon={<AutoAwesomeIcon />}
                   onClick={() => handleOpenAugmenter('entity')}
                   size="small"
-                  disabled={isCpuOnly}
+                  disabled={modelsDisabled}
                 >
                   Suggest Types
                 </Button>
@@ -562,14 +555,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={1}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
               <span>
                 <Button
                   variant="outlined"
                   startIcon={<AutoAwesomeIcon />}
                   onClick={() => handleOpenAugmenter('role')}
                   size="small"
-                  disabled={isCpuOnly}
+                  disabled={modelsDisabled}
                 >
                   Suggest Types
                 </Button>
@@ -630,14 +623,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={2}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
               <span>
                 <Button
                   variant="outlined"
                   startIcon={<AutoAwesomeIcon />}
                   onClick={() => handleOpenAugmenter('event')}
                   size="small"
-                  disabled={isCpuOnly}
+                  disabled={modelsDisabled}
                 >
                   Suggest Types
                 </Button>
@@ -700,14 +693,14 @@ export default function OntologyWorkspace() {
 
         <TabPanel value={tabValue} index={3}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={isCpuOnly ? 'GPU required for AI-powered suggestions (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
               <span>
                 <Button
                   variant="outlined"
                   startIcon={<AutoAwesomeIcon />}
                   onClick={() => handleOpenAugmenter('relation')}
                   size="small"
-                  disabled={isCpuOnly}
+                  disabled={modelsDisabled}
                 >
                   Suggest Types
                 </Button>

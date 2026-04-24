@@ -5,18 +5,20 @@ This module contains tests for the video summarization, ontology augmentation,
 and object detection endpoints.
 """
 
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from src.application.dto.ontology import OntologyTypeDTO
+from src.application.dto.summarization import SummarizeResponseDTO
 from src.main import app
-from src.models import OntologyType, SummarizeResponse
 
 
 @pytest.fixture(autouse=True)
-def mock_model_manager() -> Mock:
+def mock_model_manager() -> Generator[Mock, None, None]:
     """Mock the global model manager for all tests."""
     mock_manager = Mock()
 
@@ -27,7 +29,9 @@ def mock_model_manager() -> Mock:
     mock_model_config.model_id = "meta-llama/Llama-4-Maverick"
     mock_model_config.quantization = "4bit"
     mock_model_config.framework = "sglang"
+    mock_model_config.cpu_compatible = False
     mock_task_config.get_selected_config.return_value = mock_model_config
+    mock_task_config.options = {"llama-4-maverick": mock_model_config}
 
     # Object detection task config
     mock_detection_task = Mock()
@@ -36,7 +40,9 @@ def mock_model_manager() -> Mock:
     mock_detection_config.model_id = "ultralytics/yolov8x-worldv2"
     mock_detection_config.quantization = None
     mock_detection_config.framework = "ultralytics"
+    mock_detection_config.cpu_compatible = True
     mock_detection_task.get_selected_config.return_value = mock_detection_config
+    mock_detection_task.options = {"yolo-world-v2": mock_detection_config}
 
     # Ontology augmentation task config
     mock_augment_task = Mock()
@@ -45,7 +51,9 @@ def mock_model_manager() -> Mock:
     mock_augment_config.model_id = "meta-llama/Llama-4-Scout"
     mock_augment_config.quantization = "4bit"
     mock_augment_config.framework = "sglang"
+    mock_augment_config.cpu_compatible = False
     mock_augment_task.get_selected_config.return_value = mock_augment_config
+    mock_augment_task.options = {"llama-4-scout": mock_augment_config}
 
     # Video tracking task config
     mock_tracking_task = Mock()
@@ -54,7 +62,9 @@ def mock_model_manager() -> Mock:
     mock_tracking_config.model_id = "yangchris11/samurai"
     mock_tracking_config.quantization = None
     mock_tracking_config.framework = "pytorch"
+    mock_tracking_config.cpu_compatible = False
     mock_tracking_task.get_selected_config.return_value = mock_tracking_config
+    mock_tracking_task.options = {"samurai": mock_tracking_config}
 
     mock_manager.tasks = {
         "video_summarization": mock_task_config,
@@ -70,21 +80,34 @@ def mock_model_manager() -> Mock:
 
 
 @pytest.fixture
-def test_client_with_mocks(mock_model_manager: Mock) -> TestClient:
+def test_client_with_mocks(mock_model_manager: Mock) -> Generator[TestClient, None, None]:
     """Test client fixture for API requests with mocked model manager."""
-    # Replace the model manager that was set during app startup with our mock
-    import src.routes
+    from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 
-    src.routes._model_manager = mock_model_manager
-    return TestClient(app, base_url="http://testserver")
+    app.dependency_overrides[get_model_manager] = lambda: mock_model_manager
+    # Patch loader factories so routes do not attempt to download real weights
+    # when the use-case wrapper is itself mocked.
+    with (
+        patch(
+            "src.infrastructure.adapters.outbound.models.vlm.loader.create_vlm_loader",
+            return_value=Mock(),
+        ),
+        patch(
+            "src.infrastructure.adapters.outbound.models.llm.loader.create_llm_loader",
+            return_value=Mock(load=AsyncMock(), unload=AsyncMock()),
+        ),
+    ):
+        client = TestClient(app, base_url="http://testserver")
+        yield client
+        app.dependency_overrides.clear()
 
 
 class TestSummarizeEndpoint:
     """Tests for /api/summarize endpoint."""
 
-    @patch("src.video_downloader.download_video_if_needed")
-    @patch("src.summarization.summarize_video_with_vlm")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
+    @patch("src.application.use_cases.summarize_video.summarize_video_with_vlm")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_summarize_video_success(
         self,
         mock_get_video: Mock,
@@ -95,7 +118,7 @@ class TestSummarizeEndpoint:
         """Test successful video summarization request."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
         mock_download.return_value = ("/videos/test-video-123.mp4", False)  # Not a temp file
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-123",
             video_id="test-video-123",
             persona_id="test-persona-456",
@@ -124,9 +147,9 @@ class TestSummarizeEndpoint:
         assert isinstance(data["key_frames"], list)
         assert "confidence" in data
 
-    @patch("src.video_downloader.download_video_if_needed")
-    @patch("src.summarization.summarize_video_with_vlm")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
+    @patch("src.application.use_cases.summarize_video.summarize_video_with_vlm")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_summarize_video_default_params(
         self,
         mock_get_video: Mock,
@@ -137,7 +160,7 @@ class TestSummarizeEndpoint:
         """Test summarization with default parameters."""
         mock_get_video.return_value = Path("/videos/test-video-789.mp4")
         mock_download.return_value = ("/videos/test-video-789.mp4", False)
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-789",
             video_id="test-video-789",
             persona_id="test-persona-012",
@@ -182,9 +205,9 @@ class TestSummarizeEndpoint:
 
         assert response.status_code == 422
 
-    @patch("src.video_downloader.download_video_if_needed")
-    @patch("src.summarization.summarize_video_with_vlm")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
+    @patch("src.application.use_cases.summarize_video.summarize_video_with_vlm")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_summarize_response_structure(
         self,
         mock_get_video: Mock,
@@ -195,7 +218,7 @@ class TestSummarizeEndpoint:
         """Test that response contains all expected fields."""
         mock_get_video.return_value = Path("/videos/test-video-123.mp4")
         mock_download.return_value = ("/videos/test-video-123.mp4", False)
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-456",
             video_id="test-video-123",
             persona_id="test-persona-456",
@@ -233,9 +256,9 @@ class TestSummarizeEndpoint:
             assert "description" in key_frame
             assert "confidence" in key_frame
 
-    @patch("src.video_downloader.cleanup_temp_video")
-    @patch("src.video_downloader.download_video_if_needed")
-    @patch("src.summarization.summarize_video_with_vlm")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.cleanup_temp_video")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
+    @patch("src.application.use_cases.summarize_video.summarize_video_with_vlm")
     def test_summarize_with_http_url(
         self,
         mock_summarize: AsyncMock,
@@ -247,7 +270,7 @@ class TestSummarizeEndpoint:
         # Mock download to return temp file path
         mock_download.return_value = ("/tmp/video_abc123.mp4", True)
 
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-789",
             video_id="test-video-456",
             persona_id="test-persona-789",
@@ -275,9 +298,9 @@ class TestSummarizeEndpoint:
         # Verify cleanup was called with temp file
         mock_cleanup.assert_called_once_with("/tmp/video_abc123.mp4")
 
-    @patch("src.video_downloader.cleanup_temp_video")
-    @patch("src.video_downloader.download_video_if_needed")
-    @patch("src.summarization.summarize_video_with_vlm")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.cleanup_temp_video")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
+    @patch("src.application.use_cases.summarize_video.summarize_video_with_vlm")
     def test_summarize_with_local_path_no_download(
         self,
         mock_summarize: AsyncMock,
@@ -289,7 +312,7 @@ class TestSummarizeEndpoint:
         # Mock download to return same path (not a temp file)
         mock_download.return_value = ("/videos/local-video.mp4", False)
 
-        mock_summarize.return_value = SummarizeResponse(
+        mock_summarize.return_value = SummarizeResponseDTO(
             id="summary-012",
             video_id="test-video-012",
             persona_id="test-persona-012",
@@ -319,19 +342,19 @@ class TestSummarizeEndpoint:
 class TestAugmentEndpoint:
     """Tests for /api/ontology/augment endpoint."""
 
-    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    @patch("src.application.use_cases.augment_ontology.augment_ontology_with_llm")
     def test_augment_ontology_success(
         self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test successful ontology augmentation request."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Reptile",
                 description="Cold-blooded vertebrate animal",
                 confidence=0.92,
                 examples=["Snake", "Lizard"],
             ),
-            OntologyType(
+            OntologyTypeDTO(
                 name="Amphibian",
                 description="Animal that lives both on land and in water",
                 confidence=0.88,
@@ -361,13 +384,13 @@ class TestAugmentEndpoint:
         assert len(data["suggestions"]) <= 5
         assert "reasoning" in data
 
-    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    @patch("src.application.use_cases.augment_ontology.augment_ontology_with_llm")
     def test_augment_ontology_event_category(
         self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test augmentation for event category."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Goal",
                 description="Scoring event in a game",
                 confidence=0.95,
@@ -401,13 +424,13 @@ class TestAugmentEndpoint:
 
         assert response.status_code == 422
 
-    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    @patch("src.application.use_cases.augment_ontology.augment_ontology_with_llm")
     def test_augment_ontology_default_max_suggestions(
         self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test augmentation with default max_suggestions."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name=f"Type{i}",
                 description="Test description",
                 confidence=0.8,
@@ -429,13 +452,13 @@ class TestAugmentEndpoint:
         data = response.json()
         assert len(data["suggestions"]) <= 10
 
-    @patch("src.ontology_augmentation.augment_ontology_with_llm")
+    @patch("src.application.use_cases.augment_ontology.augment_ontology_with_llm")
     def test_augment_response_suggestion_structure(
         self, mock_augment: AsyncMock, test_client_with_mocks: TestClient
     ) -> None:
         """Test that suggestions have correct structure."""
         mock_augment.return_value = [
-            OntologyType(
+            OntologyTypeDTO(
                 name="Infrastructure",
                 description="Built environment",
                 confidence=0.9,
@@ -466,10 +489,10 @@ class TestAugmentEndpoint:
 class TestDetectionEndpoint:
     """Tests for /api/detection/detect endpoint."""
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_process_detection_success(
         self,
         mock_get_video: Mock,
@@ -521,10 +544,10 @@ class TestDetectionEndpoint:
         assert "total_detections" in data
         assert "processing_time" in data
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_process_detection_specific_frames(
         self,
         mock_get_video: Mock,
@@ -563,10 +586,10 @@ class TestDetectionEndpoint:
         data = response.json()
         assert data["video_id"] == "test-video-456"
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_process_detection_no_tracking(
         self,
         mock_get_video: Mock,
@@ -629,10 +652,10 @@ class TestDetectionEndpoint:
 
         assert response.status_code == 422
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_process_detection_response_structure(
         self,
         mock_get_video: Mock,
@@ -687,10 +710,10 @@ class TestDetectionEndpoint:
             assert "detections" in frame
             assert isinstance(frame["detections"], list)
 
-    @patch("src.video_downloader.cleanup_temp_video")
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.cleanup_temp_video")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
     def test_detection_with_http_url(
         self,
         mock_create_loader: Mock,
@@ -738,11 +761,11 @@ class TestDetectionEndpoint:
         # Verify cleanup was called with temp file
         mock_cleanup.assert_called_once_with("/tmp/video_def456.mp4")
 
-    @patch("src.video_downloader.cleanup_temp_video")
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.cleanup_temp_video")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.detection_loader.create_detection_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.detection.loader.create_detection_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_detection_with_s3_presigned_url_from_video_id(
         self,
         mock_get_video: Mock,
@@ -795,10 +818,10 @@ class TestDetectionEndpoint:
 class TestTrackingEndpoint:
     """Tests for /api/tracking/track endpoint."""
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_success(
         self,
         mock_get_video: Mock,
@@ -833,7 +856,11 @@ class TestTrackingEndpoint:
         mock_video_capture.return_value = mock_cap
 
         # Mock tracking loader
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         mock_loader = Mock()
         mock_mask = TrackingMask(
@@ -884,10 +911,10 @@ class TestTrackingEndpoint:
         assert "processing_time" in data
         assert "fps" in data
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_all_models(
         self,
         mock_get_video: Mock,
@@ -923,7 +950,11 @@ class TestTrackingEndpoint:
         mock_cap.set.return_value = True
         mock_video_capture.return_value = mock_cap
 
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         mock_loader = Mock()
         mock_mask = TrackingMask(
@@ -962,10 +993,10 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 200
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_multiple_objects(
         self,
         mock_get_video: Mock,
@@ -998,7 +1029,11 @@ class TestTrackingEndpoint:
         mock_cap.set.return_value = True
         mock_video_capture.return_value = mock_cap
 
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         mock_loader = Mock()
         mock_mask1 = TrackingMask(
@@ -1051,7 +1086,7 @@ class TestTrackingEndpoint:
             assert "confidence" in mask
             assert "is_occluded" in mask
 
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_missing_masks(
         self, mock_get_video: Mock, test_client_with_mocks: TestClient
     ) -> None:
@@ -1076,10 +1111,10 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 400
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_invalid_mask_encoding(
         self,
         mock_get_video: Mock,
@@ -1139,10 +1174,10 @@ class TestTrackingEndpoint:
 
         assert response.status_code == 422
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_with_occlusion(
         self,
         mock_get_video: Mock,
@@ -1178,7 +1213,11 @@ class TestTrackingEndpoint:
         mock_cap.set.return_value = True
         mock_video_capture.return_value = mock_cap
 
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         mock_loader = Mock()
         # Object is occluded with low confidence
@@ -1221,10 +1260,10 @@ class TestTrackingEndpoint:
             mask = data["frames"][0]["masks"][0]
             assert "is_occluded" in mask
 
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_track_objects_response_structure(
         self,
         mock_get_video: Mock,
@@ -1257,7 +1296,11 @@ class TestTrackingEndpoint:
         mock_cap.set.return_value = True
         mock_video_capture.return_value = mock_cap
 
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         mock_loader = Mock()
         mock_mask = TrackingMask(
@@ -1327,11 +1370,11 @@ class TestTrackingEndpoint:
                 assert "confidence" in mask
                 assert "is_occluded" in mask
 
-    @patch("src.video_downloader.cleanup_temp_video")
-    @patch("src.video_downloader.download_video_if_needed")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.cleanup_temp_video")
+    @patch("src.infrastructure.adapters.outbound.video.downloader.download_video_if_needed")
     @patch("cv2.VideoCapture")
-    @patch("src.tracking_loader.create_tracking_loader")
-    @patch("src.summarization.get_video_path_for_id")
+    @patch("src.infrastructure.adapters.outbound.models.tracking.loader.create_tracking_loader")
+    @patch("src.application.use_cases.summarize_video.get_video_path_for_id")
     def test_tracking_with_s3_presigned_url(
         self,
         mock_get_video: Mock,
@@ -1346,7 +1389,11 @@ class TestTrackingEndpoint:
 
         import numpy as np
 
-        from src.tracking_loader import TrackingFrame, TrackingMask, TrackingResult
+        from src.infrastructure.adapters.outbound.models.tracking.loader import (
+            TrackingFrame,
+            TrackingMask,
+            TrackingResult,
+        )
 
         # Mock get_video_path_for_id to return S3 URL
         mock_get_video.return_value = "https://bucket.s3.amazonaws.com/tracking.mp4?signature=abc"
@@ -1459,9 +1506,12 @@ class TestModelConfigEndpoints:
         mock_option.model_id = "meta-llama/Llama-4-Maverick"
         mock_option.framework = "sglang"
         mock_option.vram_gb = 16.0
+        mock_option.cpu_memory_gb = 0.0
+        mock_option.cpu_compatible = False
         mock_option.speed = "fast"
         mock_option.description = "Test model"
         mock_option.fps = 2.5
+        mock_option.requires_api_key = False
 
         mock_task = Mock()
         mock_task.selected = "llama-4-maverick"

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fovea-model-service"
-version = "0.2.0"
+version = "0.3.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
@@ -35,7 +35,6 @@ dependencies = [
     "tenacity>=8.5.0",
     "aiohttp>=3.9.0",
     "aiofiles>=23.2.0",
-    "setuptools>=61.0",
 ]
 
 [project.optional-dependencies]
@@ -79,6 +78,7 @@ dev = [
     "ruff>=0.14.0",
     "mypy==1.8.0",
     "types-PyYAML>=6.0.0",
+    "types-psutil>=5.9.0",
 ]
 docs = [
     "sphinx>=7.0.0",
@@ -124,6 +124,7 @@ ignore = [
     "ARG002",  # unused method argument (kwargs is standard idiom)
     "PLR0913", # too many arguments (VideoInfo dataclass needs 7 params)
     "PLR0912", # too many branches (video processing has complex logic)
+    "PLR0911", # too many return statements (factory functions with multiple model types)
     "PLR0915", # too many statements (video processing needs many steps)
     "PTH123",  # use Path.open (external APIs provide string paths)
     "PTH110",  # use Path.exists (temp file handling uses os.path)
@@ -141,13 +142,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "test/**/*.py" = ["S101", "S108", "ANN201", "ANN202", "ANN001", "PLR2004", "PLC0415", "RUF059"]
 # Loader files use deferred imports for lazy loading of heavy ML dependencies
-"src/*_loader.py" = ["PLC0415"]
-"src/model_manager.py" = ["PLC0415"]
-"src/routes.py" = ["PLC0415"]
-"src/summarization.py" = ["PLC0415"]
-"src/av_fusion.py" = ["PLC0415"]
-"src/external_apis/*.py" = ["PLC0415"]
-"src/external_apis/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/loader.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/base.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/models/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/outbound/external_apis/**/*.py" = ["PLC0415"]
+"src/infrastructure/adapters/inbound/fastapi/routes/*.py" = ["PLC0415"]
+"src/application/services/*.py" = ["PLC0415"]
+"src/application/use_cases/*.py" = ["PLC0415"]
+"scripts/*.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -184,17 +186,54 @@ follow_imports = "skip"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["external_apis", "external_apis.*"]
+module = ["src.infrastructure.adapters.outbound.external_apis.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["ultralytics", "ultralytics.*", "groundingdino", "groundingdino.*", "supervision", "supervision.*", "sam2", "sam2.*", "pycocotools", "pycocotools.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
+module = [
+    "ultralytics", "ultralytics.*",
+    "groundingdino", "groundingdino.*",
+    "supervision", "supervision.*",
+    "sam2", "sam2.*",
+    "pycocotools", "pycocotools.*",
+    "httpx", "httpx.*",
+    "tenacity", "tenacity.*",
+    "cv2", "cv2.*",
+    "onnxruntime", "onnxruntime.*",
+    "llama_cpp", "llama_cpp.*",
+    "psutil", "psutil.*",
+    "sam3", "sam3.*",
+    "rfdetr", "rfdetr.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["whisper", "whisper.*", "faster_whisper", "faster_whisper.*", "pyannote", "pyannote.*", "torch_audiomentations", "torch_audiomentations.*", "pydub", "pydub.*", "assemblyai", "assemblyai.*", "deepgram", "deepgram.*", "boto3", "boto3.*", "google.cloud.speech", "google.cloud.speech.*", "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*"]
+module = [
+    "whisper", "whisper.*",
+    "whisperx", "whisperx.*",
+    "nemo", "nemo.*",
+    "faster_whisper", "faster_whisper.*",
+    "pyannote", "pyannote.*",
+    "torch_audiomentations", "torch_audiomentations.*",
+    "pydub", "pydub.*",
+    "assemblyai", "assemblyai.*",
+    "deepgram", "deepgram.*",
+    "boto3", "boto3.*",
+    "google.cloud.speech", "google.cloud.speech.*",
+    "azure.cognitiveservices.speech", "azure.cognitiveservices.speech.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*"]
+module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*", "yaml", "yaml.*"]
 ignore_missing_imports = true
+
+# Loader and adapter modules with heavy use of dynamic imports and Any types
+[[tool.mypy.overrides]]
+module = [
+    "src.infrastructure.adapters.outbound.models.onnx.*",
+    "src.infrastructure.adapters.outbound.models.llama_cpp.*",
+    "src.infrastructure.adapters.outbound.video.processor",
+]
+disallow_any_unimported = false
+warn_return_any = false

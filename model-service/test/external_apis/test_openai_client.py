@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from src.external_apis.base import ExternalAPIConfig
-from src.external_apis.openai_client import OpenAIClient
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.openai_client import OpenAIClient
 
 
 @pytest.fixture

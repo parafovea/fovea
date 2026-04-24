@@ -17,6 +17,8 @@ import {
   SelectModelResponse,
   MemoryValidation,
   ModelStatusResponse,
+  TaskReadyResponse,
+  ModelLoadResponse,
   ApiError,
 } from '@api/client'
 
@@ -29,6 +31,8 @@ export const modelConfigKeys = {
   config: () => [...modelConfigKeys.all, 'config'] as const,
   validation: () => [...modelConfigKeys.all, 'validation'] as const,
   status: () => [...modelConfigKeys.all, 'status'] as const,
+  taskReady: (taskType: string) => [...modelConfigKeys.all, 'taskReady', taskType] as const,
+  allTaskReady: () => [...modelConfigKeys.all, 'taskReady'] as const,
 }
 
 /**
@@ -154,6 +158,56 @@ export function useModelStatus(
     queryFn: () => apiClient.getModelStatus(),
     staleTime: 10 * 1000, // 10 seconds
     refetchInterval: 15 * 1000, // Auto-refresh every 15 seconds by default
+    ...options,
+  })
+}
+
+/**
+ * Check whether a model is cached locally for a task type.
+ *
+ * @param taskType - Task type to check
+ * @param options - TanStack Query options
+ * @returns Query result with cache status
+ */
+export function useTaskReady(
+  taskType: string,
+  options?: Omit<
+    UseQueryOptions<TaskReadyResponse, ApiError>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  return useQuery<TaskReadyResponse, ApiError>({
+    queryKey: modelConfigKeys.taskReady(taskType),
+    queryFn: () => apiClient.checkTaskReady(taskType),
+    enabled: !!taskType,
+    staleTime: 30 * 1000,
+    ...options,
+  })
+}
+
+/**
+ * Mutation hook for loading a model (triggers download if not cached).
+ * Invalidates task-ready queries on success.
+ *
+ * @param options - TanStack Mutation options
+ * @returns Mutation result
+ */
+export function useLoadModel(
+  options?: UseMutationOptions<ModelLoadResponse, ApiError, string>
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation<ModelLoadResponse, ApiError, string>({
+    mutationFn: (taskType) => apiClient.loadModel(taskType),
+    onSuccess: (data, taskType, context, mutation) => {
+      queryClient.invalidateQueries({
+        queryKey: modelConfigKeys.allTaskReady(),
+      })
+      queryClient.invalidateQueries({
+        queryKey: modelConfigKeys.status(),
+      })
+      options?.onSuccess?.(data, taskType, context, mutation)
+    },
     ...options,
   })
 }

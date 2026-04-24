@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 import torch
 
-from src.llm_loader import (
+from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     GenerationResult,
     LLMConfig,
@@ -187,11 +187,11 @@ class TestLLMLoader:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ),
             patch(
-                "src.llm_loader.AutoModelForCausalLM.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 return_value=mock_model,
             ),
         ):
@@ -215,11 +215,11 @@ class TestLLMLoader:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ),
             patch(
-                "src.llm_loader.AutoModelForCausalLM.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 return_value=mock_model,
             ),
         ):
@@ -238,7 +238,7 @@ class TestLLMLoader:
         loader = LLMLoader(config)
 
         with patch(
-            "src.llm_loader.AutoTokenizer.from_pretrained",
+            "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
             side_effect=ValueError("Model not found"),
         ):
             with pytest.raises(RuntimeError, match="Failed to load model"):
@@ -258,11 +258,11 @@ class TestLLMLoader:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ) as mock_tokenizer_load,
             patch(
-                "src.llm_loader.AutoModelForCausalLM.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 return_value=mock_model,
             ) as mock_model_load,
         ):
@@ -365,8 +365,13 @@ class TestLLMLoader:
         assert loader.is_loaded()
 
         with (
-            patch("src.llm_loader.torch.cuda.is_available", return_value=True),
-            patch("src.llm_loader.torch.cuda.empty_cache") as mock_empty_cache,
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+                return_value=True,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.empty_cache"
+            ) as mock_empty_cache,
         ):
             await loader.unload()
 
@@ -400,9 +405,18 @@ class TestLLMLoader:
         loader = LLMLoader(config)
 
         with (
-            patch("src.llm_loader.torch.cuda.is_available", return_value=True),
-            patch("src.llm_loader.torch.cuda.memory_allocated", return_value=1024 * 1024 * 1024),
-            patch("src.llm_loader.torch.cuda.memory_reserved", return_value=2 * 1024 * 1024 * 1024),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+                return_value=True,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_allocated",
+                return_value=1024 * 1024 * 1024,
+            ),
+            patch(
+                "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.memory_reserved",
+                return_value=2 * 1024 * 1024 * 1024,
+            ),
         ):
             usage = loader.get_memory_usage()
 
@@ -418,7 +432,10 @@ class TestLLMLoader:
         )
         loader = LLMLoader(config)
 
-        with patch("src.llm_loader.torch.cuda.is_available", return_value=False):
+        with patch(
+            "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
+            return_value=False,
+        ):
             usage = loader.get_memory_usage()
 
             assert usage["allocated"] == 0
@@ -514,11 +531,11 @@ class TestFallbackLoading:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ),
             patch(
-                "src.llm_loader.AutoModelForCausalLM.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 return_value=mock_model,
             ),
         ):
@@ -554,20 +571,18 @@ class TestFallbackLoading:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ),
             patch(
-                "src.llm_loader.AutoModelForCausalLM.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoModelForCausalLM.from_pretrained",
                 side_effect=mock_from_pretrained,
             ),
-            patch("builtins.print") as mock_print,
         ):
             loader = await create_llm_loader_with_fallback(primary, [fallback])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "google/gemma-3-27b-it"
-            mock_print.assert_any_call("Loaded fallback model: google/gemma-3-27b-it")
 
     @pytest.mark.asyncio
     async def test_create_llm_loader_with_fallback_all_fail(self) -> None:
@@ -585,7 +600,7 @@ class TestFallbackLoading:
 
         with (
             patch(
-                "src.llm_loader.AutoTokenizer.from_pretrained",
+                "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
                 side_effect=RuntimeError("Model failed"),
             ),
             patch("builtins.print"),

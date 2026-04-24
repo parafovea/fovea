@@ -94,12 +94,32 @@ export interface GenerateSummaryResponse {
 }
 
 /**
- * Job status information.
+ * Raw job status response from the backend API.
+ * The progress field may be a plain number (legacy) or an object with percent and stage.
+ */
+interface JobStatusRaw {
+  id: string
+  state: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
+  progress: number | { percent: number; stage: string } | null
+  data: {
+    videoId: string
+    personaId: string
+  }
+  returnvalue?: VideoSummary
+  failedReason?: string
+  finishedOn?: number
+  processedOn?: number
+}
+
+/**
+ * Job status information (normalized from backend response).
  */
 export interface JobStatus {
   id: string
   state: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
   progress: number
+  /** Current processing stage, or null when the backend uses legacy number-only progress. */
+  stage: string | null
   data: {
     videoId: string
     personaId: string
@@ -198,12 +218,16 @@ export interface DetectionResponse {
  * Model metadata for a single model option.
  */
 export interface ModelOption {
+  name: string
   modelId: string
   framework: string
   vramGb: number
+  cpuMemoryGb: number
+  cpuCompatible: boolean
   speed: string
   description: string
   fps: number | null
+  requiresApiKey: boolean
 }
 
 /**
@@ -211,7 +235,7 @@ export interface ModelOption {
  */
 export interface TaskConfig {
   selected: string
-  options: Record<string, ModelOption>
+  options: ModelOption[]
 }
 
 /**
@@ -230,6 +254,8 @@ export interface ModelConfig {
   models: Record<string, TaskConfig>
   inference: InferenceConfig
   cudaAvailable: boolean
+  modelsAvailable: boolean
+  cpuModelsAvailable: boolean
 }
 
 /**
@@ -238,6 +264,7 @@ export interface ModelConfig {
 export interface ModelRequirement {
   modelId: string
   vramGb: number
+  cpuCompatible: boolean
 }
 
 /**
@@ -312,6 +339,27 @@ export interface ModelStatusResponse {
   totalVramAvailableGb: number
   timestamp: string
   cudaAvailable: boolean
+  modelsAvailable: boolean
+  cpuModelsAvailable: boolean
+}
+
+/**
+ * Response from checking whether a model is cached locally.
+ */
+export interface TaskReadyResponse {
+  taskType: string
+  modelId: string
+  cached: boolean
+  framework: string
+}
+
+/**
+ * Response from loading or unloading a model.
+ */
+export interface ModelLoadResponse {
+  status: string
+  taskType: string
+  message: string
 }
 
 /**
@@ -465,8 +513,25 @@ export class ApiClient {
    */
   async getJobStatus(jobId: string): Promise<JobStatus> {
     try {
-      const response = await this.client.get<JobStatus>(`/api/jobs/${jobId}`)
-      return response.data
+      const response = await this.client.get<JobStatusRaw>(`/api/jobs/${jobId}`)
+      const raw = response.data
+
+      // Parse progress: backend may send a number (legacy) or { percent, stage } (new format)
+      const rawProgress = raw.progress
+      let progress: number
+      let stage: string | null = null
+      if (typeof rawProgress === 'object' && rawProgress !== null) {
+        progress = (rawProgress as { percent: number }).percent ?? 0
+        stage = (rawProgress as { stage: string }).stage ?? null
+      } else {
+        progress = (rawProgress as number) ?? 0
+      }
+
+      return {
+        ...raw,
+        progress,
+        stage,
+      }
     } catch (error) {
       throw this.handleError(error)
     }
@@ -630,6 +695,42 @@ export class ApiClient {
     try {
       const response = await this.client.get<ModelStatusResponse>(
         '/api/models/status'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Check whether the selected model for a task type is cached locally.
+   *
+   * @param taskType - Task type to check
+   * @returns Task ready status with cached flag
+   * @throws ApiError if request fails
+   */
+  async checkTaskReady(taskType: string): Promise<TaskReadyResponse> {
+    try {
+      const response = await this.client.get<TaskReadyResponse>(
+        `/api/models/task-ready/${taskType}`
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Load a model into memory (triggers download if not cached).
+   *
+   * @param taskType - Task type of model to load
+   * @returns Load result
+   * @throws ApiError if request fails
+   */
+  async loadModel(taskType: string): Promise<ModelLoadResponse> {
+    try {
+      const response = await this.client.post<ModelLoadResponse>(
+        `/api/models/load/${taskType}`
       )
       return response.data
     } catch (error) {

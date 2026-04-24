@@ -1,7 +1,7 @@
 /**
  * Video browser component for discovering and managing video content.
  * Displays a searchable grid of video cards with metadata, summaries, and annotation controls.
- * Supports batch summarization and persona-based analysis in GPU mode.
+ * Supports batch summarization and persona-based analysis when AI models are available.
  *
  * @example
  * ```tsx
@@ -91,7 +91,7 @@ export default function VideoBrowser() {
 
   const { mutate: generateSummary } = useGenerateSummary()
   const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cudaAvailable
+  const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
 
   /**
    * Updates search filter for video list.
@@ -416,8 +416,8 @@ export default function VideoBrowser() {
         />
       </Box>
 
-      {/* Only show toolbar in GPU mode */}
-      {!isCpuOnly && (
+      {/* Only show toolbar when AI models are available */}
+      {!modelsDisabled && (
         <Paper elevation={0} sx={{ mb: 3, p: 2, bgcolor: 'background.default' }}>
           <Toolbar disableGutters sx={{ gap: 2, flexWrap: 'wrap' }}>
             <FormControl sx={{ minWidth: 200 }} size="small">
@@ -480,7 +480,7 @@ export default function VideoBrowser() {
               toggleSummaryExpand={toggleSummaryExpand}
               handleSummaryJobComplete={handleSummaryJobComplete}
               handleSummaryJobFail={handleSummaryJobFail}
-              isCpuOnly={isCpuOnly}
+              modelsDisabled={modelsDisabled}
               allowExternalVideoLinks={allowExternalVideoLinks}
               addVideoSummary={addVideoSummary}
             />
@@ -546,8 +546,8 @@ interface VideoCardProps {
   handleSummaryJobComplete: (videoId: string, personaId: string) => void
   /** Handler for summary job failure */
   handleSummaryJobFail: (videoId: string, personaId: string) => void
-  /** Whether system is running in CPU-only mode */
-  isCpuOnly: boolean
+  /** Whether AI models are unavailable (no GPU and no CPU models) */
+  modelsDisabled: boolean
   /** Whether external video source links are allowed */
   allowExternalVideoLinks: boolean
   /** Handler to sync discovered summaries to local state */
@@ -556,7 +556,7 @@ interface VideoCardProps {
 
 /**
  * Video card component displaying metadata, thumbnail, and summary controls.
- * Supports keyboard navigation and persona-based summarization in GPU mode.
+ * Supports keyboard navigation and persona-based summarization when AI models are available.
  */
 function VideoCard({
   video,
@@ -575,7 +575,7 @@ function VideoCard({
   toggleSummaryExpand,
   handleSummaryJobComplete,
   handleSummaryJobFail,
-  isCpuOnly,
+  modelsDisabled,
   allowExternalVideoLinks,
   addVideoSummary,
 }: VideoCardProps) {
@@ -779,7 +779,7 @@ function VideoCard({
                 Source
               </Button>
             )}
-            <Tooltip title={isCpuOnly ? 'GPU required for video summarization (CPU-only mode detected)' : ''}>
+            <Tooltip title={modelsDisabled ? 'No AI models available for video summarization' : ''}>
               <span>
                 <Button
                   size="small"
@@ -792,7 +792,7 @@ function VideoCard({
                       handleGenerateSummary(video.id)
                     }
                   }}
-                  disabled={!!activeJobId || !activePersonaId || isCpuOnly}
+                  disabled={!!activeJobId || !activePersonaId || modelsDisabled}
                 >
                   {hasSummary ? 'View' : 'Summarize'}
                 </Button>
@@ -823,7 +823,7 @@ function VideoCard({
             </Collapse>
           )}
 
-          {!activePersonaId && !isCpuOnly && (
+          {!activePersonaId && !modelsDisabled && (
             <Alert severity="info" sx={{ mt: 1 }}>
               Select a persona to generate summaries
             </Alert>

@@ -3,20 +3,85 @@
 
 models:
   video_summarization:
-    selected: "qwen-2-5-vl-7b"
+    selected: "qwen-3-vl-8b"
     options:
+      # ------------------------------------------------------------------
+      # Qwen3-VL family (2026) — succeeded Qwen2.5-VL with 256K-1M context,
+      # benchmarks parity with Gemini 2.5 Pro / GPT-5 on video tasks.
+      # ------------------------------------------------------------------
+      qwen-3-vl-8b:
+        model_id: "Qwen/Qwen3-VL-8B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Qwen3-VL 8B Instruct — 256K native context, ungated, current default"
+      qwen-3-vl-8b-thinking:
+        model_id: "Qwen/Qwen3-VL-8B-Thinking"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "Qwen3-VL 8B Thinking — exposes chain-of-thought for reasoning-heavy video QA"
+      qwen-3-vl-30b-a3b:
+        model_id: "Qwen/Qwen3-VL-30B-A3B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 22
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Qwen3-VL 30B MoE (3B active) — strong quality/cost balance, 256K context"
+      qwen-3-vl-30b-a3b-thinking:
+        model_id: "Qwen/Qwen3-VL-30B-A3B-Thinking"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 22
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "Qwen3-VL 30B MoE Thinking — reasoning traces for complex video analysis"
+      qwen-3-vl-235b-a22b:
+        model_id: "Qwen/Qwen3-VL-235B-A22B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 128
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        description: "Qwen3-VL flagship 235B MoE (22B active) — rivals Gemini 2.5 Pro / GPT-5"
+      tarsier2-7b:
+        model_id: "omni-research/Tarsier2-7b"
+        quantization: "4bit"
+        framework: "transformers"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Tarsier2 7B — SOTA long-form video description, frame-level QA, streaming"
+      # Legacy Qwen2.5-VL (kept for backward compatibility) ---------------
       qwen-2-5-vl-7b:
         model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 8
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
-        description: "Compact VLM, ungated, fits well on A10G with room for inference"
+        description: "Qwen2.5-VL 7B — predecessor of Qwen3-VL, kept for backward compatibility"
       llama-4-maverick:
         model_id: "meta-llama/Llama-4-Maverick"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 62
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "MoE model with 17B active parameters, multimodal, 10M context"
       gemma-3-27b:
@@ -24,6 +89,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 14
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Document analysis, OCR, multilingual support (gated)"
       internvl3-78b:
@@ -31,6 +98,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 40
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "medium"
         description: "SOTA benchmarks, scientific reasoning"
       pixtral-large:
@@ -38,6 +107,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 62
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "medium"
         description: "Long context (128k), batch processing"
       qwen2-5-vl-72b:
@@ -45,14 +116,131 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 36
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "Proven stable, good baseline"
+      # CPU-compatible VLMs (GGUF)
+      qwen2-5-vl-3b-gguf:
+        model_id: "Qwen/Qwen2.5-VL-3B-Instruct-GGUF"
+        quantization: "gguf_q4_k_m"
+        framework: "llama_cpp"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "fast"
+        description: "Qwen2.5-VL 3B GGUF, fast multimodal on CPU"
+      # CPU-compatible VLMs (Transformers)
+      smolvlm-2-2b:
+        model_id: "HuggingFaceTB/SmolVLM-Instruct"
+        quantization: "none"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 5
+        cpu_compatible: true
+        speed: "fast"
+        description: "SmolVLM 2.2B, 3-4x faster than Qwen2-VL, low tokens/image"
+      moondream-2b:
+        model_id: "vikhyat/moondream2"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 4
+        cpu_compatible: true
+        speed: "moderate"
+        description: "CPU-optimized 2B VLM, ~10s/frame, runs well on CPU/MPS"
+      smolvlm-500m:
+        model_id: "HuggingFaceTB/SmolVLM-500M-Instruct"
+        quantization: "none"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "SmolVLM 500M, ultra-compact for edge, under 1GB at int8"
+      moondream-0-5b:
+        model_id: "vikhyat/moondream-0.5b"
+        quantization: "int4"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Tiny 500M VLM, 816MB at int4, for edge devices"
+      moondream-3:
+        model_id: "vikhyatk/moondream3"
+        quantization: "none"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "very_fast"
+        description: "Moondream 3, March 2026, 40% faster than v2, better masks, CPU/MPS-optimized"
+      # External APIs (always CPU-compatible)
+      claude-sonnet-4-6:
+        model_id: "claude-sonnet-4-6"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Claude Sonnet 4.6, current production default, 1M context, vision"
+      claude-opus-4-7:
+        model_id: "claude-opus-4-7"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "medium"
+        description: "Claude Opus 4.7, Anthropic flagship April 2026, vision, 1M context"
+      gpt-5-4:
+        model_id: "gpt-5.4"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-5.4, flagship multimodal, vision, 200K context"
+      gemini-3-1-pro:
+        model_id: "gemini-3.1-pro"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Gemini 3.1 Pro, 2M context, 78.2% on Video-MME (SOTA video understanding)"
+      grok-4:
+        model_id: "grok-4"
+        framework: "external_api"
+        provider: "xai"
+        api_endpoint: "https://api.x.ai/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "xAI Grok 4, 2M context, multimodal"
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
       gpt-4o:
@@ -61,6 +249,9 @@ models:
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "OpenAI GPT-4 Omni, vision capable, API-based"
       gemini-2-5-flash:
@@ -69,17 +260,98 @@ models:
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "very_fast"
         description: "Google Gemini 2.5 Flash, multimodal, API-based"
 
   ontology_augmentation:
-    selected: "qwen-2-5-7b"
+    selected: "qwen-3-8b"
     options:
+      # Qwen3 family and modern reasoning models (2026)
+      qwen-3-8b:
+        model_id: "Qwen/Qwen3-8B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 5
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "very_fast"
+        description: "Qwen3 8B, current ungated default, strong reasoning"
+      qwen-3-32b:
+        model_id: "Qwen/Qwen3-32B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Qwen3 32B, large ungated text LLM"
+      qwen-3-5-397b-a17b:
+        model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 210
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
+      deepseek-v3-2:
+        model_id: "deepseek-ai/DeepSeek-V3.2"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
+      deepseek-r1-distill-qwen-14b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
+      deepseek-r1-distill-qwen-32b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
+      kimi-k2-6:
+        model_id: "moonshotai/Kimi-K2.6"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 90
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Kimi K2.6, current Quality Index leader (53.9)"
+      glm-4-7:
+        model_id: "THUDM/GLM-4.7"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 60
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "GLM-4.7, coding-focused leader, strong reasoning"
+      # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Compact text LLM, ungated, efficient for ontology tasks"
       qwen-2-5-32b:
@@ -87,6 +359,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 16
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "Qwen 2.5 32B, ungated, excellent reasoning"
       llama-4-scout:
@@ -94,6 +368,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 55
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "MoE model with 17B active, 10M context, multimodal"
       llama-3-3-70b:
@@ -101,6 +377,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 35
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "Matches 405B quality, proven performance"
       deepseek-v3:
@@ -108,6 +386,8 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "MoE with 37B active, best reasoning, scientific tasks"
       gemma-3-27b-text:
@@ -115,14 +395,132 @@ models:
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 14
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Lightweight, fast iteration"
+      # CPU-compatible LLMs (GGUF)
+      qwen2-5-1-5b-gguf:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        quantization: "gguf_q4_k_m"
+        framework: "llama_cpp"
+        vram_gb: 0
+        cpu_memory_gb: 1.5
+        cpu_compatible: true
+        speed: "fast"
+        description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
+      qwen-3-1-7b-cpu:
+        model_id: "Qwen/Qwen3-1.7B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "fast"
+        description: "Qwen3 1.7B CPU, current ungated small LLM default"
+      phi-4-mini:
+        model_id: "microsoft/Phi-4-mini-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-4 mini, efficient reasoning on CPU (successor to Phi-3)"
+      deepseek-r1-distill-qwen-1-5b-gguf:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+        quantization: "gguf_q4_k_m"
+        framework: "llama_cpp"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 1.5B GGUF, CPU chain-of-thought reasoning"
+      # CPU-compatible LLMs (Transformers)
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for ontology, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
+      # External APIs (always CPU-compatible)
+      claude-sonnet-4-6:
+        model_id: "claude-sonnet-4-6"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Claude Sonnet 4.6, current production default, 1M context, text"
+      claude-opus-4-7:
+        model_id: "claude-opus-4-7"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "medium"
+        description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
+      gpt-5-4:
+        model_id: "gpt-5.4"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
+      gemini-3-1-pro:
+        model_id: "gemini-3.1-pro"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Gemini 3.1 Pro, 2M context"
+      grok-4:
+        model_id: "grok-4"
+        framework: "external_api"
+        provider: "xai"
+        api_endpoint: "https://api.x.ai/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "xAI Grok 4, 2M context, multimodal"
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
       gpt-4o:
@@ -131,6 +529,9 @@ models:
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "OpenAI GPT-4 Omni, text-only, API-based"
       gemini-2-5-flash:
@@ -139,16 +540,66 @@ models:
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "very_fast"
         description: "Google Gemini 2.5 Flash, text-only, API-based"
 
   object_detection:
-    selected: "yolo-world-v2"
+    selected: "sam-3-1"
     options:
+      sam-3-1:
+        model_id: "facebook/sam3.1-base"
+        framework: "sam3"
+        vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "real_time"
+        fps: 30
+        description: "SAM 3.1 (Meta, March 2026), unified detection+segmentation+tracking, text/exemplar prompts"
+      sam-3:
+        model_id: "facebook/sam3-large"
+        framework: "sam3"
+        vram_gb: 6
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        fps: 20
+        description: "SAM 3 (Meta, Nov 2025), segment anything with concepts"
+      yolov12-large:
+        model_id: "ultralytics/yolov12l.pt"
+        framework: "ultralytics"
+        vram_gb: 3
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "real_time"
+        fps: 60
+        description: "YOLOv12 large, Feb 2025 attention-centric architecture, Area Attention"
+      yoloe-26:
+        model_id: "ailabcvc/yoloe-26l"
+        framework: "ultralytics"
+        vram_gb: 3
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "real_time"
+        fps: 52
+        description: "YOLOE-26, open-vocabulary via unified object embedding space"
+      rf-detr-base:
+        model_id: "roboflow/rf-detr-base"
+        framework: "pytorch"
+        vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        fps: 25
+        description: "RF-DETR, Roboflow DETR variant, current 2026 leader on COCO"
       yolo-world-v2:
         model_id: "yolov8l-worldv2.pt"
         framework: "pytorch"
         vram_gb: 2
+        cpu_memory_gb: 2
+        cpu_compatible: true
         speed: "real_time"
         fps: 52
         description: "Speed and accuracy balance, image prompts"
@@ -156,6 +607,8 @@ models:
         model_id: "IDEA-Research/grounding-dino-1.5-pro"
         framework: "pytorch"
         vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "medium"
         fps: 20
         description: "Open-world, zero-shot, 52.5 AP"
@@ -163,6 +616,8 @@ models:
         model_id: "google/owlv2-large-patch14-ensemble"
         framework: "pytorch"
         vram_gb: 6
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "medium"
         fps: 15
         description: "Scaled training, rare classes"
@@ -170,65 +625,164 @@ models:
         model_id: "microsoft/Florence-2-large"
         framework: "pytorch"
         vram_gb: 2
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         fps: 30
         description: "Unified vision, captioning"
+      # CPU-optimized detection with ONNX
+      yolo-world-s-onnx:
+        model_id: "yolov8s-worldv2"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "fast"
+        fps: 10
+        description: "YOLO-World small, ONNX for CPU, ~100ms/image"
+      florence-2-base-onnx:
+        model_id: "onnx-community/Florence-2-base"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        fps: 5
+        description: "Florence-2 ONNX, ~200ms/image on CPU"
+      grounding-dino-tiny-onnx:
+        model_id: "onnx-community/grounding-dino-tiny-ONNX"
+        framework: "onnx"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        fps: 8
+        description: "GroundingDINO tiny ONNX, open-vocab detection on CPU"
 
   video_tracking:
-    selected: "samurai"
+    selected: "sam-3-1-tracking"
     options:
+      sam-3-1-tracking:
+        model_id: "facebook/sam3.1-base"
+        framework: "sam3"
+        vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "real_time"
+        description: "SAM 3.1 Object Multiplex, shared-memory joint multi-object tracking, ~30ms/image H200"
       samurai:
         model_id: "yangchris11/samurai"
         framework: "pytorch"
         vram_gb: 3
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "real_time"
         description: "Motion-aware, occlusion handling, 7.1% better"
       sam2long:
         model_id: "Mark12Ding/SAM2Long"
         framework: "pytorch"
         vram_gb: 3
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "real_time"
         description: "Long videos, error accumulation fix, 5.3% better"
       sam2-1:
         model_id: "facebook/sam2.1-hiera-large"
         framework: "pytorch"
         vram_gb: 3
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "real_time"
         description: "Baseline, proven stable"
       yolo11n-seg:
         model_id: "ultralytics/yolo11n-seg"
-        framework: "pytorch"
+        framework: "ultralytics"
         vram_gb: 1
+        cpu_memory_gb: 1
+        cpu_compatible: true
         speed: "very_fast"
-        description: "Lightweight, speed-critical tasks"
+        description: "Nano segmentation, ~50ms/frame on CPU"
 
   audio_transcription:
-    selected: "whisper-v3-turbo"
+    selected: "canary-qwen-2-5b"
     options:
+      canary-qwen-2-5b:
+        model_id: "nvidia/canary-qwen-2.5b"
+        framework: "nemo_canary"
+        vram_gb: 5
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "very_fast"
+        description: "NVIDIA Canary-Qwen 2.5B SALM, #1 HF Open ASR Leaderboard (June 2025)"
+      parakeet-tdt-1-1b:
+        model_id: "nvidia/parakeet-tdt-1.1b"
+        framework: "nemo_parakeet"
+        vram_gb: 3
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "real_time"
+        description: "NVIDIA Parakeet TDT 1.1B, streaming ASR, 1 hour audio in 19s"
+      whisperx-large-v3:
+        model_id: "Systran/faster-whisper-large-v3"
+        framework: "whisperx"
+        vram_gb: 5
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "fast"
+        description: "WhisperX, unified transcribe + diarize pipeline (faster-whisper + pyannote)"
       whisper-v3-turbo:
         model_id: "openai/whisper-large-v3-turbo"
         framework: "whisper"
         vram_gb: 5
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "OpenAI Whisper v3 Turbo, 8x faster, multilingual"
       faster-whisper-large-v3:
         model_id: "Systran/faster-whisper-large-v3"
         framework: "faster_whisper"
         vram_gb: 3
+        cpu_memory_gb: 3
+        cpu_compatible: true
         speed: "fast"
         description: "CTranslate2 optimized, 4x faster than default Whisper"
       whisper-large-v3:
         model_id: "openai/whisper-large-v3"
         framework: "whisper"
         vram_gb: 10
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "medium"
         description: "Full Whisper large v3, highest accuracy"
+      # CPU-optimized audio with CTranslate2
+      faster-whisper-medium-cpu:
+        model_id: "Systran/faster-whisper-medium"
+        framework: "faster_whisper"
+        quantization: "int8"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "1:1 realtime on 4 vCPU, CTranslate2 int8"
+      faster-whisper-small-cpu:
+        model_id: "Systran/faster-whisper-small"
+        framework: "faster_whisper"
+        quantization: "int8"
+        vram_gb: 0
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "fast"
+        description: "3x realtime on 4 vCPU, CTranslate2 int8"
+      # External APIs (always CPU-compatible)
       assemblyai-universal:
         model_id: "best"
         framework: "external_api"
         provider: "assemblyai"
         api_endpoint: "https://api.assemblyai.com/v2"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "AssemblyAI Universal-2, speaker diarization, sentiment"
       deepgram-nova-3:
@@ -237,6 +791,9 @@ models:
         provider: "deepgram"
         api_endpoint: "https://api.deepgram.com/v1"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "very_fast"
         description: "Deepgram Nova-3, streaming capable, highest accuracy"
       revai:
@@ -245,6 +802,9 @@ models:
         provider: "revai"
         api_endpoint: "https://api.rev.ai/speechtotext/v1"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Rev AI Speech-to-Text, human-level accuracy"
       gladia:
@@ -253,6 +813,9 @@ models:
         provider: "gladia"
         api_endpoint: "https://api.gladia.io/v2"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Gladia Audio API, multilingual, code-switching"
       aws-transcribe:
@@ -261,6 +824,9 @@ models:
         provider: "aws"
         api_endpoint: "https://transcribe.us-east-1.amazonaws.com"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "medium"
         description: "AWS Transcribe, speaker diarization, medical/legal vocab"
       google-speech:
@@ -269,6 +835,9 @@ models:
         provider: "google"
         api_endpoint: "https://speech.googleapis.com/v2"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Google Speech-to-Text v2 with Chirp 2, multilingual"
       azure-speech:
@@ -277,17 +846,154 @@ models:
         provider: "azure"
         api_endpoint: "https://YOUR_REGION.api.cognitive.microsoft.com"
         requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
         speed: "fast"
         description: "Azure Speech Services, real-time streaming"
 
   claim_extraction:
-    selected: "qwen-2-5-7b"
+    selected: "qwen-3-8b"
     options:
+      # Qwen3 family and modern reasoning models (2026)
+      qwen-3-8b:
+        model_id: "Qwen/Qwen3-8B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 5
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "very_fast"
+        description: "Qwen3 8B, current ungated default for claim extraction"
+      qwen-3-32b:
+        model_id: "Qwen/Qwen3-32B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Qwen3 32B, large ungated text LLM"
+      qwen-3-5-397b-a17b:
+        model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 210
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
+      deepseek-v3-2:
+        model_id: "deepseek-ai/DeepSeek-V3.2"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
+      deepseek-r1-distill-qwen-14b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
+      deepseek-r1-distill-qwen-32b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
+      kimi-k2-6:
+        model_id: "moonshotai/Kimi-K2.6"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 90
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Kimi K2.6, current Quality Index leader (53.9)"
+      glm-4-7:
+        model_id: "THUDM/GLM-4.7"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 60
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "GLM-4.7, coding-focused leader, strong reasoning"
+      # External APIs (flagship 2026)
+      claude-sonnet-4-6:
+        model_id: "claude-sonnet-4-6"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Claude Sonnet 4.6, current production default, 1M context"
+      claude-opus-4-7:
+        model_id: "claude-opus-4-7"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "medium"
+        description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
+      gpt-5-4:
+        model_id: "gpt-5.4"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
+      gemini-3-1-pro:
+        model_id: "gemini-3.1-pro"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Gemini 3.1 Pro, 2M context"
+      grok-4:
+        model_id: "grok-4"
+        framework: "external_api"
+        provider: "xai"
+        api_endpoint: "https://api.x.ai/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "xAI Grok 4, 2M context, multimodal"
+      # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Compact text LLM, ungated, efficient for claim extraction"
       llama-4-scout:
@@ -295,6 +1001,8 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 55
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "MoE model with 17B active, 10M context, excellent for claim decomposition"
       deepseek-v3:
@@ -302,6 +1010,8 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "MoE with 37B active, best reasoning for complex claims"
       gemma-3-27b:
@@ -309,17 +1019,182 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 14
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Lightweight, fast claim extraction (gated)"
+      # CPU-compatible LLMs for claim extraction (GGUF)
+      qwen2-5-1-5b-gguf:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        quantization: "gguf_q4_k_m"
+        framework: "llama_cpp"
+        vram_gb: 0
+        cpu_memory_gb: 1.5
+        cpu_compatible: true
+        speed: "fast"
+        description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
+      # CPU-compatible LLMs for claim extraction (Transformers)
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for claim extraction, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
 
   claim_synthesis:
-    selected: "qwen-2-5-7b"
+    selected: "qwen-3-8b"
     options:
+      # Qwen3 family and modern reasoning models (2026)
+      qwen-3-8b:
+        model_id: "Qwen/Qwen3-8B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 5
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "very_fast"
+        description: "Qwen3 8B, current ungated default for claim synthesis"
+      qwen-3-32b:
+        model_id: "Qwen/Qwen3-32B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Qwen3 32B, large ungated text LLM"
+      qwen-3-5-397b-a17b:
+        model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 210
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
+      deepseek-v3-2:
+        model_id: "deepseek-ai/DeepSeek-V3.2"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
+      deepseek-r1-distill-qwen-14b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 9
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
+      deepseek-r1-distill-qwen-32b:
+        model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 18
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "medium"
+        supports_thinking: true
+        description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
+      kimi-k2-6:
+        model_id: "moonshotai/Kimi-K2.6"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 90
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "Kimi K2.6, current Quality Index leader (53.9)"
+      glm-4-7:
+        model_id: "THUDM/GLM-4.7"
+        quantization: "4bit"
+        framework: "sglang"
+        vram_gb: 60
+        cpu_memory_gb: 0
+        cpu_compatible: false
+        speed: "fast"
+        description: "GLM-4.7, coding-focused leader, strong reasoning"
+      # External APIs (flagship 2026)
+      claude-sonnet-4-6:
+        model_id: "claude-sonnet-4-6"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Claude Sonnet 4.6, current production default, 1M context"
+      claude-opus-4-7:
+        model_id: "claude-opus-4-7"
+        framework: "external_api"
+        provider: "anthropic"
+        api_endpoint: "https://api.anthropic.com/v1/messages"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "medium"
+        description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
+      gpt-5-4:
+        model_id: "gpt-5.4"
+        framework: "external_api"
+        provider: "openai"
+        api_endpoint: "https://api.openai.com/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
+      gemini-3-1-pro:
+        model_id: "gemini-3.1-pro"
+        framework: "external_api"
+        provider: "google"
+        api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "Gemini 3.1 Pro, 2M context"
+      grok-4:
+        model_id: "grok-4"
+        framework: "external_api"
+        provider: "xai"
+        api_endpoint: "https://api.x.ai/v1/chat/completions"
+        requires_api_key: true
+        vram_gb: 0
+        cpu_memory_gb: 0
+        cpu_compatible: true
+        speed: "fast"
+        description: "xAI Grok 4, 2M context, multimodal"
+      # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 4
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Compact text LLM, ungated, efficient for claim synthesis"
       llama-4-scout:
@@ -327,6 +1202,8 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 55
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "MoE model with 17B active, 10M context, excellent for narrative synthesis"
       deepseek-v3:
@@ -334,6 +1211,8 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 85
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "fast"
         description: "MoE with 37B active, best reasoning for complex multi-source synthesis"
       gemma-3-27b:
@@ -341,8 +1220,39 @@ models:
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 14
+        cpu_memory_gb: 0
+        cpu_compatible: false
         speed: "very_fast"
         description: "Lightweight, fast synthesis (gated)"
+      # CPU-compatible LLMs for claim synthesis (GGUF)
+      qwen2-5-1-5b-gguf:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        quantization: "gguf_q4_k_m"
+        framework: "llama_cpp"
+        vram_gb: 0
+        cpu_memory_gb: 1.5
+        cpu_compatible: true
+        speed: "fast"
+        description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
+      # CPU-compatible LLMs for claim synthesis (Transformers)
+      qwen2-5-1-5b-cpu:
+        model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 2
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Small LLM for claim synthesis, ~20 tok/s on CPU"
+      phi-3-mini-4k:
+        model_id: "microsoft/Phi-3-mini-4k-instruct"
+        quantization: "int8"
+        framework: "transformers"
+        vram_gb: 0
+        cpu_memory_gb: 3
+        cpu_compatible: true
+        speed: "moderate"
+        description: "Phi-3 3.8B, efficient reasoning on CPU"
 
   speaker_diarization:
     selected: "pyannote-3-1"
@@ -351,6 +1261,8 @@ models:
         model_id: "pyannote/speaker-diarization-3.1"
         framework: "pyannote"
         vram_gb: 2
+        cpu_memory_gb: 2
+        cpu_compatible: true
         speed: "medium"
         description: "Pyannote Audio 3.1, speaker segmentation and clustering"
 
@@ -361,8 +1273,10 @@ models:
         model_id: "silero_vad"
         framework: "pytorch"
         vram_gb: 0.1
+        cpu_memory_gb: 0.1
+        cpu_compatible: true
         speed: "real_time"
-        description: "Silero VAD v5, lightweight speech detection"
+        description: "Silero VAD v5, CPU-native, lightweight speech detection"
 
 inference:
   max_memory_per_model: "auto"

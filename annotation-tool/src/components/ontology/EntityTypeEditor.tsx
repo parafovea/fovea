@@ -86,7 +86,7 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       setWikidataUrl('')
       setImportedAt('')
     }
-  }, [entity, personaId])
+  }, [entity, personaId, targetPersonaIds])
 
   useEffect(() => {
     // When copying from another persona, populate the fields

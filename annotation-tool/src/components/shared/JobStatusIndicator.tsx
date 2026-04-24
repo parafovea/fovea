@@ -214,6 +214,11 @@ export function JobStatusIndicator({
           value={status.progress}
           sx={{ mt: 1 }}
         />
+        {status.stage === 'downloading' && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Model downloads are cached and only happen once.
+          </Typography>
+        )}
       </Alert>
     </Box>
   )

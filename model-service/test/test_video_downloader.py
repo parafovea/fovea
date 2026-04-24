@@ -7,10 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from src.video_downloader import cleanup_temp_video, download_video_if_needed
+from src.infrastructure.adapters.outbound.video.downloader import (
+    cleanup_temp_video,
+    download_video_if_needed,
+)
 
-# Use S3 URLs that match the allowed patterns for SSRF protection
-TEST_S3_URL_HTTP = "http://bucket.s3.us-east-1.amazonaws.com/video.mp4"
+# Use S3 URLs that match the allowed patterns for SSRF protection. Remote
+# hosts must be HTTPS (plain HTTP is only allowed for localhost).
+TEST_S3_URL_HTTP = "https://bucket.s3.us-east-1.amazonaws.com/video.mp4"
 TEST_S3_URL_HTTPS = "https://bucket.s3.us-east-1.amazonaws.com/video.webm"
 TEST_S3_URL_NO_EXT = (
     "https://bucket.s3.us-east-1.amazonaws.com/signed-url-without-extension?signature=abc"
@@ -77,7 +81,9 @@ class TestDownloadVideoIfNeeded:
 
             # Verify result
             assert is_temp is True
-            assert result_path.startswith("/tmp/video_")
+            # The downloader resolves /tmp (which on macOS is a symlink to
+            # /private/tmp) and returns the canonical path. Accept either.
+            assert "/video_" in result_path
             assert result_path.endswith(".mp4")
             assert os.path.exists(result_path)
 

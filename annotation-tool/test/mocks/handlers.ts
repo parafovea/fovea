@@ -296,6 +296,8 @@ export const handlers = [
         warmupOnStartup: true,
       },
       cudaAvailable: true,
+      modelsAvailable: true,
+      cpuModelsAvailable: false,
     })
   }),
 
@@ -361,6 +363,8 @@ export const handlers = [
       totalVramAvailableGb: 24.0,
       timestamp: '2025-10-03T10:00:00Z',
       cudaAvailable: true,
+      modelsAvailable: true,
+      cpuModelsAvailable: false,
     })
   }),
 
@@ -1210,6 +1214,8 @@ export const handlers = [
         warmupOnStartup: true,
       },
       cudaAvailable: true,
+      modelsAvailable: true,
+      cpuModelsAvailable: false,
     })
   }),
 
@@ -1272,6 +1278,8 @@ export const handlers = [
       totalVramAvailableGb: 24.0,
       timestamp: '2025-10-03T10:00:00Z',
       cudaAvailable: true,
+      modelsAvailable: true,
+      cpuModelsAvailable: false,
     })
   }),
 

@@ -8,7 +8,7 @@ import pytest
 import torch
 from PIL import Image
 
-from src.detection_loader import (
+from src.infrastructure.adapters.outbound.models.detection.loader import (
     BoundingBox,
     Detection,
     DetectionConfig,

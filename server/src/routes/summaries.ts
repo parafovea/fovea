@@ -318,11 +318,21 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         }),
         response: {
           200: Type.Object({
-            jobId: Type.String(),
-            status: Type.String(),
-            progress: Type.Union([Type.Number(), Type.Null()]),
-            result: Type.Union([VideoSummarySchema, Type.Null()]),
-            error: Type.Union([Type.String(), Type.Null()]),
+            id: Type.String(),
+            state: Type.String(),
+            progress: Type.Union([
+              Type.Number(),
+              Type.Object({ percent: Type.Number(), stage: Type.String() }),
+              Type.Null(),
+            ]),
+            data: Type.Object({
+              videoId: Type.String(),
+              personaId: Type.String(),
+            }),
+            returnvalue: Type.Optional(Type.Union([VideoSummarySchema, Type.Null()])),
+            failedReason: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+            finishedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+            processedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
           }),
           404: Type.Object({ error: Type.String() }),
         },
@@ -352,23 +362,30 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const state = await job.getState()
-      const progress = typeof job.progress === 'number' ? job.progress : null
-
-      let result = null
-      let error = null
-
-      if (state === 'completed') {
-        result = job.returnvalue
-      } else if (state === 'failed') {
-        error = job.failedReason || 'Job failed'
-      }
+      // job.progress is typed as number | object in BullMQ; narrow to the
+      // shapes this queue actually emits without an unsafe cast.
+      const rawProgress = job.progress
+      const progress =
+        typeof rawProgress === 'number'
+          ? rawProgress
+          : (typeof rawProgress === 'object' && rawProgress !== null
+              && 'percent' in rawProgress && typeof rawProgress.percent === 'number'
+              && 'stage' in rawProgress && typeof rawProgress.stage === 'string'
+              ? { percent: rawProgress.percent, stage: rawProgress.stage }
+              : null)
+      const validJobData = isSummarizeJobData(job.data) ? job.data : null
 
       return reply.send({
-        jobId: job.id ?? '',
-        status: state,
+        id: job.id ?? '',
+        state,
         progress,
-        result,
-        error,
+        data: validJobData
+          ? { videoId: validJobData.videoId, personaId: validJobData.personaId }
+          : { videoId: '', personaId: '' },
+        returnvalue: state === 'completed' ? job.returnvalue : null,
+        failedReason: state === 'failed' ? (job.failedReason || 'Job failed') : null,
+        finishedOn: job.finishedOn ?? null,
+        processedOn: job.processedOn ?? null,
       })
     }
   )

@@ -102,7 +102,7 @@ export default function AnnotationWorkspace() {
   const updateInterpolationSegmentHook = useUpdateInterpolationSegment()
 
   const { data: modelConfig } = useModelConfig()
-  const isCpuOnly = !modelConfig?.cudaAvailable
+  const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
   const videoPlayerRef = useRef<VideoPlayerHandle>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
@@ -834,14 +834,14 @@ export default function AnnotationWorkspace() {
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
                   {/* Detect Objects Button */}
                   {currentVideo && videoId && (
-                    <Tooltip title={isCpuOnly ? 'GPU required for object detection (CPU-only mode detected)' : ''}>
+                    <Tooltip title={modelsDisabled ? 'No AI models available for object detection' : ''}>
                       <span>
                         <Button
                           variant="outlined"
                           startIcon={<DetectIcon />}
                           onClick={() => setDetectionDialogOpen(true)}
                           size="small"
-                          disabled={isCpuOnly}
+                          disabled={modelsDisabled}
                         >
                           Detect Objects
                         </Button>

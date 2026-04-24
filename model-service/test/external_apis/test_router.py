@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.external_apis.anthropic_client import AnthropicClient
-from src.external_apis.base import ExternalAPIConfig
-from src.external_apis.google_client import GoogleClient
-from src.external_apis.openai_client import OpenAIClient
-from src.external_apis.router import ExternalModelRouter
+from src.infrastructure.adapters.outbound.external_apis.anthropic_client import AnthropicClient
+from src.infrastructure.adapters.outbound.external_apis.base import ExternalAPIConfig
+from src.infrastructure.adapters.outbound.external_apis.google_client import GoogleClient
+from src.infrastructure.adapters.outbound.external_apis.openai_client import OpenAIClient
+from src.infrastructure.adapters.outbound.external_apis.router import ExternalModelRouter
 
 
 @pytest.fixture

@@ -16,6 +16,7 @@
 #               NOTE: Requires DEVICE=gpu, will fail on CPU/ARM64
 #
 # Examples:
+#   CPU build: docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=minimal -t fovea-model-service:cpu .
 #   docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=minimal .
 #   docker build --build-arg DEVICE=cpu --build-arg BUILD_MODE=recommended .
 #   docker build --build-arg DEVICE=gpu --build-arg BUILD_MODE=full .
@@ -74,7 +75,9 @@ ARG DEVICE=cpu
 # BUILD_MODE options: minimal (base only), recommended (+ bitsandbytes), full (+ all inference engines)
 # DEVICE options: cpu (local dev), gpu (production)
 
-# Install Python and build tools (retry apt-get update to handle transient mirror syncs)
+# Install Python and build tools
+# - cmake is needed for llama-cpp-python on CPU
+# - apt-get update is retried to handle transient mirror syncs
 RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed (attempt $i/3), retrying in 30s..."; sleep 30; }; done \
     && apt-get install -y \
     python3 \
@@ -82,6 +85,7 @@ RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed 
     python3-pip \
     git \
     build-essential \
+    cmake \
     kmod \
     && rm -rf /var/lib/apt/lists/*
 
@@ -109,10 +113,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip install --no-cache-dir -e ".[recommended]"; \
     else \
         pip install --no-cache-dir -e .; \
+    fi && \
+    if [ "$DEVICE" = "cpu" ]; then \
+        pip install --no-cache-dir -e ".[cpu]"; \
     fi
 
 # Production stage
 FROM base AS production
+
+ARG DEVICE=cpu
 
 WORKDIR /app
 
@@ -123,6 +132,7 @@ COPY --link --from=builder-base /usr/local/bin /usr/local/bin
 # Copy application code with link
 COPY --link src ./src
 COPY --link config ./config
+COPY --link scripts ./scripts
 
 # Create cache directories
 RUN mkdir -p /models /videos
@@ -131,6 +141,24 @@ RUN mkdir -p /models /videos
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_CACHE=/models
 ENV HF_HOME=/models
+# Create symlink to active model config based on DEVICE; override at runtime via env var
+RUN if [ "$DEVICE" = "cpu" ]; then \
+        ln -sf /app/config/models-cpu.yaml /app/config/active-models.yaml; \
+    else \
+        ln -sf /app/config/models.yaml /app/config/active-models.yaml; \
+    fi
+ENV MODEL_CONFIG_PATH=/app/config/active-models.yaml
+
+# Optionally pre-download default models at build time
+ARG PRELOAD_MODELS=false
+RUN --mount=type=secret,id=hf_token,required=false \
+    if [ "$PRELOAD_MODELS" = "true" ]; then \
+        echo "Pre-downloading default models..." && \
+        export HF_TOKEN=$(cat /run/secrets/hf_token 2>/dev/null || echo "") && \
+        python scripts/preload_models.py --config /app/config/active-models.yaml --cache-dir /models; \
+    else \
+        echo "Skipping model pre-download (PRELOAD_MODELS=false)"; \
+    fi
 
 # Expose port
 EXPOSE 8000

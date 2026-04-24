@@ -872,7 +872,7 @@ describe('ClaimEditor', () => {
       await user.type(input, 'Test claim')
       
       // Set confidence
-      const slider = screen.getByRole('slider')
+      screen.getByRole('slider')
       // Slider already at 0.9, which is valid
       
       // Don't select any modality - save should be disabled

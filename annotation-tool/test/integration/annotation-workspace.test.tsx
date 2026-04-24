@@ -109,7 +109,7 @@ vi.mock('../../src/hooks/useDetection', () => ({
 
 vi.mock('../../src/hooks/useModelConfig', () => ({
   useModelConfig: vi.fn(() => ({
-    data: { cudaAvailable: true },
+    data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
     isLoading: false,
     error: null,
   })),

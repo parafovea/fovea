@@ -104,12 +104,14 @@ services:
       args:
         BUILD_MODE: ${MODEL_BUILD_MODE:-minimal}
         DEVICE: cpu
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-false}
     ports:
       - "8000:8000"
     environment:
       - TRANSFORMERS_CACHE=/models
+      - HF_TOKEN=${HF_TOKEN:-}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-      - MODEL_CONFIG_PATH=/config/models.yaml
+      - MODEL_CONFIG_PATH=/config/models-cpu.yaml
     volumes:
       - model-cache:/models
       - ./videos:/videos
@@ -139,6 +141,7 @@ services:
       args:
         BUILD_MODE: ${MODEL_BUILD_MODE:-full}
         DEVICE: gpu
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-false}
     deploy:
       resources:
         reservations:
@@ -148,6 +151,7 @@ services:
               capabilities: [gpu]
     environment:
       - TRANSFORMERS_CACHE=/models
+      - HF_TOKEN=${HF_TOKEN:-}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - MODEL_CONFIG_PATH=/config/models.yaml
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}

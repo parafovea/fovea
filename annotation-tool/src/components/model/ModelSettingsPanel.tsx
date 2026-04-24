@@ -56,8 +56,11 @@ const TASK_DISPLAY_NAMES: Record<string, string> = {
  * Speed indicator color mapping.
  */
 const SPEED_COLORS: Record<string, 'success' | 'warning' | 'error'> = {
+  real_time: 'success',
+  very_fast: 'success',
   fast: 'success',
   moderate: 'warning',
+  medium: 'warning',
   slow: 'error',
 }
 
@@ -110,7 +113,7 @@ export function ModelSettingsPanel({
     Object.entries(pendingSelections).forEach(([taskType, modelName]) => {
       const taskConfig = config.models[taskType]
       if (taskConfig) {
-        const modelOption = taskConfig.options[modelName]
+        const modelOption = taskConfig.options.find((o) => o.name === modelName)
         if (modelOption) {
           totalRequired += modelOption.vramGb
           requirements[taskType] = {
@@ -236,8 +239,10 @@ export function ModelSettingsPanel({
     )
   }
 
-  // Check for CPU-only mode
+  // Determine hardware mode
   const isCpuOnly = !config.cudaAvailable
+  const cpuModelsAvailable = config.cpuModelsAvailable
+  const modelsDisabled = !config.cudaAvailable && !cpuModelsAvailable
   const isVramWarning = vramCalculation.utilizationPercent >= 80 && vramCalculation.valid
   const isVramError = !vramCalculation.valid
 
@@ -253,14 +258,27 @@ export function ModelSettingsPanel({
           </Typography>
         </Box>
 
-        {/* CPU-Only Mode Warning */}
-        {isCpuOnly && (
-          <Alert severity="error" sx={{ mb: 3 }}>
+        {/* CPU Mode Info / No Models Warning */}
+        {isCpuOnly && cpuModelsAvailable && (
+          <Alert severity="info" sx={{ mb: 3 }}>
             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-              ⚠️ GPU Required - CPU-Only Mode Detected
+              CPU Mode - Using Optimized CPU Models
             </Typography>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              The model service is running in <strong>CPU-only mode</strong> (no GPU/CUDA available).
+              No GPU/CUDA detected. Running with CPU-optimized models (ONNX detection, llama.cpp).
+            </Typography>
+            <Typography variant="body2">
+              Performance may be slower than GPU mode. VRAM budget does not apply.
+            </Typography>
+          </Alert>
+        )}
+        {modelsDisabled && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+              No AI Models Available
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              No GPU/CUDA detected and no CPU-compatible models are installed.
             </Typography>
             <Typography variant="body2" sx={{ mb: 1 }}>
               <strong>All AI-powered features are disabled:</strong>
@@ -272,13 +290,13 @@ export function ModelSettingsPanel({
               <li>Ontology augmentation</li>
             </Box>
             <Typography variant="body2" sx={{ mt: 1, fontWeight: 'bold' }}>
-              These deep learning models require GPU acceleration and will not work on CPU.
+              Install CPU-compatible models or add a GPU to enable AI features.
             </Typography>
           </Alert>
         )}
 
         {/* VRAM Budget Visualization - Only show if GPU available and validation data loaded */}
-        {!isCpuOnly && vramCalculation && validation && (
+        {!isCpuOnly && !modelsDisabled && vramCalculation && validation && (
           <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <MemoryIcon sx={{ mr: 1 }} />
@@ -329,8 +347,8 @@ export function ModelSettingsPanel({
           </Paper>
         )}
 
-        {/* Model Selection per Task - hide in CPU mode */}
-        {!isCpuOnly && (
+        {/* Model Selection per Task - hide when no models available */}
+        {!modelsDisabled && (
           <Stack spacing={3}>
           {Object.entries(config.models).map(([taskType, taskConfig]) => (
             <Box key={taskType}>
@@ -338,20 +356,20 @@ export function ModelSettingsPanel({
                 {TASK_DISPLAY_NAMES[taskType] || taskType}
               </Typography>
 
-              <FormControl fullWidth disabled={isCpuOnly}>
+              <FormControl fullWidth disabled={modelsDisabled}>
                 <InputLabel id={`${taskType}-label`}>Model</InputLabel>
                 <Select
                   labelId={`${taskType}-label`}
                   value={pendingSelections[taskType] || taskConfig.selected}
                   label="Model"
                   onChange={(e) => handleModelChange(taskType, e.target.value)}
-                  disabled={isCpuOnly}
+                  disabled={modelsDisabled}
                 >
-                  {Object.entries(taskConfig.options).map(([name, option]) => (
-                    <MenuItem key={name} value={name}>
+                  {taskConfig.options.map((option) => (
+                    <MenuItem key={option.name} value={option.name}>
                       <Box sx={{ width: '100%' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography>{name}</Typography>
+                          <Typography>{option.name}</Typography>
                           <Chip
                             label={`${option.vramGb.toFixed(1)} GB`}
                             size="small"
@@ -382,28 +400,30 @@ export function ModelSettingsPanel({
 
               {/* Display current model info */}
               <ModelOptionInfo
-                option={taskConfig.options[pendingSelections[taskType] || taskConfig.selected]}
+                option={taskConfig.options.find(
+                  (o) => o.name === (pendingSelections[taskType] || taskConfig.selected),
+                )}
               />
             </Box>
           ))}
           </Stack>
         )}
 
-        {!isCpuOnly && <Divider sx={{ my: 3 }} />}
+        {!modelsDisabled && <Divider sx={{ my: 3 }} />}
 
         {/* Action Buttons */}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={isCpuOnly || !hasChanges || isVramError || selectModelMutation.isPending}
+            disabled={modelsDisabled || !hasChanges || isVramError || selectModelMutation.isPending}
           >
             {selectModelMutation.isPending ? 'Saving...' : 'Save Configuration'}
           </Button>
           <Button
             variant="outlined"
             onClick={handleReset}
-            disabled={isCpuOnly || !hasChanges || selectModelMutation.isPending}
+            disabled={modelsDisabled || !hasChanges || selectModelMutation.isPending}
           >
             Reset
           </Button>
