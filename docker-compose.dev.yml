@@ -34,7 +34,7 @@ services:
       - ./server/prisma:/repo/server/prisma:ro
     environment:
       - NODE_ENV=development
-    command: sh -c "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/prisma db seed && pnpm dev"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/seed.cjs && pnpm dev"
 
   model-service:
     volumes:
