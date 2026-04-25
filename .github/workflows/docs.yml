@@ -43,6 +43,9 @@ jobs:
       - name: Install workspace dependencies (annotation-tool + server for TypeDoc)
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client (so server typedoc can resolve @prisma/client types)
+        run: pnpm --filter @fovea/server exec prisma generate
+
       - name: Install documentation dependencies
         run: |
           cd docs && npm ci

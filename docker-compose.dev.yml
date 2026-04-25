@@ -15,24 +15,26 @@ services:
   frontend:
     build:
       target: builder  # Use builder stage for development
+    working_dir: /repo/annotation-tool
     volumes:
-      - ./annotation-tool/src:/app/src:ro
-      - ./annotation-tool/public:/app/public:ro
+      - ./annotation-tool/src:/repo/annotation-tool/src:ro
+      - ./annotation-tool/public:/repo/annotation-tool/public:ro
     environment:
       - NODE_ENV=development
       - VITE_BACKEND_URL=http://backend:3001  # Use Docker service name for inter-container communication (for Vite proxy)
       - VITE_API_URL=  # Empty = use relative URLs that go through Vite proxy
-    command: pnpm run dev -- --host 0.0.0.0 --port 3000
+    command: pnpm dev -- --host 0.0.0.0 --port 3000
 
   backend:
     build:
       target: builder  # Use builder stage which has devDependencies (tsx)
+    working_dir: /repo/server
     volumes:
-      - ./server/src:/app/src:ro
-      - ./server/prisma:/app/prisma:ro
+      - ./server/src:/repo/server/src:ro
+      - ./server/prisma:/repo/server/prisma:ro
     environment:
       - NODE_ENV=development
-    command: sh -c "pnpm exec prisma migrate deploy && pnpm exec prisma db seed && pnpm run dev"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/prisma db seed && pnpm dev"
 
   model-service:
     volumes:
