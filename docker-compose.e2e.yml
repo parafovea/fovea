@@ -5,8 +5,8 @@ name: fovea-e2e
 services:
   frontend:
     build:
-      context: ./annotation-tool
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: annotation-tool/Dockerfile
       target: production
     ports:
       - "3000:3000"
@@ -26,8 +26,8 @@ services:
 
   backend:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     ports:
       - "3001:3001"
     environment:

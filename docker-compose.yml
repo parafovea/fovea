@@ -4,8 +4,8 @@ name: fovea
 services:
   frontend:
     build:
-      context: ./annotation-tool
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: annotation-tool/Dockerfile
       target: production
       args:
         # Empty defaults = use relative URLs (nginx proxies /api/* to backend)
@@ -27,8 +27,8 @@ services:
 
   backend:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     command: sh -c "pnpm exec prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
     ports:
       - "3001:3001"
