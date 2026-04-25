@@ -18,38 +18,30 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch }}
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            annotation-tool/package-lock.json
-            server/package-lock.json
+          node-version: '22'
+          cache: 'pnpm'
 
-      - name: Install frontend dependencies
-        working-directory: ./annotation-tool
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Type check frontend
-        working-directory: ./annotation-tool
-        run: npm run type-check
+        run: pnpm --filter @fovea/annotation-tool type-check
 
       - name: Lint frontend
-        working-directory: ./annotation-tool
-        run: npm run lint
+        run: pnpm --filter @fovea/annotation-tool lint
 
-      - name: Install backend dependencies
-        working-directory: ./server
-        run: npm ci
-
-      - name: Type check backend
-        working-directory: ./server
-        run: npm run build
+      - name: Build backend (type-checks)
+        run: pnpm --filter @fovea/server build
 
       - name: Lint backend
-        working-directory: ./server
-        run: npm run lint
+        run: pnpm --filter @fovea/server lint
 
   deploy-staging:
     name: Deploy to Staging Environment
