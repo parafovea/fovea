@@ -30,6 +30,9 @@
       "msw",
       "prisma",
       "protobufjs"
-    ]
+    ],
+    "overrides": {
+      "ioredis": "5.9.3"
+    }
   }
 }
