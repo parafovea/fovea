@@ -51,7 +51,7 @@ describe('User preferences routes', () => {
       url: '/api/auth/login',
       payload: { username: 'alice', password: 'alicepw123' },
     })
-    aliceToken = (aliceLogin.json() as { token: string }).token
+    aliceToken = aliceLogin.cookies.find((c) => c.name === 'session_token')!.value
 
     const bob = await prisma.user.create({
       data: {
@@ -68,7 +68,7 @@ describe('User preferences routes', () => {
       url: '/api/auth/login',
       payload: { username: 'bob', password: 'bobpw12345' },
     })
-    bobToken = (bobLogin.json() as { token: string }).token
+    bobToken = bobLogin.cookies.find((c) => c.name === 'session_token')!.value
 
     expect(alice.id).toBeTruthy()
     expect(bob.id).toBeTruthy()
@@ -78,7 +78,7 @@ describe('User preferences routes', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/me/preferences',
-      headers: { authorization: `Bearer ${aliceToken}` },
+      cookies: { session_token: aliceToken },
     })
     expect(response.statusCode).toBe(200)
     const body = response.json() as {
@@ -105,7 +105,7 @@ describe('User preferences routes', () => {
     const put = await app.inject({
       method: 'PUT',
       url: '/api/me/preferences',
-      headers: { authorization: `Bearer ${aliceToken}` },
+      cookies: { session_token: aliceToken },
       payload,
     })
     expect(put.statusCode).toBe(200)
@@ -113,7 +113,7 @@ describe('User preferences routes', () => {
     const get = await app.inject({
       method: 'GET',
       url: '/api/me/preferences',
-      headers: { authorization: `Bearer ${aliceToken}` },
+      cookies: { session_token: aliceToken },
     })
     const body = get.json() as typeof payload
     expect(body.inferencePreferences.generation.temperature).toBe(0.45)
@@ -125,7 +125,7 @@ describe('User preferences routes', () => {
     await app.inject({
       method: 'PUT',
       url: '/api/me/preferences',
-      headers: { authorization: `Bearer ${aliceToken}` },
+      cookies: { session_token: aliceToken },
       payload: {
         inferencePreferences: {
           generation: { temperature: 0.1, topP: 0.1, maxTokens: 100 },
@@ -144,7 +144,7 @@ describe('User preferences routes', () => {
     const bobGet = await app.inject({
       method: 'GET',
       url: '/api/me/preferences',
-      headers: { authorization: `Bearer ${bobToken}` },
+      cookies: { session_token: bobToken },
     })
     const body = bobGet.json() as {
       inferencePreferences: { generation: { temperature: number | null } }
