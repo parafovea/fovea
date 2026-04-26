@@ -402,8 +402,11 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:3000
           CI: 'true'
-        run: pnpm --filter @fovea/annotation-tool exec playwright test --project=smoke --project=functional --project=regression --project=accessibility
-        timeout-minutes: 30
+        # 90-minute budget covers the full 4-project suite (~379 tests at 2
+        # workers under docker compose). Reporter list is added so the job log
+        # records per-test pass/fail, which the default html-only reporter omits.
+        run: pnpm --filter @fovea/annotation-tool exec playwright test --project=smoke --project=functional --project=regression --project=accessibility --reporter=list,html,json,junit
+        timeout-minutes: 90
 
       - name: Dump service logs on failure
         if: failure()
