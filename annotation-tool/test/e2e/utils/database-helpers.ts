@@ -66,11 +66,31 @@ export interface RelationType {
  */
 export class DatabaseHelper {
   private apiURL: string
+  private sessionToken: string | null = null
 
   constructor(baseURL: string = 'http://localhost:3000') {
     // baseURL is used to derive apiURL
     // API is on port 3001 in E2E environment
     this.apiURL = baseURL.replace(':3000', ':3001')
+  }
+
+  /**
+   * Set the worker user's session token. All subsequent create*Type / update
+   * ontology / persona helpers will attach this as a session_token cookie so
+   * RBAC-protected routes (now backing every persona/ontology mutation)
+   * resolve to the worker user instead of the unauthenticated branch that
+   * 404s on non-system-generated personas.
+   */
+  setSessionToken(token: string | null): void {
+    this.sessionToken = token
+  }
+
+  private authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const headers: Record<string, string> = { ...extra }
+    if (this.sessionToken) {
+      headers['Cookie'] = `session_token=${this.sessionToken}`
+    }
+    return headers
   }
 
   /**
@@ -195,7 +215,8 @@ export class DatabaseHelper {
    */
   async deletePersona(personaId: string): Promise<void> {
     await fetch(`${this.apiURL}/api/personas/${personaId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: this.authHeaders()
     })
   }
 
@@ -295,7 +316,7 @@ export class DatabaseHelper {
    */
   async createEntityType(personaId: string, data: Partial<EntityType>): Promise<EntityType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -315,7 +336,7 @@ export class DatabaseHelper {
     // Update the ontology
     const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
 
@@ -338,7 +359,7 @@ export class DatabaseHelper {
    */
   async createEventType(personaId: string, data: Partial<EventType>): Promise<EventType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -358,7 +379,7 @@ export class DatabaseHelper {
     // Update the ontology
     const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
 
@@ -380,7 +401,7 @@ export class DatabaseHelper {
    */
   async createRoleType(personaId: string, data: Partial<RoleType>): Promise<RoleType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -400,7 +421,7 @@ export class DatabaseHelper {
     // Update the ontology
     const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
 
@@ -423,7 +444,7 @@ export class DatabaseHelper {
    */
   async createRelationType(personaId: string, data: Partial<RelationType>): Promise<RelationType> {
     // Get the current ontology
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -444,7 +465,7 @@ export class DatabaseHelper {
     // Update the ontology
     const updateResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
 
@@ -467,7 +488,7 @@ export class DatabaseHelper {
    * @param entityTypeId - ID of entity type
    */
   async getEntityType(personaId: string, entityTypeId: string): Promise<EntityType | null> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       return null
     }
@@ -488,7 +509,7 @@ export class DatabaseHelper {
    * @param personaId - ID of persona
    */
   async getEntityTypes(personaId: string): Promise<EntityType[]> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       return []
     }
@@ -519,7 +540,7 @@ export class DatabaseHelper {
    * @param entityTypeId - ID of entity type to delete
    */
   async deleteEntityType(personaId: string, entityTypeId: string): Promise<void> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -529,7 +550,7 @@ export class DatabaseHelper {
 
     await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
   }
@@ -540,7 +561,7 @@ export class DatabaseHelper {
    * @param eventTypeId - ID of event type to delete
    */
   async deleteEventType(personaId: string, eventTypeId: string): Promise<void> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -550,7 +571,7 @@ export class DatabaseHelper {
 
     await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
   }
@@ -561,7 +582,7 @@ export class DatabaseHelper {
    * @param roleTypeId - ID of role type to delete
    */
   async deleteRoleType(personaId: string, roleTypeId: string): Promise<void> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -571,7 +592,7 @@ export class DatabaseHelper {
 
     await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
   }
@@ -582,7 +603,7 @@ export class DatabaseHelper {
    * @param relationTypeId - ID of relation type to delete
    */
   async deleteRelationType(personaId: string, relationTypeId: string): Promise<void> {
-    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`)
+    const getResponse = await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, { headers: this.authHeaders() })
     if (!getResponse.ok) {
       throw new Error(`Failed to get ontology: ${getResponse.statusText}`)
     }
@@ -592,7 +613,7 @@ export class DatabaseHelper {
 
     await fetch(`${this.apiURL}/api/personas/${personaId}/ontology`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
   }

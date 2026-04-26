@@ -101,7 +101,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     await workerDb.deleteUser(user.id)
   }, { scope: 'worker' }],
 
-  workerSessionToken: [async ({ workerUser }, use) => {
+  workerSessionToken: [async ({ workerUser, workerDb }, use) => {
     const password = 'test-password-123'
 
     // Authenticate to get session token
@@ -123,7 +123,14 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       throw new Error('Failed to extract session token from login response')
     }
 
+    // Inject the worker user's token into workerDb so every create*Type /
+    // ontology fetch resolves to the worker user (otherwise unauthenticated
+    // requests fall into the "only system personas visible" branch and 404).
+    workerDb.setSessionToken(cookieMatch[1])
+
     await use(cookieMatch[1])
+
+    workerDb.setSessionToken(null)
   }, { scope: 'worker' }],
 
   // Test-scoped fixtures (use worker fixtures)
