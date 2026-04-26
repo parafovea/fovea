@@ -805,7 +805,7 @@ export default function AnnotationWorkspace() {
                     onValueChange={(val) => setSelectedPersonaId(val || null)}
                     disabled={annotationMode === 'object'}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Select Persona">
                       <SelectValue placeholder="Select Persona" />
                     </SelectTrigger>
                     <SelectContent>

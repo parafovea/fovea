@@ -75,7 +75,7 @@ export class AnnotationWorkspacePage extends BasePage {
     await this.page.waitForURL(/\/annotate\//, { timeout: 15000 })
 
     // Wait for annotation workspace UI elements to be visible
-    await expect(this.page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await expect(this.page.getByRole('combobox').filter({ hasText: /select persona/i }).first()).toBeVisible({ timeout: 15000 })
     await expect(this.page.getByText('All Annotations')).toBeVisible({ timeout: 15000 })
 
     // Note: We don't wait for "Loading..." to disappear because video summary loading
@@ -130,7 +130,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async drawSimpleBoundingBox(): Promise<void> {
     // Wait for persona select to be visible and enabled
-    const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
+    const personaSelect = this.page.getByRole('combobox').filter({ hasText: /select persona/i }).first()
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
 
@@ -349,7 +349,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async expectWorkspaceReady(): Promise<void> {
     // Check for annotation workspace specific elements with longer timeouts for slow CI environments
-    await expect(this.page.getByRole('combobox', { name: /select persona/i })).toBeVisible({ timeout: 15000 })
+    await expect(this.page.getByRole('combobox').filter({ hasText: /select persona/i }).first()).toBeVisible({ timeout: 15000 })
     await expect(this.page.getByText('All Annotations')).toBeVisible({ timeout: 15000 })
     await expect(this.video.videoElement).toBeVisible({ timeout: 15000 })
     // Note: We don't check readyState because headless browsers may not load video codecs
