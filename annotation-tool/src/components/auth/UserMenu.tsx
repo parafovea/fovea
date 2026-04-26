@@ -76,7 +76,12 @@ export function UserMenu({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" size="icon" className="rounded-full">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label="User menu"
+            >
               <span className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground text-xs font-medium">
                 {getUserInitials()}
               </span>

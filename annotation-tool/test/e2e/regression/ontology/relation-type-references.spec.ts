@@ -97,16 +97,16 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('This video shows #')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear (MUI List renders as <ul> inside Paper)
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear (GlossEditor renders an absolute-positioned bg-popover container)
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
-    // Verify "Relation Types" section is visible (ListSubheader)
-    const relationTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Relation Types' })
+    // Verify "Relation Types" section header is visible
+    const relationTypesHeader = autocompletePopper.getByText('Relation Types', { exact: true })
     await expect(relationTypesHeader).toBeVisible({ timeout: 10000 })
 
-    // Click on the relation type (ListItem with the relation type name)
-    const relationTypeOption = page.locator('.MuiListItem-root').filter({ hasText: relationType.name })
+    // Click on the relation type option
+    const relationTypeOption = autocompletePopper.getByText(relationType.name, { exact: true })
     await expect(relationTypeOption).toBeVisible({ timeout: 10000 })
     await relationTypeOption.click()
 
@@ -268,12 +268,12 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('Testing #')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
     // Click on the relation type in the autocomplete
-    const relationTypeOption = page.locator('.MuiListItem-root').filter({ hasText: relationType.name })
+    const relationTypeOption = autocompletePopper.getByText(relationType.name, { exact: true })
     await expect(relationTypeOption).toBeVisible({ timeout: 10000 })
     await relationTypeOption.click()
 
@@ -283,9 +283,10 @@ test.describe('Relation Type References in Summaries', () => {
     // Wait for preview to update
     await page.waitForTimeout(1000)
 
-    // Verify the relation type reference renders as a chip in the preview
-    const chip = dialog.locator('.MuiChip-root').filter({ hasText: relationType.name })
-    await expect(chip).toBeVisible({ timeout: 10000 })
+    // Verify the relation type reference renders as a Badge in the preview (shadcn Badge spans).
+    // Filter to badges (small inline-flex spans with rounded-4xl), excluding the autocomplete option text.
+    const chip = dialog.locator('span.inline-flex').filter({ hasText: relationType.name })
+    await expect(chip.first()).toBeVisible({ timeout: 10000 })
   })
 
   test('relation types appear in autocomplete alongside other types', async ({
@@ -344,19 +345,19 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('#')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
-    // Verify both Entity Types and Relation Types sections are visible
-    const entityTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Entity Types' })
+    // Verify both Entity Types and Relation Types section headers are visible
+    const entityTypesHeader = autocompletePopper.getByText('Entity Types', { exact: true })
     await expect(entityTypesHeader).toBeVisible({ timeout: 10000 })
 
-    const relationTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Relation Types' })
+    const relationTypesHeader = autocompletePopper.getByText('Relation Types', { exact: true })
     await expect(relationTypesHeader).toBeVisible({ timeout: 10000 })
 
-    // Verify specific types are listed
-    await expect(page.locator('.MuiListItem-root').filter({ hasText: entityType.name })).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('.MuiListItem-root').filter({ hasText: relationType.name })).toBeVisible({ timeout: 10000 })
+    // Verify specific types are listed within the popover
+    await expect(autocompletePopper.getByText(entityType.name, { exact: true })).toBeVisible({ timeout: 10000 })
+    await expect(autocompletePopper.getByText(relationType.name, { exact: true })).toBeVisible({ timeout: 10000 })
   })
 })

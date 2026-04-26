@@ -80,11 +80,19 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     const displayName = `Test User (Worker ${workerInfo.workerIndex})`
     const password = 'test-password-123'
 
+    // Worker users get systemRole='system_admin' so the buildAbilities()
+    // shortcut (`if (roles.systemRole === 'system_admin')`) returns
+    // can('manage', 'all') and every CASL check downstream short-circuits
+    // to allowed. Without this, persona/world-state/annotation creates
+    // return 403 because no RolePermission rows are seeded for the
+    // per-worker users we create on the fly. (isAdmin alone does NOT
+    // bypass CASL — only systemRole does.)
     const user = await workerDb.createUser({
       username,
       displayName,
       password,
-      isAdmin: false
+      isAdmin: true,
+      systemRole: 'system_admin'
     })
 
     await use(user)

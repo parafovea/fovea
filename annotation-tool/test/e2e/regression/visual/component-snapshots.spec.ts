@@ -198,8 +198,8 @@ test.describe('Component Visual Regression', () => {
   test('annotation workspace sidebar renders correctly', async ({ page, annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
-    // The sidebar is a Material-UI Drawer on the right side containing "All Annotations"
-    const sidebar = page.locator('.MuiDrawer-root').filter({ has: page.getByText('All Annotations') })
+    // The annotations sidebar is a flex panel on the right side with the "All Annotations" heading.
+    const sidebar = page.locator('div.shrink-0').filter({ has: page.getByRole('heading', { name: /all annotations/i }) })
 
     // Wait for sidebar to be visible
     await expect(sidebar).toBeVisible({ timeout: 10000 })
@@ -279,7 +279,7 @@ test.describe('Component Visual Regression', () => {
     // Click export button to open dialog
     await exportButton.click()
 
-    const dialog = page.locator('[role="dialog"]').or(page.locator('.MuiDialog-root'))
+    const dialog = page.locator('[role="dialog"]').or(page.locator('[data-slot="dialog-content"]'))
     await expect(dialog.first()).toBeVisible({ timeout: 10000 })
 
     // Wait for dialog animation and content to fully render

@@ -371,15 +371,16 @@ export class ObjectWorkspacePage extends BasePage {
       await this.wait(300)
     }
 
-    // Find Location select - look for combobox near "Location" text
-    const locationInput = dialog.locator('[role="combobox"]').filter({ has: this.page.locator('input[id*="location"]') }).first()
-    if (await locationInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await locationInput.click({ timeout: 3000 })
+    // Find Location select trigger (shadcn Select renders as combobox)
+    const locationCombobox = dialog.getByRole('combobox').filter({ hasText: /location|none/i }).first()
+    if (await locationCombobox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await locationCombobox.click({ timeout: 3000 })
     } else {
-      // Fallback: try finding by nearby text
-      const locationFormControl = dialog.locator('.MuiFormControl-root').filter({ hasText: /location/i }).first()
-      const combobox = locationFormControl.locator('[role="combobox"]').first()
-      await combobox.click({ timeout: 3000 })
+      // Fallback: locate via Label + sibling combobox group
+      const locationGroup = dialog.locator('div').filter({
+        has: this.page.getByText(/^location$/i)
+      }).filter({ has: this.page.getByRole('combobox') }).first()
+      await locationGroup.getByRole('combobox').first().click({ timeout: 3000 })
     }
     await this.wait(300)
 
@@ -408,15 +409,16 @@ export class ObjectWorkspacePage extends BasePage {
       await this.wait(300)
     }
 
-    // Find Time select - look for combobox near "Time" text
-    const timeInput = dialog.locator('[role="combobox"]').filter({ has: this.page.locator('input[id*="time"]') }).first()
-    if (await timeInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await timeInput.click({ timeout: 3000 })
+    // Find Time select trigger (shadcn Select renders as combobox)
+    const timeCombobox = dialog.getByRole('combobox').filter({ hasText: /instant|interval|time|none/i }).first()
+    if (await timeCombobox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await timeCombobox.click({ timeout: 3000 })
     } else {
-      // Fallback: try finding by nearby text
-      const timeFormControl = dialog.locator('.MuiFormControl-root').filter({ hasText: /time/i }).first()
-      const combobox = timeFormControl.locator('[role="combobox"]').first()
-      await combobox.click({ timeout: 3000 })
+      // Fallback: locate via Label + sibling combobox group
+      const timeGroup = dialog.locator('div').filter({
+        has: this.page.getByText(/^time$/i)
+      }).filter({ has: this.page.getByRole('combobox') }).first()
+      await timeGroup.getByRole('combobox').first().click({ timeout: 3000 })
     }
     await this.wait(300)
 
@@ -785,19 +787,12 @@ export class ObjectWorkspacePage extends BasePage {
     const dialog = this.page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Find the autocomplete container
-    const autocompleteContainer = dialog.locator('.MuiAutocomplete-root').first()
-
-    // Get all member chips in the autocomplete (exclude collection type chips)
-    const memberChipsInAutocomplete = autocompleteContainer.locator('.MuiChip-root').filter({
-      has: this.page.locator('.MuiChip-deleteIcon')
-    })
-
-    // Find and click the delete icon for the chip to remove
-    const chipToRemove = memberChipsInAutocomplete.filter({ hasText: memberNameToRemove }).first()
-    const deleteIcon = chipToRemove.locator('.MuiChip-deleteIcon')
-    if (await deleteIcon.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await deleteIcon.click()
+    // shadcn CollectionEditor: members are toggled by clicking buttons in the
+    // available-members list. Click the matching toggle to deselect.
+    const memberToggle = dialog.getByRole('button', { name: new RegExp(`^${memberNameToRemove}$`, 'i') }).first()
+    if (await memberToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await memberToggle.scrollIntoViewIfNeeded()
+      await memberToggle.click()
       await this.wait(500)
     }
 

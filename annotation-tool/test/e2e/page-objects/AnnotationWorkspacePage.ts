@@ -63,7 +63,7 @@ export class AnnotationWorkspacePage extends BasePage {
     await this.goto('/')
     await expect(this.page.getByPlaceholder(/search videos/i)).toBeVisible()
 
-    const firstVideo = this.page.locator('.MuiCard-root').first()
+    const firstVideo = this.page.locator('[data-slot="card"]').first()
     await expect(firstVideo).toBeVisible()
 
     // Click the "Annotate" button within the first video card
@@ -388,8 +388,8 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async expectTimelineFocused(): Promise<void> {
     const focused = await this.page.evaluate(() => {
-      const timeline = document.querySelector('[data-testid="timeline-canvas"]')
-      return timeline === document.activeElement
+      const timeline = document.querySelector('[data-slot="timeline-root"]')
+      return timeline === document.activeElement || (timeline?.contains(document.activeElement) ?? false)
     })
     expect(focused).toBe(true)
   }
@@ -397,7 +397,7 @@ export class AnnotationWorkspacePage extends BasePage {
   /**
    * Assert that the currently focused element has a visible focus indicator.
    * Verifies outline or box-shadow is present, or that element is an interactive element with focus.
-   * In headless browsers, Material-UI focus indicators may not render, so we accept any focused interactive element.
+   * In headless browsers, focus indicators may not render, so we accept any focused interactive element.
    */
   async expectFocusVisible(): Promise<void> {
     const focusInfo = await this.page.evaluate(() => {
@@ -431,7 +431,7 @@ export class AnnotationWorkspacePage extends BasePage {
 
   /**
    * Assert that focus indicator meets WCAG minimum width (2px).
-   * In practice, we accept any focused interactive element as Material-UI handles this.
+   * In practice, we accept any focused interactive element.
    */
   async expectFocusIndicatorMeetsWCAG(): Promise<void> {
     const meetsWCAG = await this.page.evaluate(() => {

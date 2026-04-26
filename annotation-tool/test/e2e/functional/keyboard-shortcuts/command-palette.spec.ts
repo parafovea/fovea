@@ -179,14 +179,14 @@ test.describe('Command Palette', () => {
     // Should show "Save" command
     await expect(page.getByText(/save/i).first()).toBeVisible()
 
-    // Keybindings are displayed in Paper components with outlined variant
-    // Verify that keybinding display elements exist (MUI Paper with backgroundColor grey.100)
-    const listItems = dialog.locator('[role="button"]')
+    // Keybindings are displayed via shadcn CommandShortcut ([data-slot="command-shortcut"]).
+    // Command items render as [role="option"] in cmdk (the underlying primitive shadcn Command wraps).
+    const listItems = dialog.locator('[role="option"], [cmdk-item]')
     const firstItem = listItems.first()
     await expect(firstItem).toBeVisible()
 
-    // Keybinding should be in a Paper element within the list item
-    const keybindingPaper = firstItem.locator('.MuiPaper-root')
+    // Keybinding shortcut element should be present somewhere in the visible list when shortcuts exist.
+    const keybindingPaper = dialog.locator('[data-slot="command-shortcut"]')
     if (await keybindingPaper.count() > 0) {
       await expect(keybindingPaper.first()).toBeVisible()
     }

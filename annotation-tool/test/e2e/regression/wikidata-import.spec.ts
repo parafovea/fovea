@@ -239,10 +239,10 @@ test.describe('Wikidata Import Flow', () => {
       await wikidataButton.click()
       await page.waitForTimeout(500)
 
-      // Check all stepper steps are visible (use more specific selectors)
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Search Wikidata' }).first()).toBeVisible()
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Preview & Confirm' }).first()).toBeVisible()
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Success' }).first()).toBeVisible()
+      // Check all stepper steps are visible (shadcn step indicator renders plain spans)
+      await expect(dialog.getByText('Search Wikidata', { exact: true }).first()).toBeVisible()
+      await expect(dialog.getByText('Preview & Confirm', { exact: true }).first()).toBeVisible()
+      await expect(dialog.getByText('Success', { exact: true }).first()).toBeVisible()
     })
 
     test('highlights active step', async ({ ontologyWorkspace, testPersona, page }) => {
@@ -271,9 +271,8 @@ test.describe('Wikidata Import Flow', () => {
       const importAsTypeButton = dialog.getByRole('button', { name: /import as entity type/i })
       await expect(importAsTypeButton).toBeVisible({ timeout: 3000 })
 
-      // Stepper should be visible
-      const stepper = dialog.locator('[class*="MuiStepper"]')
-      await expect(stepper).toBeVisible()
+      // Step indicator labels should still be visible after advancing
+      await expect(dialog.getByText('Preview & Confirm', { exact: true }).first()).toBeVisible()
     })
   })
 })

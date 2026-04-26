@@ -88,6 +88,7 @@ export class DatabaseHelper {
     password?: string
     email?: string | null
     isAdmin?: boolean
+    systemRole?: 'user' | 'system_admin'
   }): Promise<User> {
     const response = await fetch(`${this.apiURL}/api/admin/users`, {
       method: 'POST',
@@ -99,7 +100,8 @@ export class DatabaseHelper {
         email: data.email ?? `${data.username}@test.local`,
         password: data.password ?? 'test-password-123',
         displayName: data.displayName,
-        isAdmin: data.isAdmin ?? false
+        isAdmin: data.isAdmin ?? false,
+        ...(data.systemRole ? { systemRole: data.systemRole } : {})
       })
     })
 

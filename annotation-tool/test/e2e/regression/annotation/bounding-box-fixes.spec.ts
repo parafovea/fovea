@@ -163,7 +163,8 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     await page.waitForTimeout(500)
 
     // Verify label shows the actual type name (e.g., "Test Entity Type", not "entity")
-    const label = page.locator('[data-testid="bounding-box"] .MuiChip-label')
+    // The shadcn Badge inside the bounding-box foreignObject renders as a <span>
+    const label = page.locator('[data-testid="bounding-box"] foreignObject span')
     await expect(label.first()).toBeVisible({ timeout: 5000 })
 
     // The label should contain the type name, not just the category
@@ -229,9 +230,10 @@ test.describe('Annotation Panel Consistency', () => {
     // Wait for annotation to be created and visible
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify the annotation panel shows a colored chip
-    // The chip is inside the ListItemText primary content within the Drawer
-    const drawerChip = page.locator('.MuiDrawer-root .MuiChip-root').first()
+    // Verify the annotation panel shows a colored badge.
+    // The annotations sidebar contains an "All Annotations" heading; each list item renders a shadcn Badge (span) for the kind.
+    const sidebar = page.locator('div', { has: page.getByRole('heading', { name: /all annotations/i }) }).last()
+    const drawerChip = sidebar.locator('ul li span').filter({ hasText: /^(entity|event|role|Entity|Event|Location|Collection)$/ }).first()
     await expect(drawerChip).toBeVisible({ timeout: 5000 })
   })
 
@@ -251,25 +253,29 @@ test.describe('Annotation Panel Consistency', () => {
       return rect?.getAttribute('stroke')
     })
 
-    // Get chip color from panel (chip is inside Drawer but may not be direct child of ListItem)
+    // Get badge classes from panel (shadcn Badge renders as a span with variant utility classes).
+    // Find the first badge inside the annotations sidebar (the panel containing "All Annotations").
     const chipClass = await page.evaluate(() => {
-      const chip = document.querySelector('.MuiDrawer-root .MuiChip-root')
-      return chip?.className
+      const heading = Array.from(document.querySelectorAll('h3')).find((h) =>
+        /all annotations/i.test(h.textContent ?? '')
+      )
+      const sidebar = heading?.closest('div.shrink-0') ?? heading?.parentElement
+      const badge = sidebar?.querySelector('ul li span')
+      return badge?.className ?? null
     })
 
-    // Both should indicate the same kind based on color mapping
-    // Note: If no stroke color found, skip assertion (annotation may not be rendered)
+    // Both should indicate the same kind based on Badge variant -> Tailwind class mapping.
+    // entity -> variant="default" -> bg-primary
+    // event  -> variant="secondary" -> bg-secondary
+    // role   -> variant="outline" -> border-border (no bg-* fill)
     if (boxStroke === '#4caf50') {
-      // Entity - should be success color
-      expect(chipClass).toContain('MuiChip-colorSuccess')
+      expect(chipClass).toContain('bg-primary')
     } else if (boxStroke === '#ff9800') {
-      // Event - should be warning color
-      expect(chipClass).toContain('MuiChip-colorWarning')
+      expect(chipClass).toContain('bg-secondary')
     } else if (boxStroke === '#2196f3') {
-      // Role - should be primary color
-      expect(chipClass).toContain('MuiChip-colorPrimary')
+      expect(chipClass).toContain('border-border')
     } else {
-      // If stroke is some other color, just verify the chip exists
+      // If stroke is some other color, just verify the badge exists
       expect(chipClass).toBeTruthy()
     }
   })

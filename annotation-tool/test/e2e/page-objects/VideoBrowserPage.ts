@@ -35,7 +35,7 @@ export class VideoBrowserPage extends BasePage {
    * Get all video cards.
    */
   get videoCards(): Locator {
-    return this.page.locator('.MuiCard-root')
+    return this.page.locator('[data-slot="card"]')
   }
 
   /**
@@ -46,10 +46,12 @@ export class VideoBrowserPage extends BasePage {
   }
 
   /**
-   * Get the user avatar button (always visible when logged in).
+   * Get the user menu trigger button (always visible when logged in).
+   * Replaces the former MUI Avatar trigger; the shadcn UserMenu uses a
+   * plain icon button with an explicit aria-label.
    */
   get userAvatar(): Locator {
-    return this.page.locator('button').filter({ has: this.page.locator('[class*="MuiAvatar-root"]') })
+    return this.page.getByRole('button', { name: /user menu/i })
   }
 
   /**
@@ -106,7 +108,7 @@ export class VideoBrowserPage extends BasePage {
    * @param title - Video title to select
    */
   async selectVideoByTitle(title: string): Promise<void> {
-    const videoCard = this.page.locator('.MuiCard-root', { hasText: title })
+    const videoCard = this.page.locator('[data-slot="card"]', { hasText: title })
     await expect(videoCard).toBeVisible()
     await videoCard.click()
     await expect(this.page.getByText(/annotation workspace/i)).toBeVisible({ timeout: 10000 })
