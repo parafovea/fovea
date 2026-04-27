@@ -166,11 +166,13 @@ describe('Annotations API', () => {
 
   describe('GET /api/annotations/:videoId', () => {
     it('returns annotations with null personaId correctly', async () => {
-      // Create object annotation with null personaId directly in DB
+      // Object annotations have null personaId but carry userId so the
+      // listing endpoint can scope them to the requesting user.
       await prisma.annotation.create({
         data: {
           videoId: testVideoId,
           personaId: null,
+          userId: testUserId,
           type: 'object',
           label: 'test-entity',
           frames: { boxes: [] }
@@ -190,11 +192,12 @@ describe('Annotations API', () => {
     })
 
     it('returns mixed annotations with and without personaId', async () => {
-      // Create object annotation (no personaId)
+      // Create object annotation (no personaId, but owned via userId)
       await prisma.annotation.create({
         data: {
           videoId: testVideoId,
           personaId: null,
+          userId: testUserId,
           type: 'object',
           label: 'entity-1',
           frames: { boxes: [] }

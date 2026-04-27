@@ -53,8 +53,24 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
 
+    // Scope to the requesting user's annotations: type annotations attached to
+    // the user's personas plus persona-less object annotations the user owns.
+    // Mirrors the filter used by routes/export.ts so a multi-user instance
+    // never surfaces another user's imported copies in the All Annotations tab.
+    const userPersonas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
+      select: { id: true }
+    })
+    const userPersonaIds = userPersonas.map(p => p.id)
+
     const annotations = await fastify.prisma.annotation.findMany({
-      where: { videoId },
+      where: {
+        videoId,
+        OR: [
+          { personaId: { in: userPersonaIds } },
+          { personaId: null, userId: request.user!.id }
+        ]
+      },
       orderBy: { createdAt: 'asc' }
     })
 

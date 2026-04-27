@@ -122,8 +122,21 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      // Scope to the requesting user's personas so a multi-user instance does
+      // not surface another user's imported summaries (which would mask the
+      // current user's own summary in the persona switcher and route claim
+      // lookups to a summary the user does not own).
+      const userPersonas = await fastify.prisma.persona.findMany({
+        where: { userId: request.user!.id },
+        select: { id: true }
+      })
+      const userPersonaIds = userPersonas.map(p => p.id)
+
       const summaries = await fastify.prisma.videoSummary.findMany({
-        where: { videoId: request.params.videoId },
+        where: {
+          videoId: request.params.videoId,
+          personaId: { in: userPersonaIds }
+        },
       })
       return reply.send(summaries)
     }

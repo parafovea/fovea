@@ -5,6 +5,13 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - Unreleased
+
+### Fixed
+
+- Scopes `GET /api/annotations/:videoId` to the requesting user's annotations (type annotations on the user's personas plus object annotations the user owns) so a multi-user instance no longer surfaces another user's imported copies in the All Annotations tab, fixing the duplicate-row symptom in #121
+- Scopes `GET /api/videos/:videoId/summaries` to the requesting user's personas so a foreign user's imported summary cannot mask the importing user's own summary in the persona switcher
+
 ## [0.1.7] - 2026-04-15
 
 ### Fixed
