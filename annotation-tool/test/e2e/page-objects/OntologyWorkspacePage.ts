@@ -358,7 +358,11 @@ export class OntologyWorkspacePage extends BasePage {
     // Fill name field - MUI adds asterisk for required fields
     const nameInput = dialog.getByRole('textbox', { name: /^name/i }).first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    // Select-all + fill so re-edits replace the existing value (the
+    // shadcn Input is controlled and `.fill()` alone doesn't always
+    // clear React's internal value via the synthetic change event).
     await nameInput.click()
+    await nameInput.press('ControlOrMeta+a')
     await nameInput.fill(name)
 
     // Fill definition/gloss field
