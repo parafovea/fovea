@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Library, User, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,16 +25,14 @@ import {
   useWorld,
   useAddEntityCollection,
   useUpdateEntityCollection,
-  useDeleteEntityCollection,
   useAddEventCollection,
   useUpdateEventCollection,
-  useDeleteEventCollection,
 } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { EntityCollection, EventCollection, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 /** Entity collection type options */
 type EntityCollectionTypeOption = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
@@ -59,10 +57,8 @@ export default function CollectionEditor({ open, onClose, collection, collection
 
   const { mutateAsync: addEntityCollection } = useAddEntityCollection()
   const { mutateAsync: updateEntityCollection } = useUpdateEntityCollection()
-  const { mutate: deleteEntityCollection } = useDeleteEntityCollection()
   const { mutateAsync: addEventCollection } = useAddEventCollection()
   const { mutateAsync: updateEventCollection } = useUpdateEventCollection()
-  const { mutate: deleteEventCollection } = useDeleteEventCollection()
 
   const [collectionType, setCollectionType] = useState<'entity' | 'event'>(initialType || 'entity')
   const [name, setName] = useState('')
@@ -71,81 +67,20 @@ export default function CollectionEditor({ open, onClose, collection, collection
   const [entityCollectionType, setEntityCollectionType] = useState<'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'>('group')
   const [eventCollectionType, setEventCollectionType] = useState<'sequence' | 'iteration' | 'complex' | 'alternative' | 'group'>('sequence')
 
-  // Track auto-created collection ID for cancel cleanup
-  const [autoCreatedCollectionId, setAutoCreatedCollectionId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    collection
+      ? name !== collection.name ||
+        JSON.stringify(description) !== JSON.stringify(collection.description) ||
+        JSON.stringify(selectedMembers) !== JSON.stringify(
+          'entityIds' in collection ? collection.entityIds : collection.eventIds
+        ) ||
+        ('entityIds' in collection
+          ? entityCollectionType !== collection.collectionType
+          : eventCollectionType !== collection.collectionType)
+      : !!name || selectedMembers.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedCollectionId
-  }, [autoCreatedCollectionId])
-
-  // Auto-save hook for new collections
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, selectedMembers, collectionType, entityCollectionType, eventCollectionType },
-    isEnabled: open && !!name && !collection, // Only for new collections, require name
-    onSave: async (collectionData) => {
-      const now = new Date().toISOString()
-
-      if (collectionData.collectionType === 'entity') {
-        const entityCollectionData: Omit<EntityCollection, 'id' | 'createdAt' | 'updatedAt'> = {
-          name: collectionData.name,
-          description: collectionData.description,
-          entityIds: collectionData.selectedMembers,
-          collectionType: collectionData.entityCollectionType,
-          typeAssignments: [],
-          metadata: {},
-        }
-
-        if (autoCreatedIdRef.current) {
-          // Update the auto-created collection
-          await updateEntityCollection({
-            id: autoCreatedIdRef.current,
-            createdAt: now,
-            updatedAt: now,
-            ...entityCollectionData,
-          })
-        } else {
-          // Create new collection and track ID
-          const result = await addEntityCollection(entityCollectionData)
-          // Get the newly created collection ID from the result
-          const newCollection = result.entityCollections[result.entityCollections.length - 1]
-          if (newCollection) {
-            setAutoCreatedCollectionId(newCollection.id)
-          }
-        }
-      } else {
-        const eventCollectionData: Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'> = {
-          name: collectionData.name,
-          description: collectionData.description,
-          eventIds: collectionData.selectedMembers,
-          collectionType: collectionData.eventCollectionType,
-          typeAssignments: [],
-          metadata: {},
-        }
-
-        if (autoCreatedIdRef.current) {
-          // Update the auto-created collection
-          await updateEventCollection({
-            id: autoCreatedIdRef.current,
-            createdAt: now,
-            updatedAt: now,
-            ...eventCollectionData,
-          })
-        } else {
-          // Create new collection and track ID
-          const result = await addEventCollection(eventCollectionData)
-          // Get the newly created collection ID from the result
-          const newCollection = result.eventCollections[result.eventCollections.length - 1]
-          if (newCollection) {
-            setAutoCreatedCollectionId(newCollection.id)
-          }
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: collection?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (collection) {
@@ -170,8 +105,6 @@ export default function CollectionEditor({ open, onClose, collection, collection
       setEntityCollectionType('group')
       setEventCollectionType('sequence')
     }
-    // Reset auto-created ID when dialog opens/closes or collection changes
-    setAutoCreatedCollectionId(null)
   }, [collection, initialType, open])
 
   const handleSave = async () => {
@@ -220,26 +153,8 @@ export default function CollectionEditor({ open, onClose, collection, collection
     onClose()
   }
 
-  // Cancel handler deletes auto-created collection
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      if (collectionType === 'entity') {
-        deleteEntityCollection(autoCreatedIdRef.current)
-      } else {
-        deleteEventCollection(autoCreatedIdRef.current)
-      }
-    }
-    setAutoCreatedCollectionId(null)
-    onClose()
-  }
-
-  // Done handler keeps the collection (already saved via autosave)
-  const handleDone = async () => {
-    // Force save any pending changes before closing
-    if (!collection && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedCollectionId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -398,38 +313,15 @@ export default function CollectionEditor({ open, onClose, collection, collection
             )}
           </div>
         </div>
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {!collection && (
-              <SaveStatusIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                errorMessage={errorMessage}
-                retryCount={retryCount}
-                onRetry={forceSave}
-              />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {collection ? (
-              <Button
-                variant="secondary"
-                onClick={handleSave}
-                disabled={!name || description.length === 0}
-              >
-                Update Collection
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={handleDone}
-                disabled={!name || description.length === 0 || !autoCreatedCollectionId}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {collection ? 'Update Collection' : 'Create Collection'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

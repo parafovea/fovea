@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Clock, Timer, CalendarRange, Trash2, Plus, Pencil, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,12 +24,12 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useVideos } from '@store/queries'
-import { useAddTime, useUpdateTime, useDeleteTime } from '@store/queries'
+import { useAddTime, useUpdateTime } from '@store/queries'
 import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '@components/shared/WikidataSearch'
 import { generateId } from '@utils/uuid'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 /** Granularity options for vagueness */
 type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
@@ -58,7 +58,6 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const { data: videos = [] } = useVideos()
   const { mutateAsync: addTime } = useAddTime()
   const { mutateAsync: updateTime } = useUpdateTime()
-  const { mutate: deleteTime } = useDeleteTime()
 
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
@@ -93,105 +92,19 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   // Certainty
   const [certainty, setCertainty] = useState(1.0)
 
-  // Track auto-created time ID for cancel cleanup
-  const [autoCreatedTimeId, setAutoCreatedTimeId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    time
+      ? label !== (time.label || '') ||
+        timeType !== time.type ||
+        wikidataId !== (time.wikidataId || '') ||
+        wikidataUrl !== (time.wikidataUrl || '') ||
+        certainty !== (time.certainty ?? 1.0) ||
+        JSON.stringify(videoReferences) !== JSON.stringify(time.videoReferences || [])
+      : !!label || timestamp !== '' || startTime !== '' || endTime !== '' ||
+        videoReferences.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedTimeId
-  }, [autoCreatedTimeId])
-
-  // Auto-save hook for new times
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: {
-      timeType,
-      label,
-      timestamp,
-      startTime,
-      endTime,
-      hasVagueness,
-      vaguenessType,
-      vaguenessDescription,
-      earliestBound,
-      latestBound,
-      typicalTime,
-      granularity,
-      hasDeictic,
-      deicticAnchorType,
-      deicticExpression,
-      videoReferences,
-      certainty,
-      wikidataId,
-      wikidataUrl,
-    },
-    isEnabled: open && !!label && !time, // Only for new times, require label
-    onSave: async (timeData) => {
-      const baseTime: Omit<Time, 'id'> = {
-        type: timeData.timeType,
-        label: timeData.label || undefined,
-        videoReferences: timeData.videoReferences.filter(ref => ref.videoId),
-        certainty: timeData.certainty,
-        wikidataId: timeData.wikidataId || undefined,
-        wikidataUrl: timeData.wikidataUrl || undefined,
-        metadata: {},
-      }
-
-      if (timeData.hasVagueness) {
-        baseTime.vagueness = {
-          type: timeData.vaguenessType,
-          description: timeData.vaguenessDescription || undefined,
-          bounds: (timeData.earliestBound || timeData.latestBound || timeData.typicalTime) ? {
-            earliest: timeData.earliestBound || undefined,
-            latest: timeData.latestBound || undefined,
-            typical: timeData.typicalTime || undefined,
-          } : undefined,
-          granularity: timeData.granularity,
-        }
-      }
-
-      if (timeData.hasDeictic) {
-        baseTime.deictic = {
-          anchorType: timeData.deicticAnchorType,
-          anchorTime: undefined,
-          expression: timeData.deicticExpression || undefined,
-        }
-      }
-
-      let fullTimeData: Omit<Time, 'id'>
-
-      if (timeData.timeType === 'instant') {
-        fullTimeData = {
-          ...baseTime,
-          type: 'instant',
-          timestamp: timeData.timestamp,
-        } as Omit<TimeInstant, 'id'>
-      } else {
-        fullTimeData = {
-          ...baseTime,
-          type: 'interval',
-          startTime: timeData.startTime || undefined,
-          endTime: timeData.endTime || undefined,
-        } as Omit<TimeInterval, 'id'>
-      }
-
-      if (autoCreatedIdRef.current) {
-        await updateTime({
-          ...fullTimeData,
-          id: autoCreatedIdRef.current,
-        } as Time)
-      } else {
-        const newId = generateId()
-        const result = await addTime({ ...fullTimeData, id: newId } as Time)
-        const newTime = result.times[result.times.length - 1]
-        if (newTime) {
-          setAutoCreatedTimeId(newTime.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: time?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (time) {
@@ -242,7 +155,6 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       setVideoReferences([])
       setCertainty(1.0)
     }
-    setAutoCreatedTimeId(null)
   }, [time, open])
 
   const handleAddVideoReference = () => {
@@ -320,18 +232,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   }
 
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteTime(autoCreatedIdRef.current)
-    }
-    setAutoCreatedTimeId(null)
-    onClose()
-  }
-
-  const handleDone = async () => {
-    if (!time && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedTimeId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -712,42 +613,21 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
             />
           </div>
         </div>
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {!time && (
-              <SaveStatusIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                errorMessage={errorMessage}
-                retryCount={retryCount}
-                onRetry={forceSave}
-              />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {time ? (
-              <Button
-                variant="secondary"
-                onClick={handleSave}
-                disabled={
-                  timeType === 'instant'
-                    ? !timestamp && !hasVagueness && !hasDeictic
-                    : !startTime && !endTime && !hasVagueness && !hasDeictic
-                }
-              >
-                Update Time
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={handleDone}
-                disabled={!label || !autoCreatedTimeId}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={
+              !label || (
+                timeType === 'instant'
+                  ? !timestamp && !hasVagueness && !hasDeictic
+                  : !startTime && !endTime && !hasVagueness && !hasDeictic
+              )
+            }
+          >
+            {time ? 'Update Time' : 'Create Time'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

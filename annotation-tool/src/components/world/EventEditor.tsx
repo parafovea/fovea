@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Plus, Trash2, Zap, User, Clock, MapPin, Globe, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,13 +27,13 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion'
-import { useWorld, useAddEvent, useUpdateEvent, useDeleteEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Event, EventInterpretation, GlossItem, Location, TimeInstant, TimeInterval } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 interface EventEditorProps {
   open: boolean
@@ -60,7 +60,6 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const times = useMemo(() => worldData?.times ?? [], [worldData?.times])
   const { mutateAsync: addEvent } = useAddEvent()
   const { mutateAsync: updateEvent } = useUpdateEvent()
-  const { mutate: deleteEvent } = useDeleteEvent()
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -81,58 +80,20 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const [interpretationConfidence, setInterpretationConfidence] = useState<number>(1.0)
   const [interpretationJustification, setInterpretationJustification] = useState('')
 
-  // Track auto-created event ID for cancel cleanup
-  const [autoCreatedEventId, setAutoCreatedEventId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    event
+      ? name !== event.name ||
+        selectedTimeId !== (event.time?.id || '') ||
+        selectedLocationId !== (event.location?.id || '') ||
+        certainty !== (event.metadata?.certainty ?? 1.0) ||
+        wikidataId !== (event.wikidataId || '') ||
+        wikidataUrl !== (event.wikidataUrl || '') ||
+        JSON.stringify(description) !== JSON.stringify(event.description) ||
+        JSON.stringify(interpretations) !== JSON.stringify(event.personaInterpretations || [])
+      : !!name || interpretations.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedEventId
-  }, [autoCreatedEventId])
-
-  // Auto-save hook for new events
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, interpretations, selectedTimeId, selectedLocationId, certainty, wikidataId, wikidataUrl },
-    isEnabled: open && !!name && !event, // Only for new events, require name
-    onSave: async (eventData) => {
-      const now = new Date().toISOString()
-      const timeToUse = times.find(t => t.id === eventData.selectedTimeId)
-      const locationToUse = entities.find(e => e.id === eventData.selectedLocationId && 'locationType' in e) as Location | undefined
-
-      const fullEventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: eventData.name,
-        description: eventData.description,
-        personaInterpretations: eventData.interpretations,
-        time: timeToUse,
-        location: locationToUse,
-        wikidataId: eventData.wikidataId || undefined,
-        wikidataUrl: eventData.wikidataUrl || undefined,
-        importedFrom: eventData.wikidataId ? 'wikidata' : undefined,
-        importedAt: eventData.wikidataId ? now : undefined,
-        metadata: {
-          certainty: eventData.certainty,
-          properties: {},
-        },
-      }
-
-      if (autoCreatedIdRef.current) {
-        await updateEvent({
-          id: autoCreatedIdRef.current,
-          createdAt: now,
-          updatedAt: now,
-          ...fullEventData,
-        })
-      } else {
-        const result = await addEvent(fullEventData)
-        const newEvent = result.events[result.events.length - 1]
-        if (newEvent) {
-          setAutoCreatedEventId(newEvent.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: event?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (event) {
@@ -154,7 +115,6 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
       setWikidataId('')
       setWikidataUrl('')
     }
-    setAutoCreatedEventId(null)
   }, [event, open])
 
   const handleAddParticipant = () => {
@@ -230,18 +190,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   }
 
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteEvent(autoCreatedIdRef.current)
-    }
-    setAutoCreatedEventId(null)
-    onClose()
-  }
-
-  const handleDone = async () => {
-    if (!event && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedEventId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -593,38 +542,15 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
             </Accordion>
           </div>
         </div>
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {!event && (
-              <SaveStatusIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                errorMessage={errorMessage}
-                retryCount={retryCount}
-                onRetry={forceSave}
-              />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {event ? (
-              <Button
-                variant="secondary"
-                onClick={handleSave}
-                disabled={!name || description.length === 0}
-              >
-                Update Event
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={handleDone}
-                disabled={!name || description.length === 0 || !autoCreatedEventId}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {event ? 'Update Event' : 'Create Event'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

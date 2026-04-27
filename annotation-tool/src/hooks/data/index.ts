@@ -11,5 +11,10 @@ export type {
   UseAutoSaveReturn,
 } from './useAutoSave'
 export { useAutoSaveAnnotations } from './useAutoSaveAnnotations'
+export { useUnsavedChangesPrompt } from './useUnsavedChangesPrompt'
+export type {
+  UseUnsavedChangesPromptOptions,
+  UseUnsavedChangesPromptReturn,
+} from './useUnsavedChangesPrompt'
 export { SaveStatusIndicator } from '@components/shared/SaveStatusIndicator'
 export type { SaveStatusIndicatorProps } from '@components/shared/SaveStatusIndicator'

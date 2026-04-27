@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   MapPin,
   Crosshair,
@@ -33,7 +33,7 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { LocationPoint, LocationExtent, GlossItem, EntityTypeAssignment, Entity } from '@models/types'
 
@@ -43,7 +43,7 @@ import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import MapLocationPicker from './MapLocationPicker'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 interface LocationEditorProps {
   open: boolean
@@ -71,7 +71,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
   const { mutateAsync: addEntity } = useAddEntity()
   const { mutateAsync: updateEntity } = useUpdateEntity()
-  const { mutate: deleteEntity } = useDeleteEntity()
 
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
@@ -107,86 +106,21 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   // Map interface state
   const [mapOpen, setMapOpen] = useState(false)
 
-  // Track auto-created location ID for cancel cleanup
-  const [autoCreatedLocationId, setAutoCreatedLocationId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    location
+      ? name !== location.name ||
+        alternateNamesInput !== (location.metadata?.alternateNames?.join(', ') || '') ||
+        wikidataId !== (location.wikidataId || '') ||
+        wikidataUrl !== (location.wikidataUrl || '') ||
+        locationType !== location.locationType ||
+        coordinateSystem !== (location.coordinateSystem || 'GPS') ||
+        JSON.stringify(description) !== JSON.stringify(location.description) ||
+        JSON.stringify(typeAssignments) !== JSON.stringify(location.typeAssignments || [])
+      : !!name || alternateNamesInput.trim() !== '' || typeAssignments.length > 0 ||
+        Object.keys(pointCoordinates).length > 0 || boundaryPoints.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedLocationId
-  }, [autoCreatedLocationId])
-
-  // Auto-save hook for new locations
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: {
-      name,
-      description,
-      typeAssignments,
-      wikidataId,
-      wikidataUrl,
-      alternateNamesInput,
-      locationType,
-      coordinateSystem,
-      pointCoordinates,
-      boundaryPoints,
-      useBoundingBox,
-      boundingBox,
-    },
-    isEnabled: open && !!name && !location, // Only for new locations, require name
-    onSave: async (locationData) => {
-      const now = new Date().toISOString()
-      const baseEntity = {
-        name: locationData.name,
-        description: locationData.description,
-        typeAssignments: locationData.typeAssignments,
-        wikidataId: locationData.wikidataId || undefined,
-        wikidataUrl: locationData.wikidataUrl || undefined,
-        importedFrom: locationData.wikidataId ? 'wikidata' : undefined,
-        importedAt: locationData.wikidataId ? now : undefined,
-        metadata: {
-          alternateNames: locationData.alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
-          externalIds: {},
-          properties: {},
-        },
-      }
-
-      let fullLocationData: Omit<LocationPoint | LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
-
-      if (locationData.locationType === 'point') {
-        fullLocationData = {
-          ...baseEntity,
-          locationType: 'point',
-          coordinateSystem: locationData.coordinateSystem,
-          coordinates: locationData.pointCoordinates,
-        } as Omit<LocationPoint, 'id' | 'createdAt' | 'updatedAt'>
-      } else {
-        fullLocationData = {
-          ...baseEntity,
-          locationType: 'extent',
-          coordinateSystem: locationData.coordinateSystem,
-          boundary: locationData.boundaryPoints,
-          boundingBox: locationData.useBoundingBox ? locationData.boundingBox : undefined,
-        } as Omit<LocationExtent, 'id' | 'createdAt' | 'updatedAt'>
-      }
-
-      if (autoCreatedIdRef.current) {
-        await updateEntity({
-          id: autoCreatedIdRef.current,
-          createdAt: now,
-          updatedAt: now,
-          ...fullLocationData,
-        } as Entity)
-      } else {
-        const result = await addEntity(fullLocationData as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
-        const newLocation = result.entities[result.entities.length - 1]
-        if (newLocation) {
-          setAutoCreatedLocationId(newLocation.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: location?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (location) {
@@ -224,7 +158,6 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
       setWikidataId('')
       setWikidataUrl('')
     }
-    setAutoCreatedLocationId(null)
   }, [location, open])
 
   const handleAddBoundaryPoint = () => {
@@ -334,18 +267,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   }
 
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteEntity(autoCreatedIdRef.current)
-    }
-    setAutoCreatedLocationId(null)
-    onClose()
-  }
-
-  const handleDone = async () => {
-    if (!location && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedLocationId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -756,38 +678,15 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
             </div>
           </div>
         </div>
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {!location && (
-              <SaveStatusIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                errorMessage={errorMessage}
-                retryCount={retryCount}
-                onRetry={forceSave}
-              />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {location ? (
-              <Button
-                variant="secondary"
-                onClick={handleSave}
-                disabled={!name || description.length === 0}
-              >
-                Update Location
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={handleDone}
-                disabled={!name || description.length === 0 || !autoCreatedLocationId}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {location ? 'Update Location' : 'Create Location'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

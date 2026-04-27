@@ -8,7 +8,7 @@ import { test, expect } from '../fixtures/test-context.js'
  */
 
 test.describe('Video Storage', () => {
-  test('streams video from storage endpoint', async ({ page, testVideo }) => {
+  test('streams video from storage endpoint', async ({ page, testVideo, testUser }) => {
     // Test that the video stream endpoint returns valid video content
     const streamResponse = await page.request.get(`/api/videos/${testVideo.id}/stream`)
 
@@ -16,7 +16,7 @@ test.describe('Video Storage', () => {
     expect(streamResponse.headers()['content-type']).toMatch(/video\//)
   })
 
-  test('supports video range requests for seeking', async ({ page, testVideo }) => {
+  test('supports video range requests for seeking', async ({ page, testVideo, testUser }) => {
     // Test that range requests work for video seeking
     const response = await page.request.get(`/api/videos/${testVideo.id}/stream`, {
       headers: {
@@ -35,7 +35,7 @@ test.describe('Video Storage', () => {
     }
   })
 
-  test('thumbnail endpoint responds correctly', async ({ page, testVideo }) => {
+  test('thumbnail endpoint responds correctly', async ({ page, testVideo, testUser }) => {
     // Test thumbnail endpoint - may return 200 with image or error if not generated
     const thumbnailResponse = await page.request.get(`/api/videos/${testVideo.id}/thumbnail`)
 
@@ -48,7 +48,7 @@ test.describe('Video Storage', () => {
     }
   })
 
-  test('returns 404 for non-existent video', async ({ page }) => {
+  test('returns 404 for non-existent video', async ({ page, testUser }) => {
     // Test error handling for non-existent videos
     const response = await page.request.get('/api/videos/non-existent-video-id/stream')
 
@@ -71,7 +71,7 @@ test.describe('Video Storage', () => {
     expect(videoSrc).toContain('/api/videos/')
   })
 
-  test('video metadata is correct', async ({ page, testVideo }) => {
+  test('video metadata is correct', async ({ page, testVideo, testUser }) => {
     // Test that video metadata endpoint returns correct data
     const response = await page.request.get(`/api/videos/${testVideo.id}`)
 

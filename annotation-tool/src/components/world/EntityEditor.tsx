@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Package, Globe, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,13 +21,13 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Entity, EntityTypeAssignment, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 interface EntityEditorProps {
   open: boolean
@@ -42,7 +42,6 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
   const { mutateAsync: addEntity } = useAddEntity()
   const { mutateAsync: updateEntity } = useUpdateEntity()
-  const { mutate: deleteEntity } = useDeleteEntity()
 
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
@@ -55,63 +54,24 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
 
-  // Track auto-created entity ID for cancel cleanup
-  const [autoCreatedEntityId, setAutoCreatedEntityId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
-
   // For adding new type assignment
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState<string>('')
   const [assignmentConfidence, setAssignmentConfidence] = useState<number>(1.0)
   const [assignmentJustification, setAssignmentJustification] = useState('')
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedEntityId
-  }, [autoCreatedEntityId])
+  const isDirty = open && (
+    entity
+      ? name !== entity.name ||
+        wikidataId !== (entity.wikidataId || '') ||
+        wikidataUrl !== (entity.wikidataUrl || '') ||
+        alternateNamesInput !== (entity.metadata?.alternateNames?.join(', ') || '') ||
+        JSON.stringify(description) !== JSON.stringify(entity.description) ||
+        JSON.stringify(typeAssignments) !== JSON.stringify(entity.typeAssignments || [])
+      : !!name || alternateNamesInput.trim() !== '' || typeAssignments.length > 0
+  )
 
-  // Auto-save hook for new entities
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, typeAssignments, wikidataId, wikidataUrl, alternateNamesInput },
-    isEnabled: open && !!name && !entity, // Only for new entities, require name
-    onSave: async (entityData) => {
-      const now = new Date().toISOString()
-      const fullEntityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: entityData.name,
-        description: entityData.description,
-        typeAssignments: entityData.typeAssignments,
-        wikidataId: entityData.wikidataId || undefined,
-        wikidataUrl: entityData.wikidataUrl || undefined,
-        importedFrom: entityData.wikidataId ? 'wikidata' : undefined,
-        importedAt: entityData.wikidataId ? now : undefined,
-        metadata: {
-          alternateNames: entityData.alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
-          externalIds: {},
-          properties: {},
-        },
-      }
-
-      if (autoCreatedIdRef.current) {
-        // Update the auto-created entity
-        await updateEntity({
-          id: autoCreatedIdRef.current,
-          createdAt: now,
-          updatedAt: now,
-          ...fullEntityData,
-        })
-      } else {
-        // Create new entity and track ID
-        const result = await addEntity(fullEntityData)
-        // Get the newly created entity ID from the result
-        const newEntity = result.entities[result.entities.length - 1]
-        if (newEntity) {
-          setAutoCreatedEntityId(newEntity.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: entity?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (entity) {
@@ -129,8 +89,6 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
       setWikidataId('')
       setWikidataUrl('')
     }
-    // Reset auto-created ID when dialog opens/closes or entity changes
-    setAutoCreatedEntityId(null)
   }, [entity, open])
 
   const handleAddTypeAssignment = () => {
@@ -218,22 +176,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     onClose()
   }
 
-  // Cancel handler deletes auto-created entity
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteEntity(autoCreatedIdRef.current)
-    }
-    setAutoCreatedEntityId(null)
-    onClose()
-  }
-
-  // Done handler keeps the entity (already saved via autosave)
-  const handleDone = async () => {
-    // Force save any pending changes before closing
-    if (!entity && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedEntityId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -458,38 +402,15 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
             </div>
           </div>
         </div>
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {!entity && (
-              <SaveStatusIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                errorMessage={errorMessage}
-                retryCount={retryCount}
-                onRetry={forceSave}
-              />
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-            {entity ? (
-              <Button
-                variant="secondary"
-                onClick={handleSave}
-                disabled={!name || description.length === 0}
-              >
-                Update Entity
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={handleDone}
-                disabled={!name || description.length === 0 || !autoCreatedEntityId}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {entity ? 'Update Entity' : 'Create Entity'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

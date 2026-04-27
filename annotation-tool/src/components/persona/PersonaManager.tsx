@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Copy, Trash2, Pencil, ChevronDown, UserPlus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,7 +36,7 @@ import {
 import { useAnnotationUiStore } from '@store/zustand'
 import { Persona } from '@models/types'
 import { ConfirmDialog } from '@components/shared/ConfirmDialog'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 export default function PersonaManager() {
   // TanStack Query hooks
@@ -60,15 +60,13 @@ export default function PersonaManager() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
-  const [createdPersonaId, setCreatedPersonaId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [personaToDelete, setPersonaToDelete] = useState<Persona | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    role: '',
-    informationNeed: '',
-    details: '',
-  })
+  const emptyForm = useMemo(
+    () => ({ name: '', role: '', informationNeed: '', details: '' }),
+    []
+  )
+  const [formData, setFormData] = useState(emptyForm)
 
   // Fetch deletion preview when delete dialog is open
   const { data: deletionPreview, isFetching: isLoadingPreview } = usePersonaDeletionPreview(
@@ -76,140 +74,64 @@ export default function PersonaManager() {
     deleteDialogOpen
   )
 
-  // Track auto-created persona for ref access in callbacks
-  const createdPersonaIdRef = useRef<string | null>(null)
+  const isCreateDirty =
+    createDialogOpen &&
+    (formData.name.trim() !== '' ||
+      formData.role.trim() !== '' ||
+      formData.informationNeed.trim() !== '' ||
+      formData.details.trim() !== '')
 
-  // Sync ref with state
-  useEffect(() => {
-    createdPersonaIdRef.current = createdPersonaId
-  }, [createdPersonaId])
+  const isEditDirty =
+    editDialogOpen &&
+    !!editingPersona &&
+    (formData.name !== editingPersona.name ||
+      formData.role !== editingPersona.role ||
+      formData.informationNeed !== editingPersona.informationNeed ||
+      formData.details !== editingPersona.details)
 
-  // Auto-save for edit dialog using useAutoSave hook
-  const {
-    saveStatus: editSaveStatus,
-    lastSavedAt: editLastSavedAt,
-    errorMessage: editErrorMessage,
-    retryCount: editRetryCount,
-    forceSave: editForceSave,
-  } = useAutoSave({
-    data: formData,
-    isEnabled: editDialogOpen && !!editingPersona && formData.name.trim().length > 0,
-    onSave: async (data) => {
-      if (!editingPersona) return
-      const updatedPersona: Persona = {
-        ...editingPersona,
-        name: data.name,
-        role: data.role,
-        informationNeed: data.informationNeed,
-        details: data.details,
-        updatedAt: new Date().toISOString(),
-      }
-      await new Promise<void>((resolve, reject) => {
-        updatePersonaMutation(updatedPersona, {
-          onSuccess: () => {
-            setEditingPersona(updatedPersona)
-            resolve()
-          },
-          onError: (err) => reject(err),
-        })
-      })
-    },
-    entityType: 'persona',
-    entityId: editingPersona?.id || 'edit',
+  const { confirmDiscard: confirmDiscardCreate } = useUnsavedChangesPrompt({
+    isDirty: isCreateDirty,
   })
-
-  // Auto-save for create dialog using useAutoSave hook
-  const {
-    saveStatus: createSaveStatus,
-    lastSavedAt: createLastSavedAt,
-    errorMessage: createErrorMessage,
-    retryCount: createRetryCount,
-    forceSave: createForceSave,
-  } = useAutoSave({
-    data: formData,
-    isEnabled: createDialogOpen && formData.name.trim().length > 0,
-    onSave: async (data) => {
-      if (createdPersonaIdRef.current) {
-        // Already created - update existing persona
-        const existingPersona = personas.find(p => p.id === createdPersonaIdRef.current)
-        if (existingPersona) {
-          const updatedPersona: Persona = {
-            ...existingPersona,
-            name: data.name,
-            role: data.role,
-            informationNeed: data.informationNeed,
-            details: data.details,
-            updatedAt: new Date().toISOString(),
-          }
-          await new Promise<void>((resolve, reject) => {
-            updatePersonaMutation(updatedPersona, {
-              onSuccess: () => resolve(),
-              onError: (err) => reject(err),
-            })
-          })
-        }
-      } else {
-        // First save - create new persona
-        await new Promise<void>((resolve, reject) => {
-          createPersonaMutation(
-            {
-              persona: {
-                name: data.name,
-                role: data.role,
-                informationNeed: data.informationNeed,
-                details: data.details,
-              },
-              ontology: {
-                entities: [],
-                roles: [],
-                events: [],
-                relationTypes: [],
-                relations: [],
-              },
-            },
-            {
-              onSuccess: (result) => {
-                setCreatedPersonaId(result.persona.id)
-                createdPersonaIdRef.current = result.persona.id
-                resolve()
-              },
-              onError: (err) => reject(err),
-            }
-          )
-        })
-      }
-    },
-    entityType: 'persona',
-    entityId: createdPersonaId || 'new',
+  const { confirmDiscard: confirmDiscardEdit } = useUnsavedChangesPrompt({
+    isDirty: isEditDirty,
   })
 
   const handleCreateNew = () => {
-    setFormData({
-      name: '',
-      role: '',
-      informationNeed: '',
-      details: '',
-    })
-    setCreatedPersonaId(null) // Reset for fresh creation
-    createdPersonaIdRef.current = null
+    setFormData(emptyForm)
     setCreateDialogOpen(true)
   }
 
   const handleCancelCreate = () => {
-    // Delete auto-created persona if user cancels
-    if (createdPersonaId) {
-      deletePersonaMutation.mutate(createdPersonaId)
-    }
-    setCreatedPersonaId(null)
-    createdPersonaIdRef.current = null
+    if (!confirmDiscardCreate()) return
     setCreateDialogOpen(false)
+    setFormData(emptyForm)
   }
 
-  const handleCloseCreate = () => {
-    // When closing via Done button, just close (persona already saved)
-    setCreatedPersonaId(null)
-    createdPersonaIdRef.current = null
-    setCreateDialogOpen(false)
+  const handleSaveNewPersona = () => {
+    if (!formData.name.trim()) return
+    createPersonaMutation(
+      {
+        persona: {
+          name: formData.name,
+          role: formData.role,
+          informationNeed: formData.informationNeed,
+          details: formData.details,
+        },
+        ontology: {
+          entities: [],
+          roles: [],
+          events: [],
+          relationTypes: [],
+          relations: [],
+        },
+      },
+      {
+        onSuccess: () => {
+          setCreateDialogOpen(false)
+          setFormData(emptyForm)
+        },
+      }
+    )
   }
 
   const handleEditPersona = (persona: Persona) => {
@@ -221,6 +143,30 @@ export default function PersonaManager() {
       details: persona.details,
     })
     setEditDialogOpen(true)
+  }
+
+  const handleCancelEdit = () => {
+    if (!confirmDiscardEdit()) return
+    setEditDialogOpen(false)
+    setEditingPersona(null)
+  }
+
+  const handleSaveEdit = () => {
+    if (!editingPersona || !formData.name.trim()) return
+    const updatedPersona: Persona = {
+      ...editingPersona,
+      name: formData.name,
+      role: formData.role,
+      informationNeed: formData.informationNeed,
+      details: formData.details,
+      updatedAt: new Date().toISOString(),
+    }
+    updatePersonaMutation(updatedPersona, {
+      onSuccess: () => {
+        setEditDialogOpen(false)
+        setEditingPersona(null)
+      },
+    })
   }
 
   const handleCopyPersona = (sourcePersonaId: string) => {
@@ -236,26 +182,6 @@ export default function PersonaManager() {
         },
       })
     }
-  }
-
-  const handleSaveNew = () => {
-    createPersonaMutation({
-      persona: {
-        name: formData.name,
-        role: formData.role,
-        informationNeed: formData.informationNeed,
-        details: formData.details,
-      },
-      ontology: {
-        entities: [],
-        roles: [],
-        events: [],
-        relationTypes: [],
-        relations: [],
-      },
-    })
-
-    setCreateDialogOpen(false)
   }
 
   const handleDeleteClick = useCallback((persona: Persona) => {
@@ -441,7 +367,7 @@ export default function PersonaManager() {
       <Dialog open={createDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCancelCreate() }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{createdPersonaId ? 'Edit New Persona' : 'Create New Persona'}</DialogTitle>
+            <DialogTitle>Create New Persona</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
@@ -480,27 +406,18 @@ export default function PersonaManager() {
             </div>
           </div>
           <DialogFooter>
-            <div className="mr-auto flex items-center gap-2">
-              <SaveStatusIndicator
-                status={createSaveStatus}
-                lastSavedAt={createLastSavedAt}
-                errorMessage={createErrorMessage}
-                retryCount={createRetryCount}
-                onRetry={createForceSave}
-              />
-            </div>
             <Button variant="outline" onClick={handleCancelCreate}>Cancel</Button>
             <Button
-              onClick={createdPersonaId ? handleCloseCreate : handleSaveNew}
-              disabled={!formData.name}
+              onClick={handleSaveNewPersona}
+              disabled={!formData.name.trim()}
             >
-              {createdPersonaId ? 'Done' : 'Create Persona'}
+              Create Persona
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setEditDialogOpen(false) }}>
+      <Dialog open={editDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) handleCancelEdit() }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Persona</DialogTitle>
@@ -539,16 +456,13 @@ export default function PersonaManager() {
             </div>
           </div>
           <DialogFooter>
-            <div className="mr-auto flex items-center gap-2">
-              <SaveStatusIndicator
-                status={editSaveStatus}
-                lastSavedAt={editLastSavedAt}
-                errorMessage={editErrorMessage}
-                retryCount={editRetryCount}
-                onRetry={editForceSave}
-              />
-            </div>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Done</Button>
+            <Button variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={!formData.name.trim() || !isEditDirty}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
