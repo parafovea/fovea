@@ -192,13 +192,16 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
    */
-  // eslint-disable-next-line no-empty-pattern
-  testVideo: async ({}, use) => {
-    // Fetch actual videos from backend
-    const response = await fetch('http://localhost:3001/api/videos')
+  testVideo: async ({ workerSessionToken }, use) => {
+    // Fetch actual videos from backend (auth required since the projects-groups
+    // RBAC merge — the request must carry the worker user's session cookie or
+    // the route returns 401 and videos becomes the error envelope).
+    const response = await fetch('http://localhost:3001/api/videos', {
+      headers: { Cookie: `session_token=${workerSessionToken}` }
+    })
     const videos = await response.json()
 
-    if (!videos || videos.length === 0) {
+    if (!Array.isArray(videos) || videos.length === 0) {
       throw new Error('No videos found in test environment. Ensure test-data directory has videos.')
     }
 

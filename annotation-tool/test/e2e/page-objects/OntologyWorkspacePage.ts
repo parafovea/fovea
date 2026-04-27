@@ -272,11 +272,16 @@ export class OntologyWorkspacePage extends BasePage {
     // Wait for data to load
     await this.page.waitForLoadState('networkidle', { timeout: 10000 })
 
-    // Find visible (not hidden) tab panel and look for type by name
-    // MUI TabPanel hides inactive panels with hidden attribute
-    // Use p element with exact text to avoid matching definitions
+    // Find visible (not hidden) tab panel and look for type by name.
+    // The shadcn rewrite renders type rows as plain <li> with the name in
+    // a nested <div>; the prior `li > p` query was MUI-specific.
     const visibleTabPanel = this.page.locator('[role="tabpanel"]:not([hidden])')
-    const typeItem = visibleTabPanel.locator('li').locator('p').filter({ hasText: new RegExp(`^${name}$`) }).first()
+    // Anchor on the Edit/Delete button aria-label since each row carries
+    // "Edit <name>" — that's an exact, unambiguous substring even when the
+    // type's gloss happens to contain the name elsewhere on the page.
+    const typeItem = visibleTabPanel.locator('li').filter({
+      has: this.page.getByRole('button', { name: `Edit ${name}` })
+    }).first()
     await expect(typeItem).toBeVisible({ timeout: 10000 })
   }
 

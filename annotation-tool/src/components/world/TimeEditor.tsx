@@ -436,8 +436,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
 
           {/* Label Field */}
           <div className="space-y-1">
-            <Label>Label</Label>
+            <Label htmlFor="time-label">Label</Label>
             <Input
+              id="time-label"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g., Apollo 11 Launch, Summer 2024"

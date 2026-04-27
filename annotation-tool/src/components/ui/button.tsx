@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -41,19 +42,25 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+// Forward refs to the underlying base-ui Button so consumers (Tooltip,
+// Popover, DropdownMenu triggers, etc.) that compose Button via render
+// props can attach their merged ref. Without this, base-ui logs
+// "Function components cannot be given refs" warnings and trigger
+// behaviour breaks subtly — most visibly, TooltipTrigger/PopoverTrigger
+// can't position over the button and onClick handlers passed through
+// the trigger sometimes don't propagate.
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  ButtonPrimitive.Props & VariantProps<typeof buttonVariants>
+>(function Button({ className, variant = "default", size = "default", ...props }, ref) {
   return (
     <ButtonPrimitive
+      ref={ref}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   )
-}
+})
 
 export { Button, buttonVariants }

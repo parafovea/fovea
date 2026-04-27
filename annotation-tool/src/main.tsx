@@ -56,7 +56,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <App />
             <Toaster position="bottom-right" />
           </TooltipProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
+          {/*
+            The TanStack Query devtools toggle button is fixed to the
+            bottom-right corner with a large invisible hit area; the
+            annotation-workspace and ontology-workspace FABs sit at the
+            same corner and the devtools intercept their clicks. Skip in
+            test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
+            the FABs.
+          */}
+          {import.meta.env.MODE !== 'test' && !import.meta.env.VITE_E2E && (
+            <ReactQueryDevtools initialIsOpen={false} />
+          )}
         </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>

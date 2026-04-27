@@ -302,8 +302,9 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
           )}
 
           <div className="space-y-1">
-            <Label>Name *</Label>
+            <Label htmlFor="entity-name">Name *</Label>
             <Input
+              id="entity-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Entity name"

@@ -40,7 +40,7 @@ test.describe('Command Palette', () => {
 
     // Should show at least global navigation commands
     await expect(page.getByText(/go to video browser/i)).toBeVisible()
-    await expect(page.getByText(/go to ontology builder/i)).toBeVisible()
+    await expect(page.getByText(/go to persona builder/i)).toBeVisible()
     await expect(page.getByText(/go to object builder/i)).toBeVisible()
   })
 
@@ -58,10 +58,11 @@ test.describe('Command Palette', () => {
     await searchInput.fill('ontology')
 
     // Should show only ontology-related commands
-    await expect(page.getByText(/go to ontology builder/i)).toBeVisible()
+    await expect(page.getByText(/go to persona builder/i)).toBeVisible()
 
     // Should NOT show non-matching commands
-    const commandItems = dialog.locator('[role="button"]')
+    // cmdk renders items with role="option" / [cmdk-item], not buttons.
+    const commandItems = dialog.locator('[role="option"], [cmdk-item]')
     const commandCount = await commandItems.count()
 
     // Verify filtered results (should be less than total)
@@ -80,10 +81,10 @@ test.describe('Command Palette', () => {
 
     // Search for ontology command
     const searchInput = dialog.locator('input[placeholder*="command"]')
-    await searchInput.fill('ontology builder')
+    await searchInput.fill('persona builder')
 
-    // Click the "Go to Ontology Builder" command
-    await page.getByText(/go to ontology builder/i).click()
+    // Click the "Go to Persona Builder" command
+    await page.getByText(/go to persona builder/i).click()
 
     // Verify navigation occurred
     await page.waitForURL(/\/ontology/, { timeout: 5000 })
@@ -234,8 +235,11 @@ test.describe('Command Palette', () => {
     const searchInput = dialog.locator('input[placeholder*="command"]')
     await searchInput.fill('navigation')
 
-    // Should show navigation category commands
-    const navCommands = page.locator('[role="button"]:has-text("navigation")')
+    // The cmdk command palette renders matched commands as
+    // [cmdk-item]/role="option" inside the dialog. Filtering by typing
+    // "navigation" matches the category heading and the items in that
+    // group; assert that at least one item remains visible.
+    const navCommands = dialog.locator('[role="option"], [cmdk-item]')
     const count = await navCommands.count()
     expect(count).toBeGreaterThan(0)
   })

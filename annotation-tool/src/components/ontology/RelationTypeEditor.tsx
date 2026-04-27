@@ -337,8 +337,9 @@ export default function RelationTypeEditor({
     return (
       <>
         <div>
-          <Label className="mb-2">Relation Type Name</Label>
+          <Label className="mb-2" htmlFor="relation-type-name">Relation Type Name</Label>
           <Input
+            id="relation-type-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required

@@ -299,8 +299,9 @@ export default function CollectionEditor({ open, onClose, collection, collection
           )}
 
           <div className="space-y-1">
-            <Label>Name *</Label>
+            <Label htmlFor="collection-name">Name *</Label>
             <Input
+              id="collection-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Collection name"

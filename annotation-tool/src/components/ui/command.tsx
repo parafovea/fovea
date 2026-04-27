@@ -60,7 +60,14 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/*
+          Wrap children in <Command> so the cmdk context (CommandList,
+          CommandGroup, CommandItem use it via useContext) is provided.
+          Without this, every cmdk child crashes with
+          "Cannot read properties of undefined (reading 'subscribe')" the
+          moment the dialog mounts, which trips React's error boundary.
+        */}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   )

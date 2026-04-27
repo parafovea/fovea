@@ -35,9 +35,11 @@ export class AnnotationWorkspacePage extends BasePage {
    * Get the video canvas overlay for drawing annotations.
    */
   get videoCanvas(): Locator {
-    return this.page.locator('[data-testid="video-canvas"]').or(
-      this.page.locator('video').locator('..')
-    )
+    // The DrawingCanvas SVG carries data-testid="video-canvas" once the video
+    // element mounts; the previous .or(video.parent) fallback was a relic
+    // from when AnnotationOverlay's ref-conditional sometimes failed to
+    // render and is no longer needed.
+    return this.page.locator('[data-testid="video-canvas"]')
   }
 
   /**
@@ -164,16 +166,17 @@ export class AnnotationWorkspacePage extends BasePage {
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
     await expect(typeSelect).toBeEnabled({ timeout: 30000 })
 
-    // Use keyboard navigation for type selection as well
+    // The shadcn rewrite replaced the Material-UI Select listbox with a
+    // command-palette-style picker: a combobox that opens a Dialog with a
+    // search textbox plus one clickable Button per type. Click the first
+    // type entry by name. ArrowDown/Enter would dismiss the dialog instead
+    // of selecting an option.
     await typeSelect.click()
-    await this.page.waitForTimeout(500)
-
-    // Press ArrowDown to open dropdown and select first option
-    await typeSelect.press('ArrowDown')
-    await this.page.waitForTimeout(300)
-
-    // Press Enter to select the highlighted option
-    await typeSelect.press('Enter')
+    const typePicker = this.page.getByRole('dialog')
+    await expect(typePicker).toBeVisible({ timeout: 5000 })
+    const firstType = typePicker.getByRole('button').first()
+    await expect(firstType).toBeVisible({ timeout: 5000 })
+    await firstType.click()
     await this.page.waitForTimeout(1000)  // Wait for type selection to register
 
     await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })

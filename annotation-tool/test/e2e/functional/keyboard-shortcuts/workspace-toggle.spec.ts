@@ -4,7 +4,7 @@ import { test, expect } from '../../fixtures/test-context.js'
  * Workspace Toggle Keyboard Shortcuts Tests
  *
  * Tests verify that workspace toggle shortcuts work correctly:
- * - o: Toggle to/from ontology builder
+ * - o: Toggle to/from persona builder
  * - w: Toggle to/from object builder (world)
  * - Cmd+1/2/3: Direct navigation to workspaces
  *
@@ -18,12 +18,12 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     void testUser
   })
 
-  test('o navigates from video browser to ontology builder', async ({ page }) => {
+  test('o navigates from video browser to persona builder', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle', { timeout: 15000 })
 
-    // Press 'o' to go to ontology builder
-    await page.keyboard.press('o')
+    // Press 'o' to go to persona builder
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
 
     await expect(page).toHaveURL(/\/ontology/)
@@ -44,8 +44,8 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await page.goto('/objects')
     await page.waitForLoadState('networkidle', { timeout: 15000 })
 
-    // Press 'o' to go to ontology builder
-    await page.keyboard.press('o')
+    // Press 'o' to go to persona builder
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
 
     await expect(page).toHaveURL(/\/ontology/)
@@ -59,7 +59,7 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     const searchInput = page.locator('input[type="search"], input[type="text"]').first()
     if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchInput.focus()
-      await page.keyboard.press('o')
+      await page.keyboard.press('p')
       await page.waitForTimeout(500)
 
       // Should still be on video browser since input was focused
@@ -98,13 +98,13 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     console.log('Annotation URL:', annotationUrl)
 
     // Toggle to ontology
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
     console.log('Now at ontology:', page.url())
 
     // Toggle back to annotation
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
 
     // Should be back at annotation workspace
@@ -133,13 +133,13 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle', { timeout: 15000 })
 
-    // Press 'o' to go to ontology builder
-    await page.keyboard.press('o')
+    // Press 'o' to go to persona builder
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
     // Press 'o' again to toggle back to video browser
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
 
     // Should be back at video browser (URL ends with just /)
@@ -202,7 +202,7 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
 
     // Chain: o -> w -> o -> w -> back to video browser
     // Press 'o' to go to ontology
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
@@ -212,12 +212,12 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await expect(page).toHaveURL(/\/objects/)
 
     // Press 'o' to go back to ontology (from object builder)
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
     // Press 'o' again - should go back to object builder (where we came from)
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/objects/)
 
@@ -232,7 +232,7 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await page.waitForLoadState('networkidle', { timeout: 15000 })
 
     // Use 'o' to toggle to ontology (stores video browser as return path)
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
@@ -255,12 +255,12 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     const annotationUrl = page.url()
 
     // Toggle to ontology
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
     // Toggle back to annotation
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(annotationUrl)
 
@@ -275,7 +275,7 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await expect(page).toHaveURL(annotationUrl)
 
     // Now do a chain: o -> w -> o (from object builder)
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
@@ -283,12 +283,12 @@ test.describe('Keyboard Shortcuts - Workspace Toggle', () => {
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/objects/)
 
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/ontology/)
 
     // Toggle o back should return to objects (where we came from)
-    await page.keyboard.press('o')
+    await page.keyboard.press('p')
     await page.waitForTimeout(500)
     await expect(page).toHaveURL(/\/objects/)
   })

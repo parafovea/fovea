@@ -489,8 +489,9 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
           {/* Basic Entity Fields */}
           <div className="space-y-1">
-            <Label>Location Name *</Label>
+            <Label htmlFor="location-name">Location Name *</Label>
             <Input
+              id="location-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Location name"

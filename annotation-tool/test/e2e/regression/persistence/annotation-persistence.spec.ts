@@ -42,7 +42,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again (required to see annotations after reload)
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = page.getByRole('listbox')
     const personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -98,7 +98,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = page.getByRole('listbox')
     const personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -134,7 +134,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona to see the annotation
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = page.getByRole('listbox')
     const personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -169,7 +169,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Re-select persona
     const personaSelect2 = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect2.click()
-    const personaListbox2 = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox2 = page.getByRole('listbox')
     const personaOption2 = personaListbox2.getByText(testPersona.name)
     await personaOption2.click()
     await page.waitForTimeout(1000)
@@ -191,7 +191,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select persona first (required for annotations)
     let personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    let personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    let personaListbox = page.getByRole('listbox')
     let personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -241,7 +241,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    personaListbox = page.getByRole('listbox')
     personaOption = personaListbox.getByText(testPersona.name)
     await personaOption.click()
     await page.waitForTimeout(1000)

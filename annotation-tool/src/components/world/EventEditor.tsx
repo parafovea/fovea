@@ -343,8 +343,9 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
           )}
 
           <div className="space-y-1">
-            <Label>Name *</Label>
+            <Label htmlFor="event-name">Name *</Label>
             <Input
+              id="event-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Event name"

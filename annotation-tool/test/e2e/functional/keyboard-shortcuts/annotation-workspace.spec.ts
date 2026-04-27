@@ -51,7 +51,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     })
     await page.waitForTimeout(300)
 
-    const timeline = page.locator('[data-testid="timeline-canvas"]')
+    const timeline = page.locator('[data-slot="timeline-root"]')
 
     // Timeline should be hidden initially
     const initiallyVisible = await timeline.isVisible().catch(() => false)
@@ -166,7 +166,7 @@ test.describe('Keyboard Shortcuts - Annotation Workspace', () => {
     await page.keyboard.press('t')
     await page.waitForTimeout(500)
 
-    const timeline = page.locator('[data-testid="timeline-canvas"]')
+    const timeline = page.locator('[data-slot="timeline-root"]')
     await expect(timeline).toBeVisible()
   })
 

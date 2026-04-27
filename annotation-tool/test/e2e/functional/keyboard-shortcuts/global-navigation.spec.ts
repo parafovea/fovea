@@ -41,7 +41,9 @@ test.describe('Keyboard Shortcuts - Global Navigation', () => {
 
     // Verify navigated to ontology workspace
     await expect(page).toHaveURL('/ontology')
-    await expect(page.getByText('Ontology Builder')).toBeVisible()
+    // "Persona Builder" appears in both the sidebar nav link and the
+    // page breadcrumb; either resolution confirms we landed on /ontology.
+    await expect(page.getByText('Persona Builder').first()).toBeVisible()
   })
 
   test('Cmd/Ctrl+3 navigates to object workspace', async ({ page, testUser }) => {

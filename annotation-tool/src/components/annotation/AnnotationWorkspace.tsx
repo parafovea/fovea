@@ -94,6 +94,12 @@ export default function AnnotationWorkspace() {
   const { data: modelConfig } = useModelConfig()
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
   const videoPlayerRef = useRef<VideoPlayerHandle>(null)
+  // Track the underlying <video> DOM node in state so AnnotationOverlay
+  // re-renders when it mounts (refs don't trigger re-renders, so a
+  // condition like `videoPlayerRef.current?.videoRef.current && <Overlay/>`
+  // would only flip in if some unrelated state update happened to fire
+  // afterwards — which under headless Chromium it often doesn't).
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -688,13 +694,14 @@ export default function AnnotationWorkspace() {
           onTimeUpdate={setCurrentTime}
           onFrameChange={setCurrentFrame}
           onDurationChange={setDuration}
+          onVideoElementChange={setVideoElement}
         >
-          {currentVideo && videoPlayerRef.current?.videoRef.current && (
+          {currentVideo && videoElement && (
             <AnnotationOverlay
-              videoElement={videoPlayerRef.current.videoRef.current}
+              videoElement={videoElement}
               currentTime={currentTime}
-              videoWidth={videoPlayerRef.current.videoRef.current.videoWidth || currentVideo.width}
-              videoHeight={videoPlayerRef.current.videoRef.current.videoHeight || currentVideo.height}
+              videoWidth={videoElement.videoWidth || currentVideo.width}
+              videoHeight={videoElement.videoHeight || currentVideo.height}
               videoFps={currentVideo.fps || 30}
               detectionResults={detectionResults}
               onAnnotationEditComplete={forceSave}

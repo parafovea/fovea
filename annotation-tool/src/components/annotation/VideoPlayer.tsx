@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle } from 'react'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import { VideoMetadata } from '@models/types'
@@ -11,6 +11,17 @@ export interface VideoPlayerProps {
   onFrameChange?: (frame: number) => void
   onDurationChange?: (duration: number) => void
   onPlayingChange?: (isPlaying: boolean) => void
+  /**
+   * Callback fired with the underlying ``<video>`` element once it has been
+   * attached to the DOM (and again with ``null`` when it unmounts).
+   *
+   * Consumers that need to render an overlay positioned over the video
+   * element should track this in component state rather than reading
+   * ``videoRef.current`` directly — refs do not trigger re-renders, so
+   * conditional rendering keyed on ``videoRef.current`` would only flip on
+   * unrelated state updates.
+   */
+  onVideoElementChange?: (element: HTMLVideoElement | null) => void
   children?: React.ReactNode
 }
 
@@ -61,6 +72,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onFrameChange,
       onDurationChange,
       onPlayingChange,
+      onVideoElementChange,
       children,
     } = props
 
@@ -89,6 +101,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onDurationChange,
       onPlayingChange,
     })
+
+    // Notify the parent once the underlying <video> element is attached to
+    // the DOM, so consumers can render overlays in response to a real state
+    // change (refs don't trigger re-renders). Fires with null on unmount.
+    useEffect(() => {
+      if (!onVideoElementChange) return
+      onVideoElementChange(videoRef.current)
+      return () => onVideoElementChange(null)
+    }, [onVideoElementChange, videoRef])
 
     // Expose player control methods via ref for parent component access
     useImperativeHandle(ref, () => ({

@@ -67,7 +67,7 @@ test.describe('Selection Persistence (Issue #59)', () => {
     await personaSelect.click()
     await page.waitForTimeout(500)
 
-    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = page.getByRole('listbox')
     await expect(personaListbox).toBeVisible({ timeout: 5000 })
     const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await personaOption.click()
@@ -139,7 +139,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     await personaSelect.click()
     await page.waitForTimeout(500)
 
-    const personaListbox = page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = page.getByRole('listbox')
     await expect(personaListbox).toBeVisible({ timeout: 5000 })
     const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await personaOption.click()
