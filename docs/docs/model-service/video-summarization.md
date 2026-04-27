@@ -6,6 +6,8 @@ title: Video Summarization
 
 Video summarization uses Vision Language Models (VLMs) to analyze video frames and generate text descriptions. The service samples frames from videos, processes them through multimodal models, and returns summaries with persona context integration.
 
+The summarization use case (`application/use_cases/summarize_video.py`) calls an outbound VLM port. The default selection in `model-service/config/models.yaml` is `qwen-3-vl-8b`; the catalog includes the Qwen3-VL family (8B, 30B-A3B, 235B-A22B, plus thinking variants), Tarsier2-7b, Moondream3, and the legacy Llama-4 / Gemma-3 / InternVL3 / Qwen2.5-VL line. The CPU build defaults to a Qwen2.5-VL-3B GGUF served by `llama-cpp-python`. Generation parameters can be overridden per request through `generation_overrides`; audio handling is configured separately (see [Audio Processing](./audio-processing.md)).
+
 ## How It Works
 
 The video summarization pipeline:

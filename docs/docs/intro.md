@@ -3,59 +3,41 @@ sidebar_position: 1
 slug: /
 ---
 
-# Welcome to FOVEA Documentation
+# Fovea
 
-FOVEA (Flexible Ontology Visual Event Analyzer) is a web-based video annotation tool that enables tactically-oriented analysts to develop annotation ontologies using a persona-based approach.
+Fovea (Flexible Ontology Visual Event Analyzer) is a web-based video annotation system. It pairs a persona-based annotation model with VLM, LLM, detection, tracking, and audio inference, and runs as a containerized stack of three services backed by PostgreSQL, Redis, and (optionally) GPU hardware.
 
-## Quick Links
+## What Fovea does
 
-- [Installation Guide](./getting-started/installation.md): Get FOVEA running in 5 minutes
-- [Quick Start Tutorial](./getting-started/quick-start.md): Annotate your first video
-- [Architecture Overview](./concepts/architecture.md): Understand how FOVEA works
-- [API Reference](./api-reference/overview.md): Explore the API documentation
+Each analyst (persona) defines an ontology of entity, event, role, and relation types. Annotators mark video content with bounding box sequences linked either to those types or to shared world objects (entities, events, times, locations). Inference services produce video summaries, claim graphs, object detections, and tracks. Projects and groups scope work across users, with role-based access control governing every read and write.
 
-## Key Features
+## Documentation map
 
-### Persona-Based Ontologies
-Different analysts can assign different types to the same real-world objects through their own interpretive frameworks. Learn more in [Personas](./concepts/personas.md).
+| Section | Contents |
+|---------|----------|
+| [Getting Started](./getting-started/installation.md) | Installation, quick start, manual setup, first video |
+| [Concepts](./concepts/architecture.md) | Architecture, personas, annotations, projects/groups, RBAC, observability |
+| [User Guides](./user-guides/annotation/creating-annotations.md) | Annotation, claims, ontology, audio, collaboration, admin |
+| [Model Service](./model-service/overview.md) | Clean Architecture layout, model catalog, audio processing, CPU inference |
+| [Deployment](./deployment/overview.md) | Docker profiles, CPU/GPU modes, S3, build modes |
+| [Operations](./operations/monitoring/overview.md) | Monitoring, troubleshooting |
+| [Development](./development/contributing.md) | Contributing, code style, testing |
+| [Reference](./reference/data-model.md) | Data model, environment variables, ports, glossary |
+| [API Reference](./api-reference/overview.md) | REST API endpoints |
 
-### Bounding Box Sequences
-Support for temporal annotations with keyframe interpolation and automated tracking. See [Annotation System](./concepts/annotation-model.md).
+## Feature areas
 
-### AI-Powered Analysis
-Integrated model service with video summarization, object detection, tracking, and claim extraction. Explore [Model Service](./model-service/overview.md).
+- **Persona-based ontologies and annotations.** Persona-scoped types and shared world objects with bounding box sequences (keyframes plus interpolation).
+- **Video summarization, claims, and ontology augmentation.** VLM and LLM workers driven through BullMQ.
+- **Object detection and tracking.** YOLO, Grounding DINO, Florence-2, OWLv2, SAM 3.1, SAM 2.1, SAMURAI, YOLO11-seg.
+- **Audio processing.** Local transcription (Canary-Qwen, Parakeet TDT, WhisperX) and seven external vendor adapters (AssemblyAI, AWS Transcribe, Azure Speech, Deepgram, Gladia, Google Speech, Rev AI), with diarization and VAD.
+- **Projects, groups, and RBAC.** Three-scope role model (system, group, project) with CASL, data-driven RolePermission matrix, ownership rules, and re-share caps.
+- **Admin configuration surface.** Server-persisted system config and per-user / per-persona inference preferences propagated live to the model service via `/api/admin/reconfigure`.
+- **CPU inference.** ONNX Runtime detectors, llama.cpp GGUF text and multimodal loaders, Transformers small-VLM loaders.
+- **Clean Architecture model service.** Domain, application, and infrastructure layers with port adapters and a dependency-injection container.
 
-### Claims and Subclaims
-Extract and organize factual assertions from video summaries with hierarchical claims, typed relations, and automated extraction. See [Claims Overview](./user-guides/claims/overview.md).
+## Related links
 
-### Flexible Deployment
-Run on CPU or GPU, locally or in production. Check [Deployment Options](./deployment/overview.md).
-
-## Getting Started
-
-1. **Install** FOVEA using Docker: [Installation Guide](./getting-started/installation.md)
-2. **Load** your first video: [Video Management](./getting-started/first-video.md)
-3. **Create** annotations with our [User Guides](./user-guides/annotation/creating-annotations.md)
-4. **Export** your data: [Export Guide](./user-guides/data-management/exporting-data.md)
-
-## System Architecture
-
-FOVEA consists of three main services:
-
-```mermaid
-graph LR
-    A[Frontend<br/>React + TanStack Query] --> B[Backend<br/>Fastify + Prisma]
-    B --> C[PostgreSQL]
-    B --> D[Model Service<br/>FastAPI + PyTorch]
-    D --> C
-    B --> E[Redis + BullMQ]
-    D --> E
-```
-
-Learn more about the [architecture](./concepts/architecture.md).
-
-## Need Help?
-
-- [Common Operations](./operations/common-tasks.md): Frequently needed operations
-- [Troubleshooting](./operations/troubleshooting/common-issues.md): Solutions to common problems
-- [GitHub Issues](https://github.com/parafovea/fovea/issues): Report bugs or request features
+- [Common operations](./operations/common-tasks.md)
+- [Troubleshooting](./operations/troubleshooting/common-issues.md)
+- [GitHub repository](https://github.com/parafovea/fovea)

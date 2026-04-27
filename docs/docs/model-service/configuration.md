@@ -4,7 +4,9 @@ title: Configuration
 
 # Model Service Configuration
 
-The model service uses `config/models.yaml` to define available models, inference settings, and hardware allocation. Configuration determines which models load and how they run.
+The model service uses `config/models.yaml` (GPU build) or `config/models-cpu.yaml` (CPU build, selected by `DEVICE=cpu` via a build-time symlink) to define available models, inference settings, and hardware allocation. `YamlModelRepository` parses each task's `selected` value and `options` map into `TaskConfig` rows.
+
+Admins can also override values at runtime through the `SystemConfigPanel`, which writes to the backend's `SystemConfig` table and propagates to the model service via `POST /api/admin/reconfigure` (gated by `MODEL_SERVICE_ADMIN_TOKEN`). See [System configuration](../user-guides/admin/system-config.md).
 
 ## Configuration File Structure
 
@@ -344,6 +346,18 @@ export HF_HOME=/mnt/models
 
 ```bash
 export MODEL_CACHE_DIR=/data/model-cache
+```
+
+**THUMBNAIL_OUTPUT_ROOT**: Directory where the thumbnail generator writes output frames. Configurable so admins can mount fast storage for thumbnail caches.
+
+```bash
+export THUMBNAIL_OUTPUT_ROOT=/data/thumbnails
+```
+
+**MODEL_SERVICE_ADMIN_TOKEN**: Shared secret for the admin reconfigure channel. Must match the value the backend sends in the `X-Admin-Token` header on `POST /api/admin/reconfigure`.
+
+```bash
+export MODEL_SERVICE_ADMIN_TOKEN=$(openssl rand -hex 32)
 ```
 
 ### Cache Behavior

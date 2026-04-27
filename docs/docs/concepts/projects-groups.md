@@ -158,11 +158,32 @@ The final ability is the union of all matched rules.
 
 ## Resource Ownership
 
-Regardless of role-based permissions, users always have read, update, and delete access to resources they created. The CASL builder adds these ownership rules automatically based on the `createdByUserId` or `createdBy` field on each resource.
+Regardless of role-based permissions, users always have read, update, and delete access to resources they created. The CASL builder adds these ownership rules automatically using the per-model ownership field:
+
+| Resource | Ownership field |
+|----------|-----------------|
+| `Persona`, `WorldState` | `userId` |
+| `Annotation` | `createdByUserId` |
+| `VideoSummary`, `Claim`, `UserGroup` | `createdBy` |
+| `Project` | `ownerUserId` |
+
+## Ability cache
+
+The backend keeps two caches to keep RBAC checks cheap:
+
+1. A global **RolePermission matrix cache** with a 5-minute TTL fallback. Any edit through `/api/admin/permissions` invalidates the cache explicitly.
+2. A per-user **ability cache** keyed on `userId` with no TTL. The cache is invalidated explicitly on:
+   - Any add or remove of a `GroupMembership` or `ProjectMembership` row
+   - Any role change on an existing membership
+   - Any `systemRole` change on the user
+   - Any `RolePermission` matrix edit (which clears all entries)
+   - Project deletion (which clears entries for every member of the project)
+
+Failing to invalidate after a membership change is a security bug; the middleware exposes `invalidateUserAbilities`, `invalidateGroupMembers`, `invalidateProjectMembers`, and `invalidatePermissionCache` for this reason.
 
 ## Video Access
 
-All authenticated users can read video metadata. Access to video content within a project context is determined by project membership: only project members (or system admins) can view videos assigned to that project.
+All authenticated users can read video metadata. `VideoAccessService` gates access to video content: only project members (or system admins) can view videos assigned to their projects. Non-existent video IDs pass through to the route's own validation rather than being masked as 404s, so callers get accurate errors during testing.
 
 ## Resource Sharing
 
@@ -174,6 +195,10 @@ Users can share resources (annotations, summaries, claims, personas, world state
 Shares can optionally have an expiration date. Expired shares are excluded from listing queries. The original sharer (or a system admin) can revoke any share at any time.
 
 When a resource is shared with a group, all members of that group gain the specified permission level on that resource.
+
+### Re-share privilege cap
+
+Re-shares cannot exceed the permission level the sharer received. A user who received a `read_only` share cannot re-share the resource as `forkable`. The cap is enforced server-side in the sharing routes and covered by the negative RBAC test suite.
 
 ### Forking
 

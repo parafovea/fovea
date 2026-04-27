@@ -6,6 +6,8 @@ title: Ontology Augmentation
 
 Ontology augmentation uses LLM models to suggest entity types, event types, roles, and relationships based on persona context and domain knowledge. The service generates suggestions to expand ontologies during annotation workflows.
 
+The augmentation use case (`application/use_cases/augment_ontology.py`) calls an outbound LLM port. The default selection in `model-service/config/models.yaml` is `qwen-3-8b`. The catalog includes Qwen3, Kimi K2.6, GLM-4.7, DeepSeek R1 distills, plus closed-source providers (Claude 4.6 / 4.7, GPT-5.4, Gemini 3.1 Pro, Grok 4) routed through the external API adapter. The CPU build serves Qwen2.5-1.5B GGUF through `llama-cpp-python`.
+
 ## How It Works
 
 The augmentation pipeline:

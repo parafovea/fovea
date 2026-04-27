@@ -6,6 +6,8 @@ title: Object Detection
 
 Object detection identifies and localizes objects in video frames using bounding boxes. The service supports class-based detection (COCO classes), zero-shot detection with text prompts, and automatic object discovery.
 
+The detection use case (`application/use_cases/detect_objects.py`) calls an outbound detection port. The default adapter dispatches by `framework` to YOLOv12, YOLOE-26, RF-DETR, YOLO-World v2, OWLv2, Florence-2, or Grounding DINO. The CPU build adds ONNX Runtime variants of YOLO-World, Florence-2, and Grounding DINO. See `model-service/config/models.yaml` (and `models-cpu.yaml`) for the current `selected` defaults and full option list.
+
 ## How It Works
 
 The object detection pipeline:

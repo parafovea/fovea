@@ -43,6 +43,16 @@ const sidebars: SidebarsConfig = {
             'user-guides/authentication/managing-users',
             'user-guides/authentication/user-profile',
             'user-guides/authentication/sessions',
+            'user-guides/authentication/api-key-management',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Admin',
+          items: [
+            'user-guides/admin/system-config',
+            'user-guides/admin/inference-preferences',
+            'user-guides/admin/permissions',
           ],
         },
         {
@@ -117,6 +127,7 @@ const sidebars: SidebarsConfig = {
         'model-service/object-detection',
         'model-service/video-tracking',
         'model-service/ontology-augmentation',
+        'model-service/audio-processing',
       ],
     },
     {

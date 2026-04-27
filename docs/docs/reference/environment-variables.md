@@ -24,6 +24,7 @@ Complete reference for environment variables used across FOVEA services.
 | `MODEL_SERVICE_URL` | `http://model-service:8000` | Model service endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OpenTelemetry endpoint |
 | `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
+| `MODEL_SERVICE_ADMIN_TOKEN` | (optional) | Shared secret for `POST /api/admin/reconfigure`. Required for `SystemConfigPanel` writes to propagate to the model service. The startup replay logs a warning and skips when unset. |
 
 #### Authentication & User Management
 
@@ -92,7 +93,9 @@ frontend:
 |----------|---------|-------------|
 | `DEVICE` | `cpu` | Inference device (cpu, cuda). Use `--profile gpu` instead. |
 | `MODEL_BUILD_MODE` | `minimal` | Feature set: `minimal`, `recommended`, or `full` |
-| `MODEL_CONFIG_PATH` | `/app/config/models.yaml` | Model configuration file |
+| `MODEL_CONFIG_PATH` | `/app/config/models.yaml` | Model configuration file. The Docker build symlinks `models.yaml` to `models-cpu.yaml` when `DEVICE=cpu`. |
+| `MODEL_SERVICE_ADMIN_TOKEN` | (optional) | Shared secret matching the backend value. Requests to `POST /api/admin/reconfigure` must carry this in the `X-Admin-Token` header. |
+| `THUMBNAIL_OUTPUT_ROOT` | (storage default) | Directory where the thumbnail generator writes output frames. Configurable so admins can mount fast storage for thumbnail caches. |
 | `PYTORCH_CUDA_ALLOC_CONF` | `max_split_size_mb:512` | PyTorch CUDA memory config |
 | `CUDA_VISIBLE_DEVICES` | (all) | GPU indices when using `--profile gpu` (e.g., "0,1,2,3") |
 | `REDIS_URL` | `redis://redis:6379` | Redis connection string |

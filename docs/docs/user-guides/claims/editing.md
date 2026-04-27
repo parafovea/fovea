@@ -238,10 +238,10 @@ The accordion starts expanded and can be collapsed by clicking its header. It do
 
 ## Workspace Toggle from Claim Editor
 
-While editing a claim, you may need to look up or create an entity type in the Ontology Builder, or an object in the Object Builder. Instead of losing your in-progress claim, you can use keyboard shortcuts to save a draft and switch workspaces:
+While editing a claim, you may need to look up or create an entity type in the Persona Builder, or an object in the Object Builder. Instead of losing your in-progress claim, you can use keyboard shortcuts to save a draft and switch workspaces:
 
 - Press **W** to save the claim form as a draft and switch to the Object Builder.
-- Press **O** to save the claim form as a draft and switch to the Ontology Builder.
+- Press **O** to save the claim form as a draft and switch to the Persona Builder.
 
 These shortcuts only work when the Claim Editor dialog is open and no input field is focused (they will not interfere with typing in text fields).
 

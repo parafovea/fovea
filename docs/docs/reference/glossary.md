@@ -123,6 +123,58 @@ A visibility range marks when an object is present in the video. Each range has 
 
 The world state contains all entities, events, times, and collections that exist across videos. Unlike types which are persona-specific, world objects in the world state are shared. Multiple personas can refer to the same entity but assign it different types.
 
+## Ability
+
+A CASL `Ability` instance computed from a user's roles and the `RolePermission` matrix. The instance is consulted by every authenticated route to decide whether the request is permitted. Built once per user, cached in memory, and invalidated explicitly on membership and role changes.
+
+## Ability cache
+
+Per-user cache of `Ability` instances keyed on `userId`. There is no TTL; mutations that change a user's effective permissions are responsible for invalidation.
+
+## Clean Architecture
+
+The model service's layout: a domain layer of pure entities and value objects, an application layer of use cases and ports, and an infrastructure layer of adapters that talk to FastAPI, model loaders, external APIs, and the filesystem. Use cases depend only on DTOs and ports.
+
+## GGUF
+
+A binary file format for quantized language and vision-language models, used by `llama.cpp`. Fovea's CPU build serves GGUF Qwen2.5, Qwen3, and Moondream variants through `llama-cpp-python`.
+
+## Inference preferences
+
+Sparse override blocks layered as server defaults → user preferences → persona pins. Persisted in `UserPreferences` and `PersonaPreferences`, merged client-side with `mergeOverrides`, and forwarded to the model service as `generation_overrides` and `audio_overrides` on summarize requests.
+
+## Membership
+
+A row in `GroupMembership` or `ProjectMembership` recording a user's role within a specific group or project.
+
+## ONNX
+
+The Open Neural Network Exchange format. Fovea's CPU detection loaders run YOLO-World, Florence-2, and Grounding DINO through ONNX Runtime.
+
+## Persona pin
+
+A field in `PersonaPreferences` that overrides the corresponding user preference whenever the persona is the active context for a request.
+
+## Port adapter
+
+An infrastructure-layer implementation of an application-layer port. The model service's outbound ports cover detection, tracking, VLM, LLM, audio, video, persistence, and external API routing; each port has one or more adapters in `infrastructure/adapters/outbound/`.
+
+## RolePermission
+
+A row in the runtime-editable permission matrix. Each row binds a `(scope, role, resourceType, action)` tuple to an `ownOnly` flag.
+
+## Share (re-share cap)
+
+Re-shares cannot exceed the permission level the sharer received. A `read_only` recipient cannot re-share as `forkable`.
+
+## System admin
+
+A user whose `systemRole` is `system_admin`. System admins bypass all CASL permission checks and the matrix is not consulted for their requests.
+
+## System config
+
+A row in the `SystemConfig` table holding a single key-value pair that propagates live to the model service through `POST /api/admin/reconfigure`. The backend replays all rows on startup.
+
 ## Next Steps
 
 The [Quick Start Tutorial](../getting-started/quick-start.md) uses these terms in context. The [Annotation Model Concepts](../concepts/annotation-model.md) page explains keyframes, interpolation, and sequences in detail.

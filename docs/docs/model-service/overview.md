@@ -4,434 +4,166 @@ title: Overview
 
 # Model Service Overview
 
-The model service provides AI inference capabilities for video analysis, object detection, tracking, and ontology augmentation. Built with FastAPI, PyTorch, and Transformers, it supports both CPU and GPU execution.
+The model service is a Python 3.12 FastAPI application that performs inference for video summarization, object detection, tracking, ontology augmentation, claim extraction and synthesis, and audio processing (transcription, diarization, voice activity detection). The service is structured as a Clean Architecture application with explicit ports and adapters.
 
 ## Architecture
 
-The model service uses a layered architecture:
-
 ```
-FastAPI Application Layer
-    ↓
-Model Manager (Lazy Loading)
-    ↓
-Inference Engines (SGLang, vLLM, PyTorch)
-    ↓
-Model Weights Cache
+FastAPI inbound adapters  (infrastructure/adapters/inbound)
+        v
+Use cases                 (application/use_cases)
+        v
+Ports                     (application/ports/{inbound,outbound})
+        v
+Outbound adapters         (infrastructure/adapters/outbound)
+        v
+Loaders                   (infrastructure/adapters/outbound/models/{vlm,llm,detection,tracking,audio,onnx,llama_cpp,sam3,ctranslate2})
 ```
 
-### Core Components
+Source layout:
 
-**FastAPI Application** (`src/main.py`): HTTP API server handling requests and responses.
+| Layer | Path | Contents |
+|-------|------|----------|
+| Domain | `model-service/src/domain/` | Entities, value objects, exception hierarchy, shared types |
+| Application | `model-service/src/application/` | Use cases, service interfaces, DTOs, inbound and outbound ports |
+| Infrastructure | `model-service/src/infrastructure/` | FastAPI routes, outbound adapters (VLM, LLM, detection, tracking, audio, video, persistence, external APIs), config, observability |
+| Composition root | `model-service/src/main.py` | Dependency injection container that wires use cases to adapters |
 
-**Model Manager** (`src/model_manager.py`): Lazy model loading and memory management. Models load on first use, not at startup.
+Use cases depend only on DTOs and ports, never on `torch` or model-loader libraries. Loader factories dispatch to the right adapter based on the `framework` field in the YAML config (`sglang`, `vllm`, `transformers`, `onnx`, `llama_cpp`).
 
-**Inference Engines**:
-- SGLang: Primary engine for LLM and VLM inference
-- vLLM: Fallback engine for high-throughput LLM serving
-- PyTorch: Direct inference for detection and tracking models
+OpenTelemetry spans wrap every use case, and `model_inference` metrics fire on every outbound adapter. Reasoning-trace DTOs (`ThinkingTrace`, `ReasonedText`) carry chain-of-thought through use cases and FastAPI schemas when a `supports_thinking` model is selected.
 
-**Configuration** (`config/models.yaml`): Model selection and parameters.
+## Tasks
 
-### Lazy Loading System
+| Task | Endpoint | Use case |
+|------|----------|----------|
+| Video summarization | `POST /api/summarize` | `summarize_video`, `fuse_modalities` |
+| Object detection | `POST /api/detect` | `detect_objects` |
+| Object tracking | `POST /api/track` | `track_objects` |
+| Ontology augmentation | `POST /api/augment` | `augment_ontology` |
+| Claim extraction | `POST /api/claims/extract` | `extract_claims` |
+| Claim synthesis | `POST /api/claims/synthesize` | `synthesize_summary` |
+| Audio transcription | invoked by `summarize_video` | `audio_processing` service |
+| Admin reconfigure | `POST /api/admin/reconfigure` | applies `reconfigure_roots` and updates `ModelManager` knobs |
 
-Models load only when needed. This approach:
+## Model catalog (2026)
 
-- Reduces startup time from minutes to seconds
-- Allows running without GPU during development
-- Enables selective model loading based on usage
-- Conserves VRAM by loading models on demand
+The catalog is defined in `model-service/config/models.yaml` (GPU build) and `model-service/config/models-cpu.yaml` (CPU build, selected by `DEVICE=cpu` via build-time symlink). Per-task entries declare a `selected` model and an `options` map; `YamlModelRepository` parses both into `TaskConfig` rows.
 
-Example: A video summarization request triggers VLM loading, but detection models remain unloaded until needed.
+### Vision-language (video summarization, claim synthesis)
 
-## Available Tasks
+- **Qwen3-VL** family (`qwen-3-vl-8b`, `-8b-thinking`, `-30b-a3b`, `-30b-a3b-thinking`, `-235b-a22b`) with 256K-1M context
+- **Tarsier2-7b** for long-form video description
+- **Moondream3** for compact local VLM
+- **Llama-4-Maverick**, **Gemma-3-27b**, **InternVL3-78B**, **Pixtral-Large**, **Qwen2.5-VL-7B/72B** (legacy, retained for backward compatibility)
 
-### Video Summarization
+### Language models (ontology augmentation, claim extraction, claim synthesis)
 
-VLM-based analysis generates text descriptions from video frames.
+- **Qwen3** (8B and larger), **Kimi K2.6**, **GLM-4.7**, **DeepSeek R1** distills
+- Closed-source providers via API adapters: **Claude 4.6 / 4.7**, **GPT-5.4**, **Gemini 3.1 Pro**, **Grok 4** (routed through `external_api_router_adapter`)
 
-**Endpoint**: `POST /api/summarize`
+### Detection
 
-**Models**: Llama-4-Maverick, Gemma-3-27b, InternVL3-78B, Pixtral-Large, Qwen2.5-VL-72B
+- **YOLOv12**, **YOLOE-26**, **RF-DETR**
+- Open-vocabulary: **YOLO-World v2**, **Florence-2**, **Grounding DINO 1.5**, **OWLv2**
 
-**Use cases**:
-- Generate video summaries for annotation context
-- Extract text from video frames (OCR)
-- Identify key events in footage
+### Tracking
 
-See [Video Summarization](./video-summarization.md) for details.
+- **SAM 3.1** (default), **SAM 2.1**, **SAMURAI**, **SAM2Long**, **YOLO11n-seg**
 
-### Object Detection
+### Audio
 
-Detect and localize objects in video frames.
+- Local transcription: **Canary-Qwen 2.5B** (default), **Parakeet TDT**, **WhisperX**, **faster-whisper** (CPU)
+- Diarization: **pyannote 3.1**
+- Voice activity detection: **Silero VAD**
+- External vendor adapters: **AssemblyAI**, **AWS Transcribe**, **Azure Speech**, **Deepgram**, **Gladia**, **Google Speech**, **Rev AI**
 
-**Endpoint**: `POST /api/detect`
+For full per-task entries (including resource hints and `supports_thinking` flags), read `model-service/config/models.yaml` and `model-service/config/models-cpu.yaml` directly.
 
-**Models**: YOLO-World-v2, GroundingDINO 1.5, OWLv2, Florence-2
+## Audio processing
 
-**Use cases**:
-- Initialize bounding boxes for annotation
-- Detect specific object classes (COCO dataset)
-- Zero-shot detection with text prompts
+Transcription, diarization, and voice activity detection flow through the `audio_processing` application service. The service depends on three outbound ports, each backed by a loader factory or vendor adapter:
 
-See [Object Detection](./object-detection.md) for details.
+- Local loaders: `models/audio/{canary.py,parakeet.py,whisperx.py}` plus `ctranslate2` for `faster-whisper`
+- External vendor adapters: `external_apis/audio/{assemblyai_client.py,aws_transcribe_client.py,azure_speech_client.py,deepgram_client.py,gladia_client.py,google_speech_client.py,revai_client.py}`, all sharing `external_apis/audio/base.py`
+- The selected vendor or local loader is chosen by the YAML config; `audio_overrides` in a summarize request override the default per-call
 
-### Video Tracking
+See [Audio Processing](./audio-processing.md) for endpoint payloads and configuration knobs.
 
-Track objects across multiple frames.
+## CPU inference
 
-**Endpoint**: `POST /api/track`
+CPU mode is selected by setting `DEVICE=cpu`. The Docker build replaces `models.yaml` with `models-cpu.yaml` via symlink and installs the `cpu` extras (`onnxruntime`, `llama-cpp-python`).
 
-**Models**: SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg
+CPU loader paths:
 
-**Use cases**:
-- Generate annotation sequences automatically
-- Track moving objects through occlusions
-- Reduce manual keyframe placement
+- **ONNX Runtime detection** (`models/onnx/`): YOLO-World, Florence-2, Grounding DINO
+- **llama.cpp LLM** (`models/llama_cpp/`): GGUF text generation for Qwen2.5-1.5B, Qwen3 GGUF builds
+- **llama.cpp VLM** (`models/llama_cpp/`): GGUF multimodal inference for Qwen2.5-VL-3B, Moondream
+- **SmallVLMLoader** (Transformers): SmolVLM, Moondream small variants
+- **faster-whisper** (`models/ctranslate2/`): CPU audio transcription
 
-See [Video Tracking](./video-tracking.md) for details.
+The loader factory picks the right adapter by inspecting the `framework` field on each option in the YAML.
 
-### Ontology Augmentation
+## Admin reconfiguration
 
-LLM-based suggestions for ontology types and relationships.
+`POST /api/admin/reconfigure` accepts `{ key, value }` rows from the backend's SystemConfig table. The handler is gated by the `MODEL_SERVICE_ADMIN_TOKEN` header (`X-Admin-Token`). Storage-path keys are dispatched through `reconfigure_roots`; runtime knobs (sampling defaults, audio defaults, detection thresholds) are applied to the live `ModelManager` without restarting the process.
 
-**Endpoint**: `POST /api/augment`
+The backend pushes every write through `services/system-config-propagator.ts`, and replays every persisted row on server startup so a fresh model service picks up admin state without operator intervention.
 
-**Models**: Llama-4-Scout, Llama-3.3-70B, DeepSeek-V3, Gemma-3-27b
+## System requirements
 
-**Use cases**:
-- Suggest entity types based on domain
-- Generate relationship definitions
-- Expand ontologies with persona context
+CPU mode runs the full feature set with smaller models (GGUF quantized LLMs and VLMs, ONNX detection, faster-whisper). GPU mode unlocks the Qwen3-VL family, SGLang and vLLM backends, and full-precision inference. Hardware sizing depends on the selected models; per-model resource hints (`vram_gb`, `cpu_memory_gb`, `cpu_compatible`, `speed`) are declared in the YAML config.
 
-See [Ontology Augmentation](./ontology-augmentation.md) for details.
+Benchmarks, when published, will live under `docs/benchmarks/`.
 
-## Inference Engines
+## Endpoints
 
-### SGLang (Primary)
-
-SGLang provides fast inference with structured generation support.
-
-**Advantages**:
-- Supports both LLM and VLM models
-- 10M context length for Llama-4 models
-- Batching and continuous batching
-- JSON mode for structured outputs
-
-**When to use**: Default for all VLM and LLM tasks.
-
-### vLLM (Fallback)
-
-vLLM offers high-throughput serving for large batches.
-
-**Advantages**:
-- PagedAttention for memory efficiency
-- Dynamic batching
-- Tensor parallelism for multi-GPU
-
-**When to use**: When SGLang unavailable or for batch processing.
-
-### PyTorch (Direct)
-
-Direct PyTorch inference for detection and tracking.
-
-**Advantages**:
-- Full control over inference pipeline
-- Custom preprocessing and postprocessing
-- Lower overhead for single predictions
-
-**When to use**: Object detection and tracking tasks.
-
-## System Requirements
-
-### CPU Mode (Development)
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | 8 cores | 16 cores |
-| RAM | 16 GB | 32 GB |
-| Storage | 50 GB | 100 GB |
-| OS | Linux, macOS, Windows | Linux |
-
-**Model availability**: PyTorch models only (detection, tracking). VLM inference runs but is slow (30-60 seconds per frame).
-
-**When to use**:
-- Local development without GPU
-- Testing API endpoints
-- Annotation workflows without AI assistance
-
-### GPU Mode (Production)
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| GPU | NVIDIA T4 (16GB VRAM) | A100 (40GB VRAM) |
-| CPU | 8 cores | 16 cores |
-| RAM | 32 GB | 64 GB |
-| Storage | 100 GB | 500 GB |
-| OS | Linux with CUDA 12.1+ | Ubuntu 22.04 |
-
-**Model availability**: All models supported.
-
-**When to use**:
-- Production deployments
-- Real-time video processing
-- Multiple concurrent users
-
-### VRAM Requirements by Model
-
-| Model | Task | VRAM (4-bit) | VRAM (full) |
-|-------|------|--------------|-------------|
-| Llama-4-Maverick | Summarization | 62 GB | 240 GB |
-| Gemma-3-27b | Summarization | 14 GB | 54 GB |
-| InternVL3-78B | Summarization | 40 GB | 156 GB |
-| Qwen2.5-VL-72B | Summarization | 36 GB | 144 GB |
-| Llama-4-Scout | Augmentation | 55 GB | 220 GB |
-| DeepSeek-V3 | Augmentation | 85 GB | 340 GB |
-| YOLO-World-v2 | Detection | 2 GB | 2 GB |
-| GroundingDINO 1.5 | Detection | 4 GB | 4 GB |
-| SAMURAI | Tracking | 3 GB | 3 GB |
-| SAM2.1 | Tracking | 3 GB | 3 GB |
-
-4-bit quantization reduces VRAM usage by approximately 75% with minimal accuracy loss.
-
-## Service Endpoints
-
-### Health Check
+### Health
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Response:
-```json
-{
-  "status": "healthy",
-  "models_loaded": ["llama-4-maverick"],
-  "device": "cuda",
-  "gpu_memory_allocated": "14.5 GB",
-  "gpu_memory_reserved": "16.0 GB"
-}
-```
-
-### Model Info
+### Model info
 
 ```bash
 curl http://localhost:8000/models/info
 ```
 
-Response:
-```json
-{
-  "available_models": {
-    "video_summarization": ["llama-4-maverick", "gemma-3-27b", "qwen2-5-vl-72b"],
-    "ontology_augmentation": ["llama-4-scout", "llama-3-3-70b"],
-    "object_detection": ["yolo-world-v2", "grounding-dino-1-5"],
-    "video_tracking": ["samurai", "sam2-1"]
-  },
-  "loaded_models": ["llama-4-maverick"],
-  "device": "cuda:0"
-}
-```
-
-### Summarize Video
+### Summarize
 
 ```bash
 curl -X POST http://localhost:8000/api/summarize \
   -H "Content-Type: application/json" \
   -d '{
     "video_path": "/data/example.mp4",
-    "persona_context": "Baseball game analyst",
+    "persona_context": "Sports analyst",
     "frame_count": 8,
     "sampling_strategy": "uniform"
   }'
 ```
 
-See [Video Summarization](./video-summarization.md) for full API.
-
-### Detect Objects
-
-```bash
-curl -X POST http://localhost:8000/api/detect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "video_path": "/data/example.mp4",
-    "frame_numbers": [0, 10, 20],
-    "model": "yolo-world-v2",
-    "confidence_threshold": 0.5
-  }'
-```
-
-See [Object Detection](./object-detection.md) for full API.
-
-### Track Objects
-
-```bash
-curl -X POST http://localhost:8000/api/track \
-  -H "Content-Type: application/json" \
-  -d '{
-    "video_path": "/data/example.mp4",
-    "frame_range": {"start": 0, "end": 100},
-    "tracking_model": "samurai",
-    "confidence_threshold": 0.7
-  }'
-```
-
-See [Video Tracking](./video-tracking.md) for full API.
-
-### Augment Ontology
-
-```bash
-curl -X POST http://localhost:8000/api/augment \
-  -H "Content-Type: application/json" \
-  -d '{
-    "persona_name": "Baseball Analyst",
-    "existing_ontology": {"entity_types": ["Player", "Ball"]},
-    "domain_context": "Baseball game analysis",
-    "task_description": "Annotating pitcher actions"
-  }'
-```
-
-See [Ontology Augmentation](./ontology-augmentation.md) for full API.
-
-## Performance Characteristics
-
-### Throughput
-
-| Task | Model | CPU | GPU (T4) | GPU (A100) |
-|------|-------|-----|----------|------------|
-| Summarization | Gemma-3-27b | 0.5 frames/sec | 4 frames/sec | 12 frames/sec |
-| Summarization | Qwen2.5-VL-72B | 0.2 frames/sec | 2 frames/sec | 8 frames/sec |
-| Detection | YOLO-World-v2 | 15 frames/sec | 52 frames/sec | 85 frames/sec |
-| Detection | GroundingDINO | 8 frames/sec | 20 frames/sec | 35 frames/sec |
-| Tracking | SAMURAI | 5 frames/sec | 25 frames/sec | 45 frames/sec |
-| Tracking | SAM2.1 | 6 frames/sec | 30 frames/sec | 50 frames/sec |
-
-### Latency
-
-| Task | First Request | Subsequent Requests |
-|------|---------------|---------------------|
-| Summarization | 15-30 seconds (model load) | 0.5-2 seconds |
-| Detection | 5-10 seconds (model load) | 0.05-0.2 seconds |
-| Tracking | 5-10 seconds (model load) | 0.1-0.5 seconds |
-| Augmentation | 15-30 seconds (model load) | 1-5 seconds |
-
-First request includes model loading time. Subsequent requests use cached models.
-
-## When to Use Model Service
-
-### Use Model Service When:
-
-1. **Automating repetitive tasks**: Detecting hundreds of objects across video frames.
-2. **Bootstrapping annotations**: Generating initial bounding boxes for manual refinement.
-3. **Analyzing large video datasets**: Processing hours of footage efficiently.
-4. **Enriching ontologies**: Suggesting types and relationships from domain knowledge.
-5. **Extracting video content**: OCR, scene detection, or summarization.
-
-### Skip Model Service When:
-
-1. **Annotating small datasets**: Manual annotation may be faster for 10-20 objects.
-2. **Complex edge cases**: AI struggles with unusual perspectives or rare objects.
-3. **Precision requirements**: Manual annotation provides exact bounding boxes.
-4. **Resource constraints**: CPU inference is too slow for interactive use.
-5. **Offline environments**: Model downloads require internet connection.
+See [Video Summarization](./video-summarization.md), [Object Detection](./object-detection.md), [Video Tracking](./video-tracking.md), [Ontology Augmentation](./ontology-augmentation.md), and [Audio Processing](./audio-processing.md) for full payloads.
 
 ## Troubleshooting
 
-### Model Loading Fails
+### Model loading fails
 
-**Symptom**: Error "Failed to load model llama-4-maverick"
+Check VRAM (`nvidia-smi`), the HuggingFace cache directory, and the `selected` field in the relevant YAML section. Switching `selected` to a smaller entry (for example, `qwen-3-vl-8b` over `qwen-3-vl-235b-a22b`) is the fastest fix.
 
-**Causes**:
-- Insufficient VRAM
-- Missing model files in cache
-- Incorrect model configuration
+### CUDA out of memory
 
-**Solutions**:
+Lower `max_memory_per_model` in the `inference:` block of the YAML, switch to a 4-bit quantized option, or unload unused models via `POST /models/unload`.
 
-1. Check VRAM availability:
-```bash
-nvidia-smi
-```
+### Connection refused
 
-2. Verify model cache:
-```bash
-ls ~/.cache/huggingface/hub/
-```
+Confirm the model service container is up (`docker compose ps model-service`) and reachable from the backend (`MODEL_SERVICE_URL`).
 
-3. Switch to smaller model in `config/models.yaml`:
-```yaml
-video_summarization:
-  selected: "gemma-3-27b"  # Requires only 14GB VRAM
-```
+## Next steps
 
-### Slow Inference on CPU
-
-**Symptom**: Summarization takes 60+ seconds per frame
-
-**Cause**: CPU inference is inherently slow for large models.
-
-**Solutions**:
-
-1. Use GPU mode if available.
-2. Switch to lighter models (Gemma-3-27b instead of Llama-4-Maverick).
-3. Reduce frame count in requests.
-4. Use detection/tracking only (skip summarization).
-
-### CUDA Out of Memory
-
-**Symptom**: Error "RuntimeError: CUDA out of memory"
-
-**Causes**:
-- Model too large for GPU
-- Multiple models loaded simultaneously
-- Batch size too large
-
-**Solutions**:
-
-1. Enable 4-bit quantization in config:
-```yaml
-quantization: "4bit"
-```
-
-2. Unload unused models:
-```bash
-curl -X POST http://localhost:8000/models/unload \
-  -H "Content-Type: application/json" \
-  -d '{"model_id": "unused-model"}'
-```
-
-3. Reduce batch size in requests.
-
-### Connection Refused
-
-**Symptom**: Error "Connection refused to localhost:8000"
-
-**Causes**:
-- Service not running
-- Port conflict
-- Firewall blocking
-
-**Solutions**:
-
-1. Check service status:
-```bash
-docker compose ps model-service
-```
-
-2. Check logs:
-```bash
-docker compose logs model-service
-```
-
-3. Verify port availability:
-```bash
-lsof -i :8000
-```
-
-## Next Steps
-
-- [Configure models](./configuration.md) for your hardware
-- [Set up video summarization](./video-summarization.md)
-- [Configure object detection](./object-detection.md)
-- [Enable video tracking](./video-tracking.md)
-- [Use ontology augmentation](./ontology-augmentation.md)
+- [Configure models](./configuration.md)
+- [Audio Processing](./audio-processing.md)
+- [Video Summarization](./video-summarization.md)
+- [Object Detection](./object-detection.md)
+- [Video Tracking](./video-tracking.md)
+- [Ontology Augmentation](./ontology-augmentation.md)

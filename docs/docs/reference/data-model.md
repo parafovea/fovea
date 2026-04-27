@@ -776,9 +776,73 @@ model RolePermission {
 - `ownOnly`: When true, the permission applies only to resources created by the user
 - Unique constraint on (scope, role, resourceType, action) prevents duplicate entries
 
+### UserPreferences Model
+
+Per-user inference defaults persisted on the server. One row per user.
+
+```prisma
+model UserPreferences {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(...)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+```
+
+The `data` field holds a sparse object of inference overrides (sampling, audio, detection, advanced subtabs). Read and written through `GET` / `PUT /api/me/preferences`.
+
+### PersonaPreferences Model
+
+Per-persona pinned inference values. One row per persona.
+
+```prisma
+model PersonaPreferences {
+  id        String   @id @default(uuid())
+  personaId String   @unique
+  persona   Persona  @relation(...)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("persona_preferences")
+}
+```
+
+Read and written through `GET` / `PUT /api/personas/:id/preferences`. Persona pins override user preferences via the `mergeOverrides` helper before each summarize request.
+
+### SystemConfig Model
+
+Key-value configuration applied live to the model service. Each row covers one configuration key.
+
+```prisma
+model SystemConfig {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  value           Json
+  updatedByUserId String?
+  updatedByUser   User?    @relation(...)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("system_config")
+}
+```
+
+The backend's `services/system-config-propagator.ts` pushes every write to the model service at `POST /api/admin/reconfigure` (gated by `MODEL_SERVICE_ADMIN_TOKEN`). Server startup replays every persisted row so a fresh model service picks up admin state automatically. `updatedByUserId` is resolved through the users table, falling back to `NULL` for deleted users.
+
+## Schema notes (0.3.0+)
+
+- The legacy `TimeSpan` interface and the `timeSpan?` field on `ObjectAnnotation` and `TypeAnnotation` were removed. Annotations always use `boundingBoxSequence`.
+- `OntologyTypeItem.gloss` is now `GlossItem[]` only. The legacy `string` branch and its frontend `transformBackendToFrontend` stub have been removed.
+
 ## Next Steps
 
 - Learn about [Exporting Data](../user-guides/data-management/exporting-data.md)
 - Learn about [Importing Data](../user-guides/data-management/importing-data.md)
 - Explore [Architecture](../concepts/architecture.md)
 - Learn about [Projects, Groups, and RBAC](../concepts/projects-groups.md)
+- Learn about [Inference Preferences](../user-guides/admin/inference-preferences.md) and [System Configuration](../user-guides/admin/system-config.md)

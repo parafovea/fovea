@@ -6,6 +6,8 @@ title: Video Tracking
 
 Video tracking follows objects across multiple frames, maintaining consistent identities through occlusions, scale changes, and motion. The service provides automated track generation for annotation workflows.
 
+The tracking use case (`application/use_cases/track_objects.py`) dispatches through an outbound tracking port. The default selection in `model-service/config/models.yaml` is `sam-3-1-tracking` (SAM 3.1); SAM 2.1, SAMURAI, SAM2Long, and YOLO11n-seg remain available as options. The CPU build defaults to `yolo11n-seg`.
+
 ## How It Works
 
 The tracking pipeline:

@@ -1,191 +1,176 @@
 ---
 title: Architecture
 sidebar_position: 1
-keywords: [architecture, system design, services, components, microservices]
+keywords: [architecture, system design, services, components, microservices, rbac, clean architecture]
 ---
 
 # Architecture
 
-FOVEA uses a microservices architecture with separate frontend, backend, and model service layers connected through REST APIs and message queues.
+Fovea is a three-service application: a React frontend, a Fastify backend, and a Python model service. PostgreSQL persists relational data, Redis backs the BullMQ job queue and a cache layer, and an OpenTelemetry pipeline emits traces and metrics from every service.
 
-## System Architecture
+## System diagram
 
 ```mermaid
 graph TB
-    subgraph "Client Layer"
-        Browser[Web Browser]
+    subgraph "Client"
+        Browser[Web browser]
     end
 
-    subgraph "Frontend Service (Port 5173)"
+    subgraph "Frontend (port 5173)"
         React[React 18 + TypeScript]
-        TanStack[TanStack Query + Zustand]
-        VideoJS[Video.js Player]
-        MUI[Material-UI v5]
+        State[TanStack Query + Zustand]
+        UI[shadcn-ui + Tailwind v4 + base-ui]
+        Player[Video.js]
     end
 
-    subgraph "Backend Service (Port 3001)"
-        Fastify[Fastify 5 Server]
-        Prisma[Prisma 6 ORM]
-        BullMQ[BullMQ Job Queue]
+    subgraph "Backend (port 3001)"
+        Fastify[Fastify 5]
+        Prisma[Prisma 6]
+        BullMQ[BullMQ 5]
+        CASL[CASL ability builder]
     end
 
-    subgraph "Model Service (Port 8000)"
-        FastAPI[FastAPI Server]
-        SGLang[SGLang Inference]
-        YOLO[YOLO Detection]
-        Tracking[Tracking Models]
+    subgraph "Model service (port 8000)"
+        FastAPI[FastAPI routes]
+        UseCases[Use cases]
+        Ports[Ports]
+        Adapters[Infrastructure adapters]
     end
 
-    subgraph "Data Layer"
+    subgraph "Data and access"
         Postgres[(PostgreSQL 16)]
         Redis[(Redis 7)]
-        Videos[(/data Volume)]
+        Videos[(/data volume)]
+        Authorization[Projects, groups, RBAC]
     end
 
-    subgraph "Observability Stack"
+    subgraph "Observability"
         OTEL[OTEL Collector]
-        Prometheus[(Prometheus)]
-        Grafana[Grafana Dashboards]
+        Prom[(Prometheus)]
+        Grafana[Grafana]
     end
 
     Browser --> React
     React --> Fastify
+    Fastify --> CASL
+    CASL --> Authorization
     Fastify --> Prisma
     Fastify --> BullMQ
     Prisma --> Postgres
     BullMQ --> Redis
     BullMQ --> FastAPI
-    FastAPI --> Videos
+    FastAPI --> UseCases
+    UseCases --> Ports
+    Ports --> Adapters
+    Adapters --> Videos
     Fastify --> OTEL
     FastAPI --> OTEL
-    OTEL --> Prometheus
-    Prometheus --> Grafana
+    OTEL --> Prom
+    Prom --> Grafana
 ```
+
+The "Authorization" layer sits between authenticated users and every project-scoped resource. All data routes filter results through CASL `accessibleBy()` queries, and project membership is the gate for video and project-scoped persona, world state, annotation, summary, and claim access.
 
 ## Components
 
 ### Frontend
 
-The frontend is a single-page application built with React 18 and TypeScript 5.3+. Key technologies include:
+The frontend is a Vite-built React 18 + TypeScript 5 single-page application.
 
-- **React 18 + TypeScript 5.3+**: Component-based UI with type safety
-- **TanStack Query v5**: Server state caching and synchronization for API data
-- **Zustand**: Client-side UI state management (selections, dialogs, drawing modes)
-- **Video.js v8**: Video playback with frame-accurate seeking
-- **Material-UI v5**: UI components with emotion-based styling
-- **Leaflet + react-leaflet**: Map interactions for location editing
+- **shadcn-ui** components composed on **Tailwind CSS v4** design tokens
+- **base-ui** primitives for low-level interactive elements
+- **Lucide** icon set (barrel-exported)
+- **TanStack Query v5** for server state with optimistic updates
+- **Zustand** for client UI state (selections, dialogs, drawing modes)
+- **Video.js v8** for frame-accurate video playback
+- **Leaflet** for location editing
 
-The frontend runs on port 5173 during development and communicates with the backend via REST API.
+The frontend dev server runs on port 5173. Component tests use Vitest + Testing Library against the shadcn DOM structure.
 
 ### Backend
 
-The backend is a Node.js 22 LTS server using the Fastify 5 framework. Key technologies include:
+The backend is a Fastify 5 server on Node 22 LTS.
 
-- **Fastify 5**: High-performance REST API server
-- **Prisma 6**: Type-safe ORM for PostgreSQL with migrations
-- **BullMQ 5**: Job queue for asynchronous AI tasks
-- **TypeBox**: Schema validation with Fastify type provider
-- **OpenTelemetry**: Distributed tracing and metrics
+- **Prisma 6** for PostgreSQL access (repository pattern via `VideoRepository` and friends)
+- **BullMQ 5** for asynchronous summarization, detection, and tracking jobs
+- **TypeBox** schemas for request validation through the Fastify type provider
+- **CASL** with `@casl/prisma` for RBAC; per-user ability cache with explicit invalidation
+- **OpenTelemetry** spans on every route and RBAC check
+- `services/system-config-propagator.ts` pushes admin SystemConfig writes (and replays them on startup) to the model service over `/api/admin/reconfigure`
 
-The backend serves the REST API on port 3001, persists data to PostgreSQL, and queues long-running jobs (video summarization) to Redis for the model service to process. The codebase uses a repository pattern (e.g., VideoRepository) to abstract database queries from route handlers.
+### Model service
 
-### Model Service
+The model service uses Clean Architecture layers under `model-service/src/`:
 
-The model service is a Python 3.12 application using FastAPI 0.110+ for AI inference. Key technologies include:
+- **`domain/`**: entities, value objects, exception hierarchy, types
+- **`application/`**: use cases (`summarize_video`, `detect_objects`, `track_objects`, `extract_claims`, `synthesize_summary`, `augment_ontology`, `fuse_modalities`), service interfaces, DTOs, and ports (`inbound`, `outbound`)
+- **`infrastructure/`**: FastAPI inbound adapters; outbound adapters for VLM, LLM, detection, tracking, audio, video, persistence, and external API routing
+- **`main.py`**: dependency injection container that wires use cases to adapters at startup
 
-- **FastAPI 0.110+**: High-performance async API server
-- **SGLang 0.4+**: Primary inference engine for VLMs and LLMs
-- **vLLM 0.6+**: Fallback inference engine
-- **PyTorch 2.5+**: Deep learning framework
-- **Transformers 4.47+**: Pretrained model loading
-- **Ultralytics**: YOLO object detection models
-- **Supervision**: Object tracking algorithms
+Inference engines are pluggable through loader factories. The same task can dispatch to Transformers, SGLang, vLLM, ONNX Runtime, or llama.cpp depending on the model entry's `framework` field. See [Model Service Overview](../model-service/overview.md).
 
-The model service runs on port 8000 and processes jobs from Redis, including video summarization, object detection, object tracking, and ontology augmentation.
+### Data layer
 
-### Data Layer
+- **PostgreSQL 16** for relational data (with pgvector for embeddings)
+- **Redis 7** for the BullMQ queue and `CacheService`
+- **`/data` volume** for video files served via range requests
 
-The data layer consists of persistent storage and caching:
+### Observability
 
-- **PostgreSQL 16**: Primary database with pgvector extension for embedding storage
-- **Redis 7**: Job queue backend and caching layer
-- **/data Volume**: Mounted directory containing video files served to the frontend
+- **OTEL Collector** on ports 4317 (gRPC) and 4318 (HTTP)
+- **Prometheus** on port 9090
+- **Grafana** on port 3002 with RBAC, queue, and inference dashboards
 
-### Observability Stack
+## Service interactions
 
-The observability stack provides monitoring and debugging capabilities:
+### Frontend to backend
 
-- **OpenTelemetry Collector**: Aggregates traces and metrics from all services (port 4318)
-- **Prometheus**: Time-series metrics storage (port 9090)
-- **Grafana**: Visualization dashboards (port 3002, login: admin/admin)
+REST calls over Axios. TanStack Query manages cache invalidation; mutations use optimistic updates where the server is single-source-of-truth (preferences, persona pins, system config).
 
-## Service Interactions
+### Backend to model service
 
-### Frontend to Backend
+Synchronous detection, tracking, and reconfigure calls go directly. Long-running jobs (summarization, claim extraction, claim synthesis, ontology augmentation, video tracking) flow through BullMQ:
 
-The frontend calls the backend REST API for CRUD operations on personas, ontologies, world objects, and annotations. API calls use Axios with automatic retry and error handling.
+1. Frontend POSTs the request to the backend.
+2. Backend creates a BullMQ job and returns the job id.
+3. A worker picks up the job, calls the model service, and persists the result.
+4. Frontend polls `/api/jobs/:id` (or subscribes through TanStack Query) for status.
 
-### Backend to Model Service
+Generation and audio overrides from persona pins and user preferences are merged client-side, attached to the summarize request, and forwarded as `generation_overrides` / `audio_overrides` in the model service payload.
 
-For object detection and tracking, the backend forwards requests to the model service:
+### Telemetry flow
 
-1. User clicks "Run Detection" (with optional tracking) in the frontend
-2. Frontend sends POST request to backend `/api/videos/:videoId/detect` with `enableTracking: true`
-3. Backend forwards request to model service `/api/detect` or `/api/track` endpoint
-4. Model service processes the video and returns detection/tracking results
-5. Backend returns results to frontend
-6. Frontend displays bounding boxes and tracking data
+Every service exports OTLP traces and metrics to the OTEL Collector. The collector forwards metrics to Prometheus; Grafana queries Prometheus for dashboards (RBAC checks, queue depth, model inference latency, audio vendor latency, etc.).
 
-For long-running AI tasks like video summarization, the backend uses BullMQ:
+## Authorization and access control
 
-1. Frontend sends summarization request to backend
-2. Backend creates a BullMQ job and returns job ID
-3. BullMQ worker picks up the job from Redis
-4. Worker calls model service `/api/summarize` endpoint
-5. Model service generates summary
-6. Worker stores results in database
-7. Frontend polls for job completion via `/api/jobs/:id`
+The backend implements role-based access control with [CASL](https://casl.js.org/). On each authenticated request the server:
 
-### Telemetry Flow
+1. Reads the cached RolePermission matrix (TTL fallback, explicit invalidation on edit).
+2. Collects the user's roles across the system, group, and project scopes.
+3. Builds a CASL ability instance keyed on `userId` (per-user ability cache with explicit invalidation on membership add/remove, role change, and project deletion).
+4. Adds ownership baseline rules using per-model ownership fields: `Persona`/`WorldState.userId`, `Annotation.createdByUserId`, `VideoSummary`/`Claim`/`UserGroup.createdBy`, `Project.ownerUserId`.
+5. Hands the ability to route handlers, which use `accessibleBy()` for list filters and `subject()` checks for instance-level reads and writes.
 
-All services emit OpenTelemetry traces and metrics:
+System administrators bypass all checks. All other access is governed by the matrix plus ownership rules. Re-shares cannot exceed the received permission level (a `read_only` recipient cannot re-share as `forkable`). See [Projects, Groups, and RBAC](./projects-groups.md).
 
-1. Services send telemetry to OTEL Collector (localhost:4318)
-2. OTEL Collector aggregates and exports to Prometheus
-3. Prometheus stores time-series metrics
-4. Grafana queries Prometheus for dashboard visualization
+## Port assignments
 
-## Port Assignments
+| Service | Port | Purpose |
+|---------|------|---------|
+| Frontend | 5173 | Vite dev server |
+| Backend | 3001 | REST API (Fastify) |
+| Model Service | 8000 | Inference API (FastAPI) |
+| PostgreSQL | 5432 | Database |
+| Redis | 6379 | Queue and cache |
+| Prometheus | 9090 | Metrics storage |
+| Grafana | 3002 | Dashboards |
+| Bull Board | 3001 | `/admin/queues` job UI |
+| OTEL Collector | 4317 / 4318 | gRPC / HTTP OTLP |
 
-| Service | Port | URL | Purpose |
-|---------|------|-----|---------|
-| Frontend | 5173 | http://localhost:5173 | React development server (Vite) |
-| Backend | 3001 | http://localhost:3001 | REST API server (Fastify) |
-| Model Service | 8000 | http://localhost:8000 | AI inference API (FastAPI) |
-| PostgreSQL | 5432 | localhost:5432 | Database server |
-| Redis | 6379 | localhost:6379 | Job queue and cache |
-| Prometheus | 9090 | http://localhost:9090 | Metrics storage and queries |
-| Grafana | 3002 | http://localhost:3002 | Metrics dashboards (admin/admin) |
-| Bull Board | 3001 | http://localhost:3001/admin/queues | Job queue monitoring UI |
-| OTEL Collector | 4318 | localhost:4318 | Telemetry ingestion (HTTP) |
-| OTEL Collector | 4317 | localhost:4317 | Telemetry ingestion (gRPC) |
+## Next steps
 
-## Authorization and Access Control
-
-The backend implements role-based access control (RBAC) using the [CASL](https://casl.js.org/) library. On each authenticated request, the server:
-
-1. Loads the permission matrix from the RolePermission table in PostgreSQL
-2. Collects the user's roles across three scopes: system, group, and project
-3. Builds a CASL ability instance that encodes the union of all granted permissions
-4. Passes the ability to route handlers for authorization checks
-
-System administrators bypass all permission checks. For all other users, the permission matrix determines which actions (create, read, update, delete, share, fork, assign, export, review, manage_members) are allowed on which resources (Annotation, Claim, Persona, WorldState, Video, VideoSummary, Project, UserGroup, User).
-
-Resources are organized into projects, which are optionally owned by user groups. Project membership and group membership control who can access project-scoped data. See [Projects, Groups, and RBAC](./projects-groups.md) for details.
-
-## Next Steps
-
-- Learn about [Projects, Groups, and RBAC](./projects-groups.md)
-- Learn about [Deployment Overview](../deployment/overview.md)
-- Understand [Service Architecture](../deployment/service-architecture.md)
-- Explore [Observability](./observability.md)
+- [Projects, Groups, and RBAC](./projects-groups.md)
+- [Model Service Overview](../model-service/overview.md)
+- [Deployment Overview](../deployment/overview.md)
+- [Observability](./observability.md)
