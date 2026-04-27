@@ -355,15 +355,17 @@ export class OntologyWorkspacePage extends BasePage {
     const dialog = this.page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Fill name field - MUI adds asterisk for required fields
+    // Fill name field. The shadcn Input is a base-ui Field.Control which
+    // is React-controlled, so Playwright's .fill() on a prefilled input
+    // doesn't always propagate. Click → clear → fill works for create
+    // and rename flows; if that ever falls back to the old MUI behavior
+    // we'll switch to pressSequentially.
     const nameInput = dialog.getByRole('textbox', { name: /^name/i }).first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
-    // Select-all + fill so re-edits replace the existing value (the
-    // shadcn Input is controlled and `.fill()` alone doesn't always
-    // clear React's internal value via the synthetic change event).
     await nameInput.click()
-    await nameInput.press('ControlOrMeta+a')
+    await nameInput.fill('')
     await nameInput.fill(name)
+    await nameInput.blur()
 
     // Fill definition/gloss field
     const defInput = dialog.locator('textarea').first()
@@ -397,7 +399,11 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   private async saveTypeForm() {
-    const saveButton = this.page.getByRole('button', { name: /save|create|done/i })
+    // Scope to the dialog so we don't pick up the global Sidebar Save
+    // button (which matches /save/i too) — that button doesn't submit
+    // the form and the test would silently no-op.
+    const dialog = this.page.locator('[role="dialog"]')
+    const saveButton = dialog.getByRole('button', { name: /^(save|create|done)$/i }).first()
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 
