@@ -590,5 +590,99 @@ describe('Cross-user import/export round-trip', () => {
       const userASummaries = userAList.json() as Array<{ id: string }>
       expect(userASummaries.map(s => s.id)).not.toContain(userBData.summaryId)
     })
+
+    /**
+     * End-to-end check that the full display path works for imported claims:
+     * import → list summaries → fetch claims by summaryId. This is the path
+     * the frontend actually walks when it renders the Claims panel for a
+     * summary, so a regression here would mean imported claims look invisible
+     * even when they exist in the database.
+     */
+    it('imported claims display under the importing user\'s summary on the shared video', async () => {
+      // Step 1: user A exports (beforeEach already seeded a summary with one claim).
+      const exportResponse = await app.inject({
+        method: 'GET',
+        url: '/api/export',
+        cookies: { session_token: userASessionToken },
+      })
+      expect(exportResponse.statusCode).toBe(200)
+      const exportedJsonl = exportResponse.body
+      const exportedClaims = exportedJsonl
+        .trim()
+        .split('\n')
+        .map((l: string) => JSON.parse(l))
+        .filter((e: { type: string }) => e.type === 'claim')
+      expect(exportedClaims.length).toBeGreaterThanOrEqual(1)
+      const originalClaimText = exportedClaims[0].data.text as string
+
+      // Step 2: user B imports.
+      const { body, contentType } = createImportForm(exportedJsonl)
+      const importResponse = await app.inject({
+        method: 'POST',
+        url: '/api/import',
+        cookies: { session_token: userBSessionToken },
+        headers: { 'content-type': contentType },
+        payload: body,
+      })
+      expect(importResponse.statusCode).toBe(200)
+      expect(importResponse.json().success).toBe(true)
+
+      // Step 3: list user B's summaries on the shared video. With user-scoping
+      // in place, this returns exactly user B's imported summary, not user A's.
+      const summariesResponse = await app.inject({
+        method: 'GET',
+        url: `/api/videos/${sharedVideoId}/summaries`,
+        cookies: { session_token: userBSessionToken },
+      })
+      expect(summariesResponse.statusCode).toBe(200)
+      const userBSummaries = summariesResponse.json() as Array<{ id: string; personaId: string }>
+      expect(userBSummaries.length).toBe(1)
+      const userBSummaryId = userBSummaries[0].id
+
+      // Step 4: fetch the claims under user B's summary. The display path the
+      // frontend uses must return the imported claim with its text intact.
+      const claimsResponse = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${userBSummaryId}/claims`,
+        cookies: { session_token: userBSessionToken },
+      })
+      expect(claimsResponse.statusCode).toBe(200)
+      const userBClaims = claimsResponse.json() as Array<{
+        id: string
+        summaryId: string
+        text: string
+        parentClaimId: string | null
+      }>
+      expect(userBClaims.length).toBeGreaterThanOrEqual(1)
+      // Every returned claim must point at user B's summary id (i.e. the
+      // import remapped the claim's summaryId to the new summary).
+      for (const claim of userBClaims) {
+        expect(claim.summaryId).toBe(userBSummaryId)
+        expect(claim.parentClaimId).toBeNull()
+      }
+      // The original claim text round-tripped through the import.
+      expect(userBClaims.some(c => c.text === originalClaimText)).toBe(true)
+
+      // Step 5: cross-check isolation. User A's view of summaries-on-shared-
+      // video still returns A's own summary (not B's), and the claims under
+      // it are still A's original claim, not B's imported copy.
+      const userAList = await app.inject({
+        method: 'GET',
+        url: `/api/videos/${sharedVideoId}/summaries`,
+        cookies: { session_token: userASessionToken },
+      })
+      const userASummaries = userAList.json() as Array<{ id: string }>
+      expect(userASummaries.map(s => s.id)).not.toContain(userBSummaryId)
+      expect(userASummaries.length).toBe(1)
+      const userAClaimsResponse = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${userASummaries[0].id}/claims`,
+        cookies: { session_token: userASessionToken },
+      })
+      const userAClaims = userAClaimsResponse.json() as Array<{ id: string }>
+      // User A sees exactly their own one claim from beforeEach, not B's import.
+      expect(userAClaims.length).toBe(1)
+      expect(userAClaims[0].id).not.toBe(userBClaims[0].id)
+    })
   })
 })
