@@ -33,6 +33,7 @@ describe('Cross-user import/export round-trip', () => {
 
   beforeEach(async () => {
     // Clean database in dependency order
+    await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
     await prisma.claimRelation.deleteMany()
     await prisma.claim.deleteMany()

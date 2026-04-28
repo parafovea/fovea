@@ -9,6 +9,7 @@ import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError } from '../lib/errors.js'
+import { assertPersonaOwned, assertSummaryOwned, assertSummaryByKeyOwned } from '../lib/ownership.js'
 import { requireAuth } from '../middleware/auth.js'
 
 /**
@@ -205,6 +206,11 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         audioLanguage,
       } = request.body
 
+      // The persona that the summary will be attributed to must belong to
+      // the requester; otherwise A could queue expensive jobs that overwrite
+      // B's (videoId, personaId) summary.
+      await assertPersonaOwned(fastify.prisma, personaId, request.user!.id)
+
       const video = await fastify.prisma.video.findUnique({
         where: { id: videoId },
       })
@@ -288,6 +294,14 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Job', request.params.jobId)
       }
 
+      // The job is bound to a persona via its data; the requester must own
+      // that persona to read job status (and the eventual VideoSummary
+      // result). Without this check, A could poll for B's job result.
+      const jobPersonaId = (job.data as { personaId?: string })?.personaId
+      if (jobPersonaId) {
+        await assertPersonaOwned(fastify.prisma, jobPersonaId, request.user!.id, 'Job')
+      }
+
       const state = await job.getState()
       const progress = job.progress as number | null
 
@@ -368,6 +382,10 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         createdBy,
       } = request.body
 
+      // The persona that owns the summary must belong to the requesting user;
+      // otherwise A could create or overwrite B's (videoId, personaId) row.
+      await assertPersonaOwned(fastify.prisma, personaId, request.user!.id)
+
       const savedSummary = await fastify.prisma.videoSummary.upsert({
         where: {
           videoId_personaId: {
@@ -445,13 +463,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const { summaryId } = request.params
       const { summary } = request.body
 
-      const existing = await fastify.prisma.videoSummary.findUnique({
-        where: { id: summaryId },
-      })
-
-      if (!existing) {
-        throw new NotFoundError('Summary', summaryId)
-      }
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
 
       const updated = await fastify.prisma.videoSummary.update({
         where: { id: summaryId },
@@ -482,6 +494,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { videoId, personaId } = request.params
+
+      await assertSummaryByKeyOwned(fastify.prisma, videoId, personaId, request.user!.id)
 
       try {
         await fastify.prisma.videoSummary.delete({

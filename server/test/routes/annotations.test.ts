@@ -285,10 +285,12 @@ describe('Annotations API', () => {
 
   describe('DELETE /api/annotations/:videoId/:id', () => {
     it('deletes annotation', async () => {
+      // Object annotation owned via userId so the ownership check passes.
       const annotation = await prisma.annotation.create({
         data: {
           videoId: testVideoId,
           personaId: null,
+          userId: testUserId,
           type: 'object',
           label: 'to-delete',
           frames: { boxes: [] }

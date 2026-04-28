@@ -198,6 +198,7 @@ describe('Multi-user listing isolation matrix', () => {
   }
 
   beforeEach(async () => {
+    await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
     await prisma.claimRelation.deleteMany()
     await prisma.claim.deleteMany()
@@ -399,6 +400,344 @@ describe('Multi-user listing isolation matrix', () => {
       expect(filenames).not.toContain('userB-import.jsonl')
       expect(filenames).toContain('userA-import.jsonl')
     })
+
+    /**
+     * End-to-end check that POST /api/import populates `importedBy` so the
+     * row that GET /api/import/history is scoped against actually carries
+     * the importer's id. Previously the create call omitted the field, which
+     * meant every user saw an empty history list once the listing endpoint
+     * became user-scoped.
+     */
+    it('POST /api/import populates importedBy so the row appears in the importer\'s history', async () => {
+      // Minimal valid JSONL: one persona owned by user A's exporter id.
+      const fixture = JSON.stringify({
+        type: 'persona',
+        data: {
+          id: '00000000-0000-0000-0000-0000000000ab',
+          userId: A.userId, // intentionally same userId so it's a same-user re-import
+          name: 'Round-trip persona',
+          role: 'Tester',
+          informationNeed: 'Verify importedBy gets set',
+        },
+      })
+      const formData = new (await import('form-data')).default()
+      formData.append('file', Buffer.from(fixture, 'utf-8'), {
+        filename: 'history-test.jsonl',
+        contentType: 'application/x-ndjson',
+      })
+
+      const importRes = await app.inject({
+        method: 'POST',
+        url: '/api/import',
+        cookies: { session_token: A.sessionToken },
+        headers: { 'content-type': formData.getHeaders()['content-type'] },
+        payload: formData.getBuffer(),
+      })
+      expect(importRes.statusCode).toBe(200)
+
+      // Listing endpoint should return the new history row.
+      const historyRes = await app.inject({
+        method: 'GET',
+        url: '/api/import/history',
+        cookies: { session_token: A.sessionToken },
+      })
+      const history = historyRes.json() as { imports: Array<{ filename: string }> }
+      expect(history.imports.map(i => i.filename)).toContain('history-test.jsonl')
+
+      // And the underlying row carries the user id.
+      const stored = await prisma.importHistory.findFirst({
+        where: { filename: 'history-test.jsonl' },
+        select: { importedBy: true },
+      })
+      expect(stored?.importedBy).toBe(A.userId)
+    })
+  })
+
+  /**
+   * Mutation routes must reject any attempt by user A to modify or delete a
+   * resource owned by user B. A passing test here means each route checks
+   * resource ownership against `request.user.id` before performing the write.
+   * The accepted statuses are 403 (Forbidden) or 404 (Not Found, the
+   * preferred response when an owner check fails since it does not confirm
+   * the existence of resources the requester cannot see).
+   */
+  describe('Mutation isolation', () => {
+    function expectDeniedOrNotFound(statusCode: number, label: string): void {
+      expect([403, 404], `[${label}] expected 403/404 but got ${statusCode}`).toContain(statusCode)
+    }
+
+    it('POST /api/annotations rejects creating an annotation on another user\'s persona', async () => {
+      const beforeCount = await prisma.annotation.count({ where: { personaId: B.personaId } })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/annotations',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          videoId: sharedVideoId,
+          personaId: B.personaId,
+          type: 'type',
+          label: 'hijacked-type',
+          frames: { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 },
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST annotation on foreign persona')
+      const afterCount = await prisma.annotation.count({ where: { personaId: B.personaId } })
+      expect(afterCount).toBe(beforeCount)
+    })
+
+    it('PUT /api/annotations/:id rejects writes to another user\'s annotation', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/annotations/${B.typeAnnotationId}`,
+        cookies: { session_token: A.sessionToken },
+        payload: { label: 'hijacked' },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s annotation')
+      // The annotation must remain unchanged.
+      const stored = await prisma.annotation.findUnique({ where: { id: B.typeAnnotationId } })
+      expect(stored?.label).not.toBe('hijacked')
+    })
+
+    it('DELETE /api/annotations/:videoId/:id rejects deletes of another user\'s annotation', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/annotations/${sharedVideoId}/${B.typeAnnotationId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s annotation')
+      // The annotation must still exist.
+      const stored = await prisma.annotation.findUnique({ where: { id: B.typeAnnotationId } })
+      expect(stored).not.toBeNull()
+    })
+
+    it('POST /api/summaries rejects creating a summary on another user\'s persona', async () => {
+      // User A targets user B's persona.
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/summaries',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          videoId: sharedVideoId,
+          personaId: B.personaId,
+          summary: [{ type: 'text', content: 'hijacked summary' }],
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST summary on foreign persona')
+      // No new summary should have been created on B's persona.
+      const summaries = await prisma.videoSummary.findMany({
+        where: { personaId: B.personaId, videoId: sharedVideoId }
+      })
+      // B's seed already has one; there should still be exactly one.
+      expect(summaries.length).toBe(1)
+      expect(summaries[0].id).toBe(B.summaryId)
+    })
+
+    it('PUT /api/videos/:videoId/summaries/:summaryId rejects writes to another user\'s summary', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/videos/${sharedVideoId}/summaries/${B.summaryId}`,
+        cookies: { session_token: A.sessionToken },
+        payload: { summary: [{ type: 'text', content: 'hijacked' }] },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s summary')
+      const stored = await prisma.videoSummary.findUnique({ where: { id: B.summaryId } })
+      const storedSummary = stored?.summary as Array<{ content?: string }>
+      expect(storedSummary?.[0]?.content).not.toBe('hijacked')
+    })
+
+    it('DELETE /api/videos/:videoId/summaries/:personaId rejects deletes of another user\'s summary', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/videos/${sharedVideoId}/summaries/${B.personaId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s summary')
+      const stored = await prisma.videoSummary.findUnique({ where: { id: B.summaryId } })
+      expect(stored).not.toBeNull()
+    })
+
+    it('PUT /api/personas/:id/ontology rejects writes to another user\'s ontology', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/personas/${B.personaId}/ontology`,
+        cookies: { session_token: A.sessionToken },
+        payload: { entities: [{ id: 'hijack-et', name: 'Hijacked', gloss: [] }] },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s ontology')
+      const ontology = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
+      const entityTypes = ontology?.entityTypes as Array<{ id: string }>
+      expect(entityTypes.map(e => e.id)).not.toContain('hijack-et')
+    })
+
+    it('POST /api/summaries/:summaryId/claims rejects creating a claim under another user\'s summary', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${B.summaryId}/claims`,
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          summaryType: 'video',
+          text: 'hijacked claim',
+          gloss: [{ type: 'text', content: 'hijack' }],
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST claim under another user\'s summary')
+      const claims = await prisma.claim.findMany({ where: { summaryId: B.summaryId } })
+      // B's seed has one claim; nothing was added.
+      expect(claims.length).toBe(1)
+      expect(claims[0].id).toBe(B.claimId)
+    })
+
+    it('PUT /api/summaries/:summaryId/claims/:claimId rejects writes to another user\'s claim', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/summaries/${B.summaryId}/claims/${B.claimId}`,
+        cookies: { session_token: A.sessionToken },
+        payload: { text: 'hijacked text' },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s claim')
+      const stored = await prisma.claim.findUnique({ where: { id: B.claimId } })
+      expect(stored?.text).not.toBe('hijacked text')
+    })
+
+    it('DELETE /api/summaries/:summaryId/claims/:claimId rejects deletes of another user\'s claim', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/summaries/${B.summaryId}/claims/${B.claimId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s claim')
+      const stored = await prisma.claim.findUnique({ where: { id: B.claimId } })
+      expect(stored).not.toBeNull()
+    })
+
+    it('POST /api/summaries/:summaryId/claims/:claimId/relations rejects creating a relation under another user\'s claim', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${B.summaryId}/claims/${B.claimId}/relations`,
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          targetClaimId: A.claimId, // pointing back at A's own claim is irrelevant here
+          relationTypeId: 'any',
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST claim relation under foreign summary')
+      const relations = await prisma.claimRelation.count({ where: { sourceClaimId: B.claimId } })
+      expect(relations).toBe(0)
+    })
+
+    it('DELETE /api/summaries/:summaryId/claims/relations/:relationId rejects deletes of another user\'s claim relation', async () => {
+      // Seed a real claim relation owned by user B.
+      const relation = await prisma.claimRelation.create({
+        data: {
+          sourceClaimId: B.claimId,
+          targetClaimId: B.claimId,
+          relationTypeId: 'self-ref',
+        },
+      })
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/summaries/${B.summaryId}/claims/relations/${relation.id}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s claim relation')
+      const stored = await prisma.claimRelation.findUnique({ where: { id: relation.id } })
+      expect(stored).not.toBeNull()
+    })
+
+    it('POST /api/videos/summaries/generate rejects queuing summary generation on another user\'s persona', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/videos/summaries/generate',
+        cookies: { session_token: A.sessionToken },
+        payload: { videoId: sharedVideoId, personaId: B.personaId },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST summarize-generate on foreign persona')
+    })
+
+    it('POST /api/summaries/:summaryId/claims/generate rejects queuing claim extraction on another user\'s summary', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${B.summaryId}/claims/generate`,
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          summaryType: 'video',
+          inputSources: {
+            includeSummaryText: true,
+            includeAnnotations: false,
+            includeOntology: false,
+            ontologyDepth: 'names-only',
+          },
+          extractionStrategy: 'sentence-based',
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST claims-generate on foreign summary')
+    })
+
+    it('POST /api/summaries/:summaryId/synthesize rejects queuing claim synthesis on another user\'s summary', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${B.summaryId}/synthesize`,
+        cookies: { session_token: A.sessionToken },
+        payload: {},
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST synthesize on foreign summary')
+    })
+
+    it('POST /api/videos/:videoId/personas/:personaId/claims rejects creating a claim on another user\'s persona', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${sharedVideoId}/personas/${B.personaId}/claims`,
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          text: 'hijacked claim',
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST video+persona claim on foreign persona')
+      // No new claim should appear under B's existing summary.
+      const claims = await prisma.claim.count({ where: { summaryId: B.summaryId } })
+      expect(claims).toBe(1)
+    })
+  })
+
+  /**
+   * Privilege escalation guards. A regular user must not be able to flag
+   * their persona as `isSystemGenerated`, since system personas are surfaced
+   * to anonymous visitors via GET /api/personas (the unauthenticated branch
+   * filters where isSystemGenerated=true).
+   */
+  describe('Privilege escalation guards', () => {
+    it('POST /api/personas silently ignores isSystemGenerated from non-admin requests', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/personas',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          name: 'Sneaky persona',
+          role: 'Analyst',
+          informationNeed: 'Be public',
+          isSystemGenerated: true,
+        },
+      })
+      expect(res.statusCode).toBe(201)
+      const created = res.json() as { id: string; isSystemGenerated: boolean }
+      expect(created.isSystemGenerated).toBe(false)
+      // Cross-check by reading the row directly.
+      const stored = await prisma.persona.findUnique({ where: { id: created.id } })
+      expect(stored?.isSystemGenerated).toBe(false)
+    })
+
+    it('PUT /api/personas/:id silently ignores isSystemGenerated from non-admin requests', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/personas/${A.personaId}`,
+        cookies: { session_token: A.sessionToken },
+        payload: { isSystemGenerated: true },
+      })
+      // 200 (write succeeded) but the flag was stripped.
+      expect(res.statusCode).toBe(200)
+      const stored = await prisma.persona.findUnique({ where: { id: A.personaId } })
+      expect(stored?.isSystemGenerated).toBe(false)
+    })
   })
 
   describe('Claim listings', () => {
@@ -421,6 +760,26 @@ describe('Multi-user listing isolation matrix', () => {
       const ids = claims.map(c => c.id)
       expect(ids).toContain(A.claimId)
       expect(ids).not.toContain(B.claimId)
+    })
+
+    it('GET /api/summaries/:summaryId/claims rejects user A reading another user\'s summary by id', async () => {
+      // Defense in depth: even if user A knows B's summaryId, the claims
+      // endpoint must not return B's claims.
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${B.summaryId}/claims`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expect([403, 404]).toContain(res.statusCode)
+    })
+
+    it('GET /api/summaries/:summaryId/claims/:claimId rejects user A reading another user\'s claim by id', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${B.summaryId}/claims/${B.claimId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expect([403, 404]).toContain(res.statusCode)
     })
   })
 })

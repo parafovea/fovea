@@ -135,6 +135,11 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
+            // Required so the GET /api/import/history filter can return the
+            // row to the user who imported it. Was previously omitted, which
+            // meant every user saw an empty history list once the listing
+            // endpoint became user-scoped.
+            importedBy: request.user!.id,
             importOptions: options as unknown as Prisma.InputJsonValue,
             result: result as unknown as Prisma.InputJsonValue,
             success: result.success,

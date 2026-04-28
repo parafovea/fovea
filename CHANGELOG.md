@@ -13,13 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scopes `GET /api/videos/:videoId/summaries` to the requesting user's personas so a foreign user's imported summary cannot mask the importing user's own summary in the persona switcher
 - Scopes `GET /api/personas/:id/ontology` so a non-system persona's ontology is only readable by its owner; previously any authenticated user could read any persona's ontology by id
 - Scopes `GET /api/import/history` to the requesting user's own imports; previously it returned every user's import provenance (filenames, row counts) on the same instance
+- Scopes `GET /api/summaries/:summaryId/claims` and `GET /api/summaries/:summaryId/claims/:claimId` so a user who knows another user's summaryId cannot read their claim list or individual claims (defense in depth)
+- Scopes the three job-status endpoints (`GET /api/jobs/:jobId`, `GET /api/jobs/claims/:jobId`, `GET /api/jobs/synthesis/:jobId`) to the persona / summary that owns the job's data; previously any authenticated user could poll for another user's job result
+- Adds ownership checks to mutation endpoints so user A cannot modify or delete user B's records: `PUT/DELETE /api/annotations/:id`, `POST /api/annotations` (when `personaId` is supplied), `POST/PUT/DELETE /api/summaries`, `PUT /api/personas/:id/ontology`, `POST/PUT/DELETE /api/summaries/:summaryId/claims/...`, `POST /api/summaries/:summaryId/claims/:claimId/relations`, `DELETE /api/summaries/:summaryId/claims/relations/:relationId`, `POST /api/videos/:videoId/personas/:personaId/claims`, `POST /api/videos/summaries/generate`, `POST /api/summaries/:summaryId/claims/generate`, `POST /api/summaries/:summaryId/synthesize`
+- Coerces `isSystemGenerated` to `false` on `POST/PUT /api/personas/:id` for non-admin requests; previously a regular user could publish their persona to anonymous visitors by setting the flag in the request body
 - `ImportHandler` now sets `userId` on every imported annotation row, matching how `POST /api/annotations` populates the field; without this, imported object annotations had `personaId=null` AND `userId=null` and were filtered out as orphans by the user-scoped listing endpoint
+- `POST /api/import` now sets `importedBy = request.user.id` on every `ImportHistory` row; previously it was omitted, so once `GET /api/import/history` became user-scoped no user saw any of their imports listed
 
 ### Added
 
 - Multi-user listing isolation matrix (`test/integration/multi-user-isolation.test.ts`) that seeds parallel data for two users (persona, ontology, world state, summary, claim, type and object annotations, api key, session, import history) and asserts every user-scoped GET endpoint returns only the requester's records; adding a new listing route to the matrix is the documented forward-protection for this class of bug
 - End-to-end round-trip test that imports a synthetic JSONL fixture covering persona, ontology, world (entity/event/time), summary, claim, type and object annotations, and asserts the importer's `/api/annotations` response carries no orphan UUID labels (every `linkedEntityId` resolves to an entity in the importer's `/api/world` response) and the imported claim's gloss `objectRef` content remaps to the regenerated entity id
 - Multi-user listing isolation tests for `GET /api/annotations/:videoId`, `GET /api/videos/:videoId/summaries`, and the claims-by-summary path that prove user A and user B never see each other's records on the same shared video
+- Mutation isolation tests covering every PUT/POST/DELETE endpoint that operates on user-owned resources, asserting a foreign user receives 403/404 and the underlying row is unchanged
+- Privilege-escalation tests asserting `isSystemGenerated` is silently coerced to `false` for non-admin requests on both `POST /api/personas` and `PUT /api/personas/:id`
+- End-to-end test that `POST /api/import` populates `importedBy` so the row appears in the importer's history listing
+- `lib/ownership.ts` helper module exposing `getUserPersonaIds`, `assertPersonaOwned`, `assertAnnotationOwned`, `assertSummaryOwned`, `assertSummaryByKeyOwned`, `assertClaimOwned`, and `assertClaimRelationOwned` so route handlers can enforce resource ownership without copy-pasting the lookup; all helpers throw `NotFoundError` (not `ForbiddenError`) to avoid confirming the existence of records the requester cannot see
+- Auth, isolation matrix, and cross-user integration tests now clear `LoginAttempt` rows in `beforeEach` so accumulated lockout state from prior runs cannot turn 401 invalid-credential assertions into 429 lockout responses
 
 ### Changed
 

@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { NotFoundError } from '../lib/errors.js'
+import { assertAnnotationOwned, assertPersonaOwned } from '../lib/ownership.js'
 import { requireAuth } from '../middleware/auth.js'
 
 /**
@@ -124,6 +124,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       source?: string
     }
 
+    // If a personaId is supplied, it must belong to the requester. Without
+    // this guard, A could inject a type annotation attributed to B's persona,
+    // which would then surface in B's All Annotations list as a foreign row.
+    if (data.personaId) {
+      await assertPersonaOwned(fastify.prisma, data.personaId, request.user!.id)
+    }
+
     const annotation = await fastify.prisma.annotation.create({
       data: {
         videoId: data.videoId,
@@ -188,15 +195,8 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       source?: string
     }
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
-
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
-    }
+    // Ownership-checked existence lookup; returns 404 for foreign annotations.
+    await assertAnnotationOwned(fastify.prisma, id, request.user!.id)
 
     const annotation = await fastify.prisma.annotation.update({
       where: { id },
@@ -246,15 +246,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
-
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
-    }
+    await assertAnnotationOwned(fastify.prisma, id, request.user!.id)
 
     await fastify.prisma.annotation.delete({
       where: { id }
