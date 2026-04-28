@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coerces `isSystemGenerated` to `false` on `POST/PUT /api/personas/:id` for non-admin requests; previously a regular user could publish their persona to anonymous visitors by setting the flag in the request body
 - `ImportHandler` now sets `userId` on every imported annotation row, matching how `POST /api/annotations` populates the field; without this, imported object annotations had `personaId=null` AND `userId=null` and were filtered out as orphans by the user-scoped listing endpoint
 - `POST /api/import` now sets `importedBy = request.user.id` on every `ImportHistory` row; previously it was omitted, so once `GET /api/import/history` became user-scoped no user saw any of their imports listed
+- `PUT /api/ontology` now refuses to upsert a persona id whose existing row belongs to another user; previously the upsert would silently overwrite that user's persona name/role/informationNeed (a complete persona-level account takeover), and similarly for ontologies the personaId must belong to the requester
+- `POST /api/ontology/augment` now requires the `personaId` body field to belong to the requester and is gated by `requireAuth`; previously it was `optionalAuth` and an unrelated user could trigger model-service calls using another persona's ontology context
+- `POST /api/videos/:videoId/detect` now requires the `personaId` body field to belong to the requester before reading that persona's ontology to build the detection query; previously A could feed B's ontology into the detector and consume model-service quota on B's behalf
+- `POST /api/summaries/:summaryId/claims/:claimId/relations` now requires the `targetClaimId` body field to belong to the requester; previously A could create a relation from their own claim into B's claim, surfacing B's claim text in A's relations view
+- `PUT /api/ontology` and `POST /api/ontology/augment` catch blocks now re-throw `AppError` so authorization-induced 404s don't get collapsed into 500s by the route's local catch handler
 
 ### Added
 

@@ -625,6 +625,26 @@ describe('Multi-user listing isolation matrix', () => {
       expect(relations).toBe(0)
     })
 
+    it('POST /api/summaries/:summaryId/claims/:claimId/relations rejects pointing at another user\'s targetClaimId', async () => {
+      // A owns the source path (A.summaryId, A.claimId) but tries to target
+      // B's claim. Without the targetClaim ownership check, A could create a
+      // relation that surfaces B's claim text in A's relations view.
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${A.summaryId}/claims/${A.claimId}/relations`,
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          targetClaimId: B.claimId,
+          relationTypeId: 'any',
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST claim relation with foreign targetClaim')
+      const relations = await prisma.claimRelation.count({
+        where: { sourceClaimId: A.claimId, targetClaimId: B.claimId },
+      })
+      expect(relations).toBe(0)
+    })
+
     it('DELETE /api/summaries/:summaryId/claims/relations/:relationId rejects deletes of another user\'s claim relation', async () => {
       // Seed a real claim relation owned by user B.
       const relation = await prisma.claimRelation.create({
@@ -681,6 +701,75 @@ describe('Multi-user listing isolation matrix', () => {
         payload: {},
       })
       expectDeniedOrNotFound(res.statusCode, 'POST synthesize on foreign summary')
+    })
+
+    it('PUT /api/ontology rejects upserting another user\'s persona by id', async () => {
+      // User A sends a payload that names B's persona id. Without the
+      // ownership precheck, the upsert would update B's persona row with
+      // A's name/role/informationNeed, completing a full account-level
+      // takeover of B's persona.
+      const before = await prisma.persona.findUnique({ where: { id: B.personaId } })
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          personas: [{
+            id: B.personaId,
+            name: 'Hijacked',
+            role: 'Hijacked',
+            informationNeed: 'Hijacked',
+          }],
+          personaOntologies: [],
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT ontology with foreign persona id')
+      const after = await prisma.persona.findUnique({ where: { id: B.personaId } })
+      expect(after?.name).toBe(before?.name)
+      expect(after?.userId).toBe(B.userId)
+    })
+
+    it('PUT /api/ontology rejects upserting an ontology under another user\'s persona', async () => {
+      const before = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          personas: [],
+          personaOntologies: [{
+            personaId: B.personaId,
+            entities: [{ id: 'hijack-et', name: 'Hijacked' }],
+          }],
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'PUT ontology with foreign personaId')
+      const after = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
+      expect(JSON.stringify(after?.entityTypes)).toBe(JSON.stringify(before?.entityTypes))
+    })
+
+    it('POST /api/ontology/augment rejects requesting suggestions against another user\'s persona', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ontology/augment',
+        cookies: { session_token: A.sessionToken },
+        payload: {
+          personaId: B.personaId,
+          domain: 'security',
+          targetCategory: 'entity',
+        },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST ontology/augment with foreign personaId')
+    })
+
+    it('POST /api/videos/:videoId/detect rejects building a detection query from another user\'s persona', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/videos/${sharedVideoId}/detect`,
+        cookies: { session_token: A.sessionToken },
+        payload: { personaId: B.personaId },
+      })
+      expectDeniedOrNotFound(res.statusCode, 'POST detect with foreign personaId')
     })
 
     it('POST /api/videos/:videoId/personas/:personaId/claims rejects creating a claim on another user\'s persona', async () => {

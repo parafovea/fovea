@@ -1100,7 +1100,11 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Source claim', claimId)
       }
 
-      // Verify target claim exists
+      // Verify target claim exists AND belongs to the requester. Without
+      // the ownership check, A could create a relation from their source
+      // claim into B's target claim, which would let claim joins surface
+      // B's claim text in A's relations view.
+      await assertClaimOwned(fastify.prisma, targetClaimId, request.user!.id)
       const targetClaim = await fastify.prisma.claim.findUnique({
         where: { id: targetClaimId }
       })

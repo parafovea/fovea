@@ -7,6 +7,7 @@ import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../../uti
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
 import { NotFoundError, ValidationError, InternalError, AppError, ErrorResponseSchema } from '../../lib/errors.js'
+import { assertPersonaOwned } from '../../lib/ownership.js'
 
 /**
  * Object detection route.
@@ -66,6 +67,14 @@ export const detectRoutes: FastifyPluginAsync<{
         // Validate that either personaId or manualQuery is provided
         if (!personaId && !manualQuery) {
           throw new ValidationError('Either personaId or manualQuery must be provided')
+        }
+
+        // The persona used to build the detection query must belong to the
+        // requester. Without this guard, A could feed B's ontology into the
+        // detector (consuming model-service quota on B's behalf and leaking
+        // B's type vocabulary indirectly via the constructed query).
+        if (personaId) {
+          await assertPersonaOwned(prisma, personaId, request.user!.id)
         }
 
         // Build query based on persona or use manual query
