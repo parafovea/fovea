@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Scopes `GET /api/annotations/:videoId` to the requesting user's annotations (type annotations on the user's personas plus object annotations the user owns) so a multi-user instance no longer surfaces another user's imported copies in the All Annotations tab, fixing the duplicate-row symptom in #121
 - Scopes `GET /api/videos/:videoId/summaries` to the requesting user's personas so a foreign user's imported summary cannot mask the importing user's own summary in the persona switcher
+- Scopes `GET /api/personas/:id/ontology` so a non-system persona's ontology is only readable by its owner; previously any authenticated user could read any persona's ontology by id
+- Scopes `GET /api/import/history` to the requesting user's own imports; previously it returned every user's import provenance (filenames, row counts) on the same instance
+- `ImportHandler` now sets `userId` on every imported annotation row, matching how `POST /api/annotations` populates the field; without this, imported object annotations had `personaId=null` AND `userId=null` and were filtered out as orphans by the user-scoped listing endpoint
+
+### Added
+
+- Multi-user listing isolation matrix (`test/integration/multi-user-isolation.test.ts`) that seeds parallel data for two users (persona, ontology, world state, summary, claim, type and object annotations, api key, session, import history) and asserts every user-scoped GET endpoint returns only the requester's records; adding a new listing route to the matrix is the documented forward-protection for this class of bug
+- End-to-end round-trip test that imports a synthetic JSONL fixture covering persona, ontology, world (entity/event/time), summary, claim, type and object annotations, and asserts the importer's `/api/annotations` response carries no orphan UUID labels (every `linkedEntityId` resolves to an entity in the importer's `/api/world` response) and the imported claim's gloss `objectRef` content remaps to the regenerated entity id
+- Multi-user listing isolation tests for `GET /api/annotations/:videoId`, `GET /api/videos/:videoId/summaries`, and the claims-by-summary path that prove user A and user B never see each other's records on the same shared video
+
+### Changed
+
+- `app.setErrorHandler` callback now types `error` as `FastifyError` so `.validation`, `.statusCode`, and `.message` access in the handler typechecks under stricter TypeScript settings
 
 ## [0.1.7] - 2026-04-15
 

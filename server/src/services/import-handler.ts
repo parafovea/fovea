@@ -2051,12 +2051,17 @@ export class ImportHandler {
         })
       }
 
-      // Store the boundingBoxSequence in the frames field
+      // Store the boundingBoxSequence in the frames field. The userId field
+      // is always populated with the importing user so that listing endpoints
+      // (which scope object annotations by userId) can return the row;
+      // otherwise an imported object annotation has personaId=null AND
+      // userId=null and disappears from the importer's All Annotations tab.
       await tx.annotation.create({
         data: {
           id: annotation.id,
           videoId: annotation.videoId,
           personaId: annotation.personaId || null,
+          userId: this.userId,
           type: annotation.annotationType ?? 'type',
           label: annotation.typeId ?? annotation.linkedEntityId ?? '',
           frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,

@@ -582,6 +582,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona or ontology', id)
     }
 
+    // Multi-user mode: only the owning user (or a system-generated persona)
+    // may read the ontology. Returning 404 (not 403) avoids confirming the
+    // existence of personas the requester cannot see.
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+    if (mode !== 'single-user' && request.user && !persona.isSystemGenerated && persona.userId !== request.user.id) {
+      throw new NotFoundError('Persona or ontology', id)
+    }
+
     // Map database field names to API field names
     return reply.send({
       id: persona.ontology.id,

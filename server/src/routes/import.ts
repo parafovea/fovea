@@ -317,8 +317,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      // Scope to the requesting user so a multi-user instance never surfaces
+      // another user's import provenance (filenames, row counts) through this
+      // endpoint.
+      const where = { importedBy: request.user!.id }
       const [imports, total] = await Promise.all([
         fastify.prisma.importHistory.findMany({
+          where,
           select: {
             id: true,
             filename: true,
@@ -331,7 +336,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           take: limit,
           skip: offset
         }),
-        fastify.prisma.importHistory.count()
+        fastify.prisma.importHistory.count({ where })
       ])
 
       return reply.send({
