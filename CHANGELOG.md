@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.8] - Unreleased
 
+### Schema
+
+- Adds `linkType` String column to `annotations` (`'entity' | 'event' | 'time' | 'location' | NULL`). Migration `20260429000000_add_annotation_link_type` applies it as a nullable column so legacy rows are unaffected; the frontend treats NULL as entity-linked, matching the historical default.
+
 ### Fixed
 
 - Scopes `GET /api/annotations/:videoId` to the requesting user's annotations (type annotations on the user's personas plus object annotations the user owns) so a multi-user instance no longer surfaces another user's imported copies in the All Annotations tab, fixing the duplicate-row symptom in #121
@@ -24,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /api/videos/:videoId/detect` now requires the `personaId` body field to belong to the requester before reading that persona's ontology to build the detection query; previously A could feed B's ontology into the detector and consume model-service quota on B's behalf
 - `POST /api/summaries/:summaryId/claims/:claimId/relations` now requires the `targetClaimId` body field to belong to the requester; previously A could create a relation from their own claim into B's claim, surfacing B's claim text in A's relations view
 - `PUT /api/ontology` and `POST /api/ontology/augment` catch blocks now re-throw `AppError` so authorization-induced 404s don't get collapsed into 500s by the route's local catch handler
+- Object annotations linked to events / times / locations now round-trip through export and import without being silently flattened to entity-linked. Previously the backend stored only the linked id under `label` with no record of which `linked*Id` field it came from, so `export-handler.convertPrismaAnnotation` always emitted `linkedEntityId` and `import-handler.importAnnotation` only honoured `linkedEntityId`. The new `Annotation.linkType` column carries the kind through the round-trip, the export emits the correct `linkedEventId` / `linkedTimeId` / `linkedLocationId` field, the import reads any of the four, the route's `POST` and `PUT` accept and return `linkType`, and the frontend's `transformBackendToFrontend` / `transformFrontendToBackend` populate the right linked-id field so `getObjectName` resolves against the correct world list (not just `worldEntities`).
 
 ### Added
 

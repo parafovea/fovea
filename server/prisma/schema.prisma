@@ -291,6 +291,15 @@ model Annotation {
 
   type        String
   label       String
+  /// For object annotations, the kind of world object the `label` references:
+  /// 'entity' | 'event' | 'time' | 'location'. NULL for type annotations and
+  /// for legacy object annotations created before this column was added (in
+  /// which case the frontend treats them as entity-linked, matching the
+  /// previous behavior). The column is required to round-trip event/time/
+  /// location-linked annotations through export+import — without it the
+  /// backend cannot distinguish which `linked*Id` field the export should
+  /// emit, and the frontend defaults to rendering the row as entity-linked.
+  linkType    String?
   /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
   frames      Json
   confidence  Float?

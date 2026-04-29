@@ -266,4 +266,126 @@ describe('Issue #121 reproduction with real Fovea export', () => {
       expect(aClaims.map(ac => ac.id), 'no claim id appears in both users\' views').not.toContain(c.id)
     }
   })
+
+  /**
+   * Regression for the previously-flagged structural bug: object annotations
+   * linked to events / times / locations must round-trip through export and
+   * import without being silently flattened to entity-linked. The Annotation
+   * row now carries a `linkType` column that records the kind, so the export
+   * emits the correct `linked*Id` field and the import restores it.
+   */
+  it('object annotations linked to events/times/locations round-trip through export+import', async () => {
+    const A = await registerAndLogin('userA', 'passA12345')
+    const B = await registerAndLogin('userB', 'passB12345')
+
+    // Seed user A with an event, a time, a location, and three object
+    // annotations linking to each. Use raw prisma so the test can set
+    // linkType directly without going through the route.
+    const eventId = '11111111-1111-1111-1111-111111111111'
+    const timeId = '22222222-2222-2222-2222-222222222222'
+    const locationId = '33333333-3333-3333-3333-333333333333'
+    await prisma.worldState.create({
+      data: {
+        userId: A.userId,
+        entities: [],
+        events: [{ id: eventId, name: 'Round-trip Event' }],
+        times: [{ id: timeId, label: 'Round-trip Time' }],
+        // The world model uses entities of subtype "location"; for the
+        // round-trip what matters is that A's world includes the id under
+        // *some* list. Stash the location under entities since worldState
+        // does not have a separate locations list at this schema version.
+        entityCollections: [],
+        eventCollections: [],
+        timeCollections: [],
+        relations: [],
+      },
+    })
+
+    const frames = {
+      boxes: [{ x: 0, y: 0, width: 10, height: 10, frameNumber: 0, isKeyframe: true }],
+      interpolationSegments: [],
+      visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+      totalFrames: 1,
+      keyframeCount: 1,
+      interpolatedFrameCount: 0,
+    }
+    await prisma.annotation.createMany({
+      data: [
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: eventId, linkType: 'event', frames },
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: timeId, linkType: 'time', frames },
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: locationId, linkType: 'location', frames },
+      ],
+    })
+
+    // Export A's data and verify the export emits the right `linked*Id` per
+    // annotation (not just `linkedEntityId` for everything).
+    const exportRes = await app.inject({
+      method: 'GET',
+      url: '/api/export',
+      cookies: { session_token: A.sessionToken },
+    })
+    expect(exportRes.statusCode).toBe(200)
+    const lines = exportRes.body.trim().split('\n')
+      .map(l => JSON.parse(l))
+      .filter((l: { type: string }) => l.type === 'annotation') as Array<{
+        data: {
+          id: string
+          linkedEntityId?: string
+          linkedEventId?: string
+          linkedTimeId?: string
+          linkedLocationId?: string
+        }
+      }>
+    expect(lines.length).toBe(3)
+
+    const exportedByLinkField = {
+      event: lines.filter(l => l.data.linkedEventId),
+      time: lines.filter(l => l.data.linkedTimeId),
+      location: lines.filter(l => l.data.linkedLocationId),
+      entity: lines.filter(l => l.data.linkedEntityId),
+    }
+    expect(exportedByLinkField.event.length, 'export emits exactly one linkedEventId line').toBe(1)
+    expect(exportedByLinkField.time.length, 'export emits exactly one linkedTimeId line').toBe(1)
+    expect(exportedByLinkField.location.length, 'export emits exactly one linkedLocationId line').toBe(1)
+    expect(exportedByLinkField.entity.length, 'export emits no linkedEntityId lines').toBe(0)
+
+    // User B imports A's export. Each imported object annotation must be
+    // stored with the matching `linkType` so subsequent reads via the API
+    // report it correctly.
+    const form = new FormData()
+    form.append('file', Buffer.from(exportRes.body, 'utf-8'), {
+      filename: 'a-export.jsonl',
+      contentType: 'application/x-ndjson',
+    })
+    const importRes = await app.inject({
+      method: 'POST',
+      url: '/api/import',
+      cookies: { session_token: B.sessionToken },
+      headers: form.getHeaders(),
+      payload: form.getBuffer(),
+    })
+    expect(importRes.statusCode).toBe(200)
+    expect(importRes.json().success).toBe(true)
+
+    // Walk B's annotations and confirm linkType survived.
+    const annsRes = await app.inject({
+      method: 'GET',
+      url: `/api/annotations/${ANNOTATION_VIDEO_ID}`,
+      cookies: { session_token: B.sessionToken },
+    })
+    const anns = annsRes.json() as Array<{ id: string; type: string; label: string; linkType: string | null }>
+    const objectAnns = anns.filter(a => a.type === 'object')
+    expect(objectAnns.length).toBe(3)
+
+    const byLinkType = {
+      event: objectAnns.filter(a => a.linkType === 'event'),
+      time: objectAnns.filter(a => a.linkType === 'time'),
+      location: objectAnns.filter(a => a.linkType === 'location'),
+      entity: objectAnns.filter(a => a.linkType === 'entity' || a.linkType === null),
+    }
+    expect(byLinkType.event.length, 'B sees exactly one event-linked object annotation').toBe(1)
+    expect(byLinkType.time.length, 'B sees exactly one time-linked object annotation').toBe(1)
+    expect(byLinkType.location.length, 'B sees exactly one location-linked object annotation').toBe(1)
+    expect(byLinkType.entity.length, 'B sees no entity-linked object annotations from this seed').toBe(0)
+  })
 })

@@ -33,6 +33,10 @@ export interface BackendAnnotation {
   personaId: string | null
   type: string
   label: string
+  /// Object-annotation link kind: 'entity' | 'event' | 'time' | 'location'.
+  /// NULL for type annotations and for legacy object annotations created
+  /// before the column existed (frontend defaults those to entity-linked).
+  linkType: 'entity' | 'event' | 'time' | 'location' | null
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
@@ -82,13 +86,22 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
       typeCategory: 'entity', // Default to entity; this could be enhanced with metadata
     }
   } else {
-    // Object annotation - determine which field to use based on context
-    // For now, default to linkedEntityId as it's the most common
-    return {
-      ...base,
-      annotationType: 'object' as const,
-      linkedEntityId: backendAnnotation.label,
+    // Object annotation. Use the backend's linkType to populate the right
+    // linked-id field on the frontend object so getObjectName resolves
+    // against the correct world list (entities/events/times/locations).
+    // NULL linkType is treated as entity-linked for back-compat with
+    // annotations created before the column existed.
+    const linkType = backendAnnotation.linkType ?? 'entity'
+    if (linkType === 'event') {
+      return { ...base, annotationType: 'object' as const, linkedEventId: backendAnnotation.label }
     }
+    if (linkType === 'time') {
+      return { ...base, annotationType: 'object' as const, linkedTimeId: backendAnnotation.label }
+    }
+    if (linkType === 'location') {
+      return { ...base, annotationType: 'object' as const, linkedLocationId: backendAnnotation.label }
+    }
+    return { ...base, annotationType: 'object' as const, linkedEntityId: backendAnnotation.label }
   }
 }
 
@@ -105,21 +118,39 @@ export function transformFrontendToBackend(annotation: Annotation): {
   personaId: string | null
   type: string
   label: string
+  linkType: 'entity' | 'event' | 'time' | 'location' | null
   frames: BoundingBoxSequence | undefined
   confidence?: number
   source: string
 } {
   let personaId: string | null
   let label: string
+  let linkType: 'entity' | 'event' | 'time' | 'location' | null = null
 
   if (annotation.annotationType === 'type') {
     // Type annotations require personaId (persona-scoped ontology assignments)
     personaId = annotation.personaId
     label = annotation.typeId || 'unlabeled'
   } else {
-    // Object annotations are persona-agnostic (world object links)
+    // Object annotations are persona-agnostic (world object links). Pick
+    // the label from whichever linked-id field is set and tell the backend
+    // which linkType to record so the round-trip preserves the distinction.
     personaId = null
-    label = annotation.linkedEntityId || annotation.linkedEventId || annotation.linkedTimeId || 'unlabeled'
+    if (annotation.linkedEntityId) {
+      label = annotation.linkedEntityId
+      linkType = 'entity'
+    } else if (annotation.linkedEventId) {
+      label = annotation.linkedEventId
+      linkType = 'event'
+    } else if (annotation.linkedTimeId) {
+      label = annotation.linkedTimeId
+      linkType = 'time'
+    } else if (annotation.linkedLocationId) {
+      label = annotation.linkedLocationId
+      linkType = 'location'
+    } else {
+      label = 'unlabeled'
+    }
   }
 
   return {
@@ -127,6 +158,7 @@ export function transformFrontendToBackend(annotation: Annotation): {
     personaId,
     type: annotation.annotationType,
     label,
+    linkType,
     frames: annotation.boundingBoxSequence,
     confidence: annotation.confidence,
     source: 'manual'

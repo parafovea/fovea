@@ -13,6 +13,10 @@ const AnnotationResponseSchema = Type.Object({
   personaId: Type.Union([Type.Null(), Type.String()]),
   type: Type.String(),
   label: Type.String(),
+  /// 'entity' | 'event' | 'time' | 'location' | null. NULL for type
+  /// annotations and for legacy object annotations created before the
+  /// column existed (the frontend treats those as entity-linked).
+  linkType: Type.Union([Type.Null(), Type.String()]),
   frames: Type.Unknown(),
   confidence: Type.Union([Type.Null(), Type.Number()]),
   source: Type.String(),
@@ -80,6 +84,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: a.personaId,
       type: a.type,
       label: a.label,
+      linkType: a.linkType,
       frames: a.frames,
       confidence: a.confidence,
       source: a.source,
@@ -105,6 +110,16 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         personaId: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         type: Type.String(),
         label: Type.String(),
+        // Optional for back-compat with clients that haven't been updated;
+        // when omitted the column stays NULL and the frontend treats the
+        // row as entity-linked (the historical default).
+        linkType: Type.Optional(Type.Union([
+          Type.Null(),
+          Type.Literal('entity'),
+          Type.Literal('event'),
+          Type.Literal('time'),
+          Type.Literal('location'),
+        ])),
         frames: Type.Unknown(),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
@@ -119,6 +134,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId?: string | null
       type: string
       label: string
+      linkType?: 'entity' | 'event' | 'time' | 'location' | null
       frames: Prisma.InputJsonValue
       confidence?: number
       source?: string
@@ -138,6 +154,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         userId: request.user?.id ?? null,
         type: data.type,
         label: data.label,
+        linkType: data.type === 'object' ? (data.linkType ?? null) : null,
         frames: data.frames,
         confidence: data.confidence,
         source: data.source || 'manual'
@@ -150,6 +167,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: annotation.personaId,
       type: annotation.type,
       label: annotation.label,
+      linkType: annotation.linkType,
       frames: annotation.frames,
       confidence: annotation.confidence,
       source: annotation.source,
@@ -177,6 +195,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       body: Type.Object({
         type: Type.Optional(Type.String()),
         label: Type.Optional(Type.String()),
+        linkType: Type.Optional(Type.Union([
+          Type.Null(),
+          Type.Literal('entity'),
+          Type.Literal('event'),
+          Type.Literal('time'),
+          Type.Literal('location'),
+        ])),
         frames: Type.Optional(Type.Unknown()),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
@@ -190,6 +215,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const data = request.body as {
       type?: string
       label?: string
+      linkType?: 'entity' | 'event' | 'time' | 'location' | null
       frames?: Prisma.InputJsonValue
       confidence?: number
       source?: string
@@ -203,6 +229,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       data: {
         type: data.type,
         label: data.label,
+        linkType: data.linkType,
         frames: data.frames,
         confidence: data.confidence,
         source: data.source
@@ -215,6 +242,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: annotation.personaId,
       type: annotation.type,
       label: annotation.label,
+      linkType: annotation.linkType,
       frames: annotation.frames,
       confidence: annotation.confidence,
       source: annotation.source,

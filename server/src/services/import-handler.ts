@@ -2056,14 +2056,44 @@ export class ImportHandler {
       // (which scope object annotations by userId) can return the row;
       // otherwise an imported object annotation has personaId=null AND
       // userId=null and disappears from the importer's All Annotations tab.
+      //
+      // Picks `label` and `linkType` from whichever `linked*Id` the export
+      // line carries, so event/time/location-linked object annotations
+      // round-trip correctly. Previously only `linkedEntityId` was honoured,
+      // which silently flattened every object annotation into an
+      // entity-linked row.
+      const annotationType = annotation.annotationType ?? 'type'
+      let label: string
+      let linkType: string | null = null
+      if (annotationType === 'object') {
+        if (annotation.linkedEntityId) {
+          label = annotation.linkedEntityId
+          linkType = 'entity'
+        } else if (annotation.linkedEventId) {
+          label = annotation.linkedEventId
+          linkType = 'event'
+        } else if (annotation.linkedTimeId) {
+          label = annotation.linkedTimeId
+          linkType = 'time'
+        } else if (annotation.linkedLocationId) {
+          label = annotation.linkedLocationId
+          linkType = 'location'
+        } else {
+          label = ''
+        }
+      } else {
+        label = annotation.typeId ?? ''
+      }
+
       await tx.annotation.create({
         data: {
           id: annotation.id,
           videoId: annotation.videoId,
           personaId: annotation.personaId || null,
           userId: this.userId,
-          type: annotation.annotationType ?? 'type',
-          label: annotation.typeId ?? annotation.linkedEntityId ?? '',
+          type: annotationType,
+          label,
+          linkType,
           frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,
           confidence: annotation.confidence,
           source: 'import',
