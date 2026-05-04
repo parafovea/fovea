@@ -77,16 +77,20 @@ ARG DEVICE=cpu
 
 # Install Python and build tools
 # - cmake is needed for llama-cpp-python on CPU
-# - apt-get update is retried to handle transient mirror syncs
-RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed (attempt $i/3), retrying in 30s..."; sleep 30; }; done \
-    && apt-get install -y \
-    python3 \
-    python3-dev \
-    python3-pip \
-    git \
-    build-essential \
-    cmake \
-    kmod \
+# - the whole apt-get update + install is retried, since the mirror flake
+#   can hit either step (apt-get update succeeded but archive.ubuntu.com
+#   was unreachable for the .deb fetches in CI on 2026-05-04).
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y \
+            python3 \
+            python3-dev \
+            python3-pip \
+            git \
+            build-essential \
+            cmake \
+            kmod && break || { echo "apt-get failed (attempt $i/3), retrying in 30s..."; sleep 30; }; \
+    done \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove EXTERNALLY-MANAGED file
@@ -98,25 +102,34 @@ WORKDIR /app
 COPY pyproject.toml ./
 
 # Install PyTorch based on device type (CPU or CUDA) with pip cache mount
+# Retry up to 3 times to handle transient PyPI/PyTorch index mirror flakes that
+# otherwise cause the release.yml model-service-cpu image build to fail.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$DEVICE" = "cpu" ]; then \
-        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-        pip install --no-cache-dir torch torchvision; \
-    fi
+    for i in 1 2 3; do \
+        if [ "$DEVICE" = "cpu" ]; then \
+            pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && break; \
+        else \
+            pip install --no-cache-dir torch torchvision && break; \
+        fi; \
+        echo "pip install torch failed (attempt $i/3), retrying in 30s..." && sleep 30; \
+    done
 
-# Install dependencies based on BUILD_MODE with pip cache mount
+# Install dependencies based on BUILD_MODE with pip cache mount; retry to
+# survive transient PyPI mirror failures that previously broke release.yml.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$BUILD_MODE" = "full" ]; then \
-        pip install --no-cache-dir -e ".[inference-engines]"; \
-    elif [ "$BUILD_MODE" = "recommended" ]; then \
-        pip install --no-cache-dir -e ".[recommended]"; \
-    else \
-        pip install --no-cache-dir -e .; \
-    fi && \
-    if [ "$DEVICE" = "cpu" ]; then \
-        pip install --no-cache-dir -e ".[cpu]"; \
-    fi
+    for i in 1 2 3; do \
+        ( if [ "$BUILD_MODE" = "full" ]; then \
+              pip install --no-cache-dir -e ".[inference-engines]"; \
+          elif [ "$BUILD_MODE" = "recommended" ]; then \
+              pip install --no-cache-dir -e ".[recommended]"; \
+          else \
+              pip install --no-cache-dir -e .; \
+          fi ) && \
+        ( if [ "$DEVICE" = "cpu" ]; then \
+              pip install --no-cache-dir -e ".[cpu]"; \
+          fi ) && break; \
+        echo "pip install -e failed (attempt $i/3), retrying in 30s..." && sleep 30; \
+    done
 
 # Production stage
 FROM base AS production

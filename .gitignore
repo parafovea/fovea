@@ -126,7 +126,7 @@ docs/planning/
 
 # Local working directories
 notes/
-tutorial/
+/tutorial/
 .claude/
 .venv/
 model-service/uv.lock

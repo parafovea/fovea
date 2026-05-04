@@ -1,438 +1,137 @@
----
-title: Environment Variables
-sidebar_position: 2
-keywords: [environment variables, configuration, env, settings, docker]
----
+# Environment variables
 
-# Environment Variables
+The set read by the backend (`server/.env.example`) and the model
+service. Required variables have no safe default; recommended
+variables have defaults but should be overridden in production.
 
-Complete reference for environment variables used across FOVEA services.
+## Database and queues
 
-## Environment Variables by Service
-
-### Backend Service
-
-#### Core Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Node environment (development, production) |
-| `PORT` | `3001` | Backend server port |
-| `DATABASE_URL` | `postgresql://fovea:fovea@postgres:5432/fovea` | PostgreSQL connection string |
-| `REDIS_URL` | `redis://redis:6379` | Redis connection string |
-| `CORS_ORIGIN` | `http://localhost:5173` | Allowed CORS origins |
-| `MODEL_SERVICE_URL` | `http://model-service:8000` | Model service endpoint |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OpenTelemetry endpoint |
-| `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
-
-#### Authentication & User Management
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FOVEA_MODE` | `single-user` | Authentication mode: `single-user` (no login) or `multi-user` (session-based auth) |
-| `ALLOW_REGISTRATION` | `false` | Allow user self-registration (multi-user mode only) |
-| `SESSION_SECRET` | (required) | Secret for session cookie signing (min 32 characters, required in multi-user mode) |
-| `SESSION_TIMEOUT_DAYS` | `7` | Session expiration in days |
-| `ADMIN_PASSWORD` | (required) | Admin user password for database seeding (required in multi-user mode) |
-| `API_KEY_ENCRYPTION_KEY` | (required) | 32-byte hex key for API key encryption at rest |
-
-#### Wikidata/Wikibase Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WIKIDATA_MODE` | `online` | `online` for public Wikidata API, `offline` for local Wikibase |
-| `WIKIDATA_URL` | `https://www.wikidata.org/w/api.php` | Wikidata/Wikibase API endpoint |
-| `WIKIBASE_ID_MAPPING_PATH` | `/wikibase/id-mapping.json` | Path to ID mapping file (offline mode only) |
-
-#### External Links Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ALLOW_EXTERNAL_LINKS` | `true` | Master switch for all external links |
-| `ALLOW_EXTERNAL_WIKIDATA_LINKS` | (mode-dependent) | Control Wikidata entity page links. Always `true` in online mode. |
-| `ALLOW_EXTERNAL_VIDEO_SOURCE_LINKS` | (master switch) | Control video source links (uploaderUrl, webpageUrl) |
-
-See [Local Wikibase documentation](../wikibase/overview.md) for detailed configuration.
-
-**Example** (in docker-compose.yml):
-```yaml
-backend:
-  environment:
-    NODE_ENV: production
-    PORT: 3001
-    DATABASE_URL: postgresql://fovea:${DB_PASSWORD}@postgres:5432/fovea
-    FOVEA_MODE: multi-user
-    ALLOW_REGISTRATION: false
-    SESSION_SECRET: ${SESSION_SECRET}
-    ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-    SESSION_TIMEOUT_DAYS: 7
-    API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
+```text
+DATABASE_URL              required   -                              postgres URL
+REDIS_HOST                no         redis (compose)                BullMQ host
+REDIS_PORT                no         6379                           BullMQ port
 ```
 
-### Frontend Service
+## Server
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_URL` | `http://localhost:3001` | Backend API URL |
-| `VITE_VIDEO_BASE_URL` | `http://localhost:3001/videos` | Video file base URL |
-
-**Example** (in docker-compose.yml):
-```yaml
-frontend:
-  environment:
-    VITE_API_URL: http://localhost:3001
-    VITE_VIDEO_BASE_URL: http://localhost:3001/videos
+```text
+NODE_ENV                  no         development                    development | production
+PORT                      no         3001                           backend HTTP port
+LOG_LEVEL                 no         info                           Pino log level
+ALLOWED_ORIGINS           no         http://localhost:5173          CORS origins
 ```
 
-### Model Service
+## Authentication
 
-#### Core Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEVICE` | `cpu` | Inference device (cpu, cuda). Use `--profile gpu` instead. |
-| `MODEL_BUILD_MODE` | `minimal` | Feature set: `minimal`, `recommended`, or `full` |
-| `MODEL_CONFIG_PATH` | `/app/config/models.yaml` | Model configuration file |
-| `PYTORCH_CUDA_ALLOC_CONF` | `max_split_size_mb:512` | PyTorch CUDA memory config |
-| `CUDA_VISIBLE_DEVICES` | (all) | GPU indices when using `--profile gpu` (e.g., "0,1,2,3") |
-| `REDIS_URL` | `redis://redis:6379` | Redis connection string |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OpenTelemetry endpoint |
-
-#### External VLM/LLM API Keys
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Optional | Anthropic Claude API key (get from console.anthropic.com/settings/keys) |
-| `OPENAI_API_KEY` | Optional | OpenAI API key (get from [platform.openai.com](https://platform.openai.com/api-keys)) |
-| `GOOGLE_API_KEY` | Optional | Google AI API key (get from [aistudio.google.com](https://aistudio.google.com/app/apikey)) |
-
-**Note**: API keys can also be configured via the frontend UI (user-level) or admin panel (system-level). Environment variables serve as fallback.
-
-#### External Audio API Keys
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ASSEMBLYAI_API_KEY` | Optional | AssemblyAI API key (Universal-2 model) |
-| `DEEPGRAM_API_KEY` | Optional | Deepgram API key (Nova-3 model) |
-| `AZURE_SPEECH_KEY` | Optional | Azure Speech Services key |
-| `AZURE_SPEECH_REGION` | Optional | Azure Speech Services region (e.g., "eastus") |
-| `AWS_ACCESS_KEY_ID` | Optional | AWS access key for Transcribe |
-| `AWS_SECRET_ACCESS_KEY` | Optional | AWS secret key for Transcribe |
-| `AWS_REGION` | Optional | AWS region (e.g., "us-east-1") |
-| `REVAI_API_KEY` | Optional | Rev.ai API key |
-| `GLADIA_API_KEY` | Optional | Gladia API key |
-
-**Example** (in docker-compose.yml):
-```yaml
-model-service:
-  environment:
-    MODEL_BUILD_MODE: recommended
-    PYTORCH_CUDA_ALLOC_CONF: max_split_size_mb:512
-    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-    OPENAI_API_KEY: ${OPENAI_API_KEY}
-    GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-    ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
-    DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+```text
+FOVEA_MODE                recommended multi-user                    multi-user | single-user
+ALLOW_REGISTRATION        no         false                          enable POST /api/auth/register
+SESSION_SECRET            required   -                              cookie signing (min 32 chars)
+SESSION_TIMEOUT_DAYS      no         7                              session expiration window
+ADMIN_PASSWORD            required   -                              seeded admin password
+TEST_USER_PASSWORD        no         test123                        seeded test user password
 ```
 
-### PostgreSQL
+## API key encryption
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_USER` | `fovea` | Database user |
-| `POSTGRES_PASSWORD` | `fovea` | Database password |
-| `POSTGRES_DB` | `fovea` | Database name |
-
-**Example** (in docker-compose.yml):
-```yaml
-postgres:
-  environment:
-    POSTGRES_USER: fovea
-    POSTGRES_PASSWORD: fovea
-    POSTGRES_DB: fovea
+```text
+API_KEY_ENCRYPTION_KEY    required   -                              32-byte hex string for AES-256-GCM
 ```
 
-### Grafana
+## Model service
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GF_SECURITY_ADMIN_USER` | `admin` | Grafana admin username |
-| `GF_SECURITY_ADMIN_PASSWORD` | `admin` | Grafana admin password |
-| `GF_AUTH_ANONYMOUS_ENABLED` | `true` | Allow anonymous access |
-
-**Example** (in docker-compose.yml):
-```yaml
-grafana:
-  environment:
-    GF_SECURITY_ADMIN_USER: admin
-    GF_SECURITY_ADMIN_PASSWORD: secure_password
+```text
+MODEL_SERVICE_URL         no         http://model-service:8000      backend -> model-service base
 ```
 
-## Configuration Files
+## Telemetry
 
-### Backend Configuration
-
-Environment variables can be set in `server/.env`:
-
-```env
-# Core Configuration
-NODE_ENV=development
-PORT=3001
-DATABASE_URL=postgresql://fovea:fovea@localhost:5432/fovea
-REDIS_URL=redis://localhost:6379
-CORS_ORIGIN=http://localhost:5173
-MODEL_SERVICE_URL=http://localhost:8000
-LOG_LEVEL=info
-
-# Authentication & User Management
-FOVEA_MODE=multi-user
-ALLOW_REGISTRATION=false
-SESSION_SECRET=your-secret-key-here-min-32-chars
-ADMIN_PASSWORD=your-secure-password-here
-SESSION_TIMEOUT_DAYS=7
-API_KEY_ENCRYPTION_KEY=your-32-byte-hex-key-here
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT no       http://otel-collector:4318     OTLP HTTP endpoint
+OTEL_SERVICE_NAME           no       fovea-backend                  service.name attribute
 ```
 
-### Frontend Configuration
+## Video storage
 
-Environment variables can be set in `annotation-tool/.env`:
-
-```env
-VITE_API_URL=http://localhost:3001
-VITE_VIDEO_BASE_URL=http://localhost:3001/videos
+```text
+VIDEO_STORAGE_TYPE        no         local                          local | s3 | hybrid
+STORAGE_PATH              no         /videos                        local file root
+VIDEO_BASE_URL            no         /api/videos                    public URL prefix
+S3_BUCKET                 if s3      -                              bucket name
+S3_REGION                 if s3      -                              AWS region
+S3_ACCESS_KEY_ID          if s3      -                              access key
+S3_SECRET_ACCESS_KEY      if s3      -                              secret key
+S3_ENDPOINT               no         -                              S3-compatible endpoint
+S3_PUBLIC_BUCKET          no         false                          if true, do not sign URLs
+AWS_ACCESS_KEY_ID         no         -                              fallback for boto3
+AWS_SECRET_ACCESS_KEY     no         -                              fallback for boto3
 ```
 
-### Model Service Configuration
+## CDN
 
-Environment variables can be set in `model-service/.env`:
-
-```env
-# Core Configuration
-MODEL_BUILD_MODE=minimal
-MODEL_CONFIG_PATH=/app/config/models.yaml
-PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
-REDIS_URL=redis://localhost:6379
-
-# External VLM/LLM API Keys (Optional)
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-OPENAI_API_KEY=sk-your-key-here
-GOOGLE_API_KEY=your-key-here
-
-# External Audio API Keys (Optional)
-ASSEMBLYAI_API_KEY=your-key-here
-DEEPGRAM_API_KEY=your-key-here
-AZURE_SPEECH_KEY=your-key-here
-AZURE_SPEECH_REGION=eastus
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_REGION=us-east-1
-REVAI_API_KEY=your-key-here
-GLADIA_API_KEY=your-key-here
+```text
+CDN_ENABLED               no         false                          rewrite video URLs through CDN
+CDN_BASE_URL              if enabled -                              CDN origin
+CDN_SIGNED_URLS           no         true                           sign CDN URLs
 ```
 
-## Common Configuration Scenarios
+## Thumbnails
 
-### Development (Local without Docker)
-
-**Backend** (`server/.env`):
-```env
-NODE_ENV=development
-PORT=3001
-DATABASE_URL=postgresql://fovea:fovea@localhost:5432/fovea
-REDIS_URL=redis://localhost:6379
-CORS_ORIGIN=http://localhost:5173
-MODEL_SERVICE_URL=http://localhost:8000
-FOVEA_MODE=single-user
-SESSION_SECRET=dev-secret-key-min-32-chars-here
-API_KEY_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```text
+THUMBNAIL_STORAGE_TYPE    no         local                          local | s3
+THUMBNAIL_PATH            no         /videos/thumbnails             local thumbnail root
+THUMBNAIL_S3_PREFIX       no         thumbnails/                    S3 key prefix
+THUMBNAIL_OUTPUT_ROOT     no         /videos/thumbnails             model-service thumbnail output (v0.3.0)
 ```
 
-**Model Service** (`model-service/.env`):
-```env
-MODEL_BUILD_MODE=minimal
-MODEL_CONFIG_PATH=/app/config/models.yaml
-REDIS_URL=redis://localhost:6379
-# Optional: Add external API keys here
+## Wikidata
+
+```text
+WIKIDATA_MODE             no         online                         online | offline
+WIKIDATA_URL              no         https://www.wikidata.org/w/api.php  endpoint
+WIKIBASE_ID_MAPPING_PATH  no         -                              offline-mode id mapping JSON
 ```
 
-**Frontend** (`annotation-tool/.env`):
-```env
-VITE_API_URL=http://localhost:3001
-VITE_VIDEO_BASE_URL=http://localhost:3001/videos
+## External link gating
+
+```text
+ALLOW_EXTERNAL_LINKS                no   true   master switch
+ALLOW_EXTERNAL_WIKIDATA_LINKS       no   true   offline mode only
+ALLOW_EXTERNAL_VIDEO_SOURCE_LINKS   no   true   uploaderUrl, webpageUrl
 ```
 
-### Production (Docker Compose)
+## Model service vendor keys
 
-**Backend**:
-```yaml
-backend:
-  environment:
-    NODE_ENV: production
-    PORT: 3001
-    DATABASE_URL: postgresql://fovea:${DB_PASSWORD}@postgres:5432/fovea
-    REDIS_URL: redis://redis:6379
-    CORS_ORIGIN: https://fovea.example.com
+These are read by the model-service container. They serve as the
+last-resort fallback after the requester's user-level key and the
+admin shared-pool key.
+
+```text
+ANTHROPIC_API_KEY         no         -                              Claude family
+OPENAI_API_KEY            no         -                              GPT family
+GOOGLE_API_KEY            no         -                              Gemini family
 ```
 
-**Frontend**:
-```yaml
-frontend:
-  environment:
-    VITE_API_URL: https://api.fovea.example.com
-    VITE_VIDEO_BASE_URL: https://api.fovea.example.com/videos
+Other vendor keys (AssemblyAI, Deepgram, Gladia, Rev.ai, Azure
+Speech, Google Speech, AWS Transcribe) are stored in the
+`ApiKey` table; see [Guide > API keys](../guide/api-keys.md).
+
+## Model service build
+
+```text
+DEVICE                    no         cpu                            cpu | gpu (build arg, selects base image
+                                                                     and the active-models.yaml symlink)
+MODEL_BUILD_MODE          no         minimal (cpu) / full (gpu)     ungated-only vs full set (build arg)
+PRELOAD_MODELS            no         false                          pre-download default models at build (build arg);
+                                                                     reads HF token from /run/secrets/hf_token
+MODEL_CONFIG_PATH         no         /app/config/active-models.yaml symlink resolves to models.yaml or models-cpu.yaml
+TRANSFORMERS_CACHE        no         /models                        Hugging Face cache root
 ```
 
-### GPU Mode
+## Model service admin
 
-Use the `--profile gpu` flag instead of environment variables:
-
-```bash
-docker compose --profile gpu up
+```text
+MODEL_SERVICE_ADMIN_TOKEN no         -                              token gating the model-service
+                                                                     /api/admin/reconfigure endpoint
+                                                                     used by the SystemConfigPanel
 ```
-
-**Model Service** (optional GPU configuration):
-```yaml
-model-service:
-  environment:
-    MODEL_BUILD_MODE: recommended
-    PYTORCH_CUDA_ALLOC_CONF: max_split_size_mb:512
-    CUDA_VISIBLE_DEVICES: "0,1"  # Use first 2 GPUs
-```
-
-### Multi-User Mode with External APIs
-
-**Backend**:
-```yaml
-backend:
-  environment:
-    FOVEA_MODE: multi-user
-    ALLOW_REGISTRATION: false
-    SESSION_SECRET: ${SESSION_SECRET}
-    ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-    SESSION_TIMEOUT_DAYS: 7
-    API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY}
-```
-
-**Model Service** (fallback keys):
-```yaml
-model-service:
-  environment:
-    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-    OPENAI_API_KEY: ${OPENAI_API_KEY}
-    ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
-    DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
-```
-
-Users can override these with their own keys via Settings > API Keys.
-
-## Security Considerations
-
-### Database Credentials
-
-**Development**: Default credentials (`fovea:fovea`) are acceptable.
-
-**Production**: Use strong passwords and environment variable substitution:
-```yaml
-postgres:
-  environment:
-    POSTGRES_USER: ${DB_USER}
-    POSTGRES_PASSWORD: ${DB_PASSWORD}
-    POSTGRES_DB: fovea
-```
-
-Set in `.env` file (not committed to git):
-```env
-DB_USER=fovea_prod
-DB_PASSWORD=strong_random_password_here
-```
-
-### Authentication Secrets
-
-**Cookie Secret**: Generate a random 32+ character string:
-```bash
-openssl rand -base64 32
-```
-
-**API Key Encryption Key**: Generate a 32-byte hex key:
-```bash
-openssl rand -hex 32
-```
-
-Set in `.env` file:
-```env
-SESSION_SECRET=your-generated-secret-here
-ADMIN_PASSWORD=your-generated-password-here
-API_KEY_ENCRYPTION_KEY=your-generated-hex-key-here
-```
-
-### External API Keys
-
-External API keys can be configured in three ways (priority order):
-
-1. **User-level keys**: Settings > API Keys (user-scoped)
-2. **System-level keys**: Admin Panel > API Keys (admin-only, fallback for all users)
-3. **Environment variables**: model-service/.env (ultimate fallback)
-
-For production, use environment variables as fallback and allow users to configure their own keys via UI.
-
-### Grafana Credentials
-
-Change default admin password in production:
-```yaml
-grafana:
-  environment:
-    GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-```
-
-### CORS Configuration
-
-Restrict CORS in production:
-```yaml
-backend:
-  environment:
-    CORS_ORIGIN: https://fovea.example.com
-```
-
-## Troubleshooting
-
-### Database Connection Fails
-
-**Problem**: Backend cannot connect to PostgreSQL.
-
-**Check**:
-- Verify `DATABASE_URL` is correct
-- Ensure PostgreSQL container is running: `docker compose ps postgres`
-- Check PostgreSQL logs: `docker compose logs postgres`
-
-### Model Service Not Found
-
-**Problem**: Backend cannot reach model service.
-
-**Check**:
-- Verify `MODEL_SERVICE_URL` points to correct container: `http://model-service:8000`
-- Ensure model service is running: `docker compose ps model-service`
-- Check network connectivity: `docker compose exec backend ping model-service`
-
-### Frontend Cannot Reach Backend
-
-**Problem**: Frontend shows API connection errors.
-
-**Check**:
-- Verify `VITE_API_URL` matches backend URL
-- Check CORS settings in backend `CORS_ORIGIN`
-- Inspect browser console for CORS errors
-
-### GPU Not Available
-
-**Problem**: Model service cannot access GPU despite `DEVICE=cuda`.
-
-**Check**:
-- Verify NVIDIA driver installed: `nvidia-smi`
-- Ensure nvidia-docker2 installed
-- Check Docker can access GPU: `docker run --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi`
-
-## Next Steps
-
-- Review [Configuration Guide](../deployment/configuration.md) for detailed setup
-- Explore [Service Ports](./service-ports.md) for network configuration
-- Read [Docker Profiles](../concepts/docker-profiles.md) for deployment modes

@@ -1,191 +1,144 @@
----
-title: Architecture
-sidebar_position: 1
-keywords: [architecture, system design, services, components, microservices]
----
-
 # Architecture
 
-FOVEA uses a microservices architecture with separate frontend, backend, and model service layers connected through REST APIs and message queues.
+Fovea is three services connected by HTTP and BullMQ. The
+frontend owns the user interaction; the backend owns persistence,
+authorization, and job orchestration; the model service owns AI
+inference. A PostgreSQL database and a Redis instance back the
+persistence and queue layers.
 
-## System Architecture
+## What the frontend adds
 
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        Browser[Web Browser]
-    end
+- React 18 + TypeScript + Material UI v5 + Vite.
+- The annotation workspace (canvas, timeline, keyboard model,
+  drawing state machine).
+- The persona, ontology, world, summary, and claims editors.
+- Admin pages for projects, groups, video assignments, sharing,
+  and the RBAC permission matrix.
+- A command registry with keyboard shortcuts and a command
+  palette (`mod+shift+p`).
+- An OpenTelemetry trace exporter that posts to
+  `POST /api/telemetry/traces` for ingestion through the
+  collector.
 
-    subgraph "Frontend Service (Port 5173)"
-        React[React 18 + TypeScript]
-        TanStack[TanStack Query + Zustand]
-        VideoJS[Video.js Player]
-        MUI[Material-UI v5]
-    end
+## What the backend adds
 
-    subgraph "Backend Service (Port 3001)"
-        Fastify[Fastify 5 Server]
-        Prisma[Prisma 6 ORM]
-        BullMQ[BullMQ Job Queue]
-    end
+- Fastify 5 + TypeScript + Prisma 6 + PostgreSQL.
+- TypeBox-defined request and response schemas with
+  fast-json-stringify response serialization.
+- Cookie-session authentication with `LoginAttempt`-driven
+  brute-force lockout.
+- A CASL-based RBAC engine with per-user ability cache and
+  per-row ownership conditions. See
+  [Concepts > RBAC](rbac.md).
+- BullMQ queues for summarization, claim extraction, claim
+  synthesis, and detection.
+- Multipart upload handling for video sync and JSONL import.
+- Encrypted API key storage.
 
-    subgraph "Model Service (Port 8000)"
-        FastAPI[FastAPI Server]
-        SGLang[SGLang Inference]
-        YOLO[YOLO Detection]
-        Tracking[Tracking Models]
-    end
+## What the model service adds
 
-    subgraph "Data Layer"
-        Postgres[(PostgreSQL 16)]
-        Redis[(Redis 7)]
-        Videos[(/data Volume)]
-    end
+- FastAPI + Python 3.12 + PyTorch + Transformers, plus
+  llama.cpp and ONNX Runtime for CPU inference.
+- A Clean Architecture layout (domain / application /
+  infrastructure) introduced in v0.3.0; see
+  [Clean Architecture](clean-architecture.md).
+- A model manager that loads VLM, LLM, detector, and tracker
+  models per the task-slot config in
+  `model-service/config/models.yaml` (or
+  `models-cpu.yaml`).
+- Vendor adapters for seven audio transcription providers and
+  on-device adapters for Whisper, faster-whisper, Canary,
+  Parakeet, and WhisperX, all behind the `IAudioTranscriber`
+  port.
+- An `external_api` framework dispatching to hosted providers
+  (Anthropic, OpenAI, Google) when the configured option
+  requires an API key.
+- A modality-fusion use case that combines audio transcription
+  and visual summarization into the final summary.
 
-    subgraph "Observability Stack"
-        OTEL[OTEL Collector]
-        Prometheus[(Prometheus)]
-        Grafana[Grafana Dashboards]
-    end
+## What v0.3.x added
 
-    Browser --> React
-    React --> Fastify
-    Fastify --> Prisma
-    Fastify --> BullMQ
-    Prisma --> Postgres
-    BullMQ --> Redis
-    BullMQ --> FastAPI
-    FastAPI --> Videos
-    Fastify --> OTEL
-    FastAPI --> OTEL
-    OTEL --> Prometheus
-    Prometheus --> Grafana
+v0.3.0 restructured the model service into Clean Architecture
+layers (domain, application, infrastructure) with one-way
+dependencies, every external dependency hidden behind an
+outbound port, OpenTelemetry spans on every use case, and a
+`model_inference` metric on every adapter. The same release
+shipped CPU inference paths (ONNX Runtime, llama.cpp,
+Transformers SmolVLM / Moondream), a 2026 model catalog with
+57 new GPU entries and 11 new CPU entries (Wave 1), and
+loaders for SAM 3 / 3.1, YOLOv12, YOLOE-26, RF-DETR,
+Canary-Qwen, Parakeet TDT, and WhisperX (Waves 2+3). It also
+introduced `ThinkingTrace` and `ReasonedText` DTOs for
+chain-of-thought capture, hardened the video downloader and
+processor against SSRF and path injection, and removed several
+backcompat shims as planned breaking changes (see
+[Project > Stability](../project/stability.md)). v0.3.1
+forward-ported the v0.1.8 / v0.2.1 fixes through CASL.
+
+## What v0.2.x added
+
+v0.2.0 layered RBAC, projects, groups, video assignments, and
+sharing on top of the v0.1.x persona-scoped data model:
+
+- A CASL `Ability` is built per request from the user's roles plus
+  the `RolePermission` table. Routes check the ability for both
+  list filters (`accessibleBy`) and instance updates
+  (`subject(...)`).
+- `Project` rows organise videos, personas, world states,
+  summaries, claims, and annotations under a shared owner. A
+  project belongs either to a `User` (via `ownerUserId`) or to a
+  `UserGroup` (via `ownerGroupId`).
+- `UserGroup` rows organise users into teams. `GroupMembership`
+  carries the user's group role (`group_owner`, `group_admin`,
+  `group_member`).
+- `ProjectVideoAssignment` links a video to a project and
+  optionally to a user for review workflows.
+  `VideoAssignmentRule` rows capture conditions that auto-assign
+  matching videos.
+- `ResourceShare` rows record per-resource shares between users or
+  groups, with `read_only` or `forkable` permission levels and an
+  optional expiry.
+- `/api/admin/permissions` lets a `system_admin` edit
+  `RolePermission` rows at runtime; mutations invalidate the
+  per-user ability cache so changes take effect on the next
+  request.
+
+v0.2.1 forward-ported the v0.1.8 data-fidelity, ownership, and DoS
+fixes through CASL rather than reintroducing
+`lib/ownership.ts`. The user-visible behaviour is the same; the
+gates have a different shape. See the v0.2.1 entry in the
+[changelog](../project/changelog.md) for the full list.
+
+## How a summary travels
+
+```text
+frontend                  backend                       model-service
+   |                         |                              |
+   | POST /api/videos/        |                              |
+   |   summaries/generate     |                              |
+   | -----------------------> |                              |
+   |                          | enqueue BullMQ job           |
+   |                          | ---------------------------> |
+   |                          |                              | load VLM
+   |                          |                              | extract frames
+   |                          |                              | transcribe audio
+   |                          |                              | run VLM caption
+   |                          |                              | fuse a/v
+   |                          | <--------------------------- | result
+   |                          | write VideoSummary row       |
+   |                          | mark job complete            |
+   | GET /api/jobs/:jobId     |                              |
+   | -----------------------> |                              |
+   | <----------------------- |                              |
 ```
 
-## Components
+## Data flow boundaries
 
-### Frontend
-
-The frontend is a single-page application built with React 18 and TypeScript 5.3+. Key technologies include:
-
-- **React 18 + TypeScript 5.3+**: Component-based UI with type safety
-- **TanStack Query v5**: Server state caching and synchronization for API data
-- **Zustand**: Client-side UI state management (selections, dialogs, drawing modes)
-- **Video.js v8**: Video playback with frame-accurate seeking
-- **Material-UI v5**: UI components with emotion-based styling
-- **Leaflet + react-leaflet**: Map interactions for location editing
-
-The frontend runs on port 5173 during development and communicates with the backend via REST API.
-
-### Backend
-
-The backend is a Node.js 22 LTS server using the Fastify 5 framework. Key technologies include:
-
-- **Fastify 5**: High-performance REST API server
-- **Prisma 6**: Type-safe ORM for PostgreSQL with migrations
-- **BullMQ 5**: Job queue for asynchronous AI tasks
-- **TypeBox**: Schema validation with Fastify type provider
-- **OpenTelemetry**: Distributed tracing and metrics
-
-The backend serves the REST API on port 3001, persists data to PostgreSQL, and queues long-running jobs (video summarization) to Redis for the model service to process. The codebase uses a repository pattern (e.g., VideoRepository) to abstract database queries from route handlers.
-
-### Model Service
-
-The model service is a Python 3.12 application using FastAPI 0.110+ for AI inference. Key technologies include:
-
-- **FastAPI 0.110+**: High-performance async API server
-- **SGLang 0.4+**: Primary inference engine for VLMs and LLMs
-- **vLLM 0.6+**: Fallback inference engine
-- **PyTorch 2.5+**: Deep learning framework
-- **Transformers 4.47+**: Pretrained model loading
-- **Ultralytics**: YOLO object detection models
-- **Supervision**: Object tracking algorithms
-
-The model service runs on port 8000 and processes jobs from Redis, including video summarization, object detection, object tracking, and ontology augmentation.
-
-### Data Layer
-
-The data layer consists of persistent storage and caching:
-
-- **PostgreSQL 16**: Primary database with pgvector extension for embedding storage
-- **Redis 7**: Job queue backend and caching layer
-- **/data Volume**: Mounted directory containing video files served to the frontend
-
-### Observability Stack
-
-The observability stack provides monitoring and debugging capabilities:
-
-- **OpenTelemetry Collector**: Aggregates traces and metrics from all services (port 4318)
-- **Prometheus**: Time-series metrics storage (port 9090)
-- **Grafana**: Visualization dashboards (port 3002, login: admin/admin)
-
-## Service Interactions
-
-### Frontend to Backend
-
-The frontend calls the backend REST API for CRUD operations on personas, ontologies, world objects, and annotations. API calls use Axios with automatic retry and error handling.
-
-### Backend to Model Service
-
-For object detection and tracking, the backend forwards requests to the model service:
-
-1. User clicks "Run Detection" (with optional tracking) in the frontend
-2. Frontend sends POST request to backend `/api/videos/:videoId/detect` with `enableTracking: true`
-3. Backend forwards request to model service `/api/detect` or `/api/track` endpoint
-4. Model service processes the video and returns detection/tracking results
-5. Backend returns results to frontend
-6. Frontend displays bounding boxes and tracking data
-
-For long-running AI tasks like video summarization, the backend uses BullMQ:
-
-1. Frontend sends summarization request to backend
-2. Backend creates a BullMQ job and returns job ID
-3. BullMQ worker picks up the job from Redis
-4. Worker calls model service `/api/summarize` endpoint
-5. Model service generates summary
-6. Worker stores results in database
-7. Frontend polls for job completion via `/api/jobs/:id`
-
-### Telemetry Flow
-
-All services emit OpenTelemetry traces and metrics:
-
-1. Services send telemetry to OTEL Collector (localhost:4318)
-2. OTEL Collector aggregates and exports to Prometheus
-3. Prometheus stores time-series metrics
-4. Grafana queries Prometheus for dashboard visualization
-
-## Port Assignments
-
-| Service | Port | URL | Purpose |
-|---------|------|-----|---------|
-| Frontend | 5173 | http://localhost:5173 | React development server (Vite) |
-| Backend | 3001 | http://localhost:3001 | REST API server (Fastify) |
-| Model Service | 8000 | http://localhost:8000 | AI inference API (FastAPI) |
-| PostgreSQL | 5432 | localhost:5432 | Database server |
-| Redis | 6379 | localhost:6379 | Job queue and cache |
-| Prometheus | 9090 | http://localhost:9090 | Metrics storage and queries |
-| Grafana | 3002 | http://localhost:3002 | Metrics dashboards (admin/admin) |
-| Bull Board | 3001 | http://localhost:3001/admin/queues | Job queue monitoring UI |
-| OTEL Collector | 4318 | localhost:4318 | Telemetry ingestion (HTTP) |
-| OTEL Collector | 4317 | localhost:4317 | Telemetry ingestion (gRPC) |
-
-## Authorization and Access Control
-
-The backend implements role-based access control (RBAC) using the [CASL](https://casl.js.org/) library. On each authenticated request, the server:
-
-1. Loads the permission matrix from the RolePermission table in PostgreSQL
-2. Collects the user's roles across three scopes: system, group, and project
-3. Builds a CASL ability instance that encodes the union of all granted permissions
-4. Passes the ability to route handlers for authorization checks
-
-System administrators bypass all permission checks. For all other users, the permission matrix determines which actions (create, read, update, delete, share, fork, assign, export, review, manage_members) are allowed on which resources (Annotation, Claim, Persona, WorldState, Video, VideoSummary, Project, UserGroup, User).
-
-Resources are organized into projects, which are optionally owned by user groups. Project membership and group membership control who can access project-scoped data. See [Projects, Groups, and RBAC](./projects-groups.md) for details.
-
-## Next Steps
-
-- Learn about [Projects, Groups, and RBAC](./projects-groups.md)
-- Learn about [Deployment Overview](../deployment/overview.md)
-- Understand [Service Architecture](../deployment/service-architecture.md)
-- Explore [Observability](./observability.md)
+- The frontend never talks to the model service directly. Every
+  AI call goes through the backend, which gates it on
+  authentication and CASL ability.
+- The model service never talks to PostgreSQL directly. It
+  receives input via the job payload and returns output to the
+  backend; the backend writes the row.
+- Cross-service traces are correlated via the OTLP propagation
+  context attached to BullMQ job payloads.

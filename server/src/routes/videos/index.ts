@@ -3,6 +3,7 @@ import { createVideoStorageProvider, loadStorageConfig } from '../../services/vi
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoAccessService } from '../../services/video-access-service.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { buildAbilities } from '../../middleware/abilities.js'
 import { NotFoundError } from '../../lib/errors.js'
 import { listRoutes } from './list.js'
 import { streamRoutes } from './stream.js'
@@ -35,6 +36,9 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
 
   // Require authentication for all video routes
   fastify.addHook('onRequest', requireAuth)
+  // Build CASL abilities so per-route ability.can() checks work (e.g.
+  // detect.ts verifying the supplied personaId belongs to the requester).
+  fastify.addHook('onRequest', buildAbilities)
 
   // Per-video access check: any request with a :videoId param is verified
   // against the caller's project/group memberships via VideoAccessService.
