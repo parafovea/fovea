@@ -22,7 +22,10 @@ describe('Authentication Routes', () => {
   })
 
   beforeEach(async () => {
-    // Clean up database before each test
+    // Clean up database before each test. LoginAttempt rows must be cleared
+    // alongside users so the lockout window does not bleed across runs and
+    // turn 401 invalid-credential assertions into 429 lockout responses.
+    await prisma.loginAttempt.deleteMany()
     await prisma.session.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.annotation.deleteMany()

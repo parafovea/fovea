@@ -5,6 +5,49 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-05-04
+
+### Schema
+
+- Adds `linkType` String column to `annotations` (`'entity' | 'event' | 'time' | 'location' | NULL`). Migration `20260429000000_add_annotation_link_type` applies it as a nullable column so legacy rows are unaffected; the frontend treats NULL as entity-linked, matching the historical default.
+
+### Fixed
+
+- Scopes `GET /api/annotations/:videoId` to the requesting user's annotations (type annotations on the user's personas plus object annotations the user owns) so a multi-user instance no longer surfaces another user's imported copies in the All Annotations tab, fixing the duplicate-row symptom in #121
+- Scopes `GET /api/videos/:videoId/summaries` to the requesting user's personas so a foreign user's imported summary cannot mask the importing user's own summary in the persona switcher
+- Scopes `GET /api/personas/:id/ontology` so a non-system persona's ontology is only readable by its owner; previously any authenticated user could read any persona's ontology by id
+- Scopes `GET /api/import/history` to the requesting user's own imports; previously it returned every user's import provenance (filenames, row counts) on the same instance
+- Scopes `GET /api/summaries/:summaryId/claims` and `GET /api/summaries/:summaryId/claims/:claimId` so a user who knows another user's summaryId cannot read their claim list or individual claims (defense in depth)
+- Scopes the three job-status endpoints (`GET /api/jobs/:jobId`, `GET /api/jobs/claims/:jobId`, `GET /api/jobs/synthesis/:jobId`) to the persona / summary that owns the job's data; previously any authenticated user could poll for another user's job result
+- Adds ownership checks to mutation endpoints so user A cannot modify or delete user B's records: `PUT/DELETE /api/annotations/:id`, `POST /api/annotations` (when `personaId` is supplied), `POST/PUT/DELETE /api/summaries`, `PUT /api/personas/:id/ontology`, `POST/PUT/DELETE /api/summaries/:summaryId/claims/...`, `POST /api/summaries/:summaryId/claims/:claimId/relations`, `DELETE /api/summaries/:summaryId/claims/relations/:relationId`, `POST /api/videos/:videoId/personas/:personaId/claims`, `POST /api/videos/summaries/generate`, `POST /api/summaries/:summaryId/claims/generate`, `POST /api/summaries/:summaryId/synthesize`
+- Coerces `isSystemGenerated` to `false` on `POST/PUT /api/personas/:id` for non-admin requests; previously a regular user could publish their persona to anonymous visitors by setting the flag in the request body
+- `ImportHandler` now sets `userId` on every imported annotation row, matching how `POST /api/annotations` populates the field; without this, imported object annotations had `personaId=null` AND `userId=null` and were filtered out as orphans by the user-scoped listing endpoint
+- `POST /api/import` now sets `importedBy = request.user.id` on every `ImportHistory` row; previously it was omitted, so once `GET /api/import/history` became user-scoped no user saw any of their imports listed
+- `PUT /api/ontology` now refuses to upsert a persona id whose existing row belongs to another user; previously the upsert would silently overwrite that user's persona name/role/informationNeed (a complete persona-level account takeover), and similarly for ontologies the personaId must belong to the requester
+- `POST /api/ontology/augment` now requires the `personaId` body field to belong to the requester and is gated by `requireAuth`; previously it was `optionalAuth` and an unrelated user could trigger model-service calls using another persona's ontology context
+- `POST /api/videos/:videoId/detect` now requires the `personaId` body field to belong to the requester before reading that persona's ontology to build the detection query; previously A could feed B's ontology into the detector and consume model-service quota on B's behalf
+- `POST /api/summaries/:summaryId/claims/:claimId/relations` now requires the `targetClaimId` body field to belong to the requester; previously A could create a relation from their own claim into B's claim, surfacing B's claim text in A's relations view
+- `PUT /api/ontology` and `POST /api/ontology/augment` catch blocks now re-throw `AppError` so authorization-induced 404s don't get collapsed into 500s by the route's local catch handler
+- `POST /api/import` now returns the multipart upload-too-large failure with the underlying 4xx status (typically 413) instead of collapsing it into a 500. The route's local catch handler previously wrapped any non-`AppError` into `InternalError`; it now passes `FST_REQ_FILE_TOO_LARGE` and similar `FST_*_LIMIT` codes through with a 4xx response so clients can render a helpful "file too big" message.
+- Surface silent-data-loss in the import result UI: when annotations were skipped because of missing referenced data (`missing-dependency` conflicts), `ImportResultDialog` now shows a yellow `Completed with Warnings` title and a prominent banner explaining the skip count, the cause, and how to recover (re-export from source with referenced world objects included). Previously the dialog showed a green "Import Successful" header with no warning, so a user importing a partially-broken export saw zero annotations and assumed the import worked.
+- `Claim.audio`, `Claim.video`, and `Claim.metadata` now round-trip through export+import for any JSON value (object, array, scalar) instead of being wiped to `JsonNull` whenever the value is not an array. The previous `Array.isArray(...) ? ... : Prisma.JsonNull` guards in `import-handler.importClaim` (both the create and update branches) silently dropped object-shaped claim metadata on every import; the column is typed `Json?` so any JSON-valued payload is now preserved verbatim. Caught by the new field-level fidelity test suite.
+- Object annotations linked to events / times / locations now round-trip through export and import without being silently flattened to entity-linked. Previously the backend stored only the linked id under `label` with no record of which `linked*Id` field it came from, so `export-handler.convertPrismaAnnotation` always emitted `linkedEntityId` and `import-handler.importAnnotation` only honoured `linkedEntityId`. The new `Annotation.linkType` column carries the kind through the round-trip, the export emits the correct `linkedEventId` / `linkedTimeId` / `linkedLocationId` field, the import reads any of the four, the route's `POST` and `PUT` accept and return `linkType`, and the frontend's `transformBackendToFrontend` / `transformFrontendToBackend` populate the right linked-id field so `getObjectName` resolves against the correct world list (not just `worldEntities`).
+
+### Added
+
+- Multi-user listing isolation matrix (`test/integration/multi-user-isolation.test.ts`) that seeds parallel data for two users (persona, ontology, world state, summary, claim, type and object annotations, api key, session, import history) and asserts every user-scoped GET endpoint returns only the requester's records; adding a new listing route to the matrix is the documented forward-protection for this class of bug
+- End-to-end round-trip test that imports a synthetic JSONL fixture covering persona, ontology, world (entity/event/time), summary, claim, type and object annotations, and asserts the importer's `/api/annotations` response carries no orphan UUID labels (every `linkedEntityId` resolves to an entity in the importer's `/api/world` response) and the imported claim's gloss `objectRef` content remaps to the regenerated entity id
+- Multi-user listing isolation tests for `GET /api/annotations/:videoId`, `GET /api/videos/:videoId/summaries`, and the claims-by-summary path that prove user A and user B never see each other's records on the same shared video
+- Mutation isolation tests covering every PUT/POST/DELETE endpoint that operates on user-owned resources, asserting a foreign user receives 403/404 and the underlying row is unchanged
+- Privilege-escalation tests asserting `isSystemGenerated` is silently coerced to `false` for non-admin requests on both `POST /api/personas` and `PUT /api/personas/:id`
+- End-to-end test that `POST /api/import` populates `importedBy` so the row appears in the importer's history listing
+- `lib/ownership.ts` helper module exposing `getUserPersonaIds`, `assertPersonaOwned`, `assertAnnotationOwned`, `assertSummaryOwned`, `assertSummaryByKeyOwned`, `assertClaimOwned`, and `assertClaimRelationOwned` so route handlers can enforce resource ownership without copy-pasting the lookup; all helpers throw `NotFoundError` (not `ForbiddenError`) to avoid confirming the existence of records the requester cannot see
+- Auth, isolation matrix, and cross-user integration tests now clear `LoginAttempt` rows in `beforeEach` so accumulated lockout state from prior runs cannot turn 401 invalid-credential assertions into 429 lockout responses
+
+### Changed
+
+- `app.setErrorHandler` callback now types `error` as `FastifyError` so `.validation`, `.statusCode`, and `.message` access in the handler typechecks under stricter TypeScript settings
+
 ## [0.1.7] - 2026-04-15
 
 ### Fixed

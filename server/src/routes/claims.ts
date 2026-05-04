@@ -15,6 +15,7 @@ import {
   ClaimSynthesisJobData
 } from '../queues/setup.js'
 import { NotFoundError, ValidationError, ErrorResponseSchema } from '../lib/errors.js'
+import { assertSummaryOwned, assertClaimOwned, assertClaimRelationOwned, assertPersonaOwned } from '../lib/ownership.js'
 import { requireAuth } from '../middleware/auth.js'
 
 /**
@@ -319,6 +320,11 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const { summaryId } = request.params
       const { summaryType = 'video', includeSubclaims = true, minConfidence } = request.query
 
+      // The summary the requester is reading claims under must belong to
+      // them. Without this defense-in-depth check, knowing a summaryId is
+      // enough to read every claim under it.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
+
       // Verify summary exists
       const summary = summaryType === 'video'
         ? await fastify.prisma.videoSummary.findUnique({ where: { id: summaryId } })
@@ -387,6 +393,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { summaryId, claimId } = request.params
 
+      await assertClaimOwned(fastify.prisma, claimId, request.user!.id)
+
       const claim = await fastify.prisma.claim.findUnique({
         where: { id: claimId },
         include: {
@@ -445,6 +453,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { summaryId } = request.params
       const { text, gloss, parentClaimId, summaryType, audio, video, metadata, comment, ...rest } = request.body
+
+      // The summary must belong to the requesting user; otherwise A could
+      // create claims under B's summary.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
 
       // Verify summary exists
       const summary = summaryType === 'video'
@@ -550,6 +562,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const { summaryId, claimId } = request.params
       const { audio, video, metadata, comment, ...rest } = request.body
 
+      // The claim's parent summary must belong to the requesting user.
+      await assertClaimOwned(fastify.prisma, claimId, request.user!.id)
+
       // Verify claim exists and belongs to summary
       const existingClaim = await fastify.prisma.claim.findUnique({
         where: { id: claimId }
@@ -630,6 +645,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { summaryId, claimId } = request.params
 
+      await assertClaimOwned(fastify.prisma, claimId, request.user!.id)
+
       // Verify claim exists and belongs to summary
       const claim = await fastify.prisma.claim.findUnique({
         where: { id: claimId }
@@ -689,6 +706,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const config = request.body
 
       const summaryType = config.summaryType || 'video'
+
+      // Block A from queuing claim extraction against B's summary, which
+      // would otherwise write claims under B's persona.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
 
       // Verify summary exists
       const summary = summaryType === 'video'
@@ -768,6 +789,14 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!job) {
         throw new NotFoundError('Job', jobId)
+      }
+
+      // The job is bound to a summary via its data; the requester must own
+      // that summary to read job status. Without this, A could poll for the
+      // result of B's claim extraction (which contains B's claim text).
+      const jobSummaryId = (job.data as { summaryId?: string })?.summaryId
+      if (jobSummaryId) {
+        await assertSummaryOwned(fastify.prisma, jobSummaryId, request.user!.id)
       }
 
       // Get job state
@@ -859,6 +888,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const { summaryId } = request.params
       const config = request.body
 
+      // Block A from queuing synthesis (which overwrites the visualAnalysis
+      // text) against B's summary.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
+
       // Verify summary exists and has claims
       const summary = await fastify.prisma.videoSummary.findUnique({
         where: { id: summaryId },
@@ -942,6 +975,13 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!job) {
         throw new NotFoundError('Job', jobId)
+      }
+
+      // The job is bound to a summary; the requester must own it to read
+      // status (and the synthesized text result).
+      const jobSummaryId = (job.data as { summaryId?: string })?.summaryId
+      if (jobSummaryId) {
+        await assertSummaryOwned(fastify.prisma, jobSummaryId, request.user!.id)
       }
 
       // Get job state
@@ -1048,6 +1088,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const { summaryId, claimId } = request.params
       const { targetClaimId, relationTypeId, sourceSpans, targetSpans, confidence, notes } = request.body
 
+      // The summary that owns the source claim must belong to the requester.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
+
       // Verify source claim exists
       const sourceClaim = await fastify.prisma.claim.findUnique({
         where: { id: claimId }
@@ -1057,7 +1100,11 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Source claim', claimId)
       }
 
-      // Verify target claim exists
+      // Verify target claim exists AND belongs to the requester. Without
+      // the ownership check, A could create a relation from their source
+      // claim into B's target claim, which would let claim joins surface
+      // B's claim text in A's relations view.
+      await assertClaimOwned(fastify.prisma, targetClaimId, request.user!.id)
       const targetClaim = await fastify.prisma.claim.findUnique({
         where: { id: targetClaimId }
       })
@@ -1201,6 +1248,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { summaryId, relationId } = request.params
 
+      // The summary the relation lives under must belong to the requester.
+      await assertSummaryOwned(fastify.prisma, summaryId, request.user!.id)
+      await assertClaimRelationOwned(fastify.prisma, relationId, request.user!.id)
+
       // Verify relation exists
       const relation = await fastify.prisma.claimRelation.findUnique({
         where: { id: relationId },
@@ -1271,6 +1322,10 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { videoId, personaId } = request.params
       const { text, gloss, parentClaimId, audio, video: videoModality, metadata, comment, ...rest } = request.body
+
+      // The persona must belong to the requester; otherwise A could create
+      // claims (and auto-create a VideoSummary) on B's persona via this route.
+      await assertPersonaOwned(fastify.prisma, personaId, request.user!.id)
 
       // Verify video exists
       const video = await fastify.prisma.video.findUnique({

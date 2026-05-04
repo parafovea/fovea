@@ -1,8 +1,9 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { optionalAuth } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, InternalError } from '../lib/errors.js'
+import { optionalAuth, requireAuth } from '../middleware/auth.js'
+import { NotFoundError, UnauthorizedError, InternalError, AppError } from '../lib/errors.js'
+import { assertPersonaOwned } from '../lib/ownership.js'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -245,8 +246,18 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         const savedPersonas = []
         const savedOntologies = []
 
-      // Save all personas for this user
+      // Save all personas for this user. CRITICAL: every persona id in the
+      // payload must either be unowned (new) or belong to the requester. If
+      // it belongs to another user, refuse the entire request, otherwise an
+      // upsert by id would overwrite that user's persona.
       for (const persona of personas) {
+        const existing = await tx.persona.findUnique({
+          where: { id: persona.id },
+          select: { userId: true }
+        })
+        if (existing && existing.userId !== userId) {
+          throw new NotFoundError('Persona', persona.id)
+        }
         const savedPersona = await tx.persona.upsert({
           where: { id: persona.id },
           update: {
@@ -267,8 +278,17 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         savedPersonas.push(savedPersona)
       }
 
-      // Save all ontologies
+      // Save all ontologies. The persona under each ontology must belong to
+      // the requester for the same reason; otherwise A could hand-craft a
+      // PUT body that overwrites B's ontology by referencing B's personaId.
       for (const ontology of personaOntologies) {
+        const owningPersona = await tx.persona.findUnique({
+          where: { id: ontology.personaId },
+          select: { userId: true }
+        })
+        if (!owningPersona || owningPersona.userId !== userId) {
+          throw new NotFoundError('Persona', ontology.personaId)
+        }
         const savedOntology = await tx.ontology.upsert({
           where: { personaId: ontology.personaId },
           update: {
@@ -352,6 +372,12 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         world: worldData
       })
     } catch (error: unknown) {
+      // Re-throw AppError so the global handler returns the proper status
+      // (404 for ownership precheck violations); without this, the catch
+      // collapsed every error including authorization checks into a 500.
+      if (error instanceof AppError) {
+        throw error
+      }
       fastify.log.error({ error }, 'Error saving ontology data')
       if (error instanceof Error) {
         fastify.log.error(`Error name: ${error.name}`)
@@ -381,7 +407,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
    * @returns Suggested ontology types with reasoning
    */
   fastify.post('/api/ontology/augment', {
-    onRequest: [optionalAuth],
+    onRequest: [requireAuth],
     schema: {
       description: 'Generate AI-powered ontology type suggestions',
       tags: ['ontology'],
@@ -425,7 +451,13 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         maxSuggestions?: number
       }
 
-      // Verify persona exists
+      // The persona used to seed the augmentation must belong to the
+      // requester. Without this, A could call the model service with B's
+      // ontology context and consume model-service quota on B's behalf.
+      await assertPersonaOwned(fastify.prisma, personaId, request.user!.id)
+
+      // Verify persona exists (covered by assertPersonaOwned, but keep the
+      // explicit lookup for the error surface that callers expect).
       const persona = await fastify.prisma.persona.findUnique({
         where: { id: personaId }
       })
@@ -461,6 +493,11 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
 
       return reply.send(result)
     } catch (error) {
+      // Re-throw AppError so authorization checks (NotFoundError from
+      // assertPersonaOwned) surface as 404 rather than 500.
+      if (error instanceof AppError) {
+        throw error
+      }
       fastify.log.error(error, 'Error generating ontology suggestions')
       return reply.code(500).send({
         error: error instanceof Error ? error.message : 'Failed to generate suggestions'

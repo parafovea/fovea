@@ -177,13 +177,20 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
 
     const validatedData = createPersonaSchema.parse(request.body)
 
+    // Only admins may flag a persona as system-generated, since system
+    // personas are visible to unauthenticated visitors via GET /api/personas.
+    // A non-admin attempting to set this flag has it silently coerced to
+    // false rather than 403 so legitimate clients that send the field
+    // unconditionally still succeed.
+    const isSystemGenerated = request.user?.isAdmin ? validatedData.isSystemGenerated : false
+
     const persona = await fastify.prisma.persona.create({
       data: {
         name: validatedData.name,
         role: validatedData.role,
         informationNeed: validatedData.informationNeed,
         details: validatedData.details || null,
-        isSystemGenerated: validatedData.isSystemGenerated,
+        isSystemGenerated,
         hidden: validatedData.hidden,
         userId,
         ontology: {
@@ -301,10 +308,18 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot update another user\'s persona')
     }
 
+    // Only admins may toggle isSystemGenerated; strip it from non-admin
+    // updates so a regular user cannot publish their persona to anonymous
+    // visitors.
+    const updatePayload = { ...validatedData }
+    if (!request.user!.isAdmin) {
+      delete (updatePayload as { isSystemGenerated?: boolean }).isSystemGenerated
+    }
+
     try {
       const persona = await fastify.prisma.persona.update({
         where: { id },
-        data: validatedData
+        data: updatePayload
       })
       return reply.send(persona)
     } catch (error: unknown) {
@@ -582,6 +597,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new NotFoundError('Persona or ontology', id)
     }
 
+    // Multi-user mode: only the owning user (or a system-generated persona)
+    // may read the ontology. Returning 404 (not 403) avoids confirming the
+    // existence of personas the requester cannot see.
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+    if (mode !== 'single-user' && request.user && !persona.isSystemGenerated && persona.userId !== request.user.id) {
+      throw new NotFoundError('Persona or ontology', id)
+    }
+
     // Map database field names to API field names
     return reply.send({
       id: persona.ontology.id,
@@ -639,6 +662,14 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!persona || !persona.ontology) {
+      throw new NotFoundError('Persona or ontology', id)
+    }
+
+    // Multi-user mode: only the owning user (or a system-generated persona)
+    // may write the ontology. 404 instead of 403 to avoid confirming the
+    // existence of personas the requester cannot see.
+    const mode = process.env.FOVEA_MODE || 'multi-user'
+    if (mode !== 'single-user' && request.user && !persona.isSystemGenerated && persona.userId !== request.user.id) {
       throw new NotFoundError('Persona or ontology', id)
     }
 

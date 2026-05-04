@@ -161,7 +161,9 @@ describe('Personas API', () => {
       expect(created.hidden).toBe(false)
     })
 
-    it('creates a persona with optional fields', async () => {
+    it('creates a persona with optional fields (isSystemGenerated stripped for non-admin)', async () => {
+      // testUser is non-admin. isSystemGenerated must be coerced to false
+      // so a regular user cannot publish their persona to anonymous visitors.
       const newPersona = {
         name: 'Traffic Engineer',
         role: 'Urban Planning Specialist',
@@ -180,7 +182,12 @@ describe('Personas API', () => {
 
       expect(response.statusCode).toBe(201)
       const created = response.json()
-      expect(created).toMatchObject(newPersona)
+      expect(created.name).toBe(newPersona.name)
+      expect(created.role).toBe(newPersona.role)
+      expect(created.informationNeed).toBe(newPersona.informationNeed)
+      expect(created.details).toBe(newPersona.details)
+      expect(created.hidden).toBe(true)
+      expect(created.isSystemGenerated).toBe(false)
     })
 
     it('creates an associated ontology when creating a persona', async () => {
@@ -324,7 +331,9 @@ describe('Personas API', () => {
       expect(updated.informationNeed).toBe('Verifying event timelines in news footage')
     })
 
-    it('updates all optional fields', async () => {
+    it('updates all optional fields (isSystemGenerated stripped for non-admin)', async () => {
+      // Non-admin can update details and hidden but cannot toggle the
+      // system-generated flag.
       const created = await prisma.persona.create({
         data: {
           name: 'Infrastructure Analyst',
@@ -353,8 +362,8 @@ describe('Personas API', () => {
       expect(response.statusCode).toBe(200)
       const updated = response.json()
       expect(updated.details).toBe('Updated details')
-      expect(updated.isSystemGenerated).toBe(true)
       expect(updated.hidden).toBe(true)
+      expect(updated.isSystemGenerated).toBe(false)
     })
 
     it('returns 404 for non-existent persona', async () => {

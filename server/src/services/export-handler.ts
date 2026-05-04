@@ -613,9 +613,20 @@ export class AnnotationExporter {
       // Default typeCategory since it's not stored separately
       annotation.typeCategory = 'entity'
     } else {
-      // For object annotations, label contains the linked entity/event/time ID
-      // We store it as linkedEntityId by default; could be enhanced to detect type
-      annotation.linkedEntityId = prismaAnnotation.label
+      // For object annotations, `label` is the linked id and `linkType`
+      // tells us which kind of world object it points at. NULL linkType
+      // (legacy rows) is treated as entity-linked, matching the historical
+      // behavior of always populating linkedEntityId.
+      const linkType = prismaAnnotation.linkType as ('entity' | 'event' | 'time' | 'location' | null) ?? 'entity'
+      if (linkType === 'event') {
+        annotation.linkedEventId = prismaAnnotation.label
+      } else if (linkType === 'time') {
+        annotation.linkedTimeId = prismaAnnotation.label
+      } else if (linkType === 'location') {
+        annotation.linkedLocationId = prismaAnnotation.label
+      } else {
+        annotation.linkedEntityId = prismaAnnotation.label
+      }
     }
 
     // Add confidence from database column

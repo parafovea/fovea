@@ -135,6 +135,11 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
+            // Required so the GET /api/import/history filter can return the
+            // row to the user who imported it. Was previously omitted, which
+            // meant every user saw an empty history list once the listing
+            // endpoint became user-scoped.
+            importedBy: request.user!.id,
             importOptions: options as unknown as Prisma.InputJsonValue,
             result: result as unknown as Prisma.InputJsonValue,
             success: result.success,
@@ -149,6 +154,18 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       // Re-throw typed errors (ValidationError, etc.) to be handled by global error handler
       if (error instanceof ValidationError || error instanceof InternalError) {
+        throw error
+      }
+      // @fastify/multipart raises a FastifyError when the upload exceeds
+      // the configured fileSize. The error carries a `code` of
+      // `FST_REQ_FILE_TOO_LARGE` (or similar `FST_FILES_LIMIT`), and
+      // sometimes a `statusCode`. Surface those as 4xx instead of
+      // collapsing into a 500.
+      const errAsObj = error as { statusCode?: number; code?: string; message?: string } | null
+      if (errAsObj?.code && /^FST_(REQ_FILE_TOO_LARGE|FILES_LIMIT|FIELDS_LIMIT|PARTS_LIMIT|PROTO_VIOLATION)$/.test(errAsObj.code)) {
+        throw new ValidationError(errAsObj.message || 'Upload rejected by multipart limits')
+      }
+      if (errAsObj?.statusCode && errAsObj.statusCode >= 400 && errAsObj.statusCode < 500) {
         throw error
       }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -317,8 +334,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      // Scope to the requesting user so a multi-user instance never surfaces
+      // another user's import provenance (filenames, row counts) through this
+      // endpoint.
+      const where = { importedBy: request.user!.id }
       const [imports, total] = await Promise.all([
         fastify.prisma.importHistory.findMany({
+          where,
           select: {
             id: true,
             filename: true,
@@ -331,7 +353,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           take: limit,
           skip: offset
         }),
-        fastify.prisma.importHistory.count()
+        fastify.prisma.importHistory.count({ where })
       ])
 
       return reply.send({

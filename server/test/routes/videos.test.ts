@@ -253,6 +253,11 @@ describe('Videos API - Detection', () => {
     })
 
     it('handles persona not found error', async () => {
+      // The ownership precheck runs before buildDetectionQueryFromPersona,
+      // so a non-existent or foreign persona id surfaces as 404 from
+      // assertPersonaOwned rather than 400 from the inner builder. 404 is
+      // also the right response since it does not confirm the existence of
+      // personas the requester cannot see.
       const response = await app.inject({
         method: 'POST',
         url: '/api/videos/test-video-id/detect',
@@ -262,9 +267,7 @@ describe('Videos API - Detection', () => {
         cookies: { session_token: testSessionToken },
       })
 
-      expect(response.statusCode).toBe(400)
-      expect(response.json().error).toBe('VALIDATION_ERROR')
-      expect(response.json().message).toContain('Persona not found')
+      expect(response.statusCode).toBe(404)
     })
 
     it('handles persona with no ontology', async () => {

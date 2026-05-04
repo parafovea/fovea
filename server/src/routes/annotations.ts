@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
-import { NotFoundError } from '../lib/errors.js'
+import { assertAnnotationOwned, assertPersonaOwned } from '../lib/ownership.js'
 import { requireAuth } from '../middleware/auth.js'
 
 /**
@@ -13,6 +13,10 @@ const AnnotationResponseSchema = Type.Object({
   personaId: Type.Union([Type.Null(), Type.String()]),
   type: Type.String(),
   label: Type.String(),
+  /// 'entity' | 'event' | 'time' | 'location' | null. NULL for type
+  /// annotations and for legacy object annotations created before the
+  /// column existed (the frontend treats those as entity-linked).
+  linkType: Type.Union([Type.Null(), Type.String()]),
   frames: Type.Unknown(),
   confidence: Type.Union([Type.Null(), Type.Number()]),
   source: Type.String(),
@@ -53,8 +57,24 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
 
+    // Scope to the requesting user's annotations: type annotations attached to
+    // the user's personas plus persona-less object annotations the user owns.
+    // Mirrors the filter used by routes/export.ts so a multi-user instance
+    // never surfaces another user's imported copies in the All Annotations tab.
+    const userPersonas = await fastify.prisma.persona.findMany({
+      where: { userId: request.user!.id },
+      select: { id: true }
+    })
+    const userPersonaIds = userPersonas.map(p => p.id)
+
     const annotations = await fastify.prisma.annotation.findMany({
-      where: { videoId },
+      where: {
+        videoId,
+        OR: [
+          { personaId: { in: userPersonaIds } },
+          { personaId: null, userId: request.user!.id }
+        ]
+      },
       orderBy: { createdAt: 'asc' }
     })
 
@@ -64,6 +84,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: a.personaId,
       type: a.type,
       label: a.label,
+      linkType: a.linkType,
       frames: a.frames,
       confidence: a.confidence,
       source: a.source,
@@ -89,6 +110,16 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         personaId: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         type: Type.String(),
         label: Type.String(),
+        // Optional for back-compat with clients that haven't been updated;
+        // when omitted the column stays NULL and the frontend treats the
+        // row as entity-linked (the historical default).
+        linkType: Type.Optional(Type.Union([
+          Type.Null(),
+          Type.Literal('entity'),
+          Type.Literal('event'),
+          Type.Literal('time'),
+          Type.Literal('location'),
+        ])),
         frames: Type.Unknown(),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
@@ -103,9 +134,17 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId?: string | null
       type: string
       label: string
+      linkType?: 'entity' | 'event' | 'time' | 'location' | null
       frames: Prisma.InputJsonValue
       confidence?: number
       source?: string
+    }
+
+    // If a personaId is supplied, it must belong to the requester. Without
+    // this guard, A could inject a type annotation attributed to B's persona,
+    // which would then surface in B's All Annotations list as a foreign row.
+    if (data.personaId) {
+      await assertPersonaOwned(fastify.prisma, data.personaId, request.user!.id)
     }
 
     const annotation = await fastify.prisma.annotation.create({
@@ -115,6 +154,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         userId: request.user?.id ?? null,
         type: data.type,
         label: data.label,
+        linkType: data.type === 'object' ? (data.linkType ?? null) : null,
         frames: data.frames,
         confidence: data.confidence,
         source: data.source || 'manual'
@@ -127,6 +167,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: annotation.personaId,
       type: annotation.type,
       label: annotation.label,
+      linkType: annotation.linkType,
       frames: annotation.frames,
       confidence: annotation.confidence,
       source: annotation.source,
@@ -154,6 +195,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       body: Type.Object({
         type: Type.Optional(Type.String()),
         label: Type.Optional(Type.String()),
+        linkType: Type.Optional(Type.Union([
+          Type.Null(),
+          Type.Literal('entity'),
+          Type.Literal('event'),
+          Type.Literal('time'),
+          Type.Literal('location'),
+        ])),
         frames: Type.Optional(Type.Unknown()),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String())
@@ -167,26 +215,21 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const data = request.body as {
       type?: string
       label?: string
+      linkType?: 'entity' | 'event' | 'time' | 'location' | null
       frames?: Prisma.InputJsonValue
       confidence?: number
       source?: string
     }
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
-
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
-    }
+    // Ownership-checked existence lookup; returns 404 for foreign annotations.
+    await assertAnnotationOwned(fastify.prisma, id, request.user!.id)
 
     const annotation = await fastify.prisma.annotation.update({
       where: { id },
       data: {
         type: data.type,
         label: data.label,
+        linkType: data.linkType,
         frames: data.frames,
         confidence: data.confidence,
         source: data.source
@@ -199,6 +242,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       personaId: annotation.personaId,
       type: annotation.type,
       label: annotation.label,
+      linkType: annotation.linkType,
       frames: annotation.frames,
       confidence: annotation.confidence,
       source: annotation.source,
@@ -230,15 +274,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
-    // Check if annotation exists
-    const existing = await fastify.prisma.annotation.findUnique({
-      where: { id },
-      select: { id: true }
-    })
-
-    if (!existing) {
-      throw new NotFoundError('Annotation', id)
-    }
+    await assertAnnotationOwned(fastify.prisma, id, request.user!.id)
 
     await fastify.prisma.annotation.delete({
       where: { id }
