@@ -1823,14 +1823,20 @@ export class ImportHandler {
         confidence: (line.data.confidence as number) || undefined,
         modelUsed: (line.data.modelUsed as string) || undefined,
         extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-        audio: line.data.audio !== undefined && line.data.audio !== null 
-          ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+        // Preserve any JSON-valued audio/video/metadata payload — array,
+        // object, string, number, boolean. The previous implementation
+        // hardcoded `Array.isArray` and silently wiped object-shaped
+        // payloads (a real fidelity bug surfaced by the round-trip test
+        // suite, since these columns are typed `Json?` and accept any
+        // shape).
+        audio: line.data.audio !== undefined && line.data.audio !== null
+          ? (line.data.audio as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         video: line.data.video !== undefined && line.data.video !== null
-          ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+          ? (line.data.video as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         metadata: line.data.metadata !== undefined && line.data.metadata !== null
-          ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+          ? (line.data.metadata as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         comment: (line.data.comment as string) || undefined,
         createdBy: (line.data.createdBy as string) || undefined,
@@ -1861,14 +1867,19 @@ export class ImportHandler {
             confidence: (line.data.confidence as number) || undefined,
             modelUsed: (line.data.modelUsed as string) || undefined,
             extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-            audio: line.data.audio !== undefined && line.data.audio !== null 
-              ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+            // Preserve any JSON-valued audio/video/metadata payload — the
+            // columns are typed `Json?` and accept array | object | scalar.
+            // The previous `Array.isArray` guard wiped object-shaped
+            // payloads to JsonNull, a fidelity bug surfaced by
+            // import-export-fidelity.test.ts.
+            audio: line.data.audio !== undefined && line.data.audio !== null
+              ? (line.data.audio as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             video: line.data.video !== undefined && line.data.video !== null
-              ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+              ? (line.data.video as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             metadata: line.data.metadata !== undefined && line.data.metadata !== null
-              ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+              ? (line.data.metadata as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             comment: (line.data.comment as string) || undefined,
             createdBy: (line.data.createdBy as string) || undefined,
