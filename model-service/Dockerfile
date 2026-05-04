@@ -77,16 +77,20 @@ ARG DEVICE=cpu
 
 # Install Python and build tools
 # - cmake is needed for llama-cpp-python on CPU
-# - apt-get update is retried to handle transient mirror syncs
-RUN for i in 1 2 3; do apt-get update && break || { echo "apt-get update failed (attempt $i/3), retrying in 30s..."; sleep 30; }; done \
-    && apt-get install -y \
-    python3 \
-    python3-dev \
-    python3-pip \
-    git \
-    build-essential \
-    cmake \
-    kmod \
+# - the whole apt-get update + install is retried, since the mirror flake
+#   can hit either step (apt-get update succeeded but archive.ubuntu.com
+#   was unreachable for the .deb fetches in CI on 2026-05-04).
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y \
+            python3 \
+            python3-dev \
+            python3-pip \
+            git \
+            build-essential \
+            cmake \
+            kmod && break || { echo "apt-get failed (attempt $i/3), retrying in 30s..."; sleep 30; }; \
+    done \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove EXTERNALLY-MANAGED file
