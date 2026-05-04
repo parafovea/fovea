@@ -126,7 +126,6 @@ describe('Issue #121 reproduction with real Fovea export', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json() as { success: boolean; errors?: unknown[]; warnings?: unknown[] }
     if (!body.success) {
-      // eslint-disable-next-line no-console
       console.error('Import failed', JSON.stringify(body, null, 2).slice(0, 2000))
     }
     expect(body.success).toBe(true)
