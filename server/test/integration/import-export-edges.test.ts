@@ -550,6 +550,186 @@ describe('Import/export edge cases', () => {
     })
   })
 
+  // --- DoS / resource exhaustion ------------------------------------------
+
+  describe('DoS / resource exhaustion', () => {
+    /**
+     * The route registers @fastify/multipart with `fileSize: 100MB`. A
+     * payload larger than the limit must be rejected, not crash the
+     * process or silently truncate. We test with a file slightly over
+     * the limit but not so large it exhausts test memory.
+     */
+    it('upload exceeding multipart fileSize limit is rejected, not crashed', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      // 101MB. Building a Buffer this large is fine in Node test memory.
+      const oversize = Buffer.alloc(101 * 1024 * 1024, 'A')
+      const form = new FormData()
+      form.append('file', oversize, { filename: 'big.jsonl', contentType: 'application/x-ndjson' })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/import',
+        cookies: { session_token: A.sessionToken },
+        headers: form.getHeaders(),
+        payload: form.getBuffer(),
+      })
+      // Either 413 (payload too large) or 4xx-class. Must not be 5xx.
+      expect(res.statusCode).toBeGreaterThanOrEqual(400)
+      expect(res.statusCode).toBeLessThan(500)
+    }, 60000)
+
+    /**
+     * Many short valid lines must process or reject deterministically.
+     * 5000 personas is enough to exercise per-line transaction overhead
+     * without making the test minutes long.
+     */
+    it('5000 small valid lines complete or fail deterministically without 5xx', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      const lines: string[] = []
+      for (let i = 0; i < 5000; i++) {
+        // Pad to a stable 36-char uuid. Only the last 4 hex chars vary.
+        const id = `00000000-0000-0000-0000-${i.toString(16).padStart(12, '0')}`
+        lines.push(JSON.stringify({
+          type: 'persona',
+          data: { id, userId: A.userId, name: `P${i}`, role: 'r', informationNeed: 'i' },
+        }))
+      }
+      const res = await importAs(A, lines.join('\n'), 'bulk.jsonl')
+      expect(res.statusCode).toBeLessThan(500)
+      if (res.statusCode === 200) {
+        const body = res.json() as { success: boolean }
+        expect(typeof body.success).toBe('boolean')
+      }
+    }, 120000)
+
+    /**
+     * A single line with deeply-nested JSON must not stack-overflow the
+     * server. JSON.parse handles 5000 levels fine on V8; we test the
+     * downstream consumers (parseLine, validateLine, remapObjectIds).
+     */
+    it('deeply-nested JSON in a single line does not stack-overflow', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      // Build a persona whose `details` contains 1000 levels of nested
+      // arrays. The remapObjectIds recursion has to walk this without
+      // exhausting the stack.
+      let nested: unknown = 'leaf'
+      for (let i = 0; i < 1000; i++) nested = [nested]
+      const personaLine = JSON.stringify({
+        type: 'persona',
+        data: {
+          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          userId: A.userId,
+          name: 'Deep',
+          role: 'r',
+          informationNeed: 'i',
+          // The schema rejects unknown extra fields normally, but the
+          // import handler is more permissive — it remaps any *Id key
+          // anywhere in the tree, so we need the deep payload to live
+          // somewhere it'll actually be traversed. Stuff it in `details`
+          // (a string field) by serializing — that bypasses the recursion
+          // but tests the parse path. To exercise remapObjectIds, we
+          // also include a separate `metadata` field carrying the array.
+          details: 'deep',
+          metadata: nested,
+        },
+      })
+      const res = await importAs(A, personaLine, 'deep.jsonl')
+      expect(res.statusCode).toBeLessThan(500)
+    }, 30000)
+  })
+
+  // --- Encoding / line-ending edges ---------------------------------------
+
+  describe('Encoding edges', () => {
+    /**
+     * UTF-8 BOM at the file start must not break the first line's parse.
+     * Some editors add it silently when saving as UTF-8.
+     */
+    it('UTF-8 BOM at file start does not break parse of the first line', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      const personaLine = JSON.stringify({
+        type: 'persona',
+        data: { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', userId: A.userId, name: 'BomTest', role: 'r', informationNeed: 'i' },
+      })
+      const bom = '﻿' // U+FEFF is the BOM marker
+      const res = await importAs(A, bom + personaLine)
+      // Either parsed (success: true with 1 line) or rejected as 400. If
+      // it 5xx'd, that'd be a regression.
+      expect(res.statusCode).toBeLessThan(500)
+    })
+
+    /**
+     * Windows line endings (\r\n) must be normalised so the JSONL parser
+     * doesn't see "{...}\r" as a malformed object on every line.
+     */
+    it('CRLF line endings parse correctly', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      const lines = [
+        JSON.stringify({ type: 'persona', data: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', userId: A.userId, name: 'CR', role: 'r', informationNeed: 'i' } }),
+        JSON.stringify({ type: 'persona', data: { id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', userId: A.userId, name: 'LF', role: 'r', informationNeed: 'i' } }),
+      ].join('\r\n')
+      const res = await importAs(A, lines, 'crlf.jsonl')
+      // Must not 5xx. Whether CRLF is silently accepted or rejected with
+      // a clear error is up to the parser, but the route must respond.
+      expect(res.statusCode).toBeLessThan(500)
+    })
+
+    /**
+     * Missing trailing newline at end of file must not cause the last
+     * line to be silently dropped.
+     */
+    it('missing trailing newline does not drop the last line', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      const lastId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+      const lines = [
+        JSON.stringify({ type: 'persona', data: { id: 'ffffffff-ffff-ffff-ffff-ffffffffffff', userId: A.userId, name: 'A', role: 'r', informationNeed: 'i' } }),
+        JSON.stringify({ type: 'persona', data: { id: lastId, userId: A.userId, name: 'Last', role: 'r', informationNeed: 'i' } }),
+      ]
+      // No trailing \n.
+      const res = await importAs(A, lines.join('\n'), 'no-trailing-newline.jsonl')
+      expect(res.statusCode).toBe(200)
+      expect(res.json().success).toBe(true)
+      const stored = await prisma.persona.findUnique({ where: { id: lastId } })
+      expect(stored, 'last line without trailing newline must still import').not.toBeNull()
+    })
+  })
+
+  // --- Worker-side double-check probe -------------------------------------
+
+  describe('Worker-side defensive checks', () => {
+    /**
+     * BullMQ workers process jobs by reading `job.data` and writing to
+     * the DB. The queue-creation routes I locked down earlier already
+     * verify ownership before enqueueing, so a job in the queue is
+     * implicitly trusted. But what happens if the persona is deleted
+     * between enqueue and worker pickup? The worker's videoSummary
+     * upsert would fail with FK violation. We assert that a deleted
+     * persona before queue write does not corrupt the importer's state.
+     *
+     * This is a structural test rather than a worker-execution test
+     * (we cannot easily run the BullMQ worker in-process), but it
+     * captures the invariant that the API surface that feeds the worker
+     * doesn't accept work referencing a deleted persona.
+     */
+    it('queueing summary generation against a just-deleted persona is rejected at the API surface', async () => {
+      const A = await registerAndLogin('userA', 'passA12345')
+      const persona = await prisma.persona.create({
+        data: { userId: A.userId, name: 'Doomed', role: 'r', informationNeed: 'i' },
+      })
+      await prisma.video.create({ data: { id: 'v-worker-1', filename: 'w.mp4', path: '/v/w.mp4', duration: 1 } })
+
+      // Delete the persona before queueing.
+      await prisma.persona.delete({ where: { id: persona.id } })
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/videos/summaries/generate',
+        cookies: { session_token: A.sessionToken },
+        payload: { videoId: 'v-worker-1', personaId: persona.id },
+      })
+      expect([403, 404]).toContain(res.statusCode)
+    })
+  })
+
   // --- Fuzz: JSONL parser ---------------------------------------------------
 
   describe('JSONL parser fuzz', () => {

@@ -23,6 +23,20 @@ import {
 import { ImportResult } from '@models/types'
 
 /**
+ * Predicate for the orphan-skipped banner. Exported so it can be unit
+ * tested without rendering the full MUI Dialog (which has React-context
+ * resolution issues under pnpm + jsdom). Returns true when the import
+ * dropped one or more annotations because they referenced data not
+ * present in the file — the user-visible UX cliff that previously read
+ * as "Import Successful" with zero annotations and no warning.
+ */
+export function shouldShowOrphanSkippedBanner(result: ImportResult): boolean {
+  const skippedCount = result.summary.skippedItems.annotations
+  const hasMissingDep = result.conflicts.some(c => c.type === 'missing-dependency')
+  return skippedCount > 0 && hasMissingDep
+}
+
+/**
  * @interface ImportResultDialogProps
  * @description Props for the ImportResultDialog component.
  * @property open - Whether the dialog is open
@@ -54,21 +68,58 @@ export default function ImportResultDialog({ open, result, onClose }: ImportResu
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {result.success ? (
-            <>
-              <SuccessIcon color="success" />
-              <Typography variant="h6">Import Successful</Typography>
-            </>
-          ) : (
-            <>
-              <ErrorIcon color="error" />
-              <Typography variant="h6">Import Failed</Typography>
-            </>
-          )}
+          {(() => {
+            const hasSkipped =
+              result.summary.skippedItems.annotations > 0 ||
+              result.conflicts.some(c => c.type === 'missing-dependency')
+            if (!result.success) {
+              return (
+                <>
+                  <ErrorIcon color="error" />
+                  <Typography variant="h6">Import Failed</Typography>
+                </>
+              )
+            }
+            if (hasSkipped) {
+              return (
+                <>
+                  <WarningIcon color="warning" />
+                  <Typography variant="h6">Import Completed with Warnings</Typography>
+                </>
+              )
+            }
+            return (
+              <>
+                <SuccessIcon color="success" />
+                <Typography variant="h6">Import Successful</Typography>
+              </>
+            )
+          })()}
         </Box>
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+          {/* Prominent banner when annotations were silently skipped due to
+              missing references. The success icon alone is misleading in
+              this case: the import "succeeded" but the user got fewer
+              records than they exported, so we surface the count and the
+              "what happened" explanation up front. */}
+          {shouldShowOrphanSkippedBanner(result) && (
+            <Alert severity="warning" icon={<WarningIcon />} data-testid="import-orphan-skipped-banner">
+              <Typography variant="subtitle2" gutterBottom>
+                {result.summary.skippedItems.annotations} annotation{result.summary.skippedItems.annotations === 1 ? '' : 's'} skipped: missing referenced data
+              </Typography>
+              <Typography variant="body2">
+                These annotations link to entities, events, times, or locations
+                that were not included in the imported file (and that you do
+                not already own). They cannot be imported on their own. To
+                recover them, re-export from the source with the referenced
+                world objects included, then re-import. The skipped rows are
+                listed under "Resolved Conflicts" below.
+              </Typography>
+            </Alert>
+          )}
+
           {/* Summary Statistics */}
           <Box>
             <Typography variant="subtitle2" gutterBottom>

@@ -156,6 +156,18 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       if (error instanceof ValidationError || error instanceof InternalError) {
         throw error
       }
+      // @fastify/multipart raises a FastifyError when the upload exceeds
+      // the configured fileSize. The error carries a `code` of
+      // `FST_REQ_FILE_TOO_LARGE` (or similar `FST_FILES_LIMIT`), and
+      // sometimes a `statusCode`. Surface those as 4xx instead of
+      // collapsing into a 500.
+      const errAsObj = error as { statusCode?: number; code?: string; message?: string } | null
+      if (errAsObj?.code && /^FST_(REQ_FILE_TOO_LARGE|FILES_LIMIT|FIELDS_LIMIT|PARTS_LIMIT|PROTO_VIOLATION)$/.test(errAsObj.code)) {
+        throw new ValidationError(errAsObj.message || 'Upload rejected by multipart limits')
+      }
+      if (errAsObj?.statusCode && errAsObj.statusCode >= 400 && errAsObj.statusCode < 500) {
+        throw error
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       fastify.log.error(error)
       throw new InternalError(errorMessage)
