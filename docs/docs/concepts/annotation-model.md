@@ -1,266 +1,88 @@
----
-title: Annotation Model
-sidebar_position: 4
----
+# Annotation model
 
-# Annotation Model
+An annotation is a sequence of keyframe boxes plus a label. The
+frontend renders the box at every frame between keyframes by
+linear interpolation; the backend stores only the keyframes. This
+keeps storage proportional to user effort, not to video length.
 
-FOVEA uses bounding box sequences as the foundation for all video annotations. Understanding how sequences, keyframes, and interpolation work is essential for efficient annotation.
+## Keyframes and interpolation
 
-## Core Concept: Bounding Box Sequences
-
-All bounding box annotations in FOVEA are sequences, even if they only appear in a single frame. This unified model simplifies the system and handles both static and moving objects consistently.
-
-### Why Sequences Matter
-
-Traditional frame-by-frame annotation requires drawing boxes on every frame where an object appears. For a 100-frame segment, this means drawing 100 boxes. Bounding box sequences reduce this to 3-5 keyframes, with the system generating the remaining 95-97 frames automatically. This reduces annotation time by 60-95% based on industry benchmarks.
-
-### Sequence Structure
-
-A bounding box sequence contains:
-
-- **Keyframes**: Frames where you explicitly set the box position and size
-- **Interpolated frames**: Frames where the box is automatically calculated between keyframes
-- **Interpolation segments**: Configuration for how to transition between keyframes
-- **Visibility ranges**: Time periods when the object is visible in the video
-- **Metadata**: Tracking source, confidence scores, labels
-
-## Keyframes
-
-Keyframes are user-defined control points where you explicitly position and size the bounding box. The system marks these frames and uses them as anchors for interpolation.
-
-### Creating Keyframes
-
-1. **Initial keyframe**: Drawing a bounding box creates the first keyframe
-2. **Additional keyframes**: Press `K` at any frame to add a keyframe
-3. **Converting interpolated frames**: Click a corner handle on an interpolated box to convert it to a keyframe
-
-### Keyframe Properties
-
-Each keyframe stores:
-- Frame number
-- Bounding box coordinates (x, y, width, height)
-- Keyframe flag (`isKeyframe: true`)
-- Optional confidence score (for tracking-based annotations)
-
-### Minimum Requirements
-
-Sequences with motion require at least 2 keyframes. Single-keyframe sequences represent static objects that appear on only one frame.
-
-## Interpolation
-
-Interpolation is the automatic generation of bounding boxes for frames between keyframes. The system calculates box positions and sizes based on the interpolation type you select.
-
-### Interpolation Types
-
-#### Linear (Default)
-
-Linear interpolation creates constant-velocity motion between keyframes. The box moves at a steady rate from one keyframe to the next.
-
-```mermaid
-graph LR
-    A[Keyframe 0<br/>x=100] --> B[Frame 5<br/>x=150]
-    B --> C[Keyframe 10<br/>x=200]
-    style A fill:#4CAF50
-    style C fill:#4CAF50
-    style B fill:#E3F2FD
+```text
+frame 0    box A
+frame 60   box B
+                ->  rendered: box at frame f for 0 <= f <= 60
+                    is the linear interpolation of A and B
+                    weighted by f / 60.
 ```
 
-**Use for**: Objects moving at constant speed in straight lines.
+The keyframe array is ordered by frame number. Frames before the
+first keyframe and after the last are not rendered (the
+annotation is "absent" outside its keyframe range). To make an
+annotation truly disappear within its range, drop a keyframe with
+the `visible: false` flag at that frame.
 
-#### Bezier
+## Type vs object
 
-Bezier interpolation uses control points to create smooth curves with acceleration and deceleration. The system applies cubic Bezier mathematics to transition smoothly between keyframes.
+Two annotation types share the same row shape:
 
-**Use for**: Natural motion with smooth starts and stops, curved paths.
-
-#### Ease-In
-
-Gradual acceleration from rest. The box starts slow and speeds up as it approaches the next keyframe.
-
-**Use for**: Objects starting to move from a stationary position.
-
-#### Ease-Out
-
-Gradual deceleration to rest. The box moves fast initially and slows down as it approaches the next keyframe.
-
-**Use for**: Objects coming to a stop.
-
-#### Ease-In-Out
-
-Smooth acceleration and deceleration. The box starts slow, speeds up in the middle, then slows down again.
-
-**Use for**: Most natural human and animal motion.
-
-#### Hold
-
-No interpolation. The box stays in the same position until reaching the next keyframe, where it jumps instantly.
-
-**Use for**: Objects that remain stationary then teleport, or for creating distinct pose keyframes.
-
-### Interpolation Math
-
-The system interpolates each box property (x, y, width, height) independently using the formula:
-
-```
-value(t) = start_value + (end_value - start_value) * f(t)
+```text
+type    label              persona
+------  -----------------  --------
+"type"  ontology typeId    required
+"object" worldObject id    optional (linked via linkType)
 ```
 
-Where:
-- `t` is the normalized time (0 to 1) between keyframes
-- `f(t)` is the interpolation function (linear, bezier, easing)
+The `linkType` column on object annotations discriminates which
+world list the `label` resolves through:
 
-For bezier interpolation, `f(t)` evaluates a cubic Bezier curve with configurable control points.
-
-## Visibility Ranges
-
-Objects do not always remain visible throughout a video. Visibility ranges mark when an object is present in the frame.
-
-### Use Cases
-
-- **Objects entering frame**: Person walks into view
-- **Objects leaving frame**: Car drives out of sight
-- **Occlusion**: Object temporarily hidden behind another object
-- **Discontiguous sequences**: Object appears, disappears, then reappears
-
-### Creating Visibility Ranges
-
-1. **Mark visibility end**: Press `V` at the frame where the object leaves
-2. **Mark visibility start**: Advance to the frame where it returns, press `V` again
-3. **Using in/out points**: Press `[` to mark in-point, `]` to mark out-point
-
-### Constraints
-
-- Keyframes can only exist in visible ranges
-- Interpolation skips invisible ranges
-- Each sequence requires at least one visible range
-
-## Tracking Integration
-
-Bounding box sequences integrate with automated tracking models. When you run object tracking, the system generates sequence candidates with tracking metadata.
-
-### Tracking Metadata
-
-- **Track ID**: Identifier from the tracking model
-- **Tracking source**: Model used (SAMURAI, SAM2Long, SAM2.1, YOLO11n-seg)
-- **Confidence**: Overall tracking quality score
-- **Per-frame confidence**: Individual frame confidence scores
-
-### Workflow
-
-1. Run tracking on a video segment
-2. System generates sequence candidates
-3. Review candidates with confidence visualization
-4. Accept high-confidence tracks
-5. Refine accepted tracks by adding or adjusting keyframes
-
-Accepted tracks become standard sequences that you can edit like manually created ones.
-
-## Data Model
-
-### BoundingBox Structure
-
-```typescript
-interface BoundingBox {
-  x: number              // Left edge (pixels from left)
-  y: number              // Top edge (pixels from top)
-  width: number          // Width in pixels
-  height: number         // Height in pixels
-  frameNumber: number    // Frame index (0-based)
-  isKeyframe?: boolean   // True for user-defined keyframes
-  confidence?: number    // Optional confidence score (0-1)
-}
+```text
+linkType   resolves through
+---------  ------------------
+"entity"   worldEntities
+"event"    worldEvents
+"time"     worldTimes
+"location" worldLocations
+NULL       treated as entity-linked (legacy)
 ```
 
-### InterpolationSegment Structure
+The pre-v0.1.8 schema had no `linkType` column. The export emitted
+only `linkedEntityId` and the import only honoured
+`linkedEntityId`, so any object annotation linked to an event,
+time, or location was silently flattened to entity-linked on
+every round-trip. The migration
+`20260429000000_add_annotation_link_type` added the column
+nullable; the frontend, the export handler, and the import
+handler now write and read whichever linked-id field matches the
+column.
 
-```typescript
-interface InterpolationSegment {
-  startFrame: number     // First frame of segment
-  endFrame: number       // Last frame of segment
-  type: InterpolationType  // linear, bezier, ease-in, etc.
+## Ownership columns
 
-  // For bezier interpolation
-  controlPoints?: {
-    x?: BezierControlPoint[]
-    y?: BezierControlPoint[]
-    width?: BezierControlPoint[]
-    height?: BezierControlPoint[]
-  }
-}
+Annotations carry two ownership columns. `Annotation.userId` was
+added in `20260310000000_add_annotation_userid` to support
+user-scoped object annotations (object annotations have an
+optional `personaId`, so the persona-side ownership check does
+not apply). v0.2.0 added `Annotation.createdByUserId` and the
+backfill migration `20260415000000_backfill_rbac_ownership` copied
+`userId` into it for historical rows. CASL's ability builder
+matches against `createdByUserId`; the legacy `userId` is still
+populated by write paths so v0.1.x clients see consistent data.
+
+`GET /api/annotations/:videoId` is filtered by
+`accessibleBy(request.ability, 'read').Annotation`, which compiles
+to `createdByUserId = request.user.id` for own-only readers and to
+the union with project-scoped reads for project members. The
+listing was previously unscoped, which is what let cross-user
+imports show up as duplicate rows. See
+[Concepts > RBAC](rbac.md).
+
+## Confidence and source
+
+```text
+confidence   Float?    model confidence (NULL for hand-drawn)
+source       String    "manual" | "tracking" | "detection"
 ```
 
-### BoundingBoxSequence Structure
-
-```typescript
-interface BoundingBoxSequence {
-  boxes: BoundingBox[]   // All boxes (keyframes + interpolated)
-  interpolationSegments: InterpolationSegment[]
-  visibilityRanges: Array<{
-    startFrame: number
-    endFrame: number
-    visible: boolean
-  }>
-  trackId?: string       // Link to tracking result
-  trackingSource?: string  // Tracking model used
-  trackingConfidence?: number
-  totalFrames: number
-  keyframeCount: number
-  interpolatedFrameCount: number
-}
-```
-
-## Performance Optimization
-
-### Lazy Evaluation
-
-The system uses lazy evaluation for interpolation. Instead of pre-computing all frames when you create keyframes, it calculates boxes on demand when you seek to a frame.
-
-### Caching
-
-Computed interpolated boxes are cached in memory. When you seek to a frame multiple times, the system returns the cached value instantly.
-
-### Cache Invalidation
-
-When you modify a keyframe, the system invalidates only the affected interpolation segments. This minimizes recalculation and maintains smooth editing performance.
-
-## Efficiency Gains
-
-### Example: Annotating a Walking Person
-
-**Frame-by-frame approach**:
-- Video: 300 frames (10 seconds at 30 fps)
-- Actions: Draw 300 boxes
-- Time: ~30 minutes (6 seconds per frame)
-
-**Keyframe approach**:
-- Video: 300 frames
-- Actions: Draw 5 keyframes
-- Time: ~3 minutes (36 seconds per keyframe + review)
-- **Reduction**: 90% fewer manual actions
-
-### When to Add Keyframes
-
-Add keyframes when:
-- Object changes direction
-- Object changes speed (acceleration/deceleration)
-- Object changes size significantly
-- Object rotates or changes pose
-- Current interpolation deviates from actual position
-
-## Comparison to Other Tools
-
-Most professional annotation tools (CVAT, Labelbox, V7 Labs) use similar keyframe interpolation systems. FOVEA's implementation provides:
-
-- Bezier curves for complex motion (like After Effects)
-- Visibility ranges for discontiguous sequences
-- Direct integration with automated tracking
-- Per-property interpolation control
-- Parametric motion functions for physics-based animation
-
-## Next Steps
-
-- [Bounding Box Sequences User Guide](../user-guides/annotation/bounding-box-sequences.md): Practical keyframe workflows
-- [Automated Tracking](../user-guides/annotation/automated-tracking.md): Bootstrap sequences with AI
-- [Export and Import](../user-guides/data-management/exporting-data.md): Share sequences between systems
-- [Keyboard Shortcuts](../reference/keyboard-shortcuts.md): Efficient annotation with shortcuts
+A `tracking` annotation came from the tracker filling between
+keyframes. A `detection` annotation came from
+`POST /api/videos/:videoId/detect`. A `manual` annotation came
+from a user drawing it.

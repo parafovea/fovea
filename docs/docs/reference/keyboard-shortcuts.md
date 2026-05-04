@@ -1,78 +1,66 @@
----
-title: Keyboard Shortcuts
-sidebar_position: 5
----
+# Keyboard shortcuts
 
-# Keyboard Shortcuts Reference
+The frontend's command registry
+(`annotation-tool/src/lib/commands/commands.ts`) declares every
+shortcut. `mod` is `Cmd` on macOS and `Ctrl` elsewhere. Press `?`
+in any view to open the shortcuts dialog with the live list.
 
-FOVEA uses keyboard shortcuts throughout the annotation interface. Most actions that require multiple clicks with the mouse can be performed with a single keystroke.
+## Global
 
-## Video Navigation
+```text
+mod+1            Go to Video Browser
+mod+2            Go to Ontology Builder
+mod+3            Go to Object Builder
+o                Toggle Ontology Builder
+w                Toggle World Builder
+v                Return to last active video
+mod+s            Save current work
+mod+e            Export data
+mod+shift+p      Open command palette
+?                Open keyboard shortcuts dialog
+escape           Close current dialog
+```
 
-The arrow keys control frame-by-frame navigation. Press **→** to move forward one frame or **←** to move backward. Hold **Shift** with either arrow key to jump 10 frames at a time. For larger jumps, **Home** takes you to the first frame and **End** to the last.
+## Video playback (annotation workspace)
 
-When working with keyframes, **Ctrl+→** and **Ctrl+←** jump directly to the next or previous keyframe in the sequence, skipping all interpolated frames between them.
+```text
+space            Play / pause
+right            Next frame
+left             Previous frame
+shift+right      Jump 10 frames forward
+shift+left       Jump 10 frames backward
+mod+right        Jump to next keyframe
+mod+left         Jump to previous keyframe
+home             Jump to frame 0
+end              Jump to last frame
+f                Toggle fullscreen
+t                Toggle timeline
+```
 
-Video playback follows standard conventions. **Space** toggles play and pause. The **J**, **K**, and **L** keys provide reverse, pause, and forward playback respectively, matching professional video editing software.
+## Annotation editing (annotation workspace)
 
-## Annotation Actions
+```text
+n                Start drawing a new annotation
+escape           Cancel drawing in progress
+enter            Confirm drawing in progress
+k                Add keyframe at current frame
+c                Copy bounding box from previous keyframe
+v                Toggle annotation visibility at current frame
+delete           Delete keyframe at current frame
+                 (when keyframe selected; otherwise deletes the annotation)
+tab              Select next annotation
+shift+tab        Select previous annotation
+plus / equals    Zoom timeline in
+minus            Zoom timeline out
+```
 
-Press **B** to begin drawing a new bounding box. Once you have a box selected, **K** adds a keyframe at the current frame. To remove a keyframe, navigate to that frame and press **Delete**.
+## Ontology workspace
 
-The **V** key toggles visibility for the selected annotation at the current frame. This creates visibility ranges when objects enter or leave the video frame. For more precise control, **[** and **]** mark in and out points for visibility.
-
-To copy the previous frame's bounding box to the current frame, use **C**. This is useful for tracking slowly moving objects where interpolation might overshoot the actual position.
-
-Press **I** to open the interpolation mode selector for the current segment. This lets you change how the system calculates intermediate frames between keyframes.
-
-Press **T** to toggle the timeline panel visibility. The timeline replaces the standard video controls when expanded, showing keyframe markers and interpolation segments for precise editing.
-
-## Timeline Editing
-
-Click keyframes on the timeline to select them. **Ctrl+Click** adds multiple keyframes to the selection. **Shift+Click** between two keyframes selects all keyframes in that range. **Ctrl+A** selects all keyframes in the sequence.
-
-Drag keyframes to move them in time. Hold **Alt** while dragging to disable snapping, allowing precise frame placement.
-
-## Tracking Workflow
-
-When reviewing tracking results, **Y** accepts the current track as an annotation and **N** rejects it. Press **↓** and **↑** to move between tracks in the results panel. **Enter** previews the selected track. **Ctrl+T** opens the tracking dialog from the video view.
-
-## Selection and Deselection
-
-**Tab** cycles forward through annotations on the current frame. **Shift+Tab** cycles backward. This is faster than clicking each annotation when multiple objects overlap.
-
-**Esc** deselects the current annotation or cancels the current drawing operation. Use it whenever you want to return to an unselected state.
-
-## Box Adjustments
-
-With a box selected, the arrow keys nudge it 1 pixel in any direction. Hold **Shift** with the arrow keys to nudge 10 pixels at a time. This provides precise positioning without requiring mouse interaction.
-
-## Claim Editor Shortcuts
-
-When the Claim Editor dialog is open and no input field is focused, the following shortcuts switch workspaces while preserving your in-progress claim as a draft.
-
-Press **W** to save the current claim form as a draft and navigate to the Object Builder. Press **O** to save the draft and navigate to the Ontology Builder. Both shortcuts store all form fields (gloss, confidence, modality, claimer, context, comment) so you can look up or create entities in the other workspace.
-
-After navigating away, a "Draft Claim" chip appears in the top toolbar. Click it to return to the annotation workspace and resume editing. The chip's delete button discards the draft.
-
-These shortcuts do not fire when focus is on an input, textarea, contentEditable element, or combobox, so they will not interfere with typing.
-
-## Dialog and Export Operations
-
-**Ctrl+E** opens the export dialog. **Ctrl+I** opens the import dialog. These work from anywhere in the application.
-
-**Ctrl+S** forces an immediate save of annotations. Annotations auto-save automatically after 1 second of inactivity, but this shortcut ensures changes are committed immediately. Use before switching videos, closing the browser, or when you need confirmation that changes persisted.
-
-**Ctrl+Z** and **Ctrl+Shift+Z** provide undo and redo functionality across most operations.
-
-## Platform Notes
-
-On macOS, **Cmd** generally replaces **Ctrl** for standard operations like copy, paste, undo, and save. The exception is **Ctrl+Click** for multi-selection, which uses **Ctrl** on all platforms.
-
-## Context Help
-
-Press **?** at any time to show the keyboard shortcuts dialog with context-sensitive shortcuts for your current view.
-
-## Next Steps
-
-The [Bounding Box Sequences Guide](../user-guides/annotation/bounding-box-sequences.md) demonstrates these shortcuts in practice. The [Automated Tracking Guide](../user-guides/annotation/automated-tracking.md) covers tracking-specific shortcuts.
+```text
+n                Create new type (context-aware)
+enter            Edit selected type
+delete           Delete selected type
+mod+d            Duplicate selected type
+/                Focus search field
+mod+shift+s      Generate type suggestions with AI
+```
