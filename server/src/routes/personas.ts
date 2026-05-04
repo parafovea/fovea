@@ -195,13 +195,23 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot create Persona in this scope')
     }
 
+    // Only system_admin may flag a persona as system-generated, since
+    // system personas are visible to unauthenticated visitors via the
+    // unauthenticated GET /api/personas branch. A non-admin attempting
+    // to set this flag has it silently coerced to false rather than 403
+    // so legitimate clients that send the field unconditionally still
+    // succeed.
+    const isSystemGenerated = request.user?.systemRole === 'system_admin'
+      ? validatedData.isSystemGenerated
+      : false
+
     const persona = await fastify.prisma.persona.create({
       data: {
         name: validatedData.name,
         role: validatedData.role,
         informationNeed: validatedData.informationNeed,
         details: validatedData.details || null,
-        isSystemGenerated: validatedData.isSystemGenerated,
+        isSystemGenerated,
         hidden: validatedData.hidden,
         userId,
         projectId,
@@ -326,10 +336,18 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot update this Persona')
     }
 
+    // Only system_admin may toggle isSystemGenerated; strip it from
+    // non-admin updates so a regular user cannot publish their persona to
+    // anonymous visitors via the unauthenticated GET /api/personas branch.
+    const updatePayload = { ...validatedData }
+    if (request.user?.systemRole !== 'system_admin') {
+      delete (updatePayload as { isSystemGenerated?: boolean }).isSystemGenerated
+    }
+
     try {
       const persona = await fastify.prisma.persona.update({
         where: { id },
-        data: validatedData
+        data: updatePayload
       })
       personaOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(persona)

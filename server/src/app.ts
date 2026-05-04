@@ -1,4 +1,4 @@
-import Fastify from 'fastify'
+import Fastify, { FastifyError } from 'fastify'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUI from '@fastify/swagger-ui'
 import fastifyCors from '@fastify/cors'
@@ -172,7 +172,7 @@ export async function buildApp() {
    * - Fastify validation errors: Returns 400 with validation details
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const route = request.routeOptions?.url || request.url
     const method = request.method
 

@@ -6,7 +6,8 @@ import snakecaseKeys from 'snakecase-keys'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../../utils/queryBuilder.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
-import { NotFoundError, ValidationError, InternalError, AppError, ErrorResponseSchema } from '../../lib/errors.js'
+import { NotFoundError, ValidationError, InternalError, AppError, ForbiddenError, ErrorResponseSchema } from '../../lib/errors.js'
+import { subject } from '@casl/ability'
 
 /**
  * Object detection route.
@@ -66,6 +67,21 @@ export const detectRoutes: FastifyPluginAsync<{
         // Validate that either personaId or manualQuery is provided
         if (!personaId && !manualQuery) {
           throw new ValidationError('Either personaId or manualQuery must be provided')
+        }
+
+        // The persona used to build the detection query must belong to the
+        // requester. Without this guard, A could feed B's ontology into
+        // the detector (consuming model-service quota on B's behalf and
+        // leaking B's type vocabulary indirectly via the constructed
+        // query). Wired through the same CASL ability the rest of the
+        // app uses — no parallel ownership system.
+        if (personaId) {
+          if (!request.ability) throw new ForbiddenError('No abilities defined')
+          const persona = await prisma.persona.findUnique({ where: { id: personaId } })
+          if (!persona) throw new NotFoundError('Persona', personaId)
+          if (!request.ability.can('read', subject('Persona', persona))) {
+            throw new ForbiddenError('Cannot use this persona for detection')
+          }
         }
 
         // Build query based on persona or use manual query

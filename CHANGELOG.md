@@ -5,6 +5,46 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-05-04
+
+Forward-ports the data-fidelity, schema, UX, and DoS fixes from v0.1.8 (see the v0.1.8 section below) to the v0.2.x line. The bug taxonomy and user-visible behavior is the same; this section lists only the deltas specific to integrating those fixes into v0.2.0's CASL-based RBAC framework, plus the items unique to this release.
+
+### Schema
+
+- Adds `Annotation.linkType` column. Same column as v0.1.8; migration re-stamped as `20260505000000_add_annotation_link_type` to land after v0.2.0's `20260415000000_backfill_rbac_ownership`.
+
+### Fixed (RBAC integration deltas)
+
+The fixes below are conceptually the same as v0.1.8 but are wired through v0.2.0's CASL machinery rather than v0.1.8's `lib/ownership.ts` helpers, so there is no parallel ownership system on the v0.2.x line.
+
+- `POST /api/annotations` calls `request.ability.can('read', subject('Persona', persona))` on the supplied `personaId` before attaching. The generic `create Annotation` candidate carries `createdByUserId = caller` and passes CASL's create rule even when the target persona is foreign; the explicit read-on-target gate closes the gap.
+- `POST /api/summaries/:summaryId/claims` and `GET /api/summaries/:summaryId/claims` apply the same `read`-on-parent gate via `subject('VideoSummary', summary)`.
+- `POST /api/videos/:videoId/detect` runs `ability.can('read', subject('Persona', persona))` when a `personaId` is supplied. The videos plugin now also wires `buildAbilities` so `request.ability` is populated for every video sub-route (it was not, prior to this release).
+- `PUT /api/ontology` and `POST /api/ontology/augment` catch blocks re-throw `AppError` so authorization-induced 403/404 are no longer collapsed into 500.
+- `POST` / `PUT /api/personas` strip `isSystemGenerated` for non-`system_admin` requests by checking `request.user.systemRole` (v0.1.8 used `request.user.isAdmin`; v0.2.0 split admin into a `systemRole` field).
+- `GET /api/import/history` scopes by `importedBy = request.user.id` directly. `ImportHistory` is intentionally not modeled as a CASL subject, so explicit scoping is the right shape.
+
+### Fixed (carried through unchanged from v0.1.8)
+
+- `Claim.audio` / `Claim.video` / `Claim.metadata` round-trip for any JSON value (was wiped to `JsonNull` for non-arrays).
+- Object annotations linked to events / times / locations round-trip through export+import via the new `linkType` column.
+- `POST /api/import` returns 4xx (typically 413) for `FST_*_LIMIT` codes instead of 500.
+- `POST /api/import` populates `importedBy` so the history listing returns the row.
+- `app.setErrorHandler` types its `error` parameter as `FastifyError`.
+
+### UX (carried through unchanged from v0.1.8)
+
+- `ImportResultDialog` shows a yellow "Completed with Warnings" title and a prominent banner when annotations were skipped because of missing referenced data.
+
+### Infrastructure
+
+- `model-service/Dockerfile` retries `pip install torch torchvision` and `pip install -e .` up to 3× with a 30s sleep between attempts, matching the existing `apt-get update` retry pattern. v0.2.0's release workflow run failed at the `pip install` step from a transient network error.
+- `.github/workflows/ci.yml` triggers on `release/**` PRs in addition to `main` / `develop`, so backport PRs to maintenance branches go through the same lint + test gate.
+
+### Tests
+
+- Forward-ports every v0.1.8 test suite (multi-user-isolation, import-export-cross-user, import-export-edges, import-export-fidelity, issue-121-real-fixture, plus the orphan-banner predicate test and Playwright spec). Seeds adjusted to populate v0.2.x's `createdBy` / `createdByUserId` ownership columns. New shared helper `test/integration/_rbac-baseline.ts` wipes the test-helper's blanket-grant `RolePermission` rows and re-seeds an ownership-aware production-like baseline (every action `ownOnly: true` for content types) so the matrix actually exercises CASL's per-row ownership rules rather than the test-helper's unconditional grants — without this, the matrix would falsely pass against v0.2.0's permission state.
+
 ## [0.2.0] - 2026-04-21
 
 ### Added

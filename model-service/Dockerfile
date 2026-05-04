@@ -93,23 +93,35 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml ./
 
-# Install PyTorch based on device type (CPU or CUDA) with pip cache mount
+# Install PyTorch based on device type (CPU or CUDA) with pip cache mount.
+# Retry up to 3x to handle transient PyPI / pytorch.org mirror failures —
+# v0.2.0's release.yml run failed at this step from a pip exit-code 2 that
+# turned out to be network-side.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$DEVICE" = "cpu" ]; then \
-        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-        pip install --no-cache-dir torch torchvision; \
-    fi
+    for i in 1 2 3; do \
+        if [ "$DEVICE" = "cpu" ]; then \
+            pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && break; \
+        else \
+            pip install --no-cache-dir torch torchvision && break; \
+        fi; \
+        echo "torch install failed (attempt $i/3), retrying in 30s..."; \
+        sleep 30; \
+    done
 
-# Install dependencies based on BUILD_MODE with pip cache mount
+# Install dependencies based on BUILD_MODE with pip cache mount. Same retry
+# loop as the torch install above.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$BUILD_MODE" = "full" ]; then \
-        pip install --no-cache-dir -e ".[inference-engines]"; \
-    elif [ "$BUILD_MODE" = "recommended" ]; then \
-        pip install --no-cache-dir -e ".[recommended]"; \
-    else \
-        pip install --no-cache-dir -e .; \
-    fi
+    for i in 1 2 3; do \
+        if [ "$BUILD_MODE" = "full" ]; then \
+            pip install --no-cache-dir -e ".[inference-engines]" && break; \
+        elif [ "$BUILD_MODE" = "recommended" ]; then \
+            pip install --no-cache-dir -e ".[recommended]" && break; \
+        else \
+            pip install --no-cache-dir -e . && break; \
+        fi; \
+        echo "pip install -e failed (attempt $i/3), retrying in 30s..."; \
+        sleep 30; \
+    done
 
 # Production stage
 FROM base AS production

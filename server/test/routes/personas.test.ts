@@ -183,7 +183,15 @@ describe('Personas API', () => {
 
       expect(response.statusCode).toBe(201)
       const created = response.json()
-      expect(created).toMatchObject(newPersona)
+      // v0.2.1 coerces isSystemGenerated to false for non-admin requests
+      // so a regular user cannot publish their persona to anonymous
+      // visitors via the unauthenticated GET /api/personas branch.
+      expect(created.name).toBe(newPersona.name)
+      expect(created.role).toBe(newPersona.role)
+      expect(created.informationNeed).toBe(newPersona.informationNeed)
+      expect(created.details).toBe(newPersona.details)
+      expect(created.hidden).toBe(true)
+      expect(created.isSystemGenerated).toBe(false)
     })
 
     it('creates an associated ontology when creating a persona', async () => {
@@ -355,9 +363,11 @@ describe('Personas API', () => {
 
       expect(response.statusCode).toBe(200)
       const updated = response.json()
+      // v0.2.1 strips isSystemGenerated from non-admin updates so a
+      // regular user cannot toggle the flag.
       expect(updated.details).toBe('Updated details')
-      expect(updated.isSystemGenerated).toBe(true)
       expect(updated.hidden).toBe(true)
+      expect(updated.isSystemGenerated).toBe(false)
     })
 
     it('returns 404 for non-existent persona', async () => {

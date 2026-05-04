@@ -344,6 +344,14 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Summary', summaryId)
       }
 
+      // Defense in depth: even if a caller knows another user's
+      // summaryId, deny the claim listing. Without this, the summaries-
+      // list scoping is the only gate, and a known summaryId would
+      // unconditionally surface its claims.
+      if (!request.ability.can('read', subject('VideoSummary', summary))) {
+        throw new ForbiddenError('Cannot read claims under this Summary')
+      }
+
       // Build include object for nested subclaims
       const includeConfig = includeSubclaims ? {
         subclaims: {
@@ -478,12 +486,19 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
       const summary = summaryType === 'video'
         ? await fastify.prisma.videoSummary.findUnique({
             where: { id: summaryId },
-            select: { id: true, projectId: true },
           })
         : null
 
       if (!summary) {
         throw new NotFoundError('Summary', summaryId)
+      }
+
+      // The parent summary must be one the caller can read; otherwise A
+      // could attach claims under B's summary (the create candidate
+      // carries createdBy=A so the generic create rule passes even when
+      // the parent summary belongs to B).
+      if (!request.ability.can('read', subject('VideoSummary', summary))) {
+        throw new ForbiddenError('Cannot create a claim under this Summary')
       }
 
       // Pre-authorize create on a candidate Claim in the resolved scope. The
