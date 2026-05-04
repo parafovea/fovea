@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { reseedOwnershipBaseline } from './_rbac-baseline.js'
 import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
@@ -33,6 +34,7 @@ describe('Cross-user import/export round-trip', () => {
   })
 
   beforeEach(async () => {
+    await reseedOwnershipBaseline(prisma)
     // Clean database in dependency order
     await prisma.importHistory.deleteMany()
     await prisma.claimRelation.deleteMany()

@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, AppError } from '../lib/errors.js'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -369,6 +369,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         world: worldData
       })
     } catch (error: unknown) {
+      // Re-throw AppError so the global handler returns the proper status
+      // (403 for ability denials, 404 for not-found); without this the
+      // catch collapsed every error including ForbiddenError into a 500.
+      if (error instanceof AppError) throw error
       fastify.log.error({ error }, 'Error saving ontology data')
       if (error instanceof Error) {
         fastify.log.error(`Error name: ${error.name}`)
@@ -480,6 +484,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
 
       return reply.send(result)
     } catch (error) {
+      // Re-throw AppError so authorization checks (NotFoundError /
+      // ForbiddenError from ability gates) surface as their proper status
+      // rather than 500.
+      if (error instanceof AppError) throw error
       fastify.log.error(error, 'Error generating ontology suggestions')
       return reply.code(500).send({
         error: error instanceof Error ? error.message : 'Failed to generate suggestions'

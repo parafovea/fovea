@@ -98,25 +98,34 @@ WORKDIR /app
 COPY pyproject.toml ./
 
 # Install PyTorch based on device type (CPU or CUDA) with pip cache mount
+# Retry up to 3 times to handle transient PyPI/PyTorch index mirror flakes that
+# otherwise cause the release.yml model-service-cpu image build to fail.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$DEVICE" = "cpu" ]; then \
-        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-        pip install --no-cache-dir torch torchvision; \
-    fi
+    for i in 1 2 3; do \
+        if [ "$DEVICE" = "cpu" ]; then \
+            pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && break; \
+        else \
+            pip install --no-cache-dir torch torchvision && break; \
+        fi; \
+        echo "pip install torch failed (attempt $i/3), retrying in 30s..." && sleep 30; \
+    done
 
-# Install dependencies based on BUILD_MODE with pip cache mount
+# Install dependencies based on BUILD_MODE with pip cache mount; retry to
+# survive transient PyPI mirror failures that previously broke release.yml.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$BUILD_MODE" = "full" ]; then \
-        pip install --no-cache-dir -e ".[inference-engines]"; \
-    elif [ "$BUILD_MODE" = "recommended" ]; then \
-        pip install --no-cache-dir -e ".[recommended]"; \
-    else \
-        pip install --no-cache-dir -e .; \
-    fi && \
-    if [ "$DEVICE" = "cpu" ]; then \
-        pip install --no-cache-dir -e ".[cpu]"; \
-    fi
+    for i in 1 2 3; do \
+        ( if [ "$BUILD_MODE" = "full" ]; then \
+              pip install --no-cache-dir -e ".[inference-engines]"; \
+          elif [ "$BUILD_MODE" = "recommended" ]; then \
+              pip install --no-cache-dir -e ".[recommended]"; \
+          else \
+              pip install --no-cache-dir -e .; \
+          fi ) && \
+        ( if [ "$DEVICE" = "cpu" ]; then \
+              pip install --no-cache-dir -e ".[cpu]"; \
+          fi ) && break; \
+        echo "pip install -e failed (attempt $i/3), retrying in 30s..." && sleep 30; \
+    done
 
 # Production stage
 FROM base AS production

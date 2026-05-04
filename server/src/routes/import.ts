@@ -146,6 +146,10 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.importHistory.create({
           data: {
             filename: data.filename,
+            // Required so the history listing endpoint can scope rows to
+            // the importing user. Was previously omitted, leaving every
+            // user with an empty history view.
+            importedBy: request.user!.id,
             importOptions: toJsonValue(options),
             result: toJsonValue(result),
             success: result.success,
@@ -160,6 +164,16 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       // Re-throw typed errors (ValidationError, etc.) to be handled by global error handler
       if (error instanceof ValidationError || error instanceof InternalError) {
+        throw error
+      }
+      // @fastify/multipart raises a FastifyError when the upload exceeds
+      // the configured fileSize. Surface those as 4xx (typically 413)
+      // instead of collapsing into a 500.
+      const errAsObj = error as { statusCode?: number; code?: string; message?: string } | null
+      if (errAsObj?.code && /^FST_(REQ_FILE_TOO_LARGE|FILES_LIMIT|FIELDS_LIMIT|PARTS_LIMIT|PROTO_VIOLATION)$/.test(errAsObj.code)) {
+        throw new ValidationError(errAsObj.message || 'Upload rejected by multipart limits')
+      }
+      if (errAsObj?.statusCode && errAsObj.statusCode >= 400 && errAsObj.statusCode < 500) {
         throw error
       }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -328,8 +342,13 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      // ImportHistory is not modeled as a CASL subject; scope explicitly
+      // by importedBy so multi-user instances don't leak each other's
+      // import provenance (filenames, row counts).
+      const where = { importedBy: request.user!.id }
       const [imports, total] = await Promise.all([
         fastify.prisma.importHistory.findMany({
+          where,
           select: {
             id: true,
             filename: true,
@@ -342,7 +361,7 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
           take: limit,
           skip: offset
         }),
-        fastify.prisma.importHistory.count()
+        fastify.prisma.importHistory.count({ where })
       ])
 
       return reply.send({

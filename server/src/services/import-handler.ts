@@ -1869,14 +1869,19 @@ export class ImportHandler {
         confidence: (line.data.confidence as number) || undefined,
         modelUsed: (line.data.modelUsed as string) || undefined,
         extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-        audio: line.data.audio !== undefined && line.data.audio !== null 
-          ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+        // Preserve any JSON-valued audio/video/metadata payload — array,
+        // object, string, number, boolean. The previous `Array.isArray`
+        // guard wiped object-shaped payloads to JsonNull, a fidelity bug
+        // surfaced by import-export-fidelity.test.ts. Columns are typed
+        // `Json?` and accept any shape.
+        audio: line.data.audio !== undefined && line.data.audio !== null
+          ? (line.data.audio as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         video: line.data.video !== undefined && line.data.video !== null
-          ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+          ? (line.data.video as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         metadata: line.data.metadata !== undefined && line.data.metadata !== null
-          ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+          ? (line.data.metadata as Prisma.InputJsonValue)
           : Prisma.JsonNull,
         comment: (line.data.comment as string) || undefined,
         createdBy: (line.data.createdBy as string) || undefined,
@@ -1917,14 +1922,15 @@ export class ImportHandler {
             confidence: (line.data.confidence as number) || undefined,
             modelUsed: (line.data.modelUsed as string) || undefined,
             extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-            audio: line.data.audio !== undefined && line.data.audio !== null 
-              ? (Array.isArray(line.data.audio) ? line.data.audio as Prisma.InputJsonValue : Prisma.JsonNull)
+            // See note above: preserve any JSON value, not just arrays.
+            audio: line.data.audio !== undefined && line.data.audio !== null
+              ? (line.data.audio as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             video: line.data.video !== undefined && line.data.video !== null
-              ? (Array.isArray(line.data.video) ? line.data.video as Prisma.InputJsonValue : Prisma.JsonNull)
+              ? (line.data.video as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             metadata: line.data.metadata !== undefined && line.data.metadata !== null
-              ? (Array.isArray(line.data.metadata) ? line.data.metadata as Prisma.InputJsonValue : Prisma.JsonNull)
+              ? (line.data.metadata as Prisma.InputJsonValue)
               : Prisma.JsonNull,
             comment: (line.data.comment as string) || undefined,
             createdBy: this.userId,
@@ -2121,6 +2127,34 @@ export class ImportHandler {
 
       // Store the boundingBoxSequence in the frames field. Force ownership
       // and project scope to the importer; never honour the payload's values.
+      //
+      // Picks `label` and `linkType` from whichever `linked*Id` field the
+      // export carries, so event/time/location-linked object annotations
+      // round-trip correctly. Previously only `linkedEntityId` was honoured,
+      // which silently flattened every object annotation into entity-linked.
+      const annotationType = annotation.annotationType ?? 'type'
+      let label: string
+      let linkType: string | null = null
+      if (annotationType === 'object') {
+        if (annotation.linkedEntityId) {
+          label = annotation.linkedEntityId
+          linkType = 'entity'
+        } else if (annotation.linkedEventId) {
+          label = annotation.linkedEventId
+          linkType = 'event'
+        } else if (annotation.linkedTimeId) {
+          label = annotation.linkedTimeId
+          linkType = 'time'
+        } else if (annotation.linkedLocationId) {
+          label = annotation.linkedLocationId
+          linkType = 'location'
+        } else {
+          label = ''
+        }
+      } else {
+        label = annotation.typeId ?? ''
+      }
+
       await tx.annotation.create({
         data: {
           id: annotation.id,
@@ -2129,8 +2163,9 @@ export class ImportHandler {
           userId: this.userId,
           createdByUserId: this.userId,
           projectId: this.projectId,
-          type: annotation.annotationType ?? 'type',
-          label: annotation.typeId ?? annotation.linkedEntityId ?? '',
+          type: annotationType,
+          label,
+          linkType,
           frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,
           confidence: annotation.confidence,
           source: 'import',
