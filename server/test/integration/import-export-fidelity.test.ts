@@ -97,7 +97,6 @@ describe('Import/export field-level round-trip fidelity', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json() as { success: boolean; errors: Array<{ message: string }>; conflicts: unknown[] }
     if (!body.success) {
-      // eslint-disable-next-line no-console
       console.error('import failed:', JSON.stringify(body.errors, null, 2))
     }
     expect(body.success).toBe(true)
