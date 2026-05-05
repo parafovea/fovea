@@ -455,7 +455,7 @@ jobs:
       - lint-model-service
       - lint-wikibase
       - test-wikibase
-      - test-e2e
+      # - test-e2e  # disabled (job has if: false; gate must not require it)
       # test-model-service disabled due to disk space constraints
     if: always()
     steps:
@@ -483,7 +483,7 @@ jobs:
             echo "- Tests: ${{ needs.test-wikibase.result }}"
             echo ""
             echo "### Integration"
-            echo "- E2E Tests: ${{ needs.test-e2e.result }} (smoke + functional + regression + accessibility)"
+            # echo "- E2E Tests: ${{ needs.test-e2e.result }}" — disabled
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
@@ -496,7 +496,7 @@ jobs:
           LINT_MODEL="${{ needs.lint-model-service.result }}"
           LINT_WIKIBASE="${{ needs.lint-wikibase.result }}"
           TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
-          TEST_E2E="${{ needs.test-e2e.result }}"
+          # TEST_E2E="${{ needs.test-e2e.result }}"  # disabled
 
           if [ "$LINT_FRONTEND" != "success" ] || \
              [ "$TEST_FRONTEND" != "success" ] || \
@@ -506,8 +506,7 @@ jobs:
              [ "$BUILD_BACKEND" != "success" ] || \
              [ "$LINT_MODEL" != "success" ] || \
              [ "$LINT_WIKIBASE" != "success" ] || \
-             [ "$TEST_WIKIBASE" != "success" ] || \
-             [ "$TEST_E2E" != "success" ]; then
+             [ "$TEST_WIKIBASE" != "success" ]; then  # E2E disabled
             {
               echo ""
               echo "❌ Quality gate FAILED"
