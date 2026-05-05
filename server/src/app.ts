@@ -278,6 +278,15 @@ export async function buildApp() {
   const apiKeysRoute = await import('./routes/api-keys.js')
   await app.register(apiKeysRoute.default)
 
+  const preferencesRoute = await import('./routes/preferences.js')
+  await app.register(preferencesRoute.default)
+
+  const personaPreferencesRoute = await import('./routes/persona-preferences.js')
+  await app.register(personaPreferencesRoute.default)
+
+  const adminConfigRoute = await import('./routes/admin-config.js')
+  await app.register(adminConfigRoute.default)
+
   const configRoute = await import('./routes/config.js')
   await app.register(configRoute.default)
 

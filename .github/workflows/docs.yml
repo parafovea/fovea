@@ -23,15 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            docs/package-lock.json
-            annotation-tool/package-lock.json
-            server/package-lock.json
+          cache: 'pnpm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -49,13 +48,8 @@ jobs:
         run: |
           cd docs && npm ci
 
-      - name: Install annotation-tool dependencies (for TypeDoc)
-        run: |
-          cd annotation-tool && npm ci
-
-      - name: Install server dependencies (for TypeDoc)
-        run: |
-          cd server && npm ci
+      - name: Install annotation-tool and server dependencies (for TypeDoc)
+        run: pnpm install --frozen-lockfile
 
       - name: Install model-service dependencies (for Sphinx)
         run: |

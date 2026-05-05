@@ -1,7 +1,25 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
-import { InternalError } from '../lib/errors.js'
+import { InternalError, ValidationError } from '../lib/errors.js'
+
+const ALLOWED_TASK_TYPES = new Set([
+  'videoSummarization',
+  'ontologyAugmentation',
+  'objectDetection',
+  'videoTracking',
+  'audioTranscription',
+  'speakerDiarization',
+  'voiceActivityDetection',
+  'claimExtraction',
+  'claimSynthesis',
+])
+
+function assertAllowedTaskType(taskType: string): void {
+  if (!ALLOWED_TASK_TYPES.has(taskType)) {
+    throw new ValidationError(`Unknown taskType: ${taskType}`)
+  }
+}
 
 /**
  * Model service API routes.
@@ -205,6 +223,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType, modelName } = request.query
+      assertAllowedTaskType(taskType)
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/select`,
         null,
@@ -306,6 +325,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType } = request.params
+      assertAllowedTaskType(taskType)
       const response = await axios.get(
         `${MODEL_SERVICE_URL}/api/models/task-ready/${toSnakeCase(taskType)}`,
         { timeout: 10000 }
@@ -345,6 +365,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType } = request.params
+      assertAllowedTaskType(taskType)
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/load/${toSnakeCase(taskType)}`,
         null,
@@ -385,6 +406,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType } = request.params
+      assertAllowedTaskType(taskType)
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/unload/${toSnakeCase(taskType)}`,
         null,
