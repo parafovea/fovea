@@ -393,6 +393,9 @@ importers:
       eslint:
         specifier: ^8.56.0
         version: 8.57.1
+      fast-check:
+        specifier: ^3.23.2
+        version: 3.23.2
       form-data:
         specifier: ^4.0.5
         version: 4.0.5
@@ -9477,7 +9480,7 @@ snapshots:
       std-env: 3.10.0
       test-exclude: 7.0.2
       tinyrainbow: 2.0.0
-      vitest: 3.2.4(@types/node@20.19.37)(@vitest/ui@3.2.4)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(msw@2.12.10(@types/node@20.19.37)(typescript@5.9.3))
+      vitest: 3.2.4(@types/node@20.19.37)(@vitest/ui@3.2.4)(jsdom@26.1.0)(lightningcss@1.31.1)(msw@2.12.10(@types/node@20.19.37)(typescript@5.9.3))
     transitivePeerDependencies:
       - supports-color
 
@@ -9527,7 +9530,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 2.0.0
-      vitest: 3.2.4(@types/node@20.19.37)(@vitest/ui@3.2.4)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(msw@2.12.10(@types/node@20.19.37)(typescript@5.9.3))
+      vitest: 3.2.4(@types/node@20.19.37)(@vitest/ui@3.2.4)(jsdom@26.1.0)(lightningcss@1.31.1)(msw@2.12.10(@types/node@20.19.37)(typescript@5.9.3))
 
   '@vitest/utils@3.2.4':
     dependencies:
