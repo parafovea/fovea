@@ -3,21 +3,11 @@ import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
 import { InternalError, ValidationError } from '../lib/errors.js'
 
-const ALLOWED_TASK_TYPES = new Set([
-  'videoSummarization',
-  'ontologyAugmentation',
-  'objectDetection',
-  'videoTracking',
-  'audioTranscription',
-  'speakerDiarization',
-  'voiceActivityDetection',
-  'claimExtraction',
-  'claimSynthesis',
-])
+const SAFE_TASK_TYPE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/
 
 function assertAllowedTaskType(taskType: string): void {
-  if (!ALLOWED_TASK_TYPES.has(taskType)) {
-    throw new ValidationError(`Unknown taskType: ${taskType}`)
+  if (!SAFE_TASK_TYPE.test(taskType)) {
+    throw new ValidationError(`Invalid taskType: ${taskType}`)
   }
 }
 
