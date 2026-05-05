@@ -181,32 +181,117 @@ jobs:
               fi
             fi
 
-            echo '🐳 Building and restarting containers...'
+            echo '🧹 Pre-build cleanup to free disk space...'
+            docker image prune -f
+            docker builder prune -af
+            df -h /
+
+            echo '💾 Checking available disk space...'
+            AVAIL=\$(df --output=avail / | tail -1)
+            if [ \"\$AVAIL\" -lt 2097152 ]; then
+              echo 'FATAL: Less than 2GB disk space available after cleanup'
+              df -h /
+              exit 1
+            fi
+            echo \"Available: \$((\$AVAIL / 1024))MB\"
+
+            echo '🐳 Building containers...'
             docker compose build --parallel
-            docker compose up -d --force-recreate
 
-            echo '🔄 Running database migrations...'
-            docker compose exec -T backend npx prisma migrate deploy || exit 1
+            echo '🔍 Verifying Redis health before full startup...'
+            docker compose up -d redis
+            sleep 5
+            if ! docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
+              echo '⚠️  Redis unhealthy - removing corrupted data volume and restarting...'
+              docker compose stop redis
+              docker compose rm -f redis
+              docker volume rm fovea_redis-data 2>/dev/null || true
+              docker compose up -d redis
+              sleep 5
+              if ! docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
+                echo 'FATAL: Redis still unhealthy after volume reset'
+                docker compose logs redis
+                exit 1
+              fi
+              echo '✅ Redis recovered after volume reset'
+            else
+              echo '✅ Redis is healthy'
+            fi
 
-            echo '👤 Seeding database with secure credentials...'
-            docker compose exec -T backend npm run seed || echo '⚠️  Seed failed - check ADMIN_PASSWORD is set'
+            echo '🚀 Starting infrastructure containers...'
+            docker compose up -d --no-deps postgres redis otel-collector
+            docker compose up -d --no-deps prometheus grafana model-service
 
-            echo '⏳ Waiting for backend to be healthy...'
-            for i in {1..30}; do
-              if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
-                echo '✅ Backend is healthy'
+            echo '⏳ Waiting for postgres to be ready...'
+            for i in {1..20}; do
+              if docker compose exec -T postgres pg_isready -U fovea 2>/dev/null; then
+                echo '✅ Postgres ready'
                 break
               fi
-              echo \"Waiting for backend... (\$i/30)\"
+              if [ \$i -eq 20 ]; then
+                echo 'FATAL: Postgres did not become ready in time'
+                docker compose logs --tail=80 postgres
+                exit 1
+              fi
               sleep 2
             done
+
+            echo '🔄 Running database migrations (out-of-band)...'
+            if ! docker compose run --rm --no-deps -T backend sh -c 'npx prisma migrate deploy'; then
+              echo '❌ Migrations failed.'
+              docker compose logs --tail=80 postgres
+              exit 1
+            fi
+
+            echo '👤 Seeding database (out-of-band)...'
+            if ! docker compose run --rm --no-deps -T backend sh -c 'node prisma/seed.cjs'; then
+              echo '⚠️  Seed failed - check ADMIN_PASSWORD is set'
+            fi
+
+            echo '🚀 Starting application containers...'
+            if ! docker compose up -d --force-recreate; then
+              echo '❌ docker compose up failed — dumping logs from every service:'
+              docker compose ps
+              echo '--- backend logs ---'
+              docker compose logs --tail=300 backend || true
+              echo '--- frontend logs ---'
+              docker compose logs --tail=100 frontend || true
+              echo '--- model-service logs ---'
+              docker compose logs --tail=100 model-service || true
+              echo '--- postgres logs ---'
+              docker compose logs --tail=80 postgres || true
+              echo '--- redis logs ---'
+              docker compose logs --tail=40 redis || true
+              exit 1
+            fi
+
+            echo '⏳ Waiting for backend to be healthy...'
+            BACKEND_HEALTHY=false
+            for i in {1..60}; do
+              if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+                echo '✅ Backend is healthy'
+                BACKEND_HEALTHY=true
+                break
+              fi
+              echo \"Waiting for backend... (\$i/60)\"
+              sleep 2
+            done
+
+            if [ \"\$BACKEND_HEALTHY\" != \"true\" ]; then
+              echo '❌ Backend never became healthy — dumping logs:'
+              docker compose ps
+              echo '--- backend logs ---'
+              docker compose logs --tail=300 backend || true
+              echo '--- model-service logs ---'
+              docker compose logs --tail=100 model-service || true
+              exit 1
+            fi
 
             echo '📹 Syncing videos from S3 to database...'
             curl -X POST http://localhost:3001/api/videos/sync || echo '⚠️  Video sync failed, videos may need manual sync'
 
-            echo '🧹 Cleaning up old images and build cache...'
+            echo '🧹 Post-deploy cleanup...'
             docker image prune -f
-            docker builder prune -af
 
             echo '✅ Deployment complete!'
           "

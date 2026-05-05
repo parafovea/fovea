@@ -40,6 +40,11 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'model-service/pyproject.toml'
 
+      - name: Install libvips (required by sharp)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvips-dev
+
       - name: Install documentation dependencies
         run: |
           cd docs && npm ci
