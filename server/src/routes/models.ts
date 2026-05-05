@@ -317,7 +317,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const { taskType } = request.params
       assertAllowedTaskType(taskType)
       const response = await axios.get(
-        `${MODEL_SERVICE_URL}/api/models/task-ready/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/task-ready/${encodeURIComponent(toSnakeCase(taskType))}`,
         { timeout: 10000 }
       )
       return camelcaseKeys(response.data, { deep: true })
@@ -357,7 +357,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const { taskType } = request.params
       assertAllowedTaskType(taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/load/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/load/${encodeURIComponent(toSnakeCase(taskType))}`,
         null,
         { timeout: 300000 } // 5 min timeout for model download + load
       )
@@ -398,7 +398,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       const { taskType } = request.params
       assertAllowedTaskType(taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/unload/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/unload/${encodeURIComponent(toSnakeCase(taskType))}`,
         null,
         { timeout: 30000 }
       )

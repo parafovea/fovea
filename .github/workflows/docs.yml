@@ -53,6 +53,9 @@ jobs:
       - name: Install annotation-tool and server dependencies (for TypeDoc)
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client (required by server TypeDoc)
+        run: cd server && pnpm exec prisma generate
+
       - name: Install model-service dependencies (for Sphinx)
         run: |
           cd model-service
