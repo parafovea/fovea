@@ -1,0 +1,93 @@
+# Annotations
+
+Use the annotations API to create and edit bounding-box sequences.
+Each annotation belongs to one video and either a persona (for
+type annotations) or directly to a user (for object annotations
+without a persona).
+
+## Endpoints
+
+```text
+GET    /api/annotations/:videoId
+POST   /api/annotations
+PUT    /api/annotations/:id
+DELETE /api/annotations/:videoId/:id
+```
+
+## Type vs object
+
+A type annotation has `type: "type"` and a `label` that resolves
+to a typeId from the persona's ontology (for example,
+`label: "player"`). It must carry a `personaId`.
+
+An object annotation has `type: "object"` and a `label` that
+resolves to a world-state object id. The `linkType` column
+discriminates the four kinds:
+
+```text
+linkType   | label resolves through
+-----------+-------------------------------
+"entity"   | worldEntities
+"event"    | worldEvents
+"time"     | worldTimes
+"location" | worldLocations
+NULL       | treated as entity-linked (legacy)
+```
+
+The `linkType` column was added in v0.1.8
+(migration `20260429000000_add_annotation_link_type`). Before
+v0.1.8 the export emitted only `linkedEntityId`, so any object
+annotation linked to an event, time, or location was silently
+flattened on export and on import. The v0.1.8 export emits the
+correct `linkedEventId` / `linkedTimeId` / `linkedLocationId`
+field, the import reads any of the four, and `linkType` is
+preserved on the round-trip.
+
+## Frames and keyframes
+
+The `frames` field is an ordered array of keyframes:
+
+```json
+{
+  "frames": [
+    {"frame": 0,  "box": {"x": 120, "y": 80, "width": 60, "height": 140}},
+    {"frame": 60, "box": {"x": 150, "y": 85, "width": 60, "height": 140}}
+  ]
+}
+```
+
+Frames between keyframes are interpolated linearly at render
+time. The frontend renders this as a smooth box; the backend
+stores only the keyframes. See
+[Concepts > Annotation model](../concepts/annotation-model.md) for
+the algorithm.
+
+## Listing scope
+
+`GET /api/annotations/:videoId` is filtered by
+`accessibleBy(request.ability, 'read').Annotation`. The compiled
+clause matches `createdByUserId = request.user.id` for own-only
+readers and additionally pulls in project-scoped reads for project
+members. The pre-v0.1.8 unscoped listing surfaced foreign users'
+imported copies in the All Annotations tab as duplicate rows; that
+symptom is gone.
+
+## Mutation ownership
+
+`PUT /api/annotations/:id`, `DELETE /api/annotations/:videoId/:id`,
+and `POST /api/annotations` go through CASL: the route fetches the
+target annotation (or, for create, the supplied `personaId` row)
+and calls `request.ability.can(action, subject(...))`. A
+foreign-owned target returns 404. v0.2.1 added an explicit
+`can('read', subject('Persona', persona))` precheck on
+`POST /api/annotations` when `personaId` is supplied, because
+the generic `create Annotation` rule does not look at the
+`personaId` body field. See
+[Concepts > RBAC](../concepts/rbac.md).
+
+## Ownership columns
+
+Write paths populate `Annotation.createdByUserId` (the v0.2.0
+RBAC ownership column) and `Annotation.userId` (the v0.1.8 column,
+kept for back-compat) from the authenticated session. Both
+columns are indexed; CASL uses `createdByUserId`.

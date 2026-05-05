@@ -94,27 +94,9 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          type: 'dropdown',
+          to: '/docs/reference/api',
           label: 'API Reference',
           position: 'left',
-          items: [
-            {
-              label: 'Overview',
-              to: '/docs/api-reference/overview',
-            },
-            {
-              label: 'Frontend API',
-              to: '/docs/api-reference/frontend/',
-            },
-            {
-              label: 'Backend API',
-              to: '/docs/api-reference/backend/',
-            },
-            {
-              label: 'Model Service API',
-              to: '/docs/api-reference/model-service/routes',
-            },
-          ],
         },
         {
           href: 'https://github.com/parafovea/fovea',
@@ -131,16 +113,16 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Getting Started',
-              to: '/docs/getting-started/installation',
+              label: 'Guides',
+              to: '/docs/guide',
             },
             {
-              label: 'Deployment',
-              to: '/docs/deployment/overview',
+              label: 'Data model',
+              to: '/docs/reference/data-model',
             },
             {
               label: 'API Reference',
-              to: '/docs/api-reference/overview',
+              to: '/docs/reference/api',
             },
           ],
         },
@@ -148,16 +130,16 @@ const config: Config = {
           title: 'Resources',
           items: [
             {
-              label: 'User Guides',
-              to: '/docs/user-guides/annotation/creating-annotations',
+              label: 'Concepts',
+              to: '/docs/concepts',
             },
             {
-              label: 'Development',
-              to: '/docs/development/contributing',
+              label: 'Contributing',
+              to: '/docs/project/contributing',
             },
             {
-              label: 'Reference',
-              to: '/docs/reference/docker-commands',
+              label: 'Changelog',
+              to: '/docs/project/changelog',
             },
           ],
         },

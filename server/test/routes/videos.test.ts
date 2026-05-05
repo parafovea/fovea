@@ -265,9 +265,13 @@ describe('Videos API - Detection', () => {
         cookies: { session_token: testSessionToken },
       })
 
-      expect(response.statusCode).toBe(400)
-      expect(response.json().error).toBe('VALIDATION_ERROR')
-      expect(response.json().message).toContain('Persona not found')
+      // The CASL ownership precheck wired up in v0.2.1 runs before
+      // buildDetectionQueryFromPersona, so a non-existent or foreign
+      // persona id surfaces as 404 (NotFoundError from the precheck)
+      // rather than 400 (ValidationError from the inner builder). 404 is
+      // also the right response since it does not confirm the existence
+      // of personas the requester cannot see.
+      expect(response.statusCode).toBe(404)
     })
 
     it('handles persona with no ontology', async () => {

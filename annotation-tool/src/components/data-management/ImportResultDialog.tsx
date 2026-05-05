@@ -17,6 +17,22 @@ import { Separator } from '@/components/ui/separator'
 import { ImportResult } from '@models/types'
 
 /**
+ * Predicate for the orphan-skipped banner. Exported so it can be unit
+ * tested without rendering the full Dialog. Returns true when the
+ * import dropped one or more annotations because they referenced data
+ * not present in the file — the user-visible UX cliff that previously
+ * read as "Import Successful" with zero annotations and no warning.
+ *
+ * @param result - Import result to inspect
+ * @returns Whether the banner should be shown
+ */
+export function shouldShowOrphanSkippedBanner(result: ImportResult): boolean {
+  const skippedCount = result.summary.skippedItems.annotations
+  const hasMissingDep = result.conflicts.some(c => c.type === 'missing-dependency')
+  return skippedCount > 0 && hasMissingDep
+}
+
+/**
  * Props for the ImportResultDialog component.
  *
  * @param open - Whether the dialog is open
@@ -48,15 +64,20 @@ export function ImportResultDialog({ open, result, onClose }: ImportResultDialog
         <DialogHeader>
           <DialogTitle>
             <span className="flex items-center gap-2">
-              {result.success ? (
-                <>
-                  <CheckCircle className="size-5 text-green-600" />
-                  Import Successful
-                </>
-              ) : (
+              {!result.success ? (
                 <>
                   <CircleAlert className="size-5 text-destructive" />
                   Import Failed
+                </>
+              ) : shouldShowOrphanSkippedBanner(result) ? (
+                <>
+                  <AlertTriangle className="size-5 text-yellow-600" />
+                  Completed with Warnings
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="size-5 text-green-600" />
+                  Import Successful
                 </>
               )}
             </span>
@@ -64,6 +85,20 @@ export function ImportResultDialog({ open, result, onClose }: ImportResultDialog
         </DialogHeader>
 
         <div className="flex flex-col gap-6 pt-2">
+          {shouldShowOrphanSkippedBanner(result) && (
+            <Alert variant="default" className="border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-100">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                {result.summary.skippedItems.annotations} annotation
+                {result.summary.skippedItems.annotations === 1 ? ' was' : 's were'}{' '}
+                skipped because the export referenced world objects that
+                were not in the file. To recover, re-export from the
+                source instance with referenced entities, events, times,
+                or locations included.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Summary Statistics */}
           <div>
             <h3 className="mb-3 text-sm font-medium">Summary</h3>

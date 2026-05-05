@@ -68,6 +68,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotation-drawing duplication during keyframe edits
 - Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed)
 
+## [0.3.1] - 2026-05-04
+
+Forward-ports the data-fidelity, schema, UX, and DoS fixes from v0.1.8 (and the v0.2.1 RBAC integration of those fixes) to the v0.3.x line. The bug taxonomy and user-visible behavior is the same as v0.1.8; this section lists only the deltas specific to v0.3.x, plus the items unique to this release. Cross-version exports between v0.2.x and v0.3.x are intentionally not supported.
+
+### Schema
+
+- Adds `Annotation.linkType` column. Same column as v0.1.8 and v0.2.1.
+
+### Fixed (RBAC integration deltas, identical to v0.2.1)
+
+The fixes below are conceptually the same as v0.1.8 but are wired through CASL rather than v0.1.8's `lib/ownership.ts` helpers, so there is no parallel ownership system on the v0.3.x line.
+
+- `POST /api/annotations` calls `request.ability.can('read', subject('Persona', persona))` on the supplied `personaId` before attaching. The generic `create Annotation` candidate carries `createdByUserId = caller` and passes CASL's create rule even when the target persona is foreign; the explicit read-on-target gate closes the gap.
+- `POST /api/summaries/:summaryId/claims` and `GET /api/summaries/:summaryId/claims` apply the same `read`-on-parent gate via `subject('VideoSummary', summary)`.
+- `POST /api/videos/:videoId/detect` runs `ability.can('read', subject('Persona', persona))` when a `personaId` is supplied. The videos plugin also wires `buildAbilities` so `request.ability` is populated for every video sub-route.
+- `PUT /api/ontology` and `POST /api/ontology/augment` catch blocks re-throw `AppError` so authorization-induced 403/404 are no longer collapsed into 500.
+- `POST` / `PUT /api/personas` strip `isSystemGenerated` for non-`system_admin` requests by checking `request.user.systemRole`.
+- `GET /api/import/history` scopes by `importedBy = request.user.id` directly.
+
+### Fixed (carried through unchanged from v0.1.8)
+
+- `Claim.audio` / `Claim.video` / `Claim.metadata` round-trip for any JSON value (was wiped to `JsonNull` for non-arrays).
+- Object annotations linked to events / times / locations round-trip through export+import via the new `linkType` column.
+- `POST /api/import` returns 4xx (typically 413) for `FST_*_LIMIT` codes instead of 500.
+- `POST /api/import` populates `importedBy` so the history listing returns the row.
+- `app.setErrorHandler` types its `error` parameter as `FastifyError`.
+
+### UX (carried through unchanged from v0.1.8)
+
+- `ImportResultDialog` shows a yellow "Completed with Warnings" title and a prominent banner when annotations were skipped because of missing referenced data.
+
+### Infrastructure
+
+- `model-service/Dockerfile` retries `pip install torch torchvision` and `pip install -e .` up to 3× with a 30s sleep between attempts, matching the existing `apt-get update` retry pattern. Closes a release.yml flake first observed on v0.2.0's release run.
+- `.github/workflows/ci.yml` triggers on `release/**` PRs in addition to `main` / `develop`, so backport PRs to maintenance branches go through the same lint + test gate.
+
+### Tests
+
+- Forward-ports every v0.1.8 / v0.2.1 test suite (multi-user-isolation, import-export-cross-user, import-export-edges, import-export-fidelity, issue-121-real-fixture, orphan-banner predicate test, Playwright spec). Seeds populate `createdBy` / `createdByUserId`. Shared helper `test/integration/_rbac-baseline.ts` wipes the test-helper's blanket-grant `RolePermission` rows and re-seeds an ownership-aware production-like baseline so the matrix actually exercises CASL's per-row ownership rules.
+
 ## [0.3.0] - 2026-04-24
 
 ### Added

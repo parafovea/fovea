@@ -28,7 +28,7 @@ export default function Home(): JSX.Element {
             <Link className={styles.link} to="/docs">
               Documentation
             </Link>
-            <Link className={styles.link} to="/docs/getting-started/installation">
+            <Link className={styles.link} to="/docs/guide">
               Get started
             </Link>
             <Link className={styles.link} href="https://github.com/parafovea/fovea">

@@ -1,4 +1,4 @@
-import Fastify, { type FastifyError } from 'fastify'
+import Fastify, { FastifyError } from 'fastify'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUI from '@fastify/swagger-ui'
 import fastifyCors from '@fastify/cors'
@@ -172,7 +172,7 @@ export async function buildApp() {
    * - Fastify validation errors: Returns 400 with validation details
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
-  app.setErrorHandler<FastifyError>((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const route = request.routeOptions?.url || request.url
     const method = request.method
 
@@ -277,15 +277,6 @@ export async function buildApp() {
 
   const apiKeysRoute = await import('./routes/api-keys.js')
   await app.register(apiKeysRoute.default)
-
-  const preferencesRoute = await import('./routes/preferences.js')
-  await app.register(preferencesRoute.default)
-
-  const personaPreferencesRoute = await import('./routes/persona-preferences.js')
-  await app.register(personaPreferencesRoute.default)
-
-  const adminConfigRoute = await import('./routes/admin-config.js')
-  await app.register(adminConfigRoute.default)
 
   const configRoute = await import('./routes/config.js')
   await app.register(configRoute.default)

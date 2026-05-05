@@ -23,15 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
+          cache: 'npm'
+          cache-dependency-path: |
+            docs/package-lock.json
+            annotation-tool/package-lock.json
+            server/package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,15 +40,22 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'model-service/pyproject.toml'
 
-      - name: Install workspace dependencies (annotation-tool + server for TypeDoc)
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client (so server typedoc can resolve @prisma/client types)
-        run: pnpm --filter @fovea/server exec prisma generate
+      - name: Install libvips (required by sharp)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvips-dev
 
       - name: Install documentation dependencies
         run: |
           cd docs && npm ci
+
+      - name: Install annotation-tool dependencies (for TypeDoc)
+        run: |
+          cd annotation-tool && npm ci
+
+      - name: Install server dependencies (for TypeDoc)
+        run: |
+          cd server && npm ci
 
       - name: Install model-service dependencies (for Sphinx)
         run: |
