@@ -92,12 +92,20 @@ interface CollectionData {
 }
 
 /**
- * Standard v4 UUID, lowercase or uppercase. The `text` / `comment` /
- * `claimRelation` fields on imported claims can carry inline UUID
- * mentions in addition to the structured gloss; `remapInlineUuids` walks
- * the string and substitutes any UUID that lives in the cross-user idMap
- * with its remapped value so the surrounding prose keeps pointing at the
- * right object after a cross-user import.
+ * Standard v4 / generic UUID pattern (8-4-4-4-12 hex), case-insensitive.
+ *
+ * Free-form strings throughout an export can embed references to other
+ * imported records by inline UUID: claim.text ("ea5f996b-... has collided
+ * with 9cc9f799-..."), summary text spans, persona.informationNeed or
+ * persona.details that mention a world entity, ontology entityType /
+ * eventType / roleType descriptions that namedrop another type, world
+ * object name / description fields that cross-reference a sibling object,
+ * etc. `remapInlineUuids` substitutes every UUID-shaped substring whose
+ * lowercased form lives in the cross-user idMap with its remapped value
+ * so the surrounding prose stays consistent with the regenerated row
+ * after a cross-user import. UUID-looking strings that the import has no
+ * knowledge of (random ids not in the map) are passed through unchanged,
+ * so the substitution is a strict no-op outside the cross-user path.
  */
 const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 
@@ -958,17 +966,25 @@ export class ImportHandler {
         else if (key === 'content' && typeof value === 'string' && (isObjectRef || isInstanceTypeRef) && idMap.has(value)) {
           remapped[key] = idMap.get(value)
         }
-        // Free-text fields can embed entity / object UUIDs as inline
-        // mention strings (e.g. claim.text = "<uuid> smashes furniture").
-        // remapObjectIds previously only touched fields whose NAME signalled
-        // an id reference (`*Id`, `*Ids`, gloss `content`); inline mentions
-        // in `text` / `comment` / `claimRelation` slipped through, so after a
-        // cross-user import the surrounding prose still pointed at the
-        // exporter's old UUIDs and the frontend rendered raw hex strings
-        // where it should have rendered remapped mentions. Substitute every
-        // UUID-shaped substring that lives in idMap with its remapped value
-        // for the small set of fields known to carry user-visible prose.
-        else if (typeof value === 'string' && (key === 'text' || key === 'comment' || key === 'claimRelation')) {
+        // Any other string value can embed inline references to imported
+        // records by UUID: claim.text ("ea5f996b-... has collided with
+        // 9cc9f799-..."), summary text segments, persona.informationNeed
+        // or persona.details that namedrop a world entity, ontology
+        // entityType / eventType / roleType description that cites another
+        // type, world object name / description that cross-references a
+        // sibling, etc. The previous remapObjectIds only walked NAME-
+        // signalled id-reference fields (*Id, *Ids, gloss objectRef.content,
+        // gloss typeRef.content), so any UUID that lived as a free-text
+        // mention inside surrounding prose slipped through and pointed at
+        // an exporter-side row that no longer existed in the importer's
+        // database after the cross-user step regenerated every id. Run the
+        // UUID-shape substitution over every other string value so the
+        // surrounding prose stays consistent with the regenerated rows;
+        // strings whose UUID-shaped substrings are not in the cross-user
+        // idMap (random ids the import has no knowledge of) pass through
+        // unchanged, so the substitution is a strict no-op outside the
+        // cross-user path.
+        else if (typeof value === 'string') {
           remapped[key] = remapInlineUuids(value, idMap)
         }
         // Recurse into nested objects and arrays
