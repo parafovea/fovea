@@ -1,18 +1,36 @@
 /**
- * Issue #121 reopened — reproduction against akeil.jsonl.
+ * Cross-user import using a real foreign-annotator export.
  *
- * The fixture is the akeil.jsonl file attached to issue #121 after the
- * v0.1.8 fix shipped. The user reports two surviving symptoms when
- * importing this file into a fresh user:
+ * The fixture is a real Fovea export captured under a foreign annotator
+ * (user id `eac1c15c-b85d-4e79-b7e5-171ca8d40866`). It carries four
+ * personas, thirty-three world entities, forty-eight video summaries,
+ * sixty claims, and fifty annotations spread across twenty-six videos.
+ * It predates the `metadata.exporterUserId` provenance line, so the
+ * cross-user detection falls back to the `persona.userId` heuristic and
+ * regenerates every imported id. Annotation lines use the legacy
+ * frontend shape (`annotationType`, `linkedEntityId`) rather than the
+ * backend-shape (`type`, `label`, `linkType`).
  *
- *   1. Imported entity annotations appear twice in /api/annotations/:videoId
- *      (one row carrying the original entity UUID in `label`, another
- *      carrying the remapped UUID).
- *   2. Imported claims do not display.
+ * The test imports the full file into a freshly registered user and
+ * walks the same API sequence the All Annotations panel and the Claims
+ * panel walk in the browser:
  *
- * The fixture predates v0.1.7 so it carries no `metadata.exporterUserId`
- * line and uses the legacy frontend-shaped annotation rows
- * (`annotationType`, `linkedEntityId`).
+ *   GET /api/world
+ *   GET /api/annotations/:videoId
+ *   GET /api/videos/:videoId/summaries
+ *   GET /api/summaries/:summaryId/claims
+ *
+ * For video `0a09067725832030` (four object annotations, two summaries,
+ * each summary carrying claims) the test asserts:
+ *
+ *   1. Every object annotation row has a `label` that resolves to a
+ *      named entity in the importer's `/api/world` response, so the
+ *      All Annotations tab never renders a raw UUID where it should
+ *      have rendered an entity name.
+ *   2. No returned `claim.text` contains any of the five known fixture
+ *      entity UUIDs that the exporter embedded as inline mentions, so
+ *      the Claims tab never renders a stale exporter-side hex string
+ *      inside the prose.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -25,7 +43,7 @@ import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const FIXTURE_PATH = resolve(__dirname, '../fixtures/akeil-issue-121.jsonl')
+const FIXTURE_PATH = resolve(__dirname, '../fixtures/cross-user-import-foreign-annotator.jsonl')
 
 // Pick a video that has both annotations and a summary with claims.
 // 0a09067725832030 has 4 annotations and 2 summaries; each summary has
@@ -88,7 +106,7 @@ async function ensureAllVideos(app: FastifyInstance, fixturePath: string): Promi
 async function importFixture(app: FastifyInstance, user: User, fixturePath: string): Promise<{ statusCode: number; body: Record<string, unknown> }> {
   const form = new FormData()
   form.append('file', readFileSync(fixturePath), {
-    filename: 'akeil-issue-121.jsonl',
+    filename: 'cross-user-import-foreign-annotator.jsonl',
     contentType: 'application/x-jsonlines',
   })
   const response = await app.inject({
@@ -101,7 +119,7 @@ async function importFixture(app: FastifyInstance, user: User, fixturePath: stri
   return { statusCode: response.statusCode, body: response.json() }
 }
 
-describe('Issue #121 (reopened) — akeil.jsonl symptoms', () => {
+describe('cross-user import of a foreign-annotator fixture', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
 
@@ -129,7 +147,7 @@ describe('Issue #121 (reopened) — akeil.jsonl symptoms', () => {
   })
 
   it('does NOT duplicate object annotations on the All Annotations endpoint', async () => {
-    const importer = await registerUser(app, 'importer-akeil')
+    const importer = await registerUser(app, 'foreign-importer')
     const importResult = await importFixture(app, importer, FIXTURE_PATH)
     expect(importResult.statusCode).toBe(200)
     expect(importResult.body.success).toBe(true)
@@ -144,7 +162,7 @@ describe('Issue #121 (reopened) — akeil.jsonl symptoms', () => {
     const annotations = annotationsResp.json() as Array<{ id: string; label: string; linkType: string | null; type: string }>
 
     // Diagnostics
-    console.log(`[issue-121-akeil] /api/annotations/${VIDEO_ID} returned ${annotations.length} rows`)
+    console.log(`[cross-user-foreign] /api/annotations/${VIDEO_ID} returned ${annotations.length} rows`)
     for (const a of annotations) {
       console.log(`  - id=${a.id.slice(0, 8)} type=${a.type} linkType=${a.linkType} label=${a.label.slice(0, 8)}`)
     }
@@ -164,11 +182,11 @@ describe('Issue #121 (reopened) — akeil.jsonl symptoms', () => {
     })
     expect(worldResp.statusCode).toBe(200)
     const world = worldResp.json() as { entities: Array<{ id: string; name: string }> }
-    console.log(`[issue-121-akeil] /api/world returned ${world.entities.length} entities`)
+    console.log(`[cross-user-foreign] /api/world returned ${world.entities.length} entities`)
     const entityIds = new Set(world.entities.map(e => e.id))
     const orphans = annotations.filter(a => !entityIds.has(a.label))
     if (orphans.length > 0) {
-      console.log(`[issue-121-akeil] ORPHAN annotations (label not in world.entities):`)
+      console.log(`[cross-user-foreign] ORPHAN annotations (label not in world.entities):`)
       for (const o of orphans) {
         console.log(`  - id=${o.id.slice(0, 8)} label=${o.label.slice(0, 8)}`)
       }
@@ -177,7 +195,7 @@ describe('Issue #121 (reopened) — akeil.jsonl symptoms', () => {
   })
 
   it('returns claims through the Claims tab path', async () => {
-    const importer = await registerUser(app, 'importer-claims')
+    const importer = await registerUser(app, 'foreign-claims-importer')
     const importResult = await importFixture(app, importer, FIXTURE_PATH)
     expect(importResult.statusCode).toBe(200)
     expect(importResult.body.success).toBe(true)
