@@ -1,9 +1,8 @@
 /**
- * Issue #121 verification using a real Fovea JSONL export.
+ * Cross-user import using a real small Fovea JSONL export.
  *
- * The fixture `test/fixtures/issue-121-real-export.jsonl` is a real export
- * captured from a previous Fovea instance (exporter user
- * `c92c0859-4a75-44f6-b6db-18b610ff3fd5`). It contains:
+ * The fixture is a real export captured from a previous Fovea instance
+ * under exporter user `c92c0859-4a75-44f6-b6db-18b610ff3fd5`. It carries:
  *
  *   - 1 persona ("Test Analyst")
  *   - 1 ontology with one entity type ("fire")
@@ -12,20 +11,20 @@
  *   - 2 claims (one referencing the entity type via gloss typeRef)
  *   - 1 object annotation (linkedEntityId pointing at "Fred Rogers")
  *
- * Two test users (A and B), neither of whom is the exporter, both import the
- * SAME fixture against a shared video. The test then walks the exact API
- * sequence the All Annotations panel and Claims panel walk in the browser
- * (`GET /api/world`, `GET /api/annotations/:videoId`,
+ * Two test users (A and B), neither of whom is the exporter, both import
+ * the SAME fixture against a shared video. The test then walks the API
+ * sequence the All Annotations panel and the Claims panel walk in the
+ * browser (`GET /api/world`, `GET /api/annotations/:videoId`,
  * `GET /api/videos/:videoId/summaries`, `GET /api/summaries/:summaryId/claims`)
- * and asserts the user-visible properties from issue #121:
+ * and asserts:
  *
- *   1. No duplicate rows: each user's annotation list contains exactly one
- *      object annotation, not the foreign user's copy.
- *   2. No orphan UUID labels: the annotation's linkedEntityId resolves to a
- *      named entity ("Fred Rogers") in the requester's `/api/world`.
- *   3. Claims display: the importing user's summary returns both claims with
- *      text intact and gloss `typeRef.content` remapped to the regenerated
- *      entity type id (so the typeRef resolves locally).
+ *   1. No duplicate rows: each user's annotation list contains exactly
+ *      one object annotation, not the foreign user's copy.
+ *   2. No orphan UUID labels: the annotation's linkedEntityId resolves
+ *      to a named entity ("Fred Rogers") in the requester's `/api/world`.
+ *   3. Claims display: the importing user's summary returns both claims
+ *      with text intact and gloss `typeRef.content` remapped to the
+ *      regenerated entity type id (so the typeRef resolves locally).
  *   4. Cross-user isolation: A's annotation/summary id differs from B's.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
@@ -39,7 +38,7 @@ import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const FIXTURE_PATH = resolve(__dirname, '../fixtures/issue-121-real-export.jsonl')
+const FIXTURE_PATH = resolve(__dirname, '../fixtures/cross-user-import-real-export.jsonl')
 // The fixture references two video ids: the annotation lives on
 // `a653942195eddca5` and the summary on `5d742019ed2d7bc5`. Both must exist
 // in the videos table for the import to succeed.
@@ -51,7 +50,7 @@ interface User {
   sessionToken: string
 }
 
-describe('Issue #121 reproduction with real Fovea export', () => {
+describe('cross-user import of a real Fovea export', () => {
   let app: FastifyInstance
   let prisma: PrismaClient
   let fixtureBytes: Buffer
@@ -113,7 +112,7 @@ describe('Issue #121 reproduction with real Fovea export', () => {
   async function importFixture(user: User): Promise<void> {
     const form = new FormData()
     form.append('file', fixtureBytes, {
-      filename: 'issue-121-real-export.jsonl',
+      filename: 'cross-user-import-real-export.jsonl',
       contentType: 'application/x-ndjson',
     })
     const res = await app.inject({
@@ -161,9 +160,10 @@ describe('Issue #121 reproduction with real Fovea export', () => {
     const aObjectAnns = aAnns.filter(a => a.type === 'object')
     expect(aObjectAnns.length, 'user A sees exactly one object annotation, not duplicates').toBe(1)
 
-    // The label must resolve to a named entity in user A's own world (no
-    // orphan UUID — the issue #121 symptom was the row showing a UUID
-    // because the foreign entity wasn't in the requester's worldState).
+    // The label must resolve to a named entity in user A's own world.
+    // A label that stayed pinned to the foreign exporter-side UUID would
+    // render as a raw hex string in the All Annotations tab because the
+    // requester's worldState has no entity at that id.
     const aLabel = aObjectAnns[0].label
     expect(aEntityByName.get(aLabel), `user A annotation label "${aLabel}" should resolve to an entity name`).toBe('Fred Rogers')
     expect(aLabel).toBe(aFredId)
