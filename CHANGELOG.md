@@ -5,6 +5,16 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-05-10
+
+### Fixed
+
+- Remap inline UUID mentions embedded in `claim.text`, `claim.comment`, and `claim.claimRelation` during a cross-user import. The previous `remapObjectIds` walked only fields whose NAME signalled an id reference (`*Id`, `*Ids`, gloss `objectRef.content`, gloss `typeRef.content`) so a UUID that lived as a free-text mention inside surrounding prose (e.g. `"9ec21e61-... attempts to break gate"`) stayed pinned to the exporter's pre-import id. After the cross-user remap the rest of the row pointed at the importer's regenerated entity row, but the inline mention in the text still pointed at a UUID that no longer existed in the importer's world, so the Claims tab rendered raw hex strings inside the prose where it should have rendered remapped mentions. Reported as a v0.1.8 reopening of #121 against the akeil.jsonl fixture (HLTCOE Fovea instance).
+
+### Added
+
+- Regression test `test/integration/issue-121-akeil-fixture.test.ts` runs against the akeil.jsonl fixture attached to the reopened #121, imports the full file into a freshly registered user, walks the Claims tab path (`GET /api/videos/:videoId/summaries` → `GET /api/summaries/:summaryId/claims`) for video `0a09067725832030`, and asserts (1) every imported object annotation's label resolves to a named entity in the importer's `/api/world` response (no orphan UUIDs in the All Annotations tab), and (2) no claim text returned from `/api/summaries/:id/claims` contains any of the five known fixture entity UUIDs (`9ec21e61-...`, `ea5f996b-...`, `9cc9f799-...`, `209d9732-...`, `10d3a5e0-...`) that the exporter embedded as inline mentions, so the inline-UUID remap stays exercised on every future change to the import pipeline.
+
 ## [0.1.8] - 2026-05-04
 
 ### Schema
