@@ -92,6 +92,21 @@ interface CollectionData {
 }
 
 /**
+ * Standard v4 UUID, lowercase or uppercase. The `text` / `comment` /
+ * `claimRelation` fields on imported claims can carry inline UUID
+ * mentions in addition to the structured gloss; `remapInlineUuids` walks
+ * the string and substitutes any UUID that lives in the cross-user idMap
+ * with its remapped value so the surrounding prose keeps pointing at the
+ * right object after a cross-user import.
+ */
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+
+function remapInlineUuids(text: string, idMap: Map<string, string>): string {
+  if (!text || idMap.size === 0) return text
+  return text.replace(UUID_REGEX, m => idMap.get(m.toLowerCase()) ?? m)
+}
+
+/**
  * @class ImportHandler
  * @description Handles parsing, validation, and execution of imports.
  */
@@ -942,6 +957,19 @@ export class ImportHandler {
         // GlossItem content carrying a referenced ID
         else if (key === 'content' && typeof value === 'string' && (isObjectRef || isInstanceTypeRef) && idMap.has(value)) {
           remapped[key] = idMap.get(value)
+        }
+        // Free-text fields can embed entity / object UUIDs as inline
+        // mention strings (e.g. claim.text = "<uuid> smashes furniture").
+        // remapObjectIds previously only touched fields whose NAME signalled
+        // an id reference (`*Id`, `*Ids`, gloss `content`); inline mentions
+        // in `text` / `comment` / `claimRelation` slipped through, so after a
+        // cross-user import the surrounding prose still pointed at the
+        // exporter's old UUIDs and the frontend rendered raw hex strings
+        // where it should have rendered remapped mentions. Substitute every
+        // UUID-shaped substring that lives in idMap with its remapped value
+        // for the small set of fields known to carry user-visible prose.
+        else if (typeof value === 'string' && (key === 'text' || key === 'comment' || key === 'claimRelation')) {
+          remapped[key] = remapInlineUuids(value, idMap)
         }
         // Recurse into nested objects and arrays
         else if (typeof value === 'object' && value !== null) {
