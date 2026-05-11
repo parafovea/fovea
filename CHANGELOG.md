@@ -5,6 +5,19 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-05-11
+
+Forward-ports the v0.1.9 cross-user inline-UUID remap fix to the v0.2.x line. The bug taxonomy and user-visible behavior is the same; the integration is unchanged from v0.1.9 since `remapObjectIds` lives outside the CASL surface.
+
+### Fixed
+
+- Remap UUID-shaped substrings inside every string value of an imported payload during a cross-user import, not only inside fields whose NAME signalled an id reference (`*Id`, `*Ids`, gloss `objectRef.content`, gloss `typeRef.content`). Free-form prose that namedrops another imported record by UUID — `claim.text`, `claim.comment`, summary text segments, persona `informationNeed` and `details`, ontology entityType / eventType / roleType `description`, world object `name` and `description`, and any other carrier — now stays consistent with the regenerated row after cross-user remap. UUID-shaped substrings whose lowercased form is not in the cross-user idMap pass through unchanged, so the substitution stays a strict no-op outside the cross-user path.
+
+### Added
+
+- Regression fixture `server/test/fixtures/cross-user-import-foreign-annotator.jsonl` and matching integration test `server/test/integration/cross-user-import-foreign-fixture.test.ts` exercise the generalised remap against a real foreign-annotator export (four personas, thirty-three world entities, forty-eight video summaries, sixty claims, fifty annotations across twenty-six videos) and assert that every imported object-annotation `label` resolves to a named entity in the importer's `/api/world` and that no returned `claim.text` contains any of the five known fixture entity UUIDs the exporter embedded as inline mentions.
+- The two prior issue-number-bearing fixture / test pairs are renamed off ticket-shaped filenames (`server/test/integration/cross-user-import-{foreign,real}-fixture.test.ts`, `server/test/fixtures/cross-user-import-{foreign-annotator,real-export}.jsonl`) so future readers find tests by the behavior they encode.
+
 ## [0.2.1] - 2026-05-04
 
 Forward-ports the data-fidelity, schema, UX, and DoS fixes from v0.1.8 (see the v0.1.8 section below) to the v0.2.x line. The bug taxonomy and user-visible behavior is the same; this section lists only the deltas specific to integrating those fixes into v0.2.0's CASL-based RBAC framework, plus the items unique to this release.
