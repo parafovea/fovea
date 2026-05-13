@@ -135,6 +135,11 @@ describe('Import/export field-level round-trip fidelity', () => {
     if (key.endsWith('Id') || key.endsWith('Ids')) return true
     // v0.2.0+: ownership-tagging fields the import handler always rewrites.
     if (key === 'createdBy' || key === 'createdByUserId') return true
+    // Collection reference arrays: entityCollections / eventCollections /
+    // timeCollections each carry a `members` array whose elements are ids
+    // of the referenced entities / events / times. Those are remapped on
+    // cross-user import alongside the records they reference.
+    if (key === 'members') return true
     return false
   }
 
