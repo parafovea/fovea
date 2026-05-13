@@ -92,26 +92,42 @@ interface CollectionData {
 }
 
 /**
- * Standard v4 / generic UUID pattern (8-4-4-4-12 hex), case-insensitive.
+ * Build a case-insensitive matcher whose alternations are the literal
+ * keys of `idMap`. The remap is structure-agnostic: rather than gate on
+ * field names (the previous remap walked an allowlist of `id` / `*Id` /
+ * `*Ids` / GlossItem `content`, which had to be extended every time the
+ * export schema gained a new id-bearing field and silently missed every
+ * free-form string that namedropped a referenced record), every string
+ * value in the payload is scanned for substrings that are themselves
+ * keys in `idMap` and rewritten to the importer's regenerated value.
  *
- * Free-form strings throughout an export can embed references to other
- * imported records by inline UUID: claim.text ("ea5f996b-... has collided
- * with 9cc9f799-..."), summary text spans, persona.informationNeed or
- * persona.details that mention a world entity, ontology entityType /
- * eventType / roleType descriptions that namedrop another type, world
- * object name / description fields that cross-reference a sibling object,
- * etc. `remapInlineUuids` substitutes every UUID-shaped substring whose
- * lowercased form lives in the cross-user idMap with its remapped value
- * so the surrounding prose stays consistent with the regenerated row
- * after a cross-user import. UUID-looking strings that the import has no
- * knowledge of (random ids not in the map) are passed through unchanged,
- * so the substitution is a strict no-op outside the cross-user path.
+ * Keys are sorted longest-first so a longer id that happens to contain
+ * a shorter id as a prefix wins. Keys are RegExp-escaped so id formats
+ * containing regex metacharacters (hyphens are fine, but a future short
+ * id format could include dots or parentheses) substitute literally.
+ * The `\b`-free pattern intentionally also rewrites ids that appear as
+ * substrings of larger tokens (e.g. `claim_<id>_v2`, `entity-<id>.png`,
+ * `https://x/<id>?q=1`), since those are the exact shapes inline prose
+ * uses when it namedrops a referenced record. Strings whose substrings
+ * are not in `idMap` pass through unchanged so the substitution stays
+ * a strict no-op outside the cross-user path.
  */
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+function escapeRegex(s: string): string {
+  return s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+}
 
-function remapInlineUuids(text: string, idMap: Map<string, string>): string {
-  if (!text || idMap.size === 0) return text
-  return text.replace(UUID_REGEX, m => idMap.get(m.toLowerCase()) ?? m)
+function buildRemapPattern(idMap: Map<string, string>): RegExp | null {
+  if (idMap.size === 0) return null
+  const keys = Array.from(idMap.keys())
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegex)
+  return new RegExp(keys.join('|'), 'gi')
+}
+
+function remapInlineIds(text: string, pattern: RegExp, idMap: Map<string, string>): string {
+  if (!text) return text
+  pattern.lastIndex = 0
+  return text.replace(pattern, m => idMap.get(m.toLowerCase()) ?? m)
 }
 
 /**
@@ -903,95 +919,61 @@ export class ImportHandler {
    * @returns Updated import lines with remapped IDs
    */
   remapIds(lines: ImportLine[], resolutions: Resolution[]): ImportLine[] {
-    // Build ID mapping
+    // Keys are lowercased so the case-insensitive matcher resolves
+    // uppercase or mixed-case exporter-side ids against the same entry;
+    // values are stored verbatim.
     const idMap = new Map<string, string>()
     for (const resolution of resolutions) {
       if (resolution.newId && resolution.action === 'create-new') {
-        idMap.set(resolution.originalId, resolution.newId)
+        idMap.set(resolution.originalId.toLowerCase(), resolution.newId)
       }
     }
 
-    if (idMap.size === 0) {
+    const pattern = buildRemapPattern(idMap)
+    if (pattern === null) {
       return lines
     }
 
-    // Remap IDs in all lines
     return lines.map(line => {
       const remappedLine = { ...line }
-      remappedLine.data = this.remapObjectIds(line.data, idMap)
+      remappedLine.data = this.remapObjectIds(line.data, idMap, pattern)
       return remappedLine
     })
   }
 
   /**
-   * Recursively remap IDs in an object.
+   * Recursively remap IDs across the imported payload.
+   *
+   * The remap is structure-agnostic: it walks every value in the object
+   * tree and applies the id-shape substitution to every string. The old
+   * implementation gated on a field-name allowlist (`key === 'id'`,
+   * `key.endsWith('Id')`, `key.endsWith('Ids')`, GlossItem `content`),
+   * which had to be extended every time a new id-bearing field was added
+   * to the export schema and silently missed any free-form prose that
+   * mentioned a referenced record by id (including collection `members`
+   * arrays). Building the matcher from the idMap keys themselves makes
+   * the remap independent of field naming: a whole-string id, an id
+   * embedded in surrounding prose, an id array element, an id carried
+   * by a GlossItem `content`, and an id inside a JSON-encoded substring
+   * are all rewritten by the same regex pass against idMap. Substrings
+   * whose lowercased form is not in idMap pass through unchanged so the
+   * substitution is a strict no-op outside the cross-user path.
    */
-  private remapObjectIds(obj: unknown, idMap: Map<string, string>): ImportLine['data'] {
+  private remapObjectIds(obj: unknown, idMap: Map<string, string>, pattern: RegExp): ImportLine['data'] {
+    if (typeof obj === 'string') {
+      return remapInlineIds(obj, pattern, idMap) as unknown as ImportLine['data']
+    }
     if (Array.isArray(obj)) {
-      // Array branches are only reached for nested values (not top-level data).
-      // The index signature [key: string]: unknown on ImportLine['data'] accepts
-      // the array at runtime; bridge the type gap via unknown.
-      const mapped: unknown = obj.map(item => this.remapObjectIds(item, idMap))
-      return mapped as ImportLine['data']
-    } else if (obj && typeof obj === 'object') {
+      return obj.map(item => this.remapObjectIds(item, idMap, pattern)) as unknown as ImportLine['data']
+    }
+    if (obj && typeof obj === 'object') {
       const remapped: ImportLine['data'] = {}
-      // GlossItem references store the target ID in `content` rather than a
-      // *Id-suffixed key; detect these so the content is rewritten too.
-      const glossType = (obj as Record<string, unknown>).type
-      const glossRefType = (obj as Record<string, unknown>).refType
-      const isObjectRef = glossType === 'objectRef' || glossType === 'annotationRef' || glossType === 'claimRef'
-      const isInstanceTypeRef = glossType === 'typeRef' && typeof glossRefType === 'string' &&
-        (glossRefType === 'entity-object' || glossRefType === 'event-object' ||
-         glossRefType === 'time-object' || glossRefType === 'location-object' ||
-         glossRefType === 'annotation' || glossRefType === 'claim')
-
       for (const [key, value] of Object.entries(obj)) {
-        // Scalar id field
-        if (key === 'id' && typeof value === 'string' && idMap.has(value)) {
-          remapped[key] = idMap.get(value)
-        }
-        // Scalar *Id reference field
-        else if (key.endsWith('Id') && typeof value === 'string' && idMap.has(value)) {
-          remapped[key] = idMap.get(value)
-        }
-        // Array of IDs (e.g. entityIds: string[], eventIds: string[])
-        else if (key.endsWith('Ids') && Array.isArray(value) && value.every(v => typeof v === 'string')) {
-          remapped[key] = (value as string[]).map(v => idMap.get(v) ?? v)
-        }
-        // Scalar *Ids stored as a single string (defensive)
-        else if (key.endsWith('Ids') && typeof value === 'string' && idMap.has(value)) {
-          remapped[key] = idMap.get(value)
-        }
-        // GlossItem content carrying a referenced ID
-        else if (key === 'content' && typeof value === 'string' && (isObjectRef || isInstanceTypeRef) && idMap.has(value)) {
-          remapped[key] = idMap.get(value)
-        }
-        // Any other string value can embed inline references to imported
-        // records by UUID: claim.text ("ea5f996b-... has collided with
-        // 9cc9f799-..."), summary text segments, persona.informationNeed
-        // or persona.details that namedrop a world entity, ontology
-        // entityType / eventType / roleType description that cites another
-        // type, world object name / description that cross-references a
-        // sibling, etc. The previous remapObjectIds only walked NAME-
-        // signalled id-reference fields (*Id, *Ids, gloss objectRef.content,
-        // gloss typeRef.content), so any UUID that lived as a free-text
-        // mention inside surrounding prose slipped through and pointed at
-        // an exporter-side row that no longer existed in the importer's
-        // database after the cross-user step regenerated every id. Run the
-        // UUID-shape substitution over every other string value so the
-        // surrounding prose stays consistent with the regenerated rows;
-        // strings whose UUID-shaped substrings are not in the cross-user
-        // idMap (random ids the import has no knowledge of) pass through
-        // unchanged, so the substitution is a strict no-op outside the
-        // cross-user path.
-        else if (typeof value === 'string') {
-          remapped[key] = remapInlineUuids(value, idMap)
-        }
-        // Recurse into nested objects and arrays
-        else if (typeof value === 'object' && value !== null) {
-          remapped[key] = this.remapObjectIds(value, idMap)
-        }
-        else {
+        if (typeof value === 'string') {
+          remapped[key] = remapInlineIds(value, pattern, idMap)
+        } else if (value !== null && typeof value === 'object') {
+          remapped[key] = this.remapObjectIds(value, idMap, pattern)
+        } else {
           remapped[key] = value
         }
       }
