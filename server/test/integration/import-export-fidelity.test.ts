@@ -131,6 +131,11 @@ describe('Import/export field-level round-trip fidelity', () => {
   function isIdLikeKey(key: string): boolean {
     if (key === 'id' || key === 'createdAt' || key === 'updatedAt' || key === 'importedAt') return true
     if (key.endsWith('Id') || key.endsWith('Ids')) return true
+    // Collection reference arrays: entityCollections / eventCollections /
+    // timeCollections each carry a `members` array whose elements are ids
+    // of the referenced entities / events / times. Those are remapped on
+    // cross-user import alongside the records they reference.
+    if (key === 'members') return true
     return false
   }
 
