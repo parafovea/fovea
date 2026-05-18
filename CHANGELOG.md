@@ -5,6 +5,31 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-05-13
+
+Forward-ports the v0.1.10 / v0.2.3 generalisation of the cross-user id remap to the v0.3.x line. The bug taxonomy and user-visible behaviour is the same; the integration is unchanged from v0.2.3 since `remapObjectIds` lives outside both the CASL surface introduced in v0.2.0 and the Clean Architecture refactor introduced in v0.3.0.
+
+### Changed
+
+- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The v0.3.2 fix added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
+
+### Added
+
+- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
+
+## [0.3.2] - 2026-05-11
+
+Forward-ports the v0.1.9 / v0.2.2 cross-user inline-UUID remap fix to the v0.3.x line. The bug taxonomy and user-visible behavior is the same; the integration is unchanged from v0.1.9 since `remapObjectIds` lives outside both the CASL surface and the Clean Architecture refactor of v0.3.0.
+
+### Fixed
+
+- Remap UUID-shaped substrings inside every string value of an imported payload during a cross-user import, not only inside fields whose NAME signalled an id reference (`*Id`, `*Ids`, gloss `objectRef.content`, gloss `typeRef.content`). Free-form prose that namedrops another imported record by UUID — `claim.text`, `claim.comment`, summary text segments, persona `informationNeed` and `details`, ontology entityType / eventType / roleType `description`, world object `name` and `description`, and any other carrier — now stays consistent with the regenerated row after cross-user remap. UUID-shaped substrings whose lowercased form is not in the cross-user idMap pass through unchanged, so the substitution stays a strict no-op outside the cross-user path.
+
+### Added
+
+- Regression fixture `server/test/fixtures/cross-user-import-foreign-annotator.jsonl` and matching integration test `server/test/integration/cross-user-import-foreign-fixture.test.ts` exercise the generalised remap against a real foreign-annotator export (four personas, thirty-three world entities, forty-eight video summaries, sixty claims, fifty annotations across twenty-six videos) and assert that every imported object-annotation `label` resolves to a named entity in the importer's `/api/world` and that no returned `claim.text` contains any of the five known fixture entity UUIDs the exporter embedded as inline mentions.
+- The two prior issue-number-bearing fixture / test pairs are renamed off ticket-shaped filenames (`server/test/integration/cross-user-import-{foreign,real}-fixture.test.ts`, `server/test/fixtures/cross-user-import-{foreign-annotator,real-export}.jsonl`) so future readers find tests by the behavior they encode.
+
 ## [0.3.1] - 2026-05-04
 
 Forward-ports the data-fidelity, schema, UX, and DoS fixes from v0.1.8 (and the v0.2.1 RBAC integration of those fixes) to the v0.3.x line. The bug taxonomy and user-visible behavior is the same as v0.1.8; this section lists only the deltas specific to v0.3.x, plus the items unique to this release. Cross-version exports between v0.2.x and v0.3.x are intentionally not supported.
