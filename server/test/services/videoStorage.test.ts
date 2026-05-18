@@ -194,6 +194,37 @@ describe('Video Storage Providers', () => {
 
     // S3StorageProvider and HybridStorageProvider creation tested in integration tests
 
+    describe('S3 + CDN getVideoUrl behavior', () => {
+      const baseConfig: VideoStorageConfig = {
+        type: 's3',
+        s3: { bucket: 'test-bucket', region: 'us-east-1' },
+      }
+
+      it('returns the unsigned CDN URL when cdn.enabled is true and cdn.signedUrls is false', async () => {
+        const config: VideoStorageConfig = {
+          ...baseConfig,
+          cdn: { enabled: true, baseUrl: 'https://cdn.example.com', signedUrls: false },
+        }
+        const provider = createVideoStorageProvider(config)
+        const url = await provider.getVideoUrl('foo.mp4')
+        expect(url).toBe('https://cdn.example.com/foo.mp4')
+      })
+
+      it('throws an actionable error when cdn.enabled is true and cdn.signedUrls is true', async () => {
+        const config: VideoStorageConfig = {
+          ...baseConfig,
+          cdn: { enabled: true, baseUrl: 'https://cdn.example.com', signedUrls: true },
+        }
+        const provider = createVideoStorageProvider(config)
+        await expect(provider.getVideoUrl('foo.mp4')).rejects.toThrow(
+          /CDN signed URL generation is not implemented/i,
+        )
+        await expect(provider.getVideoUrl('foo.mp4')).rejects.toThrow(
+          /CDN_SIGNED_URLS=false|cloudfront-signer/i,
+        )
+      })
+    })
+
     it('should throw error for unsupported storage type', () => {
       const config = {
         type: 'invalid' as VideoStorageConfig['type'],
