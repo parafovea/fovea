@@ -48,6 +48,17 @@ function LoadingScreen() {
  * Protected route wrapper.
  * Redirects to login if user is not authenticated in multi-user mode.
  *
+ * Closes issue #92 (unauthenticated user briefly sees Video Browser): the
+ * previous gate read only `isLoading` and `mode`, with `mode` defaulting
+ * to `'single-user'` in the auth store's initial state. When the initial
+ * `/api/config` request transiently failed (the bug reporter saw this
+ * under heavy load), `setConfig` was never invoked, mode stayed at
+ * `'single-user'`, and the protected children rendered to a first-time
+ * visitor with no session. We now additionally hold the loading screen
+ * until `appConfig` has been fetched successfully — `appConfig === null`
+ * is the only authoritative signal that the server's actual deployment
+ * mode is known, so this is the fail-safe gate.
+ *
  * @param children - Child components to render if authenticated
  * @returns Protected content or redirect to login
  */
@@ -55,9 +66,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   const isLoading = useAuthStore(state => state.isLoading)
   const mode = useAuthStore(state => state.mode)
+  const appConfig = useAuthStore(state => state.appConfig)
   const location = useLocation()
 
-  if (isLoading) {
+  // Hold loading until both the session check has completed AND the
+  // server-side config has loaded; without the appConfig gate, a
+  // transient /api/config failure left mode at its `'single-user'`
+  // default and exposed protected routes to anonymous visitors.
+  if (isLoading || appConfig === null) {
     return <LoadingScreen />
   }
 
