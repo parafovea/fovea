@@ -475,6 +475,103 @@ describe('ClaimEditor', () => {
         expect(screen.getByText('Claiming Location')).toBeInTheDocument()
       })
     })
+
+    it('populates Claiming Event / Time / Location dropdowns from world state', async () => {
+      // Replace the default world handler with one carrying real options
+      // for each of the three context dropdowns. The Time `label` field is
+      // used as the visible item text; locations are entities tagged with
+      // a `locationType` field (Fovea data model does not promote them to
+      // a top-level WorldState key).
+      server.use(
+        http.get('/api/world', () => {
+          return HttpResponse.json({
+            entities: [
+              { id: 'e-1', name: 'Person A' },
+              { id: 'loc-1', name: 'Conference Room', locationType: 'room' },
+              { id: 'loc-2', name: 'Lobby', locationType: 'room' },
+            ],
+            events: [
+              { id: 'ev-1', name: 'Standup' },
+              { id: 'ev-2', name: 'Demo' },
+            ],
+            times: [
+              { id: 't-1', label: '2026-05-15 09:00', type: 'instant' },
+              { id: 't-2', label: 'Sprint 12', type: 'interval' },
+            ],
+            locations: [],
+            relations: [],
+            collections: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+          })
+        }),
+      )
+
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      const contextAccordion = screen.getByText(/Claim Context \(optional\)/i)
+      await user.click(contextAccordion)
+
+      // Open the Claiming Event combobox and confirm the world events surface.
+      const triggers = await screen.findAllByRole('combobox')
+      // Layout: Claimer Type, Audio, Video, Metadata + Event / Time / Location.
+      // Identify the three context triggers by walking each and checking the
+      // option set; we only assert the union contains every expected label.
+      const seenLabels = new Set<string>()
+      for (const trigger of triggers) {
+        await user.click(trigger)
+        document.querySelectorAll('[role="option"]').forEach(o => {
+          if (o.textContent) seenLabels.add(o.textContent)
+        })
+        // Close the dropdown via Escape so the next iteration opens cleanly.
+        await user.keyboard('{Escape}')
+      }
+      expect(seenLabels).toContain('Standup')
+      expect(seenLabels).toContain('Demo')
+      expect(seenLabels).toContain('2026-05-15 09:00')
+      expect(seenLabels).toContain('Sprint 12')
+      expect(seenLabels).toContain('Conference Room')
+      expect(seenLabels).toContain('Lobby')
+      // Person A is a non-location entity and must NOT appear in any context dropdown.
+      expect(seenLabels).not.toContain('Person A')
+    })
+
+    it('renders the time-object id as a fallback when label is missing', async () => {
+      server.use(
+        http.get('/api/world', () => {
+          return HttpResponse.json({
+            entities: [],
+            events: [],
+            times: [{ id: 't-unlabelled', type: 'instant' }],
+            locations: [],
+            relations: [],
+            collections: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+          })
+        }),
+      )
+
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      const contextAccordion = screen.getByText(/Claim Context \(optional\)/i)
+      await user.click(contextAccordion)
+
+      const triggers = await screen.findAllByRole('combobox')
+      const seenLabels = new Set<string>()
+      for (const trigger of triggers) {
+        await user.click(trigger)
+        document.querySelectorAll('[role="option"]').forEach(o => {
+          if (o.textContent) seenLabels.add(o.textContent)
+        })
+        await user.keyboard('{Escape}')
+      }
+      expect(seenLabels).toContain('t-unlabelled')
+    })
   })
 
   describe('Modality Metadata Section', () => {

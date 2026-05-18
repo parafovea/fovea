@@ -31,7 +31,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
-import { useClaims } from '@store/queries'
+import { useClaims, useEvents, useTimes, useEntities } from '@store/queries'
 import { logWarning } from '@services/errorLogging'
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 
@@ -58,6 +58,16 @@ export function ClaimEditor({
 }: ClaimEditorProps) {
   // Fetch sibling claims for $ references
   const { data: existingClaims = [] } = useClaims(summaryId)
+
+  // Fetch world-state objects for the claim-context dropdowns. Locations
+  // are entities tagged with a `locationType` field (the Fovea data model
+  // does not promote them to a top-level WorldState key).
+  const events = useEvents()
+  const times = useTimes()
+  const entities = useEntities()
+  const locations = entities.filter((e): e is typeof e & { locationType: string } =>
+    'locationType' in e && typeof (e as { locationType?: unknown }).locationType === 'string'
+  )
 
   // Core content
   const [gloss, setGloss] = useState<GlossItem[]>([])
@@ -602,7 +612,9 @@ export function ClaimEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
-                        {/* TODO: Populate with actual events from world state */}
+                        {events.map(e => (
+                          <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -618,7 +630,9 @@ export function ClaimEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
-                        {/* TODO: Populate with actual time objects from world state */}
+                        {times.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.label ?? t.id}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -634,7 +648,9 @@ export function ClaimEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
-                        {/* TODO: Populate with actual location objects from world state */}
+                        {locations.map(l => (
+                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
