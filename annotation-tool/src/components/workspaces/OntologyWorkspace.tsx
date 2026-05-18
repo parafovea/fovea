@@ -31,6 +31,10 @@ import { WikidataChip } from '../shared/WikidataChip'
 import {
   usePersonas,
   usePersonaOntology,
+  useAddEntityToPersona,
+  useAddRoleToPersona,
+  useAddEventToPersona,
+  useAddRelationTypeToPersona,
   useDeleteEntityFromPersona,
   useDeleteRoleFromPersona,
   useDeleteEventFromPersona,
@@ -41,6 +45,8 @@ import {
 import { OntologyAugmenter, OntologyCategory } from '@components/ontology/OntologyAugmenter'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@models/types'
+import { generateId } from '@utils/uuid'
+import { buildDuplicateOntologyType } from './duplicateOntologyType'
 
 /**
  * Union type for any ontology type item that can be filtered/edited.
@@ -75,6 +81,10 @@ export default function OntologyWorkspace() {
   const { mutate: deleteRoleMutation } = useDeleteRoleFromPersona()
   const { mutate: deleteEventMutation } = useDeleteEventFromPersona()
   const { mutate: deleteRelationTypeMutation } = useDeleteRelationTypeFromPersona()
+  const { mutate: addEntityMutation } = useAddEntityToPersona()
+  const { mutate: addRoleMutation } = useAddRoleToPersona()
+  const { mutate: addEventMutation } = useAddEventToPersona()
+  const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
   const { mutate: saveOntologyMutation } = useSavePersonaOntology()
 
   // Use preferences for smart defaults
@@ -330,8 +340,32 @@ export default function OntologyWorkspace() {
       }
     },
     'ontology.duplicateType': () => {
-      // TODO: Implement duplication logic
-      alert('Duplicate type not yet implemented')
+      const items = getCurrentItems()
+      if (!selectedPersonaId) return
+      if (selectedItemIndex < 0 || selectedItemIndex >= items.length) return
+      const item = items[selectedItemIndex]
+      switch (tabValue) {
+        case 0: {
+          const duped = buildDuplicateOntologyType(item as EntityType, generateId())
+          addEntityMutation({ personaId: selectedPersonaId, entity: duped })
+          break
+        }
+        case 1: {
+          const duped = buildDuplicateOntologyType(item as RoleType, generateId())
+          addRoleMutation({ personaId: selectedPersonaId, role: duped })
+          break
+        }
+        case 2: {
+          const duped = buildDuplicateOntologyType(item as EventType, generateId())
+          addEventMutation({ personaId: selectedPersonaId, event: duped })
+          break
+        }
+        case 3: {
+          const duped = buildDuplicateOntologyType(item as RelationType, generateId())
+          addRelationTypeMutation({ personaId: selectedPersonaId, relationType: duped })
+          break
+        }
+      }
     },
     'ontology.search': () => {
       searchInputRef.current?.focus()
