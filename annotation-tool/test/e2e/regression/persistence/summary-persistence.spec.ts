@@ -31,13 +31,21 @@ test.describe('Summary Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').filter({ hasText: testPersona.name })
+      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
       await personaOption.click()
     }
 
     // Wait for all data to load and component to stabilize
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(2000)
+
+    // The VideoSummaryDialog remembers the last active tab across opens,
+    // so a prior test (claim-*, etc.) may have left Claims selected.
+    // Explicitly switch to the Summary tab so the textarea lives in the
+    // active tabpanel before we query for it.
+    const summaryTab = dialog.getByRole('tab', { name: /^summary$/i })
+    await expect(summaryTab).toBeVisible({ timeout: 5000 })
+    await summaryTab.click()
 
     // Find the summary editor textarea
     const summaryTextarea = dialog.locator('textarea').first()
@@ -83,7 +91,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').filter({ hasText: testPersona.name })
+      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -126,10 +134,16 @@ test.describe('Summary Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').filter({ hasText: testPersona.name })
+      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
       await personaOption.click()
       await page.waitForTimeout(500)
     }
+
+    // Switch to Summary tab — the dialog remembers the last active
+    // tab across opens, so a previous test may have left Claims active.
+    const summaryTab2 = dialog.getByRole('tab', { name: /^summary$/i })
+    await expect(summaryTab2).toBeVisible({ timeout: 5000 })
+    await summaryTab2.click()
 
     // Find summary textarea
     const summaryTextarea = dialog.locator('textarea').first()
@@ -173,7 +187,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').filter({ hasText: testPersona.name })
+      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }

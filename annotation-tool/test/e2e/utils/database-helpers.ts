@@ -178,6 +178,26 @@ export class DatabaseHelper {
    * @param data - Partial persona data
    * @param sessionToken - Optional session token for authentication (required in multi-user mode)
    */
+  /**
+   * Look up a persona by (userId, name). Returns null if none exists.
+   * Used by the `testPersonaPersistent` fixture to dedupe across tests
+   * within a worker — the previous behaviour of unconditionally creating
+   * a new persona caused N duplicates with the same name to accumulate
+   * for the worker user, which then made `getByRole('option').filter`
+   * locators in persistence specs hit strict-mode violations resolving
+   * to N elements.
+   */
+  async findPersonaByName(userId: string, name: string, sessionToken?: string): Promise<Persona | null> {
+    const headers: Record<string, string> = {}
+    if (sessionToken) headers['Cookie'] = `session_token=${sessionToken}`
+    const response = await fetch(`${this.apiURL}/api/personas`, { headers })
+    if (!response.ok) return null
+    const personas = await response.json() as Array<{ id: string; userId: string; name: string; role: string }>
+    const match = personas.find((p) => p.userId === userId && p.name === name)
+    if (!match) return null
+    return { id: match.id, userId: match.userId, name: match.name, role: match.role }
+  }
+
   async createPersona(data: Partial<Persona> = {}, sessionToken?: string): Promise<Persona> {
     // Always create a new persona for test isolation
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }

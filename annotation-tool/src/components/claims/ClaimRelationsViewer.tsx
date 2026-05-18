@@ -128,6 +128,7 @@ export function ClaimRelationsViewer({
                         variant="ghost"
                         size="icon-sm"
                         className="text-destructive"
+                        aria-label="Delete relation"
                         onClick={() => handleDelete(relation.id)}
                       />
                     }

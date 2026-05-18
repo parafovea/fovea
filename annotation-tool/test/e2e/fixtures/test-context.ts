@@ -173,12 +173,23 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   /**
    * Persistent test persona fixture for persistence tests.
-   * Creates a persona but does NOT delete it after the test.
-   * This prevents CASCADE deletion of annotations during the test.
-   * Worker-level cleanup handles deletion when worker finishes.
+   *
+   * Returns ONE persona per worker user, identified by the unique
+   * (userId, name="Test Analyst (Persistent)") tuple. Earlier versions
+   * of this fixture unconditionally created a new persona on every
+   * test, accumulating duplicates within a worker — the summary-
+   * persistence and annotation-persistence specs then hit a strict-mode
+   * violation when `getByRole('option').filter({ hasText: 'Test Analyst
+   * (Persistent)' })` resolved to N copies of the same-named persona.
+   * Dedupe by querying the user's personas first and reusing an
+   * existing match; only create a fresh persona on the first call.
+   * Worker-level cleanup still owns the deletion at the end of the
+   * worker's lifecycle (the test does NOT delete on teardown so
+   * persisted-annotation data survives the reload assertion).
    */
   testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use) => {
-    const persona = await db.createPersona({
+    const existing = await db.findPersonaByName(testUser.id, 'Test Analyst (Persistent)', workerSessionToken)
+    const persona = existing ?? await db.createPersona({
       userId: testUser.id,
       name: 'Test Analyst (Persistent)',
       role: 'Intelligence Analyst'
