@@ -154,9 +154,22 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  // Suppress the next debouncedSearch run when the query is updated as
+  // a side-effect of selecting a dropdown result rather than by the
+  // user typing. Without this flag, handleSelect's `setQuery(label)`
+  // triggers the `useEffect(() => debouncedSearch(query))` 300ms later,
+  // which re-fetches options and re-opens the dropdown on top of the
+  // freshly-revealed preview card — the dropdown's option <p> elements
+  // then intercept pointer events on the "Import as Entity Type"
+  // button and every E2E click times out.
+  const suppressNextSearchRef = useRef(false)
 
   const debouncedSearch = useMemo(
     () => debounce(async (searchQuery: string) => {
+      if (suppressNextSearchRef.current) {
+        suppressNextSearchRef.current = false
+        return
+      }
       if (!searchQuery || searchQuery.length < 2) {
         setOptions([])
         return
@@ -197,6 +210,9 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   const handleSelect = async (value: WikidataSearchResult) => {
     setSelectedItem(value)
     setIsDropdownOpen(false)
+    // Suppress the search that would otherwise re-fire from the
+    // `setQuery(label)` below (see the comment on suppressNextSearchRef).
+    suppressNextSearchRef.current = true
     setQuery(value.label)
 
     setImporting(true)
