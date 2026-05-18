@@ -64,14 +64,20 @@ export async function fillClaimEditor(dialog: Locator, options: ClaimEditorFillO
     // — "Text" appears under both Video and Metadata, and "Non-speech"
     // is unique to Audio.
     //
-    // shadcn's <Checkbox> wraps a base-ui button[role="checkbox"] AND a
+    // shadcn's <Checkbox> wraps a base-ui button[role="checkbox"] plus a
     // hidden native input[type="checkbox"][aria-hidden="true"]; the
-    // label's htmlFor points at the button id, but Playwright's
-    // getByLabel returns the hidden input, which is unclickable.
-    // Click the visible label text instead — standard label-control
-    // behaviour toggles the associated checkbox.
+    // aria-hidden flag excludes the input from the accessibility tree
+    // so getByRole('checkbox') returns only the visible button. Use
+    // .check() rather than .click() so the operation is idempotent when
+    // the checkbox is already checked (the helper is called on both
+    // create-mode dialogs where the checkbox starts unchecked AND
+    // edit-mode dialogs where the previously-saved modality is already
+    // selected; clicking would toggle it OFF on edit-mode and invalidate
+    // the form's modality requirement).
     const sectionContainer = sectionHeading.locator('..').locator('..')
-    const label = sectionContainer.locator('label').filter({ hasText: new RegExp(`^${MODALITY_LABEL[m]}$`) }).first()
-    await label.click()
+    const labelLocator = sectionContainer.locator('label').filter({ hasText: new RegExp(`^${MODALITY_LABEL[m]}$`) }).first()
+    // The label and the checkbox share a parent <div>; find the role=checkbox sibling.
+    const checkbox = labelLocator.locator('xpath=preceding-sibling::*[@role="checkbox"]').first()
+    await checkbox.check()
   }
 }
