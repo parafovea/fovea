@@ -142,6 +142,7 @@ export default function AnnotationWorkspace() {
   // Zustand for annotation UI state
   const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   const annotationMode = useAnnotationUiStore((state) => state.annotationMode)
+  const drawingMode = useAnnotationUiStore((state) => state.drawingMode)
   const selectedAnnotation = useAnnotationUiStore((state) => state.selectedAnnotation)
   const detectionResults = useAnnotationUiStore((state) => state.detectionResults)
   const detectionConfidenceThreshold = useAnnotationUiStore((state) => state.detectionConfidenceThreshold)
@@ -413,7 +414,7 @@ export default function AnnotationWorkspace() {
       b => b.isKeyframe || b.isKeyframe === undefined
     ) || []).length > 0,
     timelineVisible: timelineExpanded,
-    drawingMode: false, // TODO: track drawing mode state
+    drawingMode: !!drawingMode,
   })
 
   // Register command handlers
