@@ -86,15 +86,19 @@ export function ImportResultDialog({ open, result, onClose }: ImportResultDialog
 
         <div className="flex flex-col gap-6 pt-2">
           {shouldShowOrphanSkippedBanner(result) && (
-            <Alert variant="default" className="border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-100">
+            <Alert
+              data-testid="import-orphan-skipped-banner"
+              variant="default"
+              className="border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-100"
+            >
               <AlertTriangle className="size-4" />
               <AlertDescription>
                 {result.summary.skippedItems.annotations} annotation
                 {result.summary.skippedItems.annotations === 1 ? ' was' : 's were'}{' '}
-                skipped because the export referenced world objects that
-                were not in the file. To recover, re-export from the
-                source instance with referenced entities, events, times,
-                or locations included.
+                skipped because there is missing referenced data
+                that was not included in the imported file. To recover,
+                re-export from the source instance with referenced
+                entities, events, times, or locations included.
               </AlertDescription>
             </Alert>
           )}
