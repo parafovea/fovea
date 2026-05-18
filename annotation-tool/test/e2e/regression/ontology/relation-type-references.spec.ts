@@ -31,13 +31,17 @@ function createSummarySavePromise(
 }
 
 test.describe('Relation Type References in Summaries', () => {
-  // Note: These tests verify relation type references in the GlossEditor component.
-  // The GlossEditor uses a controlled input with useAutoSave hook that has compatibility
-  // issues with Playwright's input simulation (fill, pressSequentially, keyboard.type).
-  // The input is not being captured by the component's onChange handler correctly.
-  // This appears to be related to the React Query cache invalidation and re-rendering
-  // that happens during auto-save operations.
-  // TODO: Fix the underlying GlossEditor/Playwright compatibility issue.
+  // These tests verify relation type references in the GlossEditor
+  // component. GlossEditor previously raced its own `gloss` prop effect
+  // against the parent's React Query auto-save: every onChange triggered
+  // a parent re-render whose echoed `gloss` prop reset the local
+  // `inputValue` via the [gloss, glossToString] effect, clobbering
+  // characters the user had typed in the interim. With Playwright's
+  // keyboard simulation firing keystrokes faster than the cache-
+  // invalidation cycle settles, this surfaced as missing characters. The
+  // fix tracks the most recently emitted gloss in a ref and suppresses
+  // the prop-driven re-sync when the incoming gloss structurally matches
+  // what we just emitted (see GlossEditor.tsx's `lastEmittedGlossRef`).
 
   test('can insert relation type reference in summary using autocomplete', async ({
     page,

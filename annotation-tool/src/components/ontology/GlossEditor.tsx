@@ -71,6 +71,20 @@ export default function GlossEditor({
   const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations' | 'claims'>('types')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const popperRef = useRef<HTMLDivElement>(null)
+  // Tracks the gloss we most recently emitted via onChange. When the
+  // `gloss` prop re-arrives via the parent's React-Query auto-save
+  // re-render and structurally matches what we just sent up, we suppress
+  // the re-sync into `inputValue` to avoid clobbering whatever the user
+  // typed in the meantime. Without this guard, a fast typist (or
+  // Playwright's keyboard simulation, which fires keystrokes faster than
+  // the cache-invalidation cycle settles) loses characters because the
+  // gloss-prop effect overwrites the local state with the round-tripped
+  // serialization of the older parent value.
+  const lastEmittedGlossRef = useRef<GlossItem[] | null>(null)
+  const emitChange = useCallback((newGloss: GlossItem[]) => {
+    lastEmittedGlossRef.current = newGloss
+    onChange(newGloss)
+  }, [onChange])
   const [cursorPosition, setCursorPosition] = useState(0)
 
   // Get all available types
@@ -476,8 +490,16 @@ export default function GlossEditor({
     return items
   }
 
-  // Initialize input value from gloss
+  // Initialize input value from gloss. Skip the re-sync when the
+  // incoming gloss is the same payload we just emitted via onChange —
+  // the parent's React Query auto-save fans out a re-render carrying
+  // back the gloss we sent up, and re-stringifying it here would clobber
+  // any keystrokes the user has typed in the interval between our
+  // emitChange call and the parent's settle.
   useEffect(() => {
+    if (lastEmittedGlossRef.current && JSON.stringify(gloss) === JSON.stringify(lastEmittedGlossRef.current)) {
+      return
+    }
     setInputValue(glossToString(gloss))
   }, [gloss, glossToString])
 
@@ -529,7 +551,7 @@ export default function GlossEditor({
 
     // Update gloss items
     const newGloss = stringToGloss(value)
-    onChange(newGloss)
+    emitChange(newGloss)
   }
 
   const insertReference = (item: TypeOption | ObjectOption | AnnotationOption | ClaimOption) => {
@@ -543,7 +565,7 @@ export default function GlossEditor({
     setInputValue(newValue)
 
     const newGloss = stringToGloss(newValue)
-    onChange(newGloss)
+    emitChange(newGloss)
 
     setShowAutocomplete(false)
     setSearchQuery('')
