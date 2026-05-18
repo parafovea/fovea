@@ -94,9 +94,9 @@ export function ClaimRelationsViewer({
 
       {/* Outgoing Relations */}
       <div className="mb-4 rounded-lg border p-4">
-        <p className="mb-2 text-sm font-medium text-muted-foreground">
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">
           Outgoing Relations ({asSource.length})
-        </p>
+        </h3>
         {asSource.length === 0 ? (
           <p className="text-sm italic text-muted-foreground">
             No outgoing relations
@@ -144,9 +144,9 @@ export function ClaimRelationsViewer({
 
       {/* Incoming Relations */}
       <div className="rounded-lg border p-4">
-        <p className="mb-2 text-sm font-medium text-muted-foreground">
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">
           Incoming Relations ({asTarget.length})
-        </p>
+        </h3>
         {asTarget.length === 0 ? (
           <p className="text-sm italic text-muted-foreground">
             No incoming relations

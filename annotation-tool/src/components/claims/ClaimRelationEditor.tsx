@@ -159,13 +159,13 @@ export function ClaimRelationEditor({
 
           {/* Relation Type */}
           <div className="flex flex-col gap-2">
-            <Label>Relation Type</Label>
+            <Label htmlFor="claim-relation-type">Relation Type</Label>
             <Select
               value={relationTypeId}
               onValueChange={(v) => setRelationTypeId(v ?? '')}
               disabled={claimRelationTypes.length === 0}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="claim-relation-type" className="w-full" aria-label="Relation Type">
                 <SelectValue placeholder="Select relation type" />
               </SelectTrigger>
               <SelectContent>
@@ -187,13 +187,13 @@ export function ClaimRelationEditor({
 
           {/* Target Claim */}
           <div className="flex flex-col gap-2">
-            <Label>Target Claim</Label>
+            <Label htmlFor="claim-relation-target">Target Claim</Label>
             <Select
               value={targetClaimId}
               onValueChange={(v) => setTargetClaimId(v ?? '')}
               disabled={flatClaims.length === 0}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="claim-relation-target" className="w-full" aria-label="Target Claim">
                 <SelectValue placeholder="Select target claim" />
               </SelectTrigger>
               <SelectContent>
