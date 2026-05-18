@@ -74,6 +74,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Swapped the workspace integration test's `querySelector('canvas')` probe for `getByLabelText('Video annotation timeline')`
 - Annotation-drawing duplication during keyframe edits
 - Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed)
+## [0.3.3] - 2026-05-13
+
+Forward-ports the v0.1.10 / v0.2.3 generalisation of the cross-user id remap to the v0.3.x line. The bug taxonomy and user-visible behaviour is the same; the integration is unchanged from v0.2.3 since `remapObjectIds` lives outside both the CASL surface introduced in v0.2.0 and the Clean Architecture refactor introduced in v0.3.0.
+
+### Changed
+
+- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The v0.3.2 fix added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
+
+### Added
+
+- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
+
+## [0.3.2] - 2026-05-11
 
 ## [0.3.1] - 2026-05-04
 
