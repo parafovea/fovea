@@ -68,6 +68,21 @@ describe('App', () => {
     // Set loading to false, not authenticated
     useAuthStore.getState().setLoading(false)
     useAuthStore.getState().setMode('multi-user')
+    // ProtectedRoute now also holds on `appConfig === null` (the #92 fix), so
+    // seed appConfig synchronously to bypass the loading-screen gate during
+    // this test — without this the route stays on the loading screen and
+    // never reaches the multi-user redirect branch.
+    useAuthStore.getState().setConfig({
+      mode: 'multi-user',
+      allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        idMapping: null,
+        allowExternalLinks: true,
+      },
+      externalLinks: { wikidata: true, videoSources: true },
+    })
 
     server.use(
       http.get('/api/config', () => {
