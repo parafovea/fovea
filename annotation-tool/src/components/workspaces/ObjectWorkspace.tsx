@@ -21,6 +21,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import {
   useWorld,
+  useAddEntity,
+  useAddEvent,
+  useAddTime,
+  useAddEntityCollection,
+  useAddEventCollection,
   useDeleteEntity,
   useDeleteEvent,
   useDeleteTime,
@@ -28,6 +33,7 @@ import {
   useDeleteEventCollection,
 } from '@store/queries'
 import { Entity, Event, Time, TimeInstant, TimeInterval, LocationPoint, LocationExtent, EntityCollection, EventCollection, GlossItem } from '@models/types'
+import { buildDuplicatePayload } from './duplicateWorldObject'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
@@ -53,6 +59,11 @@ export default function ObjectWorkspace() {
   const eventCollections = worldData?.eventCollections ?? []
 
   // Mutation hooks
+  const { mutate: addEntityMutate } = useAddEntity()
+  const { mutate: addEventMutate } = useAddEvent()
+  const { mutate: addTimeMutate } = useAddTime()
+  const { mutate: addEntityCollectionMutate } = useAddEntityCollection()
+  const { mutate: addEventCollectionMutate } = useAddEventCollection()
   const { mutate: deleteEntityMutate } = useDeleteEntity()
   const { mutate: deleteEventMutate } = useDeleteEvent()
   const { mutate: deleteTimeMutate } = useDeleteTime()
@@ -356,8 +367,32 @@ export default function ObjectWorkspace() {
       }
     },
     'object.duplicate': () => {
-      // TODO: Implement duplication logic
-      alert('Duplicate object not yet implemented')
+      const items = getCurrentItems()
+      if (selectedItemIndex < 0 || selectedItemIndex >= items.length) return
+      const item = items[selectedItemIndex]
+      const renamed = buildDuplicatePayload(item)
+      switch (tabValue) {
+        case 'entities':
+          addEntityMutate(renamed as unknown as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'events':
+          addEventMutate(renamed as unknown as Omit<Event, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'locations':
+          // Locations are entities with a `locationType` field.
+          addEntityMutate(renamed as unknown as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'times':
+          addTimeMutate(renamed as unknown as Omit<Time, 'id'>)
+          break
+        case 'collections':
+          if ('entityIds' in item) {
+            addEntityCollectionMutate(renamed as unknown as Omit<EntityCollection, 'id' | 'createdAt' | 'updatedAt'>)
+          } else {
+            addEventCollectionMutate(renamed as unknown as Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'>)
+          }
+          break
+      }
     },
     'object.search': () => {
       searchInputRef.current?.focus()
