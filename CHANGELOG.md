@@ -68,12 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Remap UUID-shaped substrings inside every string value of an imported payload during a cross-user import, not only inside fields whose NAME signalled an id reference (`*Id`, `*Ids`, gloss `objectRef.content`, gloss `typeRef.content`). Free-form prose that namedrops another imported record by UUID — `claim.text`, `claim.comment`, summary text segments, persona `informationNeed` and `details`, ontology entityType / eventType / roleType `description`, world object `name` and `description`, and any other carrier — now stays consistent with the regenerated row after cross-user remap. UUID-shaped substrings whose lowercased form is not in the cross-user idMap pass through unchanged, so the substitution stays a strict no-op outside the cross-user path. The two prior issue-number-bearing fixture / test pairs are renamed to `server/test/integration/cross-user-import-{foreign,real}-fixture.test.ts` and `server/test/fixtures/cross-user-import-{foreign-annotator,real-export}.jsonl` so future readers find tests by the behavior they encode.
-- Shimmed `PointerEvent` + `Element` pointer-capture in `test/setup.ts` so Base UI's checkbox/dialog handlers no longer throw `PointerEvent is not defined` under jsdom
-- Updated `TimelineComponent` tests to pass the full `TimelineComponentProps` via a `makeProps` helper and query buttons by `aria-label` instead of the canvas-era emoji placeholders
-- Swapped the workspace integration test's `querySelector('canvas')` probe for `getByLabelText('Video annotation timeline')`
-- Annotation-drawing duplication during keyframe edits
-- Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed)
+- `ClaimEditor` Claiming Event / Time / Location dropdowns now populate from world state instead of showing the None-only placeholder menus the shadcn migration left behind (events from `useEvents()`, times from `useTimes()`, locations from `useEntities()` filtered to entities tagged with a `locationType` field).
+- `ObjectWorkspace`'s `object.duplicate` command now actually duplicates the selected world object (entity / event / location / time / collection) instead of `alert('Duplicate object not yet implemented')`, via a pure `buildDuplicatePayload` helper that strips server-managed and Wikidata-provenance fields and appends a `(copy)` suffix.
+- `OntologyWorkspace`'s `ontology.duplicateType` command now actually duplicates the selected ontology type (entity / role / event / relation) instead of `alert('Duplicate type not yet implemented')`, via a pure `buildDuplicateOntologyType` helper following the same shape as the world-object duplicator.
+- `AnnotationWorkspace`'s command-context `drawingMode` flag now reflects the actual `annotationUiStore.drawingMode` value instead of being hardcoded `false`, so when-clauses that gate on `drawingMode` fire correctly while a draw-mode button is active.
+- `ImportResultDialog`'s orphan-skipped banner now carries the `data-testid="import-orphan-skipped-banner"` attribute that the corresponding E2E spec (`test/e2e/regression/export-import/orphan-skipped-banner.spec.ts`) was already probing for, and the banner prose now matches the E2E spec's `/missing referenced data/i` assertion. The unit-level rendered-output test stays skipped pending the workspace-wide pnpm + jsdom React-dedup fix.
+- `videoStorage.getVideoUrl` now fails fast with an actionable error message when `CDN_ENABLED=true` and `CDN_SIGNED_URLS=true` instead of silently returning an unsigned URL (the placeholder behaviour produced 403 cascades through signed CloudFront distributions); operators must either set `CDN_SIGNED_URLS=false` (public-CDN-in-front-of-public-bucket) or wire up `@aws-sdk/cloudfront-signer`.
+- Shimmed `PointerEvent` + `Element` pointer-capture in `test/setup.ts` so Base UI's checkbox/dialog handlers no longer throw `PointerEvent is not defined` under jsdom.
+- Updated `TimelineComponent` tests to pass the full `TimelineComponentProps` via a `makeProps` helper and query buttons by `aria-label` instead of the canvas-era emoji placeholders.
+- Swapped the workspace integration test's `querySelector('canvas')` probe for `getByLabelText('Video annotation timeline')`.
+- Annotation-drawing duplication during keyframe edits.
+- Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed).
+
 ## [0.3.3] - 2026-05-13
 
 Forward-ports the v0.1.10 / v0.2.3 generalisation of the cross-user id remap to the v0.3.x line. The bug taxonomy and user-visible behaviour is the same; the integration is unchanged from v0.2.3 since `remapObjectIds` lives outside both the CASL surface introduced in v0.2.0 and the Clean Architecture refactor introduced in v0.3.0.
