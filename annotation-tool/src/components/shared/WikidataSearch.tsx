@@ -264,11 +264,15 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
         {isDropdownOpen && options.length > 0 && (
           <div
             ref={dropdownRef}
+            role="listbox"
+            aria-label="Wikidata search results"
             className="absolute z-50 mt-1 w-full max-h-[300px] overflow-auto rounded-lg border bg-popover shadow-md"
           >
             {options.map((option) => (
               <button
                 key={option.id}
+                role="option"
+                aria-selected={false}
                 className="w-full text-left px-3 py-2 hover:bg-accent cursor-pointer"
                 onClick={() => handleSelect(option)}
               >

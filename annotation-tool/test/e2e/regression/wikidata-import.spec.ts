@@ -1,10 +1,22 @@
 import { test, expect } from '../fixtures/test-context.js'
+import { mockWikidata } from '../fixtures/mock-wikidata.js'
 
 /**
  * E2E tests for Wikidata import functionality with one-click import and undo.
  * Tests the new WikidataImportFlow component across different entity types.
+ *
+ * Every test routes through `mockWikidata(page)` so the suite is
+ * deterministic and not at the mercy of www.wikidata.org's HTTP 429
+ * rate limiter — under parallel worker execution the live endpoint
+ * starts dropping requests after a handful of hits, which made every
+ * `getByRole('option').first()` assertion flake.
  */
 test.describe('Wikidata Import Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockWikidata(page)
+  })
+
+
   test.describe('Entity Type Import', () => {
     test('imports entity type from Wikidata with one-click', async ({ ontologyWorkspace, testPersona, page }) => {
       await ontologyWorkspace.navigateTo(testPersona.id)
