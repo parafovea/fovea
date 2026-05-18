@@ -9,7 +9,7 @@
 FROM node:20-alpine AS builder
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /repo
 
@@ -39,7 +39,7 @@ RUN cd server && pnpm exec tsc prisma/seed.ts --outDir prisma --module commonjs 
 # Production dependencies stage
 FROM node:20-alpine AS deps
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /repo
 
@@ -59,7 +59,7 @@ RUN pnpm --filter @fovea/server exec prisma generate
 # Production stage
 FROM node:20-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /app
 
