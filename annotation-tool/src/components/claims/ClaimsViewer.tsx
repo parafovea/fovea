@@ -193,6 +193,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
                     variant="ghost"
                     size="icon-xs"
                     className={showRelations ? 'text-primary' : ''}
+                    aria-label={showRelations ? 'Hide relations' : 'Show relations'}
                     onClick={(e) => {
                       e.stopPropagation()
                       setShowRelations(!showRelations)
@@ -211,6 +212,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      aria-label="Add subclaim"
                       onClick={(e) => {
                         e.stopPropagation()
                         onAdd(claim.id)
@@ -230,6 +232,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      aria-label="Edit claim"
                       onClick={(e) => {
                         e.stopPropagation()
                         onEdit(claim)
@@ -250,6 +253,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
                       variant="ghost"
                       size="icon-xs"
                       className="text-destructive"
+                      aria-label="Delete claim"
                       onClick={(e) => {
                         e.stopPropagation()
                         onDelete(claim)

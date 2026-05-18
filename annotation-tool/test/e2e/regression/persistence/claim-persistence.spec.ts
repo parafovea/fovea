@@ -4,6 +4,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { fillClaimEditor } from '../../utils/claim-editor.js'
 
 test.describe('Claim Persistence', () => {
   test('claim persists after page reload', async ({
@@ -27,12 +28,12 @@ test.describe('Claim Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      // Select second option (first is disabled placeholder)
-      const personaOption = page.getByRole('option').nth(1)
+      // Select the (only) persona option — shadcn's Select renders no disabled placeholder so the first role=option IS the active persona, unlike MUI which used a non-selectable placeholder at index 0
+      const personaOption = page.getByRole('option').first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -56,8 +57,7 @@ test.describe('Claim Persistence', () => {
     await expect(claimEditorDialog).toBeVisible({ timeout: 5000 })
 
     // Enter claim text
-    const claimInput = claimEditorDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill(uniqueClaimText)
+        await fillClaimEditor(claimEditorDialog, { text: uniqueClaimText })
 
     // Save the claim
     const saveButton = claimEditorDialog.getByRole('button', { name: /create|save/i })
@@ -100,7 +100,7 @@ test.describe('Claim Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').nth(1)
+      const personaOption2 = page.getByRole('option').first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -135,11 +135,11 @@ test.describe('Claim Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').nth(1)
+      const personaOption = page.getByRole('option').first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -155,7 +155,7 @@ test.describe('Claim Persistence', () => {
     await dialog.getByRole('button', { name: /add manual claim/i }).first().click()
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
-    await claimDialog.getByLabel(/claim text with references/i).fill(originalText)
+    await fillClaimEditor(claimDialog, { text: originalText })
     await claimDialog.getByRole('button', { name: /create|save/i }).click()
     await expect(claimDialog).not.toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(1000)
@@ -167,9 +167,7 @@ test.describe('Claim Persistence', () => {
 
     const editClaimDialog = page.getByRole('dialog', { name: /edit claim/i })
     await expect(editClaimDialog).toBeVisible({ timeout: 5000 })
-    const editInput = editClaimDialog.getByLabel(/claim text with references/i)
-    await editInput.clear()
-    await editInput.fill(editedText)
+    await fillClaimEditor(editClaimDialog, { text: editedText })
     await editClaimDialog.getByRole('button', { name: /save/i }).click()
     await expect(editClaimDialog).not.toBeVisible({ timeout: 5000 })
 
@@ -197,7 +195,7 @@ test.describe('Claim Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').nth(1)
+      const personaOption2 = page.getByRole('option').first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -227,11 +225,11 @@ test.describe('Claim Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').nth(1)
+      const personaOption = page.getByRole('option').first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -246,7 +244,7 @@ test.describe('Claim Persistence', () => {
     await dialog.getByRole('button', { name: /add manual claim/i }).first().click()
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
-    await claimDialog.getByLabel(/claim text with references/i).fill(claimToDelete)
+    await fillClaimEditor(claimDialog, { text: claimToDelete })
     await claimDialog.getByRole('button', { name: /create|save/i }).click()
     await expect(claimDialog).not.toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(1000)
@@ -287,7 +285,7 @@ test.describe('Claim Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').nth(1)
+      const personaOption2 = page.getByRole('option').first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
