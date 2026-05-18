@@ -105,21 +105,21 @@ test.describe('Persona Creation Auto-Save', () => {
     await page.getByRole('button', { name: /add/i }).first().click()
     await expect(page.getByRole('dialog')).toBeVisible()
 
-    // Initially should show "Create" button (disabled)
-    const actionButton = page.getByRole('button', { name: /create|done/i }).last()
-    await expect(actionButton).toHaveText(/create/i)
+    // The shadcn PersonaEditor renders an explicit "Done" save button at all
+    // times (the legacy MUI editor cycled between "Create" pre-save and "Done"
+    // post-auto-save; tasks #71 and #72 dropped the auto-save hybrid in favour
+    // of an explicit save). The button is disabled while the form is invalid
+    // and enabled once name + role + informationNeed are populated.
+    const actionButton = page.getByRole('button', { name: /done/i }).last()
+    await expect(actionButton).toBeDisabled()
 
     // Fill required fields
     await page.getByLabel(/persona name/i).fill(uniqueName)
     await page.getByLabel(/role/i).first().fill('Role')
     await page.getByLabel(/information need/i).fill('Need')
 
-    // Wait for auto-save
-    await page.waitForTimeout(2000)
-    await page.waitForLoadState('networkidle', { timeout: 10000 })
-
-    // After auto-save, button should change to "Done"
-    await expect(page.getByRole('button', { name: /done/i })).toBeVisible({ timeout: 5000 })
+    // Once all required fields are filled the Done button becomes enabled.
+    await expect(actionButton).toBeEnabled({ timeout: 5000 })
 
     // Cancel to cleanup (will delete the auto-created persona)
     await page.getByRole('button', { name: /cancel/i }).click()

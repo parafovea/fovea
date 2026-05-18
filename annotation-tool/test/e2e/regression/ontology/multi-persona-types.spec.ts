@@ -73,7 +73,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.selectTab('entities')
 
       // Check if type exists in persona 2 (depends on whether multi-persona UI was available)
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.expectTypeExists('SharedVehicle')
 
         // Get the entity type from persona 2
@@ -288,7 +288,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedMeeting')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('events')
         await ontologyWorkspace.expectTypeExists('SharedMeeting')
@@ -351,7 +351,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedAgent')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('roles')
         await ontologyWorkspace.expectTypeExists('SharedAgent')
@@ -417,7 +417,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedConnection')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('relations')
         await ontologyWorkspace.expectTypeExists('SharedConnection')

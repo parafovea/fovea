@@ -42,9 +42,12 @@ test.describe('Entity Management', () => {
     const dialog = page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // The "Done" button should be disabled when name is empty (validation via disabled state)
-    const doneButton = dialog.getByRole('button', { name: /done/i })
-    await expect(doneButton).toBeDisabled()
+    // The save button should be disabled when name is empty (validation via disabled state).
+    // The shadcn EntityEditor renders the save button as "Create Entity" on create and
+    // "Update Entity" on edit; we anchor on the literal Create/Update phrasing rather than
+    // the legacy "Done" label the MUI editor previously used.
+    const saveButton = dialog.getByRole('button', { name: /create entity|update entity/i })
+    await expect(saveButton).toBeDisabled()
 
     // Dialog should still be visible (cannot submit without name)
     await expect(dialog).toBeVisible()
