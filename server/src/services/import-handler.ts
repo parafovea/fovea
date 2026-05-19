@@ -1296,9 +1296,21 @@ export class ImportHandler {
     // Execute import in dependency order
     try {
       if (options.transaction.atomic) {
-        await this.prisma.$transaction(async (tx) => {
-          await this.importLines(remappedLines, resolutionMap, result, options, tx as PrismaClient)
-        })
+        // Prisma's default interactive-transaction timeout is 5_000ms, which
+        // is too tight for realistic cross-user imports on this branch. A
+        // payload with ~20 personas / ~100+ summaries / hundreds of claims
+        // exceeds 5s end-to-end because every nested write goes through
+        // CASL's ability check (added in v0.2.0), so the default times out
+        // with "Transaction already closed" and the entire import rolls
+        // back. Bump to 5 minutes for atomic mode — this is the only place
+        // the budget matters for import correctness, and the import route
+        // is rate-limited upstream so unbounded payloads cannot pile up.
+        await this.prisma.$transaction(
+          async (tx) => {
+            await this.importLines(remappedLines, resolutionMap, result, options, tx as PrismaClient)
+          },
+          { maxWait: 10_000, timeout: 300_000 },
+        )
       } else {
         await this.importLines(remappedLines, resolutionMap, result, options, this.prisma)
       }
