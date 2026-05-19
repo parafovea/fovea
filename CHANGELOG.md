@@ -5,6 +5,19 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-05-19
+
+Forward-ports the v0.1.11 server-side test additions for the reopened cross-user import bug (#100) to the v0.2.x line and closes a Prisma transaction-timeout the forward-port surfaced. The frontend fixes carried in v0.1.11 (#92 auth race in `App.tsx` / `useSession.ts`, and the #122 vitest dual-React config) are intentionally NOT forward-ported because v0.2.0's CASL framework rewrote the auth surface and `release/0.2.x` runs the annotation-tool under npm with no dual-React layout.
+
+### Fixed
+
+- `ImportHandler.executeImport` now configures the Prisma atomic-mode transaction with `{ maxWait: 10_000, timeout: 300_000 }`. The default 5_000ms interactive-transaction timeout is exceeded by realistic cross-user imports on the v0.2.x line — a payload with ~20 personas / ~100+ summaries / hundreds of claims times out with `Transaction already closed` partway through because every nested write goes through v0.2.0's CASL ability check (added per-query work that is not present on v0.1.x). Without the bump the whole import rolls back and the user sees a 500 from `POST /api/import`; with it, the import completes against realistic payload sizes. The import route is rate-limited upstream so unbounded payloads cannot pile up in a single transaction window. Discovered via the forward-port of the v0.1.11 rich regression fixture.
+
+### Added
+
+- Regression suite in `server/test/integration/cross-user-import-rich-fixture.test.ts` against `server/test/fixtures/cross-user-import-rich-export.jsonl` (the richest of the seven annotator exports uploaded to #121, carrying 20 personas / 20 ontologies / 79 entities / 136 summaries across ~96 distinct videos / 621 claims / 9 object annotations — structurally far richer than the existing single-persona `cross-user-import-real-export.jsonl`). The test imports the fixture into a fresh user and walks four assertions sourced directly from the screenshot on the reopened #100: (a) every imported summary's `personaId` dereferences via `GET /api/personas/:id` with a 200 (a 404 here is the user-visible 'Persona <uuid> not found' banner in the Edit Video Summary dialog), (b) every dereferenced persona is owned by the importer (cross-checked against `GET /api/personas`), (c) no `summary.personaId` equals one of the original exporter-side persona ids (i.e. the remap actually rewrote it, not just preserved it), (d) every imported claim's `summaryId` resolves to a summary owned by the importer (the second 404 surface in the screenshot — claims pointing at the foreign summary id), with round-trip claim and annotation counts matching the fixture exactly. The suite carries a 60_000ms per-test timeout to accommodate CASL's per-call overhead.
+- `server/test/integration/cross-user-import-real-fixture.test.ts` now also walks `GET /api/personas/:id` with the summary's `personaId` after import and intersects the returned id against the requester's `GET /api/personas` list. The previous test only asserted the summary row carried *a* personaId without verifying the dereference, leaving the post-import Edit Video Summary path (the exact API the bug screenshot in #100 surfaces) untested.
+
 ## [0.2.3] - 2026-05-13
 
 Forward-ports the v0.1.10 generalisation of the cross-user id remap to the v0.2.x line. The bug taxonomy and user-visible behaviour is the same; the integration is unchanged from v0.1.10 since `remapObjectIds` lives outside the CASL surface.

@@ -184,6 +184,43 @@ describe('cross-user import of a real Fovea export', () => {
     const aSummaries = aSummariesRes.json() as Array<{ id: string; personaId: string }>
     expect(aSummaries.length, 'user A sees exactly one summary on the shared video').toBe(1)
     const aSummaryId = aSummaries[0].id
+    const aSummaryPersonaId = aSummaries[0].personaId
+
+    // Regression for the "Persona <uuid> not found" surface from the reopened
+    // cross-user import bug (#100): walk GET /api/personas/:id with the
+    // summary's personaId and require a 200. The Edit Video Summary dialog
+    // opens this exact endpoint to populate its persona dropdown, so a 404
+    // here is what produced the user-visible "Persona ... not found" banner.
+    // The previous test only asserted the summary row carried *a* personaId
+    // without verifying it dereferenced; under cross-user import the
+    // summary.personaId must point at the regenerated persona, not at the
+    // foreign exporter-side persona uuid that no longer exists on the
+    // importer's side.
+    expect(aSummaryPersonaId, 'summary must carry a personaId').toBeTruthy()
+    const aSummaryPersonaRes = await app.inject({
+      method: 'GET',
+      url: `/api/personas/${aSummaryPersonaId}`,
+      cookies: { session_token: A.sessionToken },
+    })
+    expect(
+      aSummaryPersonaRes.statusCode,
+      `GET /api/personas/${aSummaryPersonaId} (referenced by user A's summary) must return 200, not "Persona not found"`,
+    ).toBe(200)
+    const aSummaryPersona = aSummaryPersonaRes.json() as { id: string; name: string }
+    // The endpoint's response schema strips userId, so verify ownership by
+    // confirming the returned persona is in user A's own /api/personas list
+    // (which the route only returns under A's session).
+    const aPersonasRes = await app.inject({
+      method: 'GET',
+      url: '/api/personas',
+      cookies: { session_token: A.sessionToken },
+    })
+    const aPersonas = aPersonasRes.json() as Array<{ id: string }>
+    expect(
+      aPersonas.find(p => p.id === aSummaryPersona.id),
+      `summary.personaId ${aSummaryPersona.id} must appear in user A's /api/personas list (i.e. is owned by A)`,
+    ).toBeDefined()
+    expect(aSummaryPersona.id).not.toBe('57175232-62f7-4af2-96b4-bd8fd361adab') // exporter-side persona id
 
     const aClaimsRes = await app.inject({
       method: 'GET',
