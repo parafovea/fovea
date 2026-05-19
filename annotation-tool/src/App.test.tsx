@@ -39,6 +39,13 @@ describe('App', () => {
   beforeEach(() => {
     server.resetHandlers()
     vi.clearAllMocks()
+    // Clear persisted state so a prior test's localStorage write does
+    // not bleed into the next test's hydration cycle (the auth store
+    // uses zustand/persist, which writes `currentUser` and
+    // `isAuthenticated` to localStorage on every loginSuccess).
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear()
+    }
     // Reset Zustand store before each test
     useAuthStore.getState().reset()
     // Default personas API handler
@@ -61,6 +68,21 @@ describe('App', () => {
     // Set loading to false, not authenticated
     useAuthStore.getState().setLoading(false)
     useAuthStore.getState().setMode('multi-user')
+    // ProtectedRoute now also holds on `appConfig === null` (the #92 fix), so
+    // seed appConfig synchronously to bypass the loading-screen gate during
+    // this test — without this the route stays on the loading screen and
+    // never reaches the multi-user redirect branch.
+    useAuthStore.getState().setConfig({
+      mode: 'multi-user',
+      allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        idMapping: null,
+        allowExternalLinks: true,
+      },
+      externalLinks: { wikidata: true, videoSources: true },
+    })
 
     server.use(
       http.get('/api/config', () => {
@@ -93,6 +115,23 @@ describe('App', () => {
 
     useAuthStore.getState().loginSuccess(mockUser)
     useAuthStore.getState().setMode('multi-user')
+    // After the #92 fix, ProtectedRoute also holds on `appConfig === null`,
+    // so seed the appConfig synchronously to bypass the loading-screen
+    // gate during this test (the OTHER tests in this file already do
+    // this; only the original "renders protected routes when authenticated"
+    // test was relying on the dual-React bug to short-circuit the render
+    // before any of these state assumptions mattered).
+    useAuthStore.getState().setConfig({
+      mode: 'multi-user',
+      allowRegistration: true,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        idMapping: null,
+        allowExternalLinks: true,
+      },
+      externalLinks: { wikidata: true, videoSources: true },
+    })
 
     server.use(
       http.get('/api/config', () => {
@@ -100,6 +139,16 @@ describe('App', () => {
           mode: 'multi-user',
           allowRegistration: true,
         })
+      }),
+      // /api/auth/me must return the same user so that useSession's
+      // session-restoration check keeps isAuthenticated=true; without
+      // this handler MSW falls back to its default which surfaces a
+      // 404 / 401 and useSession's `logoutSuccess()` then flips the
+      // auth state back to unauthenticated, causing the protected
+      // route to redirect to /login (which is what masks this test's
+      // real intent — it is *meant* to verify the post-login render).
+      http.get('/api/auth/me', () => {
+        return HttpResponse.json({ user: mockUser })
       }),
       http.get('/api/videos', () => {
         return HttpResponse.json([])
@@ -203,9 +252,58 @@ describe('App', () => {
     })
   })
 
-  it('allows access to protected routes in single-user mode without authentication', async () => {
+  it('holds the loading screen when appConfig is null even after isLoading clears (regression for #92)', async () => {
+    // Reproduce the issue #92 scenario as a state-machine assertion:
+    // the auth store ends up with isLoading=false (session check done)
+    // but appConfig=null (config endpoint failed transiently). Before
+    // the fix, the ProtectedRoute checked only isLoading + the default
+    // mode='single-user', so it rendered protected content for an
+    // unauthenticated visitor. After the fix, `appConfig === null` is
+    // an additional gate that holds the loading screen.
+    useAuthStore.getState().reset()
     useAuthStore.getState().setLoading(false)
-    useAuthStore.getState().setMode('single-user')
+    // Intentionally do NOT call setConfig — leave appConfig=null to
+    // simulate the failed-config branch.
+
+    // /api/config returns 500 so useSession does NOT successfully
+    // hydrate appConfig, mirroring the transient-failure path.
+    server.use(
+      http.get('/api/config', () => {
+        return HttpResponse.json({ error: 'server-error' }, { status: 500 })
+      }),
+      http.get('/api/auth/me', () => {
+        return HttpResponse.json({ error: 'not-authenticated' }, { status: 401 })
+      }),
+    )
+
+    renderApp(['/'])
+
+    // The user must see the loading screen — NOT the VideoBrowser or
+    // any other protected content — while appConfig is still null.
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // Specifically, no login form (we don't know we're multi-user yet)
+    // and no VideoBrowser shell either.
+    expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+  })
+
+  it('allows access to protected routes in single-user mode without authentication', async () => {
+    // The ProtectedRoute now also holds on `appConfig === null` (the
+    // closure of #92), so a single-user-mode test must satisfy that
+    // precondition by writing a non-null appConfig as well as the
+    // legacy mode + isLoading state, otherwise the route stays on the
+    // loading screen until useSession's /api/config call lands.
+    useAuthStore.getState().setLoading(false)
+    useAuthStore.getState().setConfig({
+      mode: 'single-user',
+      allowRegistration: false,
+      wikidata: {
+        mode: 'online',
+        url: 'https://www.wikidata.org/w/api.php',
+        idMapping: null,
+        allowExternalLinks: true,
+      },
+      externalLinks: { wikidata: true, videoSources: true },
+    })
 
     server.use(
       http.get('/api/config', () => {
@@ -213,6 +311,12 @@ describe('App', () => {
           mode: 'single-user',
           allowRegistration: false,
         })
+      }),
+      http.get('/api/auth/me', () => {
+        // Single-user mode: useSession still pings /api/auth/me, return
+        // 401 so logoutSuccess fires (consistent with the test contract
+        // — there's no authenticated user in single-user mode).
+        return HttpResponse.json({ error: 'not-authenticated' }, { status: 401 })
       }),
       http.get('/api/videos', () => {
         return HttpResponse.json([])

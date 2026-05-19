@@ -40,18 +40,49 @@ export function useSession(): void {
   const logoutSuccess = useAuthStore(state => state.logoutSuccess)
 
   useEffect(() => {
+    let cancelled = false
+
+    const fetchConfigWithRetry = async (): Promise<void> => {
+      // Retry /api/config with bounded exponential backoff so a
+      // transient failure (heavy load, network blip) does not leave
+      // the auth store with `appConfig: null` indefinitely — the
+      // ProtectedRoute holds the loading screen until appConfig
+      // resolves, so this retry loop is what guarantees the user
+      // eventually reaches either the login page (multi-user) or the
+      // protected content (single-user) instead of getting stuck or,
+      // worse, falling through to the mode='single-user' default and
+      // seeing a Video Browser shell (issue #92).
+      const delays = [500, 1000, 2000, 4000, 8000]
+      for (let i = 0; i <= delays.length; i++) {
+        if (cancelled) return
+        try {
+          const configResponse = await fetch('/api/config', { credentials: 'include' })
+          if (configResponse.ok) {
+            const apiConfig = await configResponse.json()
+            if (!cancelled) setConfig(parseConfig(apiConfig))
+            return
+          }
+          // Non-2xx is treated as a transient failure for retry purposes;
+          // a truly broken server will exhaust the budget below.
+        } catch (error) {
+          console.warn(`[useSession] /api/config attempt ${i + 1} failed:`, error)
+        }
+        if (i < delays.length) {
+          await new Promise((resolve) => setTimeout(resolve, delays[i]))
+        }
+      }
+      console.error('[useSession] /api/config failed after all retries; user remains on loading screen')
+    }
+
     const checkSession = async () => {
       setLoading(true)
       try {
-        // Fetch config first to determine mode
-        const configResponse = await fetch('/api/config', { credentials: 'include' })
-        if (configResponse.ok) {
-          const apiConfig = await configResponse.json()
-          setConfig(parseConfig(apiConfig))
-        }
+        await fetchConfigWithRetry()
+        if (cancelled) return
 
         // Then check session
         const response = await fetch('/api/auth/me', { credentials: 'include' })
+        if (cancelled) return
         if (response.ok) {
           const { user } = await response.json()
           loginSuccess(user)
@@ -60,13 +91,15 @@ export function useSession(): void {
         }
       } catch (error) {
         console.error('Session check error:', error)
-        logoutSuccess()
+        if (!cancelled) logoutSuccess()
       } finally {
-        // Ensure loading is set to false even if something goes wrong
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     checkSession()
+    return () => {
+      cancelled = true
+    }
   }, [setLoading, setConfig, loginSuccess, logoutSuccess])
 }
