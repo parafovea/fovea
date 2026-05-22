@@ -149,20 +149,15 @@ test.describe('Collection Management', () => {
     await page.waitForTimeout(500)
 
     const dialog = page.locator('[role="dialog"]')
-    const autocomplete = dialog.getByLabel(/select events/i).first()
 
-    // Add Meeting 2
-    await autocomplete.click()
-    await autocomplete.fill('Meeting 2')
-    await page.waitForTimeout(300)
-    const option2 = page.getByRole('option', { name: /Meeting 2/i }).first()
-    if (await option2.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await option2.click()
-      await page.waitForTimeout(300)
-    }
+    // CollectionBuilder renders events as toggle <button>s under
+    // 'Events in Collection'; click each by exact name.
+    const eventToggle = dialog.getByRole('button', { name: 'Meeting 2', exact: true })
+    await expect(eventToggle).toBeVisible({ timeout: 5000 })
+    await eventToggle.click()
+    await page.waitForTimeout(150)
 
-    // Save
-    const saveButton = page.getByRole('button', { name: /save|update/i })
+    const saveButton = page.getByRole('button', { name: /^(save|update|create)( collection)?$/i }).last()
     await saveButton.click()
     await page.waitForTimeout(1500)
 
