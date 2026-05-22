@@ -130,24 +130,26 @@ export class AnnotationWorkspacePage extends BasePage {
    * Draw a simple bounding box with default coordinates.
    * Useful for quick test setup.
    */
-  async drawSimpleBoundingBox(): Promise<void> {
-    // Wait for persona select to be visible and enabled
+  async drawSimpleBoundingBox(opts: { personaName?: string } = {}): Promise<void> {
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
 
-    // Click to open the persona dropdown
     await personaSelect.click()
     await this.page.waitForTimeout(1000)
 
-    // Wait for the listbox to appear
-    // Radix Select renders an unnamed <listbox> portal, so match by role only
-    // and rely on the persona Select being open at this point.
     const personaListbox = this.page.getByRole('listbox')
     await expect(personaListbox).toBeVisible({ timeout: 10000 })
 
-    // Find the persona option that is NOT "None" and click it
-    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    // Anchor on the caller's specific persona when supplied — under
+    // parallel workers an admin session sees every worker's persona and
+    // `.first()` picks one that may not belong to the requesting test.
+    const personaOption = opts.personaName
+      ? this.page
+          .getByRole('option')
+          .filter({ hasText: new RegExp('^' + opts.personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+          .first()
+      : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await expect(personaOption).toBeVisible({ timeout: 5000 })
     await personaOption.click()
 
@@ -166,18 +168,22 @@ export class AnnotationWorkspacePage extends BasePage {
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
     await expect(typeSelect).toBeEnabled({ timeout: 30000 })
 
-    // The shadcn rewrite replaced the Material-UI Select listbox with a
-    // command-palette-style picker: a combobox that opens a Dialog with a
-    // search textbox plus one clickable Button per type. Click the first
-    // type entry by name. ArrowDown/Enter would dismiss the dialog instead
-    // of selecting an option.
+    // Type selector is a Popover whose content carries a search input
+    // followed by one <button> per entity / event / role type. Anchor on
+    // the search placeholder, then click the first option-button below it.
     await typeSelect.click()
-    const typePicker = this.page.getByRole('dialog')
-    await expect(typePicker).toBeVisible({ timeout: 5000 })
-    const firstType = typePicker.getByRole('button').first()
-    await expect(firstType).toBeVisible({ timeout: 5000 })
-    await firstType.click()
-    await this.page.waitForTimeout(1000)  // Wait for type selection to register
+    const typeSearch = this.page.getByPlaceholder(/^Search for (entity, role, or event )?type/i)
+    await expect(typeSearch).toBeVisible({ timeout: 5000 })
+    const typePopover = typeSearch.locator('xpath=ancestor::*[contains(@class, "PopoverContent") or @data-slot="popover-content" or @role="dialog"][1]')
+    // Fallback: scope to the document if the popover container isn't
+    // discoverable via its slot attribute — then take the first non-header
+    // button that follows the search input.
+    const typeOption = (await typePopover.count()) > 0
+      ? typePopover.getByRole('button').filter({ hasNotText: /^Search$/i }).first()
+      : this.page.getByRole('button').filter({ hasNotText: /^(Search|Cancel|Close)$/i }).nth(0)
+    await expect(typeOption).toBeVisible({ timeout: 5000 })
+    await typeOption.click()
+    await this.page.waitForTimeout(1000)
 
     await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })
 

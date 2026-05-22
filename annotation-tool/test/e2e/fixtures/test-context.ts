@@ -187,11 +187,14 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * worker's lifecycle (the test does NOT delete on teardown so
    * persisted-annotation data survives the reload assertion).
    */
-  testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use) => {
-    const existing = await db.findPersonaByName(testUser.id, 'Test Analyst (Persistent)', workerSessionToken)
+  // Name includes workerIndex so admin sessions across parallel workers
+  // see distinct options in the persona dropdown.
+  testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use, testInfo) => {
+    const personaName = `Test Analyst (Persistent W${testInfo.workerIndex})`
+    const existing = await db.findPersonaByName(testUser.id, personaName, workerSessionToken)
     const persona = existing ?? await db.createPersona({
       userId: testUser.id,
-      name: 'Test Analyst (Persistent)',
+      name: personaName,
       role: 'Intelligence Analyst'
     }, workerSessionToken)
     await use(persona)

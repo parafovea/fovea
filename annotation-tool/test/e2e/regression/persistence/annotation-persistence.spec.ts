@@ -22,7 +22,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     const savePromise = annotationWorkspace.createAnnotationSavePromise()
 
     // Draw a simple bounding box annotation
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Wait for the save to complete by awaiting the promise
@@ -42,12 +42,6 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again (required to see annotations after reload)
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    // Anchor on the persona option starting with the exact name plus the
-    // role-separator " - " to defend against the strict-mode violation
-    // that hits when multiple workers' persistent personas end up in the
-    // same listbox (the test-suite has historically accumulated 4-5
-    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
-    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
     const personaOption = page.getByRole('option').filter({
       hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
     }).first()
@@ -71,7 +65,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Create save promise BEFORE drawing
     const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     // Wait for initial save to complete
     await initialSavePromise
@@ -105,12 +99,6 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    // Anchor on the persona option starting with the exact name plus the
-    // role-separator " - " to defend against the strict-mode violation
-    // that hits when multiple workers' persistent personas end up in the
-    // same listbox (the test-suite has historically accumulated 4-5
-    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
-    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
     const personaOption = page.getByRole('option').filter({
       hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
     }).first()
@@ -133,7 +121,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
 
     // Create save promise BEFORE drawing
     const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     // Wait for initial save to complete
     await initialSavePromise
@@ -148,12 +136,6 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona to see the annotation
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    // Anchor on the persona option starting with the exact name plus the
-    // role-separator " - " to defend against the strict-mode violation
-    // that hits when multiple workers' persistent personas end up in the
-    // same listbox (the test-suite has historically accumulated 4-5
-    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
-    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
     const personaOption = page.getByRole('option').filter({
       hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
     }).first()
