@@ -97,7 +97,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
 
   const [localSummary, setLocalSummary] = useState<GlossItem[]>([])
   const [localComment, setLocalComment] = useState<string>('')
-  const [activeTab, setActiveTab] = useState('claims') // default to Claims
+  const [activeTab, setActiveTab] = useState('summary')
   const [extractDialogOpen, setExtractDialogOpen] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
   const [editingClaim, setEditingClaim] = useState<Claim | undefined>(undefined)
@@ -178,13 +178,10 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   // Track if we've already tried to create an empty summary for this video/persona
   const creatingEmptySummaryRef = useRef<string | null>(null)
 
-  // Switch to Claims tab when a different summary loads (e.g. switching videos/personas)
-  // Only depends on summaryId so background refetches don't reset the tab
-  useEffect(() => {
-    if (summaryId && summaryId.trim() !== '') {
-      setActiveTab('claims')
-    }
-  }, [summaryId])
+  // Note: do NOT auto-switch to Claims when a summary loads. Opening
+  // the Edit Video Summary dialog should land on the Summary tab so
+  // users can read / edit the summary content first; switching to
+  // Claims is an explicit action.
 
   // Log claims loading errors
   useEffect(() => {

@@ -43,11 +43,14 @@ test.describe('Summary Persistence', () => {
     // so a prior test (claim-*, etc.) may have left Claims selected.
     // Explicitly switch to the Summary tab so the textarea lives in the
     // active tabpanel before we query for it.
-    const summaryTab = dialog.locator('[role="tab"]', { hasText: /^Summary$/ }).first()
+    const summaryTab = dialog.locator('[data-slot="tabs-trigger"]', { hasText: /^Summary$/ }).first()
     await expect(summaryTab).toBeVisible({ timeout: 5000 })
-    await summaryTab.click({ force: true })
-    await page.waitForTimeout(800)
-    const summaryTextarea = dialog.getByLabel(/video summary/i).first()
+    const summaryTextarea = dialog.locator('textarea[aria-label="Video Summary"]')
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await summaryTab.click({ force: true })
+      if (await summaryTextarea.isVisible({ timeout: 1000 }).catch(() => false)) break
+      await page.waitForTimeout(500)
+    }
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
     // Type content - use fill() which is faster
@@ -106,7 +109,7 @@ test.describe('Summary Persistence', () => {
     await page.waitForTimeout(1000)
 
     // Verify summary content persisted
-    const summaryTextarea2 = dialog2.getByLabel(/video summary/i).first()
+    const summaryTextarea2 = dialog2.locator('textarea[aria-label="Video Summary"]')
     await expect(summaryTextarea2).toBeVisible({ timeout: 5000 })
     await expect(summaryTextarea2).toHaveValue(uniqueSummaryText)
   })
@@ -140,13 +143,19 @@ test.describe('Summary Persistence', () => {
 
     // Switch to Summary tab — the dialog remembers the last active
     // tab across opens, so a previous test may have left Claims active.
-    const summaryTab2 = dialog.locator('[role="tab"]', { hasText: /^Summary$/ }).first()
+    // Click the Summary tab — retry until the textarea actually mounts
+    // (base-ui TabsPrimitive.Tab occasionally swallows the first click
+    // when the dialog has just opened and the persona-Select is mid-
+    // settle).
+    const summaryTab2 = dialog.locator('[data-slot="tabs-trigger"]', { hasText: /^Summary$/ }).first()
     await expect(summaryTab2).toBeVisible({ timeout: 5000 })
-    await summaryTab2.click({ force: true })
-    await page.waitForTimeout(800)
-
-    const summaryTextarea = dialog.getByLabel(/video summary/i).first()
-    await expect(summaryTextarea).toBeVisible({ timeout: 10000 })
+    const summaryTextarea = dialog.locator('textarea[aria-label="Video Summary"]')
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await summaryTab2.click({ force: true })
+      if (await summaryTextarea.isVisible({ timeout: 1000 }).catch(() => false)) break
+      await page.waitForTimeout(500)
+    }
+    await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
     // Type original content character by character
     await summaryTextarea.click()
@@ -191,12 +200,10 @@ test.describe('Summary Persistence', () => {
       await page.waitForTimeout(500)
     }
 
-    // Wait for summary data to load from API
     await page.waitForTimeout(1000)
 
-    // Verify edited text persists
-    const summaryTextarea2 = dialog2.getByLabel(/video summary/i).first()
-    await expect(summaryTextarea2).toBeVisible({ timeout: 5000 })
+    const summaryTextarea2 = dialog2.locator('textarea[aria-label="Video Summary"]')
+    await expect(summaryTextarea2).toBeVisible({ timeout: 10000 })
     await expect(summaryTextarea2).toHaveValue(editedText)
   })
 })
