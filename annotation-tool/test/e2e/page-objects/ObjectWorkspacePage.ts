@@ -232,8 +232,13 @@ export class ObjectWorkspacePage extends BasePage {
     const personaListbox = this.page.getByRole('listbox').first()
     await personaListbox.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Wait for options to be available and click the first one
-    const firstPersonaOption = personaListbox.getByRole('option').first()
+    // Skip the leading "_none" placeholder option ("Select Persona") so
+    // we actually select a real persona and the Event Type combobox
+    // renders (it is gated on selectedPersonaId being truthy).
+    const firstPersonaOption = personaListbox
+      .getByRole('option')
+      .filter({ hasNotText: /^Select Persona$/ })
+      .first()
     await firstPersonaOption.waitFor({ state: 'visible', timeout: 5000 })
     await firstPersonaOption.click({ timeout: 5000 })
     await this.wait(500)
@@ -252,7 +257,11 @@ export class ObjectWorkspacePage extends BasePage {
     await typeListbox.waitFor({ state: 'visible', timeout: 5000 })
     await this.wait(300)
 
-    const typeOption = typeListbox.getByRole('option', { name: new RegExp(typeName, 'i') }).first()
+    const typeOption = typeListbox
+      .getByRole('option')
+      .filter({ hasNotText: /^Select Event Type$/ })
+      .filter({ hasText: new RegExp(typeName, 'i') })
+      .first()
     await typeOption.waitFor({ state: 'visible', timeout: 5000 })
     await typeOption.click({ timeout: 5000 })
     await this.wait(500)
@@ -260,8 +269,10 @@ export class ObjectWorkspacePage extends BasePage {
     // Wait for listbox to close
     await typeListbox.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
 
-    // Click "Add Interpretation" button inside the region
-    const addButton = accordionRegion.getByRole('button', { name: /add interpretation/i })
+    // Two "Add Interpretation" buttons share the region — the
+    // accordion-trigger (first, with data-slot=accordion-trigger) and
+    // the actual submit button at the bottom. Pick the last one.
+    const addButton = accordionRegion.getByRole('button', { name: /add interpretation/i }).last()
     await addButton.waitFor({ state: 'visible', timeout: 3000 })
     await addButton.click({ timeout: 3000 })
     await this.wait(500)
