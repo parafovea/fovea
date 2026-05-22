@@ -403,7 +403,11 @@ export class OntologyWorkspacePage extends BasePage {
     // button (which matches /save/i too) — that button doesn't submit
     // the form and the test would silently no-op.
     const dialog = this.page.locator('[role="dialog"]')
-    const saveButton = dialog.getByRole('button', { name: /^(save|create|done)$/i }).first()
+    // RelationTypeEditor's Edit dialog uses "Save Changes" (not "Save"),
+    // so the regex must allow the trailing " Changes". Other dialogs
+    // use plain Save / Create / Done.
+    const saveButton = dialog.getByRole('button', { name: /^(save( changes)?|create|done)$/i }).first()
+    await saveButton.scrollIntoViewIfNeeded()
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 
