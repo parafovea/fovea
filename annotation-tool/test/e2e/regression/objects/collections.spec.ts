@@ -54,30 +54,18 @@ test.describe('Collection Management', () => {
     await page.waitForTimeout(500)
 
     const dialog = page.locator('[role="dialog"]')
-    const autocomplete = dialog.getByLabel(/select entities/i).first()
 
-    // Add Entity B
-    await autocomplete.click()
-    await autocomplete.fill('Entity B')
-    await page.waitForTimeout(300)
-    const optionB = page.getByRole('option', { name: /Entity B/i }).first()
-    if (await optionB.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await optionB.click()
-      await page.waitForTimeout(300)
+    // CollectionBuilder renders entities as toggle <button>s in a
+    // scrollable list under the "Entities in Collection" Label
+    // (post-shadcn rewrite). Click each entity name directly.
+    for (const name of ['Entity B', 'Entity C']) {
+      const entityButton = dialog.getByRole('button', { name, exact: true })
+      await expect(entityButton).toBeVisible({ timeout: 5000 })
+      await entityButton.click()
+      await page.waitForTimeout(150)
     }
 
-    // Add Entity C
-    await autocomplete.click()
-    await autocomplete.fill('Entity C')
-    await page.waitForTimeout(300)
-    const optionC = page.getByRole('option', { name: /Entity C/i }).first()
-    if (await optionC.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await optionC.click()
-      await page.waitForTimeout(300)
-    }
-
-    // Save
-    const saveButton = page.getByRole('button', { name: /save|update/i })
+    const saveButton = page.getByRole('button', { name: /^(save|update|create)( collection)?$/i }).last()
     await saveButton.click()
     await page.waitForTimeout(1500)
 

@@ -382,24 +382,24 @@ export class ObjectWorkspacePage extends BasePage {
       await this.wait(300)
     }
 
-    // Find Location select trigger (shadcn Select renders as combobox)
-    const locationCombobox = dialog.getByRole('combobox').filter({ hasText: /location|none/i }).first()
-    if (await locationCombobox.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await locationCombobox.click({ timeout: 3000 })
-    } else {
-      // Fallback: locate via Label + sibling combobox group
-      const locationGroup = dialog.locator('div').filter({
-        has: this.page.getByText(/^location$/i)
-      }).filter({ has: this.page.getByRole('combobox') }).first()
-      await locationGroup.getByRole('combobox').first().click({ timeout: 3000 })
-    }
+    // Locate the Location-section combobox by walking up from the
+    // 'Location' Label to the parent flex-row that contains the Select.
+    const locationGroup = dialog
+      .locator('div.space-y-1')
+      .filter({ has: this.page.locator('label', { hasText: /^Location$/ }) })
+      .first()
+    await locationGroup.getByRole('combobox').first().click({ timeout: 5000 })
     await this.wait(300)
 
-    // Wait for listbox and select location
     const listbox = this.page.getByRole('listbox').first()
-    await listbox.waitFor({ state: 'visible', timeout: 3000 })
-    const locationOption = listbox.getByRole('option', { name: new RegExp(locationName, 'i') }).first()
-    await locationOption.click({ timeout: 3000 })
+    await listbox.waitFor({ state: 'visible', timeout: 5000 })
+    // Skip the leading "None" placeholder when searching for the named option.
+    const locationOption = listbox
+      .getByRole('option')
+      .filter({ hasNotText: /^None$/ })
+      .filter({ hasText: new RegExp(locationName, 'i') })
+      .first()
+    await locationOption.click({ timeout: 5000 })
     await this.wait(300)
 
     await this.saveForm()
