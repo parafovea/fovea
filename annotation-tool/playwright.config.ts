@@ -46,7 +46,7 @@ export default defineConfig({
       testDir: './test/e2e/functional',
       timeout: 45000,
       retries: 1,
-      workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
+      workers: 2,  // matches the test webm fixture count to avoid cross-worker state contamination
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
@@ -88,7 +88,7 @@ export default defineConfig({
       testDir: './test/e2e/accessibility',
       timeout: 45000,
       retries: 1,
-      workers: process.env.CI ? 5 : undefined,  // Same parallelization as regression tests
+      workers: 2,  // matches the test webm fixture count to avoid cross-worker state contamination
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
