@@ -53,17 +53,16 @@ test.describe('Summary Persistence', () => {
     }
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
-    // Type content - use fill() which is faster
     await summaryTextarea.fill(uniqueSummaryText)
-
-    // Verify the text was entered before continuing
     await expect(summaryTextarea).toHaveValue(uniqueSummaryText, { timeout: 1000 })
 
-    // Wait for debounce (1000ms) plus save to complete
-    await page.waitForTimeout(1500)
-
-    // Wait for any pending network requests
-    await page.waitForLoadState('networkidle')
+    // Wait for the auto-save POST /api/summaries to actually land instead
+    // of guessing at the debounce + network timing. Without this the
+    // page can reload mid-flight and the typed text is lost.
+    await page.waitForResponse(
+      r => /\/api\/summaries(\?|$)/.test(r.url()) && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 10000 },
+    )
 
     // Close the dialog
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
@@ -157,22 +156,21 @@ test.describe('Summary Persistence', () => {
     }
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
-    // Type original content character by character
+    const summaryPost = () => page.waitForResponse(
+      r => /\/api\/summaries(\?|$)/.test(r.url()) && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 10000 },
+    )
+
     await summaryTextarea.click()
+    const firstSave = summaryPost()
     await summaryTextarea.pressSequentially(originalText, { delay: 10 })
+    await firstSave
 
-    // Wait for save
-    await page.waitForTimeout(1500)
-    await page.waitForLoadState('networkidle')
-
-    // Clear and type edited content
     await summaryTextarea.click()
     await page.keyboard.press('Meta+a')
+    const secondSave = summaryPost()
     await summaryTextarea.pressSequentially(editedText, { delay: 10 })
-
-    // Wait for save
-    await page.waitForTimeout(1500)
-    await page.waitForLoadState('networkidle')
+    await secondSave
 
     // Close and reload
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
