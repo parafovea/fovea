@@ -331,8 +331,14 @@ const server = http.createServer(async (req, res) => {
 
   if (method === 'POST') {
     const body = await readJson(req)
+    // axios forwards model-service requests with task_type / model_name in
+    // the querystring (see server/src/routes/models.ts:204 — the route
+    // declares them as querystring), so read from URL too.
+    const qs = new URL(url, 'http://x').searchParams
+    const taskTypeParam = qs.get('task_type') || qs.get('taskType') || body.task_type || body.taskType
+    const modelNameParam = qs.get('model_name') || qs.get('modelName') || body.model_name || body.modelName
     if (pathname === '/api/models/select')
-      return send(res, 200, { task_type: body.task_type || body.taskType, model_name: body.model_name || body.modelName, status: 'selected' })
+      return send(res, 200, { task_type: taskTypeParam, model_name: modelNameParam, status: 'selected' })
     if (pathname === '/api/models/validate')
       return send(res, 200, { valid: true, total_memory_mb: 768, budget_mb: 8000, headroom_mb: 7232 })
     const load = pathname.match(/^\/api\/models\/load\/([^/]+)$/)

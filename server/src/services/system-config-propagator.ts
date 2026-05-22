@@ -22,33 +22,45 @@ interface AdminPushPayload {
 }
 
 /**
- * Push one ``(key, value)`` row to the model-service. Swallows failures
- * into the logger — callers choose whether an individual row failure
- * should abort a batch.
+ * Outcome of a single SystemConfig push attempt.
+ *
+ * Distinguishing "intentionally skipped" from "tried and failed" lets the
+ * admin-config route return 200 (DB row written, model-service channel
+ * deliberately not wired) instead of 500 (DB write made it but the
+ * downstream push erupted), which is what the docstring of this module
+ * promises but the previous `boolean` return type collapsed.
+ */
+export type PushResult = 'pushed' | 'skipped-no-token' | 'failed'
+
+/**
+ * Push one ``(key, value)`` row to the model-service. Returns a typed
+ * outcome — callers choose whether to treat 'skipped-no-token' as
+ * benign (admin-config route, startup replay) or as a hard failure
+ * (none currently). 'failed' always indicates an actual error.
  */
 export async function pushSystemConfigRow(
   log: Pick<FastifyBaseLogger, 'warn' | 'info'>,
   payload: AdminPushPayload
-): Promise<boolean> {
+): Promise<PushResult> {
   const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
   const token = process.env.MODEL_SERVICE_ADMIN_TOKEN
   if (!token) {
     log.warn('MODEL_SERVICE_ADMIN_TOKEN not set; skipping SystemConfig propagation')
-    return false
+    return 'skipped-no-token'
   }
   try {
     await axios.post(`${modelServiceUrl}/api/admin/reconfigure`, payload, {
       timeout: 15000,
       headers: { 'X-Admin-Token': token, 'Content-Type': 'application/json' },
     })
-    return true
+    return 'pushed'
   } catch (err) {
     const error = err as AxiosError
     const detail = (error.response?.data as { detail?: string } | undefined)?.detail
     log.warn(
       `SystemConfig push for key=${payload.key} failed: ${detail ?? error.message} (status=${error.response?.status ?? 'none'})`
     )
-    return false
+    return 'failed'
   }
 }
 
@@ -69,8 +81,8 @@ export async function replaySystemConfigOnStartup(
   }
   let succeeded = 0
   for (const row of rows) {
-    const ok = await pushSystemConfigRow(log, { key: row.key, value: row.value })
-    if (ok) succeeded += 1
+    const result = await pushSystemConfigRow(log, { key: row.key, value: row.value })
+    if (result === 'pushed') succeeded += 1
   }
   log.info(
     `SystemConfig startup replay complete: ${succeeded}/${rows.length} rows applied to model-service`

@@ -42,8 +42,15 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again (required to see annotations after reload)
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    // Anchor on the persona option starting with the exact name plus the
+    // role-separator " - " to defend against the strict-mode violation
+    // that hits when multiple workers' persistent personas end up in the
+    // same listbox (the test-suite has historically accumulated 4-5
+    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
+    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -98,8 +105,15 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    // Anchor on the persona option starting with the exact name plus the
+    // role-separator " - " to defend against the strict-mode violation
+    // that hits when multiple workers' persistent personas end up in the
+    // same listbox (the test-suite has historically accumulated 4-5
+    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
+    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -134,8 +148,15 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona to see the annotation
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    // Anchor on the persona option starting with the exact name plus the
+    // role-separator " - " to defend against the strict-mode violation
+    // that hits when multiple workers' persistent personas end up in the
+    // same listbox (the test-suite has historically accumulated 4-5
+    // "Test Analyst (Persistent)" options in shared E2E runs — same fix
+    // pattern as test/e2e/regression/persistence/summary-persistence.spec.ts).
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -169,8 +190,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Re-select persona
     const personaSelect2 = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect2.click()
-    const personaListbox2 = page.getByRole('listbox')
-    const personaOption2 = personaListbox2.getByText(testPersona.name)
+    const personaOption2 = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption2.click()
     await page.waitForTimeout(1000)
 
@@ -191,8 +213,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select persona first (required for annotations)
     let personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    let personaListbox = page.getByRole('listbox')
-    let personaOption = personaListbox.getByText(testPersona.name)
+    let personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -241,8 +264,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    personaListbox = page.getByRole('listbox')
-    personaOption = personaListbox.getByText(testPersona.name)
+    personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 

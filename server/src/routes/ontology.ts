@@ -11,6 +11,7 @@ import {
   ModelServiceTimeoutError,
   ModelServiceUnreachableError,
 } from '../lib/fetchModelService.js'
+import camelcaseKeys from 'camelcase-keys'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -437,7 +438,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
           reasoning: Type.String()
         }),
         400: Type.Object({ error: Type.String() }),
-        500: Type.Object({ error: Type.String() })
+        500: Type.Object({ error: Type.String() }),
+        502: Type.Object({ error: Type.String(), message: Type.Optional(Type.String()) }),
+        504: Type.Object({ error: Type.String(), message: Type.Optional(Type.String()) })
       }
     }
   }, async (request, reply) => {
@@ -486,7 +489,16 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const result = await response.json()
+      // Model-service responses are snake_case (Pydantic default) but this
+      // route's response schema is camelCase (e.g. `personaId`, `targetCategory`).
+      // Without this transform, fast-json-stringify's response serialization
+      // throws "personaId is required" because the model-service body carries
+      // `persona_id` and the schema validator can't find the camelCase key.
+      // Surfaces as a 500 INTERNAL_ERROR to the frontend with no useful
+      // payload, which is exactly the regression model-service-coverage.spec.ts
+      // is now locked down to catch.
+      const rawResult = (await response.json()) as Record<string, unknown>
+      const result = camelcaseKeys(rawResult, { deep: true })
 
       return reply.send(result)
     } catch (error) {

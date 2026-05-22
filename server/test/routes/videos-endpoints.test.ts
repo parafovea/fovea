@@ -378,15 +378,50 @@ describe('Videos API - Route Registration', () => {
       expect(response.json()).toHaveProperty('error')
     })
 
+    // The four "route-accessibility" tests below all share the same contract:
+    // the route must process the request as far as the model-service call,
+    // i.e. NOT 400-out on the query string and NOT 401/403-out on the
+    // session. The status that comes back from the model-service step
+    // depends on whether the test env can reach a real model service:
+    //   - 200: thumbnail returned (model service responded ok and wrote the file)
+    //   - 404: video row missing (acceptable for tests that don't seed the row)
+    //   - 502: model service unreachable from the unit-test process
+    //          (the production-correct outcome under the new fetchModelService
+    //          helper — was 500 INTERNAL_ERROR before the typed error mapping
+    //          landed; including 502 prevents the test from blocking legitimate
+    //          hardening work)
+    //   - 504: model service timed out (also production-correct under the helper)
+    // 400 / 401 / 403 must NEVER appear — those would mean the route is broken
+    // at the validation or auth layer, which is what these tests guard.
+    // Statuses that mean the route processed the request all the way to
+    // the model-service step. 200 = thumbnail returned, 404 = video row
+    // missing (acceptable when the test does not seed the row), 502/504 =
+    // model service unreachable/timed out from the unit-test process
+    // (production-correct under the new fetchModelService helper — anything
+    // that hits this path should now surface as a typed error, never an
+    // unmapped 500).
+    const ROUTE_PROCESSED_STATUSES = [200, 404, 502, 504] as const
+    // Statuses that would indicate the route is broken below the
+    // model-service layer (validation, auth, or unmapped 500).
+    const ROUTE_BROKEN_STATUSES = [400, 401, 403, 500]
+    function expectRouteProcessed(statusCode: number): void {
+      expect(
+        ROUTE_BROKEN_STATUSES.includes(statusCode),
+        `route returned ${statusCode}; must not 4xx auth/validation or unmapped 5xx`,
+      ).toBe(false)
+      expect(
+        ROUTE_PROCESSED_STATUSES,
+        `route returned ${statusCode}; must be one of ${ROUTE_PROCESSED_STATUSES.join(', ')}`,
+      ).toContain(statusCode as (typeof ROUTE_PROCESSED_STATUSES)[number])
+    }
+
     it('accepts size query parameter', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/videos/thumb-test-id/thumbnail?size=small',
         cookies: { session_token: adminSessionToken },
       })
-
-      // Will fail to generate thumbnail in test env, but route is accessible
-      expect([200, 404, 500]).toContain(response.statusCode)
+      expectRouteProcessed(response.statusCode)
     })
 
     it('accepts timestamp query parameter', async () => {
@@ -395,9 +430,7 @@ describe('Videos API - Route Registration', () => {
         url: '/api/videos/thumb-test-id/thumbnail?timestamp=5.0',
         cookies: { session_token: adminSessionToken },
       })
-
-      // Will fail to generate thumbnail in test env, but route is accessible
-      expect([200, 404, 500]).toContain(response.statusCode)
+      expectRouteProcessed(response.statusCode)
     })
 
     it('uses VideoRepository.findByIdWithSelect() with thumbnail fields', async () => {
@@ -406,9 +439,7 @@ describe('Videos API - Route Registration', () => {
         url: '/api/videos/thumb-test-id/thumbnail',
         cookies: { session_token: adminSessionToken },
       })
-
-      // Route is accessible and attempts to fetch video
-      expect([200, 404, 500]).toContain(response.statusCode)
+      expectRouteProcessed(response.statusCode)
     })
   })
 
@@ -423,12 +454,18 @@ describe('Videos API - Route Registration', () => {
         }
       })
 
-      // Test each route is accessible with authentication
+      // Test each route is accessible with authentication.
+      // The thumbnail route now surfaces the model-service-unreachable case
+      // as a typed 502 (was 500 INTERNAL_ERROR pre-fetchModelService) and
+      // the model-service-timeout case as 504; both are valid outcomes for
+      // a route the unit-test process can reach without a running model
+      // service container. The stream route can also legitimately 502 if
+      // the storage provider is unreachable.
       const routes: Array<{ method: string; url: string; expectedCodes: number[] }> = [
         { method: 'GET', url: '/api/videos', expectedCodes: [200] },
         { method: 'GET', url: '/api/videos/integration-test', expectedCodes: [200] },
         { method: 'GET', url: '/api/videos/integration-test/stream', expectedCodes: [200, 404, 500] },
-        { method: 'GET', url: '/api/videos/integration-test/thumbnail', expectedCodes: [200, 404, 500] },
+        { method: 'GET', url: '/api/videos/integration-test/thumbnail', expectedCodes: [200, 404, 502, 504] },
         { method: 'GET', url: '/api/videos/integration-test/url', expectedCodes: [200] },
         { method: 'POST', url: '/api/videos/sync', expectedCodes: [200] },
       ]
