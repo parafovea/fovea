@@ -93,16 +93,16 @@ export default function RelationTypeEditor({
       setTransitive(false)
       setExamples([])
       setTabValue('definition')
-      // Don't reset targetPersonaIds when creating - preserve user's persona selections
-      // Only initialize if empty (first open)
-      if (targetPersonaIds.length === 0 || (targetPersonaIds.length === 1 && targetPersonaIds[0] === '')) {
-        setTargetPersonaIds([personaId || ''])
-      }
+      setTargetPersonaIds([personaId || ''])
     }
     setExampleInput('')
     setSourceId('')
     setTargetId('')
-  }, [relationType, personaId, targetPersonaIds])
+    // targetPersonaIds is intentionally NOT a dependency: re-running this
+    // effect when the user toggles a target-persona checkbox wipes their
+    // in-progress name / gloss / source / target / examples.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relationType, personaId])
 
   const handleSave = async () => {
     if (!personaId) return
@@ -301,21 +301,25 @@ export default function RelationTypeEditor({
               Add to Personas
             </p>
             <div className="space-y-2">
-              {personas.map(persona => (
-                <div key={persona.id} className="flex items-center gap-2">
-                  <Checkbox
-                    checked={targetPersonaIds.includes(persona.id)}
-                    onCheckedChange={() => {
-                      setTargetPersonaIds(
-                        targetPersonaIds.includes(persona.id)
-                          ? targetPersonaIds.filter(id => id !== persona.id)
-                          : [...targetPersonaIds, persona.id]
-                      )
-                    }}
-                  />
-                  <Label>{persona.name}</Label>
-                </div>
-              ))}
+              {personas.map(persona => {
+                const cbId = `relation-target-persona-${persona.id}`
+                return (
+                  <div key={persona.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={cbId}
+                      checked={targetPersonaIds.includes(persona.id)}
+                      onCheckedChange={() => {
+                        setTargetPersonaIds(
+                          targetPersonaIds.includes(persona.id)
+                            ? targetPersonaIds.filter(id => id !== persona.id)
+                            : [...targetPersonaIds, persona.id]
+                        )
+                      }}
+                    />
+                    <Label htmlFor={cbId}>{persona.name}</Label>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

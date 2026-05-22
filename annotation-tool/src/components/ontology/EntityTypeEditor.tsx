@@ -74,16 +74,17 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
       setMode('manual')
       setSourcePersonaId('')
       setSourceEntityId('')
-      // Don't reset targetPersonaIds when creating - preserve user's persona selections
-      // Only initialize if empty (first open)
-      if (targetPersonaIds.length === 0 || (targetPersonaIds.length === 1 && targetPersonaIds[0] === '')) {
-        setTargetPersonaIds([personaId || ''])
-      }
+      setTargetPersonaIds([personaId || ''])
       setWikidataId('')
       setWikidataUrl('')
       setImportedAt('')
     }
-  }, [entity, personaId, targetPersonaIds])
+    // targetPersonaIds is intentionally NOT a dependency: this effect
+    // initialises the form when the dialog opens for a new (or different)
+    // entity/persona, and re-running it every time the user toggles a
+    // target-persona checkbox wipes their in-progress name / gloss / examples.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entity, personaId])
 
   useEffect(() => {
     // When copying from another persona, populate the fields
