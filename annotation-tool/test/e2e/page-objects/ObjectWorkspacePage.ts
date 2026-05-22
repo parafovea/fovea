@@ -684,21 +684,15 @@ export class ObjectWorkspacePage extends BasePage {
       await descTextarea.fill(description)
     }
 
-    // Add entities if provided
+    // Add entities. CollectionBuilder renders each entity as a toggle
+    // button in a scrollable list under the "Entities in Collection"
+    // label; click each by exact name to add it to the selection.
     if (entityNames.length > 0) {
-      const autocomplete = dialog.getByLabel(/select entities/i).first()
-      if (await autocomplete.isVisible({ timeout: 2000 }).catch(() => false)) {
-        for (const entityName of entityNames) {
-          await autocomplete.click()
-          await autocomplete.fill(entityName)
-          await this.wait(300)
-
-          const option = this.page.getByRole('option', { name: new RegExp(entityName, 'i') }).first()
-          if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await option.click()
-            await this.wait(300)
-          }
-        }
+      for (const entityName of entityNames) {
+        const entityButton = dialog.getByRole('button', { name: entityName, exact: true })
+        await expect(entityButton).toBeVisible({ timeout: 5000 })
+        await entityButton.click()
+        await this.wait(100)
       }
     }
 
