@@ -206,10 +206,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
    */
-  testVideo: async ({ workerSessionToken }, use) => {
-    // Fetch actual videos from backend (auth required since the projects-groups
-    // RBAC merge — the request must carry the worker user's session cookie or
-    // the route returns 401 and videos becomes the error envelope).
+  testVideo: async ({ workerSessionToken }, use, testInfo) => {
     const response = await fetch('http://localhost:3001/api/videos', {
       headers: { Cookie: `session_token=${workerSessionToken}` }
     })
@@ -219,8 +216,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       throw new Error('No videos found in test environment. Ensure test-data directory has videos.')
     }
 
-    // Use first video (all test videos are webm for codec compatibility)
-    const video = videos[0]
+    // Spread workers across the available videos so parallel test runs
+    // don't all hit annotations on the same video row and step on each
+    // other's state under admin RBAC. With two webm fixtures available
+    // (dust-storm + mummy-dust), workers 0,2,4,... use the first;
+    // workers 1,3,5,... use the second.
+    const video = videos[testInfo.workerIndex % videos.length]
 
     await use({
       id: video.id,
