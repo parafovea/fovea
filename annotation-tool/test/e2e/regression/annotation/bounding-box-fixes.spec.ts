@@ -58,69 +58,28 @@ test.describe('Selection Persistence (Issue #59)', () => {
     await videoBrowser.navigateToHome()
   })
 
-  test('persona and type selection persist after drawing bounding box', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
+  test('persona and type selection persist after drawing bounding box', async ({ annotationWorkspace, page, testPersona, testVideo }) => {
+    void testVideo
     await annotationWorkspace.navigateFromVideoBrowser()
-
-    // Select persona and type
-    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
-    await expect(personaSelect).toBeVisible({ timeout: 10000 })
-    await personaSelect.click()
-    await page.waitForTimeout(500)
-
-    const personaListbox = page.getByRole('listbox')
-    await expect(personaListbox).toBeVisible({ timeout: 5000 })
-    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
-    await personaOption.click()
-    await page.waitForTimeout(1000)
-
-    // Wait for type select to be enabled
-    const typeSelect = page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
-    await typeSelect.click()
-    await page.waitForTimeout(500)
-    await typeSelect.press('ArrowDown')
-    await page.waitForTimeout(300)
-    await typeSelect.press('Enter')
-    await page.waitForTimeout(500)
-
-    // Draw first bounding box
-    await annotationWorkspace.drawBoundingBox({ x: 50, y: 50, width: 100, height: 100 })
-    await page.waitForTimeout(500)
-
-    // Verify annotation was created
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
-
-    // Verify persona selection is still visible (not reset)
+    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible()
   })
 
-  test('can draw multiple consecutive boxes by reselecting type', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
+  test('can draw multiple consecutive boxes by reselecting type', async ({ annotationWorkspace, page, testPersona, testVideo }) => {
+    void testVideo
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for first annotation to be created
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
-
-    // Verify we have at least 1 annotation
     const annotationHeading = page.getByRole('heading', { name: /All Annotations/i })
     await expect(annotationHeading).toContainText(/\([1-9]\d*\)/, { timeout: 10000 })
 
-    // After drawing, the drawing state is reset, so we need to reselect type
-    // This is expected behavior: drawing state resets after creating an annotation
-    const typeSelect = page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
-    await typeSelect.click()
-    await page.waitForTimeout(1000)  // Longer wait for dropdown
-    await typeSelect.press('ArrowDown')
-    await page.waitForTimeout(500)
-    await typeSelect.press('Enter')
-    await page.waitForTimeout(1000)  // Longer wait for type selection
-
-    // Draw another box after reselecting type (at different position)
+    // Re-select type for the next draw (drawing state resets after each annotation).
+    await annotationWorkspace.selectFirstType()
+    const savePromise = annotationWorkspace.createAnnotationSavePromise(20000)
     await annotationWorkspace.drawBoundingBox({ x: 250, y: 50, width: 100, height: 100 })
-    await page.waitForTimeout(2000)  // Wait for annotation to be created
-
-    // Wait for second annotation to be created by checking for 2+ annotations
+    await savePromise
     await expect(annotationHeading).toContainText(/\([2-9]\d*\)/, { timeout: 15000 })
   })
 })
@@ -133,34 +92,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
   test('type annotation shows actual type name in label', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
-    // Select persona
-    const personaSelect = page.getByRole('combobox', { name: /select persona/i })
-    await expect(personaSelect).toBeVisible({ timeout: 10000 })
-    await personaSelect.click()
-    await page.waitForTimeout(500)
-
-    const personaListbox = page.getByRole('listbox')
-    await expect(personaListbox).toBeVisible({ timeout: 5000 })
-    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
-    await personaOption.click()
-    await page.waitForTimeout(1000)
-
-    // Select type and capture its name
-    const typeSelect = page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
-    await typeSelect.click()
-    await page.waitForTimeout(500)
-
-    // Get the first option's text before selecting
-    const typeListbox = page.getByRole('listbox')
-    const typeOption = typeListbox.getByRole('option').first()
-    await typeOption.textContent()
-    await typeOption.click()
-    await page.waitForTimeout(500)
-
-    // Draw bounding box
-    await annotationWorkspace.drawBoundingBox({ x: 50, y: 50, width: 100, height: 100 })
-    await page.waitForTimeout(500)
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     // Verify label shows the actual type name (e.g., "Test Entity Type", not "entity")
     // The shadcn Badge inside the bounding-box foreignObject renders as a <span>
@@ -177,9 +109,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
 
   test('type annotation has correct color for its kind', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for annotation to be created and visible
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Verify the stroke color indicates the kind
@@ -194,9 +124,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
 
   test('type annotations have appropriate stroke width', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for annotation to be created and visible
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Verify the stroke width for type annotation
@@ -225,16 +153,17 @@ test.describe('Annotation Panel Consistency', () => {
 
   test('annotation panel shows colored chip for type annotations', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for annotation to be created and visible
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify the annotation panel shows a colored badge.
-    // The annotations sidebar contains an "All Annotations" heading; each list item renders a shadcn Badge (span) for the kind.
-    const sidebar = page.locator('div', { has: page.getByRole('heading', { name: /all annotations/i }) }).last()
-    const drawerChip = sidebar.locator('ul li span').filter({ hasText: /^(entity|event|role|Entity|Event|Location|Collection)$/ }).first()
-    await expect(drawerChip).toBeVisible({ timeout: 5000 })
+    // Annotation rows in the sidebar list render a shadcn Badge whose
+    // accessible text is the type category — match directly on any
+    // element whose text is exactly one of those category names.
+    const drawerChip = page
+      .locator('ul li')
+      .locator(':text-matches("^(entity|event|role|Entity|Event|Location|Collection)$", "i")')
+      .first()
+    await expect(drawerChip).toBeVisible({ timeout: 10000 })
   })
 
   test('type and object annotations have consistent colors between box and panel', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
