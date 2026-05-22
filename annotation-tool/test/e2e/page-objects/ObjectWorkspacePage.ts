@@ -738,21 +738,14 @@ export class ObjectWorkspacePage extends BasePage {
       await descTextarea.fill(description)
     }
 
-    // Add events if provided
+    // CollectionBuilder renders each event as a toggle <button>
+    // under the 'Events in Collection' Label; click by name.
     if (eventNames.length > 0) {
-      const autocomplete = dialog.getByLabel(/select events/i).first()
-      if (await autocomplete.isVisible({ timeout: 2000 }).catch(() => false)) {
-        for (const eventName of eventNames) {
-          await autocomplete.click()
-          await autocomplete.fill(eventName)
-          await this.wait(300)
-
-          const option = this.page.getByRole('option', { name: new RegExp(eventName, 'i') }).first()
-          if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await option.click()
-            await this.wait(300)
-          }
-        }
+      for (const eventName of eventNames) {
+        const eventToggle = dialog.getByRole('button', { name: eventName, exact: true })
+        await expect(eventToggle).toBeVisible({ timeout: 5000 })
+        await eventToggle.click()
+        await this.wait(100)
       }
     }
 
