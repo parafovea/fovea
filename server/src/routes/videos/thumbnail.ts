@@ -6,6 +6,12 @@ import { createReadStream } from 'fs'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
 import { NotFoundError, InternalError, AppError } from '../../lib/errors.js'
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+  ModelServiceTimeoutError,
+  ModelServiceUnreachableError,
+} from '../../lib/fetchModelService.js'
 
 /**
  * Video thumbnail generation and serving route.
@@ -103,10 +109,10 @@ export const thumbnailRoutes: FastifyPluginAsync<{
         size: size
       }
 
-      const response = await fetch(`${modelServiceUrl}/api/thumbnails/generate`, {
+      const response = await fetchModelService(`${modelServiceUrl}/api/thumbnails/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        timeoutMs: MODEL_SERVICE_TIMEOUTS.thumbnails,
+        body: requestBody,
       })
 
       if (!response.ok) {
@@ -117,24 +123,49 @@ export const thumbnailRoutes: FastifyPluginAsync<{
         })
       }
 
+      // Confirm the model service actually wrote the thumbnail to the
+      // shared volume before declaring success. The 200 from
+      // /api/thumbnails/generate means "I ran the work" — it does not
+      // mean the file is on disk where this route expects to read it. If
+      // the volume is unmounted, mis-mounted, or the worker silently
+      // dropped the write, `createReadStream` would later emit an
+      // 'error' event after `reply.type('image/jpeg')` had already been
+      // committed, and Fastify would fail with "Attempted to send
+      // payload of invalid type 'object'." Surface a clean 502 instead
+      // so the frontend renders a real error rather than a corrupted
+      // response.
+      try {
+        await fs.stat(thumbnailPath)
+      } catch (statErr) {
+        const cause = statErr instanceof Error ? statErr.message : String(statErr)
+        fastify.log.error({ videoId, thumbnailPath, cause }, 'Model service returned ok but the thumbnail file is missing on disk')
+        return reply.code(502).send({
+          error: 'MODEL_SERVICE_OUTPUT_MISSING',
+          message: 'Model service did not produce the expected thumbnail file',
+        })
+      }
+
       // Update database with thumbnail path
       await videoRepository.updateThumbnailPath(videoId, relativeThumbnailPath)
 
       // Serve the newly generated thumbnail
-      try {
-        const stream = createReadStream(thumbnailPath)
-        return reply
-          .type('image/jpeg')
-          .header('Cache-Control', 'public, max-age=86400') // Cache for 24 hours
-          .send(stream)
-      } catch (error) {
-        fastify.log.error({ error }, 'Failed to serve generated thumbnail')
-        throw new InternalError('Failed to serve thumbnail')
-      }
+      const stream = createReadStream(thumbnailPath)
+      return reply
+        .type('image/jpeg')
+        .header('Cache-Control', 'public, max-age=86400') // Cache for 24 hours
+        .send(stream)
     } catch (error) {
       // Re-throw typed errors to preserve status codes
       if (error instanceof AppError) {
         throw error
+      }
+      if (error instanceof ModelServiceTimeoutError) {
+        fastify.log.error({ endpoint: error.endpoint, timeoutMs: error.timeoutMs }, 'Model service thumbnail generation timed out')
+        return reply.code(504).send({ error: 'MODEL_SERVICE_TIMEOUT', message: error.message })
+      }
+      if (error instanceof ModelServiceUnreachableError) {
+        fastify.log.error({ endpoint: error.endpoint, cause: error.cause.message }, 'Model service thumbnail generation unreachable')
+        return reply.code(502).send({ error: 'MODEL_SERVICE_UNREACHABLE', message: error.message })
       }
       fastify.log.error(error)
       throw new InternalError('Failed to get thumbnail')

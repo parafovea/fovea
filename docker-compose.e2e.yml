@@ -68,6 +68,14 @@ services:
     build:
       context: ./test-utils
       dockerfile: Dockerfile.mock-model-service
+    environment:
+      # Where the mock writes generated artefacts (thumbnails, etc.) so
+      # the backend can read them from the same shared volume. Must
+      # match the backend's STORAGE_PATH for the thumbnail flow to work
+      # end-to-end.
+      - STORAGE_PATH=/test-videos
+    volumes:
+      - ./test-videos:/test-videos:rw
     networks:
       - e2e-network
     healthcheck:
