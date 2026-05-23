@@ -257,7 +257,10 @@ export default function ObjectPicker({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
-      <DialogContent className="sm:max-w-2xl h-[80vh] flex flex-col">
+      <DialogContent
+        data-tour-id="object-picker-popover"
+        className="sm:max-w-2xl h-[80vh] flex flex-col"
+      >
         <DialogHeader>
           <DialogTitle>Select World Object</DialogTitle>
         </DialogHeader>

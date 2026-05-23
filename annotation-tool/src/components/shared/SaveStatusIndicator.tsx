@@ -95,6 +95,7 @@ export function SaveStatusIndicator({
     return (
       <div
         data-testid={`save-status-${status}`}
+        data-tour-id="save-indicator"
         className="flex items-center gap-1"
       >
         {status === 'saving' && <Spinner className="size-3.5" />}
@@ -128,6 +129,7 @@ export function SaveStatusIndicator({
   return (
     <div
       data-testid={`save-status-${status}`}
+      data-tour-id="save-indicator"
       className="flex items-center gap-2"
     >
       {status === 'saving' && (

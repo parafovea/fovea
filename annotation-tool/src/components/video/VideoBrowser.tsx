@@ -592,6 +592,10 @@ function VideoCard({
 
   return (
     <Card
+      // First-card anchor for Tour 1 ("First annotation in 90 seconds")
+      // and other tours that want to spotlight a tangible video tile
+      // without depending on which clip is rendered first.
+      data-tour-id={index === 0 ? 'video-browser-card-first' : undefined}
       className={cn(
         'h-full flex flex-col cursor-pointer',
         selectedVideoIndex === index && 'outline outline-2 outline-primary'

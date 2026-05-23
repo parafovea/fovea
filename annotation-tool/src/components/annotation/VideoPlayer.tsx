@@ -149,8 +149,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     ])
 
     return (
-      <div className="relative flex-grow bg-black min-h-0">
-        <div className="annotation-video-container">
+      <div className="relative flex-grow bg-black min-h-0" data-tour-id="video-player-scrubber">
+        <div className="annotation-video-container" data-tour-id="drawing-canvas">
           <video
             ref={videoRef}
             className="video-js vjs-big-play-centered vjs-fluid vjs-default-skin"
