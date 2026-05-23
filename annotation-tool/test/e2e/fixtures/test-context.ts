@@ -217,11 +217,41 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     }
 
     // Spread workers across the available videos so parallel test runs
-    // don't all hit annotations on the same video row and step on each
-    // other's state under admin RBAC. With two webm fixtures available
-    // (dust-storm + mummy-dust), workers 0,2,4,... use the first;
-    // workers 1,3,5,... use the second.
+    // don't all hit annotations on the same video row.
     const video = videos[testInfo.workerIndex % videos.length]
+
+    // Delete annotations + summaries on this video before each test so
+    // residue from a prior test in the same worker (or a parallel worker
+    // before the testVideo stripe rotation) doesn't bleed into the
+    // current test's assertions about counts / persistence / visibility.
+    const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
+      headers: { Cookie: `session_token=${workerSessionToken}` },
+    })
+    if (annsRes.ok) {
+      const anns = (await annsRes.json()) as Array<{ id: string }>
+      await Promise.all(
+        anns.map((a) =>
+          fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
+            method: 'DELETE',
+            headers: { Cookie: `session_token=${workerSessionToken}` },
+          }),
+        ),
+      )
+    }
+    const summariesRes = await fetch(`http://localhost:3001/api/videos/${video.id}/summaries`, {
+      headers: { Cookie: `session_token=${workerSessionToken}` },
+    })
+    if (summariesRes.ok) {
+      const summaries = (await summariesRes.json()) as Array<{ id: string; personaId: string }>
+      await Promise.all(
+        summaries.map((s) =>
+          fetch(`http://localhost:3001/api/videos/${video.id}/summaries/${s.personaId}`, {
+            method: 'DELETE',
+            headers: { Cookie: `session_token=${workerSessionToken}` },
+          }),
+        ),
+      )
+    }
 
     await use({
       id: video.id,

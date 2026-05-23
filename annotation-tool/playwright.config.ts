@@ -107,7 +107,10 @@ export default defineConfig({
       testDir: './test/e2e/regression/visual',
       timeout: 60000,
       retries: 0,  // Don't retry visual tests
-      workers: process.env.CI ? 3 : undefined,  // Less parallelization for stability
+      // Visual baselines include worker-specific persona names rendered in the
+      // workspace chrome (per-worker user → per-worker persona); running with
+      // a single worker keeps that UI text stable against the shared baseline.
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },

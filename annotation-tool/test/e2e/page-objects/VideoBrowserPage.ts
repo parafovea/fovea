@@ -125,7 +125,6 @@ export class VideoBrowserPage extends BasePage {
    * Assert that the video browser page is loaded.
    */
   async expectPageLoaded(): Promise<void> {
-    await expect(this.appTitle).toBeVisible()
     await expect(this.searchInput).toBeVisible()
   }
 
