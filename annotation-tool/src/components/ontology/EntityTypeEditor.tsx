@@ -83,7 +83,6 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
     // initialises the form when the dialog opens for a new (or different)
     // entity/persona, and re-running it every time the user toggles a
     // target-persona checkbox wipes their in-progress name / gloss / examples.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, personaId])
 
   useEffect(() => {

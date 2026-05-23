@@ -54,7 +54,7 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
     page,
     testVideo,
     testPersona,
-    testUser, // eslint-disable-line @typescript-eslint/no-unused-vars
+    testUser,
   }) => {
     const res = await page.request.post(`/api/videos/${testVideo.id}/detect`, {
       data: {
@@ -107,7 +107,7 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
   test('thumbnails: GET /api/videos/:id/thumbnail returns 200 with image content-type', async ({
     page,
     testVideo,
-    testUser, // eslint-disable-line @typescript-eslint/no-unused-vars
+    testUser,
   }) => {
     const res = await page.request.get(`/api/videos/${testVideo.id}/thumbnail`)
     expect(
@@ -125,7 +125,7 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
   test('ontology augment: POST /api/ontology/augment returns 200 + AugmentResponse shape', async ({
     page,
     testPersona,
-    testUser, // eslint-disable-line @typescript-eslint/no-unused-vars
+    testUser,
   }) => {
     // The backend ontology/augment route signature reads personaId, domain,
     // existingTypes, targetCategory, maxSuggestions from the body — see

@@ -101,7 +101,6 @@ export default function RelationTypeEditor({
     // targetPersonaIds is intentionally NOT a dependency: re-running this
     // effect when the user toggles a target-persona checkbox wipes their
     // in-progress name / gloss / source / target / examples.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relationType, personaId])
 
   const handleSave = async () => {

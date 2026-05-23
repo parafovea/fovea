@@ -381,7 +381,11 @@ describe('VideoSummaryEditor', () => {
   })
 
   describe('Default Tab', () => {
-    it('defaults to Claims tab (tab 1) when summary exists', async () => {
+    it('defaults to Summary tab (tab 0) when summary exists', async () => {
+      // VideoSummaryEditor now opens to Summary regardless of whether a
+      // summary already exists. The prior "auto-switch to Claims when
+      // a summary loads" effect was removed (commit 591ad1c) because it
+      // forced users into a tab they hadn't asked for.
       const { useVideoSummary } = await import('@store/queries')
       const existingSummary = {
         id: 'summary-1',
@@ -409,9 +413,8 @@ describe('VideoSummaryEditor', () => {
       )
 
       await waitFor(() => {
-        // Claims tab should be active (index 1)
-        const claimsTab = screen.getByRole('tab', { name: /claims/i })
-        expect(claimsTab).toHaveAttribute('aria-selected', 'true')
+        const summaryTab = screen.getByRole('tab', { name: /summary/i })
+        expect(summaryTab).toHaveAttribute('aria-selected', 'true')
       })
     })
   })
@@ -584,6 +587,7 @@ describe('VideoSummaryEditor', () => {
         isError: true,
       } as any)
 
+      const user = userEvent.setup()
       render(
         <VideoSummaryEditor
           videoId="test-video"
@@ -591,6 +595,11 @@ describe('VideoSummaryEditor', () => {
         />,
         { wrapper: createWrapper() }
       )
+
+      // Dialog opens on Summary; click into Claims so the error
+      // message (which is rendered inside the Claims tabpanel) is
+      // actually mounted before we assert on it.
+      await user.click(await screen.findByRole('tab', { name: /claims/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/Failed to load claims/i)).toBeInTheDocument()
@@ -618,6 +627,7 @@ describe('VideoSummaryEditor', () => {
         refetch: vi.fn(),
       } as any)
 
+      const user = userEvent.setup()
       render(
         <VideoSummaryEditor
           videoId="test-video"
@@ -626,7 +636,9 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      // Default tab is Claims (tab index 1)
+      // Default tab is now Summary; switch to Claims to reach the
+      // Summary Preview accordion (it lives inside the Claims tabpanel).
+      await user.click(await screen.findByRole('tab', { name: /claims/i }))
       await waitFor(() => {
         const claimsTab = screen.getByRole('tab', { name: /claims/i })
         expect(claimsTab).toHaveAttribute('aria-selected', 'true')
@@ -655,6 +667,7 @@ describe('VideoSummaryEditor', () => {
         refetch: vi.fn(),
       } as any)
 
+      const user = userEvent.setup()
       render(
         <VideoSummaryEditor
           videoId="test-video"
@@ -663,7 +676,8 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      // Default tab is Claims
+      // Switch to Claims explicitly; default is now Summary.
+      await user.click(await screen.findByRole('tab', { name: /claims/i }))
       await waitFor(() => {
         const claimsTab = screen.getByRole('tab', { name: /claims/i })
         expect(claimsTab).toHaveAttribute('aria-selected', 'true')
@@ -700,6 +714,9 @@ describe('VideoSummaryEditor', () => {
         />,
         { wrapper: createWrapper() }
       )
+
+      // Summary Preview lives in the Claims tabpanel; default is Summary.
+      await user.click(await screen.findByRole('tab', { name: /claims/i }))
 
       await waitFor(() => {
         expect(screen.getByText('Summary Preview')).toBeInTheDocument()
