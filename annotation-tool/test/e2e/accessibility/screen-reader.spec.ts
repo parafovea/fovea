@@ -127,8 +127,11 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
         if (controls) {
           expect(controls).toBeTruthy()
 
-          // Corresponding tabpanel should exist (may be visible or not depending on selection)
-          const tabpanel = page.locator(`#${controls}, [role="tabpanel"]`)
+          // Corresponding tabpanel should exist. base-ui generates IDs that
+          // contain colons (e.g. base-ui-:r1v:) which aren't valid in a
+          // `#id` selector without CSS.escape — match on the [id="..."]
+          // attribute selector instead.
+          const tabpanel = page.locator(`[id="${controls}"], [role="tabpanel"]`)
           const panelCount = await tabpanel.count()
           expect(panelCount).toBeGreaterThan(0)
         } else {
@@ -296,9 +299,14 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     const hasExpanded = await personaSelect.getAttribute('aria-expanded')
     expect(hasExpanded).toMatch(/true|false/)
 
-    // Should have aria-controls (points to listbox)
+    // Per WAI-ARIA 1.2, aria-controls on a combobox is required only when
+    // the popup is visible (shadcn/base-ui Select sets it on open). Open
+    // the listbox, assert the relationship, then close it again.
+    await personaSelect.click()
+    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
     const hasControls = await personaSelect.getAttribute('aria-controls')
     expect(hasControls).toBeTruthy()
+    await page.keyboard.press('Escape')
 
     // Should have aria-haspopup
     const hasPopup = await personaSelect.evaluate((el) => {

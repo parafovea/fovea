@@ -32,7 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 import { api } from '@services/api'
 import { ImportOptions, ImportPreview, ImportResult, Conflict } from '@models/types'
-import { ImportResultDialog } from './ImportResultDialog'
+import { ImportResultDialog, shouldShowOrphanSkippedBanner } from './ImportResultDialog'
 import { ExpandableJsonViewer } from '@components/shared/ExpandableJsonViewer'
 
 /**
@@ -335,15 +335,20 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
       const importResult = await api.uploadImportFile(file, importOptions)
       setResult(importResult)
 
-      if (importResult.success) {
+      // Open the result dialog whenever there is something the user
+      // needs to see: outright failure, or success-with-skipped-orphans
+      // (the latter is the "Completed with Warnings" / orphan-skipped
+      // banner case — without surfacing it, dropped annotations are
+      // silently masked behind a success toast).
+      if (importResult.success && !shouldShowOrphanSkippedBanner(importResult)) {
         toast.success(`Import successful: ${importResult.summary.importedItems.annotations} annotations imported`)
         onImportComplete?.(importResult)
-
-        setTimeout(() => {
-          onClose()
-        }, 1500)
+        setTimeout(() => onClose(), 1500)
       } else {
-        toast.error(`Import failed: ${importResult.errors.length} errors`)
+        if (!importResult.success) {
+          toast.error(`Import failed: ${importResult.errors.length} errors`)
+        }
+        onImportComplete?.(importResult)
         setResultDialogOpen(true)
       }
     } catch (error: unknown) {

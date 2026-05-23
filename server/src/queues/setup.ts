@@ -9,6 +9,10 @@ import {
   modelServiceDuration,
 } from "../metrics.js";
 import { buildPersonaPrompts } from "../utils/queryBuilder.js";
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+} from "../lib/fetchModelService.js";
 
 /**
  * Response type from model service /api/summarize endpoint.
@@ -269,10 +273,10 @@ export const videoWorker = new Worker<
 
     const requestBody = snakecaseKeys(camelCaseRequest) as ModelSummarizeRequest;
 
-    const response = await fetch(`${modelServiceUrl}/api/summarize`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/summarize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.summarize,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;
@@ -565,10 +569,10 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(30);
 
-    const response = await fetch(`${modelServiceUrl}/api/extract-claims`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/extract-claims`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.extractClaims,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;
@@ -919,10 +923,10 @@ export const synthesisWorker = new Worker<
 
     await job.updateProgress(30);
 
-    const response = await fetch(`${modelServiceUrl}/api/synthesize-summary`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/synthesize-summary`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.synthesize,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;

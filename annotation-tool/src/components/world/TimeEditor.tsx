@@ -371,8 +371,9 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           {/* Instant Fields */}
           {timeType === 'instant' && (
             <div className="space-y-1">
-              <Label>Timestamp</Label>
+              <Label htmlFor="time-timestamp">Timestamp</Label>
               <Input
+                id="time-timestamp"
                 type="datetime-local"
                 value={timestamp ? timestamp.slice(0, 16) : ''}
                 onChange={(e) => setTimestamp(e.target.value ? new Date(e.target.value).toISOString() : '')}
@@ -385,16 +386,18 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           {timeType === 'interval' && (
             <div className="flex gap-4">
               <div className="flex-1 space-y-1">
-                <Label>Start Time (Optional)</Label>
+                <Label htmlFor="time-start">Start Time (Optional)</Label>
                 <Input
+                  id="time-start"
                   type="datetime-local"
                   value={startTime ? startTime.slice(0, 16) : ''}
                   onChange={(e) => setStartTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
                 />
               </div>
               <div className="flex-1 space-y-1">
-                <Label>End Time (Optional)</Label>
+                <Label htmlFor="time-end">End Time (Optional)</Label>
                 <Input
+                  id="time-end"
                   type="datetime-local"
                   value={endTime ? endTime.slice(0, 16) : ''}
                   onChange={(e) => setEndTime(e.target.value ? new Date(e.target.value).toISOString() : '')}

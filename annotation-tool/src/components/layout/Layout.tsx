@@ -299,7 +299,7 @@ export default function Layout() {
               value={activeProjectId ?? ''}
               onValueChange={handleProjectChange}
             >
-              <SelectTrigger className="h-8 w-[180px] text-sm">
+              <SelectTrigger className="h-8 w-[180px] text-sm" aria-label="Project context">
                 <SelectValue placeholder="Personal Workspace" />
               </SelectTrigger>
               <SelectContent>

@@ -24,25 +24,20 @@ test.describe('Keyboard Navigation - Basic Tab Order', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await injectAxe(page)
 
-    // Configure axe to disable rules not related to keyboard navigation
-    await page.evaluate(() => {
-      (window as any).axe.configure({
-        rules: [
-          { id: 'color-contrast', enabled: false }, // Intentional MUI design choice
-          { id: 'page-has-heading-one', enabled: false }, // Not relevant to keyboard navigation
-          { id: 'label', enabled: false } // Form labels tested separately in aria-labels.spec.ts
-        ]
+    // checkA11y from axe-playwright surfaces violations from rules outside
+    // its `runOnly` filter; drive axe directly so only the keyboard-related
+    // rules count.
+    const results = await page.evaluate(async () => {
+      return await (window as any).axe.run(document, {
+        runOnly: { type: 'rule', values: ['button-name', 'tabindex'] },
       })
     })
 
-    await checkA11y(page, null, {
-      detailedReport: true,
-      detailedReportOptions: { html: true },
-      runOnly: {
-        type: 'rule',
-        values: ['button-name', 'tabindex']
-      }
-    })
+    const violations = (results as { violations: unknown[] }).violations || []
+    if (violations.length > 0) {
+      console.log('Keyboard a11y violations:', JSON.stringify(violations, null, 2))
+    }
+    expect(violations.length).toBe(0)
   })
 
   test('focus indicators are visible and meet WCAG standards', async ({ page, annotationWorkspace, testVideo }) => {
@@ -569,10 +564,12 @@ test.describe('Keyboard Navigation - Forms and Buttons', () => {
       expect(saveHasFocus).toBe(false)
     }
 
-    // Test 3: Tab through dialog starting from first element
-    // Focus should cycle through enabled elements only, skipping disabled Save button
-    const dialogElement = dialog.first()
-    await dialogElement.focus()
+    // Test 3: Tab through dialog starting from first focusable element.
+    // Focusing the <dialog> wrapper itself doesn't make it the active
+    // element on every browser, so seed focus on the first text input
+    // (always the name field) and tab forward from there.
+    const firstInput = dialog.locator('input, textarea').first()
+    await firstInput.focus()
     await page.waitForTimeout(300)
 
     const focusedElements: Array<{ tagName: string; text: string; isButton: boolean; disabled: boolean }> = []

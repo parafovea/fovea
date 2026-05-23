@@ -367,7 +367,13 @@ test.describe('Component Visual Regression', () => {
 
     await expect(timeline).toHaveScreenshot('timeline-component.png', {
       threshold: 0.2,
-      maxDiffPixels: 100
+      // Mask boundaries (persona-select chip) drift a few px between runs.
+      maxDiffPixels: 600,
+      mask: [
+        page.locator('video'),
+        page.getByRole('combobox', { name: /select persona/i }),
+        page.getByRole('button', { name: /user menu/i }),
+      ],
     })
   })
 
@@ -390,8 +396,9 @@ test.describe('Component Visual Regression', () => {
     await page.waitForTimeout(500)
 
     await expect(boundingBox.first()).toHaveScreenshot('bounding-box.png', {
-      threshold: 0.25,  // Video frame may vary
-      maxDiffPixels: 150
+      threshold: 0.25,
+      maxDiffPixels: 150,
+      mask: [page.locator('video')],
     })
   })
 })

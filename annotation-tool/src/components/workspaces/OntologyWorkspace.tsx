@@ -483,6 +483,7 @@ export default function OntologyWorkspace() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
+            type="search"
             placeholder="Search types by name or description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

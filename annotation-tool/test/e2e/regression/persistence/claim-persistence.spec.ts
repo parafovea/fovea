@@ -28,12 +28,16 @@ test.describe('Claim Persistence', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select the (only) persona option — shadcn's Select has no disabled placeholder
+    // Select the per-worker persistent persona explicitly — admin sees
+    // every worker's personas, so .first() can pick a different worker's
+    // persona and the saved claim ends up scoped to the wrong one.
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      // Select the (only) persona option — shadcn's Select renders no disabled placeholder so the first role=option IS the active persona, unlike MUI which used a non-selectable placeholder at index 0
-      const personaOption = page.getByRole('option').first()
+      const personaOption = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -96,11 +100,14 @@ test.describe('Claim Persistence', () => {
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
 
-    // Re-select the same persona - use nth(1) to skip the disabled placeholder
+    // Re-select the same per-worker persona by name (see note above).
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').first()
+      const personaOption2 = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -139,7 +146,10 @@ test.describe('Claim Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').first()
+      const personaOption = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -191,11 +201,14 @@ test.describe('Claim Persistence', () => {
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
 
-    // Re-select the same persona - use nth(1) to skip the disabled placeholder
+    // Re-select the same per-worker persona by name (see note above).
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').first()
+      const personaOption2 = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -229,7 +242,10 @@ test.describe('Claim Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').first()
+      const personaOption = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -281,11 +297,14 @@ test.describe('Claim Persistence', () => {
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
 
-    // Re-select the same persona - use nth(1) to skip the disabled placeholder
+    // Re-select the same per-worker persona by name (see note above).
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').first()
+      const personaOption2 = page
+        .getByRole('option')
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .first()
       await personaOption2.click()
       await page.waitForTimeout(500)
     }

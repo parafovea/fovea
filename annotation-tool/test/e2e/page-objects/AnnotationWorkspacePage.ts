@@ -130,59 +130,61 @@ export class AnnotationWorkspacePage extends BasePage {
    * Draw a simple bounding box with default coordinates.
    * Useful for quick test setup.
    */
-  async drawSimpleBoundingBox(): Promise<void> {
-    // Wait for persona select to be visible and enabled
+  async selectPersona(personaName?: string): Promise<void> {
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
-
-    // Click to open the persona dropdown
     await personaSelect.click()
-    await this.page.waitForTimeout(1000)
 
-    // Wait for the listbox to appear
-    // Radix Select renders an unnamed <listbox> portal, so match by role only
-    // and rely on the persona Select being open at this point.
     const personaListbox = this.page.getByRole('listbox')
     await expect(personaListbox).toBeVisible({ timeout: 10000 })
 
-    // Find the persona option that is NOT "None" and click it
-    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    // Under parallel workers an admin session sees every worker's persona,
+    // so `.first()` could pick another worker's. Caller passes its own name.
+    const personaOption = personaName
+      ? this.page
+          .getByRole('option')
+          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+          .first()
+      : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await expect(personaOption).toBeVisible({ timeout: 5000 })
     await personaOption.click()
-
-    // Wait for dropdown to close
     await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {})
 
-    await this.page.waitForTimeout(500)
-
-    // Wait for ontology to load after persona selection
-    await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
-
-    // Additional wait for React state updates
-    await this.page.waitForTimeout(4000)
-
-    // Verify persona was selected by checking if type select is now enabled
+    // The type-select becomes enabled once the ontology load lands. Polling
+    // for `enabled` is the precise event to wait on; the old code waited
+    // 24+ seconds on networkidle + an arbitrary buffer.
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
+    await expect(typeSelect).toBeEnabled({ timeout: 20000 })
+  }
 
-    // The shadcn rewrite replaced the Material-UI Select listbox with a
-    // command-palette-style picker: a combobox that opens a Dialog with a
-    // search textbox plus one clickable Button per type. Click the first
-    // type entry by name. ArrowDown/Enter would dismiss the dialog instead
-    // of selecting an option.
+  async selectFirstType(): Promise<void> {
+    const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
     await typeSelect.click()
-    const typePicker = this.page.getByRole('dialog')
-    await expect(typePicker).toBeVisible({ timeout: 5000 })
-    const firstType = typePicker.getByRole('button').first()
-    await expect(firstType).toBeVisible({ timeout: 5000 })
-    await firstType.click()
-    await this.page.waitForTimeout(1000)  // Wait for type selection to register
+    // PopoverContent is portalled to document.body with data-slot.
+    const typePopover = this.page.locator('[data-slot="popover-content"]')
+    await expect(typePopover).toBeVisible({ timeout: 5000 })
+    const typeOption = typePopover.locator('button').first()
+    await expect(typeOption).toBeVisible({ timeout: 5000 })
+    await typeOption.click()
+    await expect(typePopover).toBeHidden({ timeout: 5000 }).catch(() => {})
+  }
 
-    await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })
-
-    // Wait for annotation to be created via API
-    await this.page.waitForTimeout(2000)
+  /**
+   * Draw a simple bounding box and return the save Response. Callers that
+   * need to await the save (e.g. persistence tests) MUST await the
+   * returned promise. Replaces the legacy createAnnotationSavePromise()
+   * pattern that timed out when persona+type selection took longer than
+   * the 15s save-budget started at the wrong point in the test.
+   */
+  async drawSimpleBoundingBox(
+    opts: { personaName?: string; box?: { x: number; y: number; width: number; height: number } } = {},
+  ): Promise<import('@playwright/test').Response> {
+    await this.selectPersona(opts.personaName)
+    await this.selectFirstType()
+    const savePromise = this.createAnnotationSavePromise(20000)
+    await this.drawBoundingBox(opts.box ?? { x: 50, y: 50, width: 150, height: 150 })
+    return savePromise
   }
 
   /**

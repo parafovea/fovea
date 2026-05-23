@@ -18,14 +18,10 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Create save promise BEFORE drawing to capture the save response
-    const savePromise = annotationWorkspace.createAnnotationSavePromise()
-
-    // Draw a simple bounding box annotation
-    await annotationWorkspace.drawSimpleBoundingBox()
+    // drawSimpleBoundingBox returns the save Response; awaiting it
+    // guarantees the annotation is committed to the database.
+    const savePromise = annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
-
-    // Wait for the save to complete by awaiting the promise
     await savePromise
 
     // Additional buffer to ensure database write is committed
@@ -42,8 +38,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again (required to see annotations after reload)
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -62,11 +59,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Create save promise BEFORE drawing
-    const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for initial save to complete
+    const initialSavePromise = annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await initialSavePromise
 
     // Show timeline and add a keyframe at a different time
@@ -98,8 +91,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona again
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -117,11 +111,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Create save promise BEFORE drawing
-    const initialSavePromise = annotationWorkspace.createAnnotationSavePromise()
-    await annotationWorkspace.drawSimpleBoundingBox()
-
-    // Wait for initial save to complete
+    const initialSavePromise = annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await initialSavePromise
     await page.waitForTimeout(500)
 
@@ -134,8 +124,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Select the same persona to see the annotation
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
-    const personaListbox = page.getByRole('listbox')
-    const personaOption = personaListbox.getByText(testPersona.name)
+    const personaOption = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
 
@@ -169,8 +160,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Re-select persona
     const personaSelect2 = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect2.click()
-    const personaListbox2 = page.getByRole('listbox')
-    const personaOption2 = personaListbox2.getByText(testPersona.name)
+    const personaOption2 = page.getByRole('option').filter({
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+    }).first()
     await personaOption2.click()
     await page.waitForTimeout(1000)
 
@@ -188,46 +180,23 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Select persona first (required for annotations)
-    let personaSelect = page.getByRole('combobox', { name: /select persona/i })
-    await personaSelect.click()
-    let personaListbox = page.getByRole('listbox')
-    let personaOption = personaListbox.getByText(testPersona.name)
-    await personaOption.click()
-    await page.waitForTimeout(1000)
+    await annotationWorkspace.selectPersona(testPersona.name)
+    await annotationWorkspace.selectFirstType()
 
-    // Wait for ontology to load
-    await page.waitForTimeout(1000)
-
-    // Select entity type (required for annotations)
-    const typeSelect = page.getByRole('combobox', { name: /select type/i })
-    await typeSelect.click()
-    await page.waitForTimeout(500)
-    await typeSelect.press('ArrowDown')
-    await page.waitForTimeout(300)
-    await typeSelect.press('Enter')
-    await page.waitForTimeout(500)
-
-    // Create save promises BEFORE drawing to capture all save responses
-    // Each annotation will trigger its own save, so we listen for 3
+    // Each drawBoundingBox triggers one POST /api/annotations save. Listen
+    // for 3 saves to land before asserting persistence on reload.
     const savePromises: Promise<import('@playwright/test').Response>[] = []
     for (let i = 0; i < 3; i++) {
-      savePromises.push(annotationWorkspace.createAnnotationSavePromise())
-    }
-
-    // Create 3 annotations rapidly
-    for (let i = 0; i < 3; i++) {
+      const p = annotationWorkspace.createAnnotationSavePromise(20000)
+      savePromises.push(p)
       await annotationWorkspace.drawBoundingBox({
         x: 100 + i * 150,
         y: 100,
         width: 100,
-        height: 100
+        height: 100,
       })
-      await page.waitForTimeout(200)
+      await p
     }
-
-    // Wait for all saves to complete
-    await Promise.all(savePromises)
 
     // Additional buffer to ensure database writes are committed
     await page.waitForTimeout(500)
@@ -238,14 +207,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await page.goto(`/annotate/${testVideo.id}`)
     await annotationWorkspace.expectWorkspaceReady()
 
-    // Select the same persona again
-    personaSelect = page.getByRole('combobox', { name: /select persona/i })
-    await personaSelect.click()
-    personaListbox = page.getByRole('listbox')
-    personaOption = personaListbox.getByText(testPersona.name)
-    await personaOption.click()
-    await page.waitForTimeout(1000)
-
+    await annotationWorkspace.selectPersona(testPersona.name)
     // At least one annotation should be visible (verifying saves worked)
     await annotationWorkspace.expectBoundingBoxVisible()
   })

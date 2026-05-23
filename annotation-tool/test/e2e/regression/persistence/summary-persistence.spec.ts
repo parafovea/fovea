@@ -43,25 +43,26 @@ test.describe('Summary Persistence', () => {
     // so a prior test (claim-*, etc.) may have left Claims selected.
     // Explicitly switch to the Summary tab so the textarea lives in the
     // active tabpanel before we query for it.
-    const summaryTab = dialog.getByRole('tab', { name: /^summary$/i })
+    const summaryTab = dialog.locator('[data-slot="tabs-trigger"]', { hasText: /^Summary$/ }).first()
     await expect(summaryTab).toBeVisible({ timeout: 5000 })
-    await summaryTab.click()
-
-    // Find the summary editor textarea
-    const summaryTextarea = dialog.locator('textarea').first()
+    const summaryTextarea = dialog.locator('textarea[aria-label="Video Summary"]')
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await summaryTab.click({ force: true })
+      if (await summaryTextarea.isVisible({ timeout: 1000 }).catch(() => false)) break
+      await page.waitForTimeout(500)
+    }
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
-    // Type content - use fill() which is faster
     await summaryTextarea.fill(uniqueSummaryText)
-
-    // Verify the text was entered before continuing
     await expect(summaryTextarea).toHaveValue(uniqueSummaryText, { timeout: 1000 })
 
-    // Wait for debounce (1000ms) plus save to complete
-    await page.waitForTimeout(1500)
-
-    // Wait for any pending network requests
-    await page.waitForLoadState('networkidle')
+    // Wait for the auto-save POST /api/summaries to actually land instead
+    // of guessing at the debounce + network timing. Without this the
+    // page can reload mid-flight and the typed text is lost.
+    await page.waitForResponse(
+      r => /\/api\/summaries(\?|$)/.test(r.url()) && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 10000 },
+    )
 
     // Close the dialog
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
@@ -107,7 +108,7 @@ test.describe('Summary Persistence', () => {
     await page.waitForTimeout(1000)
 
     // Verify summary content persisted
-    const summaryTextarea2 = dialog2.locator('textarea').first()
+    const summaryTextarea2 = dialog2.locator('textarea[aria-label="Video Summary"]')
     await expect(summaryTextarea2).toBeVisible({ timeout: 5000 })
     await expect(summaryTextarea2).toHaveValue(uniqueSummaryText)
   })
@@ -141,30 +142,35 @@ test.describe('Summary Persistence', () => {
 
     // Switch to Summary tab — the dialog remembers the last active
     // tab across opens, so a previous test may have left Claims active.
-    const summaryTab2 = dialog.getByRole('tab', { name: /^summary$/i })
+    // Click the Summary tab — retry until the textarea actually mounts
+    // (base-ui TabsPrimitive.Tab occasionally swallows the first click
+    // when the dialog has just opened and the persona-Select is mid-
+    // settle).
+    const summaryTab2 = dialog.locator('[data-slot="tabs-trigger"]', { hasText: /^Summary$/ }).first()
     await expect(summaryTab2).toBeVisible({ timeout: 5000 })
-    await summaryTab2.click()
-
-    // Find summary textarea
-    const summaryTextarea = dialog.locator('textarea').first()
+    const summaryTextarea = dialog.locator('textarea[aria-label="Video Summary"]')
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await summaryTab2.click({ force: true })
+      if (await summaryTextarea.isVisible({ timeout: 1000 }).catch(() => false)) break
+      await page.waitForTimeout(500)
+    }
     await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
 
-    // Type original content character by character
+    const summaryPost = () => page.waitForResponse(
+      r => /\/api\/summaries(\?|$)/.test(r.url()) && r.request().method() === 'POST' && r.status() < 400,
+      { timeout: 10000 },
+    )
+
     await summaryTextarea.click()
+    const firstSave = summaryPost()
     await summaryTextarea.pressSequentially(originalText, { delay: 10 })
+    await firstSave
 
-    // Wait for save
-    await page.waitForTimeout(1500)
-    await page.waitForLoadState('networkidle')
-
-    // Clear and type edited content
     await summaryTextarea.click()
     await page.keyboard.press('Meta+a')
+    const secondSave = summaryPost()
     await summaryTextarea.pressSequentially(editedText, { delay: 10 })
-
-    // Wait for save
-    await page.waitForTimeout(1500)
-    await page.waitForLoadState('networkidle')
+    await secondSave
 
     // Close and reload
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
@@ -192,12 +198,10 @@ test.describe('Summary Persistence', () => {
       await page.waitForTimeout(500)
     }
 
-    // Wait for summary data to load from API
     await page.waitForTimeout(1000)
 
-    // Verify edited text persists
-    const summaryTextarea2 = dialog2.locator('textarea').first()
-    await expect(summaryTextarea2).toBeVisible({ timeout: 5000 })
+    const summaryTextarea2 = dialog2.locator('textarea[aria-label="Video Summary"]')
+    await expect(summaryTextarea2).toBeVisible({ timeout: 10000 })
     await expect(summaryTextarea2).toHaveValue(editedText)
   })
 })

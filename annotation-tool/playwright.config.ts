@@ -46,7 +46,7 @@ export default defineConfig({
       testDir: './test/e2e/functional',
       timeout: 45000,
       retries: 1,
-      workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
+      workers: 2,  // matches the test webm fixture count to avoid cross-worker state contamination
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
@@ -63,13 +63,17 @@ export default defineConfig({
     // Each worker creates isolated test user with separate WorldState
     // Admin endpoint used for cleanup between tests (ALLOW_TEST_ADMIN_BYPASS=true)
     // See test/e2e/fixtures/test-context.ts for worker-scoped user implementation
+    // The testVideo fixture stripes across the two webm fixtures by
+    // workerIndex; capping regression at 2 workers keeps each worker
+    // on its own video so admin-RBAC-visible annotations don't cross-
+    // contaminate state between concurrent tests on the same row.
     {
       name: 'regression',
       testDir: './test/e2e/regression',
       testIgnore: '**/visual/**',  // Visual tests run only in visual project
       timeout: 60000,
       retries: 1,
-      workers: process.env.CI ? 5 : undefined,  // 5 workers in CI, use all cores locally
+      workers: 2,  // matches the number of test webm fixtures so each worker isolates onto its own video row
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }
@@ -84,7 +88,7 @@ export default defineConfig({
       testDir: './test/e2e/accessibility',
       timeout: 45000,
       retries: 1,
-      workers: process.env.CI ? 5 : undefined,  // Same parallelization as regression tests
+      workers: 2,  // matches the test webm fixture count to avoid cross-worker state contamination
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
@@ -103,7 +107,10 @@ export default defineConfig({
       testDir: './test/e2e/regression/visual',
       timeout: 60000,
       retries: 0,  // Don't retry visual tests
-      workers: process.env.CI ? 3 : undefined,  // Less parallelization for stability
+      // Visual baselines include worker-specific persona names rendered in the
+      // workspace chrome (per-worker user → per-worker persona); running with
+      // a single worker keeps that UI text stable against the shared baseline.
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },

@@ -187,15 +187,18 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * worker's lifecycle (the test does NOT delete on teardown so
    * persisted-annotation data survives the reload assertion).
    */
-  testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use) => {
-    const existing = await db.findPersonaByName(testUser.id, 'Test Analyst (Persistent)', workerSessionToken)
+  // Name includes workerIndex + first 8 chars of testUser.id so admin
+  // sessions see globally-unique options even when previous test runs
+  // left orphans in the database.
+  testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use, testInfo) => {
+    const personaName = `Test Analyst (Persistent W${testInfo.workerIndex}-${testUser.id.slice(0, 8)})`
+    const existing = await db.findPersonaByName(testUser.id, personaName, workerSessionToken)
     const persona = existing ?? await db.createPersona({
       userId: testUser.id,
-      name: 'Test Analyst (Persistent)',
+      name: personaName,
       role: 'Intelligence Analyst'
     }, workerSessionToken)
     await use(persona)
-    // Don't delete - let worker cleanup handle it to preserve data for reload tests
   },
 
   /**
@@ -203,10 +206,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
    */
-  testVideo: async ({ workerSessionToken }, use) => {
-    // Fetch actual videos from backend (auth required since the projects-groups
-    // RBAC merge — the request must carry the worker user's session cookie or
-    // the route returns 401 and videos becomes the error envelope).
+  testVideo: async ({ workerSessionToken }, use, testInfo) => {
     const response = await fetch('http://localhost:3001/api/videos', {
       headers: { Cookie: `session_token=${workerSessionToken}` }
     })
@@ -216,8 +216,42 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       throw new Error('No videos found in test environment. Ensure test-data directory has videos.')
     }
 
-    // Use first video (all test videos are webm for codec compatibility)
-    const video = videos[0]
+    // Spread workers across the available videos so parallel test runs
+    // don't all hit annotations on the same video row.
+    const video = videos[testInfo.workerIndex % videos.length]
+
+    // Delete annotations + summaries on this video before each test so
+    // residue from a prior test in the same worker (or a parallel worker
+    // before the testVideo stripe rotation) doesn't bleed into the
+    // current test's assertions about counts / persistence / visibility.
+    const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
+      headers: { Cookie: `session_token=${workerSessionToken}` },
+    })
+    if (annsRes.ok) {
+      const anns = (await annsRes.json()) as Array<{ id: string }>
+      await Promise.all(
+        anns.map((a) =>
+          fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
+            method: 'DELETE',
+            headers: { Cookie: `session_token=${workerSessionToken}` },
+          }),
+        ),
+      )
+    }
+    const summariesRes = await fetch(`http://localhost:3001/api/videos/${video.id}/summaries`, {
+      headers: { Cookie: `session_token=${workerSessionToken}` },
+    })
+    if (summariesRes.ok) {
+      const summaries = (await summariesRes.json()) as Array<{ id: string; personaId: string }>
+      await Promise.all(
+        summaries.map((s) =>
+          fetch(`http://localhost:3001/api/videos/${video.id}/summaries/${s.personaId}`, {
+            method: 'DELETE',
+            headers: { Cookie: `session_token=${workerSessionToken}` },
+          }),
+        ),
+      )
+    }
 
     await use({
       id: video.id,

@@ -110,18 +110,23 @@ function isKnownKey(value: string): value is ConfigKey {
 }
 
 /**
- * Wrap ``pushSystemConfigRow`` so a failed write surfaces as an
- * InternalError to the HTTP client, while the startup replay path can
- * tolerate per-row failures silently.
+ * Wrap ``pushSystemConfigRow`` so a hard failure (model-service refused
+ * or unreachable) surfaces as an InternalError, while a deliberate skip
+ * (admin-token not configured, by design — see propagator docstring)
+ * lets the route return 200 because the DB row has already been written
+ * and the model-service admin channel is intentionally unwired in this
+ * environment.
  */
 async function pushOrRaise(
   log: { warn: (msg: string) => void; info: (msg: string) => void },
   payload: { key: string; value: unknown }
 ): Promise<void> {
-  const ok = await pushSystemConfigRow(log, payload)
-  if (!ok) {
+  const result = await pushSystemConfigRow(log, payload)
+  if (result === 'failed') {
     throw new InternalError('Model-service refused the new configuration')
   }
+  // result is 'pushed' or 'skipped-no-token' — both are success from the
+  // HTTP caller's perspective.
 }
 
 const ListResponseSchema = Type.Object({
