@@ -46,5 +46,13 @@ module.exports = {
       files: ['src/demo/**/*'],
       rules: { 'no-restricted-imports': 'off' },
     },
+    {
+      // main.tsx is the bootstrap integration point — it decides
+      // between mounting the stock <App /> and mounting the demo
+      // shell that wraps it. That's a deployment-mode choice, not a
+      // product-feature decision, so the restriction doesn't apply.
+      files: ['src/main.tsx'],
+      rules: { 'no-restricted-imports': 'off' },
+    },
   ],
 }

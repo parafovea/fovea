@@ -67,7 +67,34 @@ describe('FOVEA_DEMO_MODE flag isolation', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(Array.isArray(body.tours)).toBe(true)
-    expect(body.tours.length).toBeGreaterThan(0)
+    // All ten built-in tours from the plan ship in the catalog.
+    expect(body.tours.length).toBeGreaterThanOrEqual(10)
+    await app.close()
+  })
+
+  it('issues a real anonymous session when both flags are on', async () => {
+    // This is the happy path the demo landing page hits on first visit:
+    // a fresh User row gets created, a Session is minted, and the
+    // session_token cookie is set. The idle-reset sweeper will GC the
+    // user after 10 min idle — that's why the demo workspace is safe to
+    // hand out unauthenticated.
+    process.env.FOVEA_DEMO_MODE = 'true'
+    process.env.FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH = 'true'
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/api/demo/anonymous-session' })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(typeof body.userId).toBe('string')
+    expect(body.userId.length).toBeGreaterThan(0)
+    expect(typeof body.ttlSeconds).toBe('number')
+    expect(body.ttlSeconds).toBeGreaterThan(0)
+    // Token never appears in the body — only via the httpOnly cookie.
+    expect(body).not.toHaveProperty('sessionToken')
+    expect(body).not.toHaveProperty('token')
+    const setCookie = res.headers['set-cookie']
+    const cookieHeader = Array.isArray(setCookie) ? setCookie.join(';') : (setCookie ?? '')
+    expect(cookieHeader).toMatch(/session_token=/)
+    expect(cookieHeader).toMatch(/HttpOnly/i)
     await app.close()
   })
 })

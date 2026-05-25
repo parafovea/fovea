@@ -5,22 +5,35 @@
  * register at all if either is unset, so a misconfigured self-hoster
  * cannot accidentally enable unauthenticated access.
  *
- * The session is a real Session row scoped to a freshly-created
- * "demo-anonymous-{nanoid}" user with no admin role, no project
- * memberships, and a per-visitor namespaced workspace. The idle-reset
- * job (./idle-reset.ts) deletes the user + associated data after the
- * configured timeout.
+ * Implementation:
+ *   1. Create a fresh User row with username `demo-anonymous-{hex}`.
+ *      The user has no email, no password hash, no admin role, no
+ *      project memberships, no group memberships.
+ *   2. Create a Session row for that user via authService.createSession
+ *      with a short TTL — the idle-reset sweeper deletes stale users
+ *      after 10 min of inactivity, so anything longer is wasted.
+ *   3. Set the session_token cookie httpOnly so it lives the same way
+ *      a logged-in session does.
+ *   4. Return userId + ttlSeconds to the client (no token in the body —
+ *      that goes via the cookie).
+ *
+ * The demo user has the default systemRole='user' so CASL behaves
+ * exactly as it would for a self-hosted single-user deployment.
  */
 
+import crypto from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import { prisma } from '../lib/prisma'
+import { authService } from '../services/auth-service'
 import { isAnonymousAuthAllowed } from './config'
 
 interface AnonymousSessionResponse {
   userId: string
-  sessionToken: string
-  /** Seconds until the session expires due to idle GC. */
   ttlSeconds: number
 }
+
+const ANON_USERNAME_PREFIX = 'demo-anonymous-'
+const ANON_SESSION_TTL_DAYS = 1
 
 const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   if (!isAnonymousAuthAllowed()) {
@@ -39,22 +52,48 @@ const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) 
         response: {
           200: {
             type: 'object',
-            required: ['userId', 'sessionToken', 'ttlSeconds'],
+            required: ['userId', 'ttlSeconds'],
             properties: {
               userId: { type: 'string' },
-              sessionToken: { type: 'string' },
               ttlSeconds: { type: 'number' },
             },
           },
         },
       },
     },
-    async () => {
-      // Implementation lands in T-11 (see plan timeline). Stubbed here
-      // so the route registers and the CI gate that asserts 200 with
-      // the flag on / 404 with it off can be wired now. Without this
-      // stub the gate would have nothing to test against.
-      throw new Error('anonymous-session creation not yet implemented (T-11 milestone)')
+    async (request, reply) => {
+      const suffix = crypto.randomBytes(6).toString('hex')
+      const username = `${ANON_USERNAME_PREFIX}${suffix}`
+
+      const user = await prisma.user.create({
+        data: {
+          username,
+          email: null,
+          passwordHash: null,
+          displayName: 'Demo visitor',
+          isAdmin: false,
+          systemRole: 'user',
+        },
+      })
+
+      const { token, expiresAt } = await authService.createSession(user.id, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+        expiresInDays: ANON_SESSION_TTL_DAYS,
+      })
+
+      reply.setCookie('session_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        expires: expiresAt,
+        path: '/',
+      })
+
+      return {
+        userId: user.id,
+        ttlSeconds: Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+      }
     },
   )
 }

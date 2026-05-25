@@ -6,21 +6,22 @@
  * than BullMQ because the work is small, fast, and doesn't need
  * cross-process coordination at booth scale.
  *
- * Idle is measured against the Session.lastActivityAt column for the
- * anonymous user — when a visitor clicks anything in the workspace,
+ * Idle is measured against the freshest Session.lastActivityAt for the
+ * anonymous user. When the visitor clicks anything in the workspace,
  * the existing session-touch hook keeps that column fresh. A 10-minute
  * gap means the user walked away.
  *
- * The reset is destructive (deletes the User row, which cascades to
- * personas, annotations, claims, summaries, world objects, sessions).
- * That's the point: a CVPR demo workspace is per-visitor and ephemeral.
+ * The reset is destructive: deleting the User row cascades to personas,
+ * annotations, claims, summaries, world objects, and sessions via the
+ * onDelete: Cascade relations in schema.prisma. That's the point — a
+ * CVPR demo workspace is per-visitor and ephemeral.
  */
 
 import type { FastifyInstance } from 'fastify'
+import { prisma } from '../lib/prisma'
 
 const IDLE_WINDOW_MS = 10 * 60 * 1000 // 10 minutes (plan §5.3)
 const SWEEP_INTERVAL_MS = 60 * 1000 // 1 minute
-
 const DEMO_USERNAME_PREFIX = 'demo-anonymous-'
 
 export function startIdleResetJob(app: FastifyInstance): () => void {
@@ -38,21 +39,29 @@ export function startIdleResetJob(app: FastifyInstance): () => void {
 }
 
 async function sweepOnce(app: FastifyInstance): Promise<void> {
-  // Pending T-11 implementation: the actual Prisma query against the
-  // anonymous-user table. The shape is:
-  //
-  //   const cutoff = new Date(Date.now() - IDLE_WINDOW_MS)
-  //   const stale = await app.prisma.user.findMany({
-  //     where: {
-  //       username: { startsWith: DEMO_USERNAME_PREFIX },
-  //       sessions: { every: { lastActivityAt: { lt: cutoff } } },
-  //     },
-  //     select: { id: true },
-  //   })
-  //   await app.prisma.user.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
-  //
-  // Wired up once the anonymous-session endpoint lands a real user row.
-  void app
-  void IDLE_WINDOW_MS
-  void DEMO_USERNAME_PREFIX
+  const cutoff = new Date(Date.now() - IDLE_WINDOW_MS)
+
+  // Find anonymous users whose freshest session is older than the
+  // cutoff. A user with no sessions at all (created by the seeder but
+  // never actually logged in) is also stale — that's the `none` arm.
+  const stale = await prisma.user.findMany({
+    where: {
+      username: { startsWith: DEMO_USERNAME_PREFIX },
+      OR: [
+        { sessions: { none: {} } },
+        {
+          sessions: {
+            every: { lastActivityAt: { lt: cutoff } },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  })
+
+  if (stale.length === 0) return
+
+  const ids = stale.map((u) => u.id)
+  const deleted = await prisma.user.deleteMany({ where: { id: { in: ids } } })
+  app.log.info({ swept: deleted.count }, '[demo] idle-reset swept stale anonymous users')
 }

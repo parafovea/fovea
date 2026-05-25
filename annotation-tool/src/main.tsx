@@ -7,6 +7,8 @@ import { ThemeProvider } from 'next-themes'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import App from './App'
+import { DemoShell } from './demo/DemoShell'
+import { isDemoModeEnabled } from './demo/config'
 import './index.css'
 
 // Initialize command registry before React renders (must be before component mount effects)
@@ -53,7 +55,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider>
-            <App />
+            {/*
+              Demo deployments render <DemoShell /> instead of <App />.
+              The shell wraps the demo landing + recap routes around the
+              normal app so a visitor's path is landing → tour → workspace
+              under one shared TourProvider with fixture seeding. Stock
+              builds tree-shake the shell out because isDemoModeEnabled
+              reads the build-time VITE_FOVEA_DEMO_MODE.
+            */}
+            {isDemoModeEnabled() ? <DemoShell /> : <App />}
             <Toaster position="bottom-right" />
           </TooltipProvider>
           {/*
