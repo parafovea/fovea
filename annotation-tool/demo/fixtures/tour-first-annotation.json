@@ -1,0 +1,36 @@
+{
+  "tourId": "first-annotation",
+  "personas": [
+    {
+      "name": "Demo Researcher",
+      "role": "annotator",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      {
+        "name": "Person",
+        "gloss": "An individual human in the scene."
+      },
+      {
+        "name": "Object",
+        "gloss": "A physical thing that isn't a person."
+      }
+    ],
+    "eventTypes": [],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

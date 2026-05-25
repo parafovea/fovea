@@ -1,0 +1,27 @@
+{
+  "tourId": "ontology-authoring",
+  "personas": [
+    {
+      "name": "Music Researcher",
+      "role": "ontologist",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [],
+    "eventTypes": [],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

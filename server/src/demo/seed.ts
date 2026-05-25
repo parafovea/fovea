@@ -4,18 +4,54 @@
  * additionally protected by the X-Demo-Seed-Token header so a leaked
  * URL alone can't wipe the database.
  *
- * Self-hosters who want fixture-mode tours can also use this endpoint
- * by pointing their own seed bundles at the same JSON Schema (see
- * CVPR_2026_DEMO_PLAN.md §6.6 — the seeder is generic, only the
- * fixture *data* is CVPR-flavored).
+ * Implementation:
+ *   1. Validate token (constant-time compare).
+ *   2. Confirm the target user is an anonymous demo user (refuses to
+ *      touch any real user even if the token is correct).
+ *   3. Load the bundle from disk via $FOVEA_DEMO_FIXTURES_DIR (default
+ *      `../annotation-tool/demo/fixtures/`).
+ *   4. Validate the bundle shape via seed-schema.ts.
+ *   5. Inside one Prisma $transaction: wipe the user's personas
+ *      (cascade removes ontologies / world / annotations / claims /
+ *      summaries / persona preferences) and recreate from the bundle.
+ *
+ * Idempotent: calling /api/demo/seed twice in a row produces identical
+ * state. The first call wipes + recreates; the second wipes the just-
+ * created rows and recreates the same shape.
  */
 
+import { readFile } from 'node:fs/promises'
+import { resolve, join } from 'node:path'
+import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import { prisma } from '../lib/prisma'
 import { getSeedToken, isDemoModeEnabled } from './config'
+import {
+  validateSeedBundle,
+  type SeedBundle,
+  type SeedTypeDecl,
+} from './seed-schema'
 
 interface SeedRequestBody {
   tourId: string
   sessionUserId: string
+}
+
+interface SeedSuccess {
+  seeded: string[]
+}
+
+/**
+ * Where the bundles live on disk. Resolves relative to the server
+ * process cwd; in production the demo image bundles them next to the
+ * server build. Override with FOVEA_DEMO_FIXTURES_DIR if you've laid
+ * them out somewhere else (the env var matches the FOVEA_TOURS_DIR
+ * pattern for custom tours).
+ */
+function fixturesDir(): string {
+  const overridden = process.env.FOVEA_DEMO_FIXTURES_DIR
+  if (overridden && overridden.length > 0) return overridden
+  return resolve(process.cwd(), '..', 'annotation-tool', 'demo', 'fixtures')
 }
 
 const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -32,7 +68,7 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return
   }
 
-  app.post<{ Body: SeedRequestBody; Reply: { seeded: string[] } | { error: string } }>(
+  app.post<{ Body: SeedRequestBody; Reply: SeedSuccess | { error: string } }>(
     '/api/demo/seed',
     {
       schema: {
@@ -57,14 +93,129 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
     async (req, reply) => {
       const provided = req.headers['x-demo-seed-token']
-      if (provided !== token) {
+      if (typeof provided !== 'string' || !constantTimeEqual(provided, token)) {
         return reply.code(403).send({ error: 'invalid X-Demo-Seed-Token' })
       }
-      // Stubbed pending the fixture bundles landing under
-      // annotation-tool/demo/fixtures/tour-{id}/.
-      throw new Error('fixture seeding not yet implemented (T-7 milestone)')
+
+      const { tourId, sessionUserId } = req.body
+
+      // Refuse to seed a user that isn't an anonymous demo user. The
+      // anonymous-session endpoint names them `demo-anonymous-{hex}`;
+      // the seeder MUST reject anything else so a leaked seed token
+      // can't wipe a real user's workspace.
+      const user = await prisma.user.findUnique({
+        where: { id: sessionUserId },
+        select: { id: true, username: true },
+      })
+      if (!user || !user.username.startsWith('demo-anonymous-')) {
+        return reply
+          .code(403)
+          .send({ error: 'seed target must be an anonymous demo user' })
+      }
+
+      // Load + validate the bundle before touching the database.
+      let bundle: SeedBundle
+      try {
+        const path = join(fixturesDir(), `tour-${tourId}.json`)
+        const raw = await readFile(path, 'utf-8')
+        const parsed = JSON.parse(raw) as unknown
+        const result = validateSeedBundle(parsed)
+        if (!result.ok) {
+          return reply.code(400).send({ error: `bundle invalid: ${result.reason}` })
+        }
+        if (result.bundle.tourId !== tourId) {
+          return reply.code(400).send({
+            error: `bundle tourId "${result.bundle.tourId}" does not match request tourId "${tourId}"`,
+          })
+        }
+        bundle = result.bundle
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code
+        if (code === 'ENOENT') {
+          return reply.code(404).send({ error: `no fixture bundle for tourId "${tourId}"` })
+        }
+        return reply.code(500).send({ error: `failed to load bundle: ${(err as Error).message}` })
+      }
+
+      const seeded = await prisma.$transaction(async (tx) => {
+        // Wipe the user's personas; cascade removes ontologies / world /
+        // annotations / claims / summaries / persona preferences.
+        await tx.persona.deleteMany({ where: { userId: sessionUserId } })
+
+        const createdPersonas: Array<{ id: string; index: number }> = []
+        for (let i = 0; i < bundle.personas.length; i++) {
+          const p = bundle.personas[i]
+          const created = await tx.persona.create({
+            data: {
+              userId: sessionUserId,
+              name: p.name,
+              role: p.role,
+              informationNeed: p.informationNeed ?? 'Demo persona.',
+            },
+            select: { id: true },
+          })
+          createdPersonas.push({ id: created.id, index: i })
+        }
+
+        if (bundle.ontology) {
+          const target = createdPersonas[bundle.ontology.personaIndex]
+          if (target) {
+            await tx.ontology.create({
+              data: {
+                personaId: target.id,
+                entityTypes: toJsonOntologyTypes(bundle.ontology.entityTypes),
+                eventTypes: toJsonOntologyTypes(bundle.ontology.eventTypes),
+                roleTypes: toJsonOntologyTypes(bundle.ontology.roles),
+                relationTypes: toJsonOntologyTypes(bundle.ontology.relationTypes),
+              },
+            })
+          }
+        }
+
+        // World / annotations / summaries: bundle accepts them as
+        // untyped pass-throughs for forward compatibility, but the
+        // seeder doesn't apply them yet — the corresponding bundle
+        // sections in the demo content stay empty until each loader
+        // lands. Tours 1-3 assume an empty world, which is correct.
+
+        const summary = [
+          `${createdPersonas.length} persona(s)`,
+          bundle.ontology ? 'ontology' : null,
+        ].filter((s): s is string => !!s)
+
+        return summary
+      })
+
+      return { seeded }
     },
   )
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf-8')
+  const bb = Buffer.from(b, 'utf-8')
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
+
+/**
+ * Stamp `id`, `createdAt`, `updatedAt`, and a single-segment `gloss`
+ * array onto each declared type so the Ontology JSON columns match
+ * the shape the frontend reads. We don't bother with rich GlossItem
+ * content here — the tour's narration carries the explanation; the
+ * database row just needs a usable type name + a definition string.
+ */
+function toJsonOntologyTypes(decls: SeedTypeDecl[] | undefined): unknown[] {
+  if (!decls || decls.length === 0) return []
+  const now = new Date().toISOString()
+  return decls.map((d, i) => ({
+    id: `demo-${i}-${d.name.toLowerCase().replace(/\s+/g, '-')}`,
+    name: d.name,
+    gloss: [{ type: 'text', content: d.gloss }],
+    examples: [],
+    createdAt: now,
+    updatedAt: now,
+  }))
 }
 
 export default seedPlugin

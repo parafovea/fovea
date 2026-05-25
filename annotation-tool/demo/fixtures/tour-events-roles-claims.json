@@ -1,0 +1,34 @@
+{
+  "tourId": "events-roles-claims",
+  "personas": [
+    {
+      "name": "Concert Analyst",
+      "role": "event-annotator",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      { "name": "Person", "gloss": "An individual human." }
+    ],
+    "eventTypes": [
+      { "name": "Performance", "gloss": "A musical performance witnessed by an audience." }
+    ],
+    "roles": [
+      { "name": "Performer", "gloss": "The person performing in the event." },
+      { "name": "Audience", "gloss": "A person watching the performance." }
+    ],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}
