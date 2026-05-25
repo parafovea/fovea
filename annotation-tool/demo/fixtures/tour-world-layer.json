@@ -1,0 +1,33 @@
+{
+  "tourId": "world-layer",
+  "personas": [
+    {
+      "name": "Festival Researcher",
+      "role": "world-builder",
+      "informationNeed": "Track specific concerts, venues, and dates across multiple clips.",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      { "name": "Festival", "gloss": "A music festival as a category." },
+      { "name": "Venue", "gloss": "A physical location where events happen." }
+    ],
+    "eventTypes": [
+      { "name": "Performance", "gloss": "A specific performance instance." }
+    ],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

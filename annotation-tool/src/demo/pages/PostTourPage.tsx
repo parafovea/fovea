@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { findTour, useTour } from '@/tours'
+import { EmailCaptureCard } from './EmailCaptureCard'
 
 export function PostTourPage() {
   const params = useParams<{ id: string }>()
@@ -46,6 +47,7 @@ export function PostTourPage() {
               <p className="text-sm text-muted-foreground">{followUp.description}</p>
             </div>
           ) : null}
+          <EmailCaptureCard tourId={completed.id} />
         </CardContent>
         <CardFooter className="flex items-center justify-between gap-2">
           <Button variant="outline" onClick={() => navigate('/')}>

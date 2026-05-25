@@ -52,3 +52,27 @@ curl -i -X POST $API/api/demo/anonymous-session  # → 200 (after T-11)
 ```
 
 A CI gate asserts both arms of this behaviour on every PR.
+
+## Runtime query-string flags
+
+Two URL flags the demo respects at the booth:
+
+- `?presenter=1` — hides the landing-page hero / footer chrome and
+  routes telemetry to a no-op endpoint. Use this for clean screen
+  captures or a projector loop. The flag is sticky for the session so
+  navigating between routes inside the shell preserves it.
+- `?safe=1` — sets a safe-mode flag the tour fixtures can read. The
+  landing page hides the Tour 6 (model-in-the-loop) tile because that
+  tour requires live inference; the other nine tours run from
+  pre-recorded fixture data and stay available.
+
+## Fixture seeder
+
+`POST /api/demo/seed` wipes the anonymous demo user's workspace and
+recreates it from `tour-{tourId}.json` under
+`annotation-tool/demo/fixtures/`. Override the directory with
+`FOVEA_DEMO_FIXTURES_DIR` if you've staged bundles elsewhere.
+
+The seeder refuses to touch any user whose username doesn't start with
+`demo-anonymous-`, so even a leaked seed token can't wipe a real
+user's workspace.

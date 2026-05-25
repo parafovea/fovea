@@ -18,6 +18,7 @@ import { DemoLandingPage } from './pages/DemoLandingPage'
 import { PostTourPage } from './pages/PostTourPage'
 import { seedFixture } from './api'
 import { useDemoSession } from './session'
+import { isPresenterMode } from './mode-flags'
 
 export function DemoShell() {
   const { session } = useDemoSession()
@@ -34,6 +35,10 @@ export function DemoShell() {
         })
       }}
       onTelemetry={(e) => {
+        // Presenter mode (?presenter=1) routes to a no-op so screen-
+        // capture / projector sessions don't pollute the booth's
+        // real abandon-rate analytics (plan §9 risk 8).
+        if (isPresenterMode()) return
         // Demo telemetry hits the regular /api/telemetry endpoint with
         // a demo.* event prefix; the backend's existing telemetry
         // router accepts arbitrary event names.

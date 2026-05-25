@@ -1,0 +1,30 @@
+{
+  "tourId": "import-export",
+  "personas": [
+    {
+      "name": "Data Migrator",
+      "role": "import-export-operator",
+      "informationNeed": "Move annotations between Fovea and external formats (COCO, CSV, Fovea-native).",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      { "name": "Object", "gloss": "A generic annotated object — gives import a non-empty type list." }
+    ],
+    "eventTypes": [],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

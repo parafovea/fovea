@@ -1,0 +1,30 @@
+{
+  "tourId": "model-in-the-loop",
+  "personas": [
+    {
+      "name": "CV Researcher",
+      "role": "model-supervisor",
+      "informationNeed": "Watch the tracker, interpolation, and detection-candidate pipelines on real footage.",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      { "name": "Object", "gloss": "A trackable thing in the scene." }
+    ],
+    "eventTypes": [],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

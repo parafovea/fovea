@@ -1,0 +1,33 @@
+{
+  "tourId": "wikidata-augmentation",
+  "personas": [
+    {
+      "name": "Wikidata Demo Persona",
+      "role": "knowledge-graph-builder",
+      "informationNeed": "Walks the augmenter from search through related-suggestions expansion.",
+      "isDefault": true
+    }
+  ],
+  "ontology": {
+    "personaIndex": 0,
+    "entityTypes": [
+      {
+        "name": "Sample Type",
+        "gloss": "A seed entity type so the augmenter has context to expand from."
+      }
+    ],
+    "eventTypes": [],
+    "roles": [],
+    "relationTypes": []
+  },
+  "world": {
+    "personaIndex": 0,
+    "entities": [],
+    "events": [],
+    "times": [],
+    "locations": []
+  },
+  "videos": [],
+  "annotations": [],
+  "summaries": []
+}

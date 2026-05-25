@@ -15,33 +15,48 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useTour, builtInTours } from '@/tours'
 import logo from '@/assets/fovea-logo.svg'
+import { isPresenterMode, isSafeMode } from '../mode-flags'
 
 export function DemoLandingPage() {
   const { launch } = useTour()
+  const presenter = isPresenterMode()
+  const safe = isSafeMode()
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Hero strip */}
-      <header className="border-b">
-        <div className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="Fovea Logo" className="h-10 w-10" />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">FOVEA</h1>
-              <p className="text-sm text-muted-foreground">
-                Persona-scoped, relational annotation for video.
-              </p>
+      {/* Hero strip — hidden in presenter mode for clean recordings. */}
+      {!presenter && (
+        <header className="border-b">
+          <div className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Fovea Logo" className="h-10 w-10" />
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">FOVEA</h1>
+                <p className="text-sm text-muted-foreground">
+                  Persona-scoped, relational annotation for video.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {safe ? <Badge variant="outline">safe-mode</Badge> : null}
+              <Badge variant="secondary">CVPR 2026 demo</Badge>
             </div>
           </div>
-          <Badge variant="secondary">CVPR 2026 demo</Badge>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Tour grid */}
       <main className="flex-1 mx-auto max-w-6xl px-6 py-8 w-full">
-        <h2 className="text-lg font-medium mb-4">Pick a tour to get started</h2>
+        {!presenter && (
+          <h2 className="text-lg font-medium mb-4">Pick a tour to get started</h2>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {builtInTours.map((tour) => (
+          {builtInTours
+            // Safe mode hides the model-in-the-loop tile because that
+            // tour requires live inference; the rest can run from
+            // pre-recorded fixture data. Plan §9 risk 1.
+            .filter((tour) => !safe || tour.id !== 'model-in-the-loop')
+            .map((tour) => (
             <Card key={tour.id} data-tour-id={`demo-landing-tile-${tour.id}`}>
               <CardHeader>
                 <CardTitle className="text-base">{tour.title}</CardTitle>
@@ -61,19 +76,23 @@ export function DemoLandingPage() {
             </Card>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-6">
-          Demo data resets every 10 minutes. Take a card on your way out for
-          the link to your own workspace.
-        </p>
+        {!presenter && (
+          <p className="text-xs text-muted-foreground mt-6">
+            Demo data resets every 10 minutes. Take a card on your way out for
+            the link to your own workspace.
+          </p>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
-          <span>fovea.video</span>
-          <span>Made for CVPR 2026.</span>
-        </div>
-      </footer>
+      {/* Footer — hidden in presenter mode. */}
+      {!presenter && (
+        <footer className="border-t">
+          <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
+            <span>fovea.video</span>
+            <span>Made for CVPR 2026.</span>
+          </div>
+        </footer>
+      )}
     </div>
   )
 }
