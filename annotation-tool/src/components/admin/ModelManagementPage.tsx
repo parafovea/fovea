@@ -405,7 +405,7 @@ export function ModelManagementPage(): JSX.Element {
   const isVramError = vramCalculation != null && !vramCalculation.valid
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour-id="model-management-page">
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Model Configuration</h3>

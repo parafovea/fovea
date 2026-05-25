@@ -70,7 +70,7 @@ export function ClaimsExtractionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent className="sm:max-w-md min-h-[500px]">
+      <DialogContent data-tour-id="claims-extraction-dialog" className="sm:max-w-md min-h-[500px]">
         <DialogHeader>
           <DialogTitle>Extract Claims from Summary</DialogTitle>
         </DialogHeader>

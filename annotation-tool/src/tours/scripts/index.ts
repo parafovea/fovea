@@ -15,6 +15,10 @@ import { wikidataAugmentationTour } from './wikidata-augmentation'
 import { eventsRolesClaimsTour } from './events-roles-claims'
 import { worldLayerTour } from './world-layer'
 import { modelInTheLoopTour } from './model-in-the-loop'
+import { summariesAndClaimsTour } from './summaries-and-claims'
+import { collaborationTour } from './collaboration'
+import { adminTour } from './admin'
+import { importExportTour } from './import-export'
 import type { TourScript } from '../engine/types'
 
 export const builtInTours: readonly TourScript[] = [
@@ -24,6 +28,10 @@ export const builtInTours: readonly TourScript[] = [
   eventsRolesClaimsTour,
   worldLayerTour,
   modelInTheLoopTour,
+  summariesAndClaimsTour,
+  collaborationTour,
+  adminTour,
+  importExportTour,
 ]
 
 export function findTour(id: string): TourScript | undefined {
@@ -37,4 +45,8 @@ export {
   eventsRolesClaimsTour,
   worldLayerTour,
   modelInTheLoopTour,
+  summariesAndClaimsTour,
+  collaborationTour,
+  adminTour,
+  importExportTour,
 }

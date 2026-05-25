@@ -188,7 +188,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps): JSX.Element 
       open={open}
       onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent data-tour-id="export-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Export All Data</DialogTitle>
         </DialogHeader>

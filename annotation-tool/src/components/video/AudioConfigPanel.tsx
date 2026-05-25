@@ -106,7 +106,7 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
   const selectedStrategy = FUSION_STRATEGIES.find((s) => s.value === config.fusionStrategy)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-tour-id="audio-config-panel">
       <p className="text-sm font-medium text-muted-foreground">
         Audio Processing Options
       </p>

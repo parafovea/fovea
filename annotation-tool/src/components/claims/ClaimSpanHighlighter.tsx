@@ -54,7 +54,7 @@ export function ClaimSpanHighlighter({
   }, [text, highlightedSpans])
 
   return (
-    <div>
+    <div data-tour-id="claim-span-highlighter">
       {segments.map((segment, idx) => (
         <span
           key={idx}

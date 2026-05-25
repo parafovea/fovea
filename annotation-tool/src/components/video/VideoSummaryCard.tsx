@@ -146,7 +146,7 @@ export function VideoSummaryCard({
     : null
 
   return (
-    <Card>
+    <Card data-tour-id="video-summary-card">
       <CardContent>
         <div className="flex items-center mb-4">
           <div className="flex-1">

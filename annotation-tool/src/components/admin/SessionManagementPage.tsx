@@ -118,7 +118,7 @@ export function SessionManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour-id="session-management-page">
       {/* Toolbar */}
       <div className="flex gap-4 mb-6 items-center justify-between">
         <p className="text-sm text-muted-foreground">

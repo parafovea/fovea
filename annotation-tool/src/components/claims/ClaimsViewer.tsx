@@ -475,7 +475,7 @@ export function ClaimsViewer({
   }
 
   return (
-    <div>
+    <div data-tour-id="claims-viewer">
       {/* Error state */}
       {error && (
         <Alert variant="destructive" className="mb-4">

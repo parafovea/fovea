@@ -410,7 +410,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   }
 
   return (
-    <div>
+    <div data-tour-id="video-summary-editor">
       {/* Header with save status */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">

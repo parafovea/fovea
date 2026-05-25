@@ -16,6 +16,7 @@
  */
 
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import { loadCustomTours } from '../lib/custom-tours.js'
 
 interface TourSummary {
   id: string
@@ -78,9 +79,54 @@ const BUILT_IN_TOURS: readonly TourSummary[] = [
     durationMinutes: 4,
     tags: ['model-service', 'tracking', 'interpolation', 'detection'],
   },
+  {
+    id: 'summaries-and-claims',
+    title: 'Summaries, transcripts, and claim extraction',
+    description:
+      'Generate a structured summary, browse the transcript, extract claims anchored to their source span.',
+    durationMinutes: 4,
+    tags: ['summaries', 'transcripts', 'claims', 'extraction'],
+  },
+  {
+    id: 'collaboration',
+    title: 'Collaboration: projects, groups, sharing',
+    description:
+      'Projects bundle videos, personas, and members. Groups are reusable membership sets across projects.',
+    durationMinutes: 3,
+    tags: ['projects', 'groups', 'sharing', 'collaboration'],
+  },
+  {
+    id: 'admin',
+    title: 'Admin: users, models, and system config',
+    description:
+      'Manage users, roles, and the active detection / tracking models. Validate VRAM before pushing.',
+    durationMinutes: 3,
+    tags: ['admin', 'rbac', 'models', 'system-config'],
+  },
+  {
+    id: 'import-export',
+    title: 'Import & export',
+    description:
+      'Pull in COCO, CSV, or Fovea-native dumps; export filtered by persona, time range, or type.',
+    durationMinutes: 2,
+    tags: ['import', 'export', 'data-management'],
+  },
 ]
 
 const toursPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  // Custom tours are loaded once at boot — server restart picks up
+  // changes. Failures are logged loudly so a self-hoster sees them
+  // without scrolling past success messages.
+  const customLoad = await loadCustomTours()
+  if (customLoad.failures.length > 0) {
+    for (const failure of customLoad.failures) {
+      app.log.warn({ path: failure.path, reason: failure.reason }, '[tours] failed to load custom tour file')
+    }
+  }
+  if (customLoad.tours.length > 0) {
+    app.log.info({ count: customLoad.tours.length }, '[tours] loaded custom tours from FOVEA_TOURS_DIR')
+  }
+
   app.get<{ Reply: { tours: TourSummary[] } }>(
     '/api/tours',
     {
@@ -109,7 +155,7 @@ const toursPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         },
       },
     },
-    async () => ({ tours: [...BUILT_IN_TOURS] }),
+    async () => ({ tours: [...BUILT_IN_TOURS, ...customLoad.tours] }),
   )
 }
 

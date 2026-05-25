@@ -427,7 +427,7 @@ export function SystemConfigPanel() {
   const externals = findRow(rows, 'externalApis')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="system-config-panel">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">System configuration</h2>

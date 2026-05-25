@@ -145,7 +145,7 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent data-tour-id="import-dialog" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import from Another Persona</DialogTitle>
         </DialogHeader>
