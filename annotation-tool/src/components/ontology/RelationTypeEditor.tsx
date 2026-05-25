@@ -101,7 +101,6 @@ export default function RelationTypeEditor({
     // targetPersonaIds is intentionally NOT a dependency: re-running this
     // effect when the user toggles a target-persona checkbox wipes their
     // in-progress name / gloss / source / target / examples.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relationType, personaId])
 
   const handleSave = async () => {
@@ -263,7 +262,7 @@ export default function RelationTypeEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent data-tour-id="relation-type-editor" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {relationType ? 'Edit Relation Type' : 'Create Relation Type'}

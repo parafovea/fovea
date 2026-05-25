@@ -10,12 +10,18 @@
  */
 
 import { firstAnnotationTour } from './first-annotation'
+import { ontologyAuthoringTour } from './ontology-authoring'
+import { wikidataAugmentationTour } from './wikidata-augmentation'
 import type { TourScript } from '../engine/types'
 
-export const builtInTours: readonly TourScript[] = [firstAnnotationTour]
+export const builtInTours: readonly TourScript[] = [
+  firstAnnotationTour,
+  ontologyAuthoringTour,
+  wikidataAugmentationTour,
+]
 
 export function findTour(id: string): TourScript | undefined {
   return builtInTours.find((t) => t.id === id)
 }
 
-export { firstAnnotationTour }
+export { firstAnnotationTour, ontologyAuthoringTour, wikidataAugmentationTour }

@@ -38,6 +38,22 @@ const BUILT_IN_TOURS: readonly TourSummary[] = [
     durationMinutes: 2,
     tags: ['annotation', 'video', 'getting-started'],
   },
+  {
+    id: 'ontology-authoring',
+    title: "Building a persona's ontology",
+    description:
+      'Author entity types, event types, roles, and relations — the four layers a Fovea persona uses to structure annotation.',
+    durationMinutes: 3,
+    tags: ['ontology', 'types', 'persona'],
+  },
+  {
+    id: 'wikidata-augmentation',
+    title: 'Grow your ontology from Wikidata',
+    description:
+      'Search Wikidata live, import an entity type with QID grounding, expand via related concepts in seconds.',
+    durationMinutes: 2,
+    tags: ['ontology', 'wikidata', 'augmentation'],
+  },
 ]
 
 const toursPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {

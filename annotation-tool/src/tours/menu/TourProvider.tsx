@@ -12,20 +12,12 @@
  * POSTs to the fixture seeder before showing the runner.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { TourMenu } from './TourMenu'
 import { TourRunner, type TourTelemetryEvent } from '../engine'
 import type { TourScript } from '../engine/types'
-
-interface TourContextValue {
-  openMenu: () => void
-  closeMenu: () => void
-  launch: (tour: TourScript) => void
-  active: TourScript | null
-}
-
-const TourContext = createContext<TourContextValue | null>(null)
+import { TourContext, type TourContextValue } from './tour-context'
 
 interface TourProviderProps {
   children: ReactNode
@@ -98,10 +90,6 @@ export function TourProvider({
   )
 }
 
-export function useTour(): TourContextValue {
-  const ctx = useContext(TourContext)
-  if (!ctx) {
-    throw new Error('useTour must be used inside <TourProvider>')
-  }
-  return ctx
-}
+// useTour and TourContext live in ./tour-context to satisfy the
+// react-refresh rule that components-only modules export only
+// components.

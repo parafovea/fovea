@@ -106,7 +106,13 @@ export default function BaseTypeEditor({
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent className="sm:max-w-2xl min-h-[60vh]">
+      <DialogContent
+        // Tour anchor — typeCategory ∈ {entity, role, event} maps to the
+        // anchors Tour 2 ('Building a persona's ontology') drives, and
+        // 'relation' is covered by the dedicated RelationTypeEditor dialog.
+        data-tour-id={`${typeCategory}-type-editor`}
+        className="sm:max-w-2xl min-h-[60vh]"
+      >
         <DialogHeader>
           <DialogTitle>
             <div className="flex items-center gap-2">

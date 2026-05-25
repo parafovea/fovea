@@ -20,7 +20,7 @@ export async function waitForAnchor(
   const ceilingMs = 3000
   const pollMs = 50
 
-  while (true) {
+  for (;;) {
     if (signal?.aborted) return null
     const el = document.querySelector(selector)
     if (el instanceof HTMLElement) return el

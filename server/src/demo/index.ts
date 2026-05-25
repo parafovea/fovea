@@ -13,6 +13,7 @@ import type { FastifyInstance } from 'fastify'
 import anonymousSessionPlugin from './anonymous-session'
 import seedPlugin from './seed'
 import { isDemoModeEnabled } from './config'
+import { startIdleResetJob } from './idle-reset'
 
 export async function registerDemoLayer(app: FastifyInstance): Promise<void> {
   if (!isDemoModeEnabled()) {
@@ -24,4 +25,12 @@ export async function registerDemoLayer(app: FastifyInstance): Promise<void> {
   )
   await app.register(anonymousSessionPlugin)
   await app.register(seedPlugin)
+
+  // Idle-reset sweeper runs as long as the Fastify instance is alive;
+  // tear it down on graceful shutdown so the timer doesn't keep the
+  // process alive during test teardown.
+  const stopIdleReset = startIdleResetJob(app)
+  app.addHook('onClose', async () => {
+    stopIdleReset()
+  })
 }

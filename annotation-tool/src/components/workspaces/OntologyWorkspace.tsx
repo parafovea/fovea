@@ -515,7 +515,7 @@ export default function OntologyWorkspace() {
         onValueChange={(val) => setTabValue(tabKeys.indexOf(val))}
         className="flex-1 flex flex-col"
       >
-        <TabsList className="mx-4 mt-2">
+        <TabsList className="mx-4 mt-2" data-tour-id="ontology-workspace-tabs">
           <TabsTrigger value="entities">
             <Blocks className="size-4 mr-1" />
             Entity Types ({filteredEntities.length}/{selectedOntology?.entities.length || 0})
