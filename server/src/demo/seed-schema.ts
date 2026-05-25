@@ -159,7 +159,11 @@ function validateTypeArray(raw: unknown): SeedTypeDecl[] | undefined {
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
-    if (typeof o.name !== 'string' || typeof o.gloss !== 'string') continue
+    // Empty strings are rejected to match the JSON schema's minLength: 1
+    // contract — a type with no name or no gloss is unreadable for the
+    // user authoring against an existing ontology.
+    if (typeof o.name !== 'string' || o.name.length === 0) continue
+    if (typeof o.gloss !== 'string' || o.gloss.length === 0) continue
     out.push({ name: o.name, gloss: o.gloss })
   }
   return out
