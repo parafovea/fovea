@@ -12,16 +12,29 @@
 import { firstAnnotationTour } from './first-annotation'
 import { ontologyAuthoringTour } from './ontology-authoring'
 import { wikidataAugmentationTour } from './wikidata-augmentation'
+import { eventsRolesClaimsTour } from './events-roles-claims'
+import { worldLayerTour } from './world-layer'
+import { modelInTheLoopTour } from './model-in-the-loop'
 import type { TourScript } from '../engine/types'
 
 export const builtInTours: readonly TourScript[] = [
   firstAnnotationTour,
   ontologyAuthoringTour,
   wikidataAugmentationTour,
+  eventsRolesClaimsTour,
+  worldLayerTour,
+  modelInTheLoopTour,
 ]
 
 export function findTour(id: string): TourScript | undefined {
   return builtInTours.find((t) => t.id === id)
 }
 
-export { firstAnnotationTour, ontologyAuthoringTour, wikidataAugmentationTour }
+export {
+  firstAnnotationTour,
+  ontologyAuthoringTour,
+  wikidataAugmentationTour,
+  eventsRolesClaimsTour,
+  worldLayerTour,
+  modelInTheLoopTour,
+}

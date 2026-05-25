@@ -474,7 +474,7 @@ export default function ObjectWorkspace() {
       </div>
 
       <Tabs value={tabValue} onValueChange={setTabValue} className="flex-1 flex flex-col">
-        <TabsList className="mx-4">
+        <TabsList className="mx-4" data-tour-id="world-panel-tabs">
           <TabsTrigger value="entities">
             <User className="size-4 mr-1" />Entities ({entities.length})
           </TabsTrigger>

@@ -54,6 +54,30 @@ const BUILT_IN_TOURS: readonly TourSummary[] = [
     durationMinutes: 2,
     tags: ['ontology', 'wikidata', 'augmentation'],
   },
+  {
+    id: 'events-roles-claims',
+    title: 'Beyond boxes: events, roles, and claims',
+    description:
+      'Box two people, declare an event between them, assign roles, watch Fovea derive a structured claim and graph it.',
+    durationMinutes: 4,
+    tags: ['events', 'roles', 'claims', 'graph'],
+  },
+  {
+    id: 'world-layer',
+    title: 'The world layer: instances, places, times',
+    description:
+      'Beyond types, Fovea tracks specific instances — this concert, this venue, this date — and lets annotations point at them.',
+    durationMinutes: 3,
+    tags: ['world', 'entities', 'locations', 'times', 'collections'],
+  },
+  {
+    id: 'model-in-the-loop',
+    title: 'Model in the loop: tracking, interpolation, detection',
+    description:
+      'Models propose; humans dispose. Track a bbox across the clip, edit the trajectory, accept detection candidates.',
+    durationMinutes: 4,
+    tags: ['model-service', 'tracking', 'interpolation', 'detection'],
+  },
 ]
 
 const toursPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {

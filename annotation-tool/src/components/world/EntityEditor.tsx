@@ -198,7 +198,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent data-tour-id="entity-editor" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="size-5 text-secondary" />

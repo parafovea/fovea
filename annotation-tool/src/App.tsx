@@ -23,6 +23,7 @@ import { usePersonas } from './store/queries'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession'
 import { CommandPalette } from '@components/shared/CommandPalette'
+import { TourProvider } from '@/tours'
 import { commandRegistry } from './lib/commands/command-registry'
 import { AbilityContext } from './lib/ability'
 import { useAbilityStore } from './store/zustand/abilityStore'
@@ -134,6 +135,14 @@ function App() {
   return (
     <AbilityContext.Provider value={ability}>
       <ErrorBoundary context={{ component: 'App' }}>
+        {/*
+          TourProvider mounts the guided-tour engine for every deployment.
+          The menu trigger is hidden by default (no toolbar button is
+          rendered unless a deployment opts in via a setting); the demo
+          deployment renders its own landing-page menu instead. See
+          notes/CVPR_2026_DEMO_PLAN.md §6.3 and docs/tours.md.
+        */}
+        <TourProvider>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -226,6 +235,7 @@ function App() {
         </Routes>
         <CommandPalette />
         <SessionManager />
+        </TourProvider>
       </ErrorBoundary>
     </AbilityContext.Provider>
   )
