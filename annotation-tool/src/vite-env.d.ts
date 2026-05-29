@@ -18,3 +18,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// Raw text imports — Vite's ?raw query suffix yields the file contents
+// as a string. Used by the demo attribution page to embed
+// docs/demo-attribution.md at build time so the doc stays in one place.
+declare module '*.md?raw' {
+  const content: string
+  export default content
+}

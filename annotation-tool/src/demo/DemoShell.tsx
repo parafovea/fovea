@@ -16,9 +16,11 @@ import { Route, Routes } from 'react-router-dom'
 import { TourProvider } from '@/tours'
 import { DemoLandingPage } from './pages/DemoLandingPage'
 import { PostTourPage } from './pages/PostTourPage'
+import { AttributionPage } from './pages/AttributionPage'
 import { seedFixture } from './api'
 import { useDemoSession } from './session'
 import { isPresenterMode } from './mode-flags'
+import { AttributionBanner } from './AttributionBanner'
 
 export function DemoShell() {
   const { session } = useDemoSession()
@@ -52,9 +54,18 @@ export function DemoShell() {
         })
       }}
     >
+      {/*
+        Persistent CC-BY attribution banner — load-bearing for
+        CC-BY-NC-SA 3.0 compliance. Sits above every demo route so
+        anyone watching can see the source credit. Hidden under
+        ?presenter=1 because clean recordings carry the credit via
+        the per-clip ClipAttribution overlay instead.
+      */}
+      <AttributionBanner />
       <Routes>
         <Route path="/" element={<DemoLandingPage />} />
         <Route path="/done/:id" element={<PostTourPage />} />
+        <Route path="/docs/demo-attribution" element={<AttributionPage />} />
         {/*
           Anything else falls through to the stock app. A real demo
           deployment would route those under /workspace/:sessId, but
