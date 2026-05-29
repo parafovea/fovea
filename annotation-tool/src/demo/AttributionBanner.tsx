@@ -4,12 +4,14 @@
  * KEXP source clips per CC-BY-NC-SA 3.0; do not remove without
  * re-sourcing the demo content under a different license.
  *
- * Lives at the top of the viewport as a thin bar that doesn't intrude
- * on the workspace chrome but is unambiguously present and links
- * directly to the full attribution doc. Hidden in presenter mode for
- * clean screen recordings — the recordings themselves carry the
- * attribution via the per-clip ClipAttribution overlay (mounted by
- * DemoShell wherever a clip plays).
+ * Fixed at the bottom of the viewport as a thin bar that doesn't
+ * intrude on the workspace chrome but is unambiguously present and
+ * links directly to the full attribution doc. The workspace UI gets
+ * a small bottom padding so its own footer chrome (timeline, save
+ * status) isn't occluded. Hidden in presenter mode for clean screen
+ * recordings — the recordings themselves carry the attribution via
+ * the per-clip ClipAttribution overlay (mounted by DemoShell wherever
+ * a clip plays).
  *
  * The banner reads the set of source artists / venues from clips.json
  * so adding a new source means updating the manifest only; the banner
@@ -42,7 +44,7 @@ export function AttributionBanner() {
   return (
     <div
       data-demo-attribution-banner=""
-      className="w-full bg-muted/70 backdrop-blur border-b text-xs text-muted-foreground"
+      className="fixed bottom-0 inset-x-0 z-50 w-full bg-muted/80 backdrop-blur border-t text-xs text-muted-foreground"
     >
       <div className="mx-auto max-w-6xl px-4 py-1.5 flex items-center justify-between gap-2">
         <span>

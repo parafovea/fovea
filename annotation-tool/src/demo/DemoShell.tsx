@@ -116,7 +116,13 @@ function DemoRouter({
 
   return (
     <>
-      <AttributionBanner />
+      {/*
+        Reserve viewport space for the fixed bottom AttributionBanner
+        (~28 px tall including the border). Without this, the
+        workspace's own bottom chrome — timeline scrubber, save
+        status — sits underneath the banner and is unclickable.
+      */}
+      <div className="pb-8">
       {error ? (
         <div
           role="alert"
@@ -143,6 +149,8 @@ function DemoRouter({
         */}
         <Route path="*" element={<App />} />
       </Routes>
+      </div>
+      <AttributionBanner />
     </>
   )
 }
