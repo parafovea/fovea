@@ -30,7 +30,13 @@ mkdir -p "$PID_DIR"
 # fetch script + seeder + frontend agree without further config.
 export FOVEA_DEMO_MODE=true
 export FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=true
+# The token must be the same on both sides — backend checks it as
+# X-Demo-Seed-Token in the request header, frontend reads it from
+# VITE_FOVEA_DEMO_SEED_TOKEN at build time and sends it on every
+# seedFixture() call. A mismatch here is the #1 reason "Start"
+# silently 403s in the booth.
 export FOVEA_DEMO_SEED_TOKEN="dev-only-demo-seed-token-must-be-32-chars-or-more"
+export VITE_FOVEA_DEMO_SEED_TOKEN="$FOVEA_DEMO_SEED_TOKEN"
 export STORAGE_PATH="$CLIPS_DIR"
 # Frontend Vite env — read at build time so the demo router actually mounts.
 export VITE_FOVEA_DEMO_MODE=true

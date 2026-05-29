@@ -46,10 +46,19 @@ export async function seedFixture(args: {
   tourId: string
   sessionUserId: string
 }): Promise<{ seeded: string[] }> {
+  // Production demo deployments inject X-Demo-Seed-Token at the edge so
+  // the token never reaches client JS. Local-run reads it from a Vite
+  // env var instead — set VITE_FOVEA_DEMO_SEED_TOKEN to match the
+  // backend's FOVEA_DEMO_SEED_TOKEN in run-demo-local.sh.
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const localToken = env.VITE_FOVEA_DEMO_SEED_TOKEN
+  if (localToken) headers['X-Demo-Seed-Token'] = localToken
+
   const res = await fetch('/api/demo/seed', {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(args),
   })
   if (!res.ok) {
