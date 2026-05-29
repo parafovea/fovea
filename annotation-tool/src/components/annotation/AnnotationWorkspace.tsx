@@ -164,6 +164,18 @@ export default function AnnotationWorkspace() {
   const personaIds = personas.map(p => p.id)
   const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
 
+  // Derived label for the persona Select trigger. shadcn/base-ui's
+  // SelectValue falls back to rendering the controlled `value` prop
+  // when the matching SelectItem isn't yet mounted (which happens
+  // during the initial personas query — the trigger paints before
+  // the dropdown). Render the resolved label explicitly so the
+  // trigger never shows a UUID.
+  const selectedPersonaLabel = useMemo(() => {
+    if (!selectedPersonaId) return null
+    const p = personas.find((p) => p.id === selectedPersonaId)
+    return p ? `${p.name} - ${p.role}` : null
+  }, [personas, selectedPersonaId])
+
   // Get filtered annotations for display (by selected persona)
   const annotations = useMemo(() => {
     if (selectedPersonaId && videoAnnotations) {
@@ -815,17 +827,7 @@ export default function AnnotationWorkspace() {
                   >
                     <SelectTrigger aria-label="Select Persona">
                       <SelectValue placeholder="Select Persona">
-                        {(() => {
-                          // shadcn/base-ui Select falls back to rendering
-                          // the raw `value` when the matching SelectItem
-                          // isn't yet in the dropdown (the personas query
-                          // hadn't returned), which surfaced the persona
-                          // UUID instead of the name. Render the resolved
-                          // persona's name explicitly so the trigger never
-                          // shows a UUID.
-                          const p = personas.find((p) => p.id === selectedPersonaId)
-                          return p ? `${p.name} - ${p.role}` : null
-                        })()}
+                        {selectedPersonaLabel}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
