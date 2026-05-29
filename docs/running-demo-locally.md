@@ -5,6 +5,46 @@ your laptop. It mirrors what the booth deployment does, just with dev
 servers instead of a production build and `localhost:5173` instead of
 `demo.fovea.video`.
 
+## TL;DR
+
+```bash
+./scripts/run-demo-local.sh
+```
+
+First run takes ~15 minutes (model-service downloads CV + audio model
+weights and builds the image). Subsequent runs are seconds. The script
+opens `http://localhost:5173/` on the demo landing page when ready.
+
+```bash
+./scripts/run-demo-local.sh --no-fetch  # skip the yt-dlp / ffmpeg clip fetch
+./scripts/run-demo-local.sh --stop      # stop dev servers, keep DB + model
+./scripts/run-demo-local.sh --reset     # tear everything down + drop DB volume
+```
+
+## Prerequisites
+
+Before the script will get past its precheck, you need:
+
+| Tool | Why |
+|---|---|
+| `docker` (with Compose v2) | Postgres + Redis + model-service all run in docker |
+| `node` (≥ 22) and `pnpm` | Frontend + backend dev servers |
+| `yt-dlp` | Downloads the KEXP source videos |
+| `ffmpeg` | Cuts the source videos into the 30-second demo clips |
+| `jq` | The fetch script reads the clip manifest with jq |
+| `curl` | Health checks during boot |
+
+macOS install:
+
+```bash
+brew install yt-dlp ffmpeg jq
+# node + pnpm via your usual node manager (nvm, fnm, etc.)
+```
+
+You also need **at least 16 GB of RAM free** — the model-service image
+holds the full CV + audio model set in memory when `PRELOAD_MODELS=true`
+(which the demo script sets so Tour 6 doesn't cold-start mid-tour).
+
 ## One-command bring-up
 
 From the repo root:

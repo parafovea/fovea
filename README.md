@@ -68,6 +68,20 @@ For NVIDIA GPU-accelerated inference:
 docker compose --profile gpu up
 ```
 
+### Trying the CVPR demo locally
+
+The CVPR 2026 demo (10 guided tours, persona-scoped fixtures, real CC-licensed footage) runs end-to-end on a developer laptop with one command:
+
+```bash
+./scripts/run-demo-local.sh
+```
+
+That brings up Postgres + Redis + model-service (CPU build), runs migrations, fetches the demo clip set via yt-dlp + ffmpeg, exports all the demo env flags, boots backend + frontend dev servers with `FOVEA_DEMO_MODE=true` / `VITE_FOVEA_DEMO_MODE=true`, and opens `http://localhost:5173/` on the demo landing page.
+
+First-time build is ~15 minutes (model-service downloads CV + audio weights); subsequent runs reuse cached images and the script idempotently picks up. Tear down with `./scripts/run-demo-local.sh --stop` (keeps DB) or `--reset` (drops DB volume).
+
+Full walkthrough — service map, troubleshooting, attribution requirements — in [`docs/running-demo-locally.md`](docs/running-demo-locally.md). The architecture is documented in `notes/CVPR_2026_DEMO_PLAN.md`; the tour anchors are documented in [`docs/tour-anchors.md`](docs/tour-anchors.md); the video source attribution is in [`docs/demo-attribution.md`](docs/demo-attribution.md).
+
 ### Configuration
 
 Create a `.env` file to customize settings:
