@@ -4,6 +4,7 @@
     {
       "name": "Music Researcher",
       "role": "ontologist",
+      "informationNeed": "Build out the entity / event / role / relation vocabulary needed to annotate a live performance.",
       "isDefault": true
     }
   ],
@@ -21,7 +22,9 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-cu-keys" }
+  ],
   "annotations": [],
   "summaries": []
 }

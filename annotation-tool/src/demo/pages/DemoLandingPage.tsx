@@ -84,11 +84,19 @@ export function DemoLandingPage() {
         )}
       </main>
 
-      {/* Footer — hidden in presenter mode. */}
+      {/* Footer — hidden in presenter mode. The attribution link is the
+          CC-BY-NC-SA-required visible credit for the KEXP source clips
+          (see docs/demo-attribution.md). Don't remove without re-sourcing. */}
       {!presenter && (
         <footer className="border-t">
           <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
             <span>fovea.video</span>
+            <a
+              href="/docs/demo-attribution"
+              className="underline"
+            >
+              Video sources &amp; attribution
+            </a>
             <span>Made for CVPR 2026.</span>
           </div>
         </footer>

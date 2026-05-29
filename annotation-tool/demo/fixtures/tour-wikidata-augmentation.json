@@ -2,9 +2,9 @@
   "tourId": "wikidata-augmentation",
   "personas": [
     {
-      "name": "Wikidata Demo Persona",
+      "name": "Instrument Cataloguer",
       "role": "knowledge-graph-builder",
-      "informationNeed": "Walks the augmenter from search through related-suggestions expansion.",
+      "informationNeed": "Ground every visible piece of musical equipment in a Wikidata QID so the annotation is linkable, not just labelled.",
       "isDefault": true
     }
   ],
@@ -12,8 +12,8 @@
     "personaIndex": 0,
     "entityTypes": [
       {
-        "name": "Sample Type",
-        "gloss": "A seed entity type so the augmenter has context to expand from."
+        "name": "Synthesizer",
+        "gloss": "A starting type the augmenter can expand from — Wikidata returns Juno-60, Moog, etc. as concrete subtypes."
       }
     ],
     "eventTypes": [],
@@ -27,7 +27,10 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-juno-cu" },
+    { "videoId": "frahm-2018-roland-cu" }
+  ],
   "annotations": [],
   "summaries": []
 }

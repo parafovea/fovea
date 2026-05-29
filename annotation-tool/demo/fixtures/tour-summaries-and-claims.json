@@ -4,7 +4,7 @@
     {
       "name": "Language Analyst",
       "role": "summary-author",
-      "informationNeed": "Walks from audio config through transcript, summary, and claim extraction.",
+      "informationNeed": "Walk from audio config through transcript, summary, and claim extraction on a short spoken introduction.",
       "isDefault": true
     }
   ],
@@ -26,7 +26,9 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-stage-talk" }
+  ],
   "annotations": [],
   "summaries": []
 }

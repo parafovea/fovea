@@ -2,22 +2,32 @@
   "tourId": "events-roles-claims",
   "personas": [
     {
-      "name": "Concert Analyst",
-      "role": "event-annotator",
+      "name": "Musicologist",
+      "role": "music-analyst",
+      "informationNeed": "Track instruments, phrases, and which performer plays what at any moment.",
       "isDefault": true
+    },
+    {
+      "name": "Stagecraft Researcher",
+      "role": "movement-analyst",
+      "informationNeed": "Annotate body language, instrument-switch gestures, and stage geography."
     }
   ],
   "ontology": {
     "personaIndex": 0,
     "entityTypes": [
-      { "name": "Person", "gloss": "An individual human." }
+      { "name": "Performer", "gloss": "An individual playing music in the performance." },
+      { "name": "Instrument", "gloss": "A musical instrument used in the performance." },
+      { "name": "Audience", "gloss": "A person witnessing the performance." }
     ],
     "eventTypes": [
-      { "name": "Performance", "gloss": "A musical performance witnessed by an audience." }
+      { "name": "Performance", "gloss": "A musical performance witnessed by an audience." },
+      { "name": "InstrumentSwitch", "gloss": "A performer moves from one instrument to another between or within a piece." }
     ],
     "roles": [
-      { "name": "Performer", "gloss": "The person performing in the event." },
-      { "name": "Audience", "gloss": "A person watching the performance." }
+      { "name": "LeadPerformer", "gloss": "The primary performer in a Performance event." },
+      { "name": "Instrumentation", "gloss": "The instrument used during a Performance event by a specific performer." },
+      { "name": "AudienceMember", "gloss": "Someone witnessing a Performance event." }
     ],
     "relationTypes": []
   },
@@ -28,7 +38,10 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-juno-cu" },
+    { "videoId": "frahm-2015-harmonium-wide" }
+  ],
   "annotations": [],
   "summaries": []
 }

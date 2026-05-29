@@ -17,6 +17,10 @@
       {
         "name": "Object",
         "gloss": "A physical thing that isn't a person."
+      },
+      {
+        "name": "Instrument",
+        "gloss": "A musical instrument visible in the frame."
       }
     ],
     "eventTypes": [],
@@ -30,7 +34,9 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-wide-piano" }
+  ],
   "annotations": [],
   "summaries": []
 }

@@ -1,0 +1,109 @@
+{
+  "$schema": "../clips.schema.json",
+  "description": "Manifest of demo video clips fetched from CC-licensed sources. fetch-demo-clips.sh reads this to download + transcode each clip; the demo fixture bundles reference clips by id. Clip media files are NOT committed to git — see ../clips/.gitignore.",
+  "sources": [
+    {
+      "id": "kexp-frahm-2015",
+      "title": "Nils Frahm — Live at KEXP",
+      "uploader": "KEXP",
+      "uploaderUrl": "https://www.youtube.com/user/kexp",
+      "sourceUrl": "https://www.youtube.com/watch?v=DfG6VKnjrVw",
+      "license": "CC-BY-NC-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/3.0/",
+      "artist": "Nils Frahm",
+      "venue": "KEXP Radio Studio, Seattle WA",
+      "performanceDate": "2015-03-21",
+      "performanceId": "frahm-kexp-2015",
+      "notes": "Multi-camera radio session, ~25 min. The clips below extract distinct camera framings the KEXP editor cut to at different moments of one continuous performance."
+    },
+    {
+      "id": "kexp-frahm-2018",
+      "title": "Nils Frahm — Live at KEXP (All Melody tour)",
+      "uploader": "KEXP",
+      "uploaderUrl": "https://www.youtube.com/user/kexp",
+      "sourceUrl": "https://www.youtube.com/watch?v=hL0H3STKzVo",
+      "license": "CC-BY-NC-SA-3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/3.0/",
+      "artist": "Nils Frahm",
+      "venue": "KEXP Radio Studio, Seattle WA",
+      "performanceDate": "2018-04-09",
+      "performanceId": "frahm-kexp-2018",
+      "notes": "Second KEXP session, three years after the first. Pulled in alongside the 2015 session so Tour 5 (world layer) can demonstrate cross-performance entity tracking — same artist, same venue, different date, overlapping instrument set."
+    }
+  ],
+  "clips": [
+    {
+      "id": "frahm-2015-wide-piano",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 150,
+      "durationSec": 25,
+      "framing": "wide stage, piano lead",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["first-annotation", "world-layer"]
+    },
+    {
+      "id": "frahm-2015-cu-keys",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 310,
+      "durationSec": 22,
+      "framing": "close-up, hands on piano keys",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["model-in-the-loop", "ontology-authoring"]
+    },
+    {
+      "id": "frahm-2015-juno-cu",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 700,
+      "durationSec": 25,
+      "framing": "close-up, Frahm at the Juno synth, hands on knobs",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["wikidata-augmentation", "events-roles-claims"]
+    },
+    {
+      "id": "frahm-2015-harmonium-wide",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 1020,
+      "durationSec": 28,
+      "framing": "wide of harmonium switchover",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["events-roles-claims"]
+    },
+    {
+      "id": "frahm-2015-stage-talk",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 230,
+      "durationSec": 20,
+      "framing": "Frahm speaking between tracks",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["summaries-and-claims"]
+    },
+    {
+      "id": "frahm-2015-multi-instrument",
+      "sourceId": "kexp-frahm-2015",
+      "startSec": 1200,
+      "durationSec": 25,
+      "framing": "wide showing piano + Juno simultaneously",
+      "performanceId": "frahm-kexp-2015",
+      "usedByTours": ["world-layer"]
+    },
+    {
+      "id": "frahm-2018-piano-wide",
+      "sourceId": "kexp-frahm-2018",
+      "startSec": 180,
+      "durationSec": 25,
+      "framing": "wide, piano-led, Frahm seated",
+      "performanceId": "frahm-kexp-2018",
+      "usedByTours": ["world-layer"]
+    },
+    {
+      "id": "frahm-2018-roland-cu",
+      "sourceId": "kexp-frahm-2018",
+      "startSec": 540,
+      "durationSec": 22,
+      "framing": "close-up on Roland synth — same instrument lineage as 2015 Juno",
+      "performanceId": "frahm-kexp-2018",
+      "usedByTours": ["world-layer", "wikidata-augmentation"]
+    }
+  ],
+  "timestampNote": "Timestamps are nominal — verify against the actual upload before committing the demo-day cut. KEXP occasionally re-edits old uploads; if a clip's framing has shifted, adjust startSec but keep the clip id stable so the fixture bundles continue to resolve."
+}

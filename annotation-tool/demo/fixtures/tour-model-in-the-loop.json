@@ -4,14 +4,15 @@
     {
       "name": "CV Researcher",
       "role": "model-supervisor",
-      "informationNeed": "Watch the tracker, interpolation, and detection-candidate pipelines on real footage.",
+      "informationNeed": "Watch the tracker follow hands across a keyboard; refine the interpolated path with Bézier handles.",
       "isDefault": true
     }
   ],
   "ontology": {
     "personaIndex": 0,
     "entityTypes": [
-      { "name": "Object", "gloss": "A trackable thing in the scene." }
+      { "name": "Hand", "gloss": "A trackable hand moving across an instrument." },
+      { "name": "Instrument", "gloss": "The instrument the hand is interacting with." }
     ],
     "eventTypes": [],
     "roles": [],
@@ -24,7 +25,9 @@
     "times": [],
     "locations": []
   },
-  "videos": [],
+  "videos": [
+    { "videoId": "frahm-2015-cu-keys" }
+  ],
   "annotations": [],
   "summaries": []
 }
