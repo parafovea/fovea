@@ -299,7 +299,7 @@ export function AnnotationCandidatesList({
   }
 
   return (
-    <div>
+    <div data-tour-id="annotation-candidates-list">
       {/* Statistics Bar */}
       <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
         <div className="flex flex-row gap-4 items-center">

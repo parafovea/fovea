@@ -304,7 +304,7 @@ export function VideoAssignmentPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="flex flex-col gap-8 p-6" data-tour-id="project-video-assignment">
       {/* Section 1: Manual Assignment */}
       <div className="rounded-lg border bg-card p-6">
         <h3 className="text-lg font-semibold mb-1">

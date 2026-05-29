@@ -34,6 +34,14 @@ export FOVEA_DEMO_SEED_TOKEN="dev-only-demo-seed-token-must-be-32-chars-or-more"
 export STORAGE_PATH="$CLIPS_DIR"
 # Frontend Vite env — read at build time so the demo router actually mounts.
 export VITE_FOVEA_DEMO_MODE=true
+# Model-service: CPU build by default so the demo runs without CUDA.
+# The "full" mode loads every task (detection, tracking, audio) rather
+# than the minimal subset; takes longer to build first time but every
+# Tour 6 / Tour 7 anchor will exercise a real model behind it.
+export MODEL_BUILD_MODE="${MODEL_BUILD_MODE:-full}"
+export DEVICE="${DEVICE:-cpu}"
+export PRELOAD_MODELS="${PRELOAD_MODELS:-true}"
+export MODEL_SERVICE_URL="${MODEL_SERVICE_URL:-http://localhost:8000}"
 
 usage() {
   cat <<EOF
@@ -79,12 +87,23 @@ start_infra() {
   for _ in $(seq 1 30); do
     if (cd "$REPO_ROOT" && docker compose -f docker-compose.yml exec -T postgres pg_isready -U fovea >/dev/null 2>&1); then
       echo "  postgres ready"
+      break
+    fi
+    sleep 1
+  done
+
+  echo "==> bringing up model-service (CPU, mode=$MODEL_BUILD_MODE, preload=$PRELOAD_MODELS)"
+  echo "    first-time build can take ~10-15 min (downloading CV/audio model weights)"
+  (cd "$REPO_ROOT" && docker compose -f docker-compose.yml up -d --build model-service)
+  for i in $(seq 1 180); do
+    if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+      echo "  model-service ready (took ${i}s)"
       return
     fi
     sleep 1
   done
-  echo "error: postgres did not become ready within 30s" >&2
-  exit 1
+  echo "warning: model-service didn't respond on :8000 within 3 min — continuing anyway." >&2
+  echo "  check: docker compose -f docker-compose.yml logs model-service" >&2
 }
 
 run_migrations() {

@@ -26,18 +26,18 @@ export const importExportTour: TourScript = {
       anchor: 'import-dialog',
       narration: 'Pull in COCO, CSV, or Fovea-native dumps.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'import-result-dialog',
       narration: 'See exactly what landed, with conflict resolution.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'export-dialog',
       narration: 'Export filtered by persona, time range, or type.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
   ],
 }

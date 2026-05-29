@@ -250,7 +250,7 @@ export default function AnnotationEditor({
 
           {/* Show linked object if present */}
           {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedCollectionId) && (
-            <Alert className="mb-4">
+            <Alert className="mb-4" data-tour-id="annotation-world-reference">
               <AlertDescription>
                 <div className="flex flex-col gap-2">
                   <p className="text-sm">Linked Object:</p>

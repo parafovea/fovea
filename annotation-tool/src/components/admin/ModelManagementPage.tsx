@@ -442,7 +442,7 @@ export function ModelManagementPage(): JSX.Element {
 
       {/* VRAM Budget bar */}
       {config.cudaAvailable && hasGpuTask && vramCalculation && validation && (
-        <div className="rounded-lg border bg-card p-4 mb-6">
+        <div className="rounded-lg border bg-card p-4 mb-6" data-tour-id="model-memory-validation">
           <div className="flex items-center mb-2">
             <MemoryStick className="mr-2 h-4 w-4" />
             <span className="font-medium">VRAM Budget</span>

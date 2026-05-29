@@ -36,7 +36,7 @@ export const worldLayerTour: TourScript = {
       anchor: 'location-map-picker',
       narration: 'Locations are coordinates with semantics. Drop a pin on the map.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'time-editor',
@@ -47,7 +47,7 @@ export const worldLayerTour: TourScript = {
       anchor: 'time-collection-builder',
       narration: "Group times: 'all Saturdays of June 2025'.",
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'collection-builder',
@@ -58,7 +58,7 @@ export const worldLayerTour: TourScript = {
       anchor: 'annotation-world-reference',
       narration: 'Annotations link to these world instances, not just types.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
   ],
 }

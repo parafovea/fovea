@@ -248,7 +248,7 @@ export default function TemporalAnnotator({
   }
 
   return (
-    <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-6 shadow-sm">
+    <div data-tour-id="temporal-annotator" className="rounded-lg ring-1 ring-foreground/10 bg-card p-6 shadow-sm">
       <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
         <Clock className="size-5" />
         Temporal Annotation

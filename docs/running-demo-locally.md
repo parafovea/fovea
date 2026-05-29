@@ -17,11 +17,12 @@ That script:
 
 1. **Verifies tooling** — `docker`, `node`, `pnpm`, `yt-dlp`, `ffmpeg`, `jq`, `curl`.
 2. **Starts Postgres + Redis** via the existing `docker-compose.yml`.
-3. **Runs Prisma migrations** so the demo DB has the right schema.
-4. **Fetches the KEXP clip set** by calling `annotation-tool/demo/scripts/fetch-demo-clips.sh`. First run takes ~3–5 min depending on your network; cached on subsequent runs.
-5. **Boots the backend** (`server/`) with `FOVEA_DEMO_MODE=true`, `FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=true`, and `FOVEA_DEMO_SEED_TOKEN` set so the demo routes actually register.
-6. **Boots the frontend** (`annotation-tool/`) with `VITE_FOVEA_DEMO_MODE=true` so the `DemoShell` router takes over from `App`.
-7. **Opens** `http://localhost:5173/` in your default browser.
+3. **Brings up `model-service`** (CPU build, `MODEL_BUILD_MODE=full`, `PRELOAD_MODELS=true`) so tracking / detection / audio inference is actually live. First-time build downloads CV + audio model weights — give it 10–15 min. Subsequent runs reuse the cached image.
+4. **Runs Prisma migrations** so the demo DB has the right schema.
+5. **Fetches the KEXP clip set** by calling `annotation-tool/demo/scripts/fetch-demo-clips.sh`. First run takes ~3–5 min; cached after.
+6. **Boots the backend** (`server/`) with the demo env flags and `MODEL_SERVICE_URL=http://localhost:8000`.
+7. **Boots the frontend** (`annotation-tool/`) with `VITE_FOVEA_DEMO_MODE=true`.
+8. **Opens** `http://localhost:5173/` in your default browser.
 
 You should land on the **demo tile grid** with ten tours, an attribution banner above, and a footer link to `/docs/demo-attribution`.
 

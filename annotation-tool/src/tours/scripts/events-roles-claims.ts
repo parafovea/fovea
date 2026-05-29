@@ -40,13 +40,13 @@ export const eventsRolesClaimsTour: TourScript = {
       anchor: 'event-annotation-button',
       narration: "Create an Event annotation: 'Performance'.",
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'role-assignment-panel',
       narration: 'Performer → bbox 1. Audience → bbox 2.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'claim-editor',

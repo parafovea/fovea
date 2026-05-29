@@ -24,13 +24,13 @@ export const summariesAndClaimsTour: TourScript = {
       anchor: 'audio-config-panel',
       narration:
         'Audio is configurable per clip — language, diarization, transcription model.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'transcript-viewer',
       narration: 'Transcript is synced to the video — click a line to jump.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'video-summary-editor',
@@ -40,19 +40,19 @@ export const summariesAndClaimsTour: TourScript = {
     {
       anchor: 'video-summary-card',
       narration: 'Summaries live as first-class objects, browsable across clips.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'claims-extraction-dialog',
       narration: 'Extract claims from the summary or the transcript.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'claim-span-highlighter',
       narration: 'Each claim is anchored to its source span.',
       expectAction: 'hover',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'claims-viewer',

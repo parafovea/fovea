@@ -24,39 +24,39 @@ export const adminTour: TourScript = {
     {
       anchor: 'admin-panel',
       narration: 'Admins manage users, models, and system-wide config.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'user-management-page',
       narration: 'Create users, assign roles.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'permissions-page',
       narration: 'Fine-grained RBAC: who can do what, on which data.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'model-management-page',
       narration: 'Select which detection / tracking models are active.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'model-memory-validation',
       narration: 'Validate the selection fits in available VRAM before pushing.',
       expectAction: 'click',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'system-config-panel',
       narration: 'System-wide toggles, propagated to the model-service.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
     {
       anchor: 'session-management-page',
       narration: 'Operational views: live sessions, video-assignment audit.',
-      requiresFixture: true,
+      requiresFixture: false,
     },
   ],
 }

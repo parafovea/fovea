@@ -743,7 +743,7 @@ export default function AnnotationWorkspace() {
                     variant="outline"
                     size="sm"
                   >
-                    <ToggleGroupItem value="type">
+                    <ToggleGroupItem value="type" data-tour-id="event-annotation-button">
                       Type
                     </ToggleGroupItem>
                     <ToggleGroupItem value="object">
@@ -938,7 +938,7 @@ export default function AnnotationWorkspace() {
       >
         {/* Spacer for toolbar height */}
         <div className="h-16" />
-        <div className="overflow-auto p-4">
+        <div className="overflow-auto p-4" data-tour-id="role-assignment-panel">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold">
               All Annotations ({sortedAnnotations.length})

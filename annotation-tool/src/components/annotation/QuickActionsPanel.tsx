@@ -97,6 +97,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 
   return createPortal(
     <div
+      data-tour-id="quick-actions-track"
       className="absolute grid grid-cols-2 gap-2 bg-card rounded-lg p-2 shadow-lg ring-1 ring-foreground/10 z-[1000] opacity-95 transition-all duration-200 ease-in-out"
       style={{
         top: position.top,
