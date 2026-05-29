@@ -62,6 +62,31 @@ const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) 
       },
     },
     async (request, reply) => {
+      // Reuse the existing anonymous user if the visitor's session
+      // cookie still resolves to a live demo-anonymous-* row. Avoids
+      // accumulating one new user per Start click (which made the
+      // personas dropdown fill up with "Demo Researcher" entries
+      // because the admin-bypass query returned every anonymous
+      // user's persona).
+      const existingToken = request.cookies.session_token
+      if (existingToken) {
+        const existing = await prisma.session.findUnique({
+          where: { token: existingToken },
+          select: { user: { select: { id: true, username: true } }, expiresAt: true },
+        })
+        if (
+          existing?.user?.username?.startsWith(ANON_USERNAME_PREFIX) &&
+          existing.expiresAt > new Date()
+        ) {
+          return {
+            userId: existing.user.id,
+            ttlSeconds: Math.floor(
+              (existing.expiresAt.getTime() - Date.now()) / 1000,
+            ),
+          }
+        }
+      }
+
       const suffix = crypto.randomBytes(6).toString('hex')
       const username = `${ANON_USERNAME_PREFIX}${suffix}`
 

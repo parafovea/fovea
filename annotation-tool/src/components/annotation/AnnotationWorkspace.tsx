@@ -814,7 +814,19 @@ export default function AnnotationWorkspace() {
                     disabled={annotationMode === 'object'}
                   >
                     <SelectTrigger aria-label="Select Persona">
-                      <SelectValue placeholder="Select Persona" />
+                      <SelectValue placeholder="Select Persona">
+                        {(() => {
+                          // shadcn/base-ui Select falls back to rendering
+                          // the raw `value` when the matching SelectItem
+                          // isn't yet in the dropdown (the personas query
+                          // hadn't returned), which surfaced the persona
+                          // UUID instead of the name. Render the resolved
+                          // persona's name explicitly so the trigger never
+                          // shows a UUID.
+                          const p = personas.find((p) => p.id === selectedPersonaId)
+                          return p ? `${p.name} - ${p.role}` : null
+                        })()}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">

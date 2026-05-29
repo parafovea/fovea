@@ -75,10 +75,14 @@ clip_one() {
   local out_file="${OUTPUT_DIR}/${clip_id}.mp4"
 
   echo "  extracting clip: $clip_id (start=${start_sec}s, dur=${duration_sec}s)"
+  # Scale to fit inside VIDEO_MAX_HEIGHT on whichever dimension is
+  # smaller. Width=-2 forces even number divisible by 2 (libx264 yuv420p
+  # requires it). Keeps aspect ratio; clips that are already smaller
+  # pass through untouched.
   ffmpeg -hide_banner -loglevel error -y \
     -ss "$start_sec" -i "$source_file" -t "$duration_sec" \
     -c:v libx264 -crf "$VIDEO_CRF" -preset slow \
-    -vf "scale='min(${VIDEO_MAX_HEIGHT},ih*${VIDEO_MAX_HEIGHT}/iw)':'min(${VIDEO_MAX_HEIGHT},ih)':force_original_aspect_ratio=decrease" \
+    -vf "scale=-2:${VIDEO_MAX_HEIGHT}" \
     -c:a aac -b:a "$AUDIO_BITRATE" \
     -movflags +faststart \
     "$out_file"

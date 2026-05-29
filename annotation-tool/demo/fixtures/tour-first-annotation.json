@@ -35,7 +35,14 @@
     "locations": []
   },
   "videos": [
-    { "videoId": "frahm-2015-wide-piano" }
+    { "videoId": "frahm-2015-wide-piano" },
+    { "videoId": "frahm-2015-cu-keys" },
+    { "videoId": "frahm-2015-juno-cu" },
+    { "videoId": "frahm-2015-harmonium-wide" },
+    { "videoId": "frahm-2015-stage-talk" },
+    { "videoId": "frahm-2015-multi-instrument" },
+    { "videoId": "frahm-2018-piano-wide" },
+    { "videoId": "frahm-2018-roland-cu" }
   ],
   "annotations": [],
   "summaries": []
