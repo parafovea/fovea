@@ -52,17 +52,24 @@ fetch_source() {
   local source_url="$2"
   local cache_file="${CACHE_DIR}/${source_id}.mp4"
 
+  # Diagnostic messages must go to stderr — the caller does
+  # `source_file=$(fetch_source ...)` which captures stdout, so any
+  # human-readable status that lands on stdout becomes part of the
+  # returned path and makes ffmpeg open a multi-line filename. Only
+  # the final cache_file path is allowed on stdout.
   if [[ -f "$cache_file" ]]; then
-    echo "  source cached: $cache_file"
+    echo "  source cached: $cache_file" >&2
   else
-    echo "  fetching source: $source_url"
+    echo "  fetching source: $source_url" >&2
     # 720p ceiling keeps the source manageable; ffmpeg downscales as
-    # needed during the clip extraction below.
+    # needed during the clip extraction below. yt-dlp's progress bar
+    # also goes to stderr by default but we route stdout explicitly
+    # just in case any future yt-dlp version starts emitting status.
     yt-dlp \
       -f "bv*[height<=${VIDEO_MAX_HEIGHT}]+ba/b[height<=${VIDEO_MAX_HEIGHT}]" \
       --merge-output-format mp4 \
       -o "$cache_file" \
-      "$source_url"
+      "$source_url" >&2
   fi
   echo "$cache_file"
 }
@@ -79,13 +86,19 @@ clip_one() {
   # smaller. Width=-2 forces even number divisible by 2 (libx264 yuv420p
   # requires it). Keeps aspect ratio; clips that are already smaller
   # pass through untouched.
+  # Critical: ffmpeg's stdin MUST be redirected (</dev/null) because
+  # this function runs inside a `while read clip_json; done < <(jq ...)`
+  # loop and ffmpeg would otherwise consume the next clip's JSON line
+  # from the loop's stdin pipe, treating it as keyboard input ("Enter
+  # command: ..."), then jq errors when the truncated stream loops
+  # back into a partial JSON object on the next read.
   ffmpeg -hide_banner -loglevel error -y \
     -ss "$start_sec" -i "$source_file" -t "$duration_sec" \
     -c:v libx264 -crf "$VIDEO_CRF" -preset slow \
     -vf "scale=-2:${VIDEO_MAX_HEIGHT}" \
     -c:a aac -b:a "$AUDIO_BITRATE" \
     -movflags +faststart \
-    "$out_file"
+    "$out_file" </dev/null
 
   local size
   size=$(stat -f%z "$out_file" 2>/dev/null || stat -c%s "$out_file")

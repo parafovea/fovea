@@ -1,6 +1,7 @@
 /**
- * Resolve a `data-tour-id` to a single DOM element, retrying on a fixed
- * cadence until it appears or the 3 s ceiling fires.
+ * Resolve a `data-tour-id` to a single DOM element. Uses MutationObserver
+ * for instant detection when the anchor mounts, with a hard 3 s ceiling so
+ * the UI never hangs.
  *
  * The cardinal failure mode at a CVPR booth is a tour that *hangs* —
  * attendees walk away, telemetry shows the abandon as the last step
@@ -16,17 +17,52 @@ export async function waitForAnchor(
   signal?: AbortSignal,
 ): Promise<HTMLElement | null> {
   const selector = `[data-tour-id="${cssEscape(anchor)}"]`
-  const start = performance.now()
-  const ceilingMs = 3000
-  const pollMs = 50
 
-  for (;;) {
-    if (signal?.aborted) return null
-    const el = document.querySelector(selector)
-    if (el instanceof HTMLElement) return el
-    if (performance.now() - start >= ceilingMs) return null
-    await new Promise((r) => setTimeout(r, pollMs))
-  }
+  // Fast path — already mounted.
+  const existing = document.querySelector(selector)
+  if (existing instanceof HTMLElement) return existing
+  if (signal?.aborted) return null
+
+  // Slow path — observe the document subtree until the anchor appears or
+  // the ceiling fires. MutationObserver wakes us instantly when the
+  // element mounts; we then take the document.querySelector measurement
+  // (cheap) and resolve.
+  return new Promise<HTMLElement | null>((resolve) => {
+    const ceilingMs = 3000
+    let settled = false
+
+    function finish(result: HTMLElement | null) {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+
+    function check() {
+      const el = document.querySelector(selector)
+      if (el instanceof HTMLElement) finish(el)
+    }
+
+    const mo = new MutationObserver(check)
+    mo.observe(document.body, { childList: true, subtree: true })
+
+    const timer = window.setTimeout(() => finish(null), ceilingMs)
+
+    function onAbort() {
+      finish(null)
+    }
+    signal?.addEventListener('abort', onAbort)
+
+    function cleanup() {
+      mo.disconnect()
+      window.clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+
+    // Re-check once in case the element mounted between the fast-path
+    // check and the observer hookup (race window of ~1 microtask).
+    check()
+  })
 }
 
 /**
