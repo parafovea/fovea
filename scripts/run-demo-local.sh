@@ -141,11 +141,11 @@ start_backend() {
 }
 
 start_frontend() {
-  echo "==> starting frontend (vite) on :5173"
+  echo "==> starting frontend (vite) on :3000"
   (cd "$FRONTEND_DIR" && nohup pnpm dev >"$PID_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid")
   for _ in $(seq 1 30); do
-    if curl -sf http://localhost:5173 >/dev/null 2>&1; then
+    if curl -sf http://localhost:3000 >/dev/null 2>&1; then
       echo "  frontend ready"
       return
     fi
@@ -156,7 +156,7 @@ start_frontend() {
 }
 
 open_browser() {
-  local url="http://localhost:5173/"
+  local url="http://localhost:3000/"
   echo
   echo "==> demo is up at $url"
   echo "    tour menu, fixture seeder, and 10 tour scripts are live."

@@ -76,7 +76,7 @@ The CVPR 2026 demo (10 guided tours, persona-scoped fixtures, real CC-licensed f
 ./scripts/run-demo-local.sh
 ```
 
-That brings up Postgres + Redis + model-service (CPU build), runs migrations, fetches the demo clip set via yt-dlp + ffmpeg, exports all the demo env flags, boots backend + frontend dev servers with `FOVEA_DEMO_MODE=true` / `VITE_FOVEA_DEMO_MODE=true`, and opens `http://localhost:5173/` on the demo landing page.
+That brings up Postgres + Redis + model-service (CPU build), runs migrations, fetches the demo clip set via yt-dlp + ffmpeg, exports all the demo env flags, boots backend + frontend dev servers with `FOVEA_DEMO_MODE=true` / `VITE_FOVEA_DEMO_MODE=true`, and opens `http://localhost:3000/` on the demo landing page.
 
 First-time build is ~15 minutes (model-service downloads CV + audio weights); subsequent runs reuse cached images and the script idempotently picks up. Tear down with `./scripts/run-demo-local.sh --stop` (keeps DB) or `--reset` (drops DB volume).
 

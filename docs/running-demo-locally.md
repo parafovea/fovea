@@ -2,7 +2,7 @@
 
 This is the developer-side walkthrough for trying every demo tour on
 your laptop. It mirrors what the booth deployment does, just with dev
-servers instead of a production build and `localhost:5173` instead of
+servers instead of a production build and `localhost:3000` instead of
 `demo.fovea.video`.
 
 ## TL;DR
@@ -13,7 +13,7 @@ servers instead of a production build and `localhost:5173` instead of
 
 First run takes ~15 minutes (model-service downloads CV + audio model
 weights and builds the image). Subsequent runs are seconds. The script
-opens `http://localhost:5173/` on the demo landing page when ready.
+opens `http://localhost:3000/` on the demo landing page when ready.
 
 ```bash
 ./scripts/run-demo-local.sh --no-fetch  # skip the yt-dlp / ffmpeg clip fetch
@@ -62,7 +62,7 @@ That script:
 5. **Fetches the KEXP clip set** by calling `annotation-tool/demo/scripts/fetch-demo-clips.sh`. First run takes ~3–5 min; cached after.
 6. **Boots the backend** (`server/`) with the demo env flags and `MODEL_SERVICE_URL=http://localhost:8000`.
 7. **Boots the frontend** (`annotation-tool/`) with `VITE_FOVEA_DEMO_MODE=true`.
-8. **Opens** `http://localhost:5173/` in your default browser.
+8. **Opens** `http://localhost:3000/` in your default browser.
 
 You should land on the **demo tile grid** with ten tours, an attribution banner above, and a footer link to `/docs/demo-attribution`.
 
@@ -73,7 +73,7 @@ You should land on the **demo tile grid** with ten tours, an attribution banner 
 | Postgres | `localhost:5432` | data lives in the docker volume; survives restarts |
 | Redis | `localhost:6379` | for BullMQ queues |
 | Backend | `localhost:3001` | `pnpm dev` in `server/`, watches via `tsx` |
-| Frontend | `localhost:5173` | `pnpm dev` in `annotation-tool/`, Vite HMR |
+| Frontend | `localhost:3000` | `pnpm dev` in `annotation-tool/`, Vite HMR |
 | Demo clips | `${STORAGE_PATH}` | the script points this at `annotation-tool/demo/clips/` so the same files the fetcher writes are what the video stream route serves |
 
 PIDs and logs live under `.demo-local/` at the repo root. `tail -f .demo-local/backend.log` is the most useful thing if a route doesn't behave.
