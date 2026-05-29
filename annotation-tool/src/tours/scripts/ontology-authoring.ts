@@ -15,7 +15,7 @@ export const ontologyAuthoringTour: TourScript = {
     'Author entity types, event types, roles, and relations — the four layers a Fovea persona uses to structure annotation.',
   durationMinutes: 3,
   tags: ['ontology', 'types', 'persona'],
-  fixtureBundle: 'tour-ontology-authoring',
+  fixtureBundle: 'ontology-authoring',
   recap:
     'Same video, different persona = different annotation vocabulary. Try Tour 3 to seed an ontology from Wikidata.',
   followUpTourId: 'wikidata-augmentation',

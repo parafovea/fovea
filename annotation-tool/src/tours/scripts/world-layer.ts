@@ -17,7 +17,7 @@ export const worldLayerTour: TourScript = {
     'Beyond types, Fovea tracks specific instances — this concert, this venue, this date — and lets annotations point at them.',
   durationMinutes: 3,
   tags: ['world', 'entities', 'locations', 'times', 'collections'],
-  fixtureBundle: 'tour-world-layer',
+  fixtureBundle: 'world-layer',
   recap:
     "The world layer is what makes annotations queryable: 'show me all events at this venue between these dates'.",
   followUpTourId: 'model-in-the-loop',

@@ -17,7 +17,7 @@ export const collaborationTour: TourScript = {
     'Projects bundle videos, personas, and members. Groups are reusable membership sets. See annotations your collaborators made on the same clip.',
   durationMinutes: 3,
   tags: ['projects', 'groups', 'sharing', 'collaboration'],
-  fixtureBundle: 'tour-collaboration',
+  fixtureBundle: 'collaboration',
   recap: 'Fovea scales from a solo annotator to a team without changing the data model.',
   followUpTourId: 'admin',
   steps: [

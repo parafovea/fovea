@@ -16,7 +16,7 @@ export const eventsRolesClaimsTour: TourScript = {
     'Box two people, declare an event between them, assign roles, watch Fovea derive a structured claim and graph it.',
   durationMinutes: 4,
   tags: ['events', 'roles', 'claims', 'graph'],
-  fixtureBundle: 'tour-events-roles-claims',
+  fixtureBundle: 'events-roles-claims',
   recap:
     'Fovea annotations are not labels on pixels — they are structured assertions about the world.',
   followUpTourId: 'world-layer',

@@ -19,7 +19,7 @@ export const firstAnnotationTour: TourScript = {
     'The on-ramp: pick a clip, pause anywhere, draw a box, assign a type. Annotations save as you go.',
   durationMinutes: 2,
   tags: ['annotation', 'video', 'getting-started'],
-  fixtureBundle: 'tour-first-annotation',
+  fixtureBundle: 'first-annotation',
   recap: 'You annotated a frame. The type list came from the active persona\'s ontology.',
   followUpTourId: 'ontology-authoring',
   steps: [

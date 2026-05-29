@@ -21,7 +21,7 @@ export const modelInTheLoopTour: TourScript = {
     "Models propose; humans dispose. Track a bbox across the clip, edit the trajectory, accept detection candidates.",
   durationMinutes: 4,
   tags: ['model-service', 'tracking', 'interpolation', 'detection'],
-  fixtureBundle: 'tour-model-in-the-loop',
+  fixtureBundle: 'model-in-the-loop',
   recap:
     'Every prediction is an editable annotation, not a black-box output.',
   followUpTourId: 'summaries-and-claims',

@@ -16,7 +16,7 @@ export const importExportTour: TourScript = {
     'Pull in COCO, CSV, or Fovea-native dumps; review what landed with conflict resolution; export filtered by persona, time range, or type.',
   durationMinutes: 2,
   tags: ['import', 'export', 'data-management'],
-  fixtureBundle: 'tour-import-export',
+  fixtureBundle: 'import-export',
   recap:
     'Annotations are portable. Export is filtered; import surfaces conflicts before applying.',
   // No followUpTourId — Tour 10 is the end of the catalog; the post-tour

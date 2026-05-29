@@ -169,6 +169,12 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // Load + validate the bundle before touching the database.
       let bundle: SeedBundle
       try {
+        // Convention: tourId is the bare tour id ("first-annotation"),
+        // matching the `id` field of the tour script. The fixture
+        // bundle on disk is named `tour-${id}.json`, matching the
+        // bundle's own `tourId` field. The caller is expected to send
+        // the bare id; mixing in filename stems is a layering error
+        // we want to surface, not paper over.
         const path = join(fixturesDir(), `tour-${tourId}.json`)
         const raw = await readFile(path, 'utf-8')
         const parsed = JSON.parse(raw) as unknown

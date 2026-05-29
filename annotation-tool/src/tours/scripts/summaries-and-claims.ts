@@ -16,7 +16,7 @@ export const summariesAndClaimsTour: TourScript = {
     "Generate a structured summary, browse the transcript, extract claims anchored to their source span — annotation is structured language tied to structured pixels.",
   durationMinutes: 4,
   tags: ['summaries', 'transcripts', 'claims', 'extraction'],
-  fixtureBundle: 'tour-summaries-and-claims',
+  fixtureBundle: 'summaries-and-claims',
   recap: 'Annotation is structured language tied to structured pixels.',
   followUpTourId: 'collaboration',
   steps: [

@@ -15,7 +15,7 @@ export const wikidataAugmentationTour: TourScript = {
     'Search Wikidata live, import an entity type with QID grounding, expand via related concepts in seconds.',
   durationMinutes: 2,
   tags: ['ontology', 'wikidata', 'augmentation'],
-  fixtureBundle: 'tour-wikidata-augmentation',
+  fixtureBundle: 'wikidata-augmentation',
   recap:
     'Wikidata grounding gives every type a global identifier — annotations are linkable, not just labels.',
   followUpTourId: 'events-roles-claims',
