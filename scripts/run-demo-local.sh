@@ -35,10 +35,13 @@ export STORAGE_PATH="$CLIPS_DIR"
 # Frontend Vite env — read at build time so the demo router actually mounts.
 export VITE_FOVEA_DEMO_MODE=true
 # Model-service: CPU build by default so the demo runs without CUDA.
-# The "full" mode loads every task (detection, tracking, audio) rather
-# than the minimal subset; takes longer to build first time but every
-# Tour 6 / Tour 7 anchor will exercise a real model behind it.
-export MODEL_BUILD_MODE="${MODEL_BUILD_MODE:-full}"
+# `minimal` mode ships detection + tracking + audio (everything Tour 6
+# and Tour 7 actually exercise) without pulling in vLLM, which is
+# GPU-only and won't compile on a CPU image — `full` mode tries to and
+# fails with "RuntimeError: Unknown runtime environment". Local-LLM
+# claim extraction (Tour 7's downstream piece) falls back to the
+# Anthropic / OpenAI / Google API key paths when configured via .env.
+export MODEL_BUILD_MODE="${MODEL_BUILD_MODE:-minimal}"
 export DEVICE="${DEVICE:-cpu}"
 export PRELOAD_MODELS="${PRELOAD_MODELS:-true}"
 export MODEL_SERVICE_URL="${MODEL_SERVICE_URL:-http://localhost:8000}"
