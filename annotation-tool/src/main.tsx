@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/sonner'
 import App from './App'
 import { DemoShell } from './demo/DemoShell'
 import { isDemoModeEnabled } from './demo/config'
+import { TourProvider } from './tours'
 import './index.css'
 
 // Initialize command registry before React renders (must be before component mount effects)
@@ -56,14 +57,21 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider>
             {/*
-              Demo deployments render <DemoShell /> instead of <App />.
-              The shell wraps the demo landing + recap routes around the
-              normal app so a visitor's path is landing → tour → workspace
-              under one shared TourProvider with fixture seeding. Stock
-              builds tree-shake the shell out because isDemoModeEnabled
-              reads the build-time VITE_FOVEA_DEMO_MODE.
+              Demo deployments render <DemoShell />, which provides its
+              own TourProvider with the seed-on-launch hook wrapped
+              around App. Stock builds mount TourProvider here so the
+              tour engine is available to <App /> directly (anchored
+              mode against the user's real workspace). Either way the
+              TourProvider is mounted EXACTLY ONCE — nesting it would
+              shadow the outer state and the runner would never paint.
             */}
-            {isDemoModeEnabled() ? <DemoShell /> : <App />}
+            {isDemoModeEnabled() ? (
+              <DemoShell />
+            ) : (
+              <TourProvider>
+                <App />
+              </TourProvider>
+            )}
             <Toaster position="bottom-right" />
           </TooltipProvider>
           {/*

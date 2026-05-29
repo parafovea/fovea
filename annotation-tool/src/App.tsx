@@ -23,7 +23,6 @@ import { usePersonas } from './store/queries'
 import { seedTestData, isTestDataEnabled } from './utils/seedTestData'
 import { useSession } from './hooks/auth/useSession'
 import { CommandPalette } from '@components/shared/CommandPalette'
-import { TourProvider } from '@/tours'
 import { commandRegistry } from './lib/commands/command-registry'
 import { AbilityContext } from './lib/ability'
 import { useAbilityStore } from './store/zustand/abilityStore'
@@ -136,13 +135,15 @@ function App() {
     <AbilityContext.Provider value={ability}>
       <ErrorBoundary context={{ component: 'App' }}>
         {/*
-          TourProvider mounts the guided-tour engine for every deployment.
-          The menu trigger is hidden by default (no toolbar button is
-          rendered unless a deployment opts in via a setting); the demo
-          deployment renders its own landing-page menu instead. See
-          notes/CVPR_2026_DEMO_PLAN.md §6.3 and docs/tours.md.
+          TourProvider is mounted exactly ONCE per deployment, but not
+          here. Stock builds mount it in main.tsx around <App />; demo
+          builds mount it in DemoShell so the demo's seed-on-launch
+          hook can wrap the engine. Mounting it here too would nest
+          providers and the inner reset would clobber the outer
+          state — Start clicks would seed the workspace but the runner
+          would never appear because the inner provider's `active`
+          state stays null.
         */}
-        <TourProvider>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -235,7 +236,6 @@ function App() {
         </Routes>
         <CommandPalette />
         <SessionManager />
-        </TourProvider>
       </ErrorBoundary>
     </AbilityContext.Provider>
   )

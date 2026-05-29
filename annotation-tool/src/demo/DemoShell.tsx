@@ -3,8 +3,10 @@
  *
  * Stock builds never render this. main.tsx mounts <App /> directly.
  * Demo builds (VITE_FOVEA_DEMO_MODE=true) mount <DemoShell /> which
- * carves out the demo's own routes (/, /done/:id) before falling
- * through to <App /> for any workspace route under /workspace/:sessId.
+ * provides the demo-specific landing page + recap, and switches the
+ * `/` route over to the stock <App /> once a tour is active so the
+ * runner's spotlight can find the data-tour-id anchors that live
+ * inside the App's Layout component.
  *
  * Robust session handling for the booth case (plan §9 risk 4): the
  * onBeforeLaunch hook ALWAYS mints a fresh anonymous session on every
@@ -20,16 +22,16 @@
  *     instead of relying on retry-on-403 logic that the booth
  *     presenter would have to debug under pressure.
  *
- * Seed failures are surfaced via the TourProvider's onTelemetry
- * abandoned event AND a window.alert so the booth presenter sees
- * a crash rather than a silent no-op. At CVPR a visible error +
- * tour-router fall-through is preferable to "nothing happens when I
+ * Seed failures are surfaced via a top-of-viewport red banner with
+ * the specific reason and the env vars the presenter should check.
+ * At CVPR a visible error is preferable to "nothing happens when I
  * click Start."
  */
 
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
-import { TourProvider } from '@/tours'
+import { TourProvider, useTour } from '@/tours'
+import App from '@/App'
 import { DemoLandingPage } from './pages/DemoLandingPage'
 import { PostTourPage } from './pages/PostTourPage'
 import { AttributionPage } from './pages/AttributionPage'
@@ -91,19 +93,35 @@ export function DemoShell() {
         }).catch(() => undefined)
       }}
     >
-      {/*
-        Persistent CC-BY attribution banner — load-bearing for
-        CC-BY-NC-SA 3.0 compliance. Sits above every demo route so
-        anyone watching can see the source credit. Hidden under
-        ?presenter=1 because clean recordings carry the credit via
-        the per-clip ClipAttribution overlay instead.
-      */}
+      <DemoRouter error={error} dismissError={() => setError(null)} />
+    </TourProvider>
+  )
+}
+
+/**
+ * Inner component that consumes the TourProvider context. Splitting it
+ * out lets us read useTour().active and swap `/` between the demo
+ * landing page (idle) and the stock App (tour running). When a tour
+ * is active, App's own Routes take over so the visitor sees the real
+ * workspace UI and the runner's spotlight finds its anchors there.
+ */
+function DemoRouter({
+  error,
+  dismissError,
+}: {
+  error: string | null
+  dismissError: () => void
+}) {
+  const { active } = useTour()
+
+  return (
+    <>
       <AttributionBanner />
       {error ? (
         <div
           role="alert"
           className="fixed inset-x-0 top-12 mx-auto max-w-3xl z-[1100] bg-destructive text-destructive-foreground p-4 rounded shadow-lg cursor-pointer"
-          onClick={() => setError(null)}
+          onClick={dismissError}
         >
           <p className="font-semibold mb-1">Demo error</p>
           <p className="text-sm">{error}</p>
@@ -111,19 +129,20 @@ export function DemoShell() {
         </div>
       ) : null}
       <Routes>
-        <Route path="/" element={<DemoLandingPage />} />
+        <Route
+          path="/"
+          element={active ? <App /> : <DemoLandingPage />}
+        />
         <Route path="/done/:id" element={<PostTourPage />} />
         <Route path="/docs/demo-attribution" element={<AttributionPage />} />
         {/*
-          Anything else falls through to the stock app. A real demo
-          deployment would route those under /workspace/:sessId, but
-          for the initial scaffold we just let the user reach the
-          existing routes — the tour runner mounts globally and the
-          fixture is already seeded into the anonymous-session
-          workspace by the time we arrive.
+          Anything else also falls through to the stock app — the
+          visitor needs the real Routes from App.tsx (ontology
+          workspace, world workspace, admin panel) so the tour
+          runner's anchors resolve everywhere it goes.
         */}
-        <Route path="/workspace/*" element={null} />
+        <Route path="*" element={<App />} />
       </Routes>
-    </TourProvider>
+    </>
   )
 }
