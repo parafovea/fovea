@@ -32,6 +32,59 @@ import {
   type SeedTypeDecl,
 } from './seed-schema'
 
+interface ClipManifestEntry {
+  id: string
+  sourceId: string
+  durationSec: number
+  framing?: string
+}
+
+interface ClipManifestSource {
+  id: string
+  title: string
+  artist: string
+  performanceDate?: string
+  license: string
+  sourceUrl: string
+}
+
+interface ClipManifest {
+  sources: ClipManifestSource[]
+  clips: ClipManifestEntry[]
+}
+
+/**
+ * Where the clip manifest lives. Mirrors the FOVEA_DEMO_FIXTURES_DIR
+ * pattern — override via env if the manifest moves; default resolves
+ * from the server cwd to the monorepo location.
+ */
+function manifestPath(): string {
+  const overridden = process.env.FOVEA_DEMO_CLIPS_MANIFEST
+  if (overridden && overridden.length > 0) return overridden
+  return resolve(
+    process.cwd(),
+    '..',
+    'annotation-tool',
+    'demo',
+    'scripts',
+    'clips.json',
+  )
+}
+
+let cachedManifest: ClipManifest | null = null
+
+async function loadManifest(): Promise<ClipManifest | null> {
+  if (cachedManifest) return cachedManifest
+  try {
+    const raw = await readFile(manifestPath(), 'utf-8')
+    cachedManifest = JSON.parse(raw) as ClipManifest
+    return cachedManifest
+  } catch {
+    // Missing manifest is non-fatal: tours without videos still seed.
+    return null
+  }
+}
+
 interface SeedRequestBody {
   tourId: string
   sessionUserId: string
@@ -137,6 +190,11 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         return reply.code(500).send({ error: `failed to load bundle: ${(err as Error).message}` })
       }
 
+      // Load the clip manifest now so the transaction body has it in
+      // scope. Missing manifest is non-fatal: tours without videos
+      // still seed (we just upsert no Video rows).
+      const manifest = await loadManifest()
+
       const seeded = await prisma.$transaction(async (tx) => {
         // Wipe the user's personas; cascade removes ontologies / world /
         // annotations / claims / summaries / persona preferences.
@@ -178,9 +236,54 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // sections in the demo content stay empty until each loader
         // lands. Tours 1-3 assume an empty world, which is correct.
 
+        // Videos: upsert the rows referenced by bundle.videos[]. Videos
+        // are shared resources (not user-owned), so we upsert by
+        // filename so concurrent demo visitors using the same clips
+        // don't trip the unique constraint. Each clip's metadata comes
+        // from clips.json (loaded above as `manifest`) — the file path
+        // is just `${clipId}.mp4` relative to the server's STORAGE_PATH,
+        // matching where fetch-demo-clips.sh writes them.
+        let videosUpserted = 0
+        if (bundle.videos && bundle.videos.length > 0) {
+          for (const v of bundle.videos) {
+            const manifestEntry = manifest?.clips.find((c) => c.id === v.videoId)
+            const source = manifestEntry
+              ? manifest?.sources.find((s) => s.id === manifestEntry.sourceId)
+              : undefined
+            const filename = `${v.videoId}.mp4`
+            await tx.video.upsert({
+              where: { filename },
+              update: {
+                // Refresh duration if the manifest changed; everything
+                // else is immutable per-clip.
+                duration: manifestEntry?.durationSec ?? undefined,
+              },
+              create: {
+                id: v.videoId,
+                filename,
+                path: filename,
+                duration: manifestEntry?.durationSec ?? null,
+                metadata: source
+                  ? {
+                      attribution: {
+                        artist: source.artist,
+                        title: source.title,
+                        license: source.license,
+                        sourceUrl: source.sourceUrl,
+                        framing: manifestEntry?.framing ?? null,
+                      },
+                    }
+                  : undefined,
+              },
+            })
+            videosUpserted++
+          }
+        }
+
         const summary = [
           `${createdPersonas.length} persona(s)`,
           bundle.ontology ? 'ontology' : null,
+          videosUpserted > 0 ? `${videosUpserted} video(s)` : null,
         ].filter((s): s is string => !!s)
 
         return summary
