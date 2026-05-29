@@ -65,6 +65,12 @@ audio = [
 recommended = [
     "bitsandbytes>=0.42.0",
 ]
+# CPU-only extra — no-op marker that the Dockerfile passes for `pip install
+# -e ".[cpu]"` when DEVICE=cpu. Defining it explicitly stops pip's resolver
+# from interpreting an unknown extra as "include every extra" and pulling
+# vllm into a CPU build (which then fails because vllm is GPU-only).
+cpu = []
+gpu = []
 inference-engines = [
     "bitsandbytes>=0.42.0",
     "sglang>=0.4.1",
