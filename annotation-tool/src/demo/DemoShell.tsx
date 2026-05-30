@@ -34,10 +34,8 @@ import { TourProvider, useTour } from '@/tours'
 import App from '@/App'
 import { DemoLandingPage } from './pages/DemoLandingPage'
 import { PostTourPage } from './pages/PostTourPage'
-import { AttributionPage } from './pages/AttributionPage'
 import { createAnonymousSession, seedFixture } from './api'
 import { isPresenterMode } from './mode-flags'
-import { AttributionBanner } from './AttributionBanner'
 
 export function DemoShell() {
   const [error, setError] = useState<string | null>(null)
@@ -116,13 +114,6 @@ function DemoRouter({
 
   return (
     <>
-      {/*
-        Reserve viewport space for the fixed bottom AttributionBanner
-        (~28 px tall including the border). Without this, the
-        workspace's own bottom chrome — timeline scrubber, save
-        status — sits underneath the banner and is unclickable.
-      */}
-      <div className="pb-8">
       {error ? (
         <div
           role="alert"
@@ -140,7 +131,6 @@ function DemoRouter({
           element={active ? <App /> : <DemoLandingPage />}
         />
         <Route path="/done/:id" element={<PostTourPage />} />
-        <Route path="/docs/demo-attribution" element={<AttributionPage />} />
         {/*
           Anything else also falls through to the stock app — the
           visitor needs the real Routes from App.tsx (ontology
@@ -149,8 +139,6 @@ function DemoRouter({
         */}
         <Route path="*" element={<App />} />
       </Routes>
-      </div>
-      <AttributionBanner />
     </>
   )
 }
