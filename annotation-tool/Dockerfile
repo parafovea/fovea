@@ -18,6 +18,10 @@ ARG VITE_MODEL_SERVICE_URL
 ARG VITE_DATA_URL
 ARG VITE_WIKIDATA_URL
 ARG VITE_WIKIDATA_MODE
+# Set to "1" only in the E2E build target so the bundle exposes the
+# test-only window.__foveaTour handle. Production builds leave this
+# unset; the gate is build-time so the handle is dead-code-eliminated.
+ARG VITE_E2E
 
 # Export as environment variables for Vite build
 ENV VITE_API_URL=$VITE_API_URL
@@ -25,6 +29,7 @@ ENV VITE_MODEL_SERVICE_URL=$VITE_MODEL_SERVICE_URL
 ENV VITE_DATA_URL=$VITE_DATA_URL
 ENV VITE_WIKIDATA_URL=$VITE_WIKIDATA_URL
 ENV VITE_WIKIDATA_MODE=$VITE_WIKIDATA_MODE
+ENV VITE_E2E=$VITE_E2E
 
 # Copy workspace metadata + every package.json so pnpm can install from
 # the single root lockfile.
