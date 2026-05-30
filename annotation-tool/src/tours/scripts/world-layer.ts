@@ -7,64 +7,66 @@
  * times and entities into collections, and linking annotations to
  * world instances.
  *
- * Running example: a contested-ball incident at LoanDepot Park in
- * Miami (one of the videos in the microvent demo set). The visitor
- * creates the specific stadium as a Location, the September 2025
- * game as a Time + Event, and groups related games into a Collection.
+ * Running example via TourContentBundle. Default: microvent's
+ * LoanDepot Park instance + Miami coordinates + September 2025 home
+ * games group + the involved fans group. Admins for other domains
+ * supply their own venue / time range / grouping label.
  */
 
 import type { TourScript } from '../engine/types'
+import type { TourWorldLayerContent } from '../content/types'
 
-export const worldLayerTour: TourScript = {
-  id: 'world-layer',
-  title: 'The world layer: instances, places, times',
-  description:
-    'Beyond types, Fovea tracks specific instances — this game, this venue, this date — and lets annotations point at them.',
-  durationMinutes: 3,
-  tags: ['world', 'entities', 'locations', 'times', 'collections'],
-  fixtureBundle: 'world-layer',
-  recap:
-    "The world layer is what makes annotations queryable: 'show me all incidents at this venue between these dates'.",
-  followUpTourId: 'model-in-the-loop',
-  steps: [
-    {
-      anchor: 'world-panel-tabs',
-      narration:
-        'Beyond types, Fovea tracks specific instances: this game, this venue, this date.',
-    },
-    {
-      anchor: 'entity-editor',
-      narration:
-        "Create entity 'LoanDepot Park' — an instance of type 'Stadium'.",
-      expectAction: 'click',
-    },
-    {
-      anchor: 'location-map-picker',
-      narration: 'Locations are coordinates with semantics. Drop a pin on the map.',
-      expectAction: 'click',
-      requiresFixture: false,
-    },
-    {
-      anchor: 'time-editor',
-      narration: 'Times can be points, intervals, or fuzzy ranges.',
-      expectAction: 'type',
-    },
-    {
-      anchor: 'time-collection-builder',
-      narration: "Group times: 'all home games in September 2025'.",
-      expectAction: 'click',
-      requiresFixture: false,
-    },
-    {
-      anchor: 'collection-builder',
-      narration: "Entity collections work the same way: 'the involved fans'.",
-      expectAction: 'click',
-    },
-    {
-      anchor: 'annotation-world-reference',
-      narration: 'Annotations link to these world instances, not just types.',
-      expectAction: 'click',
-      requiresFixture: false,
-    },
-  ],
+export function buildWorldLayerTour(c: TourWorldLayerContent): TourScript {
+  return {
+    id: 'world-layer',
+    title: 'The world layer: instances, places, times',
+    description:
+      'Beyond types, Fovea tracks specific instances — this game, this venue, this date — and lets annotations point at them.',
+    durationMinutes: 3,
+    tags: ['world', 'entities', 'locations', 'times', 'collections'],
+    fixtureBundle: 'world-layer',
+    recap:
+      "The world layer is what makes annotations queryable: 'show me all incidents at this venue between these dates'.",
+    followUpTourId: 'model-in-the-loop',
+    steps: [
+      {
+        anchor: 'world-panel-tabs',
+        narration:
+          'Beyond types, Fovea tracks specific instances: this game, this venue, this date.',
+      },
+      {
+        anchor: 'entity-editor',
+        narration: `Create entity '${c.entityName}' — an instance of type '${c.entityType.name}'.`,
+        expectAction: 'click',
+      },
+      {
+        anchor: 'location-map-picker',
+        narration: `Locations are coordinates with semantics. Drop a pin at ${c.locationName}.`,
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'time-editor',
+        narration: 'Times can be points, intervals, or fuzzy ranges.',
+        expectAction: 'type',
+      },
+      {
+        anchor: 'time-collection-builder',
+        narration: `Group times: '${c.timeCollectionName}'.`,
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'collection-builder',
+        narration: `Entity collections work the same way: '${c.entityCollectionName}'.`,
+        expectAction: 'click',
+      },
+      {
+        anchor: 'annotation-world-reference',
+        narration: 'Annotations link to these world instances, not just types.',
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+    ],
+  }
 }

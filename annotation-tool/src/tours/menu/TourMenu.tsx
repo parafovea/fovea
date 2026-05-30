@@ -14,7 +14,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@compo
 import { Button } from '@components/ui/button'
 import { Badge } from '@components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@components/ui/dialog'
-import { builtInTours } from '../scripts'
+import { defaultBuiltInTours } from '../scripts'
 import type { TourScript } from '../engine/types'
 
 interface TourMenuProps {
@@ -25,7 +25,7 @@ interface TourMenuProps {
 }
 
 export function TourMenu({ open, onOpenChange, tours, onLaunch }: TourMenuProps) {
-  const list = tours ?? builtInTours
+  const list = tours ?? defaultBuiltInTours
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">

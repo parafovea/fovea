@@ -31,7 +31,9 @@ import { Play, X } from 'lucide-react'
 import { TourMenu } from './TourMenu'
 import { TourRunner, type TourTelemetryEvent } from '../engine'
 import type { TourScript } from '../engine/types'
-import { findTour } from '../scripts'
+import { getBuiltInTours } from '../scripts'
+import { microventContent } from '../content/microvent'
+import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
 
 interface TourProviderProps {
@@ -44,6 +46,17 @@ interface TourProviderProps {
   onBeforeLaunch?: (tour: TourScript) => void | Promise<void>
   /** Telemetry sink. No-op in stock builds; demo build wires it to /api/telemetry. */
   onTelemetry?: (e: TourTelemetryEvent) => void
+  /**
+   * Per-deployment tour content. Default: the microvent news-incident
+   * bundle that ships with Fovea (see ../content/microvent.ts). An
+   * admin tailoring tours for their own users supplies a bundle of
+   * the same shape — every tour's narration, suggested type names,
+   * venue / location / claim text update across the catalogue
+   * without touching the engine or the per-step anchors. The menu
+   * and the runner both rebuild from the bundle on every render so
+   * the bundle can be switched live.
+   */
+  contentBundle?: TourContentBundle
 }
 
 interface PausedTour {
@@ -121,7 +134,19 @@ export function TourProvider({
   children,
   onBeforeLaunch,
   onTelemetry,
+  contentBundle = microventContent,
 }: TourProviderProps) {
+  // Resolve the per-deployment tour catalogue from the bundle. Memoise
+  // on the bundle reference so swapping bundles rebuilds the list but
+  // identity-stable bundles don't churn.
+  const tours = useMemo(
+    () => getBuiltInTours(contentBundle),
+    [contentBundle],
+  )
+  const findTour = useCallback(
+    (id: string) => tours.find((t) => t.id === id),
+    [tours],
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [active, setActive] = useState<TourScript | null>(null)
   // Paused state — rehydrate from sessionStorage on mount so a hard
@@ -325,6 +350,7 @@ export function TourProvider({
       <TourMenu
         open={menuOpen}
         onOpenChange={setMenuOpen}
+        tours={tours}
         onLaunch={(tour) => {
           void launch(tour)
         }}
@@ -346,6 +372,7 @@ export function TourProvider({
             void resume()
           }}
           onDiscard={discardPaused}
+          lookupTour={findTour}
         />
       ) : null}
     </TourContext.Provider>
@@ -356,10 +383,11 @@ interface ResumePillProps {
   paused: PausedTour
   onResume: () => void
   onDiscard: () => void
+  lookupTour: (id: string) => TourScript | undefined
 }
 
-function ResumePill({ paused, onResume, onDiscard }: ResumePillProps) {
-  const tour = findTour(paused.tourId)
+function ResumePill({ paused, onResume, onDiscard, lookupTour }: ResumePillProps) {
+  const tour = lookupTour(paused.tourId)
   const title = tour?.title ?? paused.tourId
   return (
     <div
