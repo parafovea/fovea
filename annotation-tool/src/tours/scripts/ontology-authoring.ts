@@ -4,6 +4,11 @@
  * Depth tour for type authoring. Centers EntityTypeEditor and follows
  * the four-layer model (entity types, event types, roles, relations)
  * that distinguishes Fovea from a flat label vocabulary.
+ *
+ * Running example: news-event annotation (gunshot, wildfire, dust cloud
+ * — drawn from the microvent demo dataset). The narration's example
+ * names are chosen to fit the underlying clip set; the visitor's
+ * actual chosen names can be anything.
  */
 
 import type { TourScript } from '../engine/types'
@@ -27,7 +32,7 @@ export const ontologyAuthoringTour: TourScript = {
     },
     {
       anchor: 'entity-type-editor',
-      narration: "Entity types are categories of things. Add 'Musician'.",
+      narration: "Entity types are categories of things. Add 'gunshot'.",
       expectAction: 'click',
     },
     {
@@ -38,25 +43,25 @@ export const ontologyAuthoringTour: TourScript = {
     },
     {
       anchor: 'event-type-editor',
-      narration: "Event types are categories of happenings. Add 'Performance'.",
+      narration: "Event types are categories of happenings. Add 'wildfire'.",
       expectAction: 'click',
     },
     {
-      anchor: 'role-editor',
+      anchor: 'role-type-editor',
       narration:
-        "Roles tie entities into events. 'Performer' connects a Musician to a Performance.",
+        "Roles tie entities into events. 'witness' connects a citizen journalist to a wildfire.",
       expectAction: 'click',
     },
     {
       anchor: 'relation-type-editor',
       narration:
-        "Relations connect entities directly — e.g., 'member-of' between Musician and Band.",
+        "Relations connect entities directly — e.g., 'captured-by' between a wildfire and a citizen journalist.",
       expectAction: 'click',
     },
     {
       anchor: 'type-hierarchy-tree',
       narration:
-        "Types can inherit. 'Guitarist' is a kind of 'Musician', inheriting its roles.",
+        "Types can inherit. 'race car' is a kind of 'vehicle', inheriting its roles.",
       expectAction: 'click',
       requiresFixture: true,
     },

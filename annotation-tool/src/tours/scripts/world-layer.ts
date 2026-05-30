@@ -6,6 +6,11 @@
  * entity, dropping a map pin, building a time interval, grouping
  * times and entities into collections, and linking annotations to
  * world instances.
+ *
+ * Running example: a contested-ball incident at LoanDepot Park in
+ * Miami (one of the videos in the microvent demo set). The visitor
+ * creates the specific stadium as a Location, the September 2025
+ * game as a Time + Event, and groups related games into a Collection.
  */
 
 import type { TourScript } from '../engine/types'
@@ -14,22 +19,23 @@ export const worldLayerTour: TourScript = {
   id: 'world-layer',
   title: 'The world layer: instances, places, times',
   description:
-    'Beyond types, Fovea tracks specific instances — this concert, this venue, this date — and lets annotations point at them.',
+    'Beyond types, Fovea tracks specific instances — this game, this venue, this date — and lets annotations point at them.',
   durationMinutes: 3,
   tags: ['world', 'entities', 'locations', 'times', 'collections'],
   fixtureBundle: 'world-layer',
   recap:
-    "The world layer is what makes annotations queryable: 'show me all events at this venue between these dates'.",
+    "The world layer is what makes annotations queryable: 'show me all incidents at this venue between these dates'.",
   followUpTourId: 'model-in-the-loop',
   steps: [
     {
       anchor: 'world-panel-tabs',
       narration:
-        'Beyond types, Fovea tracks specific instances: this concert, this venue, this date.',
+        'Beyond types, Fovea tracks specific instances: this game, this venue, this date.',
     },
     {
       anchor: 'entity-editor',
-      narration: "Create entity 'Glastonbury 2025' — an instance of type 'Festival'.",
+      narration:
+        "Create entity 'LoanDepot Park' — an instance of type 'Stadium'.",
       expectAction: 'click',
     },
     {
@@ -45,13 +51,13 @@ export const worldLayerTour: TourScript = {
     },
     {
       anchor: 'time-collection-builder',
-      narration: "Group times: 'all Saturdays of June 2025'.",
+      narration: "Group times: 'all home games in September 2025'.",
       expectAction: 'click',
       requiresFixture: false,
     },
     {
       anchor: 'collection-builder',
-      narration: "Entity collections work the same way: 'the headliners'.",
+      narration: "Entity collections work the same way: 'the involved fans'.",
       expectAction: 'click',
     },
     {

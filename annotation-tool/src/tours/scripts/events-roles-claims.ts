@@ -5,6 +5,11 @@
  * separates Fovea from an object-detection toolkit. Walks a visitor
  * from two bounding boxes → an event annotation → role assignments →
  * a derived claim → the claim graph.
+ *
+ * Running example: a contested-ball incident at a baseball game (one
+ * of the videos in the microvent demo set). The visitor boxes two
+ * people, declares a "ball-grab" event between them, assigns
+ * "grabber" + "prior-holder" roles, and Fovea derives the claim.
  */
 
 import type { TourScript } from '../engine/types'
@@ -23,34 +28,34 @@ export const eventsRolesClaimsTour: TourScript = {
   steps: [
     {
       anchor: 'drawing-canvas',
-      narration: 'Box the performer.',
+      narration: 'Box the person grabbing the ball.',
       expectAction: 'draw',
     },
     {
       anchor: 'object-picker-popover',
-      narration: "Type: Person. Instance: 'Performer-1'.",
+      narration: "Type: Person. Instance: 'fan-1'.",
       expectAction: 'click',
     },
     {
       anchor: 'drawing-canvas',
-      narration: 'Now box the audience member.',
+      narration: 'Now box the person who had the ball first.',
       expectAction: 'draw',
     },
     {
       anchor: 'event-annotation-button',
-      narration: "Create an Event annotation: 'Performance'.",
+      narration: "Create an Event annotation: 'ball-grab'.",
       expectAction: 'click',
       requiresFixture: false,
     },
     {
       anchor: 'role-assignment-panel',
-      narration: 'Performer → bbox 1. Audience → bbox 2.',
+      narration: 'grabber → bbox 1. prior-holder → bbox 2.',
       expectAction: 'click',
       requiresFixture: false,
     },
     {
       anchor: 'claim-editor',
-      narration: "Fovea derives a claim: 'Performer-1 performs for Audience-1'.",
+      narration: "Fovea derives a claim: 'fan-1 grabbed the ball from fan-2'.",
     },
     {
       anchor: 'claim-relations-viewer',

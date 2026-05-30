@@ -51,12 +51,40 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
   test('walks all seven steps and persists a real annotation', async ({
     page,
     testUser,
-    microventSeed,
+    workerDb,
+    workerUser,
     workerSessionToken,
+    microventGrist,
   }) => {
-    // ---- setup ----
+    // ---- setup: build the minimal prerequisites Tour 1 needs (a
+    // persona with at least one entity type) by API, using the
+    // microvent "Tech-Curious Spectator" persona + its "Person" entity
+    // type as the content blueprint. The tour itself walks the visitor
+    // through BUILDING the actual annotation; we don't pre-load it.
     void testUser
-    expect(microventSeed.personaNames.length, 'microvent seed produced personas').toBeGreaterThan(0)
+    const personaGrist = microventGrist.personas.find(
+      (p) => p.name === 'Tech-Curious Spectator',
+    )
+    expect(personaGrist, 'microvent grist exposes Tech-Curious Spectator').toBeTruthy()
+    const persona = await workerDb.createPersona(
+      {
+        userId: workerUser.id,
+        name: personaGrist!.name,
+        role: personaGrist!.role,
+      },
+      workerSessionToken,
+    )
+    const ontologyGrist = microventGrist.ontologyByPersonaName[personaGrist!.name]
+    const entityTypeGrist = ontologyGrist?.entityTypes[0]
+    expect(
+      entityTypeGrist,
+      "Tech-Curious Spectator's ontology has at least one entity type to drive against",
+    ).toBeTruthy()
+    await workerDb.createEntityType(persona.id, {
+      name: entityTypeGrist!.name,
+      definition:
+        entityTypeGrist!.gloss.find((g) => g.type === 'text')?.content ?? '',
+    })
 
     // ---- pre-flight: select persona + type in the workspace so the
     // tour's bbox-draw step finds the prerequisites already met. The
