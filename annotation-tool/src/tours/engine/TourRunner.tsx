@@ -41,7 +41,7 @@ export type TourTelemetryEvent =
       kind: 'abandoned'
       tourId: string
       lastStepIndex: number
-      reason: 'manual_exit' | 'idle' | 'error'
+      reason: 'manual_exit' | 'idle' | 'error' | 'pause'
     }
 
 export interface TourRunnerProps {

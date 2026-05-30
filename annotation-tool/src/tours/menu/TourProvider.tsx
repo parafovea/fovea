@@ -133,6 +133,11 @@ export function TourProvider({
   })
   const telemetryBufferRef = useRef<TourTelemetryEvent[]>([])
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  // In-flight guard for pause() — two synchronous calls in the same
+  // microtask both see `active` non-null (setActive(null) hasn't
+  // committed yet) so without this they'd both fire telemetry and
+  // double-write the pause storage entry.
+  const pausingRef = useRef(false)
 
   const captureTelemetry = useCallback(
     (e: TourTelemetryEvent) => {
@@ -148,6 +153,10 @@ export function TourProvider({
         typeof document === 'undefined'
           ? null
           : (document.activeElement as HTMLElement | null)
+      // Reset the pause in-flight guard so a future pause on this new
+      // tour can fire (otherwise the guard would still be true from the
+      // prior tour's pause).
+      pausingRef.current = false
       // A new launch clears any prior pause — the visitor explicitly
       // started a different tour so the old one is no longer waiting.
       if (paused && paused.tourId !== tour.id) {
@@ -174,10 +183,14 @@ export function TourProvider({
 
   // Pause: capture the runner's current step + the visitor's location
   // and scroll. The runner unmounts but the cursor survives so
-  // resume() picks up exactly where they left off.
+  // resume() picks up exactly where they left off. We also emit an
+  // abandoned event with reason='pause' so analytics has a single
+  // emission point for "the visitor left this step" — without it the
+  // dwell on the paused step would be silently lost.
   const pause = useCallback(
     (stepIndex: number) => {
-      if (!active) return false
+      if (!active || pausingRef.current) return false
+      pausingRef.current = true
       const route =
         typeof window === 'undefined'
           ? '/'
@@ -186,17 +199,29 @@ export function TourProvider({
       const next: PausedTour = { tourId: active.id, stepIndex, route, scrollY }
       writePaused(next)
       writeCursor(active.id, stepIndex)
+      captureTelemetry({
+        kind: 'abandoned',
+        tourId: active.id,
+        lastStepIndex: stepIndex,
+        reason: 'pause',
+      })
       setPaused(next)
       setActive(null)
       return true
     },
-    [active],
+    [active, captureTelemetry],
   )
 
   // Resume: navigate back to the captured route via history.pushState +
   // popstate (so React Router updates without a full document load),
   // restore scroll, then remount the runner. The TourRunner reads the
   // cursor from sessionStorage on mount and lands on the paused step.
+  //
+  // We mount the runner via the normal launch path so onBeforeLaunch
+  // hooks (e.g. demo-mode fixture seeder) get a chance to run again
+  // on resume. If launch fails, KEEP the paused state — otherwise a
+  // failed seeder would strand the visitor with no way to retry. Only
+  // clear the pill once the runner is confirmed mounted.
   const resume = useCallback(async () => {
     const p = paused ?? readPaused()
     if (!p) return false
@@ -221,13 +246,15 @@ export function TourProvider({
       })
     }
     writeCursor(p.tourId, p.stepIndex)
+    const ok = await launch(tour)
+    if (!ok) {
+      // onBeforeLaunch threw. Keep paused state so the visitor can
+      // retry from the pill instead of losing their place.
+      return false
+    }
     clearPaused()
     setPaused(null)
-    // Mount the runner via the normal launch path so onBeforeLaunch
-    // hooks (e.g. demo-mode fixture seeder) get a chance to run again
-    // even on resume — important when the visitor reset state by
-    // wandering between pause and resume.
-    return launch(tour)
+    return true
   }, [launch, paused])
 
   const discardPaused = useCallback(() => {
