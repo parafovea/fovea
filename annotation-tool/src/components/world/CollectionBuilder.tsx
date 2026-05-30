@@ -402,8 +402,11 @@ function EventCollectionEditor({
   )
 }
 
-// Time Collection Editor (for patterns)
-function TimeCollectionEditorDialog({
+// Time Collection Editor (for patterns). Exported so other workspaces
+// (notably ObjectWorkspace's Collections tab) can mount the same
+// editor and surface the time-collection-builder tour anchor it
+// provides via its DialogContent.
+export function TimeCollectionEditorDialog({
   open,
   onClose,
   collection,

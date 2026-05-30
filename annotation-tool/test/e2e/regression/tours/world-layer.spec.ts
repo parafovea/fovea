@@ -162,32 +162,33 @@ test.describe('Tour 5: The world layer — end to end', () => {
     await dismissDialog(page, 'time-editor')
     await advanceTo(page, 5, 7)
 
-    // step 5: time-collection-builder (Collections tab → opens
-    // CollectionBuilder; the time-collection variant only resolves
-    // if the visitor switches the builder to time mode. The engine
-    // shows Skip if the anchor doesn't resolve — accept either.)
+    // step 5: time-collection-builder. Collections tab now has three
+    // explicit "+ X Collection" buttons; the "+ Time Pattern" one
+    // opens the TimeCollectionEditorDialog which carries the
+    // time-collection-builder anchor.
     await expect(card.locator('text=/^5\\s*\\/\\s*7$/')).toBeVisible({
       timeout: 5000,
     })
-    await openTabAndOpenEditor(page, /^Collections/)
-    // Either time-collection-builder or collection-builder may mount.
-    const collectionBuilder = page.locator(
-      '[data-tour-id="time-collection-builder"], [data-tour-id="collection-builder"]',
-    )
-    await collectionBuilder.first().waitFor({ timeout: 5000 }).catch(() => {})
+    await page.getByRole('tab', { name: /^Collections/ }).click()
+    await page
+      .getByRole('button', { name: /\+ Time Pattern/ })
+      .click()
+    await page.waitForSelector('[data-tour-id="time-collection-builder"]', {
+      timeout: 5000,
+    })
     await dismissDialog(page, 'time-collection-builder')
-    await dismissDialog(page, 'collection-builder')
     await advanceTo(page, 6, 7)
 
     // step 6: collection-builder (entity collection)
     await expect(card.locator('text=/^6\\s*\\/\\s*7$/')).toBeVisible({
       timeout: 5000,
     })
-    await page.getByRole('button', { name: 'add', exact: true }).click()
     await page
-      .locator('[data-tour-id="collection-builder"]')
-      .waitFor({ timeout: 5000 })
-      .catch(() => {})
+      .getByRole('button', { name: /\+ Entity Collection/ })
+      .click()
+    await page.waitForSelector('[data-tour-id="collection-builder"]', {
+      timeout: 5000,
+    })
     await dismissDialog(page, 'collection-builder')
     await advanceTo(page, 7, 7)
 
