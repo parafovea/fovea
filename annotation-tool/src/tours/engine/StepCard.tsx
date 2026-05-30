@@ -22,7 +22,7 @@
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@components/ui/card'
 import { Button } from '@components/ui/button'
-import { RotateCcw, X } from 'lucide-react'
+import { Pause, RotateCcw, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { TourScript } from './types'
 
@@ -42,6 +42,8 @@ interface StepCardProps {
   onSkipStep: () => void
   onSkipTour: () => void
   onRestart: () => void
+  /** Optional pause affordance — when set, renders a Pause button. */
+  onPause?: () => void
 }
 
 export function StepCard({
@@ -54,6 +56,7 @@ export function StepCard({
   onSkipStep,
   onSkipTour,
   onRestart,
+  onPause,
 }: StepCardProps) {
   const step = tour.steps[stepIndex]
   const total = tour.steps.length
@@ -133,6 +136,17 @@ export function StepCard({
             >
               <RotateCcw className="size-4" />
             </Button>
+            {onPause ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Pause tour"
+                data-fovea-tour-pause=""
+                onClick={onPause}
+              >
+                <Pause className="size-4" />
+              </Button>
+            ) : null}
             <Button
               size="icon"
               variant="ghost"

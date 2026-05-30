@@ -50,6 +50,20 @@ export interface TourRunnerProps {
   onTelemetry?: (e: TourTelemetryEvent) => void
   /** Default modal behavior for steps that don't set `modal` themselves. */
   defaultModal?: boolean
+  /**
+   * Element to restore focus to on tour exit. Captured by the caller
+   * (TourProvider.launch) BEFORE the runner mounts, so a re-render
+   * between the user's click and the runner's first render can't poison
+   * the target with whatever stole focus in the gap.
+   */
+  restoreFocusTo?: HTMLElement | null
+  /**
+   * Pause request. The provider captures (tour, stepIndex, route) so the
+   * visitor can wander off-tour and resume via a floating pill. Unlike
+   * onClose, pausing keeps the cursor alive in sessionStorage and the
+   * tour's place in the script.
+   */
+  onPause?: (stepIndex: number) => void
 }
 
 const STORAGE_KEY = 'fovea.tour.cursor'
@@ -59,6 +73,8 @@ export function TourRunner({
   onClose,
   onTelemetry,
   defaultModal = true,
+  restoreFocusTo,
+  onPause,
 }: TourRunnerProps) {
   const [stepIndex, setStepIndex] = useState(() => {
     const restored = readCursor(tour.id)
@@ -71,18 +87,36 @@ export function TourRunner({
   const [resolving, setResolving] = useState(true)
   const tourStartedAtRef = useRef(performance.now())
   const stepEnteredAtRef = useRef(performance.now())
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null)
+  // Prefer the caller's pre-captured target (TourProvider.launch grabs
+  // it synchronously at the click site). Fall back to the render-phase
+  // activeElement so direct callers that don't pass the prop still get
+  // a reasonable best-effort restore.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(
+    restoreFocusTo ??
+      (typeof document === 'undefined'
+        ? null
+        : (document.activeElement as HTMLElement | null)),
+  )
+  // Idempotency guard for the started-telemetry event — React 18
+  // StrictMode dev mode runs effects twice, so without this guard the
+  // event would emit twice per launch in dev (and the tests asserting
+  // "fires once" would fail). The guard is harmless in production.
+  const startedFiredRef = useRef(false)
 
   const step = tour.steps[stepIndex]
   const modal = step?.modal ?? defaultModal
   const totalSteps = tour.steps.length
 
-  // Capture previously-focused element once, restore on unmount. This is
-  // the "polite" exit pattern — when a visitor finishes or cancels the
-  // tour, their focus lands back where it was instead of being orphaned.
+  // Emit started once per tour-runner lifetime, guarded against
+  // StrictMode's intentional double-effect in dev. Focus restoration
+  // happens in the cleanup leg here — the *capture* of which element to
+  // restore to lives in the useRef initializer above, so children's
+  // autofocus effects don't clobber it.
   useEffect(() => {
-    previouslyFocusedRef.current = document.activeElement as HTMLElement | null
-    onTelemetry?.({ kind: 'started', tourId: tour.id })
+    if (!startedFiredRef.current) {
+      startedFiredRef.current = true
+      onTelemetry?.({ kind: 'started', tourId: tour.id })
+    }
     return () => {
       const prev = previouslyFocusedRef.current
       if (prev && document.contains(prev)) {
@@ -154,16 +188,18 @@ export function TourRunner({
       if (!step) return
       const next = stepIndex + delta
       if (next < 0) return
+      if (next >= totalSteps) {
+        // finish() emits step_viewed for the closing step itself; don't
+        // double-emit by also firing one here.
+        finish('completed')
+        return
+      }
       onTelemetry?.({
         kind: 'step_viewed',
         tourId: tour.id,
         stepIndex,
         dwellMs: performance.now() - stepEnteredAtRef.current,
       })
-      if (next >= totalSteps) {
-        finish('completed')
-        return
-      }
       setStepIndex(next)
     },
     [finish, onTelemetry, step, stepIndex, totalSteps, tour.id],
@@ -239,6 +275,7 @@ export function TourRunner({
         onSkipStep={() => move(+1)}
         onSkipTour={() => finish('abandoned')}
         onRestart={() => setStepIndex(0)}
+        onPause={onPause ? () => onPause(stepIndex) : undefined}
       />
     </>
   )

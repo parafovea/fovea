@@ -61,6 +61,45 @@ async function readTelemetry(page: Page): Promise<TelemetryEvent[]> {
   )) as TelemetryEvent[]
 }
 
+/**
+ * Inject a synthetic anchor on the page with the given `data-tour-id`,
+ * sized and positioned so the SpotlightOverlay has a non-zero rect to
+ * draw against. Returns a cleanup callback to remove the element.
+ *
+ * Used by tests that need the overlay to actually paint but don't want
+ * to depend on the rest of the app shell being present (e.g. when the
+ * test runs on `/login` because no testUser fixture is attached).
+ */
+async function injectAnchor(
+  page: Page,
+  tourId: string,
+  options: { width?: number; height?: number; top?: number; left?: number } = {},
+): Promise<() => Promise<void>> {
+  const id = `e2e-anchor-${tourId}-${Date.now()}`
+  await page.evaluate(
+    ({ tourId, id, opts }) => {
+      const el = document.createElement('div')
+      el.setAttribute('data-tour-id', tourId)
+      el.id = id
+      Object.assign(el.style, {
+        position: 'fixed',
+        top: `${opts.top ?? 200}px`,
+        left: `${opts.left ?? 200}px`,
+        width: `${opts.width ?? 240}px`,
+        height: `${opts.height ?? 120}px`,
+        background: 'transparent',
+        zIndex: '1',
+        pointerEvents: 'none',
+      })
+      document.body.appendChild(el)
+    },
+    { tourId, id, opts: options },
+  )
+  return async () => {
+    await page.evaluate((id) => document.getElementById(id)?.remove(), id)
+  }
+}
+
 async function launchTour(page: Page, tourId: string): Promise<boolean> {
   const ok = await page.evaluate(
     async (id) => Boolean(await window.__foveaTour?.launch(id)),
@@ -158,8 +197,13 @@ test.describe('Tour engine: test handle + catalog', () => {
       'abandon',
       'activeId',
       'clearTelemetry',
+      'closeMenu',
+      'discardPaused',
       'launch',
       'openMenu',
+      'pause',
+      'pausedId',
+      'resume',
       'telemetry',
     ])
     expect(shape!.telemetryIsArray).toBe(true)
@@ -288,8 +332,10 @@ test.describe('Tour engine: StepCard', () => {
     const describedBy = await card.getAttribute('aria-describedby')
     expect(labelledBy).toBeTruthy()
     expect(describedBy).toBeTruthy()
-    expect(await page.locator(`#${labelledBy}`).count()).toBe(1)
-    expect(await page.locator(`#${describedBy}`).count()).toBe(1)
+    // React 18's useId returns values like ":r0:" which are invalid in
+    // CSS `#` selectors; use the attribute-equals form instead.
+    expect(await page.locator(`[id="${labelledBy}"]`).count()).toBe(1)
+    expect(await page.locator(`[id="${describedBy}"]`).count()).toBe(1)
     await abandon(page)
   })
 
@@ -342,12 +388,15 @@ test.describe('Tour engine: SpotlightOverlay', () => {
   }) => {
     await page.goto('/')
     await waitForHandle(page)
+    const cleanup = await injectAnchor(page, 'app-shell')
     await launchTour(page, 'first-annotation') // step 0 anchor = app-shell
-    const svg = page.locator('[data-fovea-tour-spotlight]')
-    await expect(svg).toBeVisible()
+    // SVG carries aria-hidden="true", which makes Playwright's
+    // toBeVisible reject it — assert presence + count instead.
+    await expect(page.locator('[data-fovea-tour-spotlight]')).toHaveCount(1)
     // 4 backdrop + 1 outline + 4 corners = 9 rects
-    await expect(svg.locator('rect')).toHaveCount(9)
+    await expect(page.locator('[data-fovea-tour-spotlight] rect')).toHaveCount(9)
     await abandon(page)
+    await cleanup()
   })
 
   test('overlay disables pointer events on the SVG root so clicks pass through the spotlight hole', async ({
@@ -355,13 +404,16 @@ test.describe('Tour engine: SpotlightOverlay', () => {
   }) => {
     await page.goto('/')
     await waitForHandle(page)
+    const cleanup = await injectAnchor(page, 'app-shell')
     await launchTour(page, 'first-annotation')
     const svg = page.locator('[data-fovea-tour-spotlight]')
+    await expect(svg).toHaveCount(1)
     const pe = await svg.evaluate(
       (el) => window.getComputedStyle(el).pointerEvents,
     )
     expect(pe).toBe('none')
     await abandon(page)
+    await cleanup()
   })
 
   test('overlay tracks the anchor on window resize without unmounting', async ({
@@ -369,22 +421,44 @@ test.describe('Tour engine: SpotlightOverlay', () => {
   }) => {
     await page.goto('/')
     await waitForHandle(page)
+    // Use a synthetic anchor that scales to viewport width so we can
+    // assert the spotlight resizes with it.
+    await page.evaluate(() => {
+      const el = document.createElement('div')
+      el.setAttribute('data-tour-id', 'app-shell')
+      el.id = 'e2e-resize-anchor'
+      Object.assign(el.style, {
+        position: 'fixed',
+        top: '100px',
+        left: '0px',
+        right: '0px',
+        height: '120px',
+        background: 'transparent',
+        zIndex: '1',
+        pointerEvents: 'none',
+      })
+      document.body.appendChild(el)
+    })
     await launchTour(page, 'first-annotation')
     const outline = page
       .locator('[data-fovea-tour-spotlight] rect')
       .nth(4) // 4 backdrop rects come first, outline is rect #5
+    await expect(outline).toHaveCount(1)
     const before = await outline.boundingBox()
     await page.setViewportSize({ width: 900, height: 600 })
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(300)
     const after = await outline.boundingBox()
     expect(before).not.toBeNull()
     expect(after).not.toBeNull()
-    // Anchor `app-shell` covers the whole shell, so its width should
-    // change with the viewport width.
+    // Synthetic anchor stretches across the viewport, so its rendered
+    // width should change with the viewport width.
     expect(Math.abs((before?.width ?? 0) - (after?.width ?? 0))).toBeGreaterThan(
       50,
     )
     await abandon(page)
+    await page.evaluate(() =>
+      document.getElementById('e2e-resize-anchor')?.remove(),
+    )
   })
 
   test('overlay clears when the active step has no resolvable anchor', async ({
@@ -477,7 +551,13 @@ test.describe('Tour engine: navigation buttons', () => {
 // ===========================================================================
 
 test.describe('Tour engine: keyboard', () => {
-  test('ArrowRight advances and ArrowLeft retreats', async ({ page }) => {
+  test('ArrowRight advances and ArrowLeft retreats', async ({
+    page,
+    testUser,
+  }) => {
+    // See note on PageDown test below — testUser fixture authenticates
+    // so the login form's autoFocused input isn't the keydown target.
+    void testUser
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
@@ -488,7 +568,12 @@ test.describe('Tour engine: keyboard', () => {
     await abandon(page)
   })
 
-  test('PageDown / PageUp also navigate', async ({ page }) => {
+  test('PageDown / PageUp also navigate', async ({ page, testUser }) => {
+    // testUser fixture authenticates the page so we land on / (the
+    // video browser) instead of /login. Without it, the LoginPage's
+    // autoFocused username input would be the keydown event target and
+    // the editable-target guard correctly suppresses the navigation.
+    void testUser
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
@@ -740,7 +825,12 @@ test.describe('Tour engine: telemetry', () => {
 test.describe('Tour engine: focus management', () => {
   test('primary action button receives focus when a new step renders', async ({
     page,
+    testUser,
   }) => {
+    // testUser fixture authenticates the page so LoginPage's autoFocused
+    // username input doesn't compete with StepCard's primary-action
+    // focus call.
+    void testUser
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
@@ -754,7 +844,9 @@ test.describe('Tour engine: focus management', () => {
 
   test('focus is restored to the previously focused element on tour exit', async ({
     page,
+    testUser,
   }) => {
+    void testUser
     await page.goto('/')
     await waitForHandle(page)
     await page.evaluate(() => {
@@ -827,8 +919,16 @@ test.describe('Tour engine: route navigation', () => {
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
     expect((await stepCounter(page)).current).toBe(1)
-    await page.goto('/ontology')
-    await page.waitForLoadState('networkidle')
+    // Soft nav via history.pushState + popstate so React Router updates
+    // the route without unmounting the TourProvider tree. page.goto
+    // would trigger a full document navigation and unmount the runner —
+    // that's a separate contract (cursor in sessionStorage survives a
+    // reload) covered by the cursor-persistence tests above.
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/ontology')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await page.waitForTimeout(200)
     await expect(
       page.locator('[data-fovea-tour-step-card]'),
     ).toHaveCount(1)
@@ -872,5 +972,189 @@ test.describe('Tour engine: re-launch', () => {
     await launchTour(page, 'first-annotation')
     expect((await stepCounter(page)).current).toBe(1)
     await abandon(page)
+  })
+})
+
+// ===========================================================================
+// 14. Pause + resume (auto-navigates back to the paused step's route)
+// ===========================================================================
+
+test.describe('Tour engine: pause + resume', () => {
+  test('Pause button unmounts the runner and shows a resume pill', async ({
+    page,
+    testUser,
+  }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    await launchTour(page, 'first-annotation')
+    await page
+      .locator('[data-fovea-tour-step-card]')
+      .getByRole('button', { name: 'Pause tour' })
+      .click()
+    await expect(
+      page.locator('[data-fovea-tour-step-card]'),
+    ).toHaveCount(0)
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(1)
+    const pausedId = await page.evaluate(
+      () => window.__foveaTour?.pausedId() ?? null,
+    )
+    expect(pausedId).toBe('first-annotation')
+  })
+
+  test('paused state survives a hard reload', async ({ page, testUser }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    await launchTour(page, 'first-annotation')
+    await pressNext(page) // step 2
+    await page.evaluate(() => window.__foveaTour?.pause())
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(1)
+    await page.reload()
+    await waitForHandle(page)
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(1)
+    const pausedId = await page.evaluate(
+      () => window.__foveaTour?.pausedId() ?? null,
+    )
+    expect(pausedId).toBe('first-annotation')
+  })
+
+  test('Resume soft-navigates back to the paused route and re-mounts at the same step', async ({
+    page,
+    testUser,
+  }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    await launchTour(page, 'first-annotation')
+    // Advance to step 3 so we have a non-trivial cursor to assert on.
+    await pressNext(page)
+    await pressNext(page)
+    expect((await stepCounter(page)).current).toBe(3)
+    const routeAtPause = await page.evaluate(() => window.location.pathname)
+    await page.evaluate(() => window.__foveaTour?.pause())
+    await expect(
+      page.locator('[data-fovea-tour-step-card]'),
+    ).toHaveCount(0)
+    // Visitor wanders to a different route.
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/ontology')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await page.waitForTimeout(150)
+    expect(await page.evaluate(() => window.location.pathname)).toBe(
+      '/ontology',
+    )
+    // Click the Resume pill — the provider should soft-navigate back
+    // to /, restore step 3, and re-mount the runner.
+    await page
+      .locator('[data-fovea-tour-resume-pill]')
+      .getByRole('button', { name: /Resume/ })
+      .click()
+    await page.waitForSelector('[data-fovea-tour-step-card]', {
+      timeout: 5000,
+    })
+    expect(await page.evaluate(() => window.location.pathname)).toBe(
+      routeAtPause,
+    )
+    expect((await stepCounter(page)).current).toBe(3)
+    await abandon(page)
+  })
+
+  test('Resume restores scroll position', async ({ page, testUser }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    // Inject scrollable content so the document actually has a scroll
+    // range; the video-browser route can be short on a fresh worker
+    // user with no videos.
+    await page.evaluate(() => {
+      const filler = document.createElement('div')
+      filler.id = 'e2e-scroll-filler'
+      Object.assign(filler.style, { height: '4000px', width: '1px' })
+      document.body.appendChild(filler)
+    })
+    await launchTour(page, 'first-annotation')
+    await page.evaluate(() => window.scrollTo({ top: 1200, left: 0 }))
+    await page.waitForTimeout(50)
+    await page.evaluate(() => window.__foveaTour?.pause())
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0 }))
+    await page.waitForTimeout(50)
+    await page
+      .locator('[data-fovea-tour-resume-pill]')
+      .getByRole('button', { name: /Resume/ })
+      .click()
+    await page.waitForSelector('[data-fovea-tour-step-card]')
+    await page.waitForTimeout(200)
+    const scrollY = await page.evaluate(() => window.scrollY)
+    // Within 100px of 1200; rAF restoration may not land exactly.
+    expect(Math.abs(scrollY - 1200)).toBeLessThan(100)
+    await abandon(page)
+    await page.evaluate(() =>
+      document.getElementById('e2e-scroll-filler')?.remove(),
+    )
+  })
+
+  test('Discard button on the resume pill clears the paused state', async ({
+    page,
+    testUser,
+  }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    await launchTour(page, 'first-annotation')
+    await page.evaluate(() => window.__foveaTour?.pause())
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(1)
+    await page
+      .locator('[data-fovea-tour-resume-pill]')
+      .getByRole('button', { name: 'Discard paused tour' })
+      .click()
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(0)
+    const pausedId = await page.evaluate(
+      () => window.__foveaTour?.pausedId() ?? null,
+    )
+    expect(pausedId).toBeNull()
+  })
+
+  test('Launching a different tour while one is paused discards the pause', async ({
+    page,
+    testUser,
+  }) => {
+    void testUser
+    await page.goto('/')
+    await waitForHandle(page)
+    await launchTour(page, 'first-annotation')
+    await page.evaluate(() => window.__foveaTour?.pause())
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(1)
+    await launchTour(page, 'ontology-authoring')
+    // Pill should disappear because launching a different tour clears
+    // the prior pause.
+    await expect(
+      page.locator('[data-fovea-tour-resume-pill]'),
+    ).toHaveCount(0)
+    const pausedId = await page.evaluate(
+      () => window.__foveaTour?.pausedId() ?? null,
+    )
+    expect(pausedId).toBeNull()
+    await abandon(page)
+  })
+
+  test('Pause is a no-op when no tour is active', async ({ page }) => {
+    await page.goto('/')
+    await waitForHandle(page)
+    const result = await page.evaluate(() => window.__foveaTour?.pause())
+    expect(result).toBe(false)
   })
 })
