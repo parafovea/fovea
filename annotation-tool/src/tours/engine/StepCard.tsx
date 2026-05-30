@@ -97,6 +97,15 @@ export function StepCard({
         left: position.left,
         width: CARD_WIDTH,
         zIndex: 1001,
+        // Click-through wrapper: only the inner <Card> + buttons take
+        // pointer events. Without this, the card's bounding box absorbs
+        // clicks meant for whatever UI is visually behind it — at a
+        // CVPR booth, when the card's anchor-null fallback drops it on
+        // top of the persona/type select combobox the visitor needs to
+        // interact with for the highlighted step. Buttons inside the
+        // Card explicitly re-enable pointer-events so navigation still
+        // works.
+        pointerEvents: 'none',
       }}
     >
       <Card className="shadow-lg">
@@ -126,8 +135,16 @@ export function StepCard({
             </p>
           ) : null}
         </CardContent>
+        {/*
+          The wrapper div carries pointer-events: none so the visitor
+          can click controls visually behind the card. Each navigation
+          button explicitly opts back in to pointer events via
+          `pointer-events-auto` on its className — only the buttons
+          themselves catch clicks; the surrounding padding stays
+          click-through.
+        */}
         <CardFooter className="flex items-center justify-between gap-2 pt-0">
-          <div className="flex gap-1">
+          <div className="flex gap-1 pointer-events-auto">
             <Button
               size="icon"
               variant="ghost"
@@ -156,7 +173,7 @@ export function StepCard({
               <X className="size-4" />
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 pointer-events-auto">
             <Button
               size="sm"
               variant="outline"
