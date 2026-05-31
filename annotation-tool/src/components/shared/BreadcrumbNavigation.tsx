@@ -3,6 +3,7 @@
  * Displays hierarchical navigation based on the current route.
  */
 
+import { Fragment } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import {
@@ -176,31 +177,33 @@ export function BreadcrumbNavigation(): JSX.Element | null {
             const isLast = index === breadcrumbs.length - 1
 
             return (
-              <BreadcrumbItem key={index}>
+              <Fragment key={index}>
                 {index > 0 && <BreadcrumbSeparator />}
-                {isLast || !crumb.path ? (
-                  <BreadcrumbPage className={cn(
-                    'flex items-center gap-1',
-                    crumb.isActive && 'font-semibold text-primary'
-                  )}>
-                    {crumb.icon}
-                    {crumb.label}
-                  </BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink
-                    render={
-                      <button
-                        type="button"
-                        className="flex cursor-pointer items-center gap-1"
-                        onClick={() => navigate(crumb.path!)}
-                      />
-                    }
-                  >
-                    {crumb.icon}
-                    {crumb.label}
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
+                <BreadcrumbItem>
+                  {isLast || !crumb.path ? (
+                    <BreadcrumbPage className={cn(
+                      'flex items-center gap-1',
+                      crumb.isActive && 'font-semibold text-primary'
+                    )}>
+                      {crumb.icon}
+                      {crumb.label}
+                    </BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink
+                      render={
+                        <button
+                          type="button"
+                          className="flex cursor-pointer items-center gap-1"
+                          onClick={() => navigate(crumb.path!)}
+                        />
+                      }
+                    >
+                      {crumb.icon}
+                      {crumb.label}
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
             )
           })}
         </BreadcrumbList>

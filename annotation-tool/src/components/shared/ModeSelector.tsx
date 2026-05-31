@@ -25,17 +25,17 @@ export function ModeSelector({ mode, onChange, showCopy = true, disabled = false
       className="w-full"
       disabled={disabled}
     >
-      <ToggleGroupItem value="manual" className="flex-1 gap-2">
+      <ToggleGroupItem value="manual" className="flex-1 gap-2" aria-label="Manual Entry">
         <Pencil className="size-4" />
         <span className="text-sm">Manual Entry</span>
       </ToggleGroupItem>
       {showCopy && (
-        <ToggleGroupItem value="copy" className="flex-1 gap-2">
+        <ToggleGroupItem value="copy" className="flex-1 gap-2" aria-label="Copy from Existing">
           <Copy className="size-4" />
           <span className="text-sm">Copy from Existing</span>
         </ToggleGroupItem>
       )}
-      <ToggleGroupItem value="wikidata" className="flex-1 gap-2">
+      <ToggleGroupItem value="wikidata" className="flex-1 gap-2" aria-label="Import from Wikidata">
         <Globe className="size-4" />
         <span className="text-sm">Import from Wikidata</span>
       </ToggleGroupItem>

@@ -207,6 +207,7 @@ export default function BaseTypeEditor({
                       <Checkbox
                         checked={targetPersonaIds.includes(persona.id)}
                         onCheckedChange={() => handlePersonaToggle(persona.id)}
+                        aria-label={`Add to ${persona.name}`}
                       />
                       <span className="text-sm">{persona.name}</span>
                     </label>

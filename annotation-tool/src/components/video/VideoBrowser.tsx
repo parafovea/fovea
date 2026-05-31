@@ -732,8 +732,8 @@ function VideoCard({
           )}
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger>
-                <span>
+              <TooltipTrigger
+                render={
                   <Button
                     variant="ghost"
                     size="sm"
@@ -746,11 +746,11 @@ function VideoCard({
                       }
                     }}
                     disabled={!!activeJobId || !activePersonaId || modelsDisabled}
-                  >
-                    <Sparkles className="size-4 mr-1" />
-                    {hasSummary ? 'View' : 'Summarize'}
-                  </Button>
-                </span>
+                  />
+                }
+              >
+                <Sparkles className="size-4 mr-1" />
+                {hasSummary ? 'View' : 'Summarize'}
               </TooltipTrigger>
               {modelsDisabled && (
                 <TooltipContent>
