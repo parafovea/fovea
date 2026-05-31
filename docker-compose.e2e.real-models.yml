@@ -1,0 +1,60 @@
+# Docker Compose override for the real-model integration E2E tier.
+#
+# Layer this file on top of docker-compose.e2e.yml and engage the
+# `with-models` profile to swap the backend's MODEL_SERVICE_URL from
+# the mock to the real CPU-mode model-service container that already
+# ships in the base file. Use this for the integration-models
+# Playwright project, which verifies that the real model-service boots,
+# loads each task type, and returns model-shaped outputs end-to-end.
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.e2e.yml \
+#     -f docker-compose.e2e.real-models.yml \
+#     --profile with-models \
+#     up -d --build
+#
+# The mock-model-service container is still started by the base file
+# but the backend no longer points at it, so it costs nothing to leave
+# running. The real model-service container ships with BUILD_MODE=minimal
+# and DEVICE=cpu so it runs on a standard GitHub-hosted runner without
+# CUDA, at the cost of slower inference and 1-2 GB of memory.
+#
+# All other services (frontend, postgres, redis) stay on the base
+# config without modification.
+name: fovea-e2e
+
+services:
+  backend:
+    environment:
+      # Point at the real CPU-mode model-service rather than the mock.
+      # Every other env var is inherited from docker-compose.e2e.yml.
+      MODEL_SERVICE_URL: http://model-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      model-service:
+        condition: service_healthy
+
+  model-service:
+    environment:
+      # Use the CPU-targeted model selections in models-cpu.yaml rather
+      # than the GPU defaults in models.yaml. The base compose file
+      # builds with DEVICE=cpu but hardcodes MODEL_CONFIG_PATH at the
+      # GPU file, which would crash the container on first model load
+      # when the integration tier runs on a CPU-only runner. Pinning
+      # to models-cpu.yaml here keeps the change local to the real-
+      # model override so the GPU deployment path is unaffected.
+      MODEL_CONFIG_PATH: /config/models-cpu.yaml
+    # Wait longer at startup for the CPU-mode model load to complete
+    # before the backend's depends_on health gate releases. The base
+    # file allots a 20 s start_period; CPU-mode models (Qwen2.5-VL 3B
+    # GGUF, SmolVLM, Moondream) need 60 to 180 s for the first download
+    # and load depending on whether the HF cache is warm.
+    healthcheck:
+      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 30
