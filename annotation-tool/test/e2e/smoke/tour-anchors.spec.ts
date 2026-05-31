@@ -32,7 +32,11 @@ const TOUR_1: AnchorSpec[] = [
   { anchor: 'video-browser-card-first', route: 'home' },
   { anchor: 'video-player-scrubber', route: 'workspace' },
   { anchor: 'drawing-canvas', route: 'workspace' },
-  { anchor: 'timeline', route: 'workspace' },
+  // timeline is hidden by default behind a "Show Timeline" toggle.
+  // The runtime tour at step 6 still resolves it via the engine's
+  // 3 s wait once the visitor clicks Show Timeline, but the static
+  // smoke cannot simulate that interaction, so mark optional.
+  { anchor: 'timeline', route: 'workspace', optional: true },
   // save-indicator only renders when there's a recent save event.
   { anchor: 'save-indicator', route: 'workspace', optional: true },
   // object-picker-popover is dialog-mounted on user click; runtime-only.
@@ -99,7 +103,6 @@ test.describe('Tour anchors smoke', () => {
     testEntityType,
     testUser,
   }) => {
-    void testPersona
     void testEntityType
     void testUser
 
@@ -124,9 +127,15 @@ test.describe('Tour anchors smoke', () => {
     await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
     await checkRoute(ALL_STATIC_ANCHORS.filter((a) => a.route === 'workspace'))
 
-    // Ontology workspace.
+    // Ontology workspace. The TabsList anchor only mounts once a persona is
+    // selected; click the seeded persona's Open button to enter the editor.
     await page.goto('/ontology')
     await page.waitForLoadState('networkidle')
+    await page
+      .locator(`[data-persona-id="${testPersona.id}"]`)
+      .getByRole('button', { name: 'Open' })
+      .click()
+    await page.waitForSelector('[data-tour-id="ontology-workspace-tabs"]', { timeout: 5000 })
     await checkRoute(ALL_STATIC_ANCHORS.filter((a) => a.route === 'ontology'))
 
     // World / object workspace.
