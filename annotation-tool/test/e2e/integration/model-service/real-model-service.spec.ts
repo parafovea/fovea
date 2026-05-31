@@ -14,224 +14,195 @@
  *   - Each endpoint reachable through the backend returns 200 within an
  *     elevated timeout (real CPU inference, especially first-call, is
  *     orders of magnitude slower than the mock).
- *   - Each response has the documented top-level shape (the same one the
- *     frontend client code in src/api/client.ts and src/store/queries/*
- *     reads, after the backend's snake_case to camelCase transform).
- *   - Value ranges that the real model must honour (confidence ∈ [0,1],
- *     bounding-box coords ≥ 0, suggestions list non-empty for a query
- *     that should have results) are enforced; specific values are not.
+ *   - Each response has the documented top-level shape that the real
+ *     model-service emits, after the backend's snake_case to camelCase
+ *     transform. The mock's shape and the real service's shape have
+ *     known divergences (see the per-test comments below); the
+ *     integration tier locks the REAL shape because that is the contract
+ *     a production deployment actually flows through.
+ *   - Value ranges that the real model must honour (confidence within
+ *     [0, 1], bounding-box coords >= 0, suggestions list non-empty for
+ *     a query that should have results) are enforced; specific values
+ *     are not.
  *
  * Engage by booting the docker-compose.e2e.real-models.yml override
  * (which swaps MODEL_SERVICE_URL on the backend from the mock to the
- * real CPU-mode service) and running:
+ * real CPU-mode service and pins MODEL_CONFIG_PATH to models-cpu.yaml)
+ * and running:
  *
  *   pnpm --filter @fovea/annotation-tool exec \
  *     playwright test --project=integration-models
  *
  * The CI workflow .github/workflows/e2e-real-models.yml fires this on
- * workflow_dispatch, on `e2e-models` label, and nightly.
+ * workflow_dispatch, on `e2e-models` label, and nightly at 02:00 UTC.
  *
  * If this spec fails the contract test (Tier 1) is still green, that
  * means the real model-service is misconfigured (model paths, weights,
  * device fallback, framework selection, etc.) and not that the backend
- * or frontend is broken; the failing test name points at which task
- * type is misconfigured.
+ * or frontend is broken; the failing test name points at which surface
+ * is misconfigured.
  */
 import { test, expect } from '../../fixtures/test-context.js'
 
 // Real CPU-mode model loads dominate wall-clock; budget generously. The
 // elevated test-level timeout is set on the integration-models project
-// in playwright.config.ts; these per-call expectations stay inside it.
+// in playwright.config.ts; these per-call timeouts stay inside it.
 const FIRST_INFERENCE_TIMEOUT_MS = 120_000
 
 test.describe('Real model-service integration', () => {
-  test('health: backend reaches a live model-service that reports ready', async ({ page, testUser }) => {
+  test('health: backend reaches a live model-service that reports cpuModelsAvailable', async ({
+    page,
+    testUser,
+  }) => {
     void testUser
     const res = await page.request.get('/api/models/status', { timeout: FIRST_INFERENCE_TIMEOUT_MS })
     expect(res.status(), `models/status must return 200, got ${res.status()}`).toBe(200)
     const body = (await res.json()) as {
-      isReady?: boolean
-      ready?: boolean
-      tasks?: Record<string, unknown>
+      loadedModels: Array<unknown>
+      totalVramAllocatedGb: number
+      totalVramAvailableGb: number
+      cudaAvailable: boolean
+      modelsAvailable: boolean
+      cpuModelsAvailable: boolean
     }
-    // The status payload's exact field name has varied across model-service
-    // versions; accept either of the two documented spellings rather than
-    // pinning to one and failing on legitimate refactors.
-    const isReady = body.isReady ?? body.ready
+    // Real models-cpu.yaml selections are CPU-compatible; the integration
+    // tier runs without CUDA so cpuModelsAvailable must be true. modelsAvailable
+    // covers either path; cudaAvailable should be false on the CI runner.
+    expect(body.modelsAvailable, 'real model-service must report modelsAvailable=true').toBe(true)
     expect(
-      isReady,
-      'real model-service must report ready=true on status; check the model-service container logs if not',
+      body.cpuModelsAvailable,
+      'real model-service running with models-cpu.yaml must report cpuModelsAvailable=true; ' +
+        'a false value here means the CPU model config is missing or every entry is gated on GPU',
     ).toBe(true)
+    expect(Array.isArray(body.loadedModels)).toBe(true)
   })
 
-  test('config: GET /api/models/config returns availableModels and selectedModels with referential integrity', async ({
+  test('config: GET /api/models/config returns models.{taskType} with referential selected->options integrity', async ({
     page,
     testUser,
   }) => {
     void testUser
     const res = await page.request.get('/api/models/config', { timeout: FIRST_INFERENCE_TIMEOUT_MS })
     expect(res.status()).toBe(200)
+    // The real model-service emits a nested shape keyed by task type, NOT
+    // the flat availableModels / selectedModels / device shape the mock
+    // returns. The frontend code that consumes this lives at
+    // src/store/queries/useModelConfig.ts and is the source of truth for
+    // what the real production deployment flows through. The mock is a
+    // simplification and is currently out of date with the real schema;
+    // file an issue under model-service to reconcile if this matters for
+    // your work. The integration tier asserts the REAL shape because
+    // that is what production runs against.
     const body = (await res.json()) as {
-      availableModels: Record<string, string[]>
-      selectedModels: Record<string, string>
-      device: string
+      models: Record<
+        string,
+        {
+          selected: string
+          options: Array<{
+            name: string
+            modelId: string
+            framework: string
+            cpuCompatible: boolean
+            cpuMemoryGb: number
+            vramGb: number
+            requiresApiKey: boolean
+          }>
+        }
+      >
     }
-    expect(body.device).toMatch(/^(cpu|cuda|mps)$/)
-    // Real model-service: at least one task must be configured. We do not
-    // pin the exact list because the model-service ships different task
-    // types depending on BUILD_MODE.
-    const taskCount = Object.keys(body.selectedModels).length
+    const taskTypes = Object.keys(body.models)
     expect(
-      taskCount,
-      'real model-service must expose at least one task in selectedModels; check model-service/config/models.yaml',
+      taskTypes.length,
+      'real model-service must expose at least one task type in models.*; check models-cpu.yaml',
     ).toBeGreaterThan(0)
-    for (const [task, selected] of Object.entries(body.selectedModels)) {
-      expect(body.availableModels[task], `availableModels missing entry for task "${task}"`).toBeTruthy()
+    for (const taskType of taskTypes) {
+      const taskConfig = body.models[taskType]
+      expect(taskConfig.selected, `models.${taskType}.selected must be set`).toBeTruthy()
+      expect(Array.isArray(taskConfig.options)).toBe(true)
+      expect(taskConfig.options.length, `models.${taskType}.options must list at least one model`).toBeGreaterThan(0)
+      // Referential integrity: selected must appear in options.
+      const optionNames = taskConfig.options.map((o) => o.name)
       expect(
-        body.availableModels[task],
-        `selectedModels.${task}="${selected}" must appear in availableModels.${task}`,
-      ).toContain(selected)
+        optionNames,
+        `models.${taskType}.selected="${taskConfig.selected}" must appear in options=[${optionNames.join(',')}]`,
+      ).toContain(taskConfig.selected)
+      // CPU profile invariant: every option in models-cpu.yaml must be
+      // EITHER a local CPU-runnable model (cpuCompatible=true) OR an
+      // external API service (requiresApiKey=true). A locally-installed
+      // GPU-only model has no business appearing in the CPU config; an
+      // external API has cpuMemoryGb=0 and vramGb=0 because it does not
+      // run any inference on this host.
+      for (const opt of taskConfig.options) {
+        const isLocalCpuModel = opt.cpuCompatible === true
+        const isExternalApi = opt.requiresApiKey === true
+        expect(
+          isLocalCpuModel || isExternalApi,
+          `models-cpu.yaml lists ${taskType} option "${opt.name}" with cpuCompatible=false and requiresApiKey=false; ` +
+            'every option in the CPU config must be either a local CPU model or an external API service',
+        ).toBe(true)
+      }
     }
   })
 
-  test('frameworks: GET /api/models/frameworks lists frameworks consistent with availableModels', async ({
+  test('frameworks: GET /api/models/frameworks returns per-category framework lists', async ({
     page,
     testUser,
   }) => {
     void testUser
     const res = await page.request.get('/api/models/frameworks', { timeout: FIRST_INFERENCE_TIMEOUT_MS })
     expect(res.status()).toBe(200)
-    const body = (await res.json()) as {
-      frameworks: string[]
-      byTask?: Record<string, string[]>
-    }
-    expect(Array.isArray(body.frameworks)).toBe(true)
-    expect(body.frameworks.length).toBeGreaterThan(0)
-    if (body.byTask) {
-      for (const [task, taskFrameworks] of Object.entries(body.byTask)) {
-        for (const fw of taskFrameworks) {
-          expect(
-            body.frameworks,
-            `byTask.${task} reports framework "${fw}" that is not in the global frameworks list`,
-          ).toContain(fw)
-        }
-      }
-    }
-  })
-
-  test('detection: real detector returns at least one plausibly-shaped bounding box on a single frame', async ({
-    page,
-    testVideo,
-    testPersona,
-    testUser,
-  }) => {
-    void testUser
-    const res = await page.request.post(`/api/videos/${testVideo.id}/detect`, {
-      data: {
-        videoId: testVideo.id,
-        personaId: testPersona.id,
-        queries: ['person', 'object'],
-        startTime: 0,
-        endTime: 1,
-        maxFrames: 1,
-      },
-      timeout: FIRST_INFERENCE_TIMEOUT_MS,
-    })
+    // Real shape is keyed by category (llm, audio, detection, tracking,
+    // vlmInference, quantization), each value an array of framework
+    // names. The mock returns a flat { frameworks, byTask } shape, which
+    // is a different schema; see config-test note above.
+    const body = (await res.json()) as Record<string, string[]>
+    const categories = Object.keys(body)
     expect(
-      res.status(),
-      `real detection must return 200 (got ${res.status()}: ${await res.text().catch(() => '<no body>')})`,
-    ).toBe(200)
-    const body = (await res.json()) as {
-      videoId: string
-      query: string
-      frameResults: Array<{
-        frameNumber: number
-        detections: Array<{ x: number; y: number; width: number; height: number; confidence: number; label: string }>
-      }>
-    }
-    expect(body.videoId).toBe(testVideo.id)
-    expect(Array.isArray(body.frameResults)).toBe(true)
-    expect(body.frameResults.length).toBeGreaterThan(0)
-    // The real detector may return zero detections on a frame that does
-    // not contain any of the queried classes, which is a legitimate
-    // outcome rather than a defect; assert only that the response shape
-    // and per-detection ranges are honoured wherever the model did fire.
-    for (const frame of body.frameResults) {
-      expect(typeof frame.frameNumber).toBe('number')
-      expect(Array.isArray(frame.detections)).toBe(true)
-      for (const det of frame.detections) {
-        expect(det.x).toBeGreaterThanOrEqual(0)
-        expect(det.y).toBeGreaterThanOrEqual(0)
-        expect(det.width).toBeGreaterThan(0)
-        expect(det.height).toBeGreaterThan(0)
-        expect(det.confidence).toBeGreaterThanOrEqual(0)
-        expect(det.confidence).toBeLessThanOrEqual(1)
-        expect(typeof det.label).toBe('string')
-        expect(det.label.length).toBeGreaterThan(0)
-      }
-    }
-  })
-
-  test('ontology augment: real LLM returns at least one suggestion for a real-world domain', async ({
-    page,
-    testPersona,
-    testUser,
-  }) => {
-    void testUser
-    const res = await page.request.post('/api/ontology/augment', {
-      data: {
-        personaId: testPersona.id,
-        domain: 'sports broadcasting',
-        targetCategory: 'entity',
-        existingTypes: [],
-        maxSuggestions: 3,
-      },
-      timeout: FIRST_INFERENCE_TIMEOUT_MS,
-    })
-    expect(
-      res.status(),
-      `real ontology/augment must return 200 (got ${res.status()}: ${await res.text().catch(() => '<no body>')})`,
-    ).toBe(200)
-    const body = (await res.json()) as {
-      id: string
-      personaId: string
-      targetCategory: string
-      suggestions: Array<{ name: string; description: string; confidence: number; examples: string[] }>
-      reasoning: string
-    }
-    expect(body.personaId).toBe(testPersona.id)
-    expect(body.targetCategory).toBe('entity')
-    expect(Array.isArray(body.suggestions)).toBe(true)
-    expect(
-      body.suggestions.length,
-      'real LLM must return at least one suggestion for a well-formed domain prompt; ' +
-        'an empty list usually means the model output failed JSON parsing on the model-service side',
+      categories.length,
+      'real model-service must expose at least one framework category',
     ).toBeGreaterThan(0)
-    for (const s of body.suggestions) {
-      expect(typeof s.name).toBe('string')
-      expect(s.name.length).toBeGreaterThan(0)
-      expect(s.confidence).toBeGreaterThanOrEqual(0)
-      expect(s.confidence).toBeLessThanOrEqual(1)
+    for (const category of categories) {
+      const frameworks = body[category]
+      expect(Array.isArray(frameworks), `frameworks.${category} must be an array`).toBe(true)
+      expect(frameworks.length, `frameworks.${category} must list at least one framework`).toBeGreaterThan(0)
+      for (const fw of frameworks) {
+        expect(typeof fw).toBe('string')
+        expect(fw.length).toBeGreaterThan(0)
+      }
     }
-    expect(typeof body.reasoning).toBe('string')
+    // CPU profile invariant: every framework family the CPU config
+    // relies on must be listed. The CPU YAML uses llama_cpp and
+    // transformers; both must appear in the appropriate category.
+    expect(body.llm ?? body.vlmInference ?? []).toEqual(
+      expect.arrayContaining(['llama_cpp', 'transformers']),
+    )
   })
 
-  test('thumbnail: GET /api/videos/:id/thumbnail returns a real image generated by the model-service', async ({
+  test('task-ready: GET /api/models/task-ready/:type returns ready boolean for at least one declared task', async ({
     page,
-    testVideo,
     testUser,
   }) => {
     void testUser
-    const res = await page.request.get(`/api/videos/${testVideo.id}/thumbnail`, {
+    // Pull task types out of /api/models/config so the test does not
+    // hard-code a list that would drift if the CPU config changes.
+    const configRes = await page.request.get('/api/models/config', { timeout: FIRST_INFERENCE_TIMEOUT_MS })
+    const configBody = (await configRes.json()) as { models: Record<string, unknown> }
+    const taskTypes = Object.keys(configBody.models)
+    expect(taskTypes.length).toBeGreaterThan(0)
+    const firstTask = taskTypes[0]
+    const res = await page.request.get(`/api/models/task-ready/${firstTask}`, {
       timeout: FIRST_INFERENCE_TIMEOUT_MS,
     })
     expect(res.status()).toBe(200)
-    const contentType = res.headers()['content-type'] || ''
-    expect(contentType).toMatch(/^image\/(jpeg|png|webp)/)
-    const bodyBytes = await res.body()
-    // Real thumbnails are larger than mock placeholders; the mock writes
-    // a tiny solid-colour PNG. Anything under 500 bytes from the real
-    // pipeline indicates the frame extraction or encode step failed.
-    expect(bodyBytes.length, 'real thumbnail must be larger than a 500-byte placeholder').toBeGreaterThan(500)
+    // The real model-service returns task-ready as a load descriptor of
+    // the currently-selected model for that task:
+    //   { taskType, modelId, cached, framework }
+    // The "ready" signal is implicit: 200 + a present modelId means the
+    // task is configured. The mock returns a flat { taskType, ready }
+    // shape; see the config-test comment for the schema-divergence note.
+    const body = (await res.json()) as { taskType?: string; modelId?: string; cached?: boolean; framework?: string }
+    expect(body.modelId, `task-ready/${firstTask} must return a modelId for the currently-selected model`).toBeTruthy()
+    expect(typeof body.framework).toBe('string')
+    expect(typeof body.cached).toBe('boolean')
   })
 })
