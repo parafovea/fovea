@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fovea.video/schemas/tour-content.json",
+  "title": "Fovea Tour Content Bundle",
+  "description": "Per-deployment content for Fovea's ten built-in guided tours. Drop this file at /tour-content.json in the annotation-tool's public/ directory (or anywhere the frontend can fetch it from /tour-content.json). The loader reads it at boot, resolves each videoFilename to the videoId Fovea computes via md5(filename)[0:16], and hands the result to TourProvider. Editing this file is the entire admin-tailoring surface. no rebuild, no code edits required.",
+  "type": "object",
+  "required": [
+    "firstAnnotation",
+    "ontologyAuthoring",
+    "wikidataAugmentation",
+    "eventsRolesClaims",
+    "worldLayer",
+    "modelInTheLoop",
+    "summariesAndClaims",
+    "collaboration",
+    "importExport"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "firstAnnotation": {
+      "type": "object",
+      "description": "Tour 1: First annotation in 90 seconds. the on-ramp.",
+      "required": ["personaName", "personaRole", "entityType", "videoFilename"],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string", "description": "Persona the visitor adopts for their first annotation." },
+        "personaRole": { "type": "string" },
+        "entityType": { "$ref": "#/$defs/typeSlot" },
+        "videoFilename": { "type": "string", "description": "Filename in STORAGE_PATH the visitor lands on. Pick a clip where the entityType is plainly visible." }
+      }
+    },
+    "ontologyAuthoring": {
+      "type": "object",
+      "description": "Tour 2: visitor builds one type at each of the four ontology layers.",
+      "required": ["personaName", "personaRole", "entityType", "eventType", "roleType", "relationType"],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "entityType": { "$ref": "#/$defs/typeSlot" },
+        "eventType": { "$ref": "#/$defs/typeSlot" },
+        "roleType": { "$ref": "#/$defs/typeSlot" },
+        "relationType": { "$ref": "#/$defs/typeSlot" }
+      }
+    },
+    "wikidataAugmentation": {
+      "type": "object",
+      "description": "Tour 3: visitor searches Wikidata for a concept and imports it as a type.",
+      "required": ["personaName", "personaRole", "searchTerm"],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "searchTerm": { "type": "string", "description": "Search term the visitor types. pick one that returns a real Wikidata QID + makes sense for this deployment's domain." }
+      }
+    },
+    "eventsRolesClaims": {
+      "type": "object",
+      "description": "Tour 4: visitor boxes two actors, declares an event between them, assigns roles, watches Fovea derive a claim.",
+      "required": [
+        "personaName", "personaRole", "firstActor", "secondActor",
+        "eventType", "firstRole", "secondRole", "derivedClaimText",
+        "videoFilename"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "firstActor": { "$ref": "#/$defs/typeSlot", "description": "Entity type assigned to bbox 1." },
+        "secondActor": { "$ref": "#/$defs/typeSlot", "description": "Entity type assigned to bbox 2." },
+        "eventType": { "$ref": "#/$defs/typeSlot", "description": "Event the visitor declares between the two actors." },
+        "firstRole": { "$ref": "#/$defs/typeSlot" },
+        "secondRole": { "$ref": "#/$defs/typeSlot" },
+        "derivedClaimText": { "type": "string", "description": "Sentence the engine illustrates as the structured claim Fovea derived." },
+        "videoFilename": { "type": "string", "description": "MUST depict the event between the two actors. otherwise the narration's instructions don't map to anything on screen." }
+      }
+    },
+    "worldLayer": {
+      "type": "object",
+      "description": "Tour 5: visitor models a specific place + time + collection.",
+      "required": [
+        "personaName", "personaRole", "entityName", "entityType",
+        "locationLatitude", "locationLongitude", "locationName",
+        "timeCollectionName", "entityCollectionName", "videoFilename"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "entityName": { "type": "string", "description": "Specific named entity. e.g. 'LoanDepot Park'." },
+        "entityType": { "$ref": "#/$defs/typeSlot", "description": "Type the entity is an instance of. e.g. Stadium." },
+        "locationLatitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "locationLongitude": { "type": "number", "minimum": -180, "maximum": 180 },
+        "locationName": { "type": "string" },
+        "timeCollectionName": { "type": "string" },
+        "entityCollectionName": { "type": "string" },
+        "videoFilename": { "type": "string", "description": "Clip that visibly depicts the entity being modeled." }
+      }
+    },
+    "modelInTheLoop": {
+      "type": "object",
+      "description": "Tour 6: tracking + interpolation + detection demo.",
+      "required": ["personaName", "personaRole", "videoFilename"],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "videoFilename": { "type": "string", "description": "Pick a clip with a CLEAR MOVING SUBJECT. the tracker is boring on static shots." }
+      }
+    },
+    "summariesAndClaims": {
+      "type": "object",
+      "description": "Tour 7: visitor writes a summary + extracts claims from it.",
+      "required": [
+        "personaName", "personaRole", "summaryText", "claimText", "videoFilename"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "summaryText": { "type": "string", "description": "Summary text the visitor types into the editor." },
+        "claimText": { "type": "string" },
+        "videoFilename": { "type": "string", "description": "Must be a clip the summaryText actually describes." }
+      }
+    },
+    "collaboration": {
+      "type": "object",
+      "description": "Tour 8: projects + groups + shared annotations.",
+      "required": ["projectName", "groupName"],
+      "additionalProperties": false,
+      "properties": {
+        "projectName": { "type": "string" },
+        "groupName": { "type": "string" }
+      }
+    },
+    "importExport": {
+      "type": "object",
+      "description": "Tour 10: upload a bundle through the import dialog.",
+      "required": ["importBundlePath"],
+      "additionalProperties": false,
+      "properties": {
+        "importBundlePath": { "type": "string", "description": "Path/URL the test or visitor uploads at step 1." }
+      }
+    }
+  },
+  "$defs": {
+    "typeSlot": {
+      "type": "object",
+      "required": ["name", "gloss"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Name of the type the visitor types into the editor." },
+        "gloss": { "type": "string", "description": "Human-readable definition that lands in the gloss field." }
+      }
+    }
+  }
+}

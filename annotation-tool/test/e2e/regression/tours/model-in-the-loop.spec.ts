@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'model-in-the-loop'
 
@@ -66,20 +67,16 @@ test.describe('Tour 6: Model in the loop — end to end', () => {
       workerSessionToken,
     )
 
-    // Navigate to the annotation workspace — every Tour 6 anchor
-    // mounts there (or in dialogs opened from it).
-    await page.goto('/')
+    // Navigate directly to the videoId pinned by the bundle — the
+    // ABC7 Port of Long Beach cargo-container toppling clip. Picked
+    // because the tracking + interpolation + motion-path-overlay
+    // demos all want a clear moving subject; static crowd shots
+    // make for boring tracker runs.
+    const trackingVideoId = microventContent.modelInTheLoop.videoId
+    await page.goto(`/annotate/${trackingVideoId}`)
     await page.waitForFunction(() => Boolean(window.__foveaTour), undefined, {
       timeout: 10000,
     })
-    await page.waitForSelector('[data-tour-id="video-browser-card-first"]', {
-      timeout: 15000,
-    })
-    await page
-      .locator('[data-tour-id="video-browser-card-first"]')
-      .getByRole('button', { name: /annotate/i })
-      .click()
-    await page.waitForURL(/\/annotate\//, { timeout: 15000 })
 
     const ok = await page.evaluate(
       async (id) => Boolean(await window.__foveaTour?.launch(id)),

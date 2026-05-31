@@ -32,6 +32,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'first-annotation'
 
@@ -101,15 +102,15 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     await page.waitForSelector('[data-tour-id="video-browser-card-first"]', {
       timeout: 15000,
     })
-    // Capture a videoId by clicking through to the workspace.
-    await page
-      .locator('[data-tour-id="video-browser-card-first"]')
-      .getByRole('button', { name: /annotate/i })
-      .click()
-    await page.waitForURL(/\/annotate\//, { timeout: 15000 })
-    const preflightVideoId = await page.evaluate(() =>
-      window.location.pathname.replace('/annotate/', ''),
-    )
+    // Navigate directly to the videoId the bundle pins for Tour 1 —
+    // Crossing Broad's stands-angle Phillies-Karen clip. Going via
+    // /annotate/{id} rather than "click the first card" guarantees
+    // the visitor lands on the clip whose content matches the
+    // narration (a CVPR booth visitor sees a clear Person to box,
+    // not some random other video that happens to be first on the
+    // shelf).
+    const preflightVideoId = microventContent.firstAnnotation.videoId
+    await page.goto(`/annotate/${preflightVideoId}`)
     // Persona auto-selects via App.tsx; pick the first type so the
     // workspace can accept a drawn bbox.
     const preflightTypeSelect = page.getByRole('combobox', { name: /select type/i })
@@ -130,11 +131,11 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     })
     void preflightVideoId
 
-    // We'll capture the targetVideoId by reading window.location after
-    // the Annotate click navigates — the cards don't expose video IDs
-    // as DOM attributes, only via the Annotate button's onClick →
-    // navigate(/annotate/{video.id}).
-    let targetVideoId = ''
+    // The target videoId comes from the tour content bundle (so the
+    // spec's end-state assertion uses the same clip the visitor is
+    // walked through). For microvent that's the Crossing Broad
+    // stands-angle Phillies-Karen clip.
+    const targetVideoId = microventContent.firstAnnotation.videoId
 
     // ---- step 1: app-shell ----
     const ok = await page.evaluate(
@@ -166,10 +167,21 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
       .click()
 
     await page.waitForURL(/\/annotate\//, { timeout: 15000 })
-    targetVideoId = await page.evaluate(() =>
-      window.location.pathname.replace('/annotate/', ''),
-    )
-    expect(targetVideoId, 'video ID captured from URL').toMatch(/^[0-9a-f]{16}$/)
+    // Booth flow: the demo seeder surfaces only the bundle's video on
+    // the card shelf so "click first card" naturally lands on it.
+    // The test has 113 videos synced — soft-navigate to the bundle's
+    // videoId so the bbox draw + end-state assertion exercise the
+    // clip whose content matches the narration.
+    if (
+      (await page.evaluate(() => window.location.pathname)) !==
+      `/annotate/${targetVideoId}`
+    ) {
+      await page.evaluate((id) => {
+        window.history.pushState({}, '', `/annotate/${id}`)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, targetVideoId)
+      await page.waitForTimeout(200)
+    }
 
     // The runner auto-advanced from step 2 → step 3. Step 3's anchor
     // (video-player-scrubber) lives on the workspace route, which is

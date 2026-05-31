@@ -2,14 +2,14 @@
  * Per-tour content slots a deployment can override to retheme the
  * built-in tour scripts to its own domain. The default bundle that
  * ships with Fovea (`microventContent` in ./microvent.ts) is drawn
- * from a real annotation project — news-incident clips with
+ * from a real annotation project. news-incident clips with
  * personas like "Automated"/Analyst and "LoanDepot Park Guest
  * Services Usher", and entity types like "gunshot", "wildfire",
  * "Phillies fan Karen".
  *
  * An admin tailoring tours for their own users supplies a different
  * bundle of the same shape and passes it as the `contentBundle` prop
- * on TourProvider — every tour narration, type-name suggestion, and
+ * on TourProvider. every tour narration, type-name suggestion, and
  * example string updates without touching the engine or the step
  * anchors. The tour TESTS likewise read from the same bundle so a
  * deployment-specific tour suite verifies its own content.
@@ -34,6 +34,15 @@ export interface TourFirstAnnotationContent {
   personaRole: string
   /** Entity type the visitor picks for their first bounding box. */
   entityType: TourTypeSlot
+  /**
+   * Filename of a video in the deployment's videos/ directory (or
+   * STORAGE_PATH) that the booth visitor + the test land on for their
+   * first annotation. Pick a clip where the entityType is plainly
+   * visible. the booth narrative leans on the visitor immediately
+   * seeing what to box. The loader converts this to Fovea's
+   * md5(filename)[0:16] videoId at boot.
+   */
+  videoId: string
 }
 
 export interface TourOntologyAuthoringContent {
@@ -71,6 +80,14 @@ export interface TourEventsRolesClaimsContent {
   secondRole: TourTypeSlot
   /** Free-text claim sentence the derivation step illustrates. */
   derivedClaimText: string
+  /**
+   * Specific videoId the booth visitor lands on. Must depict the
+   * event from `eventType` happening between actors matching
+   * `firstActor` and `secondActor`. otherwise the narration's
+   * instructions ("Box the X grabbing the ball") don't map to
+   * anything visible on screen.
+   */
+  videoId: string
 }
 
 export interface TourWorldLayerContent {
@@ -78,7 +95,7 @@ export interface TourWorldLayerContent {
   personaRole: string
   /** Named world entity created at step 2 (e.g. 'LoanDepot Park'). */
   entityName: string
-  /** Type of that entity (e.g. 'Stadium') — created on the fly. */
+  /** Type of that entity (e.g. 'Stadium'). created on the fly. */
   entityType: TourTypeSlot
   /** Coordinates for the location pin at step 3. */
   locationLatitude: number
@@ -88,11 +105,25 @@ export interface TourWorldLayerContent {
   timeCollectionName: string
   /** Entity collection grouping label at step 6. */
   entityCollectionName: string
+  /**
+   * Specific videoId of a clip visibly depicting the entity being
+   * modeled (e.g. a wide shot of the stadium). Step 7's
+   * "annotations link to world instances" demo opens in this video's
+   * annotation workspace so the visitor can see the connection.
+   */
+  videoId: string
 }
 
 export interface TourModelInTheLoopContent {
   personaName: string
   personaRole: string
+  /**
+   * Specific videoId. pick a clip with a clear moving subject the
+   * tracker can usefully extend a starting bbox across (e.g. a
+   * falling object, a person moving across frame). Static clips are
+   * boring demos because the tracker just sits there.
+   */
+  videoId: string
 }
 
 export interface TourSummariesAndClaimsContent {
@@ -102,6 +133,12 @@ export interface TourSummariesAndClaimsContent {
   summaryText: string
   /** Sample claim sentence the extraction step lifts from the summary. */
   claimText: string
+  /**
+   * Specific videoId. must be a clip the `summaryText` is genuinely
+   * describing, otherwise the visitor types narration that has
+   * nothing to do with what's on the screen.
+   */
+  videoId: string
 }
 
 export interface TourCollaborationContent {
@@ -124,7 +161,7 @@ export interface TourImportExportContent {
 /**
  * Aggregate. An admin tailoring tours for their users provides a
  * complete bundle of this shape and passes it as TourProvider's
- * `contentBundle` prop. Partial bundles aren't supported — every
+ * `contentBundle` prop. Partial bundles aren't supported. every
  * tour's content has to be filled in so the booth experience is
  * coherent.
  */

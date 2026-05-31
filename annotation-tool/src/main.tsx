@@ -10,6 +10,8 @@ import App from './App'
 import { DemoShell } from './demo/DemoShell'
 import { isDemoModeEnabled } from './demo/config'
 import { TourProvider } from './tours'
+import { loadTourContentBundle } from './tours/content/loader'
+import type { TourContentBundle } from './tours/content/types'
 import './index.css'
 
 // Initialize command registry before React renders (must be before component mount effects)
@@ -50,6 +52,63 @@ const queryClient = new QueryClient({
   },
 })
 
+// Boot-time fetch of the deployment's tour content bundle from
+// /tour-content.json (the admin's editable config). NO silent
+// fallback: if the file is missing or malformed, render a visible
+// banner and mount the app WITHOUT TourProvider so the admin can fix
+// the JSON without an opaque "tours just don't work" failure mode.
+function Root() {
+  type LoadState =
+    | { kind: 'loading' }
+    | { kind: 'ready'; bundle: TourContentBundle }
+    | { kind: 'error'; message: string }
+  const [state, setState] = React.useState<LoadState>({ kind: 'loading' })
+  React.useEffect(() => {
+    loadTourContentBundle()
+      .then((bundle) => setState({ kind: 'ready', bundle }))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[tours] content bundle load failed:', message)
+        setState({ kind: 'error', message })
+      })
+  }, [])
+
+  if (isDemoModeEnabled()) return <DemoShell />
+
+  if (state.kind === 'error') {
+    return (
+      <>
+        <div
+          role="alert"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: '#b91c1c',
+            color: 'white',
+            padding: '12px 16px',
+            zIndex: 9999,
+            fontSize: 13,
+          }}
+        >
+          <strong>Tours disabled: content config error.</strong>{' '}
+          {state.message} See <code>docs/tour-customization.md</code>.
+        </div>
+        <App />
+      </>
+    )
+  }
+  if (state.kind === 'loading') {
+    return <App />
+  }
+  return (
+    <TourProvider contentBundle={state.bundle}>
+      <App />
+    </TourProvider>
+  )
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -62,16 +121,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               around App. Stock builds mount TourProvider here so the
               tour engine is available to <App /> directly (anchored
               mode against the user's real workspace). Either way the
-              TourProvider is mounted EXACTLY ONCE — nesting it would
+              TourProvider is mounted EXACTLY ONCE. Nesting it would
               shadow the outer state and the runner would never paint.
+
+              The tour content bundle comes from /tour-content.json
+              (admin-editable JSON, loaded at boot via Root above).
+              Edit that file to retheme the tour catalogue for your
+              own domain. See docs/tour-customization.md.
             */}
-            {isDemoModeEnabled() ? (
-              <DemoShell />
-            ) : (
-              <TourProvider>
-                <App />
-              </TourProvider>
-            )}
+            <Root />
             <Toaster position="bottom-right" />
           </TooltipProvider>
           {/*

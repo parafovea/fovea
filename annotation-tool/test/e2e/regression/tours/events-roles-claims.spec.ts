@@ -18,6 +18,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'events-roles-claims'
 
@@ -113,14 +114,14 @@ test.describe('Tour 4: Events, roles, claims — end to end', () => {
     await page.waitForFunction(() => Boolean(window.__foveaTour), undefined, {
       timeout: 10000,
     })
-    await page.waitForSelector('[data-tour-id="video-browser-card-first"]', {
-      timeout: 15000,
-    })
-    await page
-      .locator('[data-tour-id="video-browser-card-first"]')
-      .getByRole('button', { name: /annotate/i })
-      .click()
-    await page.waitForURL(/\/annotate\//, { timeout: 15000 })
+    // Navigate directly to the videoId pinned by the bundle — the
+    // Collin Rugg explainer of the Phillies-Karen ball-grab incident.
+    // Going to /annotate/{id} rather than "click first card" ensures
+    // the visitor lands on the clip whose footage matches the
+    // narration's "Box the Phillies fan Karen" / "Box the Phillies
+    // fan son" prompts.
+    const targetVideoId = microventContent.eventsRolesClaims.videoId
+    await page.goto(`/annotate/${targetVideoId}`)
     const preflightTypeSelect = page.getByRole('combobox', {
       name: /select type/i,
     })
@@ -241,19 +242,16 @@ test.describe('Tour 4: Events, roles, claims — end to end', () => {
       timeout: 5000,
     })
 
-    // ---- end-state: at least one annotation row landed (from at
-    // least one of the two bbox draws). ----
-    const videoId = await page.evaluate(() =>
-      window.location.pathname.replace('/annotate/', ''),
-    )
+    // ---- end-state: at least one annotation row landed on the
+    // pinned bundle video (from at least one of the two bbox draws). ----
     const annsResp = await fetch(
-      `http://localhost:3001/api/annotations/${videoId}`,
+      `http://localhost:3001/api/annotations/${targetVideoId}`,
       { headers: { Cookie: `session_token=${workerSessionToken}` } },
     )
     const anns = (await annsResp.json()) as Array<{ id: string }>
     expect(
       anns.length,
-      `at least one annotation persisted on video ${videoId}`,
+      `at least one annotation persisted on video ${targetVideoId}`,
     ).toBeGreaterThan(0)
   })
 })

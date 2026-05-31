@@ -1,0 +1,94 @@
+{
+  "$schema": "/tour-content.schema.json",
+
+  "firstAnnotation": {
+    "personaName": "Tech-Curious Spectator",
+    "personaRole": "General audience viewer with an interest in emerging technology",
+    "entityType": {
+      "name": "Person",
+      "gloss": "an individual human"
+    },
+    "videoFilename": "Crossing Broad - The angle from the stands of the Phillies Karen incident has been fou... [1964175938037465088].mp4"
+  },
+
+  "ontologyAuthoring": {
+    "personaName": "Automated",
+    "personaRole": "Analyst",
+    "entityType": { "name": "gunshot", "gloss": "discharge of a firearm" },
+    "eventType": { "name": "wildfire", "gloss": "an uncontrolled fire" },
+    "roleType": { "name": "perpetrator", "gloss": "the person responsible for the act" },
+    "relationType": { "name": "occurred-at", "gloss": "the event took place at the location" }
+  },
+
+  "wikidataAugmentation": {
+    "personaName": "Automated",
+    "personaRole": "Analyst",
+    "searchTerm": "dust cloud"
+  },
+
+  "eventsRolesClaims": {
+    "personaName": "LoanDepot Park Guest Services Usher",
+    "personaRole": "LoanDepot Park Guest Services Usher",
+    "firstActor": {
+      "name": "Phillies fan Karen",
+      "gloss": "the woman seated behind home plate who claimed the ball"
+    },
+    "secondActor": {
+      "name": "Phillies fan son",
+      "gloss": "the boy whose father had given him the ball"
+    },
+    "eventType": {
+      "name": "ball-grab",
+      "gloss": "one spectator takes a souvenir ball from another"
+    },
+    "firstRole": {
+      "name": "grabber",
+      "gloss": "the spectator who took the ball"
+    },
+    "secondRole": {
+      "name": "prior-holder",
+      "gloss": "the spectator who had the ball before the grab"
+    },
+    "derivedClaimText": "Phillies fan Karen took the souvenir ball from the Phillies fan son",
+    "videoFilename": "Collin Rugg - NEW： ‘Karen’ Phillies fan goes viral for berating a man for grabbing ... [1964336942667223043].mp4"
+  },
+
+  "worldLayer": {
+    "personaName": "LoanDepot Park Guest Services Usher",
+    "personaRole": "LoanDepot Park Guest Services Usher",
+    "entityName": "LoanDepot Park",
+    "entityType": {
+      "name": "Stadium",
+      "gloss": "a venue hosting major-league baseball games"
+    },
+    "locationLatitude": 25.7781,
+    "locationLongitude": -80.2197,
+    "locationName": "LoanDepot Park, Miami",
+    "timeCollectionName": "Phillies-Marlins September 2025 home games",
+    "entityCollectionName": "the involved fans",
+    "videoFilename": "Amiri King - Here’s footage of the baseball Karen getting heckled by her entire se... [1964355526243856384].mp4"
+  },
+
+  "modelInTheLoop": {
+    "personaName": "Tech-Curious Spectator",
+    "personaRole": "General audience viewer with an interest in emerging technology",
+    "videoFilename": "ABC7 Eyewitness News - New video shows the moment when nearly an entire column of shipping c... [1965554565933121536].mp4"
+  },
+
+  "summariesAndClaims": {
+    "personaName": "LoanDepot Park Guest Services Usher",
+    "personaRole": "LoanDepot Park Guest Services Usher",
+    "summaryText": "A woman seated behind home plate takes a foul ball that a man had caught and given to a young boy, then refuses to return it as the crowd reacts.",
+    "claimText": "A Phillies fan in the stands took a souvenir ball from a boy after his father caught it",
+    "videoFilename": "Collin Rugg - NEW： ‘Karen’ Phillies fan goes viral for berating a man for grabbing ... [1964336942667223043].mp4"
+  },
+
+  "collaboration": {
+    "projectName": "Phillies-Marlins incident review",
+    "groupName": "Stadium operations team"
+  },
+
+  "importExport": {
+    "importBundlePath": "test/e2e/fixtures/microvent-seed.jsonl"
+  }
+}

@@ -18,6 +18,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'world-layer'
 
@@ -107,6 +108,14 @@ test.describe('Tour 5: The world layer — end to end', () => {
       workerSessionToken,
     )
 
+    // The world-layer tour is centred on /objects, but its narrative
+    // ("Create entity 'LoanDepot Park'") references content from a
+    // specific clip. Visit /annotate/{bundle.videoId} first so a
+    // visitor switching back to the workspace sees the right venue
+    // — then navigate to /objects to start the tour.
+    const venueVideoId = microventContent.worldLayer.videoId
+    await page.goto(`/annotate/${venueVideoId}`)
+    await page.waitForLoadState('networkidle').catch(() => {})
     await page.goto('/objects')
     await page.waitForFunction(
       () => Boolean(window.__foveaTour),

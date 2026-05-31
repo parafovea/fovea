@@ -34,6 +34,19 @@ describe('TourContentBundle admin tailoring', () => {
     expect(microventContent.summariesAndClaims.summaryText.length).toBeGreaterThan(
       20,
     )
+    // Each tour that uses a video must pin a specific videoId so the
+    // booth visitor sees a clip whose content matches the narration.
+    expect(microventContent.firstAnnotation.videoId).toMatch(/^[0-9a-f]{16}$/)
+    expect(microventContent.eventsRolesClaims.videoId).toMatch(/^[0-9a-f]{16}$/)
+    expect(microventContent.worldLayer.videoId).toMatch(/^[0-9a-f]{16}$/)
+    expect(microventContent.modelInTheLoop.videoId).toMatch(/^[0-9a-f]{16}$/)
+    expect(microventContent.summariesAndClaims.videoId).toMatch(/^[0-9a-f]{16}$/)
+    // Tour 4 and Tour 7 both narrate the Phillies-Karen ball-grab
+    // incident — they need to land on the same clip so the visitor
+    // sees one coherent running example across the two tours.
+    expect(microventContent.eventsRolesClaims.videoId).toBe(
+      microventContent.summariesAndClaims.videoId,
+    )
   })
 
   it('getBuiltInTours(microvent) interpolates microvent values into narrations', () => {
@@ -92,6 +105,10 @@ describe('TourContentBundle admin tailoring', () => {
         locationName: 'Port of Long Beach, CA',
         timeCollectionName: 'September 2025 cargo incidents',
         entityCollectionName: 'the affected vessels',
+        // Marine-safety admin's bundle ships a different videoId
+        // for Tour 5 — one of the cargo-spill clips their own
+        // annotation project recorded, where Pier 400 is on screen.
+        videoId: 'd20a07790ee5de6f',
       },
     }
     const tours = getBuiltInTours(marineBundle)

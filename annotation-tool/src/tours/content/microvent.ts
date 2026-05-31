@@ -1,37 +1,15 @@
 /**
  * Default tour content bundle: the microvent annotation project.
+ * Used as the in-code fallback when /tour-content.json is missing or
+ * malformed. The values mirror `annotation-tool/public/tour-content
+ * .json` (which is the runtime source of truth and the file an admin
+ * edits to retheme the tours for their own domain).
  *
- * Sourced from the microvent_v2 export's real personas + ontologies +
- * annotations + summaries + claims (see annotation-tool/test/e2e/
- * fixtures/microvent-seed.jsonl). Picks specific content per tour so
- * the visitor sees a coherent running example across the catalogue:
- *
- *   - Tour 1 (first-annotation): a Tech-Curious Spectator picks a
- *     Person — the simplest possible on-ramp.
- *   - Tour 2 (ontology-authoring): the Automated/Analyst persona
- *     builds gunshot + wildfire + perpetrator + occurred-at — four
- *     types covering all four ontology layers using microvent's
- *     actual Wikidata-grounded vocabulary.
- *   - Tour 3 (wikidata-augmentation): same Automated persona searches
- *     Wikidata for "dust cloud" — Q1267128, one of microvent's nine
- *     Automated entity types that was originally imported from
- *     Wikidata.
- *   - Tour 4 (events-roles-claims): the LoanDepot Park Guest Services
- *     Usher boxes the Phillies fan Karen and her son's father, creates
- *     a ball-grab event, assigns grabber + prior-holder roles.
- *   - Tour 5 (world-layer): same Usher persona creates LoanDepot Park
- *     (Miami coordinates), groups the September 2025 home games, and
- *     groups the involved fans.
- *   - Tour 7 (summaries-and-claims): types one of microvent's actual
- *     summary contents about the Phillies-Karen incident.
- *   - Tour 8 (collaboration): a Phillies-Marlins incident review
- *     project + Stadium operations team group.
- *   - Tour 10 (import-export): uploads the microvent_v2 JSONL.
- *
- * To tailor tours for a different domain, fork this file with the
- * same shape, supply per-tour content drawn from the deployment's own
- * annotation project, and pass the forked bundle as TourProvider's
- * `contentBundle` prop.
+ * If you're an admin tailoring tours, edit /tour-content.json. NOT
+ * this file. The JSON loads at boot, ships videoFilenames the loader
+ * resolves to videoIds, and falls back to these values only if the
+ * JSON fetch fails. Editing this TS file requires a frontend rebuild;
+ * the JSON does not.
  */
 
 import type { TourContentBundle } from './types'
@@ -44,23 +22,16 @@ export const microventContent: TourContentBundle = {
       name: 'Person',
       gloss: 'an individual human',
     },
+    // Crossing Broad's "angle from the stands" Phillies-Karen clip.
+    videoId: '049f160046238b2f',
   },
 
   ontologyAuthoring: {
     personaName: 'Automated',
     personaRole: 'Analyst',
-    entityType: {
-      name: 'gunshot',
-      gloss: 'discharge of a firearm',
-    },
-    eventType: {
-      name: 'wildfire',
-      gloss: 'an uncontrolled fire',
-    },
-    roleType: {
-      name: 'perpetrator',
-      gloss: 'the person responsible for the act',
-    },
+    entityType: { name: 'gunshot', gloss: 'discharge of a firearm' },
+    eventType: { name: 'wildfire', gloss: 'an uncontrolled fire' },
+    roleType: { name: 'perpetrator', gloss: 'the person responsible for the act' },
     relationType: {
       name: 'occurred-at',
       gloss: 'the event took place at the location',
@@ -98,6 +69,8 @@ export const microventContent: TourContentBundle = {
     },
     derivedClaimText:
       'Phillies fan Karen took the souvenir ball from the Phillies fan son',
+    // Collin Rugg's explainer cut of the Phillies-Karen incident.
+    videoId: '8d9e6762f54408f4',
   },
 
   worldLayer: {
@@ -113,11 +86,15 @@ export const microventContent: TourContentBundle = {
     locationName: 'LoanDepot Park, Miami',
     timeCollectionName: 'Phillies-Marlins September 2025 home games',
     entityCollectionName: 'the involved fans',
+    // Amiri King's heckling-response Phillies-Karen clip.
+    videoId: 'cd0b278719bea692',
   },
 
   modelInTheLoop: {
     personaName: 'Tech-Curious Spectator',
     personaRole: 'General audience viewer with an interest in emerging technology',
+    // ABC7 cargo-container column toppling at Port of Long Beach.
+    videoId: '1fd9993237cbc33b',
   },
 
   summariesAndClaims: {
@@ -127,6 +104,8 @@ export const microventContent: TourContentBundle = {
       'A woman seated behind home plate takes a foul ball that a man had caught and given to a young boy, then refuses to return it as the crowd reacts.',
     claimText:
       'A Phillies fan in the stands took a souvenir ball from a boy after his father caught it',
+    // Same Collin Rugg explainer as Tour 4.
+    videoId: '8d9e6762f54408f4',
   },
 
   collaboration: {
@@ -135,8 +114,6 @@ export const microventContent: TourContentBundle = {
   },
 
   importExport: {
-    // E2E test path; production deployments override this with their
-    // own bundle URL.
     importBundlePath: 'test/e2e/fixtures/microvent-seed.jsonl',
   },
 }
