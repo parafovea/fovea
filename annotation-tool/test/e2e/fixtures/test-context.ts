@@ -206,7 +206,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
    */
-  testVideo: async ({ workerSessionToken }, use, testInfo) => {
+  testVideo: async ({ workerSessionToken, testUser }, use, testInfo) => {
     const response = await fetch('http://localhost:3001/api/videos', {
       headers: { Cookie: `session_token=${workerSessionToken}` }
     })
@@ -224,13 +224,25 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // residue from a prior test in the same worker (or a parallel worker
     // before the testVideo stripe rotation) doesn't bleed into the
     // current test's assertions about counts / persistence / visibility.
+    //
+    // CRITICAL: scope the cleanup to annotations + summaries CREATED BY
+    // THE CURRENT testUser. The video pool is shared across workers and
+    // across Playwright projects (smoke, functional, regression,
+    // accessibility); two workers striped onto the same video would
+    // otherwise wipe each other's in-progress annotations between
+    // test setup and the assertion, producing "All Annotations (0)"
+    // failures that only show up under parallel load (the test passes
+    // in isolation, fails under --project=A --project=B). Filtering
+    // by createdBy / userId keeps each worker's cleanup local to its
+    // own rows.
     const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (annsRes.ok) {
-      const anns = (await annsRes.json()) as Array<{ id: string }>
+      const anns = (await annsRes.json()) as Array<{ id: string; createdBy?: string }>
+      const ownAnns = anns.filter((a) => a.createdBy === testUser.id)
       await Promise.all(
-        anns.map((a) =>
+        ownAnns.map((a) =>
           fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },
@@ -242,9 +254,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (summariesRes.ok) {
-      const summaries = (await summariesRes.json()) as Array<{ id: string; personaId: string }>
+      const summaries = (await summariesRes.json()) as Array<{
+        id: string
+        personaId: string
+        userId?: string
+        createdBy?: string
+      }>
+      const ownSummaries = summaries.filter((s) => (s.userId ?? s.createdBy) === testUser.id)
       await Promise.all(
-        summaries.map((s) =>
+        ownSummaries.map((s) =>
           fetch(`http://localhost:3001/api/videos/${video.id}/summaries/${s.personaId}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },
