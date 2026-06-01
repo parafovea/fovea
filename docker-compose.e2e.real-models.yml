@@ -48,6 +48,25 @@ services:
       # to models-cpu.yaml here keeps the change local to the real-
       # model override so the GPU deployment path is unaffected.
       MODEL_CONFIG_PATH: /config/models-cpu.yaml
+      # Match the backend's STORAGE_PATH and the path convention every
+      # caller (backend route, mock-model-service, integration spec)
+      # uses. Without this VIDEO_DATA_ROOT defaults to /videos in
+      # model-service/src/infrastructure/adapters/outbound/video/processor.py:51,
+      # and the path-sanitizer check (.startswith(VIDEO_DATA_ROOT))
+      # rejects every /test-videos/* path the backend forwards, so
+      # /api/thumbnails/generate and /api/detection/detect fail with
+      # "Video file not found" even when the file is right there.
+      VIDEO_DATA_ROOT: /test-videos
+      STORAGE_PATH: /test-videos
+    volumes:
+      # Mount the e2e test-videos directory the same way the backend and
+      # mock-model-service already mount it in the base compose. The
+      # base compose file omits this volume on the model-service service
+      # entirely, so the real model-service container had NO access to
+      # any video file at all when first added to the stack. Mount
+      # read-only because integration tests should never write to the
+      # shared fixture directory.
+      - ./test-videos:/test-videos:ro
     # Wait longer at startup for the CPU-mode model load to complete
     # before the backend's depends_on health gate releases. The base
     # file allots a 20 s start_period; CPU-mode models (Qwen2.5-VL 3B

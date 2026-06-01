@@ -41,6 +41,21 @@ dependencies = [
 quantization = [
     "bitsandbytes>=0.42.0",
 ]
+# CPU-only deployment extra. Engaged by the Dockerfile when DEVICE=cpu so
+# the GGUF and ONNX models the models-cpu.yaml config selects can actually
+# load: llama-cpp-python is the runtime for every `framework: llama_cpp`
+# entry (qwen2-5-vl-3b-gguf for video summarization, qwen2-5-1-5b-gguf
+# for ontology augmentation, deepseek-r1-distill-qwen-1-5b-gguf for claim
+# extraction, etc.), and onnxruntime is the runtime for every
+# `framework: onnx` entry (yolo-world-v2 / yolo-world-s-onnx /
+# florence-2-base-onnx / grounding-dino-tiny-onnx for object detection).
+# Without these the CPU image starts, models-cpu.yaml parses, but the
+# first call to summarize / augment / detect / extract-claims throws
+# "No module named 'llama_cpp'" or "No ONNX loader available for model".
+cpu = [
+    "llama-cpp-python>=0.3.0",
+    "onnxruntime>=1.20.0",
+]
 sglang = [
     "sglang>=0.4.1",
 ]

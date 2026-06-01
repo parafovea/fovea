@@ -4,10 +4,24 @@ This module defines entities for representing model configurations,
 task configurations, and inference settings.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import TypeAdapter
+
+from src.domain.entities.architectures import Architecture
 from src.domain.types import DeviceType
+
+# Module-level Pydantic adapter that parses the discriminated
+# Architecture union from a plain dict (the shape every YAML config
+# emits) into the right subclass. Cached as a module-level constant
+# because TypeAdapter compilation is non-trivial and the parsed shape
+# is read on every model load. The annotation is lifted from the
+# Annotated[Union[...], Field(discriminator)] alias on Architecture;
+# Pyright's variance check on Annotated forces a `type: ignore`.
+_ARCHITECTURE_ADAPTER = TypeAdapter[Architecture](Architecture)  # type: ignore[misc]
 
 
 @dataclass
@@ -44,6 +58,16 @@ class ModelConfig:
 
     model_id: str
     framework: str
+    # Optional during the staged rollout of architecture-keyed loader
+    # registries (see src/infrastructure/adapters/outbound/models/registry.py
+    # and src/domain/entities/architectures.py). YAML entries that have
+    # not yet been migrated continue to dispatch through the legacy
+    # substring-matching factories. The plan is to flip every factory
+    # to registry-based dispatch as each family migrates its YAML
+    # entries, then tighten this to a required field once both
+    # models.yaml and models-cpu.yaml have an `architecture:` block on
+    # every option.
+    architecture: Architecture | None = None
     vram_gb: float = 0.0
     cpu_memory_gb: float = 0.0
     cpu_compatible: bool = False
@@ -103,6 +127,9 @@ class ModelConfig:
         return {
             "model_id": self.model_id,
             "framework": self.framework,
+            "architecture": (
+                self.architecture.model_dump() if self.architecture is not None else None
+            ),
             "vram_gb": self.vram_gb,
             "cpu_memory_gb": self.cpu_memory_gb,
             "cpu_compatible": self.cpu_compatible,
@@ -129,9 +156,24 @@ class ModelConfig:
         ModelConfig
             New model config instance.
         """
+        # The architecture is OPTIONAL during the staged rollout of
+        # registry-based loader dispatch. YAML entries that carry an
+        # `architecture: {kind: ...}` block are parsed into the right
+        # Pydantic discriminated-union subclass; entries that omit it
+        # fall through to the legacy substring-matching factories. A
+        # malformed block (e.g. unknown `kind`) still fails loudly so
+        # YAML typos are caught at config load.
+        arch_payload = data.get("architecture")
+        architecture: Architecture | None = (
+            _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
+            if arch_payload is not None
+            else None
+        )
+
         return cls(
             model_id=data["model_id"],
             framework=data["framework"],
+            architecture=architecture,
             vram_gb=data.get("vram_gb", 0.0),
             cpu_memory_gb=data.get("cpu_memory_gb", 0.0),
             cpu_compatible=data.get("cpu_compatible", False),

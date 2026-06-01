@@ -43,7 +43,7 @@ class LlamaCppVLMLoader:
         """Whether the model is loaded."""
         return self._model is not None
 
-    async def load(self) -> None:
+    def load(self) -> None:
         """Load the GGUF multimodal model with vision encoder."""
         from llama_cpp import Llama
         from llama_cpp.llama_chat_format import (
@@ -113,7 +113,7 @@ class LlamaCppVLMLoader:
         return self.clip_model_path
 
     @instrument_method(task="vlm_generate")
-    async def generate(
+    def generate(
         self,
         images: list[Any],
         prompt: str,
@@ -184,7 +184,7 @@ class LlamaCppVLMLoader:
 
         return str(output["choices"][0]["message"]["content"])
 
-    async def unload(self) -> None:
+    def unload(self) -> None:
         """Unload model and free resources."""
         self._model = None
         logger.info("Unloaded llama.cpp VLM: %s", self.config.model_id)
