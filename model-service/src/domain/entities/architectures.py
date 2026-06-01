@@ -110,6 +110,41 @@ class Tarsier2(_ArchitectureBase):
     kind: Literal["tarsier-2"] = "tarsier-2"
 
 
+# External-API VLM architectures. These tag YAML entries that route
+# through the external-API adapter layer rather than the local VLM
+# registry. No loader registers against them; if one ever reaches
+# the registry that is a route bug and the lookup raises
+# UnknownArchitectureError with the registered local VLM list.
+# Distinct from the LLM external-API architectures because the VLM
+# request payload carries images and the API client wraps them
+# differently (Anthropic vision messages, OpenAI image content parts,
+# Gemini inlineData parts).
+
+
+class ClaudeVisionAPI(_ArchitectureBase):
+    """Anthropic Claude vision messages API family."""
+
+    kind: Literal["claude-vision-api"] = "claude-vision-api"
+
+
+class OpenAIVisionAPI(_ArchitectureBase):
+    """OpenAI chat-completions API family with vision-capable models."""
+
+    kind: Literal["openai-vision-api"] = "openai-vision-api"
+
+
+class GeminiVisionAPI(_ArchitectureBase):
+    """Google Gemini generateContent API family with vision-capable models."""
+
+    kind: Literal["gemini-vision-api"] = "gemini-vision-api"
+
+
+class GrokVisionAPI(_ArchitectureBase):
+    """xAI Grok chat-completions API family with vision-capable models."""
+
+    kind: Literal["grok-vision-api"] = "grok-vision-api"
+
+
 VLMArchitecture = Annotated[
     Union[  # noqa: UP007 (Pydantic Annotated unions on 3.12 still need explicit Union)
         SmolVLM,
@@ -121,6 +156,10 @@ VLMArchitecture = Annotated[
         Pixtral,
         Llama4Maverick,
         Tarsier2,
+        ClaudeVisionAPI,
+        OpenAIVisionAPI,
+        GeminiVisionAPI,
+        GrokVisionAPI,
     ],
     Field(discriminator="kind"),
 ]
@@ -306,6 +345,22 @@ class Florence2Detection(_ArchitectureBase):
     kind: Literal["florence-2"] = "florence-2"
 
 
+class SAM3Detection(_ArchitectureBase):
+    """Meta SAM 3.1 detection-mode family.
+
+    SAM 3.1 doubles as a detection and tracking architecture; the
+    detection adapter lives outside the detection-loader registry
+    because its API surface (Object Multiplex prompts, shared memory)
+    differs from open-vocabulary detection. The architecture is
+    declared here so every YAML entry carries an ``architecture:``
+    block; no loader in the local detection registries registers
+    against it (a framework-level pre-dispatch selects the SAM 3.1
+    adapter before the architecture-keyed registry is consulted).
+    """
+
+    kind: Literal["sam-3-1-detection"] = "sam-3-1-detection"
+
+
 DetectionArchitecture = Annotated[
     Union[  # noqa: UP007
         YOLOWorld,
@@ -315,6 +370,7 @@ DetectionArchitecture = Annotated[
         GroundingDINO,
         OWLv2,
         Florence2Detection,
+        SAM3Detection,
     ],
     Field(discriminator="kind"),
 ]
@@ -462,6 +518,27 @@ class AzureSpeech(_ArchitectureBase):
     kind: Literal["azure-speech"] = "azure-speech"
 
 
+# Diarization / voice-activity architectures are tracked alongside the
+# transcription architectures because they share the audio-task surface
+# of the model-service. Diarization and VAD use entirely different
+# adapter classes (PyannoteLoader / SileroVADLoader) than the transcription
+# loaders and are routed through task-specific factories rather than
+# audio_registry; carrying their architectures here keeps every YAML
+# entry across the audio task sections schema-uniform.
+
+
+class PyannoteDiarization(_ArchitectureBase):
+    """pyannote.audio speaker diarization family."""
+
+    kind: Literal["pyannote-diarization"] = "pyannote-diarization"
+
+
+class SileroVAD(_ArchitectureBase):
+    """Silero voice-activity-detection family."""
+
+    kind: Literal["silero-vad"] = "silero-vad"
+
+
 AudioArchitecture = Annotated[
     Union[  # noqa: UP007
         Whisper,
@@ -476,6 +553,8 @@ AudioArchitecture = Annotated[
         AWSTranscribe,
         GoogleSpeech,
         AzureSpeech,
+        PyannoteDiarization,
+        SileroVAD,
     ],
     Field(discriminator="kind"),
 ]

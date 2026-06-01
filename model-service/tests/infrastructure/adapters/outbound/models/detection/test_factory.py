@@ -180,23 +180,44 @@ class TestONNXRegistryBindings:
 class TestRegistryCoverage:
     """The two registries together cover the DetectionArchitecture union."""
 
-    def test_pytorch_registry_covers_every_detection_architecture(self) -> None:
-        """Every member of the DetectionArchitecture union has a pytorch loader.
+    def test_pytorch_registry_covers_every_local_detection_architecture(self) -> None:
+        """Every LOCAL member of the DetectionArchitecture union has a pytorch loader.
 
         ONNX support is partial (only YOLOWorld, GroundingDINO, and
         Florence2Detection have ONNX loaders today). The pytorch registry,
         on the other hand, is the canonical backend and must cover every
-        architecture in the discriminated union; a YAML config naming any
-        of them with a non-ONNX framework would otherwise fail at runtime
-        with :class:`UnknownArchitectureError`.
+        local architecture in the discriminated union; a YAML config
+        naming any of them with a non-ONNX framework would otherwise
+        fail at runtime with :class:`UnknownArchitectureError`.
+
+        SAM3Detection is intentionally NOT registered: its YAML entries
+        are routed through a framework-level pre-dispatch
+        (``framework: sam3``) in the task factory before
+        ``create_detection_loader`` is reached. Asking either detection
+        registry to resolve it raises :class:`UnknownArchitectureError`,
+        the desired loud-fail behaviour for routing bugs. The
+        exhaustiveness check filters it out by name.
         """
         union_type = get_args(DetectionArchitecture)[0]
         members = set(get_args(union_type))
+        framework_pre_dispatched = {
+            cls for cls in members if cls.__name__.startswith("SAM3")
+        }
+        local_members = members - framework_pre_dispatched
         registered = set(detection_pytorch_registry.registered_architectures)
-        missing = members - registered
+
+        missing = local_members - registered
         assert not missing, (
-            "DetectionArchitecture subclasses without a registered pytorch loader: "
+            "Local DetectionArchitecture subclasses without a registered pytorch loader: "
             f"{sorted(c.__name__ for c in missing)}"
+        )
+
+        accidentally_registered = framework_pre_dispatched & registered
+        assert not accidentally_registered, (
+            "Framework-pre-dispatched DetectionArchitecture subclasses must not be "
+            "registered in detection_pytorch_registry (they route through framework: sam3 "
+            f"in the task factory); accidentally registered: "
+            f"{sorted(c.__name__ for c in accidentally_registered)}"
         )
 
     def test_no_registry_advertises_unknown_architectures(self) -> None:

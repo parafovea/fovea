@@ -89,19 +89,39 @@ class TestRegistryBindings:
         assert loader.arch is architecture
         assert loader.config.framework == InferenceFramework.TRANSFORMERS
 
-    def test_every_vlm_architecture_has_a_loader(self) -> None:
-        """The registry covers every VLMArchitecture subclass in the union."""
+    def test_every_local_vlm_architecture_has_a_loader(self) -> None:
+        """The registry covers every LOCAL VLMArchitecture subclass in the union.
+
+        External-API VLM architectures (ClaudeVisionAPI, OpenAIVisionAPI,
+        GeminiVisionAPI, GrokVisionAPI) are intentionally NOT registered:
+        their YAML entries are routed through the external-API adapter
+        layer before ``create_vlm_loader`` is reached, and asking the
+        registry to resolve one of them raises
+        :class:`UnknownArchitectureError`, the desired loud-fail
+        behaviour for routing bugs. The exhaustiveness check filters
+        them out by name suffix and locks the negative (no external-API
+        architecture may accidentally be registered).
+        """
         from src.domain.entities.architectures import VLMArchitecture  # noqa: PLC0415
         from typing import get_args
 
-        # VLMArchitecture is Annotated[Union[...], Field(...)]; unwrap to the union.
         union_type = get_args(VLMArchitecture)[0]
         members = set(get_args(union_type))
+        external_api_markers = {cls for cls in members if cls.__name__.endswith("VisionAPI")}
+        local_members = members - external_api_markers
         registered = set(vlm_registry.registered_architectures)
-        missing = members - registered
+
+        missing = local_members - registered
         assert not missing, (
-            f"VLMArchitecture subclasses without a registered loader: "
+            "Local VLMArchitecture subclasses without a registered loader: "
             f"{sorted(c.__name__ for c in missing)}"
+        )
+
+        accidentally_registered = external_api_markers & registered
+        assert not accidentally_registered, (
+            "External-API VLMArchitecture subclasses must not be registered "
+            "in vlm_registry (they route through the external-API adapter); "
+            f"accidentally registered: {sorted(c.__name__ for c in accidentally_registered)}"
         )
 
 

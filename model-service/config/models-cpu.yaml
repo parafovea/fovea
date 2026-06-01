@@ -70,6 +70,8 @@ models:
       # External APIs (always CPU-compatible)
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -81,6 +83,8 @@ models:
         description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
       gpt-4o:
         model_id: "gpt-4o"
+        architecture:
+          kind: "openai-vision-api"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -92,6 +96,8 @@ models:
         description: "OpenAI GPT-4 Omni, vision capable, API-based"
       gemini-2-5-flash:
         model_id: "gemini-2.5-flash"
+        architecture:
+          kind: "gemini-vision-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -500,6 +506,8 @@ models:
     options:
       pyannote-3-1:
         model_id: "pyannote/speaker-diarization-3.1"
+        architecture:
+          kind: "pyannote-diarization"
         framework: "pyannote"
         vram_gb: 2
         cpu_memory_gb: 2
@@ -512,6 +520,8 @@ models:
     options:
       silero-vad:
         model_id: "silero_vad"
+        architecture:
+          kind: "silero-vad"
         framework: "pytorch"
         vram_gb: 0.1
         cpu_memory_gb: 0.1

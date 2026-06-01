@@ -197,6 +197,8 @@ models:
       # External APIs (always CPU-compatible)
       claude-sonnet-4-6:
         model_id: "claude-sonnet-4-6"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -208,6 +210,8 @@ models:
         description: "Claude Sonnet 4.6, current production default, 1M context, vision"
       claude-opus-4-7:
         model_id: "claude-opus-4-7"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -219,6 +223,8 @@ models:
         description: "Claude Opus 4.7, Anthropic flagship April 2026, vision, 1M context"
       gpt-5-4:
         model_id: "gpt-5.4"
+        architecture:
+          kind: "openai-vision-api"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -230,6 +236,8 @@ models:
         description: "OpenAI GPT-5.4, flagship multimodal, vision, 200K context"
       gemini-3-1-pro:
         model_id: "gemini-3.1-pro"
+        architecture:
+          kind: "gemini-vision-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
@@ -241,6 +249,8 @@ models:
         description: "Gemini 3.1 Pro, 2M context, 78.2% on Video-MME (SOTA video understanding)"
       grok-4:
         model_id: "grok-4"
+        architecture:
+          kind: "grok-vision-api"
         framework: "external_api"
         provider: "xai"
         api_endpoint: "https://api.x.ai/v1/chat/completions"
@@ -252,6 +262,8 @@ models:
         description: "xAI Grok 4, 2M context, multimodal"
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -263,6 +275,8 @@ models:
         description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
       gpt-4o:
         model_id: "gpt-4o"
+        architecture:
+          kind: "openai-vision-api"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -274,6 +288,8 @@ models:
         description: "OpenAI GPT-4 Omni, vision capable, API-based"
       gemini-2-5-flash:
         model_id: "gemini-2.5-flash"
+        architecture:
+          kind: "gemini-vision-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -625,6 +641,8 @@ models:
     options:
       sam-3-1:
         model_id: "facebook/sam3.1-base"
+        architecture:
+          kind: "sam-3-1-detection"
         framework: "sam3"
         vram_gb: 4
         cpu_memory_gb: 0
@@ -634,6 +652,8 @@ models:
         description: "SAM 3.1 (Meta, March 2026), unified detection+segmentation+tracking, text/exemplar prompts"
       sam-3:
         model_id: "facebook/sam3-large"
+        architecture:
+          kind: "sam-3-1-detection"
         framework: "sam3"
         vram_gb: 6
         cpu_memory_gb: 0
@@ -1473,6 +1493,8 @@ models:
     options:
       pyannote-3-1:
         model_id: "pyannote/speaker-diarization-3.1"
+        architecture:
+          kind: "pyannote-diarization"
         framework: "pyannote"
         vram_gb: 2
         cpu_memory_gb: 2
@@ -1485,6 +1507,8 @@ models:
     options:
       silero-vad:
         model_id: "silero_vad"
+        architecture:
+          kind: "silero-vad"
         framework: "pytorch"
         vram_gb: 0.1
         cpu_memory_gb: 0.1
