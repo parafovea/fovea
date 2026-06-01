@@ -55,20 +55,21 @@ class ModelConfig:
         """Initialize model configuration from dictionary."""
         self.model_id: str = config_dict["model_id"]
         self.framework: str = config_dict["framework"]
-        # ``architecture`` is parsed eagerly from the YAML block when
-        # present. The field is staged as optional during the rollout
-        # of registry-keyed loader dispatch; once every family's YAML
-        # entries carry an ``architecture: {kind: ...}`` block the
-        # orchestrator will tighten this to required at the schema
-        # boundary. A malformed block (unknown ``kind``, extra fields)
-        # still fails loudly thanks to ``ConfigDict(extra='forbid')``
-        # on the architecture Pydantic models.
-        arch_payload = config_dict.get("architecture")
-        self.architecture: Architecture | None = (
-            _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
-            if arch_payload is not None
-            else None
-        )
+        # Architecture is required. A YAML entry without an `architecture`
+        # block fails loudly here at config load rather than silently
+        # selecting a default at dispatch time. The discriminated union
+        # in src.domain.entities.architectures parses the dict into the
+        # right Pydantic subclass; malformed blocks (unknown `kind`,
+        # extra fields) raise loud thanks to ConfigDict(extra='forbid').
+        try:
+            arch_payload = config_dict["architecture"]
+        except KeyError as exc:
+            raise ValueError(
+                "ModelConfig is missing the required `architecture` block; "
+                "every model option in models.yaml / models-cpu.yaml must "
+                f"declare its architecture kind. Got keys: {sorted(config_dict.keys())!r}"
+            ) from exc
+        self.architecture: Architecture = _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
         self.vram_gb: float = config_dict.get("vram_gb", 0)
         self.cpu_memory_gb: float = config_dict.get("cpu_memory_gb", 0)
         self.cpu_compatible: bool = config_dict.get("cpu_compatible", False)

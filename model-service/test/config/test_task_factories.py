@@ -23,14 +23,18 @@ from src.infrastructure.config.task_factories import (
 def _make_model_config(**overrides: object) -> ModelConfig:
     """Build a ``ModelConfig`` with sensible defaults for factory tests.
 
-    ``architecture`` is intentionally left at the ``ModelConfig`` default
-    (``None``) so per-task tests can pass the architecture that matches
-    the task under test; the parallel tracking/detection/audio/llm/vlm
-    tests each set their own concrete architecture in ``overrides``.
+    Every ``ModelConfig`` carries an architecture; per-task tests pass
+    the architecture that matches the task under test by overriding
+    ``architecture=``. The default below pins Whisper because the
+    factory tests that use the default-overridden config are audio
+    tasks (speaker_diarization, voice_activity_detection); detection,
+    tracking, audio-transcription, llm, and vlm tests pass concrete
+    architectures via ``overrides``.
     """
     defaults: dict[str, object] = {
         "model_id": "vendor/model",
         "framework": "whisper",
+        "architecture": Whisper(),
         "vram_gb": 0,
         "cpu_memory_gb": 0.0,
         "cpu_compatible": True,
@@ -262,13 +266,22 @@ class TestObjectDetectionFactory:
         assert config_cls.call_args.kwargs["framework"] == expected_enum_name
         loader.load.assert_called_once()
 
-    def test_missing_architecture_raises(self) -> None:
-        """A YAML entry without an architecture block must fail with a clear error."""
+    def test_wrong_family_architecture_raises(self) -> None:
+        """A ModelConfig whose architecture belongs to another family must
+        fail loudly: Whisper (audio) is not a DetectionArchitecture and
+        the detection registry raises UnknownArchitectureError naming the
+        registered detection architectures."""
+        from src.infrastructure.adapters.outbound.models.registry import (
+            UnknownArchitectureError,
+        )
+
         registry = build_default_task_factories()
-        with pytest.raises(ValueError, match="architecture"):
+        with pytest.raises(UnknownArchitectureError) as exc_info:
             registry["object_detection"](
                 _make_model_config(framework="pytorch", model_id="model")
             )
+        assert exc_info.value.family.startswith("detection")
+        assert "Whisper" in str(exc_info.value)
 
 
 class TestObjectTrackingFactory:
@@ -330,10 +343,12 @@ class TestObjectTrackingFactory:
         # registry-backed create_tracking_loader; never inspect model_id.
         assert create_fn.call_args.args[0] is architecture
 
-    def test_generic_tracking_path_without_architecture_raises(self) -> None:
-        """A tracking ModelConfig without an architecture block fails loudly."""
+    def test_generic_tracking_path_wrong_family_architecture_raises(self) -> None:
+        """A tracking ModelConfig that carries an architecture from another family
+        must be rejected before reaching the registry. Whisper (audio) is not a
+        TrackingArchitecture."""
         registry = build_default_task_factories()
-        with pytest.raises(ValueError, match="no architecture set"):
+        with pytest.raises(ValueError, match="not a tracking architecture"):
             registry["object_tracking"](
                 _make_model_config(framework="pytorch", model_id="sam2"),
             )

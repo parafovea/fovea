@@ -58,16 +58,14 @@ class ModelConfig:
 
     model_id: str
     framework: str
-    # Optional during the staged rollout of architecture-keyed loader
-    # registries (see src/infrastructure/adapters/outbound/models/registry.py
-    # and src/domain/entities/architectures.py). YAML entries that have
-    # not yet been migrated continue to dispatch through the legacy
-    # substring-matching factories. The plan is to flip every factory
-    # to registry-based dispatch as each family migrates its YAML
-    # entries, then tighten this to a required field once both
-    # models.yaml and models-cpu.yaml have an `architecture:` block on
-    # every option.
-    architecture: Architecture | None = None
+    # Required. Every YAML entry in both models.yaml and models-cpu.yaml
+    # carries an `architecture: {kind: ...}` block; the discriminated
+    # Pydantic union in src/domain/entities/architectures.py parses it
+    # into the right subclass, and every loader factory dispatches
+    # purely on the architecture's type via the LoaderRegistry. A
+    # ModelConfig without an architecture is a programming bug; the
+    # factories raise loud, actionable errors if one is ever reached.
+    architecture: Architecture
     vram_gb: float = 0.0
     cpu_memory_gb: float = 0.0
     cpu_compatible: bool = False
@@ -156,19 +154,21 @@ class ModelConfig:
         ModelConfig
             New model config instance.
         """
-        # The architecture is OPTIONAL during the staged rollout of
-        # registry-based loader dispatch. YAML entries that carry an
-        # `architecture: {kind: ...}` block are parsed into the right
-        # Pydantic discriminated-union subclass; entries that omit it
-        # fall through to the legacy substring-matching factories. A
-        # malformed block (e.g. unknown `kind`) still fails loudly so
-        # YAML typos are caught at config load.
-        arch_payload = data.get("architecture")
-        architecture: Architecture | None = (
-            _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
-            if arch_payload is not None
-            else None
-        )
+        # Architecture is required. A YAML entry without an `architecture`
+        # block (or with an unknown `kind`, or with extra fields under the
+        # discriminator) fails loudly here at config load rather than
+        # silently selecting a default at dispatch time. The discriminated
+        # union in src.domain.entities.architectures parses the dict into
+        # the right Pydantic subclass.
+        try:
+            arch_payload = data["architecture"]
+        except KeyError as exc:
+            raise ValueError(
+                "ModelConfig is missing the required `architecture` block; "
+                "every model option in models.yaml / models-cpu.yaml must "
+                f"declare its architecture kind. Got payload keys: {sorted(data.keys())!r}"
+            ) from exc
+        architecture = _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
 
         return cls(
             model_id=data["model_id"],
