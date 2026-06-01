@@ -30,6 +30,24 @@ services:
       # Point at the real CPU-mode model-service rather than the mock.
       # Every other env var is inherited from docker-compose.e2e.yml.
       MODEL_SERVICE_URL: http://model-service:8000
+      # CPU-friendly per-endpoint ceilings for the forwarded
+      # fetchModelService calls. The production defaults in
+      # server/src/lib/fetchModelService.ts target a GPU-warm deployment
+      # where ontology augmentation completes in ~10 seconds and
+      # detection in ~20 seconds; first-load on CPU (Qwen2.5-VL 3B GGUF,
+      # SmolVLM, Moondream, etc.) routinely runs into the 90 to 600
+      # second range, and the prior defaults would 504 the request
+      # before the model returned. Override each to a CPU-realistic
+      # ceiling so the integration-models Playwright spec exercises the
+      # full vertical without being pre-empted by the backend's
+      # production timeout. Production deployments override these via
+      # the same env vars if they need different ceilings.
+      MODEL_SERVICE_TIMEOUT_DETECTION_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS: '1800000'
+      MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS: '1800000'
+      MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS: '1800000'
     depends_on:
       postgres:
         condition: service_healthy

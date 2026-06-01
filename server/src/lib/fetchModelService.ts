@@ -85,18 +85,39 @@ export async function fetchModelService(
   }
 }
 
-/** Per-endpoint timeout defaults. */
+/** Parse a positive-integer env var, falling back to a default when unset
+ * or malformed. Used by the per-endpoint timeouts below so deployments
+ * with slower upstream hardware (CPU-only model-service, cold-start
+ * cloud instances) can raise the ceiling without a code change.
+ */
+function envTimeoutMs(name: string, defaultMs: number): number {
+  const raw = process.env[name]
+  if (raw === undefined || raw === '') return defaultMs
+  const parsed = Number.parseInt(raw, 10)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return defaultMs
+}
+
+/** Per-endpoint timeout defaults. Each value is the upper bound the
+ * backend waits before aborting a forwarded request to the model-
+ * service and surfacing 504 MODEL_SERVICE_TIMEOUT to the caller. The
+ * defaults below target a GPU-warm production deployment; CPU-cold
+ * first-load (e.g. the integration-models E2E stack) is materially
+ * slower (an LLM augmenter call took 94s on first invocation, beyond
+ * the prior 60s detection / augment ceilings), so deployments that
+ * need higher ceilings override these via the matching env vars.
+ */
 export const MODEL_SERVICE_TIMEOUTS = {
   /** Detection across N frames: heavier than a simple inference. */
-  detection: 60_000,
+  detection: envTimeoutMs('MODEL_SERVICE_TIMEOUT_DETECTION_MS', 60_000),
   /** Single-frame thumbnail render. */
-  thumbnails: 30_000,
+  thumbnails: envTimeoutMs('MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS', 30_000),
   /** LLM-backed ontology suggestion. */
-  ontologyAugment: 60_000,
+  ontologyAugment: envTimeoutMs('MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS', 60_000),
   /** Transcription / summarization over a whole video. */
-  summarize: 300_000,
+  summarize: envTimeoutMs('MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS', 300_000),
   /** Claim extraction over a summary. */
-  extractClaims: 300_000,
+  extractClaims: envTimeoutMs('MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS', 300_000),
   /** Synthesizing a final summary from extracted claims. */
-  synthesize: 300_000,
+  synthesize: envTimeoutMs('MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS', 300_000),
 } as const
