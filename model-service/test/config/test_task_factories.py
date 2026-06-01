@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.domain.entities import ModelConfig
+from src.domain.entities.architectures import Whisper
 from src.infrastructure.config.task_factories import (
     _device,
     build_default_task_factories,
@@ -20,7 +21,13 @@ from src.infrastructure.config.task_factories import (
 
 
 def _make_model_config(**overrides: object) -> ModelConfig:
-    """Build a ``ModelConfig`` with sensible defaults for factory tests."""
+    """Build a ``ModelConfig`` with sensible defaults for factory tests.
+
+    ``architecture`` is intentionally left at the ``ModelConfig`` default
+    (``None``) so per-task tests can pass the architecture that matches
+    the task under test; the parallel tracking/detection/audio/llm/vlm
+    tests each set their own concrete architecture in ``overrides``.
+    """
     defaults: dict[str, object] = {
         "model_id": "vendor/model",
         "framework": "whisper",
@@ -103,13 +110,15 @@ class TestAudioTranscriptionFactory:
                 "src.infrastructure.adapters.outbound.models.audio.loader": MagicMock(
                     AudioFramework=framework_enum,
                     TranscriptionConfig=config_cls,
-                    create_transcription_loader=MagicMock(return_value=loader),
+                    create_audio_loader=MagicMock(return_value=loader),
                 )
             },
         ):
             registry = build_default_task_factories()
             factory = registry["audio_transcription"]
-            returned = factory(_make_model_config(framework=framework_hint))
+            returned = factory(
+                _make_model_config(framework=framework_hint, architecture=Whisper())
+            )
 
         assert returned is loader
         loader.load.assert_called_once()
@@ -135,7 +144,7 @@ class TestAudioTranscriptionFactory:
         loader_module = MagicMock(
             AudioFramework=framework_enum,
             TranscriptionConfig=config_cls,
-            create_transcription_loader=MagicMock(return_value=loader),
+            create_audio_loader=MagicMock(return_value=loader),
         )
         with patch.dict(
             "sys.modules",
@@ -144,12 +153,12 @@ class TestAudioTranscriptionFactory:
             registry = build_default_task_factories()
 
             with patch("torch.cuda.is_available", return_value=True):
-                registry["audio_transcription"](_make_model_config())
+                registry["audio_transcription"](_make_model_config(architecture=Whisper()))
             assert config_cls.call_args.kwargs["compute_type"] == "float16"
 
             config_cls.reset_mock()
             with patch("torch.cuda.is_available", return_value=False):
-                registry["audio_transcription"](_make_model_config())
+                registry["audio_transcription"](_make_model_config(architecture=Whisper()))
             assert config_cls.call_args.kwargs["compute_type"] == "int8"
 
 
@@ -229,6 +238,8 @@ class TestObjectDetectionFactory:
         for name in ["PYTORCH", "ULTRALYTICS", "TRANSFORMERS", "ONNX"]:
             setattr(framework_enum, name, name)
 
+        from src.domain.entities.architectures import YOLOWorld
+
         with patch.dict(
             "sys.modules",
             {
@@ -241,11 +252,23 @@ class TestObjectDetectionFactory:
         ):
             registry = build_default_task_factories()
             registry["object_detection"](
-                _make_model_config(framework=framework_hint, model_id="model")
+                _make_model_config(
+                    framework=framework_hint,
+                    model_id="model",
+                    architecture=YOLOWorld(),
+                )
             )
 
         assert config_cls.call_args.kwargs["framework"] == expected_enum_name
         loader.load.assert_called_once()
+
+    def test_missing_architecture_raises(self) -> None:
+        """A YAML entry without an architecture block must fail with a clear error."""
+        registry = build_default_task_factories()
+        with pytest.raises(ValueError, match="architecture"):
+            registry["object_detection"](
+                _make_model_config(framework="pytorch", model_id="model")
+            )
 
 
 class TestObjectTrackingFactory:
@@ -276,22 +299,55 @@ class TestObjectTrackingFactory:
         sam3_loader.load.assert_called_once()
 
     def test_generic_tracking_path_uses_create_tracking_loader(self) -> None:
+        from src.domain.entities.architectures import SAM2
+
         loader = MagicMock()
         config_cls = MagicMock()
+        create_fn = MagicMock(return_value=loader)
         with patch.dict(
             "sys.modules",
             {
                 "src.infrastructure.adapters.outbound.models.tracking.loader": MagicMock(
                     TrackingConfig=config_cls,
-                    create_tracking_loader=MagicMock(return_value=loader),
+                    create_tracking_loader=create_fn,
                 )
             },
         ):
             registry = build_default_task_factories()
+            architecture = SAM2()
             returned = registry["object_tracking"](
-                _make_model_config(framework="pytorch", model_id="sam2")
+                _make_model_config(
+                    framework="pytorch",
+                    model_id="sam2",
+                    architecture=architecture,
+                )
             )
 
         assert returned is loader
         loader.load.assert_called_once()
         assert config_cls.call_args.kwargs["model_id"] == "sam2"
+        # The factory must thread the parsed architecture through to the
+        # registry-backed create_tracking_loader; never inspect model_id.
+        assert create_fn.call_args.args[0] is architecture
+
+    def test_generic_tracking_path_without_architecture_raises(self) -> None:
+        """A tracking ModelConfig without an architecture block fails loudly."""
+        registry = build_default_task_factories()
+        with pytest.raises(ValueError, match="no architecture set"):
+            registry["object_tracking"](
+                _make_model_config(framework="pytorch", model_id="sam2"),
+            )
+
+    def test_generic_tracking_path_rejects_non_tracking_architecture(self) -> None:
+        """An architecture from another family fails before reaching the registry."""
+        from src.domain.entities.architectures import QwenLLM
+
+        registry = build_default_task_factories()
+        with pytest.raises(ValueError, match="not a tracking architecture"):
+            registry["object_tracking"](
+                _make_model_config(
+                    framework="pytorch",
+                    model_id="sam2",
+                    architecture=QwenLLM(),
+                ),
+            )

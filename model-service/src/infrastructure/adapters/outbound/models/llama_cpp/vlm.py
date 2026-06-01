@@ -11,6 +11,7 @@ import io
 import logging
 from typing import TYPE_CHECKING, Any
 
+from src.domain.entities.architectures import Moondream, VLMArchitecture
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
@@ -22,18 +23,30 @@ logger = logging.getLogger(__name__)
 class LlamaCppVLMLoader:
     """VLM loader using llama-cpp-python for GGUF multimodal models.
 
-    Supports models like Qwen2.5-VL, LLaVA, and other GGUF vision models
-    with llava-style chat completion.
+    Supports VLM architectures distributed as GGUF (Qwen2.5-VL, LLaVA,
+    Moondream, etc.). The architecture model is carried alongside the
+    llama.cpp config so the loader can pick the right chat handler from a
+    typed discriminator rather than substring-matching the model id.
 
     Parameters
     ----------
+    arch : VLMArchitecture
+        Parsed architecture entry. Used to select the llama.cpp chat handler
+        (e.g. Moondream uses the dedicated ``MoondreamChatHandler``, every
+        other GGUF VLM uses the ``NanoLlavaChatHandler`` template).
     config : LlamaCppConfig
         llama.cpp configuration.
     clip_model_path : str
         Path or HuggingFace repo ID for the CLIP vision encoder (mmproj file).
     """
 
-    def __init__(self, config: LlamaCppConfig, clip_model_path: str = "") -> None:
+    def __init__(
+        self,
+        arch: VLMArchitecture,
+        config: LlamaCppConfig,
+        clip_model_path: str = "",
+    ) -> None:
+        self.arch = arch
         self.config = config
         self.clip_model_path = clip_model_path
         self._model: Any = None
@@ -53,12 +66,14 @@ class LlamaCppVLMLoader:
 
         model_path = self.config.resolve_model_path()
 
-        # Resolve clip/mmproj model path and select chat handler
+        # Resolve clip/mmproj model path and select chat handler. The handler
+        # is picked from the architecture discriminator: Moondream ships with
+        # its own bespoke chat template in llama-cpp-python, every other GGUF
+        # VLM family round-trips cleanly through the NanoLlava template.
         chat_handler: MoondreamChatHandler | NanoLlavaChatHandler | None = None
         if self.clip_model_path:
             clip_path = self._resolve_clip_path()
-            model_lower = self.config.model_id.lower()
-            if "moondream" in model_lower:
+            if isinstance(self.arch, Moondream):
                 chat_handler = MoondreamChatHandler(clip_model_path=clip_path)
             else:
                 chat_handler = NanoLlavaChatHandler(clip_model_path=clip_path)

@@ -157,7 +157,15 @@ async def summarize_video(
                     framework=framework,
                 )
 
-                vlm_loader = create_vlm_loader(task_config.selected, model_config)
+                architecture = selected_model_config.architecture
+                if architecture is None:
+                    raise RuntimeError(
+                        f"Model config for {task_config.selected!r} is missing the "
+                        "required architecture field; add an architecture block "
+                        "(e.g. architecture: {kind: 'smolvlm'}) to the matching "
+                        "entry in models.yaml or models-cpu.yaml."
+                    )
+                vlm_loader = create_vlm_loader(architecture, model_config)
                 vlm = VLMLoaderAdapter(vlm_loader)
 
                 response_dto = await summarize_module.summarize_video_with_vlm(

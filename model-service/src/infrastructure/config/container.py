@@ -36,6 +36,11 @@ if TYPE_CHECKING:
     from src.application.use_cases.summarize_video import SummarizeVideoUseCase
     from src.application.use_cases.synthesize_summary import SynthesizeSummaryUseCase
     from src.application.use_cases.track_objects import TrackObjectsUseCase
+    from src.domain.entities.architectures import (
+        DetectionArchitecture,
+        TrackingArchitecture,
+        VLMArchitecture,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -120,21 +125,39 @@ class Container:
         framework: str = "whisper",
         language: str | None = None,
     ) -> IAudioTranscriber:
-        """Build an :class:`IAudioTranscriber` adapter backed by Whisper."""
+        """Build an :class:`IAudioTranscriber` adapter backed by Whisper or faster-whisper.
+
+        The ``framework`` keyword selects the architecture: ``"whisper"``
+        binds :class:`Whisper` (openai-whisper backend) and
+        ``"faster_whisper"`` binds :class:`FasterWhisper` (CTranslate2
+        backend). The architecture-keyed audio registry then dispatches
+        to the registered loader without inspecting ``model_id``; the
+        caller-supplied ``framework`` string is the only dispatch hint
+        this container surface exposes, and it maps to a concrete
+        Pydantic architecture before the registry is consulted.
+        """
+        from src.domain.entities.architectures import (  # noqa: PLC0415
+            AudioArchitecture,
+            FasterWhisper,
+            Whisper,
+        )
         from src.infrastructure.adapters.outbound.models.audio.adapters import (  # noqa: PLC0415
             WhisperTranscriberAdapter,
         )
         from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
             AudioFramework,
             TranscriptionConfig,
-            create_transcription_loader,
+            create_audio_loader,
         )
 
-        framework_enum = (
-            AudioFramework.FASTER_WHISPER
-            if framework == "faster_whisper"
-            else AudioFramework.WHISPER
-        )
+        architecture: AudioArchitecture
+        if framework == "faster_whisper":
+            architecture = FasterWhisper()
+            framework_enum = AudioFramework.FASTER_WHISPER
+        else:
+            architecture = Whisper()
+            framework_enum = AudioFramework.WHISPER
+
         device = "cuda" if self.model_capability_probe().is_cuda_available() else "cpu"
         config = TranscriptionConfig(
             model_id=model_id,
@@ -142,7 +165,7 @@ class Container:
             language=language,
             device=device,
         )
-        loader = create_transcription_loader(model_id, config)
+        loader = create_audio_loader(architecture, config)
         return WhisperTranscriberAdapter(loader)
 
     def speaker_diarizer(
@@ -192,7 +215,15 @@ class Container:
     def language_model(
         self, *, model_id: str = "meta-llama/Llama-3.2-3B-Instruct"
     ) -> ILanguageModel:
-        """Build an :class:`ILanguageModel` adapter for a given model id."""
+        """Build an :class:`ILanguageModel` adapter for a given model id.
+
+        Uses the :class:`Llama3LLM` architecture as the default because
+        the bundled default ``model_id`` is a Llama-3 checkpoint. Callers
+        that want a different family should construct the loader through
+        :func:`create_llm_loader` with the appropriate architecture
+        rather than overriding ``model_id`` on this convenience helper.
+        """
+        from src.domain.entities.architectures import Llama3LLM  # noqa: PLC0415
         from src.infrastructure.adapters.outbound.llm_adapter import (  # noqa: PLC0415
             LLMLoaderAdapter,
         )
@@ -203,16 +234,28 @@ class Container:
         )
 
         loader = LLMLoader(
+            Llama3LLM(),
             LLMConfig(
                 model_id=model_id,
                 quantization="4bit",
                 framework=LLMFramework.TRANSFORMERS,
-            )
+            ),
         )
         return LLMLoaderAdapter(loader)
 
-    def vision_language_model(self, *, model_name: str, model_id: str) -> IVisionLanguageModel:
-        """Build an :class:`IVisionLanguageModel` adapter for a given model id."""
+    def vision_language_model(
+        self,
+        *,
+        architecture: VLMArchitecture,
+        model_id: str,
+    ) -> IVisionLanguageModel:
+        """Build an :class:`IVisionLanguageModel` adapter for a parsed architecture.
+
+        Dispatch flows through :data:`vlm_registry`; the architecture's
+        Pydantic class is the only key consulted. Callers parse the
+        architecture block from YAML once (via :meth:`ModelConfig.from_dict`)
+        and hand the typed instance to this helper.
+        """
         from src.infrastructure.adapters.outbound.models.vlm.loader import (  # noqa: PLC0415
             VLMConfig,
             create_vlm_loader,
@@ -221,18 +264,26 @@ class Container:
             VLMLoaderAdapter,
         )
 
-        loader = create_vlm_loader(model_name, VLMConfig(model_id=model_id))
+        loader = create_vlm_loader(architecture, VLMConfig(model_id=model_id))
         return VLMLoaderAdapter(loader)
 
     def detection_model(
         self,
         *,
-        model_name: str,
+        architecture: DetectionArchitecture,
         model_id: str,
         framework: str = "pytorch",
         confidence_threshold: float = 0.3,
     ) -> IDetectionModel:
-        """Build an :class:`IDetectionModel` adapter for a given model."""
+        """Build an :class:`IDetectionModel` adapter for a given architecture.
+
+        Dispatch flows through :data:`detection_pytorch_registry` or
+        :data:`detection_onnx_registry`; the architecture's Pydantic
+        class is the only key. ``framework`` selects the backend the
+        loader uses internally (PyTorch / Ultralytics / Transformers
+        vs. ONNX Runtime) and consequently which of the two registries
+        the factory consults.
+        """
         from pathlib import Path as _Path  # noqa: PLC0415
 
         from src.infrastructure.adapters.outbound.detection_adapter import (  # noqa: PLC0415
@@ -260,17 +311,23 @@ class Container:
             device=device,
             cache_dir=_Path.home() / ".cache" / "huggingface",
         )
-        loader = create_detection_loader(model_name, detection_config)
+        loader = create_detection_loader(architecture, detection_config)
         return DetectionLoaderAdapter(loader, model_id=model_id)
 
     def tracking_model(
         self,
         *,
-        model_name: str,
+        architecture: TrackingArchitecture,
         model_id: str,
         framework: str = "pytorch",
     ) -> ITrackingModel:
-        """Build an :class:`ITrackingModel` adapter for a given model."""
+        """Build an :class:`ITrackingModel` adapter for a given architecture.
+
+        Dispatch flows through :data:`tracking_registry`; the architecture's
+        Pydantic class is the only key. ``framework`` selects the framework
+        adapter the loader uses internally (PyTorch, Ultralytics, SAM2) and
+        does not influence loader selection.
+        """
         from pathlib import Path as _Path  # noqa: PLC0415
 
         from src.infrastructure.adapters.outbound.models.tracking.loader import (  # noqa: PLC0415
@@ -296,7 +353,7 @@ class Container:
             device=device,
             cache_dir=_Path.home() / ".cache" / "huggingface",
         )
-        loader = create_tracking_loader(model_name, tracking_config)
+        loader = create_tracking_loader(architecture, tracking_config)
         return TrackingLoaderAdapter(loader, model_id=model_id)
 
     # ------------------------------------------------------------------
@@ -305,17 +362,17 @@ class Container:
     def build_detect_objects_use_case(
         self,
         *,
-        model_name: str,
+        architecture: DetectionArchitecture,
         model_id: str,
         framework: str = "pytorch",
         confidence_threshold: float = 0.3,
     ) -> DetectObjectsUseCase:
-        """Build a :class:`DetectObjectsUseCase`."""
+        """Build a :class:`DetectObjectsUseCase` for a given architecture."""
         from src.application.use_cases.detect_objects import DetectObjectsUseCase  # noqa: PLC0415
 
         return DetectObjectsUseCase(
             detection_model=self.detection_model(
-                model_name=model_name,
+                architecture=architecture,
                 model_id=model_id,
                 framework=framework,
                 confidence_threshold=confidence_threshold,
@@ -325,16 +382,16 @@ class Container:
     def build_track_objects_use_case(
         self,
         *,
-        model_name: str,
+        architecture: TrackingArchitecture,
         model_id: str,
         framework: str = "pytorch",
     ) -> TrackObjectsUseCase:
-        """Build a :class:`TrackObjectsUseCase`."""
+        """Build a :class:`TrackObjectsUseCase` for a parsed tracking architecture."""
         from src.application.use_cases.track_objects import TrackObjectsUseCase  # noqa: PLC0415
 
         return TrackObjectsUseCase(
             tracking_model=self.tracking_model(
-                model_name=model_name,
+                architecture=architecture,
                 model_id=model_id,
                 framework=framework,
             ),

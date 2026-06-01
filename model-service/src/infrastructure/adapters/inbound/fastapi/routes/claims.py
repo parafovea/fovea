@@ -86,6 +86,14 @@ async def extract_claims(
                 )
 
             selected_config = task_config.get_selected_config()
+
+            if selected_config.architecture is None:
+                raise RuntimeError(
+                    f"Model config for {task_config.selected!r} is missing required "
+                    f"architecture field; add an architecture block to "
+                    f"models.yaml/models-cpu.yaml"
+                )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -94,7 +102,7 @@ async def extract_claims(
                 temperature=0.7,
             )
 
-            loader = create_llm_loader(llm_config)
+            loader = create_llm_loader(selected_config.architecture, llm_config)
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 
@@ -178,6 +186,14 @@ async def synthesize_summary(
                 )
 
             selected_config = task_config.get_selected_config()
+
+            if selected_config.architecture is None:
+                raise RuntimeError(
+                    f"Model config for {task_config.selected!r} is missing required "
+                    f"architecture field; add an architecture block to "
+                    f"models.yaml/models-cpu.yaml"
+                )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -186,7 +202,7 @@ async def synthesize_summary(
                 temperature=0.8,
             )
 
-            loader = create_llm_loader(llm_config)
+            loader = create_llm_loader(selected_config.architecture, llm_config)
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 

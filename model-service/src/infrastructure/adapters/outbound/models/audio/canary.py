@@ -10,10 +10,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.domain.entities.architectures import NemoCanary
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
     TranscriptionSegment,
+    audio_registry,
 )
 from src.infrastructure.observability.telemetry import record_inference
 
@@ -22,6 +24,7 @@ logger = logging.getLogger(__name__)
 NEMO_INSTALL_HINT = "NeMo required for Canary; install with: pip install nemo_toolkit[asr]"
 
 
+@audio_registry.register(NemoCanary)
 class CanaryQwenLoader(AudioTranscriptionLoader):
     """Load and run inference with NVIDIA Canary-Qwen ASR models."""
 

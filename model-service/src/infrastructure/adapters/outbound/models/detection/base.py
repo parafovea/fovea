@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
     from PIL import Image
 
+    from src.domain.entities.architectures import DetectionArchitecture
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,9 +85,19 @@ class DetectionResult:
 
 
 class DetectionModelLoader(ABC):
-    """Abstract base class for object detection model loaders."""
+    """Abstract base class for object detection model loaders.
 
-    def __init__(self, config: DetectionConfig) -> None:
+    Every concrete detection loader binds to exactly one architecture
+    subclass from :data:`src.domain.entities.architectures.DetectionArchitecture`
+    via the ``@detection_pytorch_registry.register(...)`` or
+    ``@detection_onnx_registry.register(...)`` decorator. The architecture
+    instance is passed positionally to the constructor so per-architecture
+    hyperparameters declared on the architecture model flow to the loader
+    without any further plumbing.
+    """
+
+    def __init__(self, arch: DetectionArchitecture, config: DetectionConfig) -> None:
+        self.arch = arch
         self.config = config
         self.model: Any = None
 

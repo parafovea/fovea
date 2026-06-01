@@ -92,8 +92,21 @@ async def detect_objects(
 
             selected_model_config = task_config.get_selected_config()
 
+            architecture = selected_model_config.architecture
+            if architecture is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Object-detection model {selected_model_config.model_id!r} "
+                        "has no architecture declared in its YAML config. Add an "
+                        "`architecture: {kind: ...}` block to the entry under "
+                        "`tasks.object_detection.options` so the loader registry "
+                        "can dispatch by architecture."
+                    ),
+                )
+
             use_case = container.build_detect_objects_use_case(
-                model_name=task_config.selected,
+                architecture=architecture,
                 model_id=selected_model_config.model_id,
                 framework=selected_model_config.framework,
                 confidence_threshold=request.confidence_threshold,

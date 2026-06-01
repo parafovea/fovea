@@ -9,6 +9,7 @@ models:
       # CPU-compatible VLMs
       qwen2-5-vl-3b-gguf:
         model_id: "Qwen/Qwen2.5-VL-3B-Instruct-GGUF"
+        architecture: {kind: "qwen2.5-vl"}
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -18,6 +19,7 @@ models:
         description: "Qwen2.5-VL 3B GGUF, fast multimodal on CPU"
       smolvlm-2-2b:
         model_id: "HuggingFaceTB/SmolVLM-Instruct"
+        architecture: {kind: "smolvlm"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -27,6 +29,7 @@ models:
         description: "SmolVLM 2.2B, 3-4x faster than Qwen2-VL, low tokens/image"
       moondream-2b:
         model_id: "vikhyat/moondream2"
+        architecture: {kind: "moondream"}
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -36,6 +39,7 @@ models:
         description: "CPU-optimized 2B VLM, ~10s/frame, runs well on CPU/MPS"
       smolvlm-500m:
         model_id: "HuggingFaceTB/SmolVLM-500M-Instruct"
+        architecture: {kind: "smolvlm"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -45,6 +49,7 @@ models:
         description: "SmolVLM 500M, ultra-compact for edge, under 1GB at int8"
       moondream-0-5b:
         model_id: "vikhyat/moondream-0.5b"
+        architecture: {kind: "moondream"}
         quantization: "int4"
         framework: "transformers"
         vram_gb: 0
@@ -54,6 +59,7 @@ models:
         description: "Tiny 500M VLM, 816MB at int4, for edge devices"
       moondream-3:
         model_id: "vikhyatk/moondream3"
+        architecture: {kind: "moondream"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -102,6 +108,8 @@ models:
       # CPU-compatible LLMs
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -111,6 +119,8 @@ models:
         description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -120,6 +130,8 @@ models:
         description: "Small LLM for ontology, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -129,6 +141,8 @@ models:
         description: "Phi-3 3.8B, efficient reasoning on CPU"
       qwen-3-1-7b-cpu:
         model_id: "Qwen/Qwen3-1.7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -138,6 +152,8 @@ models:
         description: "Qwen3 1.7B CPU, current ungated small LLM default"
       phi-4-mini-cpu:
         model_id: "microsoft/Phi-4-mini-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -147,6 +163,8 @@ models:
         description: "Phi-4 mini, efficient reasoning on CPU (successor to Phi-3)"
       deepseek-r1-distill-qwen-1-5b-gguf:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -158,6 +176,8 @@ models:
       # External APIs (always CPU-compatible)
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -169,6 +189,8 @@ models:
         description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
       gpt-4o:
         model_id: "gpt-4o"
+        architecture:
+          kind: "openai-chat"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -180,6 +202,8 @@ models:
         description: "OpenAI GPT-4 Omni, text-only, API-based"
       gemini-2-5-flash:
         model_id: "gemini-2.5-flash"
+        architecture:
+          kind: "gemini-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -195,6 +219,8 @@ models:
     options:
       yolo-world-v2:
         model_id: "yolov8l-worldv2.pt"
+        architecture:
+          kind: "yolo-world"
         framework: "pytorch"
         vram_gb: 2
         cpu_memory_gb: 2
@@ -205,6 +231,8 @@ models:
       # CPU-optimized detection with ONNX
       yolo-world-s-onnx:
         model_id: "yolov8s-worldv2"
+        architecture:
+          kind: "yolo-world"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -214,6 +242,8 @@ models:
         description: "YOLO-World small, ONNX for CPU, ~100ms/image"
       florence-2-base-onnx:
         model_id: "onnx-community/Florence-2-base"
+        architecture:
+          kind: "florence-2"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -223,6 +253,8 @@ models:
         description: "Florence-2 ONNX, ~200ms/image on CPU"
       grounding-dino-tiny-onnx:
         model_id: "onnx-community/grounding-dino-tiny-ONNX"
+        architecture:
+          kind: "grounding-dino"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -237,6 +269,8 @@ models:
       yolo11n-seg:
         model_id: "ultralytics/yolo11n-seg"
         framework: "ultralytics"
+        architecture:
+          kind: "yolo11-seg"
         vram_gb: 1
         cpu_memory_gb: 1
         cpu_compatible: true
@@ -249,6 +283,8 @@ models:
       faster-whisper-large-v3:
         model_id: "Systran/faster-whisper-large-v3"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         vram_gb: 3
         cpu_memory_gb: 3
         cpu_compatible: true
@@ -257,6 +293,8 @@ models:
       whisperx-large-v3:
         model_id: "Systran/faster-whisper-large-v3"
         framework: "whisperx"
+        architecture:
+          kind: "whisperx"
         vram_gb: 0
         cpu_memory_gb: 3
         cpu_compatible: true
@@ -266,6 +304,8 @@ models:
       faster-whisper-medium-cpu:
         model_id: "Systran/faster-whisper-medium"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         quantization: "int8"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -275,6 +315,8 @@ models:
       faster-whisper-small-cpu:
         model_id: "Systran/faster-whisper-small"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         quantization: "int8"
         vram_gb: 0
         cpu_memory_gb: 1
@@ -285,6 +327,8 @@ models:
       assemblyai-universal:
         model_id: "best"
         framework: "external_api"
+        architecture:
+          kind: "assemblyai"
         provider: "assemblyai"
         api_endpoint: "https://api.assemblyai.com/v2"
         requires_api_key: true
@@ -296,6 +340,8 @@ models:
       deepgram-nova-3:
         model_id: "nova-3"
         framework: "external_api"
+        architecture:
+          kind: "deepgram"
         provider: "deepgram"
         api_endpoint: "https://api.deepgram.com/v1"
         requires_api_key: true
@@ -311,6 +357,8 @@ models:
       # CPU-compatible LLMs for claim extraction
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -320,6 +368,8 @@ models:
         description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -329,6 +379,8 @@ models:
         description: "Small LLM for claim extraction, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -338,6 +390,8 @@ models:
         description: "Phi-3 3.8B, efficient reasoning on CPU"
       qwen-3-1-7b-cpu:
         model_id: "Qwen/Qwen3-1.7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -347,6 +401,8 @@ models:
         description: "Qwen3 1.7B CPU, current ungated small LLM default"
       phi-4-mini-cpu:
         model_id: "microsoft/Phi-4-mini-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -356,6 +412,8 @@ models:
         description: "Phi-4 mini, efficient reasoning on CPU (successor to Phi-3)"
       deepseek-r1-distill-qwen-1-5b-gguf:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -371,6 +429,8 @@ models:
       # CPU-compatible LLMs for claim synthesis
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -380,6 +440,8 @@ models:
         description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -389,6 +451,8 @@ models:
         description: "Small LLM for claim synthesis, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -398,6 +462,8 @@ models:
         description: "Phi-3 3.8B, efficient reasoning on CPU"
       qwen-3-1-7b-cpu:
         model_id: "Qwen/Qwen3-1.7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -407,6 +473,8 @@ models:
         description: "Qwen3 1.7B CPU, current ungated small LLM default"
       phi-4-mini-cpu:
         model_id: "microsoft/Phi-4-mini-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -416,6 +484,8 @@ models:
         description: "Phi-4 mini, efficient reasoning on CPU (successor to Phi-3)"
       deepseek-r1-distill-qwen-1-5b-gguf:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0

@@ -94,8 +94,36 @@ async def track_objects(
 
             selected_model_config = task_config.get_selected_config()
 
+            from src.domain.entities.architectures import (
+                SAM2,
+                SAM2Long,
+                SAMURAI,
+                YOLO11Seg,
+            )
+
+            tracking_architecture = selected_model_config.architecture
+            if tracking_architecture is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Selected tracking model {selected_model_config.model_id!r} has "
+                        "no architecture set; add an `architecture:` block to its YAML entry."
+                    ),
+                )
+            if not isinstance(
+                tracking_architecture, (SAMURAI, SAM2Long, SAM2, YOLO11Seg)
+            ):
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Selected tracking model {selected_model_config.model_id!r} "
+                        f"declares architecture {type(tracking_architecture).__qualname__!r} "
+                        "which is not a tracking architecture."
+                    ),
+                )
+
             use_case = container.build_track_objects_use_case(
-                model_name=task_config.selected,
+                architecture=tracking_architecture,
                 model_id=selected_model_config.model_id,
                 framework=selected_model_config.framework,
             )

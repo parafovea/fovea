@@ -10,6 +10,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from src.domain.entities.architectures import YOLOWorld
 from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
@@ -18,6 +19,7 @@ from src.infrastructure.adapters.outbound.models.detection.base import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.adapters.outbound.models.onnx.registry import detection_onnx_registry
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@detection_onnx_registry.register(YOLOWorld)
 class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
     """YOLO-World ONNX loader for open-vocabulary detection on CPU.
 
@@ -34,6 +37,8 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     Parameters
     ----------
+    arch : YOLOWorld
+        Architecture model the loader is registered against.
     config : DetectionConfig
         Detection model configuration.
     onnx_config : ONNXConfig | None
@@ -42,6 +47,7 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     def __init__(
         self,
+        arch: YOLOWorld,
         config: DetectionConfig,
         onnx_config: ONNXConfig | None = None,
     ) -> None:
@@ -50,7 +56,7 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
             cache_dir=config.cache_dir,
         )
         ONNXModelLoader.__init__(self, onnx_cfg)
-        DetectionModelLoader.__init__(self, config)
+        DetectionModelLoader.__init__(self, arch, config)
         self._input_size = (640, 640)
 
     def load(self) -> None:

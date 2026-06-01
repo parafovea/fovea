@@ -23,8 +23,19 @@ from typing import TYPE_CHECKING, Any
 import psutil
 import yaml
 from opentelemetry import trace
+from pydantic import TypeAdapter
 
 from src.application.dto.external_api import ExternalAPIConfigDTO
+from src.domain.entities.architectures import Architecture
+
+# Pydantic adapter for the cross-family discriminated Architecture
+# union. Cached at module scope because TypeAdapter compilation is
+# non-trivial and ``ModelConfig`` instances parse architecture blocks
+# on every YAML load. The annotation is the family-tagged
+# ``Annotated[Union[...], Field(discriminator)]`` alias from
+# ``src.domain.entities.architectures``; Pyright's variance check on
+# Annotated forces a ``type: ignore``.
+_ARCHITECTURE_ADAPTER = TypeAdapter[Architecture](Architecture)  # type: ignore[misc]
 
 if TYPE_CHECKING:
     from src.application.ports.outbound.model_capability import IModelCapabilityProbe
@@ -44,6 +55,20 @@ class ModelConfig:
         """Initialize model configuration from dictionary."""
         self.model_id: str = config_dict["model_id"]
         self.framework: str = config_dict["framework"]
+        # ``architecture`` is parsed eagerly from the YAML block when
+        # present. The field is staged as optional during the rollout
+        # of registry-keyed loader dispatch; once every family's YAML
+        # entries carry an ``architecture: {kind: ...}`` block the
+        # orchestrator will tighten this to required at the schema
+        # boundary. A malformed block (unknown ``kind``, extra fields)
+        # still fails loudly thanks to ``ConfigDict(extra='forbid')``
+        # on the architecture Pydantic models.
+        arch_payload = config_dict.get("architecture")
+        self.architecture: Architecture | None = (
+            _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
+            if arch_payload is not None
+            else None
+        )
         self.vram_gb: float = config_dict.get("vram_gb", 0)
         self.cpu_memory_gb: float = config_dict.get("cpu_memory_gb", 0)
         self.cpu_compatible: bool = config_dict.get("cpu_compatible", False)

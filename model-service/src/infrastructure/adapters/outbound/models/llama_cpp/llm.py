@@ -16,6 +16,7 @@ from src.infrastructure.adapters.outbound.models.llm.base import (
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
+    from src.domain.entities.architectures import LLMArchitecture
     from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
 
 logger = logging.getLogger(__name__)
@@ -28,13 +29,23 @@ class LlamaCppLLMLoader:
     ``LLMLoader`` interface while using llama.cpp under the hood for
     efficient CPU inference.
 
+    The architecture instance is accepted as the first positional
+    argument for parity with the registry-dispatched local loader.
+    GGUF inference dispatches on framework (``LLMFramework.LLAMA_CPP``)
+    rather than on architecture; the architecture is retained here so
+    per-architecture prompt formatting or token configuration can land
+    on the architecture subclass without churning this signature again.
+
     Parameters
     ----------
+    arch : LLMArchitecture
+        Architecture instance from the parsed YAML.
     config : LlamaCppConfig
         llama.cpp configuration.
     """
 
-    def __init__(self, config: LlamaCppConfig) -> None:
+    def __init__(self, arch: LLMArchitecture, config: LlamaCppConfig) -> None:
+        self.arch = arch
         self.config = config
         self._model: Any = None
 

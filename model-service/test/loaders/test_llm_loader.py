@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 import torch
 
+from src.domain.entities.architectures import Llama3LLM
 from src.infrastructure.adapters.outbound.models.llm.loader import (
     GenerationConfig,
     GenerationResult,
@@ -15,6 +16,13 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
     create_llm_config_from_dict,
     create_llm_loader_with_fallback,
 )
+
+# Default test architecture: every legacy LLMLoader test predates the
+# architecture-keyed dispatch and constructed loaders with a single config
+# arg. The registry-based factory now requires (architecture, config); pin
+# Llama3LLM as a sensible default because the test fixtures use a
+# transformers-framework Llama config.
+_DEFAULT_LLM_ARCH = Llama3LLM()
 
 pytestmark = pytest.mark.requires_models
 
@@ -123,7 +131,7 @@ class TestLLMLoader:
         )
         cache_dir = Path("/tmp/models")
 
-        loader = LLMLoader(config, cache_dir)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config, cache_dir)
 
         assert loader.config == config
         assert loader.cache_dir == cache_dir
@@ -138,7 +146,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         quant_config = loader._create_quantization_config()
 
@@ -155,7 +163,7 @@ class TestLLMLoader:
             quantization="8bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         quant_config = loader._create_quantization_config()
 
@@ -169,7 +177,7 @@ class TestLLMLoader:
             quantization="none",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         quant_config = loader._create_quantization_config()
 
@@ -183,7 +191,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with (
             patch(
@@ -211,7 +219,7 @@ class TestLLMLoader:
             quantization="none",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with (
             patch(
@@ -235,7 +243,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with patch(
             "src.infrastructure.adapters.outbound.models.llm.loader.AutoTokenizer.from_pretrained",
@@ -254,7 +262,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with (
             patch(
@@ -280,7 +288,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -305,7 +313,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -328,7 +336,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             await loader.generate("Test prompt")
@@ -341,7 +349,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -358,7 +366,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -388,7 +396,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         await loader.unload()
         await loader.unload()
@@ -402,7 +410,7 @@ class TestLLMLoader:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with (
             patch(
@@ -430,7 +438,7 @@ class TestLLMLoader:
             quantization="none",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
 
         with patch(
             "src.infrastructure.adapters.outbound.models.llm.loader.torch.cuda.is_available",
@@ -539,7 +547,7 @@ class TestFallbackLoading:
                 return_value=mock_model,
             ),
         ):
-            loader = await create_llm_loader_with_fallback(primary, [fallback1, fallback2])
+            loader = await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback1, fallback2])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "meta-llama/Llama-4-Scout"
@@ -579,7 +587,7 @@ class TestFallbackLoading:
                 side_effect=mock_from_pretrained,
             ),
         ):
-            loader = await create_llm_loader_with_fallback(primary, [fallback])
+            loader = await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "google/gemma-3-27b-it"
@@ -606,7 +614,7 @@ class TestFallbackLoading:
             patch("builtins.print"),
             pytest.raises(RuntimeError, match="All model loading attempts failed"),
         ):
-            await create_llm_loader_with_fallback(primary, [fallback])
+            await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback])
 
 
 class TestDiverseExamples:
@@ -620,7 +628,7 @@ class TestDiverseExamples:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -640,7 +648,7 @@ class TestDiverseExamples:
             quantization="4bit",
             framework=LLMFramework.SGLANG,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -660,7 +668,7 @@ class TestDiverseExamples:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 
@@ -680,7 +688,7 @@ class TestDiverseExamples:
             quantization="4bit",
             framework=LLMFramework.TRANSFORMERS,
         )
-        loader = LLMLoader(config)
+        loader = LLMLoader(_DEFAULT_LLM_ARCH, config)
         loader.model = mock_model
         loader.tokenizer = mock_tokenizer
 

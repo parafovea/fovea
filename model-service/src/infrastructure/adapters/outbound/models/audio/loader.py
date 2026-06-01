@@ -1,9 +1,28 @@
-"""Audio transcription and speaker diarization model loaders.
+"""Audio transcription, voice-activity, and speaker-diarization loaders.
 
-This module provides loaders for audio transcription models (Whisper variants)
-and speaker diarization models (Pyannote, Silero VAD). Supports multiple
-inference backends for CPU and GPU deployment.
+This module hosts the in-process audio loaders the model-service can run
+without leaving the box: OpenAI Whisper, faster-whisper, Silero VAD, and
+Pyannote diarization. The NeMo (Canary, Parakeet) and WhisperX loaders
+live in their own submodules so their heavy optional dependencies
+(``nemo_toolkit``, ``whisperx``) are not imported at module-load time.
+
+The transcription loaders register against their concrete
+:class:`AudioArchitecture` subclass on :data:`audio_registry`. The
+:func:`create_audio_loader` factory dispatches purely through that
+registry: a parsed architecture instance is the only key consulted. No
+code along the dispatch path matches on ``model_id`` substrings,
+checkpoint filenames, or other free-text labels.
+
+External-API audio providers (AssemblyAI, Deepgram, and so on) carry an
+architecture in the discriminated union for typing-completeness but are
+NOT registered here; they are routed through the external API router at
+the application layer before any loader factory is consulted. Asking
+this registry to resolve one of them surfaces an
+:class:`UnknownArchitectureError` with the legitimate audio loader list
+so the misconfiguration fails loudly.
 """
+
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
@@ -12,12 +31,21 @@ from typing import Any
 import torch
 from numpy.typing import NDArray
 
+from src.domain.entities.architectures import (
+    AudioArchitecture,
+    FasterWhisper,
+    NemoCanary,
+    NemoParakeet,
+    Whisper,
+    WhisperX,
+)
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioFramework,
     AudioTranscriptionLoader,
     TranscriptionConfig,
     TranscriptionResult,
     TranscriptionSegment,
+    audio_registry,
 )
 from src.infrastructure.observability.telemetry import instrument_method
 
@@ -37,7 +65,8 @@ __all__ = [
     "VADResult",
     "VADSegment",
     "WhisperLoader",
-    "create_transcription_loader",
+    "audio_registry",
+    "create_audio_loader",
 ]
 
 logger = logging.getLogger(__name__)
@@ -106,6 +135,7 @@ class DiarizationResult:
     speakers: list[str]
 
 
+@audio_registry.register(Whisper)
 class WhisperLoader(AudioTranscriptionLoader):
     """Loader for OpenAI Whisper transcription models.
 
@@ -167,6 +197,7 @@ class WhisperLoader(AudioTranscriptionLoader):
             raise RuntimeError(f"Whisper transcription failed: {e}") from e
 
 
+@audio_registry.register(FasterWhisper)
 class FasterWhisperLoader(AudioTranscriptionLoader):
     """Loader for faster-whisper transcription models.
 
@@ -528,74 +559,91 @@ class PyannoteLoader:
         logger.info("Pipeline unloaded and memory cleared")
 
 
-def create_transcription_loader(
-    model_name: str, config: TranscriptionConfig
+# Side-effect imports.
+#
+# These submodules carry ``@audio_registry.register(...)`` decorators on
+# their loader classes. Importing them at module-load time of this file
+# wires NemoCanary, NemoParakeet, and WhisperX into the registry so the
+# factory below can resolve them without the caller having to know which
+# submodule each loader lives in. The imports are intentionally placed
+# AFTER the registry definition because the decorators read it at import
+# time; they are also placed at module bottom so the cycle between
+# loader.py and the submodules (which import shared types from base.py)
+# resolves cleanly. ``noqa: E402, F401`` documents intent: the imports
+# are not used by name in this module, only for their decorator side
+# effects.
+from src.infrastructure.adapters.outbound.models.audio.canary import (  # noqa: E402, F401
+    CanaryQwenLoader,
+)
+from src.infrastructure.adapters.outbound.models.audio.parakeet import (  # noqa: E402, F401
+    ParakeetTDTLoader,
+)
+from src.infrastructure.adapters.outbound.models.audio.whisperx import (  # noqa: E402, F401
+    WhisperXLoader,
+)
+
+# Sanity-assert the side-effect imports actually wired the expected
+# architectures. The check runs once at module load and surfaces a
+# breakage immediately (e.g. a forgotten decorator) instead of at first
+# transcription attempt. Each NEMO_CANARY / NEMO_PARAKEET / WHISPERX
+# architecture is referenced here ONLY to keep their imports live; the
+# loader classes themselves are looked up by ``type(architecture)``
+# through the registry.
+_REQUIRED_REGISTRATIONS: tuple[type, ...] = (
+    Whisper,
+    FasterWhisper,
+    WhisperX,
+    NemoCanary,
+    NemoParakeet,
+)
+_MISSING = [
+    cls.__name__
+    for cls in _REQUIRED_REGISTRATIONS
+    if cls not in audio_registry.registered_architectures
+]
+if _MISSING:
+    raise RuntimeError(
+        f"audio_registry is missing loader registrations for: {_MISSING}. "
+        f"Each AudioArchitecture subclass must be decorated with "
+        f"@audio_registry.register(...) on its loader class."
+    )
+
+
+def create_audio_loader(
+    architecture: AudioArchitecture, config: TranscriptionConfig
 ) -> AudioTranscriptionLoader:
-    """Factory function to create transcription loader based on model name.
+    """Create the audio transcription loader registered for one architecture.
+
+    Dispatch is pure: the architecture's concrete Pydantic class is the
+    only key consulted. There is no framework-level pre-dispatch because
+    audio has no clean "framework" axis: openai-whisper, faster-whisper,
+    WhisperX (which wraps faster-whisper plus pyannote alignment), and
+    NeMo (Canary / Parakeet) are each their own runtime and each owns
+    its own loader. The architecture IS the framework here, and that
+    one-to-one mapping is what the registry encodes.
 
     Parameters
     ----------
-    model_name : str
-        Name of the model to load. Supported values:
-        - "whisper-*" (e.g., "whisper-large-v3", "whisper-v3-turbo")
-        - "faster-whisper-*" (e.g., "faster-whisper-large-v3")
+    architecture : AudioArchitecture
+        Parsed architecture entry from the model config. The
+        discriminated union guarantees the concrete subclass at compile
+        time; the registry guarantees a loader is registered for it at
+        runtime (for the in-process families).
     config : TranscriptionConfig
-        Configuration for model loading and transcription.
+        Framework-level configuration for model loading and inference.
 
     Returns
     -------
     AudioTranscriptionLoader
-        Appropriate loader instance for the specified model.
+        Loader instance registered for ``type(architecture)``.
 
     Raises
     ------
-    ValueError
-        If model_name is not recognized.
+    src.infrastructure.adapters.outbound.models.registry.UnknownArchitectureError
+        When no loader is registered for the architecture's concrete
+        class. External-API architectures (AssemblyAI, Deepgram, RevAI,
+        Gladia, AWSTranscribe, GoogleSpeech, AzureSpeech) deliberately
+        raise here: they are dispatched through the external API router
+        upstream and never reach this factory in well-configured calls.
     """
-    if config.framework == AudioFramework.NEMO_CANARY:
-        from src.infrastructure.adapters.outbound.models.audio.canary import (
-            CanaryQwenLoader,
-        )
-
-        return CanaryQwenLoader(config)
-    if config.framework == AudioFramework.NEMO_PARAKEET:
-        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
-            ParakeetTDTLoader,
-        )
-
-        return ParakeetTDTLoader(config)
-    if config.framework == AudioFramework.WHISPERX:
-        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
-            WhisperXLoader,
-        )
-
-        return WhisperXLoader(config)
-
-    model_name_lower = model_name.lower()
-
-    if "canary" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.canary import (
-            CanaryQwenLoader,
-        )
-
-        return CanaryQwenLoader(config)
-    if "parakeet" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
-            ParakeetTDTLoader,
-        )
-
-        return ParakeetTDTLoader(config)
-    if "whisperx" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
-            WhisperXLoader,
-        )
-
-        return WhisperXLoader(config)
-    if "faster-whisper" in model_name_lower:
-        return FasterWhisperLoader(config)
-    if "whisper" in model_name_lower:
-        return WhisperLoader(config)
-    raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "whisper-*, faster-whisper-*, canary-*, parakeet-*, whisperx-*"
-    )
+    return audio_registry.create(architecture, config)

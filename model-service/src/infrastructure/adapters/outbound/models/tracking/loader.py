@@ -1,9 +1,21 @@
 """Video segmentation and tracking with multiple model architectures.
 
 This module provides a unified interface for loading and running inference with
-various video segmentation and tracking models including SAMURAI, SAM2Long,
-SAM2.1, and YOLO11n-seg. Models support temporal consistency across frames,
-occlusion handling, and mask-based segmentation output.
+various video segmentation and tracking models. Each loader class is bound to
+its architecture Pydantic subclass through :data:`tracking_registry`; the
+factory :func:`create_tracking_loader` dispatches purely on the architecture's
+runtime class, so no code in this module matches on model-id substrings,
+weights filenames, or any other free-text label.
+
+Loader-to-architecture bindings:
+
+    SAMURAILoader   -> src.domain.entities.architectures.SAMURAI
+    SAM2LongLoader  -> src.domain.entities.architectures.SAM2Long
+    SAM2Loader      -> src.domain.entities.architectures.SAM2
+    YOLO11SegLoader -> src.domain.entities.architectures.YOLO11Seg
+
+Loaders support temporal consistency across frames, occlusion handling, and
+mask-based segmentation output.
 """
 
 import logging
@@ -17,6 +29,14 @@ import numpy as np
 import torch
 from PIL import Image
 
+from src.domain.entities.architectures import (
+    SAM2,
+    SAM2Long,
+    SAMURAI,
+    TrackingArchitecture,
+    YOLO11Seg,
+)
+from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
 
 logger = logging.getLogger(__name__)
@@ -143,17 +163,28 @@ class TrackingResult:
 class TrackingModelLoader(ABC):
     """Abstract base class for video tracking model loaders.
 
-    All tracking loaders must implement the load and track methods.
+    All tracking loaders must implement the load and track methods. Concrete
+    subclasses are bound to a :class:`TrackingArchitecture` subclass via
+    ``@tracking_registry.register(...)``; the architecture model travels with
+    the loader as :attr:`arch` and is the only legitimate dispatch key for
+    behaviour that varies per architecture.
     """
 
-    def __init__(self, config: TrackingConfig) -> None:
-        """Initialize the tracking model loader with configuration.
+    def __init__(self, arch: TrackingArchitecture, config: TrackingConfig) -> None:
+        """Initialize the tracking model loader with its architecture and config.
 
         Parameters
         ----------
+        arch : TrackingArchitecture
+            Parsed architecture Pydantic model the registry resolved this
+            loader to. Subclasses MAY tighten the annotation to their own
+            architecture class for clarity, but they must accept exactly this
+            positional shape so the registry's ``create`` method can construct
+            them uniformly.
         config : TrackingConfig
             Configuration for model loading and inference.
         """
+        self.arch = arch
         self.config = config
         self.model: Any = None
 
@@ -209,12 +240,27 @@ class TrackingModelLoader(ABC):
         logger.info("Tracking model unloaded and memory cleared")
 
 
+# Architecture-keyed dispatch surface for tracking loaders. Loader classes
+# register themselves below with ``@tracking_registry.register(...)``; the
+# factory at the bottom of this module is pure dispatch through this
+# registry. No code in this family may match on ``model_id`` substrings,
+# checkpoint filenames, or any other free-text label.
+tracking_registry: LoaderRegistry[TrackingArchitecture, TrackingModelLoader] = LoaderRegistry(
+    family="tracking",
+)
+
+
+@tracking_registry.register(SAMURAI)
 class SAMURAILoader(TrackingModelLoader):
     """Loader for SAMURAI motion-aware tracking model.
 
     SAMURAI achieves 7.1% better performance than SAM2 baseline with
     motion-aware tracking and occlusion handling capabilities.
     """
+
+    def __init__(self, arch: SAMURAI, config: TrackingConfig) -> None:
+        super().__init__(arch, config)
+        self.arch: SAMURAI = arch
 
     def load(self) -> None:
         """Load SAMURAI model with configured settings."""
@@ -348,12 +394,17 @@ class SAMURAILoader(TrackingModelLoader):
             raise RuntimeError(f"Video tracking failed: {e}") from e
 
 
+@tracking_registry.register(SAM2Long)
 class SAM2LongLoader(TrackingModelLoader):
     """Loader for SAM2Long long video tracking model.
 
     SAM2Long achieves 5.3% better performance than SAM2 baseline with
     error accumulation fixes for long video sequences.
     """
+
+    def __init__(self, arch: SAM2Long, config: TrackingConfig) -> None:
+        super().__init__(arch, config)
+        self.arch: SAM2Long = arch
 
     def load(self) -> None:
         """Load SAM2Long model with configured settings."""
@@ -490,12 +541,17 @@ class SAM2LongLoader(TrackingModelLoader):
             raise RuntimeError(f"Video tracking failed: {e}") from e
 
 
+@tracking_registry.register(SAM2)
 class SAM2Loader(TrackingModelLoader):
     """Loader for SAM2.1 baseline video segmentation model.
 
     SAM2.1 provides baseline performance with proven stability for
     general video segmentation and tracking tasks.
     """
+
+    def __init__(self, arch: SAM2, config: TrackingConfig) -> None:
+        super().__init__(arch, config)
+        self.arch: SAM2 = arch
 
     def load(self) -> None:
         """Load SAM2.1 model with configured settings."""
@@ -622,12 +678,17 @@ class SAM2Loader(TrackingModelLoader):
             raise RuntimeError(f"Video tracking failed: {e}") from e
 
 
+@tracking_registry.register(YOLO11Seg)
 class YOLO11SegLoader(TrackingModelLoader):
     """Loader for YOLO11n-seg lightweight segmentation model.
 
     YOLO11n-seg is a 2.7M parameter model optimized for real-time
     segmentation in speed-critical applications.
     """
+
+    def __init__(self, arch: YOLO11Seg, config: TrackingConfig) -> None:
+        super().__init__(arch, config)
+        self.arch: YOLO11Seg = arch
 
     def load(self) -> None:
         """Load YOLO11n-seg model with configured settings."""
@@ -784,41 +845,35 @@ class YOLO11SegLoader(TrackingModelLoader):
         return float(intersection / union)
 
 
-def create_tracking_loader(model_name: str, config: TrackingConfig) -> TrackingModelLoader:
-    """Factory function to create appropriate tracking loader based on model name.
+def create_tracking_loader(
+    architecture: TrackingArchitecture, config: TrackingConfig
+) -> TrackingModelLoader:
+    """Resolve a tracking loader for a parsed architecture model.
+
+    Dispatch is pure: the registry looks up the loader class bound to
+    ``type(architecture)`` and instantiates it with the architecture model
+    and the framework config. No code path here inspects ``config.model_id``
+    or any other string label; the architecture Pydantic class is the only
+    dispatch key.
 
     Parameters
     ----------
-    model_name : str
-        Name of the model to load. Supported values:
-        - "samurai" (default)
-        - "sam2long" or "sam2-long"
-        - "sam2" or "sam2.1"
-        - "yolo11n-seg" or "yolo11seg"
+    architecture : TrackingArchitecture
+        Parsed architecture from the YAML config (one of :class:`SAMURAI`,
+        :class:`SAM2Long`, :class:`SAM2`, :class:`YOLO11Seg`).
     config : TrackingConfig
         Configuration for model loading and inference.
 
     Returns
     -------
     TrackingModelLoader
-        Appropriate loader instance for the specified model.
+        Loader instance whose class is registered for ``type(architecture)``.
 
     Raises
     ------
-    ValueError
-        If model_name is not recognized.
+    src.infrastructure.adapters.outbound.models.registry.UnknownArchitectureError
+        When ``type(architecture)`` has no registered loader. This is the
+        intended failure mode for a YAML config that names an architecture
+        from another family or for one that no loader implements yet.
     """
-    model_name_lower = model_name.lower().replace("_", "-")
-
-    if "samurai" in model_name_lower:
-        return SAMURAILoader(config)
-    if "sam2long" in model_name_lower or "sam2-long" in model_name_lower:
-        return SAM2LongLoader(config)
-    if "sam2" in model_name_lower:
-        return SAM2Loader(config)
-    if "yolo11" in model_name_lower and "seg" in model_name_lower:
-        return YOLO11SegLoader(config)
-
-    raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: samurai, sam2long, sam2, yolo11n-seg"
-    )
+    return tracking_registry.create(architecture, config)

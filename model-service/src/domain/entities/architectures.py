@@ -139,7 +139,7 @@ it to this union, and (c) writing the corresponding loader class with
 
 
 class QwenLLM(_ArchitectureBase):
-    """Qwen text-only LLM family (Qwen2.5, Qwen3)."""
+    """Qwen text-only LLM family (Qwen2.5, Qwen3, Qwen3.5)."""
 
     kind: Literal["qwen-llm"] = "qwen-llm"
 
@@ -156,14 +156,99 @@ class DeepSeekR1Distill(_ArchitectureBase):
     kind: Literal["deepseek-r1-distill"] = "deepseek-r1-distill"
 
 
+class DeepSeekV3LLM(_ArchitectureBase):
+    """DeepSeek V3 / V3.2 mixture-of-experts text family."""
+
+    kind: Literal["deepseek-v3"] = "deepseek-v3"
+
+
 class Llama3LLM(_ArchitectureBase):
-    """Llama 3 / 3.1 / 3.2 text-only family."""
+    """Llama 3 / 3.1 / 3.2 / 3.3 text-only family."""
 
     kind: Literal["llama-3"] = "llama-3"
 
 
+class Llama4LLM(_ArchitectureBase):
+    """Llama-4 (Scout / Maverick) text-mode MoE family.
+
+    Used when the Llama-4 checkpoint is loaded for text-only generation
+    (ontology augmentation, claim extraction, claim synthesis); the
+    multimodal vision pathway uses :class:`Llama4Maverick` under the
+    VLM family.
+    """
+
+    kind: Literal["llama-4-llm"] = "llama-4-llm"
+
+
+class Gemma3LLM(_ArchitectureBase):
+    """Gemma 3 text-mode family (gemma-3-*-it consumed as a text LLM)."""
+
+    kind: Literal["gemma-3-llm"] = "gemma-3-llm"
+
+
+class KimiK2(_ArchitectureBase):
+    """Moonshot Kimi K2 family."""
+
+    kind: Literal["kimi-k2"] = "kimi-k2"
+
+
+class GLM4(_ArchitectureBase):
+    """THUDM GLM-4 family."""
+
+    kind: Literal["glm-4"] = "glm-4"
+
+
+# External-API LLM architectures.
+#
+# These tag YAML entries that route through ``manager.is_external_api(...)``
+# rather than the local loader registry. Carrying an explicit architecture
+# on every YAML option keeps the schema uniform and lets the orchestrator
+# tighten ``ModelConfig.architecture`` to a required field. No loader
+# registers against these classes; if one ever reaches ``llm_registry``
+# (a route bug) it raises ``UnknownArchitectureError`` loudly, which is
+# the desired fail-loud behaviour.
+
+
+class ClaudeAPI(_ArchitectureBase):
+    """Anthropic Claude messages API family."""
+
+    kind: Literal["claude-api"] = "claude-api"
+
+
+class OpenAIChat(_ArchitectureBase):
+    """OpenAI chat-completions API family (GPT-4o, GPT-5.x)."""
+
+    kind: Literal["openai-chat"] = "openai-chat"
+
+
+class GeminiAPI(_ArchitectureBase):
+    """Google Gemini generateContent API family."""
+
+    kind: Literal["gemini-api"] = "gemini-api"
+
+
+class GrokAPI(_ArchitectureBase):
+    """xAI Grok chat-completions API family."""
+
+    kind: Literal["grok-api"] = "grok-api"
+
+
 LLMArchitecture = Annotated[
-    Union[QwenLLM, Phi, DeepSeekR1Distill, Llama3LLM],  # noqa: UP007
+    Union[  # noqa: UP007
+        QwenLLM,
+        Phi,
+        DeepSeekR1Distill,
+        DeepSeekV3LLM,
+        Llama3LLM,
+        Llama4LLM,
+        Gemma3LLM,
+        KimiK2,
+        GLM4,
+        ClaudeAPI,
+        OpenAIChat,
+        GeminiAPI,
+        GrokAPI,
+    ],
     Field(discriminator="kind"),
 ]
 
@@ -264,8 +349,23 @@ class YOLO11Seg(_ArchitectureBase):
     kind: Literal["yolo11-seg"] = "yolo11-seg"
 
 
+class SAM3Tracking(_ArchitectureBase):
+    """Meta SAM 3.1 tracking family (Object Multiplex, shared memory).
+
+    The SAM 3.1 loader lives outside the tracking-family registry because
+    its loading conventions are independent (shared-memory multi-object
+    state, dedicated adapter); it is selected by a framework-level
+    pre-dispatch on ``framework == "sam3"`` in the task factory, before
+    the architecture-keyed registry is consulted. The architecture is
+    nonetheless declared here so every YAML entry carries an
+    ``architecture:`` block; no loader registers against it.
+    """
+
+    kind: Literal["sam-3-1"] = "sam-3-1"
+
+
 TrackingArchitecture = Annotated[
-    Union[SAMURAI, SAM2Long, SAM2, YOLO11Seg],  # noqa: UP007
+    Union[SAMURAI, SAM2Long, SAM2, YOLO11Seg, SAM3Tracking],  # noqa: UP007
     Field(discriminator="kind"),
 ]
 
@@ -305,8 +405,78 @@ class NemoParakeet(_ArchitectureBase):
     kind: Literal["nemo-parakeet"] = "nemo-parakeet"
 
 
+# External-API audio architectures.
+#
+# These marker architectures describe audio transcription services that
+# live behind a vendor HTTP API rather than a local loader. They are part
+# of the discriminated union so YAML entries with ``framework: external_api``
+# still carry a typed architecture block, but they are intentionally NOT
+# registered with ``audio_registry``; their dispatch flows through the
+# external API router at the application layer (which short-circuits on
+# ``ModelConfig.is_external_api`` before any loader factory is consulted).
+# Asking the audio loader registry to resolve one of these raises
+# :class:`UnknownArchitectureError` with a clear "registered architectures"
+# list so a misconfiguration that bypasses the external-API path fails
+# loudly instead of silently falling back to a local Whisper run.
+
+
+class AssemblyAI(_ArchitectureBase):
+    """AssemblyAI Universal cloud transcription family."""
+
+    kind: Literal["assemblyai"] = "assemblyai"
+
+
+class Deepgram(_ArchitectureBase):
+    """Deepgram Nova cloud transcription family."""
+
+    kind: Literal["deepgram"] = "deepgram"
+
+
+class RevAI(_ArchitectureBase):
+    """Rev AI cloud speech-to-text family."""
+
+    kind: Literal["revai"] = "revai"
+
+
+class Gladia(_ArchitectureBase):
+    """Gladia cloud transcription family."""
+
+    kind: Literal["gladia"] = "gladia"
+
+
+class AWSTranscribe(_ArchitectureBase):
+    """AWS Transcribe cloud speech-to-text family."""
+
+    kind: Literal["aws-transcribe"] = "aws-transcribe"
+
+
+class GoogleSpeech(_ArchitectureBase):
+    """Google Cloud Speech-to-Text family."""
+
+    kind: Literal["google-speech"] = "google-speech"
+
+
+class AzureSpeech(_ArchitectureBase):
+    """Azure Cognitive Services Speech family."""
+
+    kind: Literal["azure-speech"] = "azure-speech"
+
+
 AudioArchitecture = Annotated[
-    Union[Whisper, FasterWhisper, WhisperX, NemoCanary, NemoParakeet],  # noqa: UP007
+    Union[  # noqa: UP007
+        Whisper,
+        FasterWhisper,
+        WhisperX,
+        NemoCanary,
+        NemoParakeet,
+        AssemblyAI,
+        Deepgram,
+        RevAI,
+        Gladia,
+        AWSTranscribe,
+        GoogleSpeech,
+        AzureSpeech,
+    ],
     Field(discriminator="kind"),
 ]
 
@@ -332,30 +502,47 @@ Architecture = Annotated[
 
 
 __all__ = [
+    "AWSTranscribe",
     "Architecture",
+    "AssemblyAI",
     "AudioArchitecture",
+    "AzureSpeech",
+    "ClaudeAPI",
     "DeepSeekR1Distill",
+    "DeepSeekV3LLM",
+    "Deepgram",
     "DetectionArchitecture",
     "FasterWhisper",
     "Florence2Detection",
+    "GLM4",
+    "Gemma3LLM",
     "Gemma3VL",
+    "GeminiAPI",
+    "Gladia",
+    "GoogleSpeech",
+    "GrokAPI",
     "GroundingDINO",
     "InternVL3",
+    "KimiK2",
     "LLMArchitecture",
     "Llama3LLM",
+    "Llama4LLM",
     "Llama4Maverick",
     "Moondream",
     "NemoCanary",
     "NemoParakeet",
     "OWLv2",
+    "OpenAIChat",
     "Phi",
     "Pixtral",
     "Qwen3VL",
     "QwenLLM",
     "QwenVL",
     "RFDETR",
+    "RevAI",
     "SAM2",
     "SAM2Long",
+    "SAM3Tracking",
     "SAMURAI",
     "SmolVLM",
     "Tarsier2",

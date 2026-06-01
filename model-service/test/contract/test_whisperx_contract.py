@@ -10,6 +10,7 @@ from src.application.ports.outbound.audio_model import (
     IAudioTranscriber,
     ISpeakerDiarizer,
 )
+from src.domain.entities.architectures import WhisperX
 from src.infrastructure.adapters.outbound.models.audio.adapters import (
     WhisperXTranscriberAdapter,
 )
@@ -17,8 +18,14 @@ from src.infrastructure.adapters.outbound.models.audio.loader import (
     AudioFramework,
     AudioTranscriptionLoader,
     TranscriptionConfig,
+    audio_registry,
+    create_audio_loader,
 )
 from src.infrastructure.adapters.outbound.models.audio.whisperx import WhisperXLoader
+
+
+def _arch() -> WhisperX:
+    return WhisperX()
 
 
 def _config() -> TranscriptionConfig:
@@ -46,16 +53,13 @@ def test_whisperx_transcribe_without_package_raises_importerror(
 ) -> None:
     """Calling transcribe without whisperx installed raises a clear ImportError."""
     monkeypatch.setitem(sys.modules, "whisperx", None)
-    loader = WhisperXLoader(_config())
+    loader = WhisperXLoader(_arch(), _config())
     with pytest.raises(ImportError, match="whisperx"):
         loader.transcribe("audio.wav")
 
 
 def test_whisperx_registered_in_factory() -> None:
-    """Factory resolves ``whisperx`` framework to the WhisperX loader."""
-    from src.infrastructure.adapters.outbound.models.audio.loader import (
-        create_transcription_loader,
-    )
-
-    loader = create_transcription_loader("whisperx-large", _config())
+    """The audio registry resolves :class:`WhisperX` to the WhisperX loader."""
+    assert audio_registry.lookup(WhisperX) is WhisperXLoader
+    loader = create_audio_loader(_arch(), _config())
     assert isinstance(loader, WhisperXLoader)

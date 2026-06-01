@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.domain.entities.architectures import GroundingDINO
 from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
@@ -20,6 +21,7 @@ from src.infrastructure.adapters.outbound.models.detection.base import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.adapters.outbound.models.onnx.registry import detection_onnx_registry
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
@@ -32,6 +34,7 @@ _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
+@detection_onnx_registry.register(GroundingDINO)
 class GroundingDINOONNXLoader(ONNXModelLoader, DetectionModelLoader):
     """GroundingDINO ONNX loader for text-guided detection on CPU.
 
@@ -40,6 +43,8 @@ class GroundingDINOONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     Parameters
     ----------
+    arch : GroundingDINO
+        Architecture model the loader is registered against.
     config : DetectionConfig
         Detection model configuration.
     onnx_config : ONNXConfig | None
@@ -48,6 +53,7 @@ class GroundingDINOONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     def __init__(
         self,
+        arch: GroundingDINO,
         config: DetectionConfig,
         onnx_config: ONNXConfig | None = None,
     ) -> None:
@@ -56,7 +62,7 @@ class GroundingDINOONNXLoader(ONNXModelLoader, DetectionModelLoader):
             cache_dir=config.cache_dir,
         )
         ONNXModelLoader.__init__(self, onnx_cfg)
-        DetectionModelLoader.__init__(self, config)
+        DetectionModelLoader.__init__(self, arch, config)
         self._tokenizer: Any = None
         self._image_size = (800, 800)
 
