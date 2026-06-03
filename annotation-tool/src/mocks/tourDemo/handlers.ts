@@ -80,6 +80,10 @@ export function createTourDemoHandlers(
           confidence: p.confidence,
           boundingBox: p.boundingBox,
           trackId: null,
+          // Forward the demo's accept-as hints so the candidates list
+          // can render a "snap to type" chip per box.
+          acceptAsLabel: p.acceptAsLabel,
+          acceptAsWikidataId: p.acceptAsWikidataId,
         })),
       },
     ],

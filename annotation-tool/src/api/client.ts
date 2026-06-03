@@ -181,6 +181,15 @@ export interface Detection {
   boundingBox: BoundingBox
   confidence: number
   trackId?: string | null
+  /**
+   * Optional final entity type the analyst should snap the box to,
+   * populated by the tour-demo mock layer so the candidates list can
+   * render a "suggested type" chip. Null when the proposal is meant
+   * to be rejected outright; absent on real model-service responses.
+   */
+  acceptAsLabel?: string | null
+  /** Wikidata QID for `acceptAsLabel`, when grounded. */
+  acceptAsWikidataId?: string | null
 }
 
 /**
