@@ -26,11 +26,19 @@ import { buildSummariesAndClaimsTour } from './summaries-and-claims'
 import { buildCollaborationTour } from './collaboration'
 import { buildAdminTour } from './admin'
 import { buildImportExportTour } from './import-export'
+import { buildWelcomeTour } from './welcome'
+import { buildKeyframesInterpolationTour } from './keyframes-interpolation'
 
 export function getBuiltInTours(
   bundle: TourContentBundle,
 ): readonly TourScript[] {
+  // Order matches the public tour catalogue's 4x3 grid: Welcome
+  // first (orientation), followed by the four-layer arc (annotation,
+  // ontology, world), then the model-assisted flows, then
+  // collaboration and operator surfaces. Keyframes + interpolation
+  // closes the grid as the temporal-modeling deep dive.
   return [
+    buildWelcomeTour(),
     buildFirstAnnotationTour(bundle.firstAnnotation),
     buildOntologyAuthoringTour(bundle.ontologyAuthoring),
     buildWikidataAugmentationTour(bundle.wikidataAugmentation),
@@ -41,6 +49,7 @@ export function getBuiltInTours(
     buildCollaborationTour(bundle.collaboration),
     buildAdminTour(),
     buildImportExportTour(bundle.importExport),
+    buildKeyframesInterpolationTour(bundle.modelInTheLoop),
   ]
 }
 
@@ -68,6 +77,7 @@ export function findTour(id: string): TourScript | undefined {
 // Re-export the per-tour builders so admin tailoring can call them
 // individually with bespoke content.
 export {
+  buildWelcomeTour,
   buildFirstAnnotationTour,
   buildOntologyAuthoringTour,
   buildWikidataAugmentationTour,
@@ -78,4 +88,5 @@ export {
   buildCollaborationTour,
   buildAdminTour,
   buildImportExportTour,
+  buildKeyframesInterpolationTour,
 }

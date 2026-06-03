@@ -3,6 +3,15 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Spinner } from '@/components/ui/spinner'
 import Layout from '@components/layout/Layout'
 import VideoBrowser from '@components/video/VideoBrowser'
+import { TourCataloguePage } from '@/pages/TourCataloguePage'
+
+/**
+ * On demo.fovea.video the SPA is built with VITE_DEMO_PUBLIC=1. The
+ * QR-code visitor lands on a public tour catalogue (no auth, no
+ * server round-trips, fully MSW-mocked via VITE_TOUR_DEMO=1) and only
+ * crosses into the authenticated app via the explicit "Sign in" link.
+ */
+const DEMO_PUBLIC = import.meta.env.VITE_DEMO_PUBLIC === '1'
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
@@ -148,10 +157,16 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {DEMO_PUBLIC && (
+            <Route path="/" element={<TourCataloguePage />} />
+          )}
 
-          {/* Protected routes */}
+          {/* Protected routes. On demo.fovea.video the public catalogue
+              above claims `/`, so the authenticated app moves under
+              `/app/...`. Booth visitors who click Sign in still land
+              on `/login`, then are redirected to `/app` after auth. */}
           <Route
-            path="/"
+            path={DEMO_PUBLIC ? '/app' : '/'}
             element={
               <ProtectedRoute>
                 <Layout />

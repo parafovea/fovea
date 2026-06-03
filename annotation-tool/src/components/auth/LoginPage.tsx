@@ -48,7 +48,8 @@ export function LoginPage(): JSX.Element {
     try {
       await login(username, password, rememberMe)
       const params = new URLSearchParams(location.search)
-      const from = params.get('redirect') || '/'
+      const defaultDest = import.meta.env.VITE_DEMO_PUBLIC === '1' ? '/app' : '/'
+      const from = params.get('redirect') || defaultDest
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -138,13 +139,27 @@ export function LoginPage(): JSX.Element {
               {loading ? 'Logging in...' : 'Login'}
             </Button>
 
-            {allowRegistration && (
+            {allowRegistration ? (
               <p className="text-center text-sm text-muted-foreground">
                 Don&apos;t have an account?{' '}
                 <RouterLink to="/register" className="text-primary underline underline-offset-4 hover:text-primary/80">
                   Register
                 </RouterLink>
               </p>
+            ) : (
+              <Alert data-testid="registration-disabled-notice">
+                <AlertDescription>
+                  Self-registration is disabled on this deployment. To
+                  request an account, email{' '}
+                  <a
+                    href="mailto:admin@fovea.video"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    admin@fovea.video
+                  </a>
+                  .
+                </AlertDescription>
+              </Alert>
             )}
           </form>
         </CardContent>
