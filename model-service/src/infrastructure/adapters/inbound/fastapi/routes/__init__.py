@@ -19,6 +19,12 @@ models
     Model management endpoints (/api/models/*).
 thumbnails
     Thumbnail generation endpoints.
+transcribe
+    Audio transcription endpoints (/api/transcribe).
+diarize
+    Speaker diarization endpoints (/api/diarize).
+admin
+    Operational/admin endpoints.
 """
 
 from fastapi import APIRouter

@@ -242,5 +242,3 @@ export function TranscriptPanel(props: TranscriptPanelProps): JSX.Element {
     </div>
   )
 }
-
-export default TranscriptPanel

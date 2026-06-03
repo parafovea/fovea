@@ -238,5 +238,3 @@ export const transcribeRoutes: FastifyPluginAsync<{
     },
   )
 }
-
-export default transcribeRoutes

@@ -38,7 +38,6 @@ export async function startTourDemoWorker(): Promise<void> {
   try {
     bundle = await loadTourContentBundle()
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn(
       '[tour-demo] content bundle load failed; MSW not started:',
       err instanceof Error ? err.message : err,
@@ -53,7 +52,6 @@ export async function startTourDemoWorker(): Promise<void> {
       url: `${import.meta.env.BASE_URL}mockServiceWorker.js`,
     },
   })
-  // eslint-disable-next-line no-console
   console.info('[tour-demo] MSW worker active; model-service calls are mocked.')
 }
 

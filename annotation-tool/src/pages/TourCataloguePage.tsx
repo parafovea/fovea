@@ -117,5 +117,3 @@ export function TourCataloguePage(): JSX.Element {
     </div>
   )
 }
-
-export default TourCataloguePage

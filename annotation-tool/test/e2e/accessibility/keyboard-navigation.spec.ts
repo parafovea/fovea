@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/test-context.js'
-import { injectAxe, checkA11y } from 'axe-playwright'
+import { injectAxe } from 'axe-playwright'
 
 /**
  * Keyboard Navigation Accessibility Tests (20 tests)
