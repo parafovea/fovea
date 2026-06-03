@@ -44,9 +44,30 @@ export function buildSummariesAndClaimsTour(
         requiresFixture: false,
       },
       {
+        anchor: 'transcript-viewer',
+        narration:
+          "Segment 2 has the lowest confidence: the model heard 'snatched' but the eyewitness said 'grabbed'. Double-click to edit, fix the word, and accept.",
+        expectAction: 'type',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'transcript-viewer',
+        narration:
+          "Same segment is on the wrong speaker. Click the speaker chip to flip it from SPEAKER_00 to SPEAKER_01.",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
         anchor: 'video-summary-editor',
         narration: 'Write or generate a structured summary of the clip.',
         expectAction: 'click',
+      },
+      {
+        anchor: 'video-summary-editor',
+        narration:
+          "The VLM placed the woman 'above the right-field line'. She was actually behind home plate. Edit the summary text before saving.",
+        expectAction: 'type',
+        requiresFixture: false,
       },
       {
         anchor: 'video-summary-card',
@@ -57,6 +78,13 @@ export function buildSummariesAndClaimsTour(
       {
         anchor: 'claims-extraction-dialog',
         narration: 'Extract claims from the summary or the transcript.',
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'claims-extraction-dialog',
+        narration:
+          "The extractor returned one compound claim conflating three facts. Click 'Split into atomic claims' to break it into three rows the analyst can edit and confirm independently.",
         expectAction: 'click',
         requiresFixture: false,
       },

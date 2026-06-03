@@ -69,7 +69,21 @@ export function buildModelInTheLoopTour(
       {
         anchor: 'annotation-candidates-list',
         narration:
-          'Detection on a fresh frame surfaces candidate boxes for one-click acceptance.',
+          "Detection on a fresh frame surfaces candidate boxes for one-click acceptance. The model returned four; accept the two high-confidence containers and reject the two spurious boxes (a water splash and a piece of the gantry crane).",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'annotation-candidates-list',
+        narration:
+          "Snap each accepted box to a general type from your ontology: 'container' (Wikidata Q987767). The Wikidata link travels with the annotation.",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'tracking-results-panel',
+        narration:
+          "The tracker drifted at frame 214: it latched onto the receding splash to the right. Scrub to the flagged keyframe and drag the box back onto the pile of containers. The interpolation re-anchors the remaining frames.",
         expectAction: 'click',
         requiresFixture: false,
       },

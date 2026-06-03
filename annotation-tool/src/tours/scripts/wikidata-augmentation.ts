@@ -58,6 +58,20 @@ export function buildWikidataAugmentationTour(
         narration: 'Each hit is a real Wikidata entity, QID and all.',
       },
       {
+        anchor: 'augmenter-results',
+        narration:
+          "The AI augmenter returned five candidate types. 'Ball grab' is close: accept it but rename to lowercase 'ball-grab' to match your ontology convention before saving.",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'augmenter-results',
+        narration:
+          "The other four are off: 'Stadium incident' is too broad, 'Souvenir transfer' implies consent, 'Fan-fan conflict' implies symmetry, and 'Phillies fan' conflates the two distinct actors. Reject each.",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
         anchor: 'augmenter-import-target',
         narration:
           'Choose what to import: entity type, event type, role, or as an object instance.',
