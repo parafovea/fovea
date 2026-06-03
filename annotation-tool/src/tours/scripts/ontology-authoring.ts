@@ -58,7 +58,7 @@ export function buildOntologyAuthoringTour(
       },
       {
         anchor: 'relation-type-editor',
-        narration: `Relations connect entities directly; e.g., '${c.relationType.name}': ${c.relationType.gloss}.`,
+        narration: `Relations connect entities directly. Unlike the entity, event, and role editors, the relation editor adds source-types and target-types: '${c.relationType.name}' takes a source on one side and a target on the other (${c.relationType.gloss}).`,
         expectAction: 'click',
       },
       {

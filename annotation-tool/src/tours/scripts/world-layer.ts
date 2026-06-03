@@ -36,18 +36,26 @@ export function buildWorldLayerTour(c: TourWorldLayerContent): TourScript {
       },
       {
         anchor: 'entity-editor',
-        narration: `Create entity '${c.entityName}'; an instance of type '${c.entityType.name}'.`,
+        narration: `Entity instance editor: bind an entity TYPE to a specific thing. Create '${c.entityName}' as an instance of '${c.entityType.name}'.`,
         expectAction: 'click',
       },
       {
         anchor: 'location-map-picker',
-        narration: `Locations are coordinates with semantics. Drop a pin at ${c.locationName}.`,
+        narration: `Location instance editor: same shape as an entity, but with geographic coordinates and a map pin. Drop one at ${c.locationName}.`,
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'event-editor',
+        narration:
+          'Event instance editor: an occurrence in time with role bindings, not a thing in space. Note the start/end and the actor pickers the entity editor does not have.',
         expectAction: 'click',
         requiresFixture: false,
       },
       {
         anchor: 'time-editor',
-        narration: 'Times can be points, intervals, or fuzzy ranges.',
+        narration:
+          'Time instance editor: points, intervals, or fuzzy ranges. The start/end/fuzzy controls are why this editor differs from the entity and location ones.',
         expectAction: 'type',
       },
       {

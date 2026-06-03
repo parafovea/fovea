@@ -130,11 +130,11 @@
     "personaName": "Tech-Curious Spectator",
     "personaRole": "General audience viewer with an interest in emerging technology",
     "videoFilename": "ABC7 Eyewitness News - New video shows the moment when nearly an entire column of shipping c... [1965554565933121536].mp4",
-    "mockDetectionQuery": "fallen shipping container",
+    "mockDetectionQuery": "container",
     "mockDetectionFrame": 192,
     "mockDetectionProposals": [
       {
-        "label": "fallen shipping container",
+        "label": "container",
         "confidence": 0.89,
         "boundingBox": {
           "x": 0.05,
@@ -142,10 +142,11 @@
           "width": 0.66,
           "height": 0.2
         },
-        "acceptAsLabel": "fallen container pile"
+        "acceptAsLabel": "container",
+        "acceptAsWikidataId": "Q987767"
       },
       {
-        "label": "fallen shipping container",
+        "label": "container",
         "confidence": 0.72,
         "boundingBox": {
           "x": 0.3,
@@ -153,10 +154,11 @@
           "width": 0.3,
           "height": 0.18
         },
-        "acceptAsLabel": "collapsing container stack"
+        "acceptAsLabel": "container",
+        "acceptAsWikidataId": "Q987767"
       },
       {
-        "label": "fallen shipping container",
+        "label": "container",
         "confidence": 0.51,
         "boundingBox": {
           "x": 0.78,
@@ -164,10 +166,11 @@
           "width": 0.18,
           "height": 0.1
         },
-        "acceptAsLabel": null
+        "acceptAsLabel": null,
+        "acceptAsWikidataId": null
       },
       {
-        "label": "fallen shipping container",
+        "label": "container",
         "confidence": 0.38,
         "boundingBox": {
           "x": 0.34,
@@ -175,7 +178,8 @@
           "width": 0.06,
           "height": 0.06
         },
-        "acceptAsLabel": null
+        "acceptAsLabel": null,
+        "acceptAsWikidataId": null
       }
     ],
     "mockTrackingKeyframes": [
