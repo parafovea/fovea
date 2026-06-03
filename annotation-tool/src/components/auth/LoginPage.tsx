@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 
-import { LogIn } from 'lucide-react'
+import foveaLogo from '@/assets/fovea-logo.svg'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -70,10 +70,14 @@ export function LoginPage(): JSX.Element {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="max-w-[400px] w-full mx-2">
         <CardHeader className="text-center">
-          <LogIn className="mx-auto size-12 text-primary mb-1" />
-          <h1 className="text-2xl font-bold">fovea</h1>
+          <img
+            src={foveaLogo}
+            alt="FOVEA logo"
+            className="mx-auto size-12 mb-2"
+          />
+          <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
           <p className="text-sm text-muted-foreground">
-            Video Annotation Tool
+            Web-based video annotation tool for developing annotation ontologies.
           </p>
         </CardHeader>
 
