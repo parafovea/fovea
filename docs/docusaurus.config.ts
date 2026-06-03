@@ -11,7 +11,7 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://fovea.video',
+  url: 'https://docs.fovea.video',
   baseUrl: '/',
 
   organizationName: 'parafovea',
