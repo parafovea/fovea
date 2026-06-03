@@ -32,9 +32,22 @@ export function buildSummariesAndClaimsTour(
     followUpTourId: 'collaboration',
     steps: [
       {
+        anchor: 'transcribe-audio-button',
+        narration:
+          "Click Transcribe Audio on the workspace toolbar to run ASR + speaker diarization on demand. The dialog opens with the transcript scoped to the currently selected clip.",
+        expectAction: 'click',
+        requiresFixture: false,
+      },
+      {
+        anchor: 'transcript-dialog',
+        narration:
+          'Coloured chips show who said what. Click any timestamp to jump the video to that segment. The current segment highlights as the video plays.',
+        requiresFixture: false,
+      },
+      {
         anchor: 'audio-config-panel',
         narration:
-          'Audio is configurable per clip — language, diarization, transcription model.',
+          'Audio is configurable per clip: language, diarization, transcription model.',
         requiresFixture: false,
       },
       {
