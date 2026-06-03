@@ -98,7 +98,18 @@ GET    /api/videos/:videoId/stream
 GET    /api/videos/:videoId/thumbnail
 POST   /api/videos/sync
 POST   /api/videos/:videoId/detect body { personaId, frame }
+POST   /api/videos/:videoId/transcribe body { language?, enableDiarization?,
+                                              numSpeakers?, minSpeakers?,
+                                              maxSpeakers? }
 ```
+
+`POST /api/videos/:videoId/transcribe` forwards to the model-service
+`/api/transcribe` route, and when `enableDiarization=true` also to
+`/api/diarize`, merging speaker labels onto every transcript segment
+by per-second overlap. See
+[Guide > Transcribe and diarize](../guide/transcribe-and-diarize.md).
+Status codes: 400 (bad body), 404 (no such video), 500 (model error),
+502 (model service unreachable), 504 (timed out).
 
 ## Annotations
 
@@ -282,7 +293,19 @@ POST   /synthesize-summary            body: SummarySynthesisRequest
 POST   /thumbnails/generate           body: ThumbnailRequest;
                                       writes to THUMBNAIL_OUTPUT_ROOT
 POST   /admin/reconfigure             gated by MODEL_SERVICE_ADMIN_TOKEN
+POST   /transcribe                    body { audio_path, language? };
+                                      returns { text, segments, language,
+                                      duration, processing_time, model_used }
+POST   /diarize                       body { audio_path, num_speakers?,
+                                      min_speakers?, max_speakers? };
+                                      returns { segments, speakers,
+                                      processing_time, model_used }
 ```
+
+`POST /transcribe` and `POST /diarize` are the standalone audio
+endpoints introduced in v0.4.0. The backend
+`/api/videos/:videoId/transcribe` route calls both and merges them;
+direct callers can hit them independently.
 
 ## Config and telemetry
 
