@@ -55,7 +55,7 @@ describe('LoginPage', () => {
 
     // Login should complete without error
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
     })
   })
 
@@ -228,7 +228,7 @@ describe('LoginPage', () => {
 
       // Login completes without error (navigate was called)
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
 
@@ -252,7 +252,7 @@ describe('LoginPage', () => {
 
       // Login completes without error (navigate was called with from path)
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
 
@@ -270,7 +270,7 @@ describe('LoginPage', () => {
       await user.click(screen.getByRole('button', { name: /^login$/i }))
 
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
   })

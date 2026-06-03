@@ -84,7 +84,7 @@ export function LoginPage(): JSX.Element {
 
         <CardContent>
           {error && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="destructive" className="mb-4" data-testid="login-error-alert">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

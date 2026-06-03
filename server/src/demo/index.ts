@@ -10,10 +10,10 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import anonymousSessionPlugin from './anonymous-session'
-import seedPlugin from './seed'
-import { isDemoModeEnabled } from './config'
-import { startIdleResetJob } from './idle-reset'
+import anonymousSessionPlugin from './anonymous-session.js'
+import seedPlugin from './seed.js'
+import { isDemoModeEnabled } from './config.js'
+import { startIdleResetJob } from './idle-reset.js'
 
 export async function registerDemoLayer(app: FastifyInstance): Promise<void> {
   if (!isDemoModeEnabled()) {

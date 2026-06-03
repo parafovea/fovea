@@ -18,7 +18,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '../lib/prisma'
+import { prisma } from '../lib/prisma.js'
 
 const IDLE_WINDOW_MS = 10 * 60 * 1000 // 10 minutes (plan §5.3)
 const SWEEP_INTERVAL_MS = 60 * 1000 // 1 minute
@@ -61,7 +61,7 @@ async function sweepOnce(app: FastifyInstance): Promise<void> {
 
   if (stale.length === 0) return
 
-  const ids = stale.map((u) => u.id)
+  const ids = stale.map((u: { id: string }) => u.id)
   const deleted = await prisma.user.deleteMany({ where: { id: { in: ids } } })
   app.log.info({ swept: deleted.count }, '[demo] idle-reset swept stale anonymous users')
 }

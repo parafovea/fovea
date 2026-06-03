@@ -16,7 +16,10 @@ afterEach(() => {
 async function importFresh() {
   // Vitest's import cache keys on file path; reset modules so each
   // test boot picks up the current window.location.search.
-  const mod = await import(`./mode-flags?bust=${Math.random()}`)
+  // Use a non-decimal bust value: esbuild's loader query parser
+  // rejects values like '0.123456' (it splits on the dot and reads
+  // the trailing digits as a loader name).
+  const mod = await import(`./mode-flags?bust=${Math.floor(Math.random() * 1e9)}`)
   return mod as typeof import('./mode-flags')
 }
 

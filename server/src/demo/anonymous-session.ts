@@ -23,9 +23,9 @@
 
 import crypto from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
-import { prisma } from '../lib/prisma'
-import { authService } from '../services/auth-service'
-import { isAnonymousAuthAllowed } from './config'
+import { prisma } from '../lib/prisma.js'
+import { authService } from '../services/auth-service.js'
+import { isAnonymousAuthAllowed } from './config.js'
 
 interface AnonymousSessionResponse {
   userId: string

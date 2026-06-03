@@ -24,13 +24,13 @@ import { readFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
-import { prisma } from '../lib/prisma'
-import { getSeedToken, isDemoModeEnabled } from './config'
+import { prisma } from '../lib/prisma.js'
+import { getSeedToken, isDemoModeEnabled } from './config.js'
 import {
   validateSeedBundle,
   type SeedBundle,
   type SeedTypeDecl,
-} from './seed-schema'
+} from './seed-schema.js'
 
 interface ClipManifestEntry {
   id: string
@@ -201,7 +201,8 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // still seed (we just upsert no Video rows).
       const manifest = await loadManifest()
 
-      const seeded = await prisma.$transaction(async (tx) => {
+      type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+      const seeded = await prisma.$transaction(async (tx: Tx) => {
         // Wipe the user's personas; cascade removes ontologies / world /
         // annotations / claims / summaries / persona preferences.
         await tx.persona.deleteMany({ where: { userId: sessionUserId } })
@@ -314,7 +315,9 @@ function constantTimeEqual(a: string, b: string): boolean {
  * content here — the tour's narration carries the explanation; the
  * database row just needs a usable type name + a definition string.
  */
-function toJsonOntologyTypes(decls: SeedTypeDecl[] | undefined): unknown[] {
+function toJsonOntologyTypes(
+  decls: SeedTypeDecl[] | undefined,
+): Array<{ id: string; name: string; gloss: Array<{ type: string; content: string }>; examples: string[]; createdAt: string; updatedAt: string }> {
   if (!decls || decls.length === 0) return []
   const now = new Date().toISOString()
   return decls.map((d, i) => ({

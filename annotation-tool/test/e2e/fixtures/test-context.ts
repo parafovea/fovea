@@ -237,7 +237,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * claims / world state matching the grist's records — exactly the
    * way a CVPR booth visitor would build their workspace from scratch.
    */
-  microventGrist: [async ({}, use) => {
+  microventGrist: [async (_unused, use) => {
     const jsonlPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
       'microvent-seed.jsonl',
