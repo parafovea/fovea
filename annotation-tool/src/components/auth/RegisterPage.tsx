@@ -128,7 +128,7 @@ export function RegisterPage(): JSX.Element {
           />
           <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
           <p className="text-sm text-muted-foreground">
-            Web-based video annotation tool for developing annotation ontologies.
+            Flexible Ontology Visual Event Analyzer
           </p>
           <p className="text-sm font-medium mt-3">Create an account.</p>
         </CardHeader>
