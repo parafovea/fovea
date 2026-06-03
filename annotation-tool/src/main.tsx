@@ -123,7 +123,14 @@ function Root() {
   )
 }
 
-await maybeStartTourDemoMocking()
+// The MSW worker registration is fire-and-forget for the bundle to
+// remain compatible with esbuild's default target (top-level await
+// requires target esnext). React mounts immediately; any model-
+// service request fired before the worker finishes registering will
+// pass through to the real backend, which is acceptable for the
+// tour-intro screen because no tour starts its model-service-bound
+// step inside the first few hundred milliseconds of page load.
+void maybeStartTourDemoMocking()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
