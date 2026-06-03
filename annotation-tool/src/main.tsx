@@ -39,6 +39,20 @@ initializeCommands()
 initializeGlobalContext()
 
 /**
+ * Start the MSW tour-demo worker BEFORE React mounts so the first
+ * model-service-bound request fired by any tour intro screen is
+ * already intercepted. Production builds without VITE_TOUR_DEMO=1
+ * tree-shake the entire `src/mocks/tourDemo` subtree out of the
+ * bundle because the dynamic import below sits behind a statically-
+ * analysable env-var guard.
+ */
+async function maybeStartTourDemoMocking(): Promise<void> {
+  if (import.meta.env.VITE_TOUR_DEMO !== '1') return
+  const { startTourDemoWorker } = await import('./mocks/tourDemo/browser')
+  await startTourDemoWorker()
+}
+
+/**
  * TanStack Query client configuration.
  * Manages caching, refetching, and background updates for API requests.
  */
@@ -108,6 +122,8 @@ function Root() {
     </TourProvider>
   )
 }
+
+await maybeStartTourDemoMocking()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
