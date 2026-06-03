@@ -524,10 +524,29 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(20);
 
-    // Build extraction request
+    // Build extraction request. The persisted `summary.summary` is a
+    // gloss array (`[{type:"text", content:"..."}, ...]`); the
+    // model-service's /api/extract-claims expects a single plain
+    // string, so flatten the gloss segments before sending.
+    const flattenSummaryGloss = (value: unknown): string => {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value)) {
+        return value
+          .map((seg) => {
+            if (typeof seg === "string") return seg;
+            if (seg && typeof seg === "object" && "content" in seg) {
+              return String((seg as { content: unknown }).content ?? "");
+            }
+            return "";
+          })
+          .join(" ")
+          .trim();
+      }
+      return "";
+    };
     const requestBody: Record<string, unknown> = {
       summary_id: summaryId,
-      summary_text: summary.summary,
+      summary_text: flattenSummaryGloss(summary.summary),
       extraction_strategy: config.extractionStrategy,
       max_claims: config.maxClaimsPerSummary || 50,
       min_confidence: config.minConfidence || 0.5,

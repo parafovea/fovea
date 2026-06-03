@@ -135,6 +135,12 @@ function RuntimeForm({
   const [defaultBatch, setDefaultBatch] = useState(initial.value.defaultBatchSize)
   const [maxBatch, setMaxBatch] = useState(initial.value.maxBatchSize)
   const [offload, setOffload] = useState(initial.value.offloadThreshold)
+  const [maxVideoFrames, setMaxVideoFrames] = useState(initial.value.maxVideoFrames)
+  const [frameSampleRate, setFrameSampleRate] = useState(initial.value.frameSampleRate)
+  const [vlmMaxSummaryTokens, setVlmMaxSummaryTokens] = useState(initial.value.vlmMaxSummaryTokens)
+  const [llmMaxClaimsTokens, setLlmMaxClaimsTokens] = useState(initial.value.llmMaxClaimsTokens)
+  const [llmMaxSynthesisTokens, setLlmMaxSynthesisTokens] = useState(initial.value.llmMaxSynthesisTokens)
+  const [llmMaxOntologyTokens, setLlmMaxOntologyTokens] = useState(initial.value.llmMaxOntologyTokens)
 
   useEffect(() => {
     setCudaDevice(initial.value.cudaDevice)
@@ -142,6 +148,12 @@ function RuntimeForm({
     setDefaultBatch(initial.value.defaultBatchSize)
     setMaxBatch(initial.value.maxBatchSize)
     setOffload(initial.value.offloadThreshold)
+    setMaxVideoFrames(initial.value.maxVideoFrames)
+    setFrameSampleRate(initial.value.frameSampleRate)
+    setVlmMaxSummaryTokens(initial.value.vlmMaxSummaryTokens)
+    setLlmMaxClaimsTokens(initial.value.llmMaxClaimsTokens)
+    setLlmMaxSynthesisTokens(initial.value.llmMaxSynthesisTokens)
+    setLlmMaxOntologyTokens(initial.value.llmMaxOntologyTokens)
   }, [initial])
 
   const update = useUpdateSystemConfig({
@@ -166,6 +178,12 @@ function RuntimeForm({
             defaultBatchSize: defaultBatch,
             maxBatchSize: maxBatch,
             offloadThreshold: offload,
+            maxVideoFrames,
+            frameSampleRate,
+            vlmMaxSummaryTokens,
+            llmMaxClaimsTokens,
+            llmMaxSynthesisTokens,
+            llmMaxOntologyTokens,
           },
         })
       }}
@@ -240,6 +258,130 @@ function RuntimeForm({
         <p className="text-xs text-muted-foreground">
           VRAM usage fraction above which the manager starts offloading idle models (0–1).
         </p>
+      </div>
+      <Separator />
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Video summarization (VLM)</h3>
+          <p className="text-xs text-muted-foreground">
+            Per-request budget the VLM summarizer applies. CPU deployments typically run 3-5
+            frames per summary; GPU deployments can push to 30+. Lower values trade detail for
+            wall-clock latency.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="max-video-frames">Max frames per summary</Label>
+            <Input
+              id="max-video-frames"
+              type="number"
+              min={1}
+              max={100}
+              value={maxVideoFrames}
+              onChange={(event) => {
+                setMaxVideoFrames(Number(event.target.value))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Hard cap. Even when a client requests more, the model-service downsamples.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="frame-sample-rate">Frame sample rate (fps)</Label>
+            <Input
+              id="frame-sample-rate"
+              type="number"
+              min={1}
+              max={10}
+              value={frameSampleRate}
+              onChange={(event) => {
+                setFrameSampleRate(Number(event.target.value))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Frames per second the sampler considers before the hard cap applies.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="vlm-max-tokens">VLM max summary tokens</Label>
+          <Input
+            id="vlm-max-tokens"
+            type="number"
+            min={128}
+            max={4096}
+            value={vlmMaxSummaryTokens}
+            onChange={(event) => {
+              setVlmMaxSummaryTokens(Number(event.target.value))
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Output cap (generated tokens, not prompt). Minimum 128 ≈ a 1-2 sentence summary;
+            ~7 tok/s on CPU for SmolVLM-500M.
+          </p>
+        </div>
+      </div>
+      <Separator />
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Text generation (LLM)</h3>
+          <p className="text-xs text-muted-foreground">
+            Output-token caps for the LLM-driven paths. Each value caps generated tokens only
+            (prompt processing is separate). CPU LLMs at ~20-40 tok/s benefit from tight caps
+            because small models don't always emit EOS cleanly and otherwise burn the full
+            budget — that's the dominant cost.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="llm-claims-tokens">Claim extraction</Label>
+            <Input
+              id="llm-claims-tokens"
+              type="number"
+              min={256}
+              max={4096}
+              value={llmMaxClaimsTokens}
+              onChange={(event) => {
+                setLlmMaxClaimsTokens(Number(event.target.value))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              ~80 tokens per claim. 1024 ≈ 12 claims.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="llm-synthesis-tokens">Summary synthesis</Label>
+            <Input
+              id="llm-synthesis-tokens"
+              type="number"
+              min={512}
+              max={4096}
+              value={llmMaxSynthesisTokens}
+              onChange={(event) => {
+                setLlmMaxSynthesisTokens(Number(event.target.value))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Fuses claims into a paragraph. 2048 ≈ ~5 paragraphs.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="llm-ontology-tokens">Ontology augment</Label>
+            <Input
+              id="llm-ontology-tokens"
+              type="number"
+              min={128}
+              max={4096}
+              value={llmMaxOntologyTokens}
+              onChange={(event) => {
+                setLlmMaxOntologyTokens(Number(event.target.value))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              ~30-50 tokens per type suggestion. 1024 ≈ 20-30 types.
+            </p>
+          </div>
+        </div>
       </div>
       <div className="flex justify-end">
         <Button type="submit" disabled={update.isPending}>

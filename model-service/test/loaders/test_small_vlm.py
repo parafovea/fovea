@@ -1,4 +1,4 @@
-"""Tests for SmallVLMLoader and VLM factory dispatch."""
+"""Tests for SmallVLMLoader and VLM factory dispatch on CPU paths."""
 
 from __future__ import annotations
 
@@ -7,6 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
+from src.domain.entities.architectures import Moondream, QwenLLM, QwenVL, SmolVLM
+from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
+from src.infrastructure.adapters.outbound.models.registry import UnknownArchitectureError
 from src.infrastructure.adapters.outbound.models.vlm.loader import (
     InferenceFramework,
     SmallVLMLoader,
@@ -26,6 +29,16 @@ def small_vlm_config() -> VLMConfig:
     )
 
 
+@pytest.fixture
+def smolvlm_arch() -> SmolVLM:
+    return SmolVLM()
+
+
+@pytest.fixture
+def moondream_arch() -> Moondream:
+    return Moondream()
+
+
 # ---------------------------------------------------------------------------
 # SmallVLMLoader
 # ---------------------------------------------------------------------------
@@ -34,9 +47,10 @@ def small_vlm_config() -> VLMConfig:
 class TestSmallVLMLoader:
     """Tests for the SmallVLMLoader Transformers-based CPU VLM."""
 
-    def test_initial_state(self, small_vlm_config: VLMConfig) -> None:
-        loader = SmallVLMLoader(small_vlm_config)
+    def test_initial_state(self, smolvlm_arch: SmolVLM, small_vlm_config: VLMConfig) -> None:
+        loader = SmallVLMLoader(smolvlm_arch, small_vlm_config)
 
+        assert loader.arch is smolvlm_arch
         assert loader._model is None
         assert loader._processor is None
 
@@ -46,12 +60,13 @@ class TestSmallVLMLoader:
         self,
         mock_processor_cls: MagicMock,
         mock_model_cls: MagicMock,
+        smolvlm_arch: SmolVLM,
         small_vlm_config: VLMConfig,
     ) -> None:
         mock_processor_cls.from_pretrained.return_value = MagicMock()
         mock_model_cls.from_pretrained.return_value = MagicMock()
 
-        loader = SmallVLMLoader(small_vlm_config)
+        loader = SmallVLMLoader(smolvlm_arch, small_vlm_config)
         loader.load()
 
         mock_processor_cls.from_pretrained.assert_called_once_with(
@@ -64,8 +79,10 @@ class TestSmallVLMLoader:
             trust_remote_code=True,
         )
 
-    def test_generate_raises_when_not_loaded(self, small_vlm_config: VLMConfig) -> None:
-        loader = SmallVLMLoader(small_vlm_config)
+    def test_generate_raises_when_not_loaded(
+        self, smolvlm_arch: SmolVLM, small_vlm_config: VLMConfig
+    ) -> None:
+        loader = SmallVLMLoader(smolvlm_arch, small_vlm_config)
 
         from PIL import Image
 
@@ -74,8 +91,10 @@ class TestSmallVLMLoader:
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.generate(images=[img], prompt="Describe")
 
-    def test_generate_returns_decoded_text(self, small_vlm_config: VLMConfig) -> None:
-        loader = SmallVLMLoader(small_vlm_config)
+    def test_generate_returns_decoded_text(
+        self, smolvlm_arch: SmolVLM, small_vlm_config: VLMConfig
+    ) -> None:
+        loader = SmallVLMLoader(smolvlm_arch, small_vlm_config)
 
         mock_processor = MagicMock()
         mock_processor.return_value = {
@@ -97,8 +116,10 @@ class TestSmallVLMLoader:
         assert result == "A beautiful landscape"
         mock_processor.decode.assert_called_once()
 
-    def test_unload_clears_model_and_processor(self, small_vlm_config: VLMConfig) -> None:
-        loader = SmallVLMLoader(small_vlm_config)
+    def test_unload_clears_model_and_processor(
+        self, smolvlm_arch: SmolVLM, small_vlm_config: VLMConfig
+    ) -> None:
+        loader = SmallVLMLoader(smolvlm_arch, small_vlm_config)
         loader._model = MagicMock()
         loader._processor = MagicMock()
 
@@ -114,7 +135,13 @@ class TestSmallVLMLoader:
 
 
 class TestCreateVLMLoaderDispatch:
-    """Tests for the create_vlm_loader factory dispatching to CPU loaders."""
+    """Tests for the create_vlm_loader factory dispatching to CPU loaders.
+
+    The factory's only legitimate dispatch keys are
+    (a) ``config.framework`` (framework-level pre-dispatch into the GGUF
+    loader) and (b) the architecture Pydantic class (registry lookup). No
+    substring matching on ``model_id`` is permitted.
+    """
 
     def test_dispatches_smolvlm_to_small_vlm_loader(self) -> None:
         config = VLMConfig(
@@ -122,7 +149,7 @@ class TestCreateVLMLoaderDispatch:
             framework=InferenceFramework.TRANSFORMERS,
         )
 
-        loader = create_vlm_loader("smolvlm-256m", config)
+        loader = create_vlm_loader(SmolVLM(), config)
 
         assert isinstance(loader, SmallVLMLoader)
 
@@ -132,7 +159,7 @@ class TestCreateVLMLoaderDispatch:
             framework=InferenceFramework.TRANSFORMERS,
         )
 
-        loader = create_vlm_loader("moondream-2b", config)
+        loader = create_vlm_loader(Moondream(), config)
 
         assert isinstance(loader, SmallVLMLoader)
 
@@ -142,17 +169,16 @@ class TestCreateVLMLoaderDispatch:
             framework=InferenceFramework.LLAMA_CPP,
         )
 
-        from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
-
-        loader = create_vlm_loader("qwen2.5-vl-3b-gguf", config)
+        loader = create_vlm_loader(QwenVL(), config)
 
         assert isinstance(loader, LlamaCppVLMLoader)
 
-    def test_raises_for_unknown_model(self) -> None:
+    def test_raises_for_architecture_outside_family(self) -> None:
+        """An LLM architecture must not silently dispatch to a VLM loader."""
         config = VLMConfig(
-            model_id="unknown/model",
+            model_id="Qwen/Qwen2.5-1.5B-Instruct",
             framework=InferenceFramework.TRANSFORMERS,
         )
 
-        with pytest.raises(ValueError, match="Unknown model name"):
-            create_vlm_loader("unknown-model", config)
+        with pytest.raises(UnknownArchitectureError):
+            create_vlm_loader(QwenLLM(), config)  # type: ignore[arg-type]

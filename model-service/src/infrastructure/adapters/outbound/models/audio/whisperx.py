@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.domain.entities.architectures import WhisperX
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
     TranscriptionSegment,
+    audio_registry,
 )
 from src.infrastructure.observability.telemetry import record_inference
 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 WHISPERX_INSTALL_HINT = "whisperx package required; install: pip install whisperx"
 
 
+@audio_registry.register(WhisperX)
 class WhisperXLoader(AudioTranscriptionLoader):
     """Load WhisperX and run the transcribe + align + diarize pipeline."""
 

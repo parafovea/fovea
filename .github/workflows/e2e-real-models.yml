@@ -1,0 +1,125 @@
+name: E2E (real model-service)
+
+# Tier 2 integration verification: runs the integration-models Playwright
+# project against the REAL CPU-mode model-service container rather than
+# the deterministic mock the regular `test-e2e` job in ci.yml uses. This
+# is the canonical "did the model-service actually wire up" signal,
+# distinct from the contract-level signal the mock stack provides.
+#
+# Triggered by:
+#   - workflow_dispatch: on-demand manual run from the Actions tab
+#   - pull_request labeled `e2e-models`: per-PR verification when a
+#     change is suspected to affect model-service wiring (route
+#     handlers, snake_case to camelCase transforms, error mapping,
+#     env-var contracts, etc.)
+#   - schedule: nightly at 02:00 UTC against the default branch, so a
+#     regression in the real model-service surfaces within one day
+#     even if no PR happens to opt in
+#
+# Runtime budget: 60 minutes. CPU-mode model loads dominate the wall
+# clock; specific assertions inside the spec carry their own elevated
+# timeouts (see test/e2e/integration/model-service/real-model-service.spec.ts).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+  schedule:
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  test-e2e-real-models:
+    name: E2E real model-service
+    runs-on: ubuntu-latest
+    # Run on label-triggered PRs only when the label is the one we
+    # intend, on schedule + workflow_dispatch always. This avoids firing
+    # on every relabel event for unrelated labels.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e-models'))
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @fovea/annotation-tool exec playwright install --with-deps chromium
+
+      - name: Start Docker Compose stack with real model-service
+        run: |
+          docker compose \
+            -f docker-compose.e2e.yml \
+            -f docker-compose.e2e.real-models.yml \
+            --profile with-models \
+            up -d --build
+
+          echo "Waiting for services to be healthy (real model-service CPU load can take up to 3 minutes)..."
+          for i in $(seq 1 60); do
+            if docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml ps backend | grep -q "(healthy)" \
+              && docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml ps frontend | grep -q "(healthy)" \
+              && docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml ps model-service | grep -q "(healthy)"; then
+              echo "All services healthy"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Timeout waiting for services"
+              docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml ps
+              docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml logs --tail=200 model-service
+              docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml logs --tail=100 backend
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Run integration-models Playwright project
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          CI: 'true'
+        run: pnpm --filter @fovea/annotation-tool exec playwright test --project=integration-models --reporter=list,html,json,junit
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== Model Service Logs ==="
+          docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml logs --tail=500 model-service
+          echo "=== Backend Logs ==="
+          docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml logs --tail=300 backend
+          echo "=== Frontend Logs ==="
+          docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml logs --tail=200 frontend
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml down -v
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-real-models
+          path: annotation-tool/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-real-models-test-results
+          path: annotation-tool/test-results/
+          retention-days: 30

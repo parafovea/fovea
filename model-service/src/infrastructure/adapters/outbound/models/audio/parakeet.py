@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterable
 
+from src.domain.entities.architectures import NemoParakeet
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
     TranscriptionSegment,
+    audio_registry,
 )
 from src.infrastructure.observability.telemetry import record_inference
 
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 NEMO_INSTALL_HINT = "NeMo required for Parakeet; install with: pip install nemo_toolkit[asr]"
 
 
+@audio_registry.register(NemoParakeet)
 class ParakeetTDTLoader(AudioTranscriptionLoader):
     """Load and run NVIDIA Parakeet TDT models via NeMo."""
 

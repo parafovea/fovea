@@ -11,6 +11,7 @@ models:
       # ------------------------------------------------------------------
       qwen-3-vl-8b:
         model_id: "Qwen/Qwen3-VL-8B-Instruct"
+        architecture: {kind: "qwen3-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 9
@@ -20,6 +21,7 @@ models:
         description: "Qwen3-VL 8B Instruct — 256K native context, ungated, current default"
       qwen-3-vl-8b-thinking:
         model_id: "Qwen/Qwen3-VL-8B-Thinking"
+        architecture: {kind: "qwen3-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 9
@@ -30,6 +32,7 @@ models:
         description: "Qwen3-VL 8B Thinking — exposes chain-of-thought for reasoning-heavy video QA"
       qwen-3-vl-30b-a3b:
         model_id: "Qwen/Qwen3-VL-30B-A3B-Instruct"
+        architecture: {kind: "qwen3-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 22
@@ -39,6 +42,7 @@ models:
         description: "Qwen3-VL 30B MoE (3B active) — strong quality/cost balance, 256K context"
       qwen-3-vl-30b-a3b-thinking:
         model_id: "Qwen/Qwen3-VL-30B-A3B-Thinking"
+        architecture: {kind: "qwen3-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 22
@@ -49,6 +53,7 @@ models:
         description: "Qwen3-VL 30B MoE Thinking — reasoning traces for complex video analysis"
       qwen-3-vl-235b-a22b:
         model_id: "Qwen/Qwen3-VL-235B-A22B-Instruct"
+        architecture: {kind: "qwen3-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 128
@@ -58,6 +63,7 @@ models:
         description: "Qwen3-VL flagship 235B MoE (22B active) — rivals Gemini 2.5 Pro / GPT-5"
       tarsier2-7b:
         model_id: "omni-research/Tarsier2-7b"
+        architecture: {kind: "tarsier-2"}
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 9
@@ -68,6 +74,7 @@ models:
       # Legacy Qwen2.5-VL (kept for backward compatibility) ---------------
       qwen-2-5-vl-7b:
         model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
+        architecture: {kind: "qwen2.5-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 8
@@ -77,6 +84,7 @@ models:
         description: "Qwen2.5-VL 7B — predecessor of Qwen3-VL, kept for backward compatibility"
       llama-4-maverick:
         model_id: "meta-llama/Llama-4-Maverick"
+        architecture: {kind: "llama-4-maverick"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 62
@@ -86,6 +94,7 @@ models:
         description: "MoE model with 17B active parameters, multimodal, 10M context"
       gemma-3-27b:
         model_id: "google/gemma-3-27b-it"
+        architecture: {kind: "gemma-3"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 14
@@ -95,6 +104,7 @@ models:
         description: "Document analysis, OCR, multilingual support (gated)"
       internvl3-78b:
         model_id: "OpenGVLab/InternVL3-78B"
+        architecture: {kind: "internvl3"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 40
@@ -104,6 +114,7 @@ models:
         description: "SOTA benchmarks, scientific reasoning"
       pixtral-large:
         model_id: "mistralai/Pixtral-Large-Instruct-2411"
+        architecture: {kind: "pixtral"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 62
@@ -113,6 +124,7 @@ models:
         description: "Long context (128k), batch processing"
       qwen2-5-vl-72b:
         model_id: "Qwen/Qwen2.5-VL-72B-Instruct"
+        architecture: {kind: "qwen2.5-vl"}
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 36
@@ -123,6 +135,7 @@ models:
       # CPU-compatible VLMs (GGUF)
       qwen2-5-vl-3b-gguf:
         model_id: "Qwen/Qwen2.5-VL-3B-Instruct-GGUF"
+        architecture: {kind: "qwen2.5-vl"}
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -133,6 +146,7 @@ models:
       # CPU-compatible VLMs (Transformers)
       smolvlm-2-2b:
         model_id: "HuggingFaceTB/SmolVLM-Instruct"
+        architecture: {kind: "smolvlm"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -142,6 +156,7 @@ models:
         description: "SmolVLM 2.2B, 3-4x faster than Qwen2-VL, low tokens/image"
       moondream-2b:
         model_id: "vikhyat/moondream2"
+        architecture: {kind: "moondream"}
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -151,6 +166,7 @@ models:
         description: "CPU-optimized 2B VLM, ~10s/frame, runs well on CPU/MPS"
       smolvlm-500m:
         model_id: "HuggingFaceTB/SmolVLM-500M-Instruct"
+        architecture: {kind: "smolvlm"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -160,6 +176,7 @@ models:
         description: "SmolVLM 500M, ultra-compact for edge, under 1GB at int8"
       moondream-0-5b:
         model_id: "vikhyat/moondream-0.5b"
+        architecture: {kind: "moondream"}
         quantization: "int4"
         framework: "transformers"
         vram_gb: 0
@@ -169,6 +186,7 @@ models:
         description: "Tiny 500M VLM, 816MB at int4, for edge devices"
       moondream-3:
         model_id: "vikhyatk/moondream3"
+        architecture: {kind: "moondream"}
         quantization: "none"
         framework: "transformers"
         vram_gb: 0
@@ -179,6 +197,8 @@ models:
       # External APIs (always CPU-compatible)
       claude-sonnet-4-6:
         model_id: "claude-sonnet-4-6"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -190,6 +210,8 @@ models:
         description: "Claude Sonnet 4.6, current production default, 1M context, vision"
       claude-opus-4-7:
         model_id: "claude-opus-4-7"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -201,6 +223,8 @@ models:
         description: "Claude Opus 4.7, Anthropic flagship April 2026, vision, 1M context"
       gpt-5-4:
         model_id: "gpt-5.4"
+        architecture:
+          kind: "openai-vision-api"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -212,6 +236,8 @@ models:
         description: "OpenAI GPT-5.4, flagship multimodal, vision, 200K context"
       gemini-3-1-pro:
         model_id: "gemini-3.1-pro"
+        architecture:
+          kind: "gemini-vision-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
@@ -223,6 +249,8 @@ models:
         description: "Gemini 3.1 Pro, 2M context, 78.2% on Video-MME (SOTA video understanding)"
       grok-4:
         model_id: "grok-4"
+        architecture:
+          kind: "grok-vision-api"
         framework: "external_api"
         provider: "xai"
         api_endpoint: "https://api.x.ai/v1/chat/completions"
@@ -234,6 +262,8 @@ models:
         description: "xAI Grok 4, 2M context, multimodal"
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
+        architecture:
+          kind: "claude-vision-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -245,6 +275,8 @@ models:
         description: "Anthropic Claude Sonnet 4.5, vision capable, API-based"
       gpt-4o:
         model_id: "gpt-4o"
+        architecture:
+          kind: "openai-vision-api"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -256,6 +288,8 @@ models:
         description: "OpenAI GPT-4 Omni, vision capable, API-based"
       gemini-2-5-flash:
         model_id: "gemini-2.5-flash"
+        architecture:
+          kind: "gemini-vision-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -272,6 +306,8 @@ models:
       # Qwen3 family and modern reasoning models (2026)
       qwen-3-8b:
         model_id: "Qwen/Qwen3-8B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 5
@@ -281,6 +317,8 @@ models:
         description: "Qwen3 8B, current ungated default, strong reasoning"
       qwen-3-32b:
         model_id: "Qwen/Qwen3-32B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -290,6 +328,8 @@ models:
         description: "Qwen3 32B, large ungated text LLM"
       qwen-3-5-397b-a17b:
         model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 210
@@ -299,6 +339,8 @@ models:
         description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
       deepseek-v3-2:
         model_id: "deepseek-ai/DeepSeek-V3.2"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 85
@@ -308,6 +350,8 @@ models:
         description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
       deepseek-r1-distill-qwen-14b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 9
@@ -318,6 +362,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
       deepseek-r1-distill-qwen-32b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -328,6 +374,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
       kimi-k2-6:
         model_id: "moonshotai/Kimi-K2.6"
+        architecture:
+          kind: "kimi-k2"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 90
@@ -337,6 +385,8 @@ models:
         description: "Kimi K2.6, current Quality Index leader (53.9)"
       glm-4-7:
         model_id: "THUDM/GLM-4.7"
+        architecture:
+          kind: "glm-4"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 60
@@ -347,6 +397,8 @@ models:
       # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 4
@@ -356,6 +408,8 @@ models:
         description: "Compact text LLM, ungated, efficient for ontology tasks"
       qwen-2-5-32b:
         model_id: "Qwen/Qwen2.5-32B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 16
@@ -365,6 +419,8 @@ models:
         description: "Qwen 2.5 32B, ungated, excellent reasoning"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
+        architecture:
+          kind: "llama-4-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 55
@@ -374,6 +430,8 @@ models:
         description: "MoE model with 17B active, 10M context, multimodal"
       llama-3-3-70b:
         model_id: "meta-llama/Llama-3.3-70B-Instruct"
+        architecture:
+          kind: "llama-3"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 35
@@ -383,6 +441,8 @@ models:
         description: "Matches 405B quality, proven performance"
       deepseek-v3:
         model_id: "deepseek-ai/DeepSeek-V3"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 85
@@ -392,6 +452,8 @@ models:
         description: "MoE with 37B active, best reasoning, scientific tasks"
       gemma-3-27b-text:
         model_id: "google/gemma-3-27b-it"
+        architecture:
+          kind: "gemma-3-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 14
@@ -402,6 +464,8 @@ models:
       # CPU-compatible LLMs (GGUF)
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -411,6 +475,8 @@ models:
         description: "Qwen2.5-1.5B GGUF Q4_K_M, ~40 tok/s on CPU"
       qwen-3-1-7b-cpu:
         model_id: "Qwen/Qwen3-1.7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -420,6 +486,8 @@ models:
         description: "Qwen3 1.7B CPU, current ungated small LLM default"
       phi-4-mini:
         model_id: "microsoft/Phi-4-mini-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -429,6 +497,8 @@ models:
         description: "Phi-4 mini, efficient reasoning on CPU (successor to Phi-3)"
       deepseek-r1-distill-qwen-1-5b-gguf:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -440,6 +510,8 @@ models:
       # CPU-compatible LLMs (Transformers)
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -449,6 +521,8 @@ models:
         description: "Small LLM for ontology, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -459,6 +533,8 @@ models:
       # External APIs (always CPU-compatible)
       claude-sonnet-4-6:
         model_id: "claude-sonnet-4-6"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -470,6 +546,8 @@ models:
         description: "Claude Sonnet 4.6, current production default, 1M context, text"
       claude-opus-4-7:
         model_id: "claude-opus-4-7"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -481,6 +559,8 @@ models:
         description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
       gpt-5-4:
         model_id: "gpt-5.4"
+        architecture:
+          kind: "openai-chat"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -492,6 +572,8 @@ models:
         description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
       gemini-3-1-pro:
         model_id: "gemini-3.1-pro"
+        architecture:
+          kind: "gemini-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
@@ -503,6 +585,8 @@ models:
         description: "Gemini 3.1 Pro, 2M context"
       grok-4:
         model_id: "grok-4"
+        architecture:
+          kind: "grok-api"
         framework: "external_api"
         provider: "xai"
         api_endpoint: "https://api.x.ai/v1/chat/completions"
@@ -514,6 +598,8 @@ models:
         description: "xAI Grok 4, 2M context, multimodal"
       claude-sonnet-4-5:
         model_id: "claude-sonnet-4-5"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -525,6 +611,8 @@ models:
         description: "Anthropic Claude Sonnet 4.5, text-only, API-based"
       gpt-4o:
         model_id: "gpt-4o"
+        architecture:
+          kind: "openai-chat"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -536,6 +624,8 @@ models:
         description: "OpenAI GPT-4 Omni, text-only, API-based"
       gemini-2-5-flash:
         model_id: "gemini-2.5-flash"
+        architecture:
+          kind: "gemini-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
@@ -551,6 +641,8 @@ models:
     options:
       sam-3-1:
         model_id: "facebook/sam3.1-base"
+        architecture:
+          kind: "sam-3-1-detection"
         framework: "sam3"
         vram_gb: 4
         cpu_memory_gb: 0
@@ -560,6 +652,8 @@ models:
         description: "SAM 3.1 (Meta, March 2026), unified detection+segmentation+tracking, text/exemplar prompts"
       sam-3:
         model_id: "facebook/sam3-large"
+        architecture:
+          kind: "sam-3-1-detection"
         framework: "sam3"
         vram_gb: 6
         cpu_memory_gb: 0
@@ -569,6 +663,8 @@ models:
         description: "SAM 3 (Meta, Nov 2025), segment anything with concepts"
       yolov12-large:
         model_id: "ultralytics/yolov12l.pt"
+        architecture:
+          kind: "yolov12"
         framework: "ultralytics"
         vram_gb: 3
         cpu_memory_gb: 2
@@ -578,6 +674,8 @@ models:
         description: "YOLOv12 large, Feb 2025 attention-centric architecture, Area Attention"
       yoloe-26:
         model_id: "ailabcvc/yoloe-26l"
+        architecture:
+          kind: "yoloe"
         framework: "ultralytics"
         vram_gb: 3
         cpu_memory_gb: 0
@@ -587,6 +685,8 @@ models:
         description: "YOLOE-26, open-vocabulary via unified object embedding space"
       rf-detr-base:
         model_id: "roboflow/rf-detr-base"
+        architecture:
+          kind: "rf-detr"
         framework: "pytorch"
         vram_gb: 4
         cpu_memory_gb: 0
@@ -596,6 +696,8 @@ models:
         description: "RF-DETR, Roboflow DETR variant, current 2026 leader on COCO"
       yolo-world-v2:
         model_id: "yolov8l-worldv2.pt"
+        architecture:
+          kind: "yolo-world"
         framework: "pytorch"
         vram_gb: 2
         cpu_memory_gb: 2
@@ -605,6 +707,8 @@ models:
         description: "Speed and accuracy balance, image prompts"
       grounding-dino-1-5:
         model_id: "IDEA-Research/grounding-dino-1.5-pro"
+        architecture:
+          kind: "grounding-dino"
         framework: "pytorch"
         vram_gb: 4
         cpu_memory_gb: 0
@@ -614,6 +718,8 @@ models:
         description: "Open-world, zero-shot, 52.5 AP"
       owlv2:
         model_id: "google/owlv2-large-patch14-ensemble"
+        architecture:
+          kind: "owl-v2"
         framework: "pytorch"
         vram_gb: 6
         cpu_memory_gb: 0
@@ -623,6 +729,8 @@ models:
         description: "Scaled training, rare classes"
       florence-2:
         model_id: "microsoft/Florence-2-large"
+        architecture:
+          kind: "florence-2"
         framework: "pytorch"
         vram_gb: 2
         cpu_memory_gb: 0
@@ -630,9 +738,14 @@ models:
         speed: "fast"
         fps: 30
         description: "Unified vision, captioning"
-      # CPU-optimized detection with ONNX
+      # CPU-optimized detection with ONNX. Public Instemic export of
+      # the Ultralytics YOLO-World v2 small weights (AGPL-3.0); the
+      # loader in onnx/yolo_world.py walks a fallback filename chain
+      # to resolve `yolov8s-worldv2.onnx` at the repo root.
       yolo-world-s-onnx:
-        model_id: "yolov8s-worldv2"
+        model_id: "Instemic/yolo-world-onnx"
+        architecture:
+          kind: "yolo-world"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -642,6 +755,8 @@ models:
         description: "YOLO-World small, ONNX for CPU, ~100ms/image"
       florence-2-base-onnx:
         model_id: "onnx-community/Florence-2-base"
+        architecture:
+          kind: "florence-2"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -651,6 +766,8 @@ models:
         description: "Florence-2 ONNX, ~200ms/image on CPU"
       grounding-dino-tiny-onnx:
         model_id: "onnx-community/grounding-dino-tiny-ONNX"
+        architecture:
+          kind: "grounding-dino"
         framework: "onnx"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -665,6 +782,8 @@ models:
       sam-3-1-tracking:
         model_id: "facebook/sam3.1-base"
         framework: "sam3"
+        architecture:
+          kind: "sam-3-1"
         vram_gb: 4
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -673,6 +792,8 @@ models:
       samurai:
         model_id: "yangchris11/samurai"
         framework: "pytorch"
+        architecture:
+          kind: "samurai"
         vram_gb: 3
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -681,6 +802,8 @@ models:
       sam2long:
         model_id: "Mark12Ding/SAM2Long"
         framework: "pytorch"
+        architecture:
+          kind: "sam2-long"
         vram_gb: 3
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -689,6 +812,8 @@ models:
       sam2-1:
         model_id: "facebook/sam2.1-hiera-large"
         framework: "pytorch"
+        architecture:
+          kind: "sam2"
         vram_gb: 3
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -697,6 +822,8 @@ models:
       yolo11n-seg:
         model_id: "ultralytics/yolo11n-seg"
         framework: "ultralytics"
+        architecture:
+          kind: "yolo11-seg"
         vram_gb: 1
         cpu_memory_gb: 1
         cpu_compatible: true
@@ -709,6 +836,8 @@ models:
       canary-qwen-2-5b:
         model_id: "nvidia/canary-qwen-2.5b"
         framework: "nemo_canary"
+        architecture:
+          kind: "nemo-canary"
         vram_gb: 5
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -717,6 +846,8 @@ models:
       parakeet-tdt-1-1b:
         model_id: "nvidia/parakeet-tdt-1.1b"
         framework: "nemo_parakeet"
+        architecture:
+          kind: "nemo-parakeet"
         vram_gb: 3
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -725,6 +856,8 @@ models:
       whisperx-large-v3:
         model_id: "Systran/faster-whisper-large-v3"
         framework: "whisperx"
+        architecture:
+          kind: "whisperx"
         vram_gb: 5
         cpu_memory_gb: 3
         cpu_compatible: true
@@ -733,6 +866,8 @@ models:
       whisper-v3-turbo:
         model_id: "openai/whisper-large-v3-turbo"
         framework: "whisper"
+        architecture:
+          kind: "whisper"
         vram_gb: 5
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -741,6 +876,8 @@ models:
       faster-whisper-large-v3:
         model_id: "Systran/faster-whisper-large-v3"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         vram_gb: 3
         cpu_memory_gb: 3
         cpu_compatible: true
@@ -749,6 +886,8 @@ models:
       whisper-large-v3:
         model_id: "openai/whisper-large-v3"
         framework: "whisper"
+        architecture:
+          kind: "whisper"
         vram_gb: 10
         cpu_memory_gb: 0
         cpu_compatible: false
@@ -758,6 +897,8 @@ models:
       faster-whisper-medium-cpu:
         model_id: "Systran/faster-whisper-medium"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         quantization: "int8"
         vram_gb: 0
         cpu_memory_gb: 2
@@ -767,6 +908,8 @@ models:
       faster-whisper-small-cpu:
         model_id: "Systran/faster-whisper-small"
         framework: "faster_whisper"
+        architecture:
+          kind: "faster-whisper"
         quantization: "int8"
         vram_gb: 0
         cpu_memory_gb: 1
@@ -777,6 +920,8 @@ models:
       assemblyai-universal:
         model_id: "best"
         framework: "external_api"
+        architecture:
+          kind: "assemblyai"
         provider: "assemblyai"
         api_endpoint: "https://api.assemblyai.com/v2"
         requires_api_key: true
@@ -788,6 +933,8 @@ models:
       deepgram-nova-3:
         model_id: "nova-3"
         framework: "external_api"
+        architecture:
+          kind: "deepgram"
         provider: "deepgram"
         api_endpoint: "https://api.deepgram.com/v1"
         requires_api_key: true
@@ -799,6 +946,8 @@ models:
       revai:
         model_id: "default"
         framework: "external_api"
+        architecture:
+          kind: "revai"
         provider: "revai"
         api_endpoint: "https://api.rev.ai/speechtotext/v1"
         requires_api_key: true
@@ -810,6 +959,8 @@ models:
       gladia:
         model_id: "default"
         framework: "external_api"
+        architecture:
+          kind: "gladia"
         provider: "gladia"
         api_endpoint: "https://api.gladia.io/v2"
         requires_api_key: true
@@ -821,6 +972,8 @@ models:
       aws-transcribe:
         model_id: "default"
         framework: "external_api"
+        architecture:
+          kind: "aws-transcribe"
         provider: "aws"
         api_endpoint: "https://transcribe.us-east-1.amazonaws.com"
         requires_api_key: true
@@ -832,6 +985,8 @@ models:
       google-speech:
         model_id: "chirp_2"
         framework: "external_api"
+        architecture:
+          kind: "google-speech"
         provider: "google"
         api_endpoint: "https://speech.googleapis.com/v2"
         requires_api_key: true
@@ -843,6 +998,8 @@ models:
       azure-speech:
         model_id: "default"
         framework: "external_api"
+        architecture:
+          kind: "azure-speech"
         provider: "azure"
         api_endpoint: "https://YOUR_REGION.api.cognitive.microsoft.com"
         requires_api_key: true
@@ -858,6 +1015,8 @@ models:
       # Qwen3 family and modern reasoning models (2026)
       qwen-3-8b:
         model_id: "Qwen/Qwen3-8B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 5
@@ -867,6 +1026,8 @@ models:
         description: "Qwen3 8B, current ungated default for claim extraction"
       qwen-3-32b:
         model_id: "Qwen/Qwen3-32B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -876,6 +1037,8 @@ models:
         description: "Qwen3 32B, large ungated text LLM"
       qwen-3-5-397b-a17b:
         model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 210
@@ -885,6 +1048,8 @@ models:
         description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
       deepseek-v3-2:
         model_id: "deepseek-ai/DeepSeek-V3.2"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 85
@@ -894,6 +1059,8 @@ models:
         description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
       deepseek-r1-distill-qwen-14b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 9
@@ -904,6 +1071,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
       deepseek-r1-distill-qwen-32b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -914,6 +1083,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
       kimi-k2-6:
         model_id: "moonshotai/Kimi-K2.6"
+        architecture:
+          kind: "kimi-k2"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 90
@@ -923,6 +1094,8 @@ models:
         description: "Kimi K2.6, current Quality Index leader (53.9)"
       glm-4-7:
         model_id: "THUDM/GLM-4.7"
+        architecture:
+          kind: "glm-4"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 60
@@ -933,6 +1106,8 @@ models:
       # External APIs (flagship 2026)
       claude-sonnet-4-6:
         model_id: "claude-sonnet-4-6"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -944,6 +1119,8 @@ models:
         description: "Claude Sonnet 4.6, current production default, 1M context"
       claude-opus-4-7:
         model_id: "claude-opus-4-7"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -955,6 +1132,8 @@ models:
         description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
       gpt-5-4:
         model_id: "gpt-5.4"
+        architecture:
+          kind: "openai-chat"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -966,6 +1145,8 @@ models:
         description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
       gemini-3-1-pro:
         model_id: "gemini-3.1-pro"
+        architecture:
+          kind: "gemini-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
@@ -977,6 +1158,8 @@ models:
         description: "Gemini 3.1 Pro, 2M context"
       grok-4:
         model_id: "grok-4"
+        architecture:
+          kind: "grok-api"
         framework: "external_api"
         provider: "xai"
         api_endpoint: "https://api.x.ai/v1/chat/completions"
@@ -989,6 +1172,8 @@ models:
       # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 4
@@ -998,6 +1183,8 @@ models:
         description: "Compact text LLM, ungated, efficient for claim extraction"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
+        architecture:
+          kind: "llama-4-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 55
@@ -1007,6 +1194,8 @@ models:
         description: "MoE model with 17B active, 10M context, excellent for claim decomposition"
       deepseek-v3:
         model_id: "deepseek-ai/DeepSeek-V3"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 85
@@ -1016,6 +1205,8 @@ models:
         description: "MoE with 37B active, best reasoning for complex claims"
       gemma-3-27b:
         model_id: "google/gemma-3-27b-it"
+        architecture:
+          kind: "gemma-3-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 14
@@ -1026,6 +1217,8 @@ models:
       # CPU-compatible LLMs for claim extraction (GGUF)
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -1036,6 +1229,8 @@ models:
       # CPU-compatible LLMs for claim extraction (Transformers)
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -1045,6 +1240,8 @@ models:
         description: "Small LLM for claim extraction, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -1059,6 +1256,8 @@ models:
       # Qwen3 family and modern reasoning models (2026)
       qwen-3-8b:
         model_id: "Qwen/Qwen3-8B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 5
@@ -1068,6 +1267,8 @@ models:
         description: "Qwen3 8B, current ungated default for claim synthesis"
       qwen-3-32b:
         model_id: "Qwen/Qwen3-32B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -1077,6 +1278,8 @@ models:
         description: "Qwen3 32B, large ungated text LLM"
       qwen-3-5-397b-a17b:
         model_id: "Qwen/Qwen3.5-397B-A17B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 210
@@ -1086,6 +1289,8 @@ models:
         description: "Qwen3.5 flagship MoE (17B active), rivals closed models"
       deepseek-v3-2:
         model_id: "deepseek-ai/DeepSeek-V3.2"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 85
@@ -1095,6 +1300,8 @@ models:
         description: "DeepSeek V3.2, 94.2% MMLU, MIT license, MoE 671B/37B active"
       deepseek-r1-distill-qwen-14b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 9
@@ -1105,6 +1312,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 14B, chain-of-thought reasoning"
       deepseek-r1-distill-qwen-32b:
         model_id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        architecture:
+          kind: "deepseek-r1-distill"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 18
@@ -1115,6 +1324,8 @@ models:
         description: "DeepSeek-R1 distilled to Qwen 32B, strongest reasoning distill"
       kimi-k2-6:
         model_id: "moonshotai/Kimi-K2.6"
+        architecture:
+          kind: "kimi-k2"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 90
@@ -1124,6 +1335,8 @@ models:
         description: "Kimi K2.6, current Quality Index leader (53.9)"
       glm-4-7:
         model_id: "THUDM/GLM-4.7"
+        architecture:
+          kind: "glm-4"
         quantization: "4bit"
         framework: "sglang"
         vram_gb: 60
@@ -1134,6 +1347,8 @@ models:
       # External APIs (flagship 2026)
       claude-sonnet-4-6:
         model_id: "claude-sonnet-4-6"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -1145,6 +1360,8 @@ models:
         description: "Claude Sonnet 4.6, current production default, 1M context"
       claude-opus-4-7:
         model_id: "claude-opus-4-7"
+        architecture:
+          kind: "claude-api"
         framework: "external_api"
         provider: "anthropic"
         api_endpoint: "https://api.anthropic.com/v1/messages"
@@ -1156,6 +1373,8 @@ models:
         description: "Claude Opus 4.7, Anthropic flagship April 2026, 1M context"
       gpt-5-4:
         model_id: "gpt-5.4"
+        architecture:
+          kind: "openai-chat"
         framework: "external_api"
         provider: "openai"
         api_endpoint: "https://api.openai.com/v1/chat/completions"
@@ -1167,6 +1386,8 @@ models:
         description: "OpenAI GPT-5.4, flagship multimodal, 200K context"
       gemini-3-1-pro:
         model_id: "gemini-3.1-pro"
+        architecture:
+          kind: "gemini-api"
         framework: "external_api"
         provider: "google"
         api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
@@ -1178,6 +1399,8 @@ models:
         description: "Gemini 3.1 Pro, 2M context"
       grok-4:
         model_id: "grok-4"
+        architecture:
+          kind: "grok-api"
         framework: "external_api"
         provider: "xai"
         api_endpoint: "https://api.x.ai/v1/chat/completions"
@@ -1190,6 +1413,8 @@ models:
       # Legacy entries (kept for backward compatibility)
       qwen-2-5-7b:
         model_id: "Qwen/Qwen2.5-7B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 4
@@ -1199,6 +1424,8 @@ models:
         description: "Compact text LLM, ungated, efficient for claim synthesis"
       llama-4-scout:
         model_id: "meta-llama/Llama-4-Scout"
+        architecture:
+          kind: "llama-4-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 55
@@ -1208,6 +1435,8 @@ models:
         description: "MoE model with 17B active, 10M context, excellent for narrative synthesis"
       deepseek-v3:
         model_id: "deepseek-ai/DeepSeek-V3"
+        architecture:
+          kind: "deepseek-v3"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 85
@@ -1217,6 +1446,8 @@ models:
         description: "MoE with 37B active, best reasoning for complex multi-source synthesis"
       gemma-3-27b:
         model_id: "google/gemma-3-27b-it"
+        architecture:
+          kind: "gemma-3-llm"
         quantization: "4bit"
         framework: "transformers"
         vram_gb: 14
@@ -1227,6 +1458,8 @@ models:
       # CPU-compatible LLMs for claim synthesis (GGUF)
       qwen2-5-1-5b-gguf:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        architecture:
+          kind: "qwen-llm"
         quantization: "gguf_q4_k_m"
         framework: "llama_cpp"
         vram_gb: 0
@@ -1237,6 +1470,8 @@ models:
       # CPU-compatible LLMs for claim synthesis (Transformers)
       qwen2-5-1-5b-cpu:
         model_id: "Qwen/Qwen2.5-1.5B-Instruct"
+        architecture:
+          kind: "qwen-llm"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -1246,6 +1481,8 @@ models:
         description: "Small LLM for claim synthesis, ~20 tok/s on CPU"
       phi-3-mini-4k:
         model_id: "microsoft/Phi-3-mini-4k-instruct"
+        architecture:
+          kind: "phi"
         quantization: "int8"
         framework: "transformers"
         vram_gb: 0
@@ -1259,6 +1496,8 @@ models:
     options:
       pyannote-3-1:
         model_id: "pyannote/speaker-diarization-3.1"
+        architecture:
+          kind: "pyannote-diarization"
         framework: "pyannote"
         vram_gb: 2
         cpu_memory_gb: 2
@@ -1271,6 +1510,8 @@ models:
     options:
       silero-vad:
         model_id: "silero_vad"
+        architecture:
+          kind: "silero-vad"
         framework: "pytorch"
         vram_gb: 0.1
         cpu_memory_gb: 0.1

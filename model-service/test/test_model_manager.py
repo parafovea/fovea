@@ -34,6 +34,7 @@ def sample_config():
                     "test-model-1": {
                         "model_id": "test/model-1",
                         "framework": "sglang",
+                        "architecture": {"kind": "qwen2.5-vl"},
                         "vram_gb": 10,
                         "quantization": "4bit",
                         "speed": "fast",
@@ -42,6 +43,7 @@ def sample_config():
                     "test-model-2": {
                         "model_id": "test/model-2",
                         "framework": "pytorch",
+                        "architecture": {"kind": "smolvlm"},
                         "vram_gb": 5,
                         "speed": "very_fast",
                         "description": "Test model 2",
@@ -54,6 +56,7 @@ def sample_config():
                     "yolo-test": {
                         "model_id": "ultralytics/yolo-test",
                         "framework": "pytorch",
+                        "architecture": {"kind": "yolo-world"},
                         "vram_gb": 2,
                         "speed": "real_time",
                         "fps": 60,
@@ -98,6 +101,7 @@ class TestModelConfig:
         config_dict = {
             "model_id": "test/model",
             "framework": "pytorch",
+            "architecture": {"kind": "yolo-world"},
             "vram_gb": 8,
             "quantization": "4bit",
             "speed": "fast",
@@ -116,19 +120,37 @@ class TestModelConfig:
 
     def test_model_config_vram_bytes(self):
         """Test VRAM conversion from GB to bytes."""
-        config = ModelConfig({"model_id": "test", "framework": "pytorch", "vram_gb": 8})
+        config = ModelConfig(
+            {
+                "model_id": "test",
+                "framework": "pytorch",
+                "architecture": {"kind": "yolo-world"},
+                "vram_gb": 8,
+            }
+        )
         expected_bytes = 8 * 1024 * 1024 * 1024
         assert config.vram_bytes == expected_bytes
 
     def test_model_config_optional_fields(self):
         """Test ModelConfig with optional fields."""
-        config = ModelConfig({"model_id": "test", "framework": "pytorch"})
+        config = ModelConfig(
+            {
+                "model_id": "test",
+                "framework": "pytorch",
+                "architecture": {"kind": "yolo-world"},
+            }
+        )
 
         assert config.vram_gb == 0
         assert config.quantization is None
         assert config.speed == "medium"
         assert config.description == ""
         assert config.fps is None
+
+    def test_model_config_missing_architecture_raises(self):
+        """Architecture is required; missing block fails loud at load time."""
+        with pytest.raises(ValueError, match="missing the required `architecture` block"):
+            ModelConfig({"model_id": "test", "framework": "pytorch"})
 
 
 class TestTaskConfig:
@@ -142,11 +164,13 @@ class TestTaskConfig:
                 "model-a": {
                     "model_id": "test/model-a",
                     "framework": "pytorch",
+                    "architecture": {"kind": "yolo-world"},
                     "vram_gb": 4,
                 },
                 "model-b": {
                     "model_id": "test/model-b",
                     "framework": "sglang",
+                    "architecture": {"kind": "qwen2.5-vl"},
                     "vram_gb": 8,
                 },
             },
@@ -167,6 +191,7 @@ class TestTaskConfig:
                 "model-a": {
                     "model_id": "test/model-a",
                     "framework": "pytorch",
+                    "architecture": {"kind": "yolo-world"},
                     "vram_gb": 4,
                 },
             },
@@ -573,6 +598,7 @@ class TestExternalAPISupport:
                         "claude-sonnet-4-5": {
                             "model_id": "claude-sonnet-4-5",
                             "framework": "external_api",
+                            "architecture": {"kind": "claude-api"},
                             "provider": "anthropic",
                             "api_endpoint": "https://api.anthropic.com/v1/messages",
                             "requires_api_key": True,
@@ -582,6 +608,7 @@ class TestExternalAPISupport:
                         "local-model": {
                             "model_id": "test/local",
                             "framework": "sglang",
+                            "architecture": {"kind": "qwen2.5-vl"},
                             "vram_gb": 10,
                             "speed": "fast",
                             "description": "Local model",
@@ -594,6 +621,7 @@ class TestExternalAPISupport:
                         "gpt-4o": {
                             "model_id": "gpt-4o",
                             "framework": "external_api",
+                            "architecture": {"kind": "openai-chat"},
                             "provider": "openai",
                             "api_endpoint": "https://api.openai.com/v1/chat/completions",
                             "requires_api_key": True,

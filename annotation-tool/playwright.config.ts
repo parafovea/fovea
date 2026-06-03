@@ -116,6 +116,44 @@ export default defineConfig({
         viewport: { width: 1280, height: 720 },
         screenshot: 'on'  // Always take screenshots for visual tests
       }
+    },
+
+    // Integration tests against the real model-service container.
+    // Not part of the default mock-stack CI gate. Engage by booting the
+    // docker-compose.e2e.real-models.yml override (which swaps the
+    // backend's MODEL_SERVICE_URL from the mock to the real CPU-mode
+    // model-service) and running `--project=integration-models`.
+    //
+    // Assertions in this project are loose-tolerance ("detect returns
+    // at least one box at plausible coords") rather than the exact-match
+    // assertions the regression project uses against the deterministic
+    // mock, because real models return non-deterministic outputs the
+    // exact-match assertions would not survive.
+    //
+    // Timeout is high because CPU-mode model loading and first-inference
+    // latency for some task types runs into the tens of seconds. Retries
+    // stay at 0 because real-model failures usually indicate a model
+    // configuration problem that retrying does not paper over.
+    {
+      name: 'integration-models',
+      testDir: './test/e2e/integration/model-service',
+      // 30 min per test. UI-driven flows in real-model-inference.spec.ts
+      // drive a VLM summarization + claim extraction chain on a CPU-only
+      // model-service; first-load weights for the VLM family alone can
+      // burn 5-10 minutes, the multi-service journey chains six
+      // model-service round-trips, and we want headroom above the
+      // per-step UI waitFor budgets defined inside the spec so a single
+      // slow step does not blow the whole test budget. Retries stay at
+      // 0 because real-model failures usually indicate a config /
+      // regression issue (wrong architecture block, missing weights,
+      // unreachable container), not a flake; retrying papers over them.
+      timeout: 1_800_000,
+      retries: 0,
+      workers: 1,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 }
+      }
     }
   ]
 

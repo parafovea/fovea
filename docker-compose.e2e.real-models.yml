@@ -1,0 +1,126 @@
+# Docker Compose override for the real-model integration E2E tier.
+#
+# Layer this file on top of docker-compose.e2e.yml and engage the
+# `with-models` profile to swap the backend's MODEL_SERVICE_URL from
+# the mock to the real CPU-mode model-service container that already
+# ships in the base file. Use this for the integration-models
+# Playwright project, which verifies that the real model-service boots,
+# loads each task type, and returns model-shaped outputs end-to-end.
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.e2e.yml \
+#     -f docker-compose.e2e.real-models.yml \
+#     --profile with-models \
+#     up -d --build
+#
+# The mock-model-service container is still started by the base file
+# but the backend no longer points at it, so it costs nothing to leave
+# running. The real model-service container ships with BUILD_MODE=minimal
+# and DEVICE=cpu so it runs on a standard GitHub-hosted runner without
+# CUDA, at the cost of slower inference and 1-2 GB of memory.
+#
+# All other services (frontend, postgres, redis) stay on the base
+# config without modification.
+name: fovea-e2e
+
+services:
+  frontend:
+    build:
+      # Lift the axios per-call timeout in the production frontend bundle
+      # so synchronous model-service-bound requests (Suggest Types,
+      # Detect Objects, thumbnails) don't get aborted at the 30 s axios
+      # default while a cold-start CPU LLM / VLM / detector loads. The
+      # value mirrors the backend's MODEL_SERVICE_TIMEOUT_*_MS ceilings
+      # below so both sides reach their respective deadlines together
+      # instead of one cutting the other off.
+      args:
+        VITE_INFERENCE_TIMEOUT_MS: '1800000'
+
+  backend:
+    environment:
+      # Point at the real CPU-mode model-service rather than the mock.
+      # Every other env var is inherited from docker-compose.e2e.yml.
+      MODEL_SERVICE_URL: http://model-service:8000
+      # CPU-friendly per-endpoint ceilings for the forwarded
+      # fetchModelService calls. The production defaults in
+      # server/src/lib/fetchModelService.ts target a GPU-warm deployment
+      # where ontology augmentation completes in ~10 seconds and
+      # detection in ~20 seconds; first-load on CPU (Qwen2.5-VL 3B GGUF,
+      # SmolVLM, Moondream, etc.) routinely runs into the 90 to 600
+      # second range, and the prior defaults would 504 the request
+      # before the model returned. Override each to a CPU-realistic
+      # ceiling so the integration-models Playwright spec exercises the
+      # full vertical without being pre-empted by the backend's
+      # production timeout. Production deployments override these via
+      # the same env vars if they need different ceilings.
+      MODEL_SERVICE_TIMEOUT_DETECTION_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS: '600000'
+      MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS: '1800000'
+      MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS: '1800000'
+      MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS: '1800000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      model-service:
+        condition: service_healthy
+
+  model-service:
+    environment:
+      # Use the CPU-targeted model selections in models-cpu.yaml rather
+      # than the GPU defaults in models.yaml. The base compose file
+      # builds with DEVICE=cpu but hardcodes MODEL_CONFIG_PATH at the
+      # GPU file, which would crash the container on first model load
+      # when the integration tier runs on a CPU-only runner. Pinning
+      # to models-cpu.yaml here keeps the change local to the real-
+      # model override so the GPU deployment path is unaffected.
+      MODEL_CONFIG_PATH: /config/models-cpu.yaml
+      # Match the backend's STORAGE_PATH and the path convention every
+      # caller (backend route, mock-model-service, integration spec)
+      # uses. Without this VIDEO_DATA_ROOT defaults to /videos in
+      # model-service/src/infrastructure/adapters/outbound/video/processor.py:51,
+      # and the path-sanitizer check (.startswith(VIDEO_DATA_ROOT))
+      # rejects every /test-videos/* path the backend forwards, so
+      # /api/thumbnails/generate and /api/detection/detect fail with
+      # "Video file not found" even when the file is right there.
+      VIDEO_DATA_ROOT: /test-videos
+      STORAGE_PATH: /test-videos
+      # Force PyTorch to ignore CUDA even when CUDA-flavored wheels
+      # land in the venv (`pyannote.audio` and the Silero VAD weights
+      # transitively pull torch with CUDA runtime bindings). Without
+      # this, torch tries to dlopen libcudart.so.13 at load time and
+      # the warmup of speaker_diarization + voice_activity_detection
+      # fails with "libcudart.so.13: cannot open shared object file"
+      # on CPU-only runners.
+      CUDA_VISIBLE_DEVICES: ""
+      # Pass through the operator's HuggingFace access token so the
+      # model-service can (1) avoid the aggressive unauthenticated
+      # rate limit that stalls faster-whisper / SmolVLM downloads on
+      # first warm-up and (2) reach the pyannote diarization model
+      # which is gated behind a per-user agreement. The token reads
+      # from the host's $HF_TOKEN env var with a fallback to the
+      # standard HuggingFace CLI cache location.
+      HF_TOKEN: "${HF_TOKEN:-}"
+      HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+    volumes:
+      # Mount the e2e test-videos directory the same way the backend and
+      # mock-model-service already mount it in the base compose. The
+      # base compose file omits this volume on the model-service service
+      # entirely, so the real model-service container had NO access to
+      # any video file at all when first added to the stack. Mount
+      # read-only because integration tests should never write to the
+      # shared fixture directory.
+      - ./test-videos:/test-videos:ro
+    # Wait longer at startup for the CPU-mode model load to complete
+    # before the backend's depends_on health gate releases. The base
+    # file allots a 20 s start_period; CPU-mode models (Qwen2.5-VL 3B
+    # GGUF, SmolVLM, Moondream) need 60 to 180 s for the first download
+    # and load depending on whether the HF cache is warm.
+    healthcheck:
+      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 30
