@@ -58,11 +58,41 @@ export interface TourOntologyAuthoringContent {
   relationType: TourTypeSlot
 }
 
+/**
+ * One almost-there ontology suggestion the mocked AI augmenter
+ * returns in Tour 3. The whole point of the tour is the EDIT delta,
+ * so admins supply suggestions that look plausible but each need a
+ * specific edit to match the persona's real ontology:
+ *   • genuinely useful but with the wrong name or description
+ *   • thematically related but too broad/narrow
+ *   • plausible distractor the analyst rejects
+ */
+export interface TourMockOntologySuggestion {
+  name: string
+  /** Closest parent type by name, or null when standalone. */
+  parent: string | null
+  description: string
+  /** Two or three examples the suggestion would match. */
+  examples: string[]
+  /** Model confidence; the augmenter UI sorts/colours by this. */
+  confidence: number
+}
+
 export interface TourWikidataAugmentationContent {
   personaName: string
   personaRole: string
   /** Search term the visitor types into the Wikidata search box. */
   searchTerm: string
+  /**
+   * Almost-there suggestions the mocked AI ontology augmenter returns.
+   * The first suggestion is the one the visitor accepts (and renames /
+   * re-glosses to match their existing ontology); the rest illustrate
+   * the kinds of distractors a real model emits that an analyst
+   * rejects. Provide 4 to 6 entries for a natural-feeling list.
+   */
+  mockOntologyAugmentSuggestions: TourMockOntologySuggestion[]
+  /** Plain-English explanation the augmenter exposes under "reasoning". */
+  mockOntologyAugmentReasoning: string
 }
 
 export interface TourEventsRolesClaimsContent {
@@ -114,6 +144,53 @@ export interface TourWorldLayerContent {
   videoId: string
 }
 
+/** One bounding-box proposal the mocked detector returns. */
+export interface TourMockDetectionProposal {
+  label: string
+  confidence: number
+  /** Normalised 0..1 box coordinates. */
+  boundingBox: { x: number; y: number; width: number; height: number }
+  /**
+   * Final entity TYPE the analyst should re-label the box to during
+   * the demo (e.g. detector says "fallen shipping container", analyst
+   * accepts the box and snaps it to the general type `container`).
+   * Use null when the visitor is expected to REJECT this box rather
+   * than accept-and-relabel. Detectors only propose boxes for
+   * ENTITIES (things in the world); events are time-extent, not
+   * spatial, and live elsewhere in the demo.
+   *
+   * Pick general types a human analyst from the matching domain
+   * would carry in their ontology — "person", "ball", "container",
+   * "water", "crane" — not ad-hoc descriptive phrases. Pair each
+   * with its Wikidata QID via `acceptAsWikidataId` so the booth
+   * visitor sees a fully grounded type-pick step at the same time.
+   */
+  acceptAsLabel: string | null
+  /**
+   * Wikidata QID for `acceptAsLabel` (e.g. `Q987767` for container,
+   * `Q283` for water, `Q178692` for crane). Lets the demo present
+   * each suggested type as already linked to its Wikidata entry,
+   * mirroring how a real analyst would import a type from the
+   * Wikidata-Augmentation flow. Null when `acceptAsLabel` is null
+   * or the type does not have a meaningful Wikidata anchor.
+   */
+  acceptAsWikidataId: string | null
+}
+
+/** One tracker keyframe in the demo's 30-frame trajectory. */
+export interface TourMockTrackingKeyframe {
+  frameNumber: number
+  timestamp: number
+  boundingBox: { x: number; y: number; width: number; height: number }
+  confidence: number
+  /**
+   * Whether the demo expects the visitor to manually correct this
+   * keyframe (because the tracker drifted off the subject). The
+   * trajectory editor uses this flag to render the keyframe in red.
+   */
+  flagged: boolean
+}
+
 export interface TourModelInTheLoopContent {
   personaName: string
   personaRole: string
@@ -124,6 +201,61 @@ export interface TourModelInTheLoopContent {
    * boring demos because the tracker just sits there.
    */
   videoId: string
+  /**
+   * The natural-language query that gets passed to the open-vocabulary
+   * detector when the visitor clicks "Detect Objects" in this tour.
+   */
+  mockDetectionQuery: string
+  /**
+   * Almost-there detector output for the keyframe the visitor is on
+   * when they click Detect. Include 2 genuine high-confidence boxes
+   * the visitor accepts (and may rename via `acceptAsLabel`) plus 1
+   * or 2 spurious low-confidence boxes the visitor rejects, so the
+   * accept-some/reject-some editing loop has both kinds to practice
+   * against.
+   */
+  mockDetectionProposals: TourMockDetectionProposal[]
+  /** Frame number the detection proposals were computed against. */
+  mockDetectionFrame: number
+  /**
+   * Almost-there tracker keyframes the visitor inspects + edits.
+   * Convention: the first contiguous run of `flagged: false` is the
+   * good prefix the visitor accepts; the tail of `flagged: true`
+   * keyframes is where the tracker drifted and the visitor manually
+   * re-anchors the box at the first flagged frame.
+   */
+  mockTrackingKeyframes: TourMockTrackingKeyframe[]
+}
+
+/** One diarized transcript segment in the mocked ASR output. */
+export interface TourMockTranscriptSegment {
+  start: number
+  end: number
+  text: string
+  confidence: number
+  /** Speaker label as the mocked diarizer emits it (e.g. SPEAKER_00). */
+  speaker: string
+  /**
+   * Optional intended speaker label for the demo: if the mocked
+   * diarizer assigns this segment to the wrong speaker, this is the
+   * speaker the visitor should flip the chip to. Use null when the
+   * segment's assignment is correct.
+   */
+  intendedSpeaker: string | null
+  /**
+   * Optional intended text the visitor should edit the segment to
+   * during the inline-edit step. Use null when the recognised text
+   * is already correct.
+   */
+  intendedText: string | null
+}
+
+/** One claim atom that a non-atomic mock claim splits into. */
+export interface TourMockClaimAtom {
+  text: string
+  /** Time range in seconds. */
+  start: number
+  end: number
 }
 
 export interface TourSummariesAndClaimsContent {
@@ -139,6 +271,36 @@ export interface TourSummariesAndClaimsContent {
    * nothing to do with what's on the screen.
    */
   videoId: string
+  /**
+   * Almost-there transcript the mocked ASR + diarization returns. Two
+   * speakers, four segments is a comfortable demo length; pick a clip
+   * with audible cross-talk so the diarization story has something to
+   * show. Use `intendedSpeaker` / `intendedText` to encode the deltas
+   * the analyst edits.
+   */
+  mockTranscript: {
+    language: string
+    duration: number
+    speakers: string[]
+    segments: TourMockTranscriptSegment[]
+  }
+  /**
+   * Almost-there VLM summary text the model returns. Compose this by
+   * stitching together the eventual atomic claims listed below, then
+   * introducing exactly ONE believable factual error the analyst will
+   * correct (a wrong locative, a wrong role label, etc.). The
+   * narration walks the visitor through the edit step by step.
+   */
+  mockVlmSummaryText: string
+  /**
+   * One non-atomic compound claim the mocked claim-extraction model
+   * returns. The visitor splits this into the atoms in
+   * `mockClaimSplitAtoms`. This is the editing loop the tour is built
+   * around.
+   */
+  mockCompoundClaimText: string
+  /** Two to four atomic claims the compound claim splits into. */
+  mockClaimSplitAtoms: TourMockClaimAtom[]
 }
 
 export interface TourCollaborationContent {

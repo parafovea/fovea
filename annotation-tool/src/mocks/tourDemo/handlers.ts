@@ -1,102 +1,175 @@
 /**
  * MSW request handlers used by the tour demo mode.
  *
- * These intercept every backend route that would otherwise forward to
- * the model-service (detect, transcribe, augment ontology, summarize,
- * extract claims, track), resolve them from the precomputed fixtures
- * in `responses.ts`, and pause for a randomized 800-1800 ms so the
- * visitor sees a real-feeling "computing" beat without the booth
- * needing a GPU stack.
+ * Every fixture is sourced from the deployment's `TourContentBundle`
+ * (the same JSON an admin edits at `/tour-content.json` to retheme
+ * tours for their own domain), so swapping the domain — say from
+ * microvent's Phillies-Karen incident to a marine-safety cargo-spill
+ * incident — re-themes the mocked model outputs in the same edit
+ * pass that re-themes the personas, type names, and narration
+ * content. The bundle is loaded once at boot in `browser.ts` and
+ * threaded into the handler factory here.
+ *
+ * The handlers intercept every backend route that would otherwise
+ * forward to the model-service (detect, transcribe, augment
+ * ontology, summarize, extract claims, track), resolve them from
+ * the bundle, and pause for a randomized 800-1800 ms so the visitor
+ * sees a real-feeling "computing" beat without the booth needing a
+ * GPU stack.
  *
  * Why a single delay range: every tour step that calls the model
- * service is implicitly framed as "first-call cold start", and the
- * range chosen here matches the perceived range a CPU-warm
- * deployment of the real model-service produces (faster-whisper-tiny
- * cold: 3-6 s; once warmed the synthetic 800-1800 ms range is short
- * enough to feel snappy but long enough to look like real inference).
+ * service is implicitly framed as a warm call (the bundle is
+ * preloaded). The range chosen matches the perceived range a
+ * CPU-warm deployment of the real model-service produces.
  */
 
 import { http, HttpResponse, delay } from 'msw'
-import {
-  TOUR3_ONTOLOGY_AUGMENT_SUGGESTIONS,
-  TOUR6_DETECTION_PERSON_GRABBING_BALL,
-  TOUR6_TRACKING_RESULT,
-  TOUR7_CLAIMS_EXTRACTED,
-  TOUR7_TRANSCRIBE_RESPONSE,
-  TOUR7_VLM_SUMMARY,
-} from './responses'
+import type {
+  DetectionResponse,
+  TranscribeResponse,
+  AugmentationResponse,
+} from '@api/client'
+import type { TourContentBundle } from '@/tours/content/types'
 
 const MIN_DELAY_MS = 800
 const MAX_DELAY_MS = 1800
 
-/**
- * Pause for a random duration inside the synthetic-latency window so
- * the tour never produces the same wall-clock on two consecutive runs
- * (which would otherwise look canned to a careful observer).
- */
 async function simulatedInferenceDelay(): Promise<void> {
-  // Math.random() is fine here — there is no test-determinism need;
-  // the unit suite injects its own non-MSW timing via test-level mocks.
   const ms = MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS))
   await delay(ms)
 }
 
 /**
- * Build the handler set against the backend's MODEL_SERVICE_URL,
- * which in the live frontend is the relative path under the same
- * origin (the dev proxy and the production reverse proxy both rewrite
- * `/api/...` to the backend). Same-origin routes are matched with a
- * leading slash; absolute URLs are listed alongside as a safety net
- * for builds that pin VITE_BACKEND_URL.
+ * Build the MSW handler set against the deployment's tour content
+ * bundle. Same-origin routes are matched with a leading slash; the
+ * Vite dev proxy and the production reverse proxy both rewrite
+ * `/api/...` to the backend.
  */
-function makeHandler<T extends object>(
-  path: string,
-  body: T,
-): ReturnType<typeof http.post> {
-  return http.post(path, async () => {
-    await simulatedInferenceDelay()
-    return HttpResponse.json(body)
-  })
+export function createTourDemoHandlers(
+  bundle: TourContentBundle,
+): ReturnType<typeof http.post>[] {
+  // ── Tour 3 — ontology augmentation
+  const augmentResponse: AugmentationResponse = {
+    id: 'demo-augment-001',
+    personaId: '__tour_demo__',
+    targetCategory: 'event',
+    reasoning: bundle.wikidataAugmentation.mockOntologyAugmentReasoning,
+    suggestions: bundle.wikidataAugmentation.mockOntologyAugmentSuggestions.map((s) => ({
+      name: s.name,
+      parent: s.parent,
+      description: s.description,
+      examples: s.examples,
+      confidence: s.confidence,
+    })),
+  }
+
+  // ── Tour 6 — detection + tracking
+  const m6 = bundle.modelInTheLoop
+  const detectionResponse: DetectionResponse = {
+    id: 'demo-detection-001',
+    videoId: m6.videoId,
+    query: m6.mockDetectionQuery,
+    totalDetections: m6.mockDetectionProposals.length,
+    processingTime: 1.42,
+    frames: [
+      {
+        frameNumber: m6.mockDetectionFrame,
+        timestamp: m6.mockDetectionFrame / 30,
+        detections: m6.mockDetectionProposals.map((p) => ({
+          label: p.label,
+          confidence: p.confidence,
+          boundingBox: p.boundingBox,
+          trackId: null,
+        })),
+      },
+    ],
+  }
+  const trackingResponse = {
+    trackId: 'demo-track-001',
+    startFrame: m6.mockTrackingKeyframes[0]?.frameNumber ?? 0,
+    endFrame:
+      m6.mockTrackingKeyframes[m6.mockTrackingKeyframes.length - 1]?.frameNumber ?? 0,
+    keyframes: m6.mockTrackingKeyframes,
+  }
+
+  // ── Tour 7 — transcribe + summarize + extract claims
+  const m7 = bundle.summariesAndClaims
+  const transcribeResponse: TranscribeResponse = {
+    text: m7.mockTranscript.segments.map((s) => s.text).join(' '),
+    language: m7.mockTranscript.language,
+    duration: m7.mockTranscript.duration,
+    processingTime: 6.18,
+    modelUsed: 'Systran/faster-whisper-tiny',
+    speakers: m7.mockTranscript.speakers,
+    diarizationModelUsed: 'pyannote/speaker-diarization-3.1',
+    diarizationProcessingTime: 4.31,
+    segments: m7.mockTranscript.segments.map((s) => ({
+      start: s.start,
+      end: s.end,
+      text: s.text,
+      confidence: s.confidence,
+      speaker: s.speaker,
+    })),
+  }
+
+  const summarizeResponse = {
+    jobId: 'demo-summary-job-001',
+    videoId: m7.videoId,
+    personaId: '__tour_demo__',
+    summary: {
+      summary: m7.mockVlmSummaryText,
+      segments: m7.mockClaimSplitAtoms.map((c) => ({
+        start: c.start,
+        end: c.end,
+        text: c.text,
+      })),
+      processingTime: 38.4,
+      modelUsed: 'smolvlm-500m',
+    },
+  }
+
+  const claimsExtractResponse = {
+    claims: [
+      {
+        text: m7.mockCompoundClaimText,
+        confidence: 0.83,
+        roles: [],
+        timeRange: {
+          start: m7.mockClaimSplitAtoms[0]?.start ?? 0,
+          end:
+            m7.mockClaimSplitAtoms[m7.mockClaimSplitAtoms.length - 1]?.end ??
+            m7.mockTranscript.duration,
+        },
+        needsSplit: true,
+        splitTargets: m7.mockClaimSplitAtoms.map((c) => c.text),
+      },
+    ],
+  }
+
+  return [
+    http.post('/api/ontology/augment', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(augmentResponse)
+    }),
+    http.post('/api/videos/:videoId/detect', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(detectionResponse)
+    }),
+    http.post('/api/videos/:videoId/track', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(trackingResponse)
+    }),
+    http.post('/api/videos/:videoId/transcribe', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(transcribeResponse)
+    }),
+    http.post('/api/videos/:videoId/summarize', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(summarizeResponse)
+    }),
+    http.post('/api/claims/extract', async () => {
+      await simulatedInferenceDelay()
+      return HttpResponse.json(claimsExtractResponse)
+    }),
+  ]
 }
-
-export const tourDemoHandlers = [
-  // Tour 3 — ontology augmentation
-  makeHandler('/api/ontology/augment', TOUR3_ONTOLOGY_AUGMENT_SUGGESTIONS),
-
-  // Tour 6 — detection on the current frame
-  makeHandler('/api/videos/:videoId/detect', TOUR6_DETECTION_PERSON_GRABBING_BALL),
-
-  // Tour 6 — tracker results returned from the same detection path
-  // when enableTracking flips the model-service over to the tracker.
-  // We split the route so MSW can match the tracker call separately
-  // if it ever moves to a distinct endpoint; today it shares /detect.
-  http.post('/api/videos/:videoId/track', async () => {
-    await simulatedInferenceDelay()
-    return HttpResponse.json(TOUR6_TRACKING_RESULT)
-  }),
-
-  // Tour 7 — audio transcription (with diarization always-on for the
-  // tour so the visitor sees the speaker chips lit up).
-  makeHandler('/api/videos/:videoId/transcribe', TOUR7_TRANSCRIBE_RESPONSE),
-
-  // Tour 7 — VLM summarization. The real backend wraps this in a job
-  // queue; for the demo we return the summary synchronously since the
-  // tour script doesn't include polling steps.
-  http.post('/api/videos/:videoId/summarize', async () => {
-    await simulatedInferenceDelay()
-    return HttpResponse.json({
-      jobId: 'demo-summary-job-001',
-      videoId: '__tour_demo__',
-      personaId: '__tour_demo__',
-      // Return the final summary alongside the job id so the demo
-      // hook can resolve immediately without driving a queue poll.
-      summary: TOUR7_VLM_SUMMARY,
-    })
-  }),
-
-  // Tour 7 — claim extraction over the saved summary.
-  http.post('/api/claims/extract', async () => {
-    await simulatedInferenceDelay()
-    return HttpResponse.json({ claims: TOUR7_CLAIMS_EXTRACTED })
-  }),
-]
