@@ -34,6 +34,10 @@
     {
       "files": ["src/demo/**/*"],
       "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["test/**/*"],
+      "rules": { "no-restricted-imports": "off" }
     }
   ],
   "ignorePatterns": ["dist", "node_modules", "coverage"]

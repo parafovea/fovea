@@ -120,7 +120,8 @@ describe('POST /api/videos/:videoId/transcribe', () => {
   })
 
   it('returns 404 when the video does not exist', async () => {
-    ;({ app } = await buildApp(null))
+    const r0 = await buildApp(null)
+    app = r0.app
 
     const response = await app.inject({
       method: 'POST',

@@ -167,7 +167,7 @@ describe('Videos API - Detection', () => {
       expect(result.videoId).toBe('test-video-id')
       expect(result.query).toContain('Analyst: Test Persona')
       expect(result.query).toContain('Entity Types: person, car')
-      expect(result.frameResults).toHaveLength(1)
+      expect(result.frames).toHaveLength(1)
     })
 
     it('includes query options in persona-based query', async () => {
