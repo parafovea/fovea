@@ -738,9 +738,12 @@ models:
         speed: "fast"
         fps: 30
         description: "Unified vision, captioning"
-      # CPU-optimized detection with ONNX
+      # CPU-optimized detection with ONNX. Public Instemic export of
+      # the Ultralytics YOLO-World v2 small weights (AGPL-3.0); the
+      # loader in onnx/yolo_world.py walks a fallback filename chain
+      # to resolve `yolov8s-worldv2.onnx` at the repo root.
       yolo-world-s-onnx:
-        model_id: "yolov8s-worldv2"
+        model_id: "Instemic/yolo-world-onnx"
         architecture:
           kind: "yolo-world"
         framework: "onnx"

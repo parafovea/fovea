@@ -35,6 +35,7 @@ import {
   Search,
   ArrowLeft,
   Pencil,
+  Mic,
 } from 'lucide-react'
 import './AnnotationWorkspace.css'
 import { VideoPlayer, VideoPlayerHandle } from './VideoPlayer'
@@ -63,6 +64,9 @@ import type { DetectionRequest } from '@components/dialogs/DetectionDialog'
 import { formatTimestamp } from '@utils/formatters'
 import { Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment, getAnnotationTimeBounds } from '@models/types'
 import { useDetectObjects } from '@store/queries/useDetection'
+import { useTranscribeVideo } from '@store/queries/useTranscribe'
+import { TranscriptPanel } from '@components/video/TranscriptPanel'
+import type { TranscribeResponse } from '@api/client'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { TimelineComponent } from './TimelineComponent'
 import { useCommands, useCommandContext } from '@hooks/commands'
@@ -107,6 +111,10 @@ export default function AnnotationWorkspace() {
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null)
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
   const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
+  const [transcriptDialogOpen, setTranscriptDialogOpen] = useState(false)
+  const [transcriptResult, setTranscriptResult] = useState<TranscribeResponse | null>(null)
+  const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [diarizationRequested, setDiarizationRequested] = useState(true)
 
   // Timeline UI state from Zustand store
   const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
@@ -193,6 +201,21 @@ export default function AnnotationWorkspace() {
   const worldEntities = useMemo(() => worldData?.entities ?? [], [worldData?.entities])
   const worldEvents = useMemo(() => worldData?.events ?? [], [worldData?.events])
   const worldTimes = useMemo(() => worldData?.times ?? [], [worldData?.times])
+
+  // Transcription mutation. The backend response already carries the
+  // optional diarization fields (speakers + per-segment speaker), so
+  // the result is forwarded to TranscriptPanel verbatim.
+  const transcribeMutation = useTranscribeVideo({
+    onSuccess: (data) => {
+      setTranscriptResult(data)
+      setTranscriptError(null)
+      setTranscriptDialogOpen(true)
+    },
+    onError: (error) => {
+      setTranscriptError(error.message)
+      setTranscriptDialogOpen(true)
+    },
+  })
 
   // Detection mutation
   const detectMutation = useDetectObjects({
@@ -876,6 +899,26 @@ export default function AnnotationWorkspace() {
                     </Tooltip>
                   )}
 
+                  {/* Transcribe Audio Button */}
+                  {currentVideo && videoId && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTranscriptError(null)
+                        transcribeMutation.mutate({
+                          videoId,
+                          enableDiarization: diarizationRequested,
+                        })
+                      }}
+                      size="sm"
+                      disabled={transcribeMutation.isPending}
+                      data-testid="transcribe-audio-button"
+                    >
+                      <Mic className="size-4 mr-1" />
+                      {transcribeMutation.isPending ? 'Transcribing…' : 'Transcribe Audio'}
+                    </Button>
+                  )}
+
                   {/* Video Summary Button */}
                   {currentVideo && videoId && (
                     <Button
@@ -1106,6 +1149,64 @@ export default function AnnotationWorkspace() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Transcript Dialog */}
+      <Dialog open={transcriptDialogOpen} onOpenChange={setTranscriptDialogOpen}>
+        <DialogContent className="sm:max-w-3xl" data-testid="transcript-dialog">
+          <DialogHeader>
+            <DialogTitle>Audio Transcript</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="transcript-body">
+            {transcriptError ? (
+              <p className="text-sm text-destructive">{transcriptError}</p>
+            ) : transcriptResult && transcriptResult.segments.length > 0 ? (
+              <TranscriptPanel
+                segments={transcriptResult.segments}
+                speakers={transcriptResult.speakers}
+                language={transcriptResult.language}
+                modelUsed={transcriptResult.modelUsed}
+                diarizationModelUsed={transcriptResult.diarizationModelUsed}
+                processingTime={transcriptResult.processingTime}
+                diarizationProcessingTime={transcriptResult.diarizationProcessingTime}
+                duration={transcriptResult.duration}
+                currentTime={currentTime}
+                onSeek={(t) => videoPlayerRef.current?.handleSeek(t)}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No transcript segments returned.</p>
+            )}
+          </div>
+          <DialogFooter className="flex items-center justify-between gap-3 sm:justify-between">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={diarizationRequested}
+                onChange={(e) => setDiarizationRequested(e.target.checked)}
+                data-testid="transcribe-diarize-toggle"
+              />
+              Identify speakers
+            </label>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!videoId) return
+                  setTranscriptError(null)
+                  transcribeMutation.mutate({
+                    videoId,
+                    enableDiarization: diarizationRequested,
+                  })
+                }}
+                disabled={transcribeMutation.isPending}
+                data-testid="transcript-rerun-button"
+              >
+                {transcribeMutation.isPending ? 'Re-running…' : 'Re-run'}
+              </Button>
+              <Button onClick={() => setTranscriptDialogOpen(false)}>Close</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Floating Action Button to go to Ontology */}
       <div role="complementary" aria-label="Quick actions">

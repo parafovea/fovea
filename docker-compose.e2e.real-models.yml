@@ -25,6 +25,18 @@
 name: fovea-e2e
 
 services:
+  frontend:
+    build:
+      # Lift the axios per-call timeout in the production frontend bundle
+      # so synchronous model-service-bound requests (Suggest Types,
+      # Detect Objects, thumbnails) don't get aborted at the 30 s axios
+      # default while a cold-start CPU LLM / VLM / detector loads. The
+      # value mirrors the backend's MODEL_SERVICE_TIMEOUT_*_MS ceilings
+      # below so both sides reach their respective deadlines together
+      # instead of one cutting the other off.
+      args:
+        VITE_INFERENCE_TIMEOUT_MS: '1800000'
+
   backend:
     environment:
       # Point at the real CPU-mode model-service rather than the mock.
@@ -76,6 +88,23 @@ services:
       # "Video file not found" even when the file is right there.
       VIDEO_DATA_ROOT: /test-videos
       STORAGE_PATH: /test-videos
+      # Force PyTorch to ignore CUDA even when CUDA-flavored wheels
+      # land in the venv (`pyannote.audio` and the Silero VAD weights
+      # transitively pull torch with CUDA runtime bindings). Without
+      # this, torch tries to dlopen libcudart.so.13 at load time and
+      # the warmup of speaker_diarization + voice_activity_detection
+      # fails with "libcudart.so.13: cannot open shared object file"
+      # on CPU-only runners.
+      CUDA_VISIBLE_DEVICES: ""
+      # Pass through the operator's HuggingFace access token so the
+      # model-service can (1) avoid the aggressive unauthenticated
+      # rate limit that stalls faster-whisper / SmolVLM downloads on
+      # first warm-up and (2) reach the pyannote diarization model
+      # which is gated behind a per-user agreement. The token reads
+      # from the host's $HF_TOKEN env var with a fallback to the
+      # standard HuggingFace CLI cache location.
+      HF_TOKEN: "${HF_TOKEN:-}"
+      HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
     volumes:
       # Mount the e2e test-videos directory the same way the backend and
       # mock-model-service already mount it in the base compose. The

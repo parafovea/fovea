@@ -9,20 +9,40 @@ description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
-    "uvicorn[standard]==0.27.1",
+    # All transitively-shared deps use `>=` lower bounds rather than
+    # exact pins. Exact pins on numpy / opencv-python / pyyaml caused
+    # pip to backtrack through hundreds of `ultralytics` versions when
+    # the audio extras added incompatible constraints; the resolver
+    # spent 50+ minutes downloading per-version metadata before
+    # converging. `>=` bounds let pip pick a single set in one pass.
+    "uvicorn[standard]>=0.27",
     "pydantic>=2.9",
-    "python-multipart==0.0.9",
-    "opentelemetry-api==1.28.0",
-    "opentelemetry-sdk==1.28.0",
-    "opentelemetry-instrumentation-fastapi==0.49b0",
-    "opentelemetry-exporter-otlp-proto-http==1.28.0",
+    "python-multipart>=0.0.9",
+    # opentelemetry was previously pinned to 1.28.0 (instrumentation
+    # 0.49b0) across the board. That collides with pyannote.audio 4.x,
+    # which requires the 1.34+ API surface
+    # (Tracer.start_as_current_span argument change), and with
+    # transitively-resolved opentelemetry-instrumentation-redis 0.63b1
+    # which pins the matching opentelemetry-instrumentation 0.63b1.
+    # The pins below all move together so the resolver can pick a
+    # single internally-consistent OTEL set.
+    # All instrumentation packages MUST share an exact version of
+    # opentelemetry-instrumentation. Using `>=` lets the resolver pick
+    # the latest of one and the constraint-minimum of another, which
+    # fails to converge. Pin the instrumentation packages to the same
+    # release and let pip pick the matching api/sdk/exporter from the
+    # >= bounds on the base packages.
+    "opentelemetry-api>=1.34.0",
+    "opentelemetry-sdk>=1.34.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.34.0",
+    "opentelemetry-instrumentation-fastapi==0.63b1",
+    "opentelemetry-instrumentation-redis==0.63b1",
     "redis>=5.0.0",
-    "opentelemetry-instrumentation-redis==0.49b0",
-    "opencv-python==4.9.0.80",
-    "numpy==1.26.4",
-    "pyyaml==6.0.1",
-    "torch==2.5.1",
-    "torchvision>=0.20.1",
+    "opencv-python>=4.9",
+    "numpy>=1.26,<3",
+    "pyyaml>=6",
+    "torch>=2.5",
+    "torchvision>=0.20",
     "transformers>=4.47.0",
     "accelerate>=0.34.0",
     "pillow>=10.2.0",
@@ -68,7 +88,10 @@ sam2 = [
 audio = [
     "openai-whisper>=20240930",
     "faster-whisper>=1.1.0",
-    "pyannote.audio>=3.3.0",
+    # pyannote.audio 3.x calls hf_hub_download with the removed
+    # `use_auth_token` kwarg under huggingface_hub 1.x; pin >=4.0 so
+    # the pipeline loads against the current Hub client.
+    "pyannote.audio>=4.0.0",
     "torch-audiomentations>=0.11.0",
     "pydub>=0.25.1",
     "assemblyai>=0.40.0",

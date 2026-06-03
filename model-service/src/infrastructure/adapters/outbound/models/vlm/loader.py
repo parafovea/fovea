@@ -1054,11 +1054,39 @@ class SmallVLMLoader(VLMLoader):
             msg = "Model not loaded. Call load() first."
             raise RuntimeError(msg)
 
-        inputs = self._processor(
-            images=images[0] if images else None,
-            text=prompt,
-            return_tensors="pt",
-        )
+        # SmolVLM and Moondream both require the prompt to embed image
+        # placeholder tokens matching the number of supplied images.
+        # SmolVLM's processor uses `<image>` per image; the older
+        # AutoProcessor flow raises "number of images in the text [0]
+        # and images [1] should be the same" when the prompt is plain
+        # text. Use the chat template path so the processor inserts the
+        # correct token(s) for the model family, then fall back to
+        # plain text if the model doesn't ship a chat template.
+        image = images[0] if images else None
+        if image is not None and hasattr(self._processor, "apply_chat_template"):
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt},
+                    ],
+                },
+            ]
+            templated_prompt = self._processor.apply_chat_template(
+                messages, add_generation_prompt=True
+            )
+            inputs = self._processor(
+                images=image,
+                text=templated_prompt,
+                return_tensors="pt",
+            )
+        else:
+            inputs = self._processor(
+                images=image,
+                text=prompt,
+                return_tensors="pt",
+            )
 
         output = self._model.generate(
             **inputs,

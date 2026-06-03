@@ -33,6 +33,22 @@ const RuntimeValueSchema = Type.Object({
   defaultBatchSize: Type.Integer({ minimum: 1, maximum: 128 }),
   maxBatchSize: Type.Integer({ minimum: 1, maximum: 128 }),
   offloadThreshold: Type.Number({ minimum: 0, maximum: 1 }),
+  // VLM summarization budget: how many frames to actually pass to
+  // the VLM and the per-frame frame sampling rate. Default values
+  // mirror the schema in model-service summarization.py.
+  maxVideoFrames: Type.Integer({ minimum: 1, maximum: 100 }),
+  frameSampleRate: Type.Integer({ minimum: 1, maximum: 10 }),
+  // Output-token caps for each path. These are caps on the NUMBER OF
+  // GENERATED tokens, not total context — the prompt is processed
+  // separately into the KV cache. Minimums are set high enough to
+  // produce a usefully-shaped output for each path (smaller caps
+  // tend to truncate mid-claim or mid-sentence), and maximums leave
+  // room for the context window of small CPU models (typically
+  // 2048-4096 n_ctx, of which the prompt usually consumes 400-1500).
+  vlmMaxSummaryTokens: Type.Integer({ minimum: 128, maximum: 4096 }),
+  llmMaxClaimsTokens: Type.Integer({ minimum: 256, maximum: 4096 }),
+  llmMaxSynthesisTokens: Type.Integer({ minimum: 512, maximum: 4096 }),
+  llmMaxOntologyTokens: Type.Integer({ minimum: 128, maximum: 4096 }),
 })
 
 const ExternalApiProviderSchema = Type.Object({
@@ -97,6 +113,12 @@ const DEFAULTS: { [K in ConfigKey]: Static<typeof ConfigRowSchema> & { key: K } 
       defaultBatchSize: 1,
       maxBatchSize: 8,
       offloadThreshold: 0.85,
+      maxVideoFrames: 30,
+      frameSampleRate: 1,
+      vlmMaxSummaryTokens: 1024,
+      llmMaxClaimsTokens: 1024,
+      llmMaxSynthesisTokens: 2048,
+      llmMaxOntologyTokens: 1024,
     },
   },
   externalApis: {

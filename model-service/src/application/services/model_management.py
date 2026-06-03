@@ -118,6 +118,21 @@ class InferenceConfig:
         self.warmup_on_startup: bool = config_dict.get("warmup_on_startup", False)
         self.default_batch_size: int = config_dict.get("default_batch_size", 1)
         self.max_batch_size: int = config_dict.get("max_batch_size", 8)
+        # Hard cap on frames the VLM summarizer processes per request.
+        # Deployments tune this in models{,-cpu}.yaml against their
+        # hardware; the use case clamps `request.max_frames` to this
+        # value so a single unconfigured frontend request can't stall
+        # the service for tens of minutes on CPU.
+        self.max_video_frames: int = config_dict.get("max_video_frames", 100)
+        # Output-token caps per inference path. CPU LLMs at ~20-40
+        # tok/s benefit from tight caps because small models don't
+        # always emit EOS cleanly and otherwise burn the full budget.
+        # Use cases read these and pass to the LLM at call time. Admin
+        # UI tunes them through `/api/admin/reconfigure`.
+        self.vlm_max_summary_tokens: int = config_dict.get("vlm_max_summary_tokens", 1024)
+        self.llm_max_claims_tokens: int = config_dict.get("llm_max_claims_tokens", 1024)
+        self.llm_max_synthesis_tokens: int = config_dict.get("llm_max_synthesis_tokens", 2048)
+        self.llm_max_ontology_tokens: int = config_dict.get("llm_max_ontology_tokens", 1024)
 
 
 class ModelManager:
@@ -226,7 +241,20 @@ class ModelManager:
         return allocated / total
 
     def check_memory_available(self, required_bytes: int) -> bool:
-        """Check if sufficient memory is available for model loading."""
+        """Check if sufficient memory is available for model loading.
+
+        On CPU-only deployments, the GPU-flavored ``vram_bytes`` field on
+        every model config is meaningless and ``get_available_vram()``
+        returns 0, so the original VRAM-vs-required check trivially
+        rejected anything with a non-zero ``vram_gb`` in the YAML — even
+        for models that explicitly declare ``cpu_compatible: true`` and
+        run entirely in system RAM. Compare against host RAM instead
+        when ``cpu_only_mode`` is set so warm-up actually loads every
+        selected model at boot.
+        """
+        if self.cpu_only_mode:
+            available = self.get_available_ram()
+            return available >= required_bytes
         available = self.get_available_vram()
         return available >= required_bytes
 
@@ -284,7 +312,10 @@ class ModelManager:
             f"({model_config.vram_gb}GB VRAM required)"
         )
 
-        while not self.check_memory_available(model_config.vram_bytes):
+        required_bytes = (
+            model_config.cpu_memory_bytes if self.cpu_only_mode else model_config.vram_bytes
+        )
+        while not self.check_memory_available(required_bytes):
             memory_usage = self.get_memory_usage_percentage()
             logger.info(f"Insufficient memory (usage: {memory_usage:.1%}), evicting LRU model")
             evicted = await self.evict_lru_model()

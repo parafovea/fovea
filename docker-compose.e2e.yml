@@ -93,6 +93,11 @@ services:
       args:
         BUILD_MODE: minimal
         DEVICE: cpu
+        # Pull the [audio] extras so faster-whisper, pyannote.audio,
+        # and the supporting audio runtimes are available. Used by the
+        # transcription / diarization / VAD endpoints; off in the base
+        # minimal image to keep CI build time down.
+        ENABLE_AUDIO: "1"
     ports:
       - "8000:8000"
     environment:

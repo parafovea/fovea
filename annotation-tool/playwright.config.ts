@@ -137,7 +137,17 @@ export default defineConfig({
     {
       name: 'integration-models',
       testDir: './test/e2e/integration/model-service',
-      timeout: 180000,
+      // 30 min per test. UI-driven flows in real-model-inference.spec.ts
+      // drive a VLM summarization + claim extraction chain on a CPU-only
+      // model-service; first-load weights for the VLM family alone can
+      // burn 5-10 minutes, the multi-service journey chains six
+      // model-service round-trips, and we want headroom above the
+      // per-step UI waitFor budgets defined inside the spec so a single
+      // slow step does not blow the whole test budget. Retries stay at
+      // 0 because real-model failures usually indicate a config /
+      // regression issue (wrong architecture block, missing weights,
+      // unreachable container), not a flake; retrying papers over them.
+      timeout: 1_800_000,
       retries: 0,
       workers: 1,
       use: {

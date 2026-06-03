@@ -120,4 +120,8 @@ export const MODEL_SERVICE_TIMEOUTS = {
   extractClaims: envTimeoutMs('MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS', 300_000),
   /** Synthesizing a final summary from extracted claims. */
   synthesize: envTimeoutMs('MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS', 300_000),
+  /** Audio transcription over a video / audio file. faster-whisper-tiny
+   * on CPU does a 14 s clip in ~6 s cold, ~3 s warm, but a longer
+   * input or larger model can run minutes; default 5 min. */
+  transcribe: envTimeoutMs('MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS', 300_000),
 } as const

@@ -370,8 +370,13 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
       summaryId,
       config,
     })
-    // Start tracking the extraction job in Zustand
+    // Start tracking the extraction job in Zustand and dismiss the
+    // configuration dialog. The dialog has no business staying open
+    // for the duration of the extraction job — the user has already
+    // configured and submitted; surface progress on the Claims tab
+    // (badge + progress indicator), not as a blocking dialog.
     startExtraction(result.jobId)
+    setExtractDialogOpen(false)
   }
 
   const handleTabChange = (value: string) => {

@@ -6,6 +6,7 @@ GGUF-quantized models, compatible with the LLM loader interface.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -123,6 +124,23 @@ class LlamaCppLLMLoader:
         }
         if config.stop_sequences:
             completion_kwargs["stop"] = config.stop_sequences
+
+        # Grammar-constrained decoding. ``create_completion`` is the
+        # low-level llama.cpp entry point; the high-level
+        # ``create_chat_completion`` accepts ``response_format`` while
+        # this one wants a compiled ``LlamaGrammar``. The schema-form
+        # DTO is the portable knob (vLLM ``guided_json``, sglang JSON
+        # guidance, transformers via ``outlines`` all accept the same
+        # schema); the per-adapter compilation step is what's
+        # backend-specific. Compiling the grammar physically prevents
+        # invalid tokens at decode time, so small models cannot emit
+        # malformed output.
+        if config.json_schema is not None:
+            from llama_cpp.llama_grammar import LlamaGrammar  # noqa: PLC0415
+
+            completion_kwargs["grammar"] = LlamaGrammar.from_json_schema(
+                json.dumps(config.json_schema)
+            )
 
         output: dict[str, Any] = self._model.create_completion(**completion_kwargs)
 

@@ -69,7 +69,10 @@ async def extract_claims(
         span.set_attribute("summary_id", request.summary_id)
         span.set_attribute("strategy", request.extraction_strategy)
 
-        from src.application.use_cases.extract_claims import ExtractClaimsUseCase
+        from src.application.use_cases.extract_claims import (
+            ExtractClaimsRequest,
+            ExtractClaimsUseCase,
+        )
         from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
@@ -117,13 +120,16 @@ async def extract_claims(
                 start_time = time.time()
                 use_case = ExtractClaimsUseCase(language_model=language_model)
                 claim_dtos = await use_case.execute(
-                    summary_text=request.summary_text,
-                    sentences=request.sentences,
-                    strategy=request.extraction_strategy,
-                    max_claims=request.max_claims,
-                    min_confidence=request.min_confidence,
-                    ontology_context=ontology_context,
-                    annotation_context=request.annotations,
+                    ExtractClaimsRequest(
+                        summary_text=request.summary_text,
+                        sentences=request.sentences,
+                        strategy=request.extraction_strategy,
+                        max_claims=request.max_claims,
+                        min_confidence=request.min_confidence,
+                        ontology_context=ontology_context,
+                        annotation_context=request.annotations,
+                        max_output_tokens=manager.inference_config.llm_max_claims_tokens,
+                    )
                 )
                 processing_time = time.time() - start_time
 

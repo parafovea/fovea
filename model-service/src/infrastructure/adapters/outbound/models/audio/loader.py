@@ -215,11 +215,21 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
                 f"with {self.config.compute_type} precision"
             )
 
-            model_name = self.config.model_id.split("/")[-1]
+            # WhisperModel accepts both bare size tokens (``small``,
+            # ``large-v3``) and full HuggingFace repo paths
+            # (``Systran/faster-whisper-small``). The previous splitting
+            # of ``model_id.split("/")[-1]`` turned ``Systran/
+            # faster-whisper-small`` into ``faster-whisper-small`` which
+            # is neither a valid size token nor a repo path, and faster-
+            # whisper raised "Invalid model size 'faster-whisper-small'".
+            # Passing the full model_id through delegates the dispatch
+            # to faster-whisper itself: bare ``small`` works, the
+            # Systran-converted GitHub repos work, and a fine-tuned
+            # checkpoint user-provided at a local path works.
             device = self.config.device if self.config.device != "cuda" else "auto"
 
             self.model = WhisperModel(
-                model_name,
+                self.config.model_id,
                 device=device,
                 compute_type=self.config.compute_type,
                 download_root=None,
@@ -363,14 +373,23 @@ class SileroVADLoader:
         try:
             logger.info("Loading Silero VAD model")
 
+            # Prefer the ONNX backend when CUDA isn't available. The
+            # PyTorch backend's `silero_vad` model in the snakers4/
+            # silero-vad hub repo eagerly imports CUDA runtime even
+            # when the host has no CUDA libs, which fails on CPU-only
+            # deployments with "libcudart.so.13: cannot open shared
+            # object file". ONNX runtime handles the same model with
+            # no PyTorch dependency.
+            use_onnx = not (torch.cuda.is_available() and self.config.device == "cuda")
             self.model, self.utils = torch.hub.load(  # type: ignore[no-untyped-call]
                 repo_or_dir="snakers4/silero-vad",
                 model="silero_vad",
                 force_reload=False,
-                onnx=False,
+                onnx=use_onnx,
+                trust_repo=True,
             )
 
-            if torch.cuda.is_available() and self.config.device == "cuda":
+            if not use_onnx and torch.cuda.is_available() and self.config.device == "cuda":
                 self.model = self.model.to(torch.device("cuda"))
 
             logger.info("Silero VAD model loaded successfully")
@@ -488,10 +507,43 @@ class PyannoteLoader:
 
             logger.info(f"Loading Pyannote pipeline {self.config.model_id}")
 
-            self.pipeline = Pipeline.from_pretrained(self.config.model_id, use_auth_token=None)
+            # Pyannote 3.x diarization models on the HuggingFace Hub
+            # require accepting the user agreement and authenticating
+            # with a Hub access token. Read HUGGING_FACE_HUB_TOKEN /
+            # HF_TOKEN from the environment so deployments that ship
+            # a token (production / pre-warmed images) can complete
+            # download without code changes; deployments without a
+            # token surface a useful error instead of pyannote's
+            # generic "could not download model" message.
+            import os  # noqa: PLC0415
 
-            if torch.cuda.is_available() and self.config.device == "cuda":
-                self.pipeline = self.pipeline.to(torch.device("cuda"))
+            hf_token = os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN")
+            # huggingface_hub 1.x renamed `use_auth_token` → `token`.
+            # pyannote.audio 3.4 forwards the kwarg verbatim, so passing
+            # the legacy name now raises "got an unexpected keyword
+            # argument 'use_auth_token'". `token` works on both pyannote
+            # 3.3 and 3.4 against current Hub clients.
+            self.pipeline = Pipeline.from_pretrained(
+                self.config.model_id,
+                token=hf_token,
+            )
+            if self.pipeline is None:
+                raise RuntimeError(
+                    f"Pyannote returned None for {self.config.model_id!r}. The "
+                    "model is gated on HuggingFace; set HUGGING_FACE_HUB_TOKEN to "
+                    "a Hub access token that has accepted the model's user "
+                    "agreement at https://huggingface.co/" + self.config.model_id
+                )
+
+            # Pin to CPU when CUDA isn't available so the pipeline's
+            # internal torch operations don't try to dlopen libcudart
+            # on a CPU-only host.
+            target_device = (
+                torch.device("cuda")
+                if torch.cuda.is_available() and self.config.device == "cuda"
+                else torch.device("cpu")
+            )
+            self.pipeline = self.pipeline.to(target_device)
 
             logger.info("Pyannote pipeline loaded successfully")
         except Exception as e:

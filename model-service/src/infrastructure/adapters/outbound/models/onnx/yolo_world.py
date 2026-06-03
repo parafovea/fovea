@@ -53,6 +53,7 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
     ) -> None:
         onnx_cfg = onnx_config or ONNXConfig(
             model_id=config.model_id,
+            onnx_filename="yolov8s-worldv2.onnx",
             cache_dir=config.cache_dir,
         )
         ONNXModelLoader.__init__(self, onnx_cfg)
@@ -62,8 +63,13 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
     def load(self) -> None:
         """Load YOLO-World ONNX model from HuggingFace Hub.
 
-        Downloads the ONNX model file and creates an inference session.
-        Tries ``model.onnx`` first, then falls back to ``yolo_world.onnx``.
+        Downloads ``yolov8s-worldv2.onnx`` from the configured repo and
+        creates an inference session. The filename is the canonical
+        artifact name published in the Ultralytics-derived community
+        exports (Instemic, jquadrino) for the small-variant weights;
+        deployments wanting the large variant point ``model_id`` at a
+        repo that ships ``yolov8l-worldv2.onnx`` and override
+        ``onnx_filename`` accordingly.
 
         Raises
         ------
@@ -74,20 +80,11 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
         try:
             cache_dir = str(self.onnx_config.cache_dir) if self.onnx_config.cache_dir else None
-
-            try:
-                model_path: str = hf_hub_download(
-                    repo_id=self.onnx_config.model_id,
-                    filename="model.onnx",
-                    cache_dir=cache_dir,
-                )
-            except Exception:
-                model_path = hf_hub_download(
-                    repo_id=self.onnx_config.model_id,
-                    filename="yolo_world.onnx",
-                    cache_dir=cache_dir,
-                )
-
+            model_path = hf_hub_download(
+                repo_id=self.onnx_config.model_id,
+                filename=self.onnx_config.onnx_filename,
+                cache_dir=cache_dir,
+            )
             self._session = self._create_session(model_path)
             logger.info("Loaded YOLO-World ONNX model: %s", self.onnx_config.model_id)
         except Exception as e:

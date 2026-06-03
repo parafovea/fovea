@@ -155,27 +155,15 @@ export const detectRoutes: FastifyPluginAsync<{
         }
 
         const rawDetectionResult = await response.json()
-        const detectionResult = camelcaseKeys(rawDetectionResult as Record<string, unknown>, { deep: true }) as {
-          videoId?: string
-          query?: string
-          frames?: Array<{
-            frameNumber: number
-            detections: Array<{
-              boundingBox: { x: number; y: number; width: number; height: number }
-              confidence: number
-              label: string
-            }>
-          }>
-        }
+        const detectionResult = camelcaseKeys(rawDetectionResult as Record<string, unknown>, { deep: true }) as Record<string, unknown>
 
         // Defensive shape check. The model service contract requires
         // `frames: list[FrameDetections]` per
         // model-service/src/.../schemas/detection.py:130, but a buggy or
         // partially-broken upstream can return `{}` or omit `frames`.
-        // Without this guard the route crashes with a TypeError
-        // ("Cannot read properties of undefined (reading 'map')") which
-        // Fastify maps to a generic 500 and leaks a stack trace —
-        // a bad failure mode for an explicitly proxied dependency.
+        // Without this guard the route serializes a payload that the
+        // frontend then crashes on while reading `.frames.flatMap`,
+        // hidden inside its error boundary.
         if (!Array.isArray(detectionResult.frames)) {
           fastify.log.error(
             { rawDetectionResult },
@@ -187,21 +175,12 @@ export const detectRoutes: FastifyPluginAsync<{
           })
         }
 
-        return reply.send({
-          videoId: detectionResult.videoId,
-          query: detectionResult.query,
-          frameResults: detectionResult.frames.map((frame) => ({
-            frameNumber: frame.frameNumber,
-            detections: (frame.detections ?? []).map((det) => ({
-              x: det.boundingBox.x,
-              y: det.boundingBox.y,
-              width: det.boundingBox.width,
-              height: det.boundingBox.height,
-              confidence: det.confidence,
-              label: det.label,
-            })),
-          })),
-        })
+        // Pass through the model-service shape verbatim (after the
+        // snake-case to camel-case rename). DetectionResponseSchema in
+        // schemas.ts is the single canonical contract that all three
+        // layers (model-service, backend, frontend `DetectionResponse`)
+        // agree on; reshaping here would just reintroduce drift.
+        return reply.send(detectionResult)
       } catch (error) {
         // Re-throw typed errors to preserve status codes
         if (error instanceof AppError) {
