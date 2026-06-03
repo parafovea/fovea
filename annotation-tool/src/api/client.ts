@@ -181,6 +181,15 @@ export interface Detection {
   boundingBox: BoundingBox
   confidence: number
   trackId?: string | null
+  /**
+   * Optional final entity type the analyst should snap the box to,
+   * populated by the tour-demo mock layer so the candidates list can
+   * render a "suggested type" chip. Null when the proposal is meant
+   * to be rejected outright; absent on real model-service responses.
+   */
+  acceptAsLabel?: string | null
+  /** Wikidata QID for `acceptAsLabel`, when grounded. */
+  acceptAsWikidataId?: string | null
 }
 
 /**
@@ -217,6 +226,46 @@ export interface DetectionQueryOptions {
 /**
  * Request payload for object detection.
  */
+/**
+ * Request to transcribe a video's audio track. When `enableDiarization`
+ * is true the backend also calls the speaker_diarization model and the
+ * response carries a `speakers` list plus a per-segment `speaker` tag.
+ */
+export interface TranscribeRequest {
+  videoId: string
+  language?: string | null
+  enableDiarization?: boolean
+  numSpeakers?: number | null
+  minSpeakers?: number | null
+  maxSpeakers?: number | null
+}
+
+/**
+ * Single transcript segment returned by the ASR model.
+ */
+export interface TranscriptSegment {
+  start: number
+  end: number
+  text: string
+  confidence: number
+  speaker?: string | null
+}
+
+/**
+ * Response from the transcription endpoint.
+ */
+export interface TranscribeResponse {
+  text: string
+  segments: TranscriptSegment[]
+  language: string
+  duration: number
+  processingTime: number
+  modelUsed: string
+  speakers?: string[]
+  diarizationModelUsed?: string
+  diarizationProcessingTime?: number
+}
+
 export interface DetectionRequest {
   videoId: string
   personaId?: string
@@ -572,6 +621,12 @@ export type SystemConfigRow =
         defaultBatchSize: number
         maxBatchSize: number
         offloadThreshold: number
+        maxVideoFrames: number
+        frameSampleRate: number
+        vlmMaxSummaryTokens: number
+        llmMaxClaimsTokens: number
+        llmMaxSynthesisTokens: number
+        llmMaxOntologyTokens: number
       }
     }
   | {
@@ -658,6 +713,27 @@ export interface ApiClientConfig {
 }
 
 /**
+ * Per-call timeout (ms) for axios requests that forward through the
+ * backend to the model-service. Cold-start CPU LLM / VLM / detection
+ * inference can run well past the 30 s axios default; the matching
+ * backend ceilings are configured via `MODEL_SERVICE_TIMEOUT_*_MS`
+ * env vars (see server/src/lib/fetchModelService.ts). To avoid the
+ * magic-number drift of repeating that value here, the frontend
+ * reads `VITE_INFERENCE_TIMEOUT_MS` at build time (set on the docker
+ * stack via build-arg). When unset (production GPU deployments where
+ * the synchronous calls return in seconds), the default mirrors the
+ * backend's prod default ceiling of 60_000 ms.
+ */
+const INFERENCE_TIMEOUT_MS: number = (() => {
+  const raw = import.meta.env.VITE_INFERENCE_TIMEOUT_MS as string | undefined
+  if (typeof raw === 'string' && raw.length > 0) {
+    const parsed = Number.parseInt(raw, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return 60_000
+})()
+
+/**
  * HTTP client for backend API communication.
  * Wraps axios with typed methods for video summary and job management.
  */
@@ -681,7 +757,13 @@ export class ApiClient {
 
     this.client = axios.create({
       baseURL,
-      timeout: config.timeout || 30000,
+      // Base ceiling covers the slowest call any route can make. The
+      // synchronous model-service-bound routes (ontology augment,
+      // detection, thumbnails) need this much for cold-start CPU
+      // inference; the rest of the API is fast and just inherits the
+      // same ceiling. Per-call overrides are still honored when a
+      // specific route wants a tighter bound.
+      timeout: config.timeout || INFERENCE_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -841,7 +923,11 @@ export class ApiClient {
           existingTypes: request.existingTypes,
           targetCategory: request.targetCategory,
           maxSuggestions: request.maxSuggestions,
-        }
+        },
+        // Synchronous model-service-bound call; uses INFERENCE_TIMEOUT_MS
+        // so the value tracks the backend's matching env-driven ceiling
+        // rather than being repeated as a literal here.
+        { timeout: INFERENCE_TIMEOUT_MS }
       )
       return response.data
     } catch (error) {
@@ -868,7 +954,35 @@ export class ApiClient {
           frameNumbers: request.frameNumbers,
           confidenceThreshold: request.confidenceThreshold,
           enableTracking: request.enableTracking,
-        }
+        },
+        // Synchronous model-service-bound call (see augmentOntology).
+        { timeout: INFERENCE_TIMEOUT_MS }
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Transcribe a video's audio track using the configured ASR model.
+   *
+   * @param request - Transcription parameters
+   * @returns Transcript text and per-segment timings
+   * @throws ApiError if request fails
+   */
+  async transcribeVideo(request: TranscribeRequest): Promise<TranscribeResponse> {
+    try {
+      const response = await this.client.post<TranscribeResponse>(
+        `/api/videos/${request.videoId}/transcribe`,
+        {
+          language: request.language ?? null,
+          enableDiarization: request.enableDiarization ?? false,
+          numSpeakers: request.numSpeakers ?? null,
+          minSpeakers: request.minSpeakers ?? null,
+          maxSpeakers: request.maxSpeakers ?? null,
+        },
+        { timeout: INFERENCE_TIMEOUT_MS }
       )
       return response.data
     } catch (error) {

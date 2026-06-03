@@ -127,7 +127,7 @@ export function PermissionsPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour-id="permissions-page">
       <div className="mb-6">
         <p className="text-sm text-muted-foreground">
           Read-only view of the role-permission matrix. Each cell shows the actions a role can perform on a resource type.

@@ -7,6 +7,7 @@ using vision language models.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -74,6 +75,22 @@ async def summarize_video(
 
         temp_video_path: str | None = None
         dto_request = summarize_request_schema_to_dto(request)
+
+        # Enforce the deployment-wide frame cap from inference config.
+        # CPU VLMs run ~10-30 s/frame; without this cap, a frontend that
+        # asks for the schema-default 30 frames blocks for 5-15 min and
+        # makes the demo feel broken. The cap is a hard ceiling, not a
+        # default — even if the client sets a higher number, the server
+        # downsamples to what its hardware can serve within demo-time
+        # budgets. GPU deployments raise it via models.yaml.
+        frame_cap = manager.inference_config.max_video_frames
+        if dto_request.max_frames > frame_cap:
+            logger.info(
+                "Clamping max_frames from %d to %d per inference.max_video_frames",
+                dto_request.max_frames,
+                frame_cap,
+            )
+            dto_request = replace(dto_request, max_frames=frame_cap)
 
         try:
             video_path: str
@@ -157,7 +174,15 @@ async def summarize_video(
                     framework=framework,
                 )
 
-                vlm_loader = create_vlm_loader(task_config.selected, model_config)
+                architecture = selected_model_config.architecture
+                if architecture is None:
+                    raise RuntimeError(
+                        f"Model config for {task_config.selected!r} is missing the "
+                        "required architecture field; add an architecture block "
+                        "(e.g. architecture: {kind: 'smolvlm'}) to the matching "
+                        "entry in models.yaml or models-cpu.yaml."
+                    )
+                vlm_loader = create_vlm_loader(architecture, model_config)
                 vlm = VLMLoaderAdapter(vlm_loader)
 
                 response_dto = await summarize_module.summarize_video_with_vlm(

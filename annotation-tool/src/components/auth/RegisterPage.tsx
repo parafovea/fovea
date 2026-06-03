@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link as RouterLink } from 'react-router-dom'
 
-import { UserPlus } from 'lucide-react'
+import foveaLogo from '@/assets/fovea-logo.svg'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -121,11 +121,16 @@ export function RegisterPage(): JSX.Element {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="max-w-[500px] w-full mx-2">
         <CardHeader className="text-center">
-          <UserPlus className="mx-auto size-12 text-primary mb-1" />
-          <h1 className="text-2xl font-bold">Create Account</h1>
+          <img
+            src={foveaLogo}
+            alt="FOVEA logo"
+            className="mx-auto size-12 mb-2"
+          />
+          <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
           <p className="text-sm text-muted-foreground">
-            Register for fovea
+            Flexible Ontology Visual Event Analyzer
           </p>
+          <p className="text-sm font-medium mt-3">Create an account.</p>
         </CardHeader>
 
         <CardContent>

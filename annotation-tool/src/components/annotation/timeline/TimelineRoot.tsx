@@ -277,6 +277,7 @@ export function TimelineRoot({
   return (
     <div
       data-slot="timeline-root"
+      data-tour-id="timeline"
       aria-label="Video annotation timeline"
       className={cn(
         'relative flex w-full select-none flex-col overflow-hidden',

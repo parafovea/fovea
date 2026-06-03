@@ -9,6 +9,7 @@ import { listRoutes } from './list.js'
 import { streamRoutes } from './stream.js'
 import { thumbnailRoutes } from './thumbnail.js'
 import { detectRoutes } from './detect.js'
+import { transcribeRoutes } from './transcribe.js'
 import { syncRoutes } from './sync.js'
 import { urlRoutes } from './url.js'
 
@@ -80,6 +81,11 @@ const videosRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   await fastify.register(detectRoutes, {
+    videoRepository,
+    prisma: fastify.prisma
+  })
+
+  await fastify.register(transcribeRoutes, {
     videoRepository,
     prisma: fastify.prisma
   })

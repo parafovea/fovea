@@ -696,7 +696,7 @@ export default function GlossEditor({
   }
 
   return (
-    <div>
+    <div data-tour-id="gloss-editor">
       <Label className="mb-2">{label}</Label>
       <div className="relative">
         <Textarea

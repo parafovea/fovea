@@ -285,7 +285,7 @@ export function ClaimEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent className="sm:max-w-lg min-h-[500px]">
+      <DialogContent data-tour-id="claim-editor" className="sm:max-w-lg min-h-[500px]">
         <DialogHeader>
           <DialogTitle>
             {claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}

@@ -261,7 +261,7 @@ export function OntologyAugmenter({
               onValueChange={(val) => setCategory(val as OntologyCategory)}
               disabled={mutation.isPending}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" data-tour-id="augmenter-import-target" aria-label="Ontology category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -273,7 +273,7 @@ export function OntologyAugmenter({
             </Select>
           </div>
 
-          <div>
+          <div data-tour-id="augmenter-search">
             <Label className="mb-2">Domain Description</Label>
             <Textarea
               placeholder="E.g., Wildlife research tracking whale pod behavior and migration patterns"
@@ -345,7 +345,7 @@ export function OntologyAugmenter({
         )}
 
         {mutation.isSuccess && mutation.data && (
-          <div className="mt-6">
+          <div className="mt-6" data-tour-id="augmenter-results">
             {mutation.data.reasoning && (
               <Alert className="mb-4">
                 <AlertDescription>{mutation.data.reasoning}</AlertDescription>

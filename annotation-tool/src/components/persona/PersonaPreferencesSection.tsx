@@ -52,7 +52,7 @@ export function PersonaPreferencesSection({ personaId }: Props) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour-id="persona-preferences-section">
       <button
         type="button"
         className="flex items-center gap-2 text-sm font-medium select-none"

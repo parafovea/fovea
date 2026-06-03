@@ -60,7 +60,7 @@ export function ImportResultDialog({ open, result, onClose }: ImportResultDialog
       open={open}
       onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent data-tour-id="import-result-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             <span className="flex items-center gap-2">

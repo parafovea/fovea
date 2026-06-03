@@ -68,6 +68,22 @@ The selected fusion strategy depends on the configured fusion
 model and the input characteristics; the model service picks
 based on the audio-presence detection in `av_fusion.py`.
 
+## Standalone transcribe button (v0.4.0)
+
+The summary pipeline above is the indirect path: audio runs as part
+of a larger generate-summary job. v0.4.0 adds a direct path: a
+`Transcribe Audio` button on the workspace toolbar that calls
+`POST /api/videos/:videoId/transcribe`, optionally enabling speaker
+diarization via pyannote 3.1, and renders the result in a
+`TranscriptPanel` with click-to-seek timestamps and colour-coded
+speaker chips. See [Guide > Transcribe and diarize](transcribe-and-diarize.md)
+for the full request and response contract.
+
+The standalone route hits the model-service's `/api/transcribe` and
+`/api/diarize` endpoints directly and does not produce a `VideoSummary`
+row; it is for the case where a user wants the transcript surface
+without the full summary pipeline.
+
 ## Languages
 
 `audioLanguage` on the summary row is the ISO code returned by

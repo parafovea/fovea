@@ -262,7 +262,7 @@ export default function RelationTypeEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent data-tour-id="relation-type-editor" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {relationType ? 'Edit Relation Type' : 'Create Relation Type'}

@@ -183,7 +183,7 @@ export function UserManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour-id="user-management-page">
       {/* Toolbar */}
       <div className="flex gap-4 mb-6 items-center">
         <div className="relative flex-grow max-w-[400px]">

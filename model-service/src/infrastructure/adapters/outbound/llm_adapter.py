@@ -112,6 +112,7 @@ class LLMLoaderAdapter(ILanguageModel):
             temperature=config.temperature,
             top_p=config.top_p,
             stop_sequences=config.stop_sequences,
+            json_schema=config.json_schema,
         )
         with record_inference(task="llm_generate", model_id=self.model_id):
             result = await self._loader.generate(prompt=prompt, generation_config=internal)

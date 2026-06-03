@@ -114,7 +114,7 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
   if (!segment) {
     return (
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-        <DialogContent>
+        <DialogContent data-tour-id="interpolation-mode-selector">
           <DialogHeader>
             <DialogTitle>Interpolation Mode</DialogTitle>
           </DialogHeader>

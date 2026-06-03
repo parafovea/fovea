@@ -74,7 +74,7 @@ export default function GroupsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-lg px-4">
+    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="groups-page">
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold">My Groups</h1>
         <Button onClick={() => setDialogOpen(true)}>

@@ -6,6 +6,7 @@ import sys
 
 import pytest
 
+from src.domain.entities.architectures import RFDETR
 from src.infrastructure.adapters.outbound.models.detection.loader import (
     DetectionConfig,
     DetectionFramework,
@@ -33,12 +34,12 @@ def test_rfdetr_load_without_package_raises_importerror(
 ) -> None:
     """Calling load without rfdetr installed raises a clear ImportError."""
     monkeypatch.setitem(sys.modules, "rfdetr", None)
-    loader = RFDETRLoader(_config())
+    loader = RFDETRLoader(RFDETR(), _config())
     with pytest.raises(ImportError, match="rfdetr"):
         loader.load()
 
 
 def test_rfdetr_registered_in_factory() -> None:
-    """Factory resolves ``rf-detr`` model names to the new loader."""
-    loader = create_detection_loader("rf-detr", _config())
+    """Factory resolves the :class:`RFDETR` architecture to its loader."""
+    loader = create_detection_loader(RFDETR(), _config())
     assert isinstance(loader, RFDETRLoader)

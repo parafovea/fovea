@@ -191,10 +191,20 @@ test.describe('Relation Type References in Summaries', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    // Re-open summary dialog
+    // Re-open summary dialog and arm the GET wait BEFORE selecting the
+    // persona that triggers the summaries fetch, so the response is
+    // observed deterministically rather than raced against a sleep.
     await page.getByRole('button', { name: /edit summary/i }).click()
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
+
+    const summariesLoaded = page.waitForResponse(
+      (resp) =>
+        resp.url().includes(`/api/videos/${testVideo.id}/summaries`) &&
+        resp.request().method() === 'GET' &&
+        resp.status() === 200,
+      { timeout: 10000 },
+    )
 
     // Re-select persona
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
@@ -202,17 +212,14 @@ test.describe('Relation Type References in Summaries', () => {
     await page.waitForTimeout(300)
     const personaOption2 = page.getByRole('option').first()
     await personaOption2.click()
-    await page.waitForTimeout(500)
+
+    await summariesLoaded
 
     // Navigate to Summary tab
     const summaryTab2 = dialog2.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab2.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab2.click()
-      await page.waitForTimeout(300)
     }
-
-    // Wait for summary data to load from API
-    await page.waitForTimeout(2000)
 
     // Verify the summary text persisted
     const summaryTextarea2 = dialog2.locator('textarea').first()

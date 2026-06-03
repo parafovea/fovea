@@ -256,7 +256,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       </Alert>
 
       {/* Search input with dropdown */}
-      <div className="relative">
+      <div className="relative" data-tour-id="augmenter-search">
         <div className="relative">
           <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -282,6 +282,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
             ref={dropdownRef}
             role="listbox"
             aria-label="Wikidata search results"
+            data-tour-id="augmenter-results"
             className="absolute z-50 mt-1 w-full max-h-[300px] overflow-auto rounded-lg border bg-popover shadow-md"
           >
             {options.map((option) => (

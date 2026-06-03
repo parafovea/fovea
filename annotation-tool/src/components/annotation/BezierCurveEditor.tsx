@@ -128,7 +128,7 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
   }
 
   return (
-    <div>
+    <div data-tour-id="bezier-curve-editor">
       {/* Property Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>

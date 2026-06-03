@@ -243,8 +243,8 @@ export default function Layout() {
   })
 
   return (
-    <SidebarProvider defaultOpen>
-      <Sidebar collapsible="icon" side="left">
+    <SidebarProvider defaultOpen data-tour-id="app-shell">
+      <Sidebar collapsible="icon" side="left" data-tour-id="app-sidebar">
         <SidebarHeader className="p-3">
           <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             <img src={logo} alt="FOVEA Logo" className="h-8 w-8 shrink-0" />

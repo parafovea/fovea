@@ -9,6 +9,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from src.domain.entities.architectures import (
+    Florence2Detection,
+    GroundingDINO,
+    YOLOWorld,
+)
 from src.infrastructure.adapters.outbound.models.detection.loader import (
     DetectionConfig,
     DetectionFramework,
@@ -115,14 +120,14 @@ class TestYOLOWorldONNXLoader:
     def test_init_creates_onnx_config_from_detection_config(
         self, onnx_detection_config: DetectionConfig
     ) -> None:
-        loader = YOLOWorldONNXLoader(onnx_detection_config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
 
         assert loader.onnx_config.model_id == onnx_detection_config.model_id
         assert loader.config is onnx_detection_config
 
     def test_init_uses_explicit_onnx_config(self, onnx_detection_config: DetectionConfig) -> None:
         explicit = ONNXConfig(model_id="explicit/model", num_threads=2)
-        loader = YOLOWorldONNXLoader(onnx_detection_config, onnx_config=explicit)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config, onnx_config=explicit)
 
         assert loader.onnx_config is explicit
         assert loader.onnx_config.model_id == "explicit/model"
@@ -137,7 +142,7 @@ class TestYOLOWorldONNXLoader:
         mock_ort = MagicMock()
         mock_ort.GraphOptimizationLevel.ORT_ENABLE_ALL = 99
         with patch.dict("sys.modules", {"onnxruntime": mock_ort}):
-            loader = YOLOWorldONNXLoader(onnx_detection_config)
+            loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
             loader.load()
 
         assert loader.is_loaded
@@ -148,7 +153,7 @@ class TestYOLOWorldONNXLoader:
         _mock_download: Mock,
         onnx_detection_config: DetectionConfig,
     ) -> None:
-        loader = YOLOWorldONNXLoader(onnx_detection_config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
 
         with pytest.raises(RuntimeError, match="Model loading failed"):
             loader.load()
@@ -158,7 +163,7 @@ class TestYOLOWorldONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = YOLOWorldONNXLoader(onnx_detection_config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.detect(sample_image, "person. car.")
@@ -168,7 +173,7 @@ class TestYOLOWorldONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = YOLOWorldONNXLoader(onnx_detection_config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
 
         mock_session = MagicMock()
         mock_input = MagicMock()
@@ -199,7 +204,7 @@ class TestYOLOWorldONNXLoader:
             confidence_threshold=0.8,
             device="cpu",
         )
-        loader = YOLOWorldONNXLoader(config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), config)
 
         mock_session = MagicMock()
         mock_input = MagicMock()
@@ -219,7 +224,7 @@ class TestYOLOWorldONNXLoader:
         self,
         onnx_detection_config: DetectionConfig,
     ) -> None:
-        loader = YOLOWorldONNXLoader(onnx_detection_config)
+        loader = YOLOWorldONNXLoader(YOLOWorld(), onnx_detection_config)
         loader._session = MagicMock()
         loader.model = MagicMock()
 
@@ -241,7 +246,7 @@ class TestFlorence2ONNXLoader:
     def test_init_creates_onnx_config_from_detection_config(
         self, onnx_detection_config: DetectionConfig
     ) -> None:
-        loader = Florence2ONNXLoader(onnx_detection_config)
+        loader = Florence2ONNXLoader(Florence2Detection(), onnx_detection_config)
 
         assert loader.onnx_config.model_id == onnx_detection_config.model_id
         assert loader._processor is None
@@ -251,7 +256,7 @@ class TestFlorence2ONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = Florence2ONNXLoader(onnx_detection_config)
+        loader = Florence2ONNXLoader(Florence2Detection(), onnx_detection_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.detect(sample_image, "person")
@@ -261,7 +266,7 @@ class TestFlorence2ONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = Florence2ONNXLoader(onnx_detection_config)
+        loader = Florence2ONNXLoader(Florence2Detection(), onnx_detection_config)
 
         mock_processor = MagicMock()
         mock_processor.return_value = {
@@ -295,7 +300,7 @@ class TestFlorence2ONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = Florence2ONNXLoader(onnx_detection_config)
+        loader = Florence2ONNXLoader(Florence2Detection(), onnx_detection_config)
 
         mock_processor = MagicMock()
         mock_processor.return_value = {
@@ -329,7 +334,7 @@ class TestFlorence2ONNXLoader:
         self,
         onnx_detection_config: DetectionConfig,
     ) -> None:
-        loader = Florence2ONNXLoader(onnx_detection_config)
+        loader = Florence2ONNXLoader(Florence2Detection(), onnx_detection_config)
         loader._session = MagicMock()
         loader._encoder_session = MagicMock()
         loader._decoder_session = MagicMock()
@@ -356,7 +361,7 @@ class TestGroundingDINOONNXLoader:
     def test_init_creates_onnx_config_from_detection_config(
         self, onnx_detection_config: DetectionConfig
     ) -> None:
-        loader = GroundingDINOONNXLoader(onnx_detection_config)
+        loader = GroundingDINOONNXLoader(GroundingDINO(), onnx_detection_config)
 
         assert loader.onnx_config.model_id == onnx_detection_config.model_id
         assert loader._tokenizer is None
@@ -366,7 +371,7 @@ class TestGroundingDINOONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = GroundingDINOONNXLoader(onnx_detection_config)
+        loader = GroundingDINOONNXLoader(GroundingDINO(), onnx_detection_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.detect(sample_image, "person")
@@ -376,7 +381,7 @@ class TestGroundingDINOONNXLoader:
         onnx_detection_config: DetectionConfig,
         sample_image: Image.Image,
     ) -> None:
-        loader = GroundingDINOONNXLoader(onnx_detection_config)
+        loader = GroundingDINOONNXLoader(GroundingDINO(), onnx_detection_config)
 
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
@@ -417,7 +422,7 @@ class TestGroundingDINOONNXLoader:
             confidence_threshold=0.9,
             device="cpu",
         )
-        loader = GroundingDINOONNXLoader(config)
+        loader = GroundingDINOONNXLoader(GroundingDINO(), config)
 
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
@@ -449,7 +454,7 @@ class TestGroundingDINOONNXLoader:
         self,
         onnx_detection_config: DetectionConfig,
     ) -> None:
-        loader = GroundingDINOONNXLoader(onnx_detection_config)
+        loader = GroundingDINOONNXLoader(GroundingDINO(), onnx_detection_config)
         loader._session = MagicMock()
         loader._tokenizer = MagicMock()
         loader.model = MagicMock()
@@ -468,14 +473,19 @@ class TestGroundingDINOONNXLoader:
 
 
 class TestCreateDetectionLoaderONNX:
-    """Tests for the create_detection_loader factory with ONNX framework."""
+    """Architecture-keyed ONNX dispatch tests for :func:`create_detection_loader`.
+
+    The factory routes to :data:`detection_onnx_registry` whenever
+    ``config.framework == DetectionFramework.ONNX`` and dispatches on the
+    architecture's Pydantic class within that registry.
+    """
 
     def test_dispatches_yolo_world(self) -> None:
         config = DetectionConfig(
             model_id="test/yolo-world-v2",
             framework=DetectionFramework.ONNX,
         )
-        loader = create_detection_loader("yolo-world-v2", config)
+        loader = create_detection_loader(YOLOWorld(), config)
         assert isinstance(loader, YOLOWorldONNXLoader)
 
     def test_dispatches_florence(self) -> None:
@@ -483,7 +493,7 @@ class TestCreateDetectionLoaderONNX:
             model_id="microsoft/florence-2-large",
             framework=DetectionFramework.ONNX,
         )
-        loader = create_detection_loader("florence-2", config)
+        loader = create_detection_loader(Florence2Detection(), config)
         assert isinstance(loader, Florence2ONNXLoader)
 
     def test_dispatches_grounding_dino(self) -> None:
@@ -491,13 +501,18 @@ class TestCreateDetectionLoaderONNX:
             model_id="IDEA-Research/grounding-dino-tiny",
             framework=DetectionFramework.ONNX,
         )
-        loader = create_detection_loader("grounding-dino", config)
+        loader = create_detection_loader(GroundingDINO(), config)
         assert isinstance(loader, GroundingDINOONNXLoader)
 
-    def test_raises_for_unknown_onnx_model(self) -> None:
+    def test_raises_for_unknown_onnx_architecture(self) -> None:
+        from src.domain.entities.architectures import QwenLLM
+        from src.infrastructure.adapters.outbound.models.registry import (
+            UnknownArchitectureError,
+        )
+
         config = DetectionConfig(
             model_id="unknown/model",
             framework=DetectionFramework.ONNX,
         )
-        with pytest.raises(ValueError, match="No ONNX loader available"):
-            create_detection_loader("unknown", config)
+        with pytest.raises(UnknownArchitectureError):
+            create_detection_loader(QwenLLM(), config)  # type: ignore[arg-type]

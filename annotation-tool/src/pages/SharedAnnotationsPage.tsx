@@ -101,7 +101,7 @@ export default function SharedAnnotationsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-lg px-4">
+    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="shared-annotations-page">
       <div className="py-6">
         <h1 className="mb-4 text-2xl font-bold">Shared With Me</h1>
 

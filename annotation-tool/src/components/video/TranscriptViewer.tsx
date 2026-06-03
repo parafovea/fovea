@@ -66,7 +66,10 @@ export function TranscriptViewer({ transcript, currentTime, onSeek }: Transcript
   }
 
   return (
-    <ul className="w-full max-h-[400px] overflow-auto bg-card">
+    <ul
+      data-tour-id="transcript-viewer"
+      className="w-full max-h-[400px] overflow-auto bg-card"
+    >
       {transcript.segments.map((segment, index) => {
         // Determine if this segment is currently active
         const isActive = currentTime >= segment.start && currentTime < segment.end

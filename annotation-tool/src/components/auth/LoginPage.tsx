@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 
-import { LogIn } from 'lucide-react'
+import foveaLogo from '@/assets/fovea-logo.svg'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -48,7 +48,8 @@ export function LoginPage(): JSX.Element {
     try {
       await login(username, password, rememberMe)
       const params = new URLSearchParams(location.search)
-      const from = params.get('redirect') || '/'
+      const defaultDest = import.meta.env.VITE_DEMO_PUBLIC === '1' ? '/app' : '/'
+      const from = params.get('redirect') || defaultDest
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -70,16 +71,20 @@ export function LoginPage(): JSX.Element {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="max-w-[400px] w-full mx-2">
         <CardHeader className="text-center">
-          <LogIn className="mx-auto size-12 text-primary mb-1" />
-          <h1 className="text-2xl font-bold">fovea</h1>
+          <img
+            src={foveaLogo}
+            alt="FOVEA logo"
+            className="mx-auto size-12 mb-2"
+          />
+          <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
           <p className="text-sm text-muted-foreground">
-            Video Annotation Tool
+            Flexible Ontology Visual Event Analyzer
           </p>
         </CardHeader>
 
         <CardContent>
           {error && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="destructive" className="mb-4" data-testid="login-error-alert">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -134,13 +139,27 @@ export function LoginPage(): JSX.Element {
               {loading ? 'Logging in...' : 'Login'}
             </Button>
 
-            {allowRegistration && (
+            {allowRegistration ? (
               <p className="text-center text-sm text-muted-foreground">
                 Don&apos;t have an account?{' '}
                 <RouterLink to="/register" className="text-primary underline underline-offset-4 hover:text-primary/80">
                   Register
                 </RouterLink>
               </p>
+            ) : (
+              <Alert data-testid="registration-disabled-notice">
+                <AlertDescription>
+                  Self-registration is disabled on this deployment. To
+                  request an account, email{' '}
+                  <a
+                    href="mailto:admin@fovea.video"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    admin@fovea.video
+                  </a>
+                  .
+                </AlertDescription>
+              </Alert>
             )}
           </form>
         </CardContent>

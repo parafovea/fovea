@@ -1,0 +1,29 @@
+# Compose override for the CVPR booth tour-demo deployment.
+#
+# Engage by layering on top of docker-compose.yml:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.tour-demo.yml \
+#     up -d --build
+#
+# This flips VITE_TOUR_DEMO=1 at frontend build time so the
+# annotation-tool bundle starts the MSW worker (src/mocks/tourDemo/
+# browser.ts) on boot. Every model-service-bound route the tour
+# scripts touch is intercepted and resolved from the bundle's
+# precomputed "almost-there" fixtures, so the booth machine no
+# longer needs a live model-service to demonstrate detection /
+# tracking / ontology augmentation / transcription / diarization /
+# VLM summarization / claim extraction.
+#
+# Production deployments without this override never pay the cost:
+# the dynamic import sits behind a statically-analysable env-var
+# guard, so the entire src/mocks/tourDemo subtree tree-shakes out
+# of the bundle when VITE_TOUR_DEMO is not "1".
+name: fovea
+
+services:
+  frontend:
+    build:
+      args:
+        - VITE_TOUR_DEMO=1

@@ -115,7 +115,7 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
     .join(' ')
 
   return (
-    <g data-testid="motion-path-overlay" style={{ pointerEvents: 'none' }}>
+    <g data-testid="motion-path-overlay" data-tour-id="motion-path-overlay" style={{ pointerEvents: 'none' }}>
       {/* Path line */}
       <path
         d={pathData}

@@ -513,7 +513,7 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
         open={open}
         onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
       >
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent data-tour-id="import-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import Data</DialogTitle>
           </DialogHeader>

@@ -592,6 +592,10 @@ function VideoCard({
 
   return (
     <Card
+      // First-card anchor for Tour 1 ("First annotation in 90 seconds")
+      // and other tours that want to spotlight a tangible video tile
+      // without depending on which clip is rendered first.
+      data-tour-id={index === 0 ? 'video-browser-card-first' : undefined}
       className={cn(
         'h-full flex flex-col cursor-pointer',
         selectedVideoIndex === index && 'outline outline-2 outline-primary'
@@ -728,8 +732,8 @@ function VideoCard({
           )}
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger>
-                <span>
+              <TooltipTrigger
+                render={
                   <Button
                     variant="ghost"
                     size="sm"
@@ -742,11 +746,11 @@ function VideoCard({
                       }
                     }}
                     disabled={!!activeJobId || !activePersonaId || modelsDisabled}
-                  >
-                    <Sparkles className="size-4 mr-1" />
-                    {hasSummary ? 'View' : 'Summarize'}
-                  </Button>
-                </span>
+                  />
+                }
+              >
+                <Sparkles className="size-4 mr-1" />
+                {hasSummary ? 'View' : 'Summarize'}
               </TooltipTrigger>
               {modelsDisabled && (
                 <TooltipContent>

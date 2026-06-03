@@ -1,4 +1,7 @@
 import { test as base } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { AnnotationWorkspacePage } from '../page-objects/AnnotationWorkspacePage.js'
 import { VideoBrowserPage } from '../page-objects/VideoBrowserPage.js'
 import { OntologyWorkspacePage } from '../page-objects/OntologyWorkspacePage.js'
@@ -12,6 +15,97 @@ type WorkerFixtures = {
   workerDb: DatabaseHelper
   workerUser: User
   workerSessionToken: string
+  /**
+   * Worker-scoped microvent CONTENT GRIST — parsed in-memory records
+   * from the microvent_v2 export. Tour specs use this as the blueprint
+   * for what they BUILD via the UI: "create persona X with role Y",
+   * "create entity type 'dust cloud' with gloss …", "draw a bbox and
+   * assign type 'Person'", etc. NO DB writes happen at fixture setup.
+   * Each tour creates its own prerequisites and walks the visitor
+   * through incrementally building the rest, exactly the way a CVPR
+   * booth visitor would. (Tour 10 — import/export — is the one
+   * exception: it drives the import-dialog UI to load the full
+   * dataset and the spec asserts the import succeeded.)
+   */
+  microventGrist: MicroventGrist
+}
+
+export interface MicroventPersonaGrist {
+  name: string
+  role: string
+  informationNeed?: string
+}
+
+export interface MicroventGlossSegment {
+  type: string
+  content: string
+}
+
+export interface MicroventTypeGrist {
+  name: string
+  gloss: MicroventGlossSegment[]
+  wikidataId?: string | null
+  wikidataUrl?: string | null
+}
+
+export interface MicroventRoleGrist extends MicroventTypeGrist {
+  allowedFillerTypes: string[]
+}
+
+export interface MicroventRelationGrist extends MicroventTypeGrist {
+  sourceTypes: string[]
+  targetTypes: string[]
+}
+
+export interface MicroventOntologyGrist {
+  entityTypes: MicroventTypeGrist[]
+  eventTypes: MicroventTypeGrist[]
+  roles: MicroventRoleGrist[]
+  relationTypes: MicroventRelationGrist[]
+}
+
+export interface MicroventAnnotationGrist {
+  videoId: string
+  annotationType: string
+  typeCategory: string
+  boundingBoxSequence: {
+    boxes: Array<{
+      x: number
+      y: number
+      width: number
+      height: number
+      isKeyframe: boolean
+      frameNumber: number
+    }>
+  }
+}
+
+export interface MicroventSummaryGrist {
+  id: string
+  videoId: string
+  content: string
+}
+
+export interface MicroventClaimGrist {
+  summaryId: string
+  text?: string
+  gloss?: MicroventGlossSegment[]
+}
+
+export interface MicroventGrist {
+  /** All personas defined in the export, in declaration order. */
+  personas: MicroventPersonaGrist[]
+  /** Ontology rows keyed by the persona name they belong to. */
+  ontologyByPersonaName: Record<string, MicroventOntologyGrist>
+  /** The single annotation in the export (tours BUILD their own). */
+  annotations: MicroventAnnotationGrist[]
+  /** Summary records — content text drives Tour 7's narration of what to type. */
+  summaries: MicroventSummaryGrist[]
+  /** Claim records — Tour 7's extraction step builds matching ones. */
+  claims: MicroventClaimGrist[]
+  /** Local video IDs (md5(filename)[0:16]) that intersect the export. */
+  localVideosWithSummaries: string[]
+  localVideosWithClaims: string[]
 }
 
 /**
@@ -133,6 +227,171 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     workerDb.setSessionToken(null)
   }, { scope: 'worker' }],
 
+  /**
+   * Worker-scoped microvent CONTENT GRIST. Parses the bundled JSONL
+   * into in-memory records and exposes them to tour specs as the
+   * blueprint for what each tour BUILDS via the UI. No DB writes here.
+   * Each tour's spec creates its own minimal prerequisites via API
+   * (e.g. a persona to drive against) and walks the visitor through
+   * incrementally building entity types / annotations / summaries /
+   * claims / world state matching the grist's records — exactly the
+   * way a CVPR booth visitor would build their workspace from scratch.
+   */
+  microventGrist: [async (_unused, use) => {
+    const jsonlPath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      'microvent-seed.jsonl',
+    )
+    const lines = readFileSync(jsonlPath, 'utf-8').split('\n').filter(Boolean)
+
+    interface ExportPersona { id: string; name: string; role: string; informationNeed?: string }
+    interface ExportTypeRow {
+      name: string
+      gloss?: MicroventGlossSegment[]
+      wikidataId?: string | null
+      wikidataUrl?: string | null
+      allowedFillerTypes?: string[]
+      sourceTypes?: string[]
+      targetTypes?: string[]
+    }
+    interface ExportOntology {
+      personaId: string
+      entityTypes?: ExportTypeRow[]
+      eventTypes?: ExportTypeRow[]
+      roles?: ExportTypeRow[]
+      relationTypes?: ExportTypeRow[]
+    }
+    interface ExportSummary { id: string; videoId: string; content: string }
+    interface ExportClaim {
+      summaryId: string
+      text?: string
+      gloss?: MicroventGlossSegment[]
+    }
+    interface ExportAnnotation {
+      videoId: string
+      annotationType: string
+      typeCategory: string
+      boundingBoxSequence: MicroventAnnotationGrist['boundingBoxSequence']
+    }
+    interface ExportRow {
+      type: string
+      data:
+        | ExportPersona
+        | ExportOntology
+        | ExportSummary
+        | ExportClaim
+        | ExportAnnotation
+    }
+
+    const personaIdToName = new Map<string, string>()
+    const personas: MicroventPersonaGrist[] = []
+    const ontologyByPersonaName: Record<string, MicroventOntologyGrist> = {}
+    const annotations: MicroventAnnotationGrist[] = []
+    const summaries: MicroventSummaryGrist[] = []
+    const claims: MicroventClaimGrist[] = []
+    const summaryToVideo = new Map<string, string>()
+    const videosWithSummaries = new Set<string>()
+    const videosWithClaims = new Set<string>()
+
+    function isPersona(d: ExportRow['data']): d is ExportPersona {
+      return typeof (d as ExportPersona).role === 'string'
+    }
+    function isOntology(d: ExportRow['data']): d is ExportOntology {
+      return typeof (d as ExportOntology).personaId === 'string'
+    }
+    function isSummary(d: ExportRow['data']): d is ExportSummary {
+      return (
+        typeof (d as ExportSummary).content === 'string' &&
+        typeof (d as ExportSummary).videoId === 'string'
+      )
+    }
+    function isClaim(d: ExportRow['data']): d is ExportClaim {
+      return typeof (d as ExportClaim).summaryId === 'string'
+    }
+    function isAnnotation(d: ExportRow['data']): d is ExportAnnotation {
+      return typeof (d as ExportAnnotation).annotationType === 'string'
+    }
+
+    function toTypeGrist(t: ExportTypeRow): MicroventTypeGrist {
+      return {
+        name: t.name,
+        gloss: t.gloss ?? [],
+        wikidataId: t.wikidataId,
+        wikidataUrl: t.wikidataUrl,
+      }
+    }
+
+    for (const line of lines) {
+      const row = JSON.parse(line) as ExportRow
+      if (row.type === 'persona' && isPersona(row.data)) {
+        personaIdToName.set((row.data as ExportPersona & { id: string }).id, row.data.name)
+        personas.push({
+          name: row.data.name,
+          role: row.data.role,
+          informationNeed: row.data.informationNeed,
+        })
+      }
+    }
+
+    for (const line of lines) {
+      const row = JSON.parse(line) as ExportRow
+      if (row.type === 'ontology' && isOntology(row.data)) {
+        const personaName = personaIdToName.get(row.data.personaId)
+        if (!personaName) continue
+        ontologyByPersonaName[personaName] = {
+          entityTypes: (row.data.entityTypes ?? []).map(toTypeGrist),
+          eventTypes: (row.data.eventTypes ?? []).map(toTypeGrist),
+          roles: (row.data.roles ?? []).map(
+            (t): MicroventRoleGrist => ({
+              ...toTypeGrist(t),
+              allowedFillerTypes: t.allowedFillerTypes ?? [],
+            }),
+          ),
+          relationTypes: (row.data.relationTypes ?? []).map(
+            (t): MicroventRelationGrist => ({
+              ...toTypeGrist(t),
+              sourceTypes: t.sourceTypes ?? [],
+              targetTypes: t.targetTypes ?? [],
+            }),
+          ),
+        }
+      } else if (row.type === 'summary' && isSummary(row.data)) {
+        summaryToVideo.set(row.data.id, row.data.videoId)
+        videosWithSummaries.add(row.data.videoId)
+        summaries.push({
+          id: row.data.id,
+          videoId: row.data.videoId,
+          content: row.data.content,
+        })
+      } else if (row.type === 'claim' && isClaim(row.data)) {
+        claims.push({
+          summaryId: row.data.summaryId,
+          text: row.data.text,
+          gloss: row.data.gloss,
+        })
+        const v = summaryToVideo.get(row.data.summaryId)
+        if (v) videosWithClaims.add(v)
+      } else if (row.type === 'annotation' && isAnnotation(row.data)) {
+        annotations.push({
+          videoId: row.data.videoId,
+          annotationType: row.data.annotationType,
+          typeCategory: row.data.typeCategory,
+          boundingBoxSequence: row.data.boundingBoxSequence,
+        })
+      }
+    }
+
+    await use({
+      personas,
+      ontologyByPersonaName,
+      annotations,
+      summaries,
+      claims,
+      localVideosWithSummaries: Array.from(videosWithSummaries),
+      localVideosWithClaims: Array.from(videosWithClaims),
+    })
+  }, { scope: 'worker' }],
+
   // Test-scoped fixtures (use worker fixtures)
   db: async ({ workerDb, workerUser }, use) => {
     // Clean WorldState before each test to ensure isolation
@@ -206,7 +465,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Fetches the first available video from the backend.
    * Test data only contains webm files for browser compatibility.
    */
-  testVideo: async ({ workerSessionToken }, use, testInfo) => {
+  testVideo: async ({ workerSessionToken, testUser }, use, testInfo) => {
     const response = await fetch('http://localhost:3001/api/videos', {
       headers: { Cookie: `session_token=${workerSessionToken}` }
     })
@@ -224,13 +483,25 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // residue from a prior test in the same worker (or a parallel worker
     // before the testVideo stripe rotation) doesn't bleed into the
     // current test's assertions about counts / persistence / visibility.
+    //
+    // CRITICAL: scope the cleanup to annotations + summaries CREATED BY
+    // THE CURRENT testUser. The video pool is shared across workers and
+    // across Playwright projects (smoke, functional, regression,
+    // accessibility); two workers striped onto the same video would
+    // otherwise wipe each other's in-progress annotations between
+    // test setup and the assertion, producing "All Annotations (0)"
+    // failures that only show up under parallel load (the test passes
+    // in isolation, fails under --project=A --project=B). Filtering
+    // by createdBy / userId keeps each worker's cleanup local to its
+    // own rows.
     const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (annsRes.ok) {
-      const anns = (await annsRes.json()) as Array<{ id: string }>
+      const anns = (await annsRes.json()) as Array<{ id: string; createdBy?: string }>
+      const ownAnns = anns.filter((a) => a.createdBy === testUser.id)
       await Promise.all(
-        anns.map((a) =>
+        ownAnns.map((a) =>
           fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },
@@ -242,9 +513,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (summariesRes.ok) {
-      const summaries = (await summariesRes.json()) as Array<{ id: string; personaId: string }>
+      const summaries = (await summariesRes.json()) as Array<{
+        id: string
+        personaId: string
+        userId?: string
+        createdBy?: string
+      }>
+      const ownSummaries = summaries.filter((s) => (s.userId ?? s.createdBy) === testUser.id)
       await Promise.all(
-        summaries.map((s) =>
+        ownSummaries.map((s) =>
           fetch(`http://localhost:3001/api/videos/${video.id}/summaries/${s.personaId}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },

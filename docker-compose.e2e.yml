@@ -8,6 +8,12 @@ services:
       context: .
       dockerfile: annotation-tool/Dockerfile
       target: production
+      args:
+        # Install the test-only window.__foveaTour handle so the tour
+        # engine E2E suite can drive launch/abandon/telemetry directly.
+        # Gated at Vite build time → dead-code-eliminated from any build
+        # that doesn't set this.
+        VITE_E2E: "1"
     ports:
       - "3000:3000"
     environment:
@@ -93,6 +99,11 @@ services:
       args:
         BUILD_MODE: minimal
         DEVICE: cpu
+        # Pull the [audio] extras so faster-whisper, pyannote.audio,
+        # and the supporting audio runtimes are available. Used by the
+        # transcription / diarization / VAD endpoints; off in the base
+        # minimal image to keep CI build time down.
+        ENABLE_AUDIO: "1"
     ports:
       - "8000:8000"
     environment:

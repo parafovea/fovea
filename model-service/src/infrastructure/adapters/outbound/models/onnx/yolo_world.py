@@ -10,6 +10,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from src.domain.entities.architectures import YOLOWorld
 from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
@@ -18,6 +19,7 @@ from src.infrastructure.adapters.outbound.models.detection.base import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.adapters.outbound.models.onnx.registry import detection_onnx_registry
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@detection_onnx_registry.register(YOLOWorld)
 class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
     """YOLO-World ONNX loader for open-vocabulary detection on CPU.
 
@@ -34,6 +37,8 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     Parameters
     ----------
+    arch : YOLOWorld
+        Architecture model the loader is registered against.
     config : DetectionConfig
         Detection model configuration.
     onnx_config : ONNXConfig | None
@@ -42,22 +47,29 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     def __init__(
         self,
+        arch: YOLOWorld,
         config: DetectionConfig,
         onnx_config: ONNXConfig | None = None,
     ) -> None:
         onnx_cfg = onnx_config or ONNXConfig(
             model_id=config.model_id,
+            onnx_filename="yolov8s-worldv2.onnx",
             cache_dir=config.cache_dir,
         )
         ONNXModelLoader.__init__(self, onnx_cfg)
-        DetectionModelLoader.__init__(self, config)
+        DetectionModelLoader.__init__(self, arch, config)
         self._input_size = (640, 640)
 
     def load(self) -> None:
         """Load YOLO-World ONNX model from HuggingFace Hub.
 
-        Downloads the ONNX model file and creates an inference session.
-        Tries ``model.onnx`` first, then falls back to ``yolo_world.onnx``.
+        Downloads ``yolov8s-worldv2.onnx`` from the configured repo and
+        creates an inference session. The filename is the canonical
+        artifact name published in the Ultralytics-derived community
+        exports (Instemic, jquadrino) for the small-variant weights;
+        deployments wanting the large variant point ``model_id`` at a
+        repo that ships ``yolov8l-worldv2.onnx`` and override
+        ``onnx_filename`` accordingly.
 
         Raises
         ------
@@ -68,20 +80,11 @@ class YOLOWorldONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
         try:
             cache_dir = str(self.onnx_config.cache_dir) if self.onnx_config.cache_dir else None
-
-            try:
-                model_path: str = hf_hub_download(
-                    repo_id=self.onnx_config.model_id,
-                    filename="model.onnx",
-                    cache_dir=cache_dir,
-                )
-            except Exception:
-                model_path = hf_hub_download(
-                    repo_id=self.onnx_config.model_id,
-                    filename="yolo_world.onnx",
-                    cache_dir=cache_dir,
-                )
-
+            model_path = hf_hub_download(
+                repo_id=self.onnx_config.model_id,
+                filename=self.onnx_config.onnx_filename,
+                cache_dir=cache_dir,
+            )
             self._session = self._create_session(model_path)
             logger.info("Loaded YOLO-World ONNX model: %s", self.onnx_config.model_id)
         except Exception as e:

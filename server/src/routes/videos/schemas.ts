@@ -66,13 +66,39 @@ export const BoundingBoxSchema = Type.Object({
 })
 
 /**
- * Detection response schema.
+ * Detection response schema. Mirrors the camelcased model-service
+ * `DetectionResponse` (id, video_id, query, frames[], total_detections,
+ * processing_time) so this route can pass the upstream shape through
+ * without manual reshaping. The previous schema renamed `frames` to
+ * `frameResults` and flattened the inner `bounding_box: {x, y, width,
+ * height}` to top-level coordinates on each detection, which then did
+ * not match either the model-service emit (still `bounding_box`) or
+ * the frontend `DetectionResponse` type (reads `boundingBox` and
+ * iterates `frames`). The end result was a frontend TypeError when the
+ * Detection Results dialog tried to read `detectionResults.frames`
+ * which fast-json-stringify had silently dropped. Keeping a single
+ * canonical shape across the three layers prevents that drift from
+ * recurring.
  */
 export const DetectionResponseSchema = Type.Object({
+  id: Type.String(),
   videoId: Type.String(),
   query: Type.String(),
-  frameResults: Type.Array(Type.Object({
+  frames: Type.Array(Type.Object({
     frameNumber: Type.Number(),
-    detections: Type.Array(BoundingBoxSchema),
+    timestamp: Type.Number(),
+    detections: Type.Array(Type.Object({
+      label: Type.String(),
+      boundingBox: Type.Object({
+        x: Type.Number(),
+        y: Type.Number(),
+        width: Type.Number(),
+        height: Type.Number(),
+      }),
+      confidence: Type.Number(),
+      trackId: Type.Union([Type.String(), Type.Null()]),
+    })),
   })),
+  totalDetections: Type.Number(),
+  processingTime: Type.Number(),
 })

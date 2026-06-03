@@ -39,6 +39,7 @@ import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
 import CollectionEditor from '../world/CollectionEditor'
+import { TimeCollectionEditorDialog } from '../world/CollectionBuilder'
 import { WikidataChip } from '../shared/WikidataChip'
 
 // Union type for all workspace items
@@ -82,6 +83,7 @@ export default function ObjectWorkspace() {
   const [locationEditorOpen, setLocationEditorOpen] = useState(false)
   const [timeEditorOpen, setTimeEditorOpen] = useState(false)
   const [collectionEditorOpen, setCollectionEditorOpen] = useState(false)
+  const [timeCollectionEditorOpen, setTimeCollectionEditorOpen] = useState(false)
 
   const [selectedEntity, setSelectedEntity] = useState<typeof entities[0] | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
@@ -474,7 +476,7 @@ export default function ObjectWorkspace() {
       </div>
 
       <Tabs value={tabValue} onValueChange={setTabValue} className="flex-1 flex flex-col">
-        <TabsList className="mx-4">
+        <TabsList className="mx-4" data-tour-id="world-panel-tabs">
           <TabsTrigger value="entities">
             <User className="size-4 mr-1" />Entities ({entities.length})
           </TabsTrigger>
@@ -627,6 +629,44 @@ export default function ObjectWorkspace() {
           </TabsContent>
 
           <TabsContent value="collections" className="p-6">
+            {/* Quick-add row — three distinct collection kinds. The
+                floating "+" FAB only opens an entity collection by
+                default; surface explicit buttons here so the visitor
+                can create event and time collections too. The Time
+                Collection button is the entry point Tour 5 step 5
+                spotlights (data-tour-id="time-collection-builder"
+                mounts inside the editor it opens). */}
+            <div className="mb-4 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedCollection(null)
+                  setSelectedCollectionType('entity')
+                  setCollectionEditorOpen(true)
+                }}
+              >
+                + Entity Collection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedCollection(null)
+                  setSelectedCollectionType('event')
+                  setCollectionEditorOpen(true)
+                }}
+              >
+                + Event Collection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTimeCollectionEditorOpen(true)}
+              >
+                + Time Pattern
+              </Button>
+            </div>
             {/* Entity Collections */}
             {filteredEntityCollections.length > 0 && (
               <div className="mb-6">
@@ -794,6 +834,11 @@ export default function ObjectWorkspace() {
         }}
         collection={selectedCollection}
         collectionType={selectedCollectionType}
+      />
+      <TimeCollectionEditorDialog
+        open={timeCollectionEditorOpen}
+        onClose={() => setTimeCollectionEditorOpen(false)}
+        collection={null}
       />
     </div>
   )

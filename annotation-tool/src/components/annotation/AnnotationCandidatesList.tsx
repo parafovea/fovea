@@ -299,7 +299,7 @@ export function AnnotationCandidatesList({
   }
 
   return (
-    <div>
+    <div data-tour-id="annotation-candidates-list">
       {/* Statistics Bar */}
       <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
         <div className="flex flex-row gap-4 items-center">
@@ -421,6 +421,27 @@ export function AnnotationCandidatesList({
                       <Badge variant="outline">
                         Track ID: {candidate.detection.trackId}
                       </Badge>
+                    )}
+
+                    {/* Tour-demo suggested type. Surfaced when the
+                        detection carries an acceptAsLabel hint (mock
+                        layer only). Wikidata QID renders as a sublink
+                        so the booth visitor sees the type is already
+                        grounded. */}
+                    {candidate.detection.acceptAsLabel && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs text-muted-foreground">
+                          Snap to type:
+                        </span>
+                        <Badge variant="secondary" data-testid="suggested-type-chip">
+                          {candidate.detection.acceptAsLabel}
+                          {candidate.detection.acceptAsWikidataId && (
+                            <span className="ml-1.5 text-xs opacity-70">
+                              {candidate.detection.acceptAsWikidataId}
+                            </span>
+                          )}
+                        </Badge>
+                      </div>
                     )}
                   </div>
                 </CardContent>

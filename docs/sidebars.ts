@@ -35,6 +35,9 @@ const sidebars: SidebarsConfig = {
         'guide/authentication',
         'guide/api-keys',
         'guide/audio-transcription',
+        'guide/transcribe-and-diarize',
+        'guide/tour-catalogue',
+        'guide/tour-demo-mode',
         'guide/reasoning-traces',
         'guide/projects',
         'guide/groups',
@@ -77,6 +80,14 @@ const sidebars: SidebarsConfig = {
         'reference/model-config',
         'reference/model-loaders',
         'reference/glossary',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Operations',
+      link: {type: 'doc', id: 'operations/index'},
+      items: [
+        'operations/demo-fovea-deployment',
       ],
     },
     {

@@ -102,6 +102,13 @@ async def augment_ontology(
             else:
                 selected_model_config = task_config.get_selected_config()
 
+                if selected_model_config.architecture is None:
+                    raise RuntimeError(
+                        f"Model config for {task_config.selected!r} is missing required "
+                        f"architecture field; add an architecture block to "
+                        f"models.yaml/models-cpu.yaml"
+                    )
+
                 llm_config = LLMConfig(
                     model_id=selected_model_config.model_id,
                     quantization=selected_model_config.quantization or "4bit",
@@ -110,7 +117,9 @@ async def augment_ontology(
                     temperature=0.7,
                     top_p=0.9,
                 )
-                loader = create_llm_loader(llm_config)
+                loader = create_llm_loader(
+                    selected_model_config.architecture, llm_config
+                )
                 language_model = LLMLoaderAdapter(loader)
                 await language_model.aload()
                 try:

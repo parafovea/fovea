@@ -74,7 +74,7 @@ export function ClaimRelationsViewer({
   const asTarget = relationData?.asTarget || []
 
   return (
-    <div data-testid="claim-relations-viewer">
+    <div data-testid="claim-relations-viewer" data-tour-id="claim-relations-viewer">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm font-medium">
           Claim Relations

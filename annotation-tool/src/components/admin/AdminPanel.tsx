@@ -37,7 +37,7 @@ export function AdminPanel(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-xl py-8 px-4">
+    <div className="mx-auto max-w-screen-xl py-8 px-4" data-tour-id="admin-panel">
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight mb-1">
           Admin Panel
