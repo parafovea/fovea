@@ -175,7 +175,7 @@ export const microventContent: TourContentBundle = {
       },
       // Spurious: a patch of disturbed water to the right of the
       // pile. Detector thinks it might be a container. Visitor
-      // rejects — it's water (Wikidata Q283), not a container.
+      // rejects; it's water (Wikidata Q283), not a container.
       {
         label: 'container',
         confidence: 0.51,
@@ -184,7 +184,7 @@ export const microventContent: TourContentBundle = {
         acceptAsWikidataId: null,
       },
       // Spurious: a piece of the gantry crane in the upper background.
-      // Detector thinks it might be a container. Visitor rejects —
+      // Detector thinks it might be a container. Visitor rejects
       // it's a crane (Wikidata Q178692).
       {
         label: 'container',

@@ -39,7 +39,7 @@ export function buildSummariesAndClaimsTour(
       },
       {
         anchor: 'transcript-viewer',
-        narration: 'Transcript is synced to the video — click a line to jump.',
+        narration: 'Transcript is synced to the video; click a line to jump.',
         expectAction: 'click',
         requiresFixture: false,
       },

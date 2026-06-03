@@ -36,7 +36,7 @@ export function buildWorldLayerTour(c: TourWorldLayerContent): TourScript {
       },
       {
         anchor: 'entity-editor',
-        narration: `Create entity '${c.entityName}' — an instance of type '${c.entityType.name}'.`,
+        narration: `Create entity '${c.entityName}'; an instance of type '${c.entityType.name}'.`,
         expectAction: 'click',
       },
       {

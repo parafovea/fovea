@@ -33,7 +33,7 @@ export function buildCollaborationTour(
     steps: [
       {
         anchor: 'projects-page',
-        narration: `Projects bundle videos, personas, and members — e.g., '${c.projectName}'.`,
+        narration: `Projects bundle videos, personas, and members; e.g., '${c.projectName}'.`,
         expectAction: 'click',
         requiresFixture: false,
       },
@@ -45,7 +45,7 @@ export function buildCollaborationTour(
       },
       {
         anchor: 'groups-page',
-        narration: `Groups are reusable membership sets — e.g., '${c.groupName}'.`,
+        narration: `Groups are reusable membership sets; e.g., '${c.groupName}'.`,
         requiresFixture: false,
       },
       {

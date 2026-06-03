@@ -11,8 +11,8 @@
  * outputs in lockstep.
  *
  * Unhandled requests pass through (`onUnhandledRequest: 'bypass'`)
- * so the non-mocked surfaces of the app — auth, persona CRUD, video
- * streaming, the static assets the SPA serves — keep talking to the
+ * so the non-mocked surfaces of the app; auth, persona CRUD, video
+ * streaming, the static assets the SPA serves; keep talking to the
  * real backend exactly as they would in production.
  *
  * The module-level guard `import.meta.env.VITE_TOUR_DEMO` is
@@ -54,7 +54,7 @@ export async function startTourDemoWorker(): Promise<void> {
     },
   })
   // eslint-disable-next-line no-console
-  console.info('[tour-demo] MSW worker active — model-service calls are mocked.')
+  console.info('[tour-demo] MSW worker active; model-service calls are mocked.')
 }
 
 /**

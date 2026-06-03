@@ -3,9 +3,9 @@
  *
  * Every fixture is sourced from the deployment's `TourContentBundle`
  * (the same JSON an admin edits at `/tour-content.json` to retheme
- * tours for their own domain), so swapping the domain — say from
+ * tours for their own domain), so swapping the domain; say from
  * microvent's Phillies-Karen incident to a marine-safety cargo-spill
- * incident — re-themes the mocked model outputs in the same edit
+ * incident; re-themes the mocked model outputs in the same edit
  * pass that re-themes the personas, type names, and narration
  * content. The bundle is loaded once at boot in `browser.ts` and
  * threaded into the handler factory here.
@@ -48,7 +48,7 @@ async function simulatedInferenceDelay(): Promise<void> {
 export function createTourDemoHandlers(
   bundle: TourContentBundle,
 ): ReturnType<typeof http.post>[] {
-  // ── Tour 3 — ontology augmentation
+  // ── Tour 3; ontology augmentation
   const augmentResponse: AugmentationResponse = {
     id: 'demo-augment-001',
     personaId: '__tour_demo__',
@@ -63,7 +63,7 @@ export function createTourDemoHandlers(
     })),
   }
 
-  // ── Tour 6 — detection + tracking
+  // ── Tour 6; detection + tracking
   const m6 = bundle.modelInTheLoop
   const detectionResponse: DetectionResponse = {
     id: 'demo-detection-001',
@@ -92,7 +92,7 @@ export function createTourDemoHandlers(
     keyframes: m6.mockTrackingKeyframes,
   }
 
-  // ── Tour 7 — transcribe + summarize + extract claims
+  // ── Tour 7; transcribe + summarize + extract claims
   const m7 = bundle.summariesAndClaims
   const transcribeResponse: TranscribeResponse = {
     text: m7.mockTranscript.segments.map((s) => s.text).join(' '),

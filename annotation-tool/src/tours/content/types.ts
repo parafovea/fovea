@@ -160,8 +160,8 @@ export interface TourMockDetectionProposal {
    * spatial, and live elsewhere in the demo.
    *
    * Pick general types a human analyst from the matching domain
-   * would carry in their ontology — "person", "ball", "container",
-   * "water", "crane" — not ad-hoc descriptive phrases. Pair each
+   * would carry in their ontology; "person", "ball", "container",
+   * "water", "crane"; not ad-hoc descriptive phrases. Pair each
    * with its Wikidata QID via `acceptAsWikidataId` so the booth
    * visitor sees a fully grounded type-pick step at the same time.
    */

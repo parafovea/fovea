@@ -58,7 +58,7 @@ export function buildOntologyAuthoringTour(
       },
       {
         anchor: 'relation-type-editor',
-        narration: `Relations connect entities directly — e.g., '${c.relationType.name}': ${c.relationType.gloss}.`,
+        narration: `Relations connect entities directly; e.g., '${c.relationType.name}': ${c.relationType.gloss}.`,
         expectAction: 'click',
       },
       {

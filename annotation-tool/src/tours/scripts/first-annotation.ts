@@ -57,7 +57,7 @@ export function buildFirstAnnotationTour(
       },
       {
         anchor: 'object-picker-popover',
-        narration: `Assign type "${content.entityType.name}" — the list comes from this persona's ontology.`,
+        narration: `Assign type "${content.entityType.name}"; the list comes from this persona's ontology.`,
         expectAction: 'click',
       },
       {
@@ -67,7 +67,7 @@ export function buildFirstAnnotationTour(
       },
       {
         anchor: 'save-indicator',
-        narration: 'Saved. No submit button — Fovea persists as you go.',
+        narration: 'Saved. No submit button; Fovea persists as you go.',
         expectAction: 'none',
       },
     ],
