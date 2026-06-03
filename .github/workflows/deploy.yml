@@ -5,6 +5,18 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      demo_mode:
+        description: >
+          Build for demo.fovea.video: frontend lands on the public tour
+          catalogue (VITE_DEMO_PUBLIC=1) with MSW model-service mocks
+          (VITE_TOUR_DEMO=1); backend has ALLOW_REGISTRATION=false; the
+          model-service container is skipped; nginx serves the
+          rate-limited demo profile. Leave false for the regular
+          production push to main.
+        type: boolean
+        default: false
+        required: false
 
 jobs:
   test:
@@ -135,11 +147,52 @@ jobs:
               echo 'FOVEA_MODE=multi-user' >> .env
             fi
 
-            # Enable user registration for demo deployment
+            # Registration policy. The demo.fovea.video workflow run
+            # (workflow_dispatch with demo_mode=true) disables self-
+            # registration so the QR-code traffic profile is anonymous-
+            # only; the booth operator mints real accounts via the
+            # admin console's Create User dialog. Regular pushes to
+            # main keep registration enabled.
+            ALLOW_REGISTRATION_VALUE=true
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              ALLOW_REGISTRATION_VALUE=false
+            fi
             if grep -q '^ALLOW_REGISTRATION=' .env; then
-              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=true|' .env
+              sed -i \"s|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE|\" .env
             else
-              echo 'ALLOW_REGISTRATION=true' >> .env
+              echo \"ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE\" >> .env
+            fi
+
+            # Frontend demo-mode build flags. These flip the SPA into
+            # the public tour catalogue landing + MSW model-service
+            # interception that demo.fovea.video ships. Regular
+            # pushes to main blank both so the demo subtree tree-
+            # shakes out of the production bundle.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              VITE_TOUR_DEMO_VALUE=1
+              VITE_DEMO_PUBLIC_VALUE=1
+            else
+              VITE_TOUR_DEMO_VALUE=
+              VITE_DEMO_PUBLIC_VALUE=
+            fi
+            if grep -q '^VITE_TOUR_DEMO=' .env; then
+              sed -i \"s|^VITE_TOUR_DEMO=.*|VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE|\" .env
+            else
+              echo \"VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE\" >> .env
+            fi
+            if grep -q '^VITE_DEMO_PUBLIC=' .env; then
+              sed -i \"s|^VITE_DEMO_PUBLIC=.*|VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE|\" .env
+            else
+              echo \"VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE\" >> .env
+            fi
+
+            # Swap nginx config when demo_mode is on so the auth-
+            # endpoint rate limits take effect. The Dockerfile copies
+            # nginx.conf by default; we overlay nginx.demo.conf via a
+            # bind-mount on the frontend container at runtime.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              cp annotation-tool/nginx.demo.conf annotation-tool/nginx.conf
+              echo 'Swapped nginx config to nginx.demo.conf for demo mode'
             fi
 
             # Ensure online Wikidata mode (not local Wikibase) for demo
@@ -212,7 +265,12 @@ jobs:
 
             echo '🚀 Starting infrastructure containers...'
             docker compose up -d --no-deps postgres redis otel-collector
-            docker compose up -d --no-deps prometheus grafana model-service
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              echo 'demo_mode=true: skipping model-service start (MSW intercepts model-service routes in the frontend bundle).'
+              docker compose up -d --no-deps prometheus grafana
+            else
+              docker compose up -d --no-deps prometheus grafana model-service
+            fi
 
             echo '⏳ Waiting for postgres to be ready...'
             for i in {1..20}; do
@@ -241,7 +299,15 @@ jobs:
             fi
 
             echo '🚀 Starting application containers...'
-            if ! docker compose up -d --force-recreate; then
+            # demo_mode skips the model-service service entirely; the
+            # frontend bundle's MSW worker intercepts model-service
+            # routes so there is nothing to start.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              APP_SERVICES='backend frontend'
+            else
+              APP_SERVICES=''
+            fi
+            if ! docker compose up -d --force-recreate \$APP_SERVICES; then
               echo '❌ docker compose up failed — dumping logs from every service:'
               docker compose ps
               echo '--- backend logs ---'
