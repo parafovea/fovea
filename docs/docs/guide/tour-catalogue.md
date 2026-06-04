@@ -58,10 +58,11 @@ Both bracket the 4x3 grid; reorder by editing `getBuiltInTours` in
 
 ## Anchors and authoring
 
-Anchor names that tours reference live in `docs/tour-anchors.md` in
-the repo. The authoring contract (anchor naming, fallback timeout,
-fixture vs anchored mode) is unchanged from v0.3.x; see the
-in-repo `docs/tour-customization.md` for the schema.
+Anchor names that tours reference live in the
+[`data-tour-id` anchor reference](../reference/tour-anchors.md).
+The authoring contract (anchor naming, fallback timeout, fixture vs
+anchored mode) is unchanged from v0.3.x; see the
+[Tour customization](tour-customization.md) guide for the schema.
 
 ## Tour demo mode
 

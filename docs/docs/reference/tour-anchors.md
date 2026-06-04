@@ -2,8 +2,10 @@
 
 This is the public selector contract for the tour engine: every
 `data-tour-id` attribute that ships in product code is documented
-here so self-hosters writing their own tours (see `docs/tours.md`)
-have a stable surface to anchor against.
+here so self-hosters writing their own tours (see the
+[Tour catalogue](../guide/tour-catalogue.md) and
+[Tour customization](../guide/tour-customization.md) guides) have a
+stable surface to anchor against.
 
 Naming convention:
 `{feature-area}-{component}-{optional-discriminator}`, kebab-case.
@@ -30,7 +32,7 @@ No tour numbers in names.
 | `drawing-canvas` | `VideoPlayer.tsx` `.annotation-video-container` | Where the user drags to draw a bounding box. |
 | `timeline` | `TimelineRoot.tsx` outer div | The full timeline component. |
 | `save-indicator` | `SaveStatusIndicator.tsx` | Renders only when there's a status to show (saving / saved / failed). May not be present at tour-step-1 time. |
-| `object-picker-popover` | `ObjectPicker.tsx` `DialogContent` | Object/type picker dialog. Mounted on user click — guard with `waitForAnchor`'s 3 s ceiling. |
+| `object-picker-popover` | `ObjectPicker.tsx` `DialogContent` | Object/type picker dialog. Mounted on user click; guard with `waitForAnchor`'s 3 s ceiling. |
 
 ## Ontology workspace
 
@@ -40,7 +42,7 @@ No tour numbers in names.
 | `entity-type-editor` | `BaseTypeEditor.tsx` `DialogContent`, `typeCategory='entity'` | Open via the Add button on the entities tab. |
 | `event-type-editor` | `BaseTypeEditor.tsx`, `typeCategory='event'` | Open via the Add button on the events tab. |
 | `role-editor` | `BaseTypeEditor.tsx`, `typeCategory='role'` | Open via the Add button on the roles tab. |
-| `relation-type-editor` | `RelationTypeEditor.tsx` `DialogContent` | Dedicated relation editor — Relations have source/target types so they don't share `BaseTypeEditor`. |
+| `relation-type-editor` | `RelationTypeEditor.tsx` `DialogContent` | Dedicated relation editor; Relations have source/target types so they don't share `BaseTypeEditor`. |
 | `gloss-editor` | `GlossEditor.tsx` outer div | Per-type definition; rich text + tagging. |
 
 ## Ontology augmenter
@@ -122,18 +124,18 @@ haven't been built yet. Those steps are tagged `requiresFixture: true`
 in the tour scripts and surface a graceful "this step uses demo
 content" note in anchored mode rather than hanging. Specifically:
 
-- `event-annotation-button`, `role-assignment-panel` (Tour 4) — event-
+- `event-annotation-button`, `role-assignment-panel` (Tour 4); event-
   mode bbox draw flow inside AnnotationWorkspace doesn't yet expose a
   dedicated event-annotation button or role-assignment panel.
-- `annotation-world-reference` (Tour 5) — the world-instance reference
+- `annotation-world-reference` (Tour 5); the world-instance reference
   picker inside the annotation context isn't a dedicated surface yet.
 - `quick-actions-track`, `tracking-results-panel`, `motion-path-overlay`,
   `interpolation-mode-selector`, `bezier-curve-editor`, `temporal-
-  annotator`, `annotation-candidates-list` (Tour 6) — the model-in-the-
+  annotator`, `annotation-candidates-list` (Tour 6); the model-in-the-
   loop UI surface lands when those features ship.
 - `permissions-page`, `model-memory-validation`, `project-video-
   assignment`, `persona-preferences-section`, `api-keys-page` (Tours
-  8 + 9) — adjacent admin / persona pages exist but the named anchor
+  8 + 9); adjacent admin / persona pages exist but the named anchor
   points are subcomponents that haven't been carved out.
 
 When these land, add the attribute, update the table above, and remove

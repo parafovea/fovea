@@ -71,6 +71,15 @@ specific question of the form "how do I do X with Fovea".
 - [Admin permissions](admin-permissions.md) covers the
   `/api/admin/permissions` matrix editing surface.
 
+## Tours
+
+- [Tour catalogue](tour-catalogue.md) lists the twelve built-in
+  guided tours.
+- [Tour customization](tour-customization.md) covers retheming the
+  tours via `tour-content.json` for your own deployment.
+- [Tour demo mode](tour-demo-mode.md) covers the MSW-mocked tour
+  build for no-model-service demo laptops.
+
 ## Operational
 
 - [Audio transcription](audio-transcription.md) covers the seven
