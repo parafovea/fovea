@@ -3,12 +3,24 @@ import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
 import { InternalError, ValidationError } from '../lib/errors.js'
 
-const SAFE_TASK_TYPE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/
+const ALLOWED_TASK_TYPES = new Set<string>([
+  'video_summarization',
+  'ontology_augmentation',
+  'object_detection',
+  'video_tracking',
+  'audio_transcription',
+  'speaker_diarization',
+  'voice_activity_detection',
+  'claim_extraction',
+  'claim_synthesis',
+])
 
-function assertAllowedTaskType(taskType: string): void {
-  if (!SAFE_TASK_TYPE.test(taskType)) {
+function normalizeAndAssertTaskType(taskType: string): string {
+  const normalized = taskType.replace(/([A-Z])/g, '_$1').toLowerCase()
+  if (!ALLOWED_TASK_TYPES.has(normalized)) {
     throw new ValidationError(`Invalid taskType: ${taskType}`)
   }
+  return normalized
 }
 
 /**
@@ -38,9 +50,6 @@ function assertAllowedTaskType(taskType: string): void {
  * Note: snakecaseKeys only converts object KEYS, not string values,
  * so this helper is needed for URL path segments and query param values.
  */
-function toSnakeCase(str: string): string {
-  return str.replace(/([A-Z])/g, '_$1').toLowerCase()
-}
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
@@ -213,13 +222,13 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType, modelName } = request.query
-      assertAllowedTaskType(taskType)
+      const normalizedTaskType = normalizeAndAssertTaskType(taskType)
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/select`,
         null,
         {
           params: {
-            task_type: toSnakeCase(taskType),
+            task_type: normalizedTaskType,
             model_name: modelName,
           },
           timeout: 30000
@@ -314,10 +323,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
-      assertAllowedTaskType(taskType)
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.get(
-        `${MODEL_SERVICE_URL}/api/models/task-ready/${encodeURIComponent(toSnakeCase(taskType))}`,
+        `${MODEL_SERVICE_URL}/api/models/task-ready/${normalizedTaskType}`,
         { timeout: 10000 }
       )
       return camelcaseKeys(response.data, { deep: true })
@@ -354,10 +362,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
-      assertAllowedTaskType(taskType)
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/load/${encodeURIComponent(toSnakeCase(taskType))}`,
+        `${MODEL_SERVICE_URL}/api/models/load/${normalizedTaskType}`,
         null,
         { timeout: 300000 } // 5 min timeout for model download + load
       )
@@ -395,10 +402,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
-      assertAllowedTaskType(taskType)
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/unload/${encodeURIComponent(toSnakeCase(taskType))}`,
+        `${MODEL_SERVICE_URL}/api/models/unload/${normalizedTaskType}`,
         null,
         { timeout: 30000 }
       )
