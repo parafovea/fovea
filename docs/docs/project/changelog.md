@@ -82,13 +82,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `docs/docs/operations/` grows from the single `demo-fovea-deployment.md` runbook to six pages: `production-deployment.md` (six-container docker-compose stack first-time setup, port/data-volume topology, what-to-expose checklist), `monitoring.md` (OTel trace export, the Prometheus counters and histograms `server/src/metrics.ts` emits, `/api/health` readiness probe, model-service `/health`, a minimal alert set, what is intentionally not instrumented), `backup-restore.md` (`pg_dump` cadence + storage-volume rsync, quarterly DR drill), `upgrades.md` (patch / minor / major paths, Prisma migrate deploy, permission-catalogue re-seed), `troubleshooting.md` (failure modes organized by user-visible symptom), plus the existing `demo-fovea-deployment.md`. Each page is rooted in what the live code actually carries (env vars from `fetchModelService.ts`, metrics from `metrics.ts`, etc.).
 
+#### Annotation Timeline Rewrite
+
+- Rewrote the annotation timeline as a composition of small DOM primitives under `src/components/annotation/timeline`
+- `TimelineRoot` orchestrates a fixed-width track-header column and a flexible right column containing `TimelineRuler`, `TimelinePlayhead`, and stacked `TimelineTrack` lanes
+- `TimelineTrack` lanes render `InterpolationSegment` gradients and `KeyframeMarker` diamonds with selection, current, and locked states
+- `TransportBar` carries the SMPTE timecode readout, keyframe-edit cluster, and zoom controls
+- `useTimelineViewport` manages `ResizeObserver`-backed container width plus zoom clamped between fit-to-view and `MAX_ZOOM`
+- `useKeyframeDrag` installs window-level pointer listeners to reposition keyframes with obstruction nudging
+- `useTimelineKeyboard` wires J/K/L playback shortcuts and the `ShortcutPalette` surfaces the binding table via `?`
+- `TimelineComponent.tsx` remains as a drop-in shim that threads `useMoveKeyframe` through
+
+#### Bounding-Box Editing Polish
+
+- `BoundingBoxHUD` renders a float W×H and x,y readout with monospace tabular-nums in a `foreignObject` anchored below the box during drag/resize
+- `useBoundingBoxKeyboard` hook nudges the active box by 1 px (10 px with shift) on arrow keys and calls `onUpdate` + `onEditComplete` through the existing persistence pipeline
+- Shift-hold aspect-ratio lock for corner resize handles honours whichever axis drifted farther and anchors the opposite edge so the box grows from its corner
+
+#### Backend Reliability
+
+- `services/system-config-propagator.ts` factors model-service propagation out of the admin-config route
+- Server startup now auto-replays every persisted `SystemConfig` row so a fresh model-service picks up admin settings without operator intervention
+
+#### Cross-User Import Regression Coverage
+
+- Regression suite in `server/test/integration/cross-user-import-rich-fixture.test.ts` against `server/test/fixtures/cross-user-import-rich-export.jsonl` (the richest of the seven annotator exports uploaded to #121, carrying 20 personas / 20 ontologies / 79 entities / 136 summaries across ~96 distinct videos / 621 claims / 9 object annotations). The test imports the fixture into a fresh user via `reseedOwnershipBaseline` and walks four assertions sourced directly from the screenshot on the reopened #100: (a) every imported summary's `personaId` dereferences via `GET /api/personas/:id` with a 200 (a 404 here is the user-visible 'Persona &lt;uuid&gt; not found' banner in the Edit Video Summary dialog), (b) every dereferenced persona is owned by the importer (cross-checked against `GET /api/personas`), (c) no `summary.personaId` equals one of the original exporter-side persona ids (i.e. the remap actually rewrote it, not just preserved it), (d) every imported claim's `summaryId` resolves to a summary owned by the importer, with round-trip claim and annotation counts matching the fixture exactly. The suite carries a 90_000ms per-test timeout to accommodate the Clean Architecture indirection on top of CASL's per-call overhead.
+- `server/test/integration/cross-user-import-real-fixture.test.ts` now also walks `GET /api/personas/:id` with the summary's `personaId` after import and intersects the returned id against the requester's `GET /api/personas` list. The previous test only asserted the summary row carried *a* personaId without verifying the dereference, leaving the post-import Edit Video Summary path (the exact API the bug screenshot in #100 surfaces) untested.
+- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
+
 ### Changed
+
+#### UI Framework Migration (MUI to shadcn-ui)
+
+- Migrated the entire annotation-tool frontend from Material UI to shadcn-ui
+- Replaced MUI `Box`, `Typography`, `Button`, `Alert`, `Accordion`, `Dialog`, `Menu`, and form primitives with shadcn equivalents
+- Switched from Emotion-based theming to Tailwind CSS v4 with a Fovea-specific design-token layer
+- Replaced MUI icons with Lucide React icons via a barrel export
+- Rebuilt the Layout around the shadcn sidebar composition pattern with fixed dialog overflow handling
+- Fixed sidebar toggle, narrowed the dropdown menu, resolved tab overflow, and reduced the sidebar width
+- Renamed **Ontology Builder** to **Persona Builder** with updated icons and keyboard shortcut
+- Updated all component tests for the new shadcn DOM structure, ARIA roles, and named exports
 
 #### Docusaurus Reorganization (docs.fovea.video Goes Live)
 
 - Comprehensive Docusaurus reorganization at `docs/docs/`: industry-standard split into Tutorial / Guide / Concepts / Reference / Operations / Project; orphan markdown at the doc root deleted or moved into the published tree. Docusaurus serves at `docs.fovea.video` (GitHub Pages CNAME); the marketing landing stays at `fovea.video`.
 - Version-neutral docs sweep: every `v0.X.Y` / `since v0.X.Z` / `carried from v0.X` reference in the published docs is scrubbed (the workspace `CHANGELOG.md` is the only place version numbers appear). Stability and contributing pages describe the maintenance-line policy without enumerating which version is which.
 - House style sweep: em-dashes (`—` / `–`) removed from every doc and replaced with semicolons / commas / hyphens; all docs use American spelling (`organize`, `behavior`, `color`, `catalog`, `license`, `flavor`, `whilst -> while`, ...). The `guide/tour-catalogue.md` file is renamed to `guide/tour-catalog.md` (with the sidebar and cross-page links updated).
+
+#### Tooling and Build
+
+- Monorepo switched to a pnpm workspace with ergonomic dev commands
+- All Dockerfiles updated for the pnpm workspace layout
+- `jsdom` pinned to `^26.1.0` for Node 18 ESM compatibility
+
+#### Cross-User Import Remap Made Structure-Agnostic
+
+- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The prior fix on this branch (cherry-picked from v0.3.2) added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
+
+### Removed
+
+- `@mui/material`, `@mui/icons-material`, `@mui/x-*`, `@emotion/react`, and `@emotion/styled` dependencies
+- Unused `DropdownPaper` helper left over from the MUI migration
 
 ### Fixed
 
@@ -122,77 +176,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClaimEditor.handleSave` (`annotation-tool/src/components/claims/ClaimEditor.tsx`) now resolves gloss items to human-readable labels when synthesizing `claim.text`, via the existing `glossToText` helper from `annotation-tool/src/utils/glossUtils.ts`. The previous handler did `const text = gloss.map(item => item.content).join('')` which works for `text`-kind items (where `content` is the user-typed string) but writes the raw UUID into `text` for every `typeRef` / `objectRef` / `annotationRef` / `claimRef` item, because `GlossItem.content` stores the referenced thing's id. The symptom showed up in the JSONL export, where `claim.text` read like "The &lt;player-uuid&gt; hit the &lt;ball-uuid&gt;" instead of "The Player 9 hit the ball". `glossToText` resolves `typeRef` ids against the active persona ontology (entities / events / roles / relationTypes) and `objectRef` ids against world state (entities / events / times), with a fall-back to the raw id only when a lookup misses. The same naive concatenation is replaced with `glossToText` in three preview surfaces that had the same bug at display time: `ClaimRelationsViewer.getClaimText` (source / target claim previews in the relations panel), `ClaimRelationEditor` (relation-type-dropdown preview plus source / target previews; gains an optional `personaId` prop threaded from `ClaimsViewer`), and `ImportDialog` (entity-row preview during persona import; resolves `typeRef` ids against the source persona's ontology).
 - The unused name-less `convertTypeRefsToText` helper in `server/src/lib/reference-cleanup.ts` is deleted along with its five test cases. The production type-deletion path (`server/src/routes/personas.ts` `DELETE /api/personas/:personaId/ontology/{entities,events,roles,relation-types}/:typeId`) routes through `updateGlossesInTypes` -> `convertTypeRefsToTextWithName`, which uses the type name. The name-less variant had zero production callers; its replacement-text content of `item.content` (the raw UUID) would have reintroduced the same UUID-in-text bug if anyone had reached for it next.
 
-#### Pre-existing Fixed Section
+#### Cross-User Import Transaction Timeout
 
-### Fixed
-
-- `ImportHandler.executeImport` now configures the Prisma atomic-mode transaction with `{ maxWait: 10_000, timeout: 300_000 }`. The default 5_000ms interactive-transaction timeout is exceeded by realistic cross-user imports — a payload with ~20 personas / ~100+ summaries / hundreds of claims times out with `Transaction already closed` partway through because every nested write goes through v0.2.0's CASL ability check and v0.3.0's Clean Architecture indirection. Without the bump the whole import rolls back and the user sees a 500 from `POST /api/import`; with it, the import completes against realistic payload sizes. Carried from v0.2.4 / v0.3.4 (same fix, same diff). Surfaced by the forward-port of the v0.1.11 rich regression fixture.
-
-### Added
-
-- Regression suite in `server/test/integration/cross-user-import-rich-fixture.test.ts` against `server/test/fixtures/cross-user-import-rich-export.jsonl` (the richest of the seven annotator exports uploaded to #121, carrying 20 personas / 20 ontologies / 79 entities / 136 summaries across ~96 distinct videos / 621 claims / 9 object annotations). The test imports the fixture into a fresh user via `reseedOwnershipBaseline` and walks four assertions sourced directly from the screenshot on the reopened #100: (a) every imported summary's `personaId` dereferences via `GET /api/personas/:id` with a 200 (a 404 here is the user-visible 'Persona &lt;uuid&gt; not found' banner in the Edit Video Summary dialog), (b) every dereferenced persona is owned by the importer (cross-checked against `GET /api/personas`), (c) no `summary.personaId` equals one of the original exporter-side persona ids (i.e. the remap actually rewrote it, not just preserved it), (d) every imported claim's `summaryId` resolves to a summary owned by the importer, with round-trip claim and annotation counts matching the fixture exactly. The suite carries a 90_000ms per-test timeout to accommodate the Clean Architecture indirection on top of CASL's per-call overhead.
-- `server/test/integration/cross-user-import-real-fixture.test.ts` now also walks `GET /api/personas/:id` with the summary's `personaId` after import and intersects the returned id against the requester's `GET /api/personas` list. The previous test only asserted the summary row carried *a* personaId without verifying the dereference, leaving the post-import Edit Video Summary path (the exact API the bug screenshot in #100 surfaces) untested.
-
-### Changed
-
-- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The prior fix on this branch (cherry-picked from v0.3.2) added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
-
-### Added
-
-- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
-
-#### Annotation Timeline Rewrite
-
-- Rewrote the annotation timeline as a composition of small DOM primitives under `src/components/annotation/timeline`
-- `TimelineRoot` orchestrates a fixed-width track-header column and a flexible right column containing `TimelineRuler`, `TimelinePlayhead`, and stacked `TimelineTrack` lanes
-- `TimelineTrack` lanes render `InterpolationSegment` gradients and `KeyframeMarker` diamonds with selection, current, and locked states
-- `TransportBar` carries the SMPTE timecode readout, keyframe-edit cluster, and zoom controls
-- `useTimelineViewport` manages `ResizeObserver`-backed container width plus zoom clamped between fit-to-view and `MAX_ZOOM`
-- `useKeyframeDrag` installs window-level pointer listeners to reposition keyframes with obstruction nudging
-- `useTimelineKeyboard` wires J/K/L playback shortcuts and the `ShortcutPalette` surfaces the binding table via `?`
-- `TimelineComponent.tsx` remains as a drop-in shim that threads `useMoveKeyframe` through
-
-#### Bounding-Box Editing Polish
-
-- `BoundingBoxHUD` renders a float W×H and x,y readout with monospace tabular-nums in a `foreignObject` anchored below the box during drag/resize
-- `useBoundingBoxKeyboard` hook nudges the active box by 1 px (10 px with shift) on arrow keys and calls `onUpdate` + `onEditComplete` through the existing persistence pipeline
-- Shift-hold aspect-ratio lock for corner resize handles honours whichever axis drifted farther and anchors the opposite edge so the box grows from its corner
-
-#### Tooling and Build
-
-- Monorepo switched to a pnpm workspace with ergonomic dev commands
-- All Dockerfiles updated for the pnpm workspace layout
-- `jsdom` pinned to `^26.1.0` for Node 18 ESM compatibility
-
-#### Backend Reliability
-
-- `services/system-config-propagator.ts` factors model-service propagation out of the admin-config route
-- Server startup now auto-replays every persisted `SystemConfig` row so a fresh model-service picks up admin settings without operator intervention
-
-### Changed
-
-#### UI Framework Migration
-
-- Migrated the entire annotation-tool frontend from Material UI to shadcn-ui
-- Replaced MUI `Box`, `Typography`, `Button`, `Alert`, `Accordion`, `Dialog`, `Menu`, and form primitives with shadcn equivalents
-- Switched from Emotion-based theming to Tailwind CSS v4 with a Fovea-specific design-token layer
-- Replaced MUI icons with Lucide React icons via a barrel export
-- Rebuilt the Layout around the shadcn sidebar composition pattern with fixed dialog overflow handling
-- Fixed sidebar toggle, narrowed the dropdown menu, resolved tab overflow, and reduced the sidebar width
-- Renamed **Ontology Builder** to **Persona Builder** with updated icons and keyboard shortcut
-- Updated all component tests for the new shadcn DOM structure, ARIA roles, and named exports
+- `ImportHandler.executeImport` now configures the Prisma atomic-mode transaction with `{ maxWait: 10_000, timeout: 300_000 }`. The default 5_000ms interactive-transaction timeout is exceeded by realistic cross-user imports; a payload with ~20 personas / ~100+ summaries / hundreds of claims times out with `Transaction already closed` partway through because every nested write goes through the CASL ability check and the Clean Architecture indirection. Without the bump the whole import rolls back and the user sees a 500 from `POST /api/import`; with it, the import completes against realistic payload sizes. Surfaced by the forward-port of the rich regression fixture.
 
 #### Schema Hardening
 
-- Replaced vitest-broken `Type.Union` nullable response schemas on `/api/me/preferences` with the `fast-json-stringify`-safe `Type.Unsafe` array-type pattern so null values serialize correctly
-- Resolved `SystemConfig` audit `updatedByUserId` through the users table so phantom test-bypass ids and real deleted-user races no longer violate the FK
+- Replaced vitest-broken `Type.Union` nullable response schemas on `/api/me/preferences` with the `fast-json-stringify`-safe `Type.Unsafe` array-type pattern so null values serialize correctly.
+- Resolved `SystemConfig` audit `updatedByUserId` through the users table so phantom test-bypass ids and real deleted-user races no longer violate the FK.
 
-### Removed
-
-- `@mui/material`, `@mui/icons-material`, `@mui/x-*`, `@emotion/react`, and `@emotion/styled` dependencies
-- Unused `DropdownPaper` helper left over from the MUI migration
-
-### Fixed
+#### Shadcn Migration Followups
 
 - `ClaimEditor` Claiming Event / Time / Location dropdowns now populate from world state instead of showing the None-only placeholder menus the shadcn migration left behind (events from `useEvents()`, times from `useTimes()`, locations from `useEntities()` filtered to entities tagged with a `locationType` field).
 - `ObjectWorkspace`'s `object.duplicate` command now actually duplicates the selected world object (entity / event / location / time / collection) instead of `alert('Duplicate object not yet implemented')`, via a pure `buildDuplicatePayload` helper that strips server-managed and Wikidata-provenance fields and appends a `(copy)` suffix.
