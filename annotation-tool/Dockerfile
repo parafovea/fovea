@@ -15,7 +15,6 @@ WORKDIR /repo
 # Accept build arguments for Vite environment variables
 ARG VITE_API_URL
 ARG VITE_MODEL_SERVICE_URL
-ARG VITE_DATA_URL
 ARG VITE_WIKIDATA_URL
 ARG VITE_WIKIDATA_MODE
 # Set to "1" only in the E2E build target so the bundle exposes the
@@ -30,16 +29,22 @@ ARG VITE_INFERENCE_TIMEOUT_MS
 # Enable MSW tour-demo mocking; the bundle imports the worker dynamically
 # behind this flag so it tree-shakes out of production builds.
 ARG VITE_TOUR_DEMO
+# Mount the public tour catalogue at `/` for the demo.fovea.video
+# deployment. Production builds leave this unset; the gate is build-time
+# so the public-landing route tree-shakes out of stock bundles. Wired in
+# tandem with VITE_TOUR_DEMO=1 by the deploy.yml `demo_mode` flag and
+# the docker-compose.yml frontend build args.
+ARG VITE_DEMO_PUBLIC
 
 # Export as environment variables for Vite build
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_MODEL_SERVICE_URL=$VITE_MODEL_SERVICE_URL
-ENV VITE_DATA_URL=$VITE_DATA_URL
 ENV VITE_WIKIDATA_URL=$VITE_WIKIDATA_URL
 ENV VITE_WIKIDATA_MODE=$VITE_WIKIDATA_MODE
 ENV VITE_E2E=$VITE_E2E
 ENV VITE_INFERENCE_TIMEOUT_MS=$VITE_INFERENCE_TIMEOUT_MS
 ENV VITE_TOUR_DEMO=$VITE_TOUR_DEMO
+ENV VITE_DEMO_PUBLIC=$VITE_DEMO_PUBLIC
 
 # Copy workspace metadata + every package.json so pnpm can install from
 # the single root lockfile.
