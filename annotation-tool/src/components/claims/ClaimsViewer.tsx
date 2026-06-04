@@ -291,6 +291,7 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
           onSave={handleCreateRelation}
           sourceClaim={claim}
           relationTypes={ontology?.relationTypes || []}
+          personaId={personaId}
         />
       )}
 

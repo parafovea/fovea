@@ -6,7 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Claim } from '@models/types'
-import { useClaimRelations, useDeleteClaimRelation, useClaims, usePersonaOntology } from '@store/queries'
+import {
+  useClaimRelations,
+  useDeleteClaimRelation,
+  useClaims,
+  usePersonaOntology,
+  useEntities,
+  useEvents,
+  useTimes,
+} from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 
 interface ClaimRelationsViewerProps {
   claimId: string
@@ -26,6 +35,9 @@ export function ClaimRelationsViewer({
   const { data: claims = [] } = useClaims(summaryId, 'video')
   const deleteRelationMutation = useDeleteClaimRelation()
   const { data: ontology } = usePersonaOntology(personaId)
+  const entities = useEntities()
+  const events = useEvents()
+  const times = useTimes()
 
   const handleDelete = async (relationId: string) => {
     if (window.confirm('Delete this relation?')) {
@@ -51,7 +63,7 @@ export function ClaimRelationsViewer({
 
     const claim = findClaim(claims, claimId)
     if (!claim) return `Claim ${claimId.substring(0, 8)}...`
-    return claim.gloss.map((g) => g.content).join(' ').substring(0, 60)
+    return glossToText(claim.gloss, ontology ?? undefined, { entities, events, times }).substring(0, 60)
   }
 
   if (isLoading) {

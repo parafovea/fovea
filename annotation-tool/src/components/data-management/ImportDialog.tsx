@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePersonas, usePersonaOntology, useImportFromPersona } from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 import { ImportRequest } from '@models/types'
 
 interface ImportDialogProps {
@@ -224,7 +225,7 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
                             <div className="min-w-0">
                               <p className="text-sm font-medium">{entity.name}</p>
                               <p className="text-xs text-muted-foreground truncate">
-                                {entity.gloss.map(g => g.content).join(' ').substring(0, 100)}
+                                {glossToText(entity.gloss, sourceOntology ?? undefined).substring(0, 100)}
                               </p>
                             </div>
                           </label>

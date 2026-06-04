@@ -20,7 +20,8 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 import { Claim, RelationType } from '@models/types'
-import { useClaims } from '@store/queries'
+import { useClaims, usePersonaOntology, useEntities, useEvents, useTimes } from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 
 interface ClaimRelationEditorProps {
   open: boolean
@@ -33,6 +34,7 @@ interface ClaimRelationEditorProps {
   }) => Promise<void>
   sourceClaim: Claim
   relationTypes: RelationType[]
+  personaId?: string
 }
 
 export function ClaimRelationEditor({
@@ -41,6 +43,7 @@ export function ClaimRelationEditor({
   onSave,
   sourceClaim,
   relationTypes,
+  personaId,
 }: ClaimRelationEditorProps) {
   const [targetClaimId, setTargetClaimId] = useState<string>('')
   const [relationTypeId, setRelationTypeId] = useState<string>('')
@@ -51,6 +54,14 @@ export function ClaimRelationEditor({
 
   // Fetch claims using TanStack Query
   const { data: allClaims = [] } = useClaims(sourceClaim.summaryId, sourceClaim.summaryType)
+
+  // Ontology + world for human-readable rendering of gloss items in the
+  // source / target previews. Without these the preview shows raw UUIDs
+  // for typeRef / objectRef / annotationRef / claimRef items.
+  const { data: ontology } = usePersonaOntology(personaId)
+  const entities = useEntities()
+  const events = useEvents()
+  const times = useTimes()
 
   // Flatten claim tree for selection
   const flattenClaims = (claims: Claim[]): Claim[] => {
@@ -118,7 +129,7 @@ export function ClaimRelationEditor({
   }
 
   const getClaimText = (claim: Claim) => {
-    return claim.gloss.map((g) => g.content).join(' ')
+    return glossToText(claim.gloss, ontology ?? undefined, { entities, events, times })
   }
 
   return (
@@ -175,7 +186,7 @@ export function ClaimRelationEditor({
                       <span className="text-sm">{rt.name}</span>
                       {rt.gloss && rt.gloss.length > 0 && (
                         <span className="ml-2 text-xs text-muted-foreground">
-                          {rt.gloss.map((g) => g.content).join(' ').substring(0, 80)}
+                          {glossToText(rt.gloss, ontology ?? undefined, { entities, events, times }).substring(0, 80)}
                         </span>
                       )}
                     </div>
