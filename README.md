@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://docs.fovea.video">Documentation</a> &bull;
+  <a href="https://fovea.video">Documentation</a> &bull;
   <a href="https://github.com/parafovea/fovea/releases">Releases</a> &bull;
   <a href="https://github.com/parafovea/fovea/discussions">Discussions</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
@@ -80,7 +80,7 @@ That brings up Postgres + Redis + model-service (CPU build), runs migrations, fe
 
 First-time build is around 15 minutes (model-service downloads CV + audio weights); subsequent runs reuse cached images and the script idempotently picks up. Tear down with `./scripts/run-demo-local.sh --stop` (keeps DB) or `--reset` (drops DB volume).
 
-For deploying the same demo at a public URL (e.g. `demo.fovea.video`), see the [demo deployment runbook](https://docs.fovea.video/docs/operations/demo-fovea-deployment) which uses a different env-var path (`VITE_TOUR_DEMO=1` + `VITE_DEMO_PUBLIC=1`) with the MSW model-service interception layer. The tour-anchor reference and per-tour walkthroughs live under the [Reference](https://docs.fovea.video/docs/reference/tour-anchors) and [Guide](https://docs.fovea.video/docs/guide/tour-catalog) sections.
+For deploying the same demo at a public URL (e.g. `demo.fovea.video`), see the [demo deployment runbook](https://fovea.video/docs/operations/demo-fovea-deployment) which uses a different env-var path (`VITE_TOUR_DEMO=1` + `VITE_DEMO_PUBLIC=1`) with the MSW model-service interception layer. The tour-anchor reference and per-tour walkthroughs live under the [Reference](https://fovea.video/docs/reference/tour-anchors) and [Guide](https://fovea.video/docs/guide/tour-catalog) sections.
 
 ### Configuration
 

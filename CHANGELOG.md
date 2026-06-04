@@ -117,9 +117,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed **Ontology Builder** to **Persona Builder** with updated icons and keyboard shortcut
 - Updated all component tests for the new shadcn DOM structure, ARIA roles, and named exports
 
-#### Docusaurus Reorganization (docs.fovea.video Goes Live)
+#### Docusaurus Reorganization
 
-- Comprehensive Docusaurus reorganization at `docs/docs/`: industry-standard split into Tutorial / Guide / Concepts / Reference / Operations / Project; orphan markdown at the doc root deleted or moved into the published tree. Docusaurus serves at `docs.fovea.video` (GitHub Pages CNAME); the marketing landing stays at `fovea.video`.
+- Comprehensive Docusaurus reorganization at `docs/docs/`: industry-standard split into Tutorial / Guide / Concepts / Reference / Operations / Project; orphan markdown at the doc root deleted or moved into the published tree. The Docusaurus site continues to serve at `fovea.video` (landing renders at `/`, docs tree at `/docs/*`).
 - Version-neutral docs sweep: every `v0.X.Y` / `since v0.X.Z` / `carried from v0.X` reference in the published docs is scrubbed (the workspace `CHANGELOG.md` is the only place version numbers appear). Stability and contributing pages describe the maintenance-line policy without enumerating which version is which.
 - House style sweep: em-dashes (`—` / `–`) removed from every doc and replaced with semicolons / commas / hyphens; all docs use American spelling (`organize`, `behavior`, `color`, `catalog`, `license`, `flavor`, `whilst -> while`, ...). The `guide/tour-catalogue.md` file is renamed to `guide/tour-catalog.md` (with the sidebar and cross-page links updated).
 
