@@ -1,7 +1,7 @@
 # Guided tours
 
 Fovea ships with a guided-tour system originally built for the CVPR 2026
-demo (see `notes/CVPR_2026_DEMO_PLAN.md`) and exposed as a first-class
+demo and exposed as a first-class
 product feature: self-hosting teams can run the built-in onboarding tours
 and author their own to walk new annotators through team-specific
 conventions.
@@ -42,7 +42,7 @@ At present:
 
 Tours 2–10 (ontology authoring, Wikidata, events/roles/claims, world
 layer, model-in-the-loop, summaries, collaboration, admin, import/export)
-land over the next few weeks per the plan in `notes/CVPR_2026_DEMO_PLAN.md`.
+land over the next few weeks.
 
 ## Authoring custom tours
 

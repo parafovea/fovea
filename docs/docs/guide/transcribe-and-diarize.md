@@ -88,7 +88,7 @@ The audio loaders are configured under the
 `model-service/config/models.yaml` (GPU build) and
 `model-service/config/models-cpu.yaml` (CPU build). The CPU build
 defaults to `faster-whisper-tiny` for transcription so the demo
-booth laptop and the docs-test runners can transcribe a 30-second
+demo laptop and the docs-test runners can transcribe a 30-second
 clip in roughly two seconds.
 
 The diarization loader is `pyannote-3-1` in both builds. Pyannote

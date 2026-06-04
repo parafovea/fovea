@@ -9,7 +9,7 @@ a complete guided-tour experience **without a model service**. When
 the flag is set, a Mock Service Worker (MSW) browser worker installs
 at boot and intercepts the six routes that would otherwise forward to
 the model service, resolving each from a JSON content bundle. The
-booth laptop at CVPR 2026 uses this mode; the public deployment at
+event-booth demo laptop uses this mode; the public deployment at
 `demo.fovea.video` uses it too.
 
 ## When to enable it
@@ -79,7 +79,7 @@ not set at build time. Rebuild with `VITE_TOUR_DEMO=1` and reload.
 
 ## Local docker-compose
 
-`docker-compose.tour-demo.yml` is the booth-laptop stack:
+`docker-compose.tour-demo.yml` is the demo deployment-laptop stack:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.tour-demo.yml up

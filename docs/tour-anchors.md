@@ -5,7 +5,7 @@ This is the public selector contract for the tour engine: every
 here so self-hosters writing their own tours (see `docs/tours.md`)
 have a stable surface to anchor against.
 
-Naming convention (see `notes/CVPR_2026_DEMO_PLAN.md` §8):
+Naming convention:
 `{feature-area}-{component}-{optional-discriminator}`, kebab-case.
 No tour numbers in names.
 

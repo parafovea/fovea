@@ -184,7 +184,7 @@ VITE_TOUR_DEMO            no   ""    when "1", installs the MSW tour-mock worker
 VITE_DEMO_PUBLIC          no   ""    when "1", mounts the public TourCataloguePage at /
                                      and moves the authenticated app under /app. Used
                                      by demo.fovea.video.
-VITE_FOVEA_DEMO_MODE      no   ""    legacy CVPR-landing-page flag; superseded by
+VITE_FOVEA_DEMO_MODE      no   ""    legacy landing-page flag; superseded by
                                      VITE_TOUR_DEMO / VITE_DEMO_PUBLIC but still
                                      respected by the local run-demo-local.sh script.
 ```

@@ -6,7 +6,7 @@ sidebar_label: demo.fovea.video deployment
 
 ## What demo.fovea.video is
 
-A booth-grade public demo of FOVEA. The QR code at the CVPR 2026 booth
+A public demo of FOVEA. A QR code at an event booth
 points here. Anyone scanning it lands on a static tour catalogue that
 runs entirely in the browser: no backend round-trips for the tour
 experience, no model service, no account required. Serious visitors
@@ -60,7 +60,7 @@ production stays untouched.
 ## How to seed accounts after the deploy
 
 Registration is off, so visitors cannot mint their own accounts. To
-hand a partner an account at the booth:
+hand a partner an account at the demo deployment:
 
 1. Sign in as the admin user seeded by `prisma/seed.cjs`
    (the `ADMIN_PASSWORD` GitHub secret).
@@ -138,14 +138,14 @@ This re-runs the deploy with `demo_mode=false`, which restores
 `ALLOW_REGISTRATION=true`, restarts the model-service container, and
 copies `nginx.conf` back into place.
 
-## How the booth-laptop demo relates
+## How the demo deployment-laptop demo relates
 
-The CVPR booth laptop runs a docker-compose stack locally for guided
+The demo laptop runs a docker-compose stack locally for guided
 demos. That stack uses `docker-compose.tour-demo.yml`, which sets
 `VITE_TOUR_DEMO=1` at build time but leaves auth and the rest of the
 backend untouched. Both deployments share the same MSW interception
 layer and the same tour content bundle, so what the operator shows on
-the booth screen is the same flow QR-code visitors get on their
+the demo deployment screen is the same flow QR-code visitors get on their
 phones. See [Guide > Tour demo mode](../guide/tour-demo-mode.md) for
 the worker details.
 
