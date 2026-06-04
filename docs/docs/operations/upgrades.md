@@ -16,7 +16,7 @@ expected to be drop-in.
    environment variable changes; if they do, treat them as a
    minor upgrade instead.
 2. Update the tag in `docker-compose.yml` (or your env file,
-   depending on how you parameterise the image tag).
+   depending on how you parameterize the image tag).
 3. `docker compose pull`
 4. `docker compose up -d`
 
@@ -44,10 +44,10 @@ entry for the target minor calls these out under
 6. Apply migrations with the new image:
    `docker compose run --rm backend npx prisma migrate deploy`
 7. `docker compose up -d`
-8. Re-seed the permission catalogue:
+8. Re-seed the permission catalog:
    `docker compose run --rm backend npm run seed:permissions`.
    This is idempotent and required because new permissions
-   land in the catalogue on most minor releases.
+   land in the catalog on most minor releases.
 9. Spot-check the UI: log in, load a video, run summarization,
    open the admin SystemConfig panel.
 
@@ -65,10 +65,10 @@ major lands.
 
 ## Model service upgrades
 
-The model service ships in two flavours: `model-service` with
+The model service ships in two flavors: `model-service` with
 CUDA wheels and `model-service-cpu` with CPU-only wheels. Pick
 the one matching your hardware in `docker-compose.yml`. Within
-a tag, the two flavours are wire-compatible; you can switch
+a tag, the two flavors are wire-compatible; you can switch
 between them without changing the backend image.
 
 Switching `models.yaml` to a model that has not been downloaded

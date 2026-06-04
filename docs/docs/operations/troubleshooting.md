@@ -48,8 +48,8 @@ entry. The two recurring ones:
   [Reference / Model config](../reference/model-config.md) for
   the schema and
   [Reference / Model loaders](../reference/model-loaders.md) for
-  the architecture catalogue.
-- `framework` set to something the registry does not recognise.
+  the architecture catalog.
+- `framework` set to something the registry does not recognize.
   The supported framework strings are listed in the model
   loader reference.
 
@@ -90,7 +90,7 @@ fix is in the loader code, not in operator config; upgrade to
 the patch release that fixed it. The symptom is unambiguous in
 the user's summary output and in the backend logs.
 
-## "Tour demo mode loads the catalogue but tours don't run"
+## "Tour demo mode loads the catalog but tours don't run"
 
 The MSW worker did not register, almost always because the
 deploy is missing `mockServiceWorker.js` at the site root.

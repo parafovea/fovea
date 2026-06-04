@@ -17,5 +17,5 @@ Per-endpoint, per-table, per-environment-variable detail.
 - [Model config](model-config.md): the schema of
   `model-service/config/models.yaml`.
 - [Tour anchors](tour-anchors.md): every `data-tour-id` selector the
-  tour engine recognises.
+  tour engine recognizes.
 - [Glossary](glossary.md): every domain term used in the docs.

@@ -36,7 +36,7 @@ const sidebars: SidebarsConfig = {
         'guide/api-keys',
         'guide/audio-transcription',
         'guide/transcribe-and-diarize',
-        'guide/tour-catalogue',
+        'guide/tour-catalog',
         'guide/tour-customization',
         'guide/tour-demo-mode',
         'guide/reasoning-traces',

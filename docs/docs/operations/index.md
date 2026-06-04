@@ -13,8 +13,8 @@ both live here.
   through standing up the six-container stack against a real
   database and storage volume.
 - [demo.fovea.video deployment](demo-fovea-deployment.md)
-  covers the public-demo flavour: tour demo mode, no model
-  service, anonymous catalogue at `/`.
+  covers the public-demo flavor: tour demo mode, no model
+  service, anonymous catalog at `/`.
 
 ## Day two
 
@@ -29,7 +29,7 @@ both live here.
   major upgrade paths, including Prisma migrate deploy and
   permission re-seeding.
 - [Troubleshooting](troubleshooting.md) collects the failure
-  modes operators have actually hit, organised by the symptom
+  modes operators have actually hit, organized by the symptom
   the user reports.
 
 For configuration knobs (environment variables, Docker shape,

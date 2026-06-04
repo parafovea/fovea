@@ -109,7 +109,7 @@ example; replace its values with your own:
 ```
 
 Save the file and redeploy (or just refresh in dev; the JSON loads
-at boot). The tour catalogue rebuilds from the new content.
+at boot). The tour catalog rebuilds from the new content.
 
 ## What happens at runtime
 

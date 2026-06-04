@@ -41,7 +41,7 @@ tagged release; nothing in `docker-compose.yml` is dev-only.
    to apply database migrations against an empty database.
    This is idempotent; running it twice is a no-op.
 5. `docker compose run --rm backend npm run seed:permissions`
-   to populate the RBAC permission catalogue.
+   to populate the RBAC permission catalog.
 6. `docker compose up -d` to start the stack.
 7. Mint the first admin account either through the
    registration form (with `ALLOW_REGISTRATION=true` set

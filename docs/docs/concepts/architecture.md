@@ -80,11 +80,11 @@ sharing on top of the persona-scoped data model:
   the `RolePermission` table. Routes check the ability for both
   list filters (`accessibleBy`) and instance updates
   (`subject(...)`).
-- `Project` rows organise videos, personas, world states,
+- `Project` rows organize videos, personas, world states,
   summaries, claims, and annotations under a shared owner. A
   project belongs either to a `User` (via `ownerUserId`) or to a
   `UserGroup` (via `ownerGroupId`).
-- `UserGroup` rows organise users into teams. `GroupMembership`
+- `UserGroup` rows organize users into teams. `GroupMembership`
   carries the user's group role (`group_owner`, `group_admin`,
   `group_member`).
 - `ProjectVideoAssignment` links a video to a project and

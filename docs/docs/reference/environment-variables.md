@@ -50,7 +50,7 @@ Every `MODEL_SERVICE_TIMEOUTS.<KIND>` ceiling on the backend is
 overridable via a matching `MODEL_SERVICE_TIMEOUT_<KIND>_MS` env var.
 A value that is not a positive integer is ignored and the built-in
 default applies. Defaults are the prior hardcoded values so existing
-deployments do not change behaviour.
+deployments do not change behavior.
 
 ```text
 MODEL_SERVICE_TIMEOUT_DETECTION_MS         no   60000      detection ceiling
@@ -75,7 +75,7 @@ HF_TOKEN                  if gated   -                              read token f
 ```
 
 The pyannote 3.1 model used by `POST /api/diarize` requires the user
-to accept the model licence on huggingface.co and pass a read token
+to accept the model license on huggingface.co and pass a read token
 to the model-service container. See
 [Guide > Transcribe and diarize](../guide/transcribe-and-diarize.md).
 
@@ -181,7 +181,7 @@ VITE_TOUR_DEMO            no   ""    when "1", installs the MSW tour-mock worker
                                      six model-service routes resolve from the
                                      TourContentBundle instead of forwarding to a model
                                      service. See Guide > Tour demo mode.
-VITE_DEMO_PUBLIC          no   ""    when "1", mounts the public TourCataloguePage at /
+VITE_DEMO_PUBLIC          no   ""    when "1", mounts the public TourCatalogPage at /
                                      and moves the authenticated app under /app. Used
                                      by demo.fovea.video.
 VITE_FOVEA_DEMO_MODE      no   ""    legacy landing-page flag; superseded by

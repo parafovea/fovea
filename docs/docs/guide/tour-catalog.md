@@ -1,14 +1,14 @@
 ---
-sidebar_label: Tour catalogue
+sidebar_label: Tour catalog
 ---
 
-# Tour catalogue
+# Tour catalog
 
 FOVEA ships twelve built-in guided tours under
 `annotation-tool/src/tours/scripts/`. Each tour is a typed script
 that drives the spotlight engine through a sequence of anchors, with
 narration written in plain English. The tours are rendered as a 4x3
-grid by the public catalogue page (`VITE_DEMO_PUBLIC=1`) and as a
+grid by the public catalog page (`VITE_DEMO_PUBLIC=1`) and as a
 menu inside the authenticated app.
 
 ## The twelve tours
@@ -32,7 +32,7 @@ Tour 0 is the orientation entry. Tour 11 is the temporal deep dive.
 Both bracket the 4x3 grid; reorder by editing `getBuiltInTours` in
 `annotation-tool/src/tours/scripts/index.ts`.
 
-## Notes on the catalogue
+## Notes on the catalog
 
 - **Tour 0 (Welcome)** is a four-minute orientation that lands a
   first-time visitor on the workspace and names the panels they

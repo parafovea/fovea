@@ -2,7 +2,7 @@
 sidebar_label: Transcribe and diarize
 ---
 
-# Transcribing audio and labelling speakers
+# Transcribing audio and labeling speakers
 
 The annotation workspace can transcribe the audio track of any video
 and, optionally, attach a speaker label to every transcript segment.
@@ -25,7 +25,7 @@ summary pipeline drives internally (covered in
    so every transcript segment carries the speaker who was talking
    the longest during it.
 5. The `TranscriptPanel` UI renders one row per segment with a
-   colour-coded speaker chip, a click-to-seek timestamp, and an
+   color-coded speaker chip, a click-to-seek timestamp, and an
    active-segment highlight that follows playback.
 
 Diarization failures are non-fatal. If the diarizer errors out, the
@@ -93,7 +93,7 @@ clip in roughly two seconds.
 
 The diarization loader is `pyannote-3-1` in both builds. Pyannote
 requires a Hugging Face account, a one-time acceptance of the model
-licence on huggingface.co, and an `HF_TOKEN` environment variable on
+license on huggingface.co, and an `HF_TOKEN` environment variable on
 the model-service container; see
 [Reference > Environment variables](../reference/environment-variables.md).
 
@@ -115,7 +115,7 @@ diarization on a long clip is the most common case for raising it.
 
 The panel lives in the right-hand workspace dock. Each row is:
 
-- A coloured chip for the speaker (`SPEAKER_00`, `SPEAKER_01`, ...).
+- A colored chip for the speaker (`SPEAKER_00`, `SPEAKER_01`, ...).
   Colours are assigned by first-appearance order so the same clip
   always paints the same speaker palette across reloads.
 - A `mm:ss` start timestamp. Clicking it seeks the player.

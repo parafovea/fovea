@@ -75,7 +75,7 @@ part of a larger generate-summary job. The direct path is a
 `Transcribe Audio` button on the workspace toolbar that calls
 `POST /api/videos/:videoId/transcribe`, optionally enabling speaker
 diarization via pyannote 3.1, and renders the result in a
-`TranscriptPanel` with click-to-seek timestamps and colour-coded
+`TranscriptPanel` with click-to-seek timestamps and color-coded
 speaker chips. See [Guide > Transcribe and diarize](transcribe-and-diarize.md)
 for the full request and response contract.
 

@@ -3,8 +3,8 @@
 This is the public selector contract for the tour engine: every
 `data-tour-id` attribute that ships in product code is documented
 here so self-hosters writing their own tours (see the
-[Tour catalogue](../guide/tour-catalogue.md) and
-[Tour customization](../guide/tour-customization.md) guides) have a
+[Tour catalog](../guide/tour-catalog) and
+[Tour customization](../guide/tour-customization) guides) have a
 stable surface to anchor against.
 
 Naming convention:

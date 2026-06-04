@@ -7,7 +7,7 @@ sidebar_label: demo.fovea.video deployment
 ## What demo.fovea.video is
 
 A public demo of FOVEA. A QR code at an event booth
-points here. Anyone scanning it lands on a static tour catalogue that
+points here. Anyone scanning it lands on a static tour catalog that
 runs entirely in the browser: no backend round-trips for the tour
 experience, no model service, no account required. Serious visitors
 who want to try the full app can sign in, but registration is disabled
@@ -17,7 +17,7 @@ by default and accounts are minted only by the operator.
 
 | Component             | Production (`fovea.video`)   | Demo (`demo.fovea.video`)                          |
 | --------------------- | ---------------------------- | -------------------------------------------------- |
-| Frontend `/`          | Video browser (auth required)| Public tour catalogue (anonymous)                  |
+| Frontend `/`          | Video browser (auth required)| Public tour catalog (anonymous)                  |
 | Model service         | Live container               | Not deployed; MSW intercepts the six routes        |
 | Registration          | Enabled                      | Disabled (`ALLOW_REGISTRATION=false`)              |
 | nginx                 | Standard config              | `nginx.demo.conf` with rate limits on `/api/auth/*`|
