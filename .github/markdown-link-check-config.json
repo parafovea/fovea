@@ -20,6 +20,12 @@
     },
     {
       "pattern": "^https://openai\\.com"
+    },
+    {
+      "pattern": "^https://github\\.com/parafovea/fovea/compare/"
+    },
+    {
+      "pattern": "^https://github\\.com/parafovea/fovea/releases/tag/"
     }
   ],
   "aliveStatusCodes": [200, 206],

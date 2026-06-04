@@ -73,7 +73,7 @@ specific question of the form "how do I do X with Fovea".
 
 ## Tours
 
-- [Tour catalog](tour-catalog) lists the twelve built-in
+- [Tour catalog](tour-catalog.md) lists the twelve built-in
   guided tours.
 - [Tour customization](tour-customization.md) covers retheming the
   tours via `tour-content.json` for your own deployment.
