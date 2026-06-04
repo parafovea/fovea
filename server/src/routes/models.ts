@@ -3,24 +3,28 @@ import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
 import { InternalError, ValidationError } from '../lib/errors.js'
 
-const ALLOWED_TASK_TYPES = new Set<string>([
-  'video_summarization',
-  'ontology_augmentation',
-  'object_detection',
-  'video_tracking',
-  'audio_transcription',
-  'speaker_diarization',
-  'voice_activity_detection',
-  'claim_extraction',
-  'claim_synthesis',
-])
-
+/**
+ * Map a user-supplied taskType to one of the nine canonical
+ * task-type literals from `model-service/src/domain/types.py`.
+ *
+ * Each branch returns a hard-coded string literal so the value
+ * downstream consumers (URL templates, query params) build with
+ * is data-flow-independent from `taskType`. Throws on miss.
+ */
 function normalizeAndAssertTaskType(taskType: string): string {
   const normalized = taskType.replace(/([A-Z])/g, '_$1').toLowerCase()
-  if (!ALLOWED_TASK_TYPES.has(normalized)) {
-    throw new ValidationError(`Invalid taskType: ${taskType}`)
+  switch (normalized) {
+    case 'video_summarization': return 'video_summarization'
+    case 'ontology_augmentation': return 'ontology_augmentation'
+    case 'object_detection': return 'object_detection'
+    case 'video_tracking': return 'video_tracking'
+    case 'audio_transcription': return 'audio_transcription'
+    case 'speaker_diarization': return 'speaker_diarization'
+    case 'voice_activity_detection': return 'voice_activity_detection'
+    case 'claim_extraction': return 'claim_extraction'
+    case 'claim_synthesis': return 'claim_synthesis'
+    default: throw new ValidationError(`Invalid taskType: ${taskType}`)
   }
-  return normalized
 }
 
 /**
