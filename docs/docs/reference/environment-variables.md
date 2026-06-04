@@ -44,6 +44,40 @@ API_KEY_ENCRYPTION_KEY    required   -                              32-byte hex 
 MODEL_SERVICE_URL         no         http://model-service:8000      backend -> model-service base
 ```
 
+### Per-call timeouts
+
+Every `MODEL_SERVICE_TIMEOUTS.<KIND>` ceiling on the backend is
+overridable via a matching `MODEL_SERVICE_TIMEOUT_<KIND>_MS` env var.
+A value that is not a positive integer is ignored and the built-in
+default applies. Defaults are the prior hardcoded values so existing
+deployments do not change behavior.
+
+```text
+MODEL_SERVICE_TIMEOUT_DETECTION_MS         no   60000      detection ceiling
+MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS        no   30000      thumbnail ceiling
+MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS  no   60000      ontology augment ceiling
+MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS         no   300000     summary ceiling
+MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS    no   300000     claim extract ceiling
+MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS        no   300000     claim synthesis ceiling
+MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS        no   300000     transcribe / diarize ceiling
+```
+
+CPU-first-load deployments will typically raise the
+detection, thumbnail, and ontology-augment ceilings; the
+`docker-compose.e2e.real-models.yml` override is the canonical example.
+
+## Hugging Face credentials
+
+```text
+HF_TOKEN                  if gated   -                              read token for pyannote (speaker diarization)
+                                                                     and any other gated model in models.yaml
+```
+
+The pyannote 3.1 model used by `POST /api/diarize` requires the user
+to accept the model license on huggingface.co and pass a read token
+to the model-service container. See
+[Guide > Transcribe and diarize](../guide/transcribe-and-diarize.md).
+
 ## Telemetry
 
 ```text
@@ -81,7 +115,7 @@ CDN_SIGNED_URLS           no         true                           sign CDN URL
 THUMBNAIL_STORAGE_TYPE    no         local                          local | s3
 THUMBNAIL_PATH            no         /videos/thumbnails             local thumbnail root
 THUMBNAIL_S3_PREFIX       no         thumbnails/                    S3 key prefix
-THUMBNAIL_OUTPUT_ROOT     no         /videos/thumbnails             model-service thumbnail output (v0.3.0)
+THUMBNAIL_OUTPUT_ROOT     no         /tmp/thumbnails                model-service thumbnail output
 ```
 
 ## Wikidata
@@ -135,3 +169,24 @@ MODEL_SERVICE_ADMIN_TOKEN no         -                              token gating
                                                                      /api/admin/reconfigure endpoint
                                                                      used by the SystemConfigPanel
 ```
+
+## Frontend build flags
+
+These are Vite build args read at bundle time, not runtime env. They
+are passed through `docker-compose.yml` to the `frontend` service.
+
+```text
+VITE_TOUR_DEMO            no   ""    when "1", installs the MSW tour-mock worker so the
+                                     six model-service routes resolve from the
+                                     TourContentBundle instead of forwarding to a model
+                                     service. See Guide > Tour demo mode.
+VITE_DEMO_PUBLIC          no   ""    when "1", mounts the public TourCatalogPage at /
+                                     and moves the authenticated app under /app. Used
+                                     by demo.fovea.video.
+VITE_FOVEA_DEMO_MODE      no   ""    legacy landing-page flag; superseded by
+                                     VITE_TOUR_DEMO / VITE_DEMO_PUBLIC but still
+                                     respected by the local run-demo-local.sh script.
+```
+
+Builds without `VITE_TOUR_DEMO` tree-shake the entire
+`src/mocks/tourDemo/` subtree out of the bundle.

@@ -18,14 +18,18 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'retrying'
 
 /**
  * Entity types supported by auto-save for observability.
+ *
+ * Auto-save is reserved for two cases:
+ *   1. Surfaces with no Save button (e.g. annotations — drawn with the mouse).
+ *   2. Long-form free-text editing where losing work is painful, even if a
+ *      Save button also exists (e.g. video summaries).
+ *
+ * Discrete record forms (personas, world objects, ontology types, claims) use
+ * explicit save + a dirty prompt instead.
  */
 export type AutoSaveEntityType =
   | 'annotation'
-  | 'persona'
-  | 'ontology'
   | 'summary'
-  | 'claim'
-  | 'world-object'
 
 /**
  * Configuration options for useAutoSave hook.

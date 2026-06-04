@@ -1,41 +1,27 @@
 import React, { useState } from 'react'
+import { Plus, Trash2, Pencil, Users, Zap, Package, Clock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Box,
-  Paper,
-  Typography,
-  Tabs,
-  Tab,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Button,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Alert,
-  Divider,
-  ToggleButton,
-  ToggleButtonGroup,
-  Fab,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  GroupWork as CollectionIcon,
-  FlashOn as EventIcon,
-  Inventory2 as EntityIcon,
-  AccessTime as TimeIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   useWorld,
   useAddEntityCollection,
@@ -71,28 +57,6 @@ type TimeCollectionType = 'periodic' | 'calendar' | 'irregular' | 'anchored' | '
 /** Habitual frequency options */
 type HabitualFrequency = 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never'
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`collection-tabpanel-${index}`}
-      aria-labelledby={`collection-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  )
-}
-
 // Entity Collection Editor
 function EntityCollectionEditor({
   open,
@@ -107,7 +71,7 @@ function EntityCollectionEditor({
   const entities = worldData?.entities ?? []
   const { mutate: addEntityCollection } = useAddEntityCollection()
   const { mutate: updateEntityCollection } = useUpdateEntityCollection()
-  
+
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
     collection?.description || [{ type: 'text', content: '' }]
@@ -149,118 +113,123 @@ function EntityCollectionEditor({
     onClose()
   }
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CollectionIcon color="secondary" />
-          {collection ? 'Edit' : 'Create'} Entity Collection
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <TextField
-            label="Collection Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-          />
+  const toggleEntity = (id: string) => {
+    setSelectedEntityIds(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    )
+  }
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Description
-            </Typography>
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent data-tour-id="collection-builder" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="size-5 text-secondary" />
+            {collection ? 'Edit' : 'Create'} Entity Collection
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="space-y-1">
+            <Label>Collection Name *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Collection name"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Description</Label>
             <GlossEditor
               gloss={description}
               onChange={setDescription}
               personaId={null}
             />
-          </Box>
+          </div>
 
-          <FormControl fullWidth>
-            <InputLabel>Collection Type</InputLabel>
-            <Select
-              value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value as EntityCollectionType)}
-              label="Collection Type"
-            >
-              <MenuItem value="group">Group (set of entities)</MenuItem>
-              <MenuItem value="kind">Kind (entities of same type)</MenuItem>
-              <MenuItem value="functional">Functional (entities with shared function)</MenuItem>
-              <MenuItem value="stage">Stage (temporal slice)</MenuItem>
-              <MenuItem value="portion">Portion (part of whole)</MenuItem>
-              <MenuItem value="variant">Variant (alternative versions)</MenuItem>
+          <div className="space-y-1">
+            <Label>Collection Type</Label>
+            <Select value={collectionType} onValueChange={(value) => setCollectionType(value as EntityCollectionType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="group">Group (set of entities)</SelectItem>
+                <SelectItem value="kind">Kind (entities of same type)</SelectItem>
+                <SelectItem value="functional">Functional (entities with shared function)</SelectItem>
+                <SelectItem value="stage">Stage (temporal slice)</SelectItem>
+                <SelectItem value="portion">Portion (part of whole)</SelectItem>
+                <SelectItem value="variant">Variant (alternative versions)</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Entities in Collection
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel>Select Entities</InputLabel>
-              <Select
-                multiple
-                value={selectedEntityIds}
-                onChange={(e) => setSelectedEntityIds(e.target.value as string[])}
-                label="Select Entities"
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((id) => {
-                      const entity = entities.find(e => e.id === id)
-                      return (
-                        <Chip key={id} label={entity?.name || 'Unknown'} size="small" />
-                      )
-                    })}
-                  </Box>
-                )}
-              >
-                {entities.map((entity) => (
-                  <MenuItem key={entity.id} value={entity.id}>
-                    {entity.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
+          <div className="space-y-2">
+            <Label>Entities in Collection</Label>
+            <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+              {entities.map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  onClick={() => toggleEntity(entity.id)}
+                  className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
+                    selectedEntityIds.includes(entity.id)
+                      ? 'bg-primary/10 text-primary'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  {entity.name}
+                </button>
+              ))}
+            </div>
+            {selectedEntityIds.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedEntityIds.map((id) => {
+                  const entity = entities.find(e => e.id === id)
+                  return (
+                    <Badge key={id} variant="outline">
+                      {entity?.name || 'Unknown'}
+                    </Badge>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Properties
-            </Typography>
-            <ToggleButtonGroup
+          <div className="space-y-1">
+            <Label>Properties</Label>
+            <ToggleGroup
               value={[
                 ...(homogeneous ? ['homogeneous'] : []),
                 ...(ordered ? ['ordered'] : []),
               ]}
-              onChange={(_, newFormats) => {
+              onValueChange={(newFormats) => {
                 setHomogeneous(newFormats.includes('homogeneous'))
                 setOrdered(newFormats.includes('ordered'))
               }}
+              multiple
             >
-              <ToggleButton value="homogeneous">
+              <ToggleGroupItem value="homogeneous">
                 Homogeneous (same type)
-              </ToggleButton>
-              <ToggleButton value="ordered">
+              </ToggleGroupItem>
+              <ToggleGroupItem value="ordered">
                 Ordered (sequence matters)
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        </Box>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || selectedEntityIds.length === 0}
+          >
+            {collection ? 'Update' : 'Create'} Collection
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="secondary"
-          disabled={!name || selectedEntityIds.length === 0}
-        >
-          {collection ? 'Update' : 'Create'} Collection
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
@@ -280,7 +249,7 @@ function EventCollectionEditor({
   const timeCollections = worldData?.timeCollections ?? []
   const { mutate: addEventCollection } = useAddEventCollection()
   const { mutate: updateEventCollection } = useUpdateEventCollection()
-  
+
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
     collection?.description || [{ type: 'text', content: '' }]
@@ -316,118 +285,128 @@ function EventCollectionEditor({
     onClose()
   }
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CollectionIcon color="secondary" />
-          {collection ? 'Edit' : 'Create'} Event Collection
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <TextField
-            label="Collection Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-          />
+  const toggleEvent = (id: string) => {
+    setSelectedEventIds(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    )
+  }
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Description
-            </Typography>
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="size-5 text-secondary" />
+            {collection ? 'Edit' : 'Create'} Event Collection
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="space-y-1">
+            <Label>Collection Name *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Collection name"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Description</Label>
             <GlossEditor
               gloss={description}
               onChange={setDescription}
               personaId={null}
             />
-          </Box>
+          </div>
 
-          <FormControl fullWidth>
-            <InputLabel>Collection Type</InputLabel>
-            <Select
-              value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value as EventCollectionType)}
-              label="Collection Type"
-            >
-              <MenuItem value="sequence">Sequence (ordered events)</MenuItem>
-              <MenuItem value="iteration">Iteration (repeated pattern)</MenuItem>
-              <MenuItem value="complex">Complex (structured events)</MenuItem>
-              <MenuItem value="alternative">Alternative (options)</MenuItem>
-              <MenuItem value="group">Group (unordered set)</MenuItem>
+          <div className="space-y-1">
+            <Label>Collection Type</Label>
+            <Select value={collectionType} onValueChange={(value) => setCollectionType(value as EventCollectionType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sequence">Sequence (ordered events)</SelectItem>
+                <SelectItem value="iteration">Iteration (repeated pattern)</SelectItem>
+                <SelectItem value="complex">Complex (structured events)</SelectItem>
+                <SelectItem value="alternative">Alternative (options)</SelectItem>
+                <SelectItem value="group">Group (unordered set)</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Events in Collection
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel>Select Events</InputLabel>
-              <Select
-                multiple
-                value={selectedEventIds}
-                onChange={(e) => setSelectedEventIds(e.target.value as string[])}
-                label="Select Events"
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((id) => {
-                      const event = events.find(e => e.id === id)
-                      return (
-                        <Chip key={id} label={event?.name || 'Unknown'} size="small" />
-                      )
-                    })}
-                  </Box>
-                )}
-              >
-                {events.map((event) => (
-                  <MenuItem key={event.id} value={event.id}>
-                    {event.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
+          <div className="space-y-2">
+            <Label>Events in Collection</Label>
+            <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+              {events.map((event) => (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => toggleEvent(event.id)}
+                  className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
+                    selectedEventIds.includes(event.id)
+                      ? 'bg-primary/10 text-primary'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  {event.name}
+                </button>
+              ))}
+            </div>
+            {selectedEventIds.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedEventIds.map((id) => {
+                  const event = events.find(e => e.id === id)
+                  return (
+                    <Badge key={id} variant="outline">
+                      {event?.name || 'Unknown'}
+                    </Badge>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {collectionType === 'iteration' && (
-            <FormControl fullWidth>
-              <InputLabel>Time Pattern</InputLabel>
-              <Select
-                value={timeCollectionId}
-                onChange={(e) => setTimeCollectionId(e.target.value)}
-                label="Time Pattern"
-              >
-                <MenuItem value="">None</MenuItem>
-                {timeCollections.map((tc) => (
-                  <MenuItem key={tc.id} value={tc.id}>
-                    {tc.name}
-                  </MenuItem>
-                ))}
+            <div className="space-y-1">
+              <Label>Time Pattern</Label>
+              <Select value={timeCollectionId || '_none'} onValueChange={(value) => setTimeCollectionId(!value || value === '_none' ? '' : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">None</SelectItem>
+                  {timeCollections.map((tc) => (
+                    <SelectItem key={tc.id} value={tc.id}>
+                      {tc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
           )}
-        </Box>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || selectedEventIds.length === 0}
+          >
+            {collection ? 'Update' : 'Create'} Collection
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="secondary"
-          disabled={!name || selectedEventIds.length === 0}
-        >
-          {collection ? 'Update' : 'Create'} Collection
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
 
-// Time Collection Editor (for patterns)
-function TimeCollectionEditor({
+// Time Collection Editor (for patterns). Exported so other workspaces
+// (notably ObjectWorkspace's Collections tab) can mount the same
+// editor and surface the time-collection-builder tour anchor it
+// provides via its DialogContent.
+export function TimeCollectionEditorDialog({
   open,
   onClose,
   collection,
@@ -440,7 +419,7 @@ function TimeCollectionEditor({
   const times = worldData?.times ?? []
   const { mutate: addTimeCollection } = useAddTimeCollection()
   const { mutate: updateTimeCollection } = useUpdateTimeCollection()
-  
+
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState(collection?.description || '')
   const [selectedTimeIds, setSelectedTimeIds] = useState<string[]>(
@@ -475,116 +454,122 @@ function TimeCollectionEditor({
     onClose()
   }
 
+  const toggleTime = (id: string) => {
+    setSelectedTimeIds(prev =>
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+    )
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TimeIcon color="secondary" />
-          {collection ? 'Edit' : 'Create'} Time Collection
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <TextField
-            label="Collection Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-          />
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent data-tour-id="time-collection-builder" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="size-5 text-secondary" />
+            {collection ? 'Edit' : 'Create'} Time Collection
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="space-y-1">
+            <Label>Collection Name *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Collection name"
+            />
+          </div>
 
-          <TextField
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            fullWidth
-            multiline
-            rows={2}
-          />
+          <div className="space-y-1">
+            <Label>Description</Label>
+            <textarea
+              className="flex min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
 
-          <FormControl fullWidth>
-            <InputLabel>Collection Type</InputLabel>
-            <Select
-              value={collectionType}
-              onChange={(e) => setCollectionType(e.target.value as TimeCollectionType)}
-              label="Collection Type"
-            >
-              <MenuItem value="periodic">Periodic (regular intervals)</MenuItem>
-              <MenuItem value="habitual">Habitual (repeating pattern)</MenuItem>
-              <MenuItem value="calendar">Calendar (date-based)</MenuItem>
-              <MenuItem value="irregular">Irregular (no pattern)</MenuItem>
-              <MenuItem value="anchored">Anchored (event-based)</MenuItem>
+          <div className="space-y-1">
+            <Label>Collection Type</Label>
+            <Select value={collectionType} onValueChange={(value) => setCollectionType(value as TimeCollectionType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="periodic">Periodic (regular intervals)</SelectItem>
+                <SelectItem value="habitual">Habitual (repeating pattern)</SelectItem>
+                <SelectItem value="calendar">Calendar (date-based)</SelectItem>
+                <SelectItem value="irregular">Irregular (no pattern)</SelectItem>
+                <SelectItem value="anchored">Anchored (event-based)</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
           {(collectionType === 'periodic' || collectionType === 'habitual') && (
-            <FormControl fullWidth>
-              <InputLabel>Frequency</InputLabel>
-              <Select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as 'always' | 'usually' | 'often' | 'sometimes' | 'rarely' | 'never')}
-                label="Frequency"
-              >
-                <MenuItem value="always">Always</MenuItem>
-                <MenuItem value="usually">Usually</MenuItem>
-                <MenuItem value="often">Often</MenuItem>
-                <MenuItem value="sometimes">Sometimes</MenuItem>
-                <MenuItem value="rarely">Rarely</MenuItem>
-                <MenuItem value="never">Never</MenuItem>
+            <div className="space-y-1">
+              <Label>Frequency</Label>
+              <Select value={frequency} onValueChange={(value) => setFrequency(value as HabitualFrequency)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="always">Always</SelectItem>
+                  <SelectItem value="usually">Usually</SelectItem>
+                  <SelectItem value="often">Often</SelectItem>
+                  <SelectItem value="sometimes">Sometimes</SelectItem>
+                  <SelectItem value="rarely">Rarely</SelectItem>
+                  <SelectItem value="never">Never</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
           )}
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Times in Collection
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel>Select Times</InputLabel>
-              <Select
-                multiple
-                value={selectedTimeIds}
-                onChange={(e) => setSelectedTimeIds(e.target.value as string[])}
-                label="Select Times"
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((id) => {
-                      const time = times.find(t => t.id === id)
-                      return (
-                        <Chip 
-                          key={id} 
-                          label={time ? `${time.type} time` : 'Unknown'} 
-                          size="small" 
-                        />
-                      )
-                    })}
-                  </Box>
-                )}
-              >
-                {times.map((time) => (
-                  <MenuItem key={time.id} value={time.id}>
-                    {time.type === 'instant'
-                      ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
-                      : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </Box>
+          <div className="space-y-2">
+            <Label>Times in Collection</Label>
+            <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+              {times.map((time) => (
+                <button
+                  key={time.id}
+                  type="button"
+                  onClick={() => toggleTime(time.id)}
+                  className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
+                    selectedTimeIds.includes(time.id)
+                      ? 'bg-primary/10 text-primary'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  {time.type === 'instant'
+                    ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
+                    : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`}
+                </button>
+              ))}
+            </div>
+            {selectedTimeIds.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedTimeIds.map((id) => {
+                  const time = times.find(t => t.id === id)
+                  return (
+                    <Badge key={id} variant="outline">
+                      {time ? `${time.type} time` : 'Unknown'}
+                    </Badge>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name}
+          >
+            {collection ? 'Update' : 'Create'} Collection
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="secondary"
-          disabled={!name}
-        >
-          {collection ? 'Update' : 'Create'} Collection
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
@@ -598,8 +583,7 @@ export default function CollectionBuilder() {
   const { mutate: deleteEntityCollection } = useDeleteEntityCollection()
   const { mutate: deleteEventCollection } = useDeleteEventCollection()
   const { mutate: deleteTimeCollection } = useDeleteTimeCollection()
-  
-  const [tabValue, setTabValue] = useState(0)
+
   const [entityCollectionEditorOpen, setEntityCollectionEditorOpen] = useState(false)
   const [eventCollectionEditorOpen, setEventCollectionEditorOpen] = useState(false)
   const [timeCollectionEditorOpen, setTimeCollectionEditorOpen] = useState(false)
@@ -623,236 +607,210 @@ export default function CollectionBuilder() {
   }
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Paper sx={{ mb: 2, p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <CollectionIcon fontSize="large" color="secondary" />
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h5">Collection Builder</Typography>
-            <Typography variant="body2" color="text.secondary">
+    <div className="w-full">
+      <div className="rounded-lg border bg-card p-4 mb-4">
+        <div className="flex items-center gap-4">
+          <Users className="size-8 text-secondary" />
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold">Collection Builder</h2>
+            <p className="text-sm text-muted-foreground">
               Create and manage collections of entities, events, and times
-            </Typography>
-          </Box>
+            </p>
+          </div>
           <TypeObjectBadge isType={false} />
-        </Box>
-      </Paper>
+        </div>
+      </div>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Collections group related objects together. Entity collections group entities,
-        event collections can represent complex events or patterns, and time collections
-        define temporal patterns for habitual events.
+      <Alert className="mb-4">
+        <AlertDescription>
+          Collections group related objects together. Entity collections group entities,
+          event collections can represent complex events or patterns, and time collections
+          define temporal patterns for habitual events.
+        </AlertDescription>
       </Alert>
 
-      <Paper sx={{ width: '100%' }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} aria-label="collection tabs">
-            <Tab 
-              label={`Entity Collections (${entityCollections.length})`} 
-              icon={<EntityIcon />} 
-              iconPosition="start" 
-            />
-            <Tab 
-              label={`Event Collections (${eventCollections.length})`} 
-              icon={<EventIcon />} 
-              iconPosition="start" 
-            />
-            <Tab 
-              label={`Time Patterns (${timeCollections.length})`} 
-              icon={<TimeIcon />} 
-              iconPosition="start" 
-            />
-          </Tabs>
-        </Box>
+      <div className="rounded-lg border bg-card">
+        <Tabs defaultValue="entities">
+          <TabsList className="w-full">
+            <TabsTrigger value="entities" className="flex items-center gap-1">
+              <Package className="size-4" />
+              Entity Collections ({entityCollections.length})
+            </TabsTrigger>
+            <TabsTrigger value="events" className="flex items-center gap-1">
+              <Zap className="size-4" />
+              Event Collections ({eventCollections.length})
+            </TabsTrigger>
+            <TabsTrigger value="times" className="flex items-center gap-1">
+              <Clock className="size-4" />
+              Time Patterns ({timeCollections.length})
+            </TabsTrigger>
+          </TabsList>
 
-        <TabPanel value={tabValue} index={0}>
-          <List>
-            {entityCollections.map((collection) => (
-              <React.Fragment key={collection.id}>
-                <ListItem>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography>{collection.name}</Typography>
-                        <Chip 
-                          label={`${collection.entityIds.length} entities`} 
-                          size="small" 
-                        />
-                        <Chip 
-                          label={collection.collectionType} 
-                          size="small" 
-                          variant="outlined"
-                        />
-                      </Box>
-                    }
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        {collection.aggregateProperties?.homogeneous && 'Homogeneous • '}
-                        {collection.aggregateProperties?.ordered && 'Ordered • '}
+          <TabsContent value="entities" className="p-6">
+            <ul className="space-y-2">
+              {entityCollections.map((collection) => (
+                <React.Fragment key={collection.id}>
+                  <li className="flex items-center justify-between py-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{collection.name}</span>
+                        <Badge variant="outline">{collection.entityIds.length} entities</Badge>
+                        <Badge variant="outline">{collection.collectionType}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {collection.aggregateProperties?.homogeneous && 'Homogeneous \u2022 '}
+                        {collection.aggregateProperties?.ordered && 'Ordered \u2022 '}
                         {collection.typeAssignments.length} type assignments
-                      </Typography>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => handleEditEntityCollection(collection)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => deleteEntityCollection(collection.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <Divider />
-              </React.Fragment>
-            ))}
-          </List>
-          <Fab
-            color="secondary"
-            aria-label="add entity collection"
-            sx={{ position: 'fixed', bottom: 24, right: 24 }}
-            onClick={() => {
-              setSelectedEntityCollection(null)
-              setEntityCollectionEditorOpen(true)
-            }}
-          >
-            <AddIcon />
-          </Fab>
-        </TabPanel>
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleEditEntityCollection(collection)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteEntityCollection(collection.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                  <Separator />
+                </React.Fragment>
+              ))}
+            </ul>
+            <Button
+              className="fixed bottom-6 right-6 rounded-full size-12"
+              variant="secondary"
+              size="icon"
+              aria-label="add entity collection"
+              onClick={() => {
+                setSelectedEntityCollection(null)
+                setEntityCollectionEditorOpen(true)
+              }}
+            >
+              <Plus className="size-5" />
+            </Button>
+          </TabsContent>
 
-        <TabPanel value={tabValue} index={1}>
-          <List>
-            {eventCollections.map((collection) => (
-              <React.Fragment key={collection.id}>
-                <ListItem>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography>{collection.name}</Typography>
-                        <Chip 
-                          label={`${collection.eventIds.length} events`} 
-                          size="small" 
-                        />
-                        <Chip 
-                          label={collection.collectionType} 
-                          size="small" 
-                          variant="outlined"
-                        />
+          <TabsContent value="events" className="p-6">
+            <ul className="space-y-2">
+              {eventCollections.map((collection) => (
+                <React.Fragment key={collection.id}>
+                  <li className="flex items-center justify-between py-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{collection.name}</span>
+                        <Badge variant="outline">{collection.eventIds.length} events</Badge>
+                        <Badge variant="outline">{collection.collectionType}</Badge>
                         {collection.timeCollectionId && (
-                          <Chip 
-                            label="has time pattern" 
-                            size="small" 
-                            icon={<TimeIcon />}
-                            variant="outlined"
-                          />
+                          <Badge variant="outline">
+                            <Clock className="mr-1 size-3" />
+                            has time pattern
+                          </Badge>
                         )}
-                      </Box>
-                    }
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
                         {collection.typeAssignments.length} type assignments
-                        {collection.structure && ' • Has structure'}
-                      </Typography>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => handleEditEventCollection(collection)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => deleteEventCollection(collection.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <Divider />
-              </React.Fragment>
-            ))}
-          </List>
-          <Fab
-            color="secondary"
-            aria-label="add event collection"
-            sx={{ position: 'fixed', bottom: 24, right: 24 }}
-            onClick={() => {
-              setSelectedEventCollection(null)
-              setEventCollectionEditorOpen(true)
-            }}
-          >
-            <AddIcon />
-          </Fab>
-        </TabPanel>
+                        {collection.structure && ' \u2022 Has structure'}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleEditEventCollection(collection)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteEventCollection(collection.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                  <Separator />
+                </React.Fragment>
+              ))}
+            </ul>
+            <Button
+              className="fixed bottom-6 right-6 rounded-full size-12"
+              variant="secondary"
+              size="icon"
+              aria-label="add event collection"
+              onClick={() => {
+                setSelectedEventCollection(null)
+                setEventCollectionEditorOpen(true)
+              }}
+            >
+              <Plus className="size-5" />
+            </Button>
+          </TabsContent>
 
-        <TabPanel value={tabValue} index={2}>
-          <List>
-            {timeCollections.map((collection) => (
-              <React.Fragment key={collection.id}>
-                <ListItem>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography>{collection.name}</Typography>
-                        <Chip 
-                          label={`${collection.times.length} times`} 
-                          size="small" 
-                        />
-                        <Chip 
-                          label={collection.collectionType} 
-                          size="small" 
-                          variant="outlined"
-                        />
+          <TabsContent value="times" className="p-6">
+            <ul className="space-y-2">
+              {timeCollections.map((collection) => (
+                <React.Fragment key={collection.id}>
+                  <li className="flex items-center justify-between py-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{collection.name}</span>
+                        <Badge variant="outline">{collection.times.length} times</Badge>
+                        <Badge variant="outline">{collection.collectionType}</Badge>
                         {collection.habituality && (
-                          <Chip 
-                            label={collection.habituality.frequency} 
-                            size="small" 
-                            color="primary"
-                            variant="outlined"
-                          />
+                          <Badge variant="outline">
+                            {collection.habituality.frequency}
+                          </Badge>
                         )}
-                      </Box>
-                    }
-                    secondary={collection.description}
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton 
-                      edge="end" 
-                      onClick={() => handleEditTimeCollection(collection)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => deleteTimeCollection(collection.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <Divider />
-              </React.Fragment>
-            ))}
-          </List>
-          <Fab
-            color="secondary"
-            aria-label="add time collection"
-            sx={{ position: 'fixed', bottom: 24, right: 24 }}
-            onClick={() => {
-              setSelectedTimeCollection(null)
-              setTimeCollectionEditorOpen(true)
-            }}
-          >
-            <AddIcon />
-          </Fab>
-        </TabPanel>
-      </Paper>
+                      </div>
+                      {collection.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{collection.description}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleEditTimeCollection(collection)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteTimeCollection(collection.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                  <Separator />
+                </React.Fragment>
+              ))}
+            </ul>
+            <Button
+              className="fixed bottom-6 right-6 rounded-full size-12"
+              variant="secondary"
+              size="icon"
+              aria-label="add time collection"
+              onClick={() => {
+                setSelectedTimeCollection(null)
+                setTimeCollectionEditorOpen(true)
+              }}
+            >
+              <Plus className="size-5" />
+            </Button>
+          </TabsContent>
+        </Tabs>
+      </div>
 
       {/* Dialogs */}
       {entityCollectionEditorOpen && (
@@ -878,7 +836,7 @@ export default function CollectionBuilder() {
       )}
 
       {timeCollectionEditorOpen && (
-        <TimeCollectionEditor
+        <TimeCollectionEditorDialog
           open={timeCollectionEditorOpen}
           onClose={() => {
             setTimeCollectionEditorOpen(false)
@@ -887,6 +845,6 @@ export default function CollectionBuilder() {
           collection={selectedTimeCollection}
         />
       )}
-    </Box>
+    </div>
   )
 }

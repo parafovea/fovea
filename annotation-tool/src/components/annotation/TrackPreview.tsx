@@ -1,46 +1,44 @@
 /**
- * @file TrackPreview.tsx
- * @description Full-screen preview component for reviewing a single tracking result.
+ * Full-screen preview component for reviewing a single tracking result.
  * Displays all bounding boxes for a track with playback controls.
  * Supports keyboard shortcuts for accept/reject and frame navigation.
+ *
+ * @module
  */
 
 import { useState, useEffect } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  IconButton,
-  Slider,
-  Stack,
-  Chip,
-  Alert,
-} from '@mui/material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Slider } from '@/components/ui/slider'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Close as CloseIcon,
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon,
-  NavigateBefore as PrevIcon,
-  NavigateNext as NextIcon,
-  CheckCircle as AcceptIcon,
-  Cancel as RejectIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material'
+  X,
+  Play,
+  Pause,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react'
 import { TrackingResult } from '@models/types'
 
 /**
- * @interface TrackPreviewProps
- * @description Props for TrackPreview component.
- * @property track - Tracking result to preview, or null if no track selected
- * @property videoId - ID of the video being annotated
- * @property onAccept - Callback when user accepts the track
- * @property onReject - Callback when user rejects the track
- * @property onClose - Callback when user closes the preview
- * @property videoElement - Optional video element for playback control
+ * Props for TrackPreview component.
+ *
+ * @param track - Tracking result to preview, or null if no track selected
+ * @param videoId - ID of the video being annotated
+ * @param onAccept - Callback when user accepts the track
+ * @param onReject - Callback when user rejects the track
+ * @param onClose - Callback when user closes the preview
+ * @param videoElement - Optional video element for playback control
  */
 export interface TrackPreviewProps {
   track: TrackingResult | null
@@ -52,34 +50,30 @@ export interface TrackPreviewProps {
 }
 
 /**
- * Get color based on confidence level.
- *
- * @param confidence - Confidence value (0-1)
- * @returns MUI color string
+ * Get badge variant for confidence level.
  */
-function getConfidenceColor(confidence: number): 'success' | 'warning' | 'error' {
-  if (confidence > 0.9) return 'success'
-  if (confidence > 0.7) return 'warning'
-  return 'error'
+function getConfidenceVariant(confidence: number): 'default' | 'secondary' | 'destructive' {
+  if (confidence > 0.9) return 'default'
+  if (confidence > 0.7) return 'secondary'
+  return 'destructive'
 }
 
 /**
- * @component TrackPreview
- * @description Full-screen preview dialog for reviewing a single tracking result.
+ * Get border color string for confidence.
+ */
+function getConfidenceBorderColor(confidence: number): string {
+  if (confidence > 0.9) return 'green'
+  if (confidence > 0.7) return 'orange'
+  return 'red'
+}
+
+/**
+ * Full-screen preview dialog for reviewing a single tracking result.
  * Shows all bounding boxes with frame-by-frame scrubbing, playback controls,
- * and keyboard shortcuts for quick accept/reject decisions. Displays confidence
- * per frame and highlights gaps or low-confidence sections.
+ * and keyboard shortcuts for quick accept/reject decisions.
  *
  * @param props - Component properties
- * @param props.track - Tracking result to preview
- * @param props.videoId - Video ID
- * @param props.onAccept - Callback for accepting track (keyboard: Y)
- * @param props.onReject - Callback for rejecting track (keyboard: N)
- * @param props.onClose - Callback for closing preview (keyboard: Esc)
- * @param props.videoElement - Optional video element reference
  * @returns React component
- *
- * @public
  */
 export function TrackPreview({
   track,
@@ -168,175 +162,144 @@ export function TrackPreview({
   const lowConfidenceFrames = track.frames.filter((f) => f.confidence < 0.7)
 
   return (
-    <Dialog
-      open={Boolean(track)}
-      onClose={onClose}
-      maxWidth={false}
-      fullWidth
-      PaperProps={{
-        sx: {
-          height: '90vh',
-          maxHeight: '90vh',
-        },
-      }}
-    >
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h6">
-            Track #{track.trackId}: {track.label}
-          </Typography>
-          <Chip
-            label={`Confidence: ${track.confidence.toFixed(2)}`}
-            color={getConfidenceColor(track.confidence)}
-            size="small"
-          />
-        </Box>
-        <IconButton onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+    <Dialog open={Boolean(track)} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="max-w-[90vw] h-[90vh] max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <DialogTitle>
+                Track #{track.trackId}: {track.label}
+              </DialogTitle>
+              <Badge variant={getConfidenceVariant(track.confidence)}>
+                Confidence: {track.confidence.toFixed(2)}
+              </Badge>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="size-4" />
+            </Button>
+          </div>
+        </DialogHeader>
 
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3 }}>
-        {/* Video preview area (placeholder - actual video rendering would go here) */}
-        <Box
-          sx={{
-            flex: 1,
-            backgroundColor: 'grey.900',
-            borderRadius: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            minHeight: 400,
-          }}
-        >
-          <Typography variant="h6" color="grey.500">
-            Video Preview with Bounding Box
-          </Typography>
-          {/* In actual implementation, render video with bounding box overlay */}
-          {currentFrame && (
-            <Box
-              sx={{
-                position: 'absolute',
-                border: `3px solid ${
-                  getConfidenceColor(currentFrame.confidence) === 'success'
-                    ? 'green'
-                    : getConfidenceColor(currentFrame.confidence) === 'warning'
-                    ? 'orange'
-                    : 'red'
-                }`,
-                left: `${currentFrame.box.x}%`,
-                top: `${currentFrame.box.y}%`,
-                width: `${currentFrame.box.width}%`,
-                height: `${currentFrame.box.height}%`,
-                pointerEvents: 'none',
-              }}
+        <div className="flex flex-col gap-4 flex-1 overflow-hidden px-2">
+          {/* Video preview area (placeholder) */}
+          <div className="flex-1 bg-gray-900 rounded-lg flex items-center justify-center relative min-h-[400px]">
+            <h3 className="text-lg text-gray-500">
+              Video Preview with Bounding Box
+            </h3>
+            {/* In actual implementation, render video with bounding box overlay */}
+            {currentFrame && (
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  border: `3px solid ${getConfidenceBorderColor(currentFrame.confidence)}`,
+                  left: `${currentFrame.box.x}%`,
+                  top: `${currentFrame.box.y}%`,
+                  width: `${currentFrame.box.width}%`,
+                  height: `${currentFrame.box.height}%`,
+                }}
+              />
+            )}
+          </div>
+
+          {/* Frame info and warnings */}
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <p className="text-sm">
+                Frame {currentFrame.frameNumber} ({currentFrameIndex + 1}/{track.frames.length})
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Confidence: {currentFrame.confidence.toFixed(2)}
+              </p>
+            </div>
+
+            {gaps.length > 0 && (
+              <Alert>
+                <AlertTriangle className="size-4" />
+                <AlertDescription>
+                  Gaps detected: {gaps.map((g) => `Frame ${g.start}-${g.end}`).join(', ')}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {lowConfidenceFrames.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="size-4" />
+                <AlertDescription>
+                  {lowConfidenceFrames.length} low confidence frame{lowConfidenceFrames.length !== 1 ? 's' : ''} ({'<'}70%):{' '}
+                  {lowConfidenceFrames
+                    .slice(0, 5)
+                    .map((f) => `Frame ${f.frameNumber} (${f.confidence.toFixed(2)})`)
+                    .join(', ')}
+                  {lowConfidenceFrames.length > 5 && '...'}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          {/* Timeline slider */}
+          <div className="px-4">
+            <Slider
+              value={[currentFrameIndex]}
+              onValueChange={(v) => setCurrentFrameIndex(Array.isArray(v) ? v[0] : v)}
+              min={0}
+              max={track.frames.length - 1}
+              step={1}
             />
-          )}
-        </Box>
+          </div>
 
-        {/* Frame info and warnings */}
-        <Stack spacing={1}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">
-              Frame {currentFrame.frameNumber} ({currentFrameIndex + 1}/{track.frames.length})
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Confidence: {currentFrame.confidence.toFixed(2)}
-            </Typography>
-          </Box>
+          {/* Transport controls */}
+          <div className="flex flex-row gap-4 justify-center items-center">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentFrameIndex((prev) => Math.max(prev - 1, 0))}
+              disabled={currentFrameIndex === 0}
+            >
+              <ChevronLeft className="size-4 mr-1" />
+              Prev
+            </Button>
 
-          {gaps.length > 0 && (
-            <Alert severity="info" icon={<WarningIcon />}>
-              Gaps detected: {gaps.map((g) => `Frame ${g.start}-${g.end}`).join(', ')}
-            </Alert>
-          )}
+            <Button
+              onClick={() => setIsPlaying((prev) => !prev)}
+            >
+              {isPlaying ? <Pause className="size-4 mr-1" /> : <Play className="size-4 mr-1" />}
+              {isPlaying ? 'Pause' : 'Play'}
+            </Button>
 
-          {lowConfidenceFrames.length > 0 && (
-            <Alert severity="warning" icon={<WarningIcon />}>
-              {lowConfidenceFrames.length} low confidence frame{lowConfidenceFrames.length !== 1 ? 's' : ''} ({'<'}70%):{' '}
-              {lowConfidenceFrames
-                .slice(0, 5)
-                .map((f) => `Frame ${f.frameNumber} (${f.confidence.toFixed(2)})`)
-                .join(', ')}
-              {lowConfidenceFrames.length > 5 && '...'}
-            </Alert>
-          )}
-        </Stack>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentFrameIndex((prev) => Math.min(prev + 1, track.frames.length - 1))}
+              disabled={currentFrameIndex === track.frames.length - 1}
+            >
+              Next
+              <ChevronRight className="size-4 ml-1" />
+            </Button>
+          </div>
 
-        {/* Timeline slider */}
-        <Box sx={{ px: 2 }}>
-          <Slider
-            value={currentFrameIndex}
-            onChange={(_, value) => setCurrentFrameIndex(value as number)}
-            min={0}
-            max={track.frames.length - 1}
-            step={1}
-            marks={track.frames
-              .filter((_, i) => i % Math.ceil(track.frames.length / 10) === 0)
-              .map((frame, i) => ({
-                value: i * Math.ceil(track.frames.length / 10),
-                label: `${frame.frameNumber}`,
-              }))}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(value) => `Frame ${track.frames[value].frameNumber}`}
-          />
-        </Box>
+          {/* Keyboard shortcuts hint */}
+          <p className="text-xs text-muted-foreground text-center">
+            Keyboard: Y (Accept) · N (Reject) · Space (Play/Pause) · ← → (Step) · Esc (Close)
+          </p>
+        </div>
 
-        {/* Transport controls */}
-        <Stack direction="row" spacing={2} sx={{ justifyContent: 'center', alignItems: 'center' }}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            variant="outlined"
-            startIcon={<PrevIcon />}
-            onClick={() => setCurrentFrameIndex((prev) => Math.max(prev - 1, 0))}
-            disabled={currentFrameIndex === 0}
+            variant="outline"
+            onClick={onReject}
+            className="text-destructive"
           >
-            Prev
+            <XCircle className="size-4 mr-1" />
+            Reject (N)
           </Button>
-
           <Button
-            variant="contained"
-            startIcon={isPlaying ? <PauseIcon /> : <PlayIcon />}
-            onClick={() => setIsPlaying((prev) => !prev)}
+            onClick={onAccept}
+            className="bg-green-600 hover:bg-green-700 text-white"
           >
-            {isPlaying ? 'Pause' : 'Play'}
+            <CheckCircle className="size-4 mr-1" />
+            Accept (Y)
           </Button>
-
-          <Button
-            variant="outlined"
-            endIcon={<NextIcon />}
-            onClick={() => setCurrentFrameIndex((prev) => Math.min(prev + 1, track.frames.length - 1))}
-            disabled={currentFrameIndex === track.frames.length - 1}
-          >
-            Next
-          </Button>
-        </Stack>
-
-        {/* Keyboard shortcuts hint */}
-        <Typography variant="caption" color="text.secondary" align="center">
-          Keyboard: Y (Accept) · N (Reject) · Space (Play/Pause) · ← → (Step) · Esc (Close)
-        </Typography>
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="outlined"
-          color="error"
-          startIcon={<RejectIcon />}
-          onClick={onReject}
-        >
-          Reject (N)
-        </Button>
-        <Button
-          variant="contained"
-          color="success"
-          startIcon={<AcceptIcon />}
-          onClick={onAccept}
-        >
-          Accept (Y)
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

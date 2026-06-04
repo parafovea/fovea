@@ -34,14 +34,12 @@ linkType   | label resolves through
 NULL       | treated as entity-linked (legacy)
 ```
 
-The `linkType` column was added in v0.1.8
-(migration `20260429000000_add_annotation_link_type`). Before
-v0.1.8 the export emitted only `linkedEntityId`, so any object
-annotation linked to an event, time, or location was silently
-flattened on export and on import. The v0.1.8 export emits the
-correct `linkedEventId` / `linkedTimeId` / `linkedLocationId`
-field, the import reads any of the four, and `linkType` is
-preserved on the round-trip.
+The `linkType` column lives on the `Annotation` table
+(migration `20260505000000_add_annotation_link_type`). The export
+emits the correct `linkedEntityId` / `linkedEventId` /
+`linkedTimeId` / `linkedLocationId` field for each annotation,
+the import reads any of the four, and `linkType` is preserved on
+the round-trip.
 
 ## Frames and keyframes
 
@@ -68,9 +66,7 @@ the algorithm.
 `accessibleBy(request.ability, 'read').Annotation`. The compiled
 clause matches `createdByUserId = request.user.id` for own-only
 readers and additionally pulls in project-scoped reads for project
-members. The pre-v0.1.8 unscoped listing surfaced foreign users'
-imported copies in the All Annotations tab as duplicate rows; that
-symptom is gone.
+members.
 
 ## Mutation ownership
 
@@ -78,16 +74,16 @@ symptom is gone.
 and `POST /api/annotations` go through CASL: the route fetches the
 target annotation (or, for create, the supplied `personaId` row)
 and calls `request.ability.can(action, subject(...))`. A
-foreign-owned target returns 404. v0.2.1 added an explicit
-`can('read', subject('Persona', persona))` precheck on
-`POST /api/annotations` when `personaId` is supplied, because
-the generic `create Annotation` rule does not look at the
-`personaId` body field. See
+foreign-owned target returns 404. `POST /api/annotations` also
+runs an explicit `can('read', subject('Persona', persona))`
+precheck when `personaId` is supplied, because the generic
+`create Annotation` rule does not look at the `personaId` body
+field. See
 [Concepts > RBAC](../concepts/rbac.md).
 
 ## Ownership columns
 
-Write paths populate `Annotation.createdByUserId` (the v0.2.0
-RBAC ownership column) and `Annotation.userId` (the v0.1.8 column,
-kept for back-compat) from the authenticated session. Both
-columns are indexed; CASL uses `createdByUserId`.
+Write paths populate `Annotation.createdByUserId` (the RBAC
+ownership column) and `Annotation.userId` (the legacy ownership
+column, kept for back-compat) from the authenticated session.
+Both columns are indexed; CASL uses `createdByUserId`.

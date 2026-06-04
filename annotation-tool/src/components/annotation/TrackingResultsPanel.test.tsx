@@ -78,8 +78,11 @@ describe('TrackingResultsPanel', () => {
       />
     )
 
-    const acceptButtons = screen.getAllByLabelText(/Accept Track/)
-    fireEvent.click(acceptButtons[0])
+    // base-ui Tooltip render prop: label text is only in TooltipContent, not on the button.
+    // Query buttons by their icon's parent structure within each track row.
+    const trackRows = screen.getAllByText(/Track #/).map(el => el.closest('div.flex.justify-between')!)
+    const acceptButton = trackRows[0].querySelector('button:nth-child(2)') as HTMLElement
+    fireEvent.click(acceptButton)
 
     expect(mockHandlers.onAcceptTrack).toHaveBeenCalledWith(1)
   })
@@ -93,8 +96,9 @@ describe('TrackingResultsPanel', () => {
       />
     )
 
-    const rejectButtons = screen.getAllByLabelText(/Reject Track/)
-    fireEvent.click(rejectButtons[0])
+    const trackRows = screen.getAllByText(/Track #/).map(el => el.closest('div.flex.justify-between')!)
+    const rejectButton = trackRows[0].querySelector('button:nth-child(3)') as HTMLElement
+    fireEvent.click(rejectButton)
 
     expect(mockHandlers.onRejectTrack).toHaveBeenCalledWith(1)
   })
@@ -108,8 +112,9 @@ describe('TrackingResultsPanel', () => {
       />
     )
 
-    const previewButtons = screen.getAllByLabelText(/Preview Track/)
-    fireEvent.click(previewButtons[0])
+    const trackRows = screen.getAllByText(/Track #/).map(el => el.closest('div.flex.justify-between')!)
+    const previewButton = trackRows[0].querySelector('button:nth-child(1)') as HTMLElement
+    fireEvent.click(previewButton)
 
     expect(mockHandlers.onPreviewTrack).toHaveBeenCalledWith(1)
   })

@@ -91,11 +91,23 @@ test.describe('Persona Creation Auto-Save', () => {
     expect(personaVisible).toBe(false)
   })
 
-  test('dialog shows Done button after auto-save completes', async ({
+  test('Done button gates on form validity and saves only on click (explicit-save contract)', async ({
     page,
     testUser
   }) => {
     const uniqueName = `DoneButton-${Date.now()}`
+
+    // Count every POST that reaches /api/personas so we can assert how
+    // many save attempts the dialog actually makes. The contract we're
+    // proving: zero POSTs while the user types, exactly one POST when
+    // the user clicks Done — i.e. no auto-save side-channel.
+    const personaPosts: Array<{ url: string; status: number }> = []
+    page.on('response', (resp) => {
+      const url = resp.url()
+      if (resp.request().method() === 'POST' && /\/api\/personas(\b|\?)/.test(url)) {
+        personaPosts.push({ url, status: resp.status() })
+      }
+    })
 
     // Navigate to ontology workspace
     await page.goto('/ontology')
@@ -105,23 +117,41 @@ test.describe('Persona Creation Auto-Save', () => {
     await page.getByRole('button', { name: /add/i }).first().click()
     await expect(page.getByRole('dialog')).toBeVisible()
 
-    // Initially should show "Create" button (disabled)
-    const actionButton = page.getByRole('button', { name: /create|done/i }).last()
-    await expect(actionButton).toHaveText(/create/i)
+    // The shadcn PersonaEditor renders an explicit "Done" save button at all
+    // times (the legacy MUI editor cycled between "Create" pre-save and "Done"
+    // post-auto-save; tasks #71 and #72 dropped the auto-save hybrid in favour
+    // of an explicit save). The button is disabled while the form is invalid
+    // and enabled once name + role + informationNeed are populated.
+    const actionButton = page.getByRole('button', { name: /done/i }).last()
+    await expect(actionButton).toBeDisabled()
 
     // Fill required fields
     await page.getByLabel(/persona name/i).fill(uniqueName)
     await page.getByLabel(/role/i).first().fill('Role')
     await page.getByLabel(/information need/i).fill('Need')
 
-    // Wait for auto-save
-    await page.waitForTimeout(2000)
+    // Once all required fields are filled the Done button becomes enabled.
+    await expect(actionButton).toBeEnabled({ timeout: 5000 })
+
+    // Wait beyond any plausible auto-save debounce and assert that NO
+    // POST reached /api/personas yet — this proves the auto-save hybrid
+    // was actually removed in #71/#72 and replaced with an explicit save.
+    await page.waitForTimeout(2500)
+    expect(personaPosts, 'no POST /api/personas should fire while the user is typing (auto-save was removed)').toHaveLength(0)
+
+    // Click Done — this is the explicit save. Exactly one successful POST
+    // must fire to /api/personas as a result.
+    await actionButton.click()
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 })
+    expect(personaPosts.length, 'exactly one POST /api/personas should fire on Done click').toBe(1)
+    expect(personaPosts[0].status, 'the persona POST should succeed').toBeGreaterThanOrEqual(200)
+    expect(personaPosts[0].status).toBeLessThan(300)
+
+    // Reload and confirm the persona persists across a fresh page load.
+    await page.reload()
     await page.waitForLoadState('networkidle', { timeout: 10000 })
-
-    // After auto-save, button should change to "Done"
-    await expect(page.getByRole('button', { name: /done/i })).toBeVisible({ timeout: 5000 })
-
-    // Cancel to cleanup (will delete the auto-created persona)
-    await page.getByRole('button', { name: /cancel/i }).click()
+    await expect(
+      page.locator('[data-persona-id]').filter({ hasText: uniqueName }),
+    ).toBeVisible({ timeout: 10000 })
   })
 })

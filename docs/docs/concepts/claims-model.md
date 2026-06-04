@@ -51,8 +51,7 @@ metadata  null | ["text"]   | ["non-text"]   | ["text","non-text"]
 These let the user filter "show only claims supported by visible
 text in the video" or "show only claims supported by speech
 audio". They are JSON columns and round-trip through export and
-import for any JSON value (the v0.1.8 fix removed an
-`Array.isArray` guard that was wiping object-shaped values).
+import for any JSON value.
 
 ## Synthesis vs extraction
 
@@ -67,9 +66,9 @@ to be re-aligned.
 
 ## Ownership
 
-`Claim.createdBy` is the ownership column. v0.2.0 added it through
-the backfill migration `20260415000000_backfill_rbac_ownership`,
-which populated it from the owning persona's user. Every write
+`Claim.createdBy` is the ownership column. The backfill
+migration `20260415000000_backfill_rbac_ownership` populated it
+from the owning persona's user for historical rows. Every write
 path now sets `createdBy = request.user.id` from the session, never
 from the request body. CASL's ability builder uses `createdBy`
 when compiling per-row conditions, so own-only readers see only

@@ -7,15 +7,15 @@
 
 import { useState, useEffect } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-} from '@mui/material'
-
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import axiosInstance from '@api/axiosInstance'
 
 /**
@@ -96,22 +96,23 @@ export function SessionExpiryWarning({
   }
 
   return (
-    <Dialog open={open} onClose={() => {}}>
-      <DialogTitle>Session Expiring Soon</DialogTitle>
-      <DialogContent>
-        <Typography>
-          Your session will expire in {countdown}. Would you like to stay logged
-          in?
-        </Typography>
+    <Dialog open={open}>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Session Expiring Soon</DialogTitle>
+          <DialogDescription>
+            Your session will expire in {countdown}. Would you like to stay logged in?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onLogout}>
+            Logout Now
+          </Button>
+          <Button onClick={handleExtend} disabled={extending}>
+            {extending ? 'Extending...' : 'Stay Logged In'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onLogout} color="inherit">
-          Logout Now
-        </Button>
-        <Button onClick={handleExtend} variant="contained" disabled={extending}>
-          {extending ? 'Extending...' : 'Stay Logged In'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

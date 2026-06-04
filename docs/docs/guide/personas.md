@@ -36,8 +36,7 @@ curl -X POST http://localhost:3001/api/personas \
 non-admin requests; the route silently coerces it to `false` so a
 regular user cannot publish their persona to anonymous visitors.
 The same coercion applies to `PUT /api/personas/:id`. The check
-reads `request.user.systemRole === 'system_admin'`; v0.1.x used
-the boolean `request.user.isAdmin`.
+reads `request.user.systemRole === 'system_admin'`.
 
 ## Ownership and project scope
 
@@ -59,8 +58,9 @@ warn before a destructive action.
 ## Ontology endpoints
 
 `GET /api/personas/:id/ontology` returns the four type lists.
-Since v0.1.8 the route enforces ownership for non-system personas;
-an anonymous or foreign request returns 404, not 403. See
+The route hides non-system personas from anonymous callers
+with a 404; authenticated callers who lack CASL read ability
+on the persona get a 403 (`Access denied`). See
 [Guide > Ontologies](ontologies.md) for the document shape.
 
 ## System-generated personas

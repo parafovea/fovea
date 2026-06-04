@@ -30,7 +30,7 @@ project.
 
 **Fusion.** Combining audio transcription and visual
 summarization into a single summary. Strategies are
-`sequential`, `parallel`, `audio-first`.
+`sequential`, `timestamp_aligned`, `native_multimodal`, `hybrid`.
 
 **Gloss item.** One entry in a claim's gloss array. Type is one
 of `text`, `objectRef`, `typeRef`, `annotationRef`, `claimRef`.
@@ -41,9 +41,9 @@ the persona is trying to learn from a video.
 **Keyframe.** A frame at which the user has explicitly placed a
 bounding box. Frames between keyframes are interpolated.
 
-**linkType.** Column added in v0.1.8 on `Annotation` to record
-whether an object annotation is linked to an entity, event, time,
-or location. See [Guide > Annotations](../guide/annotations.md).
+**linkType.** Column on `Annotation` recording whether an
+object annotation is linked to an entity, event, time, or
+location. See [Guide > Annotations](../guide/annotations.md).
 
 **Model service.** The FastAPI process hosting VLM, LLM,
 detector, tracker, and audio adapters. See

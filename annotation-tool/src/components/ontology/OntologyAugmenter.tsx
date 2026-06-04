@@ -5,38 +5,25 @@
  */
 
 import React, { useState } from 'react'
+import { Sparkles, CheckCircle, ChevronDown, Plus, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
 import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
   Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Button,
-  Typography,
-  Chip,
-  LinearProgress,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemButton,
-  Checkbox,
-  ListItemIcon,
-  Divider,
-  IconButton,
-  Collapse,
-  Stack,
-} from '@mui/material'
-import {
-  AutoAwesome as AutoAwesomeIcon,
-  CheckCircle as CheckCircleIcon,
-  ExpandMore as ExpandMoreIcon,
-  Add as AddIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material'
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { useMutation } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import {
@@ -226,10 +213,16 @@ export function OntologyAugmenter({
     setSelectedSuggestions(new Set())
   }
 
-  const getConfidenceColor = (confidence: number): 'success' | 'warning' | 'error' => {
-    if (confidence >= 0.8) return 'success'
-    if (confidence >= 0.6) return 'warning'
-    return 'error'
+  const getConfidenceColor = (confidence: number): string => {
+    if (confidence >= 0.8) return 'bg-green-500'
+    if (confidence >= 0.6) return 'bg-yellow-500'
+    return 'bg-red-500'
+  }
+
+  const getConfidenceBadgeVariant = (confidence: number): 'default' | 'secondary' | 'destructive' => {
+    if (confidence >= 0.8) return 'default'
+    if (confidence >= 0.6) return 'secondary'
+    return 'destructive'
   }
 
   const getConfidenceLabel = (confidence: number): string => {
@@ -242,232 +235,230 @@ export function OntologyAugmenter({
   return (
     <Card>
       <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AutoAwesomeIcon color="primary" />
-            <Typography variant="h6">AI Ontology Augmentation</Typography>
-          </Box>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-5 text-primary" />
+            <h3 className="text-base font-semibold">AI Ontology Augmentation</h3>
+          </div>
           {onClose && (
-            <IconButton size="small" onClick={onClose} aria-label="close">
-              <CloseIcon />
-            </IconButton>
+            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="close">
+              <X className="size-4" />
+            </Button>
           )}
-        </Box>
+        </div>
 
         {personaName && (
-          <Typography variant="body2" color="text.secondary" gutterBottom>
+          <p className="text-sm text-muted-foreground mb-2">
             Persona: {personaName}
-          </Typography>
+          </p>
         )}
 
-        <Stack spacing={2} sx={{ mt: 2 }}>
-          <FormControl fullWidth>
-            <InputLabel>Category</InputLabel>
+        <div className="flex flex-col gap-4 mt-4">
+          <div>
+            <Label className="mb-2">Category</Label>
             <Select
               value={category}
-              label="Category"
-              onChange={(e) => setCategory(e.target.value as OntologyCategory)}
+              onValueChange={(val) => setCategory(val as OntologyCategory)}
               disabled={mutation.isPending}
             >
-              <MenuItem value="entity">Entity Types</MenuItem>
-              <MenuItem value="event">Event Types</MenuItem>
-              <MenuItem value="role">Role Types</MenuItem>
-              <MenuItem value="relation">Relation Types</MenuItem>
+              <SelectTrigger className="w-full" data-tour-id="augmenter-import-target" aria-label="Ontology category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entity">Entity Types</SelectItem>
+                <SelectItem value="event">Event Types</SelectItem>
+                <SelectItem value="role">Role Types</SelectItem>
+                <SelectItem value="relation">Relation Types</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
-          <TextField
-            label="Domain Description"
-            placeholder="E.g., Wildlife research tracking whale pod behavior and migration patterns"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            multiline
-            rows={3}
-            fullWidth
-            disabled={mutation.isPending}
-            helperText="Describe your analysis domain and what you need to annotate"
-          />
+          <div data-tour-id="augmenter-search">
+            <Label className="mb-2">Domain Description</Label>
+            <Textarea
+              placeholder="E.g., Wildlife research tracking whale pod behavior and migration patterns"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              disabled={mutation.isPending}
+              className="min-h-20"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Describe your analysis domain and what you need to annotate
+            </p>
+          </div>
 
           {existingTypes.length > 0 && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">
                 Existing {category} types ({existingTypes.length}):
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              </p>
+              <div className="flex flex-wrap gap-1">
                 {existingTypes.slice(0, 10).map((type) => (
-                  <Chip key={type} label={type} size="small" variant="outlined" />
+                  <Badge key={type} variant="outline">{type}</Badge>
                 ))}
                 {existingTypes.length > 10 && (
-                  <Chip label={`+${existingTypes.length - 10} more`} size="small" variant="outlined" />
+                  <Badge variant="outline">+{existingTypes.length - 10} more</Badge>
                 )}
-              </Box>
-            </Box>
+              </div>
+            </div>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField
-              label="Max Suggestions"
-              type="number"
-              value={maxSuggestions}
-              onChange={(e) => setMaxSuggestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 10)))}
-              inputProps={{ min: 1, max: 20 }}
-              size="small"
-              sx={{ width: 150 }}
-              disabled={mutation.isPending}
-            />
+          <div className="flex gap-4 items-center">
+            <div className="w-36">
+              <Label htmlFor="max-suggestions" className="mb-2">Max Suggestions</Label>
+              <Input
+                id="max-suggestions"
+                type="number"
+                value={maxSuggestions}
+                onChange={(e) => setMaxSuggestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 10)))}
+                min={1}
+                max={20}
+                disabled={mutation.isPending}
+              />
+            </div>
             <Button
-              variant="contained"
-              startIcon={<AutoAwesomeIcon />}
+              className="flex-1 mt-5"
               onClick={handleGenerate}
               disabled={mutation.isPending || !domain.trim()}
-              fullWidth
             >
+              <Sparkles className="size-4 mr-2" />
               Generate Suggestions
             </Button>
-          </Box>
-        </Stack>
+          </div>
+        </div>
 
         {mutation.isPending && (
-          <Box sx={{ mt: 3 }}>
-            <LinearProgress />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <div className="mt-6">
+            <Progress value={null} />
+            <p className="text-sm text-muted-foreground mt-2">
               Analyzing domain and generating suggestions...
-            </Typography>
-          </Box>
+            </p>
+          </div>
         )}
 
         {mutation.isError && (
-          <Alert severity="error" sx={{ mt: 3 }}>
-            {mutation.error instanceof Error ? mutation.error.message : 'Failed to generate suggestions'}
+          <Alert variant="destructive" className="mt-6">
+            <AlertDescription>
+              {mutation.error instanceof Error ? mutation.error.message : 'Failed to generate suggestions'}
+            </AlertDescription>
           </Alert>
         )}
 
         {mutation.isSuccess && mutation.data && (
-          <Box sx={{ mt: 3 }}>
+          <div className="mt-6" data-tour-id="augmenter-results">
             {mutation.data.reasoning && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {mutation.data.reasoning}
+              <Alert className="mb-4">
+                <AlertDescription>{mutation.data.reasoning}</AlertDescription>
               </Alert>
             )}
 
             {mutation.data.suggestions.length === 0 ? (
-              <Alert severity="warning">
-                No suggestions generated. Try providing more context in your domain description.
+              <Alert>
+                <AlertDescription>
+                  No suggestions generated. Try providing more context in your domain description.
+                </AlertDescription>
               </Alert>
             ) : (
               <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="subtitle1">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-sm font-medium">
                     Suggestions ({mutation.data.suggestions.length})
-                  </Typography>
+                  </p>
                   <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={<AddIcon />}
+                    size="sm"
                     onClick={handleAcceptSelected}
                     disabled={selectedSuggestions.size === 0}
                   >
+                    <Plus className="size-4 mr-1" />
                     Add Selected ({selectedSuggestions.size})
                   </Button>
-                </Box>
+                </div>
 
-                <List sx={{ bgcolor: 'background.paper', borderRadius: 1 }}>
+                <div className="rounded-lg border bg-card">
                   {mutation.data.suggestions.map((suggestion: OntologySuggestion, index: number) => {
                     const isSelected = selectedSuggestions.has(suggestion.name)
                     const isExpanded = expandedSuggestion === suggestion.name
 
                     return (
                       <React.Fragment key={suggestion.name}>
-                        {index > 0 && <Divider />}
-                        <ListItem disablePadding>
-                          <ListItemButton
-                            onClick={() => handleToggleSuggestion(suggestion.name)}
-                            selected={isSelected}
-                          >
-                            <ListItemIcon>
-                              <Checkbox
-                                edge="start"
-                                checked={isSelected}
-                                tabIndex={-1}
-                                disableRipple
-                              />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body1" fontWeight={500}>
-                                    {suggestion.name}
-                                  </Typography>
-                                  <Chip
-                                    label={getConfidenceLabel(suggestion.confidence)}
-                                    size="small"
-                                    color={getConfidenceColor(suggestion.confidence)}
-                                    icon={<CheckCircleIcon />}
-                                  />
-                                  {suggestion.parent && (
-                                    <Chip
-                                      label={`extends ${suggestion.parent}`}
-                                      size="small"
-                                      variant="outlined"
-                                    />
-                                  )}
-                                </Box>
-                              }
-                              secondary={suggestion.description}
-                            />
-                            <IconButton
-                              size="small"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation()
-                                handleToggleExpand(suggestion.name)
-                              }}
-                              sx={{
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.3s',
-                              }}
-                            >
-                              <ExpandMoreIcon />
-                            </IconButton>
-                          </ListItemButton>
-                        </ListItem>
-
-                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                          <Box sx={{ px: 9, py: 2, bgcolor: 'action.hover' }}>
-                            {suggestion.examples.length > 0 && (
-                              <Box sx={{ mb: 1 }}>
-                                <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                  Examples:
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                                  {suggestion.examples.map((example: string) => (
-                                    <Chip key={example} label={example} size="small" />
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Confidence Score:
-                              </Typography>
-                              <LinearProgress
-                                variant="determinate"
-                                value={suggestion.confidence * 100}
-                                color={getConfidenceColor(suggestion.confidence)}
-                                sx={{ flexGrow: 1, height: 6, borderRadius: 3 }}
-                              />
-                              <Typography variant="caption" color="text.secondary">
+                        {index > 0 && <Separator />}
+                        <div
+                          className={cn(
+                            'flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-accent/50',
+                            isSelected && 'bg-accent/30'
+                          )}
+                          onClick={() => handleToggleSuggestion(suggestion.name)}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleToggleSuggestion(suggestion.name)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{suggestion.name}</span>
+                              <Badge variant={getConfidenceBadgeVariant(suggestion.confidence)}>
+                                <CheckCircle className="size-3 mr-1" />
                                 {getConfidenceLabel(suggestion.confidence)}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Collapse>
+                              </Badge>
+                              {suggestion.parent && (
+                                <Badge variant="outline">extends {suggestion.parent}</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-0.5">{suggestion.description}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation()
+                              handleToggleExpand(suggestion.name)
+                            }}
+                            className={cn(
+                              'transition-transform duration-200',
+                              isExpanded && 'rotate-180'
+                            )}
+                          >
+                            <ChevronDown className="size-4" />
+                          </Button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="px-16 py-4 bg-accent/20">
+                            {suggestion.examples.length > 0 && (
+                              <div className="mb-2">
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Examples:
+                                </p>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {suggestion.examples.map((example: string) => (
+                                    <Badge key={example} variant="secondary">{example}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-muted-foreground">
+                                Confidence Score:
+                              </p>
+                              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className={cn('h-full rounded-full', getConfidenceColor(suggestion.confidence))}
+                                  style={{ width: `${suggestion.confidence * 100}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {getConfidenceLabel(suggestion.confidence)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </React.Fragment>
                     )
                   })}
-                </List>
+                </div>
               </>
             )}
-          </Box>
+          </div>
         )}
       </CardContent>
     </Card>

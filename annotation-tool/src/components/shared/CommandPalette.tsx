@@ -4,28 +4,25 @@
  * Opens with Cmd/Ctrl+Shift+P.
  */
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  TextField,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Typography,
-  Box,
-  Chip,
-  Paper
-} from '@mui/material'
-import { Search as SearchIcon } from '@mui/icons-material'
+import { useState, useMemo, useCallback } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
+import {
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+} from '@/components/ui/command'
+import { Badge } from '@/components/ui/badge'
 import { commandRegistry } from '@lib/commands/command-registry'
 import { formatKeybinding } from '@lib/commands/commands'
 
 /**
  * Command Palette component.
- * Provides searchable command execution interface.
+ * Provides searchable command execution using cmdk for filtering
+ * and keyboard navigation.
  *
  * @example
  * ```tsx
@@ -39,11 +36,8 @@ import { formatKeybinding } from '@lib/commands/commands'
  * }
  * ```
  */
-export function CommandPalette() {
+export function CommandPalette(): JSX.Element {
   const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // Open command palette with Cmd+Shift+P
   useHotkeys(
@@ -51,21 +45,12 @@ export function CommandPalette() {
     (event) => {
       event.preventDefault()
       setOpen(true)
-      setSearch('')
-      setSelectedIndex(0)
     },
     { enableOnFormTags: true }
   )
 
-  // Focus input when dialog opens
-  useEffect(() => {
-    if (open && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100)
-    }
-  }, [open])
-
-  // Get all available commands (filtered by context)
-  // Re-evaluate when dialog opens to get current context
+  // Get all available commands, filtered by context.
+  // Re-evaluate when dialog opens to get current context.
   const allCommands = useMemo(() => {
     const commands = commandRegistry.getCommands() || []
     return commands.filter(cmd => {
@@ -79,30 +64,23 @@ export function CommandPalette() {
 
       return true
     })
-    // Re-evaluate when dialog opens to refresh context-dependent commands
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Filter commands based on search
-  const filteredCommands = useMemo(() => {
-    if (!search.trim()) {
-      return allCommands
+  // Group commands by category
+  const commandsByCategory = useMemo(() => {
+    const grouped = new Map<string, typeof allCommands>()
+    for (const cmd of allCommands) {
+      const category = cmd.category
+      const existing = grouped.get(category) || []
+      grouped.set(category, [...existing, cmd])
     }
-
-    const searchLower = search.toLowerCase()
-    return allCommands.filter(cmd =>
-      cmd.title.toLowerCase().includes(searchLower) ||
-      cmd.description?.toLowerCase().includes(searchLower) ||
-      cmd.id.toLowerCase().includes(searchLower) ||
-      cmd.category.toLowerCase().includes(searchLower)
-    )
-  }, [allCommands, search])
+    return grouped
+  }, [allCommands])
 
   // Handle command execution
   const executeCommand = useCallback(async (commandId: string) => {
     setOpen(false)
-    setSearch('')
-    setSelectedIndex(0)
 
     try {
       await commandRegistry.execute(commandId)
@@ -111,188 +89,51 @@ export function CommandPalette() {
     }
   }, [])
 
-  // Handle keyboard navigation
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault()
-        setSelectedIndex(prev =>
-          prev < filteredCommands.length - 1 ? prev + 1 : prev
-        )
-        break
-
-      case 'ArrowUp':
-        event.preventDefault()
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : prev))
-        break
-
-      case 'Enter':
-        event.preventDefault()
-        if (filteredCommands[selectedIndex]) {
-          executeCommand(filteredCommands[selectedIndex].id)
-        }
-        break
-
-      case 'Escape':
-        event.preventDefault()
-        setOpen(false)
-        setSearch('')
-        setSelectedIndex(0)
-        break
-
-      default:
-        break
-    }
-  }, [filteredCommands, selectedIndex, executeCommand])
-
   // Handle dialog close
   const handleClose = useCallback(() => {
     setOpen(false)
-    setSearch('')
-    setSelectedIndex(0)
   }, [])
 
-  // Scroll selected item into view
-  useEffect(() => {
-    const selectedElement = document.querySelector(`[data-command-index="${selectedIndex}"]`)
-    if (selectedElement) {
-      selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
-  }, [selectedIndex])
-
   return (
-    <Dialog
+    <CommandDialog
       open={open}
-      onClose={handleClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: {
-          position: 'fixed',
-          top: '10%',
-          m: 0,
-          maxHeight: '80vh'
-        }
-      }}
+      onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}
     >
-      <DialogContent sx={{ p: 0 }}>
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <TextField
-            inputRef={inputRef}
-            fullWidth
-            placeholder="Type a command or search..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setSelectedIndex(0)
-            }}
-            onKeyDown={handleKeyDown}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-            }}
-            variant="outlined"
-            size="small"
-            autoComplete="off"
-          />
-        </Box>
-
-        <List
-          sx={{
-            maxHeight: '60vh',
-            overflow: 'auto',
-            py: 0
-          }}
-        >
-          {filteredCommands.length === 0 ? (
-            <Box sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="text.secondary">
-                No commands found
-              </Typography>
-            </Box>
-          ) : (
-            filteredCommands.map((command, index) => (
-              <ListItem
+      <CommandInput placeholder="Type a command or search..." />
+      <CommandList>
+        <CommandEmpty>No commands found</CommandEmpty>
+        {Array.from(commandsByCategory).map(([category, commands]) => (
+          <CommandGroup key={category} heading={category}>
+            {commands.map(command => (
+              <CommandItem
                 key={command.id}
-                data-command-index={index}
-                disablePadding
-                sx={{
-                  backgroundColor: index === selectedIndex ? 'action.selected' : 'transparent'
-                }}
+                value={`${command.title} ${command.description || ''} ${command.id} ${command.category}`}
+                onSelect={() => executeCommand(command.id)}
               >
-                <ListItemButton
-                  onClick={() => executeCommand(command.id)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  sx={{ py: 1.5 }}
-                >
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body1">
-                          {command.title}
-                        </Typography>
-                        <Chip
-                          label={command.category}
-                          size="small"
-                          sx={{
-                            height: 20,
-                            fontSize: '0.7rem',
-                            textTransform: 'capitalize'
-                          }}
-                        />
-                      </Box>
-                    }
-                    secondary={command.description || command.id}
-                  />
-                  {command.keybinding && (
-                    <Box sx={{ ml: 2 }}>
-                      <Paper
-                        variant="outlined"
-                        sx={{
-                          px: 1,
-                          py: 0.5,
-                          backgroundColor: 'grey.100',
-                          display: 'inline-block'
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontFamily: 'monospace',
-                            color: 'text.secondary'
-                          }}
-                        >
-                          {Array.isArray(command.keybinding)
-                            ? formatKeybinding(command.keybinding[0])
-                            : formatKeybinding(command.keybinding)}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  )}
-                </ListItemButton>
-              </ListItem>
-            ))
-          )}
-        </List>
-
-        <Box
-          sx={{
-            p: 1,
-            borderTop: 1,
-            borderColor: 'divider',
-            backgroundColor: 'grey.50',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            {filteredCommands.length} command{filteredCommands.length !== 1 ? 's' : ''}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            ↑↓ Navigate • ↵ Execute • Esc Close
-          </Typography>
-        </Box>
-      </DialogContent>
-    </Dialog>
+                <span className="flex-1">{command.title}</span>
+                <Badge variant="secondary" className="ml-2 text-[0.65rem] capitalize">
+                  {command.category}
+                </Badge>
+                {command.keybinding && (
+                  <CommandShortcut>
+                    {Array.isArray(command.keybinding)
+                      ? formatKeybinding(command.keybinding[0])
+                      : formatKeybinding(command.keybinding)}
+                  </CommandShortcut>
+                )}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
+      </CommandList>
+      <div className="flex items-center justify-between border-t bg-muted/50 px-3 py-1.5">
+        <span className="text-xs text-muted-foreground">
+          {allCommands.length} command{allCommands.length !== 1 ? 's' : ''}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          ↑↓ Navigate &middot; ↵ Execute &middot; Esc Close
+        </span>
+      </div>
+    </CommandDialog>
   )
 }

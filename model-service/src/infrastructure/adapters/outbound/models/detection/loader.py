@@ -1,18 +1,48 @@
-"""Open-vocabulary object detection with multiple model architectures.
+"""Open-vocabulary object detection loaders dispatched by architecture.
 
-This module provides a unified interface for loading and running inference with
-various open-vocabulary object detection models including YOLO-World v2.1,
-Grounding DINO 1.5, OWLv2, and Florence-2. Models support text-based prompts
-for detecting objects without pre-defined class vocabularies.
+This module owns two architecture-keyed registries:
+
+* :data:`detection_pytorch_registry` — loaders that drive a PyTorch /
+  Ultralytics / Transformers backend.
+* :data:`detection_onnx_registry` — loaders that drive an ONNX Runtime
+  session for CPU inference.
+
+A loader class registers itself against the architecture Pydantic
+subclass it implements via the appropriate registry's ``@register``
+decorator. The :func:`create_detection_loader` factory inspects the
+framework on the :class:`DetectionConfig`, picks the matching registry,
+and instantiates the loader through it. No code in this module matches
+on model-id substrings, weights filenames, or free-text labels; the
+architecture Pydantic class is the only legitimate dispatch key.
+
+The two-registry design reflects the fact that the same architecture
+(for example :class:`YOLOWorld`) is driven by two distinct loader
+classes depending on the backend: a pytorch / ultralytics
+:class:`YOLOWorldLoader` and an ONNX :class:`YOLOWorldONNXLoader` with a
+different inheritance chain. Collapsing both into one registry would
+either force a synthetic ``(framework, architecture)`` lookup key or
+overwrite one entry with the other; keeping the registries separate
+matches the natural fiber of the loader hierarchy.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+import time
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
-from PIL import Image
 
+from src.domain.entities.architectures import (
+    RFDETR,
+    YOLOE,
+    Florence2Detection,
+    GroundingDINO,
+    OWLv2,
+    YOLOv12,
+    YOLOWorld,
+)
 from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
@@ -21,7 +51,14 @@ from src.infrastructure.adapters.outbound.models.detection.base import (
     DetectionModelLoader,
     DetectionResult,
 )
+from src.infrastructure.adapters.outbound.models.onnx.registry import detection_onnx_registry
+from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from PIL import Image
+
+    from src.domain.entities.architectures import DetectionArchitecture
 
 __all__ = [
     "BoundingBox",
@@ -30,12 +67,49 @@ __all__ = [
     "DetectionFramework",
     "DetectionModelLoader",
     "DetectionResult",
+    "Florence2Loader",
+    "GroundingDINOLoader",
+    "OWLv2Loader",
+    "RFDETRLoader",
+    "YOLOELoader",
+    "YOLOWorldLoader",
+    "YOLOv12Loader",
     "create_detection_loader",
+    "detection_onnx_registry",
+    "detection_pytorch_registry",
 ]
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Registries.
+#
+# Two independent registries because the same architecture maps to two
+# distinct loader classes depending on the backend (pytorch / ultralytics
+# / transformers vs. ONNX Runtime). The registries do not share state.
+# ---------------------------------------------------------------------------
+
+detection_pytorch_registry: LoaderRegistry[DetectionArchitecture, DetectionModelLoader] = (
+    LoaderRegistry(family="detection_pytorch")
+)
+"""Loaders for PyTorch, Ultralytics, and Transformers detection backends."""
+
+
+# ---------------------------------------------------------------------------
+# Install hints for optional backend dependencies.
+# ---------------------------------------------------------------------------
+
+YOLOE_INSTALL_HINT = "YOLOE (open-vocab YOLO) required; install with: pip install ultralytics"
+RFDETR_INSTALL_HINT = "rfdetr package required; install with: pip install rfdetr"
+
+
+# ---------------------------------------------------------------------------
+# PyTorch / Ultralytics / Transformers loaders.
+# ---------------------------------------------------------------------------
+
+
+@detection_pytorch_registry.register(YOLOWorld)
 class YOLOWorldLoader(DetectionModelLoader):
     """Loader for YOLO-World v2.1 open-vocabulary detection model.
 
@@ -69,8 +143,6 @@ class YOLOWorldLoader(DetectionModelLoader):
         """Detect objects using YOLO-World v2.1 with text prompts."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         try:
             start_time = time.time()
@@ -115,6 +187,7 @@ class YOLOWorldLoader(DetectionModelLoader):
             raise RuntimeError(f"Object detection failed: {e}") from e
 
 
+@detection_pytorch_registry.register(GroundingDINO)
 class GroundingDINOLoader(DetectionModelLoader):
     """Loader for Grounding DINO 1.5 open-vocabulary detection model.
 
@@ -151,8 +224,6 @@ class GroundingDINOLoader(DetectionModelLoader):
         """Detect objects using Grounding DINO 1.5 with text prompts."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         try:
             from groundingdino.util.inference import predict
@@ -197,6 +268,7 @@ class GroundingDINOLoader(DetectionModelLoader):
             raise RuntimeError(f"Object detection failed: {e}") from e
 
 
+@detection_pytorch_registry.register(OWLv2)
 class OWLv2Loader(DetectionModelLoader):
     """Loader for OWLv2 open-vocabulary detection model.
 
@@ -240,8 +312,6 @@ class OWLv2Loader(DetectionModelLoader):
         """Detect objects using OWLv2 with text prompts."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         try:
             start_time = time.time()
@@ -294,6 +364,7 @@ class OWLv2Loader(DetectionModelLoader):
             raise RuntimeError(f"Object detection failed: {e}") from e
 
 
+@detection_pytorch_registry.register(Florence2Detection)
 class Florence2Loader(DetectionModelLoader):
     """Loader for Florence-2 unified vision model.
 
@@ -343,8 +414,6 @@ class Florence2Loader(DetectionModelLoader):
         """Detect objects using Florence-2 with text prompts."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         try:
             start_time = time.time()
@@ -428,10 +497,7 @@ class Florence2Loader(DetectionModelLoader):
         return detections
 
 
-YOLOE_INSTALL_HINT = "YOLOE (open-vocab YOLO) required; install with: pip install ultralytics"
-RFDETR_INSTALL_HINT = "rfdetr package required; install with: pip install rfdetr"
-
-
+@detection_pytorch_registry.register(YOLOv12)
 class YOLOv12Loader(DetectionModelLoader):
     """Loader for YOLOv12 closed-set detection via Ultralytics."""
 
@@ -458,8 +524,6 @@ class YOLOv12Loader(DetectionModelLoader):
         """Run YOLOv12 detection on a single image."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         start_time = time.time()
         image_array = np.array(image)
@@ -491,11 +555,12 @@ class YOLOv12Loader(DetectionModelLoader):
         )
 
 
-class YOLOE26Loader(DetectionModelLoader):
-    """Loader for YOLOE-26 open-vocabulary detection."""
+@detection_pytorch_registry.register(YOLOE)
+class YOLOELoader(DetectionModelLoader):
+    """Loader for YOLOE open-vocabulary detection via Ultralytics."""
 
     def load(self) -> None:
-        """Load YOLOE-26 via ``ultralytics.YOLOE``."""
+        """Load YOLOE via ``ultralytics.YOLOE``."""
         try:
             import ultralytics
         except ImportError as exc:
@@ -505,7 +570,7 @@ class YOLOE26Loader(DetectionModelLoader):
         if yoloe_cls is None:
             raise ImportError(YOLOE_INSTALL_HINT)
 
-        logger.info("Loading YOLOE-26 from %s", self.config.model_id)
+        logger.info("Loading YOLOE from %s", self.config.model_id)
         self.model = yoloe_cls(self.config.model_id)
         if torch.cuda.is_available():
             self.model.to(self.config.device)
@@ -516,11 +581,9 @@ class YOLOE26Loader(DetectionModelLoader):
         image: Image.Image,
         text_prompt: str,
     ) -> DetectionResult:
-        """Run YOLOE-26 open-vocabulary detection."""
+        """Run YOLOE open-vocabulary detection."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         start_time = time.time()
         image_array = np.array(image)
@@ -560,6 +623,7 @@ class YOLOE26Loader(DetectionModelLoader):
         )
 
 
+@detection_pytorch_registry.register(RFDETR)
 class RFDETRLoader(DetectionModelLoader):
     """Loader for Roboflow RF-DETR detection models."""
 
@@ -587,8 +651,6 @@ class RFDETRLoader(DetectionModelLoader):
         """Run RF-DETR detection on a single image."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-
-        import time
 
         start_time = time.time()
         width, height = image.size
@@ -636,92 +698,74 @@ def _iter_rfdetr_detections(raw: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _create_onnx_loader(config: DetectionConfig) -> DetectionModelLoader:
-    """Create an ONNX detection loader based on the model ID.
+# ---------------------------------------------------------------------------
+# ONNX loader registration.
+#
+# The ONNX loader classes live in sibling modules (``onnx/yolo_world.py``,
+# ``onnx/florence.py``, ``onnx/grounding_dino.py``) so the heavy ONNX
+# Runtime imports stay isolated from the pytorch path. We import them
+# here only to attach the architecture registration to the ONNX registry;
+# the loader bodies themselves live in those modules and use the
+# registry's ``@register`` decorator at their definition site.
+# ---------------------------------------------------------------------------
+
+# Importing these modules executes their ``@detection_onnx_registry.register(...)``
+# decorators and is the only way they enter the registry. The imports are
+# intentionally placed at the bottom of this module to keep the registry
+# definitions above any decorator that closes over them.
+from src.infrastructure.adapters.outbound.models.onnx.florence import (  # noqa: E402,F401
+    Florence2ONNXLoader,
+)
+from src.infrastructure.adapters.outbound.models.onnx.grounding_dino import (  # noqa: E402,F401
+    GroundingDINOONNXLoader,
+)
+from src.infrastructure.adapters.outbound.models.onnx.yolo_world import (  # noqa: E402,F401
+    YOLOWorldONNXLoader,
+)
+
+# ---------------------------------------------------------------------------
+# Factory.
+# ---------------------------------------------------------------------------
+
+
+def create_detection_loader(
+    architecture: DetectionArchitecture,
+    config: DetectionConfig,
+) -> DetectionModelLoader:
+    """Instantiate the detection loader registered for an architecture.
+
+    The framework on the :class:`DetectionConfig` selects the
+    pytorch-backed registry or the ONNX-backed registry; the architecture
+    instance then selects the concrete loader class within that registry.
+    No model-id, weights filename, or free-text label is inspected on
+    this path.
 
     Parameters
     ----------
+    architecture : DetectionArchitecture
+        Parsed architecture model (a member of the discriminated union
+        defined in :mod:`src.domain.entities.architectures`).
     config : DetectionConfig
-        Configuration with model_id used to select the ONNX loader.
+        Framework-level configuration including the model id, device,
+        and confidence threshold.
 
     Returns
     -------
     DetectionModelLoader
-        ONNX loader instance for the specified model.
+        A fresh loader instance bound to the supplied architecture and
+        config. The loader is NOT loaded; the caller must invoke
+        ``load()`` before ``detect()``.
 
     Raises
     ------
-    ValueError
-        If no ONNX loader is available for the model ID.
+    src.infrastructure.adapters.outbound.models.registry.UnknownArchitectureError
+        When no loader has registered against ``type(architecture)`` in
+        the selected registry. The error message lists every registered
+        architecture so a misconfigured YAML fails loudly.
     """
-    onnx_model_name = config.model_id.lower().replace("-", "").replace("_", "")
-    if "yoloworld" in onnx_model_name:
-        from src.infrastructure.adapters.outbound.models.onnx.yolo_world import (
-            YOLOWorldONNXLoader,
-        )
-
-        return YOLOWorldONNXLoader(config)
-    if "florence" in onnx_model_name:
-        from src.infrastructure.adapters.outbound.models.onnx.florence import (
-            Florence2ONNXLoader,
-        )
-
-        return Florence2ONNXLoader(config)
-    if "groundingdino" in onnx_model_name:
-        from src.infrastructure.adapters.outbound.models.onnx.grounding_dino import (
-            GroundingDINOONNXLoader,
-        )
-
-        return GroundingDINOONNXLoader(config)
-    msg = f"No ONNX loader available for model: {config.model_id}"
-    raise ValueError(msg)
-
-
-def create_detection_loader(model_name: str, config: DetectionConfig) -> DetectionModelLoader:
-    """Factory function to create appropriate detection loader based on model name.
-
-    Parameters
-    ----------
-    model_name : str
-        Name of the model to load. Supported values:
-        - "yolo-world-v2" or "yoloworld"
-        - "grounding-dino-1-5" or "groundingdino"
-        - "owlv2" or "owl-v2"
-        - "florence-2" or "florence2"
-    config : DetectionConfig
-        Configuration for model loading and inference.
-
-    Returns
-    -------
-    DetectionModelLoader
-        Appropriate loader instance for the specified model.
-
-    Raises
-    ------
-    ValueError
-        If model_name is not recognized.
-    """
-    if config.framework == DetectionFramework.ONNX:
-        return _create_onnx_loader(config)
-
-    model_name_lower = model_name.lower().replace("_", "-")
-
-    if "yolo-world" in model_name_lower or "yoloworld" in model_name_lower:
-        return YOLOWorldLoader(config)
-    if "yoloe" in model_name_lower:
-        return YOLOE26Loader(config)
-    if "yolov12" in model_name_lower or "yolo12" in model_name_lower:
-        return YOLOv12Loader(config)
-    if "rf-detr" in model_name_lower or "rfdetr" in model_name_lower:
-        return RFDETRLoader(config)
-    if "grounding-dino" in model_name_lower or "groundingdino" in model_name_lower:
-        return GroundingDINOLoader(config)
-    if "owl" in model_name_lower:
-        return OWLv2Loader(config)
-    if "florence" in model_name_lower:
-        return Florence2Loader(config)
-
-    raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "yolo-world-v2, yolov12, yoloe-26, rf-detr, grounding-dino-1-5, owlv2, florence-2"
+    registry = (
+        detection_onnx_registry
+        if config.framework == DetectionFramework.ONNX
+        else detection_pytorch_registry
     )
+    return registry.create(architecture, config)

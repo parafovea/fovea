@@ -742,7 +742,7 @@ describe('Import/export field-level round-trip fidelity', () => {
       data: {
         videoId: 'v-all',
         userId: A.userId,
-        createdByUserId: A.userId, personaId: null, userId: A.userId,
+        createdByUserId: A.userId, personaId: null,
         type: 'object', label: 'e-all', linkType: 'entity',
         frames: { boxes: [{ x: 0, y: 0, width: 1, height: 1, frameNumber: 0, isKeyframe: true }], interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 },
       },

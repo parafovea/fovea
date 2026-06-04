@@ -8,6 +8,12 @@ import pytest
 import torch
 from PIL import Image
 
+from src.domain.entities.architectures import (
+    Florence2Detection,
+    GroundingDINO,
+    OWLv2,
+    YOLOWorld,
+)
 from src.infrastructure.adapters.outbound.models.detection.loader import (
     BoundingBox,
     Detection,
@@ -126,7 +132,7 @@ class TestYOLOWorldLoader:
         mock_model = MagicMock()
         mock_yolo_class.return_value = mock_model
 
-        loader = YOLOWorldLoader(detection_config)
+        loader = YOLOWorldLoader(YOLOWorld(), detection_config)
         loader.load()
 
         mock_yolo_class.assert_called_once_with(detection_config.model_id)
@@ -139,7 +145,7 @@ class TestYOLOWorldLoader:
         """Test YOLO-World model loading failure."""
         mock_yolo_class.side_effect = RuntimeError("Model not found")
 
-        loader = YOLOWorldLoader(detection_config)
+        loader = YOLOWorldLoader(YOLOWorld(), detection_config)
 
         with pytest.raises(RuntimeError, match="Model loading failed"):
             loader.load()
@@ -163,7 +169,7 @@ class TestYOLOWorldLoader:
         mock_model.return_value = [mock_result]
         mock_yolo_class.return_value = mock_model
 
-        loader = YOLOWorldLoader(detection_config)
+        loader = YOLOWorldLoader(YOLOWorld(), detection_config)
         loader.load()
 
         result = loader.detect(sample_image, "person. car.")
@@ -179,7 +185,7 @@ class TestYOLOWorldLoader:
         self, detection_config: DetectionConfig, sample_image: Image.Image
     ) -> None:
         """Test detection fails if model not loaded."""
-        loader = YOLOWorldLoader(detection_config)
+        loader = YOLOWorldLoader(YOLOWorld(), detection_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.detect(sample_image, "person")
@@ -210,7 +216,7 @@ class TestYOLOWorldLoader:
         mock_model.return_value = [mock_result]
         mock_yolo_class.return_value = mock_model
 
-        loader = YOLOWorldLoader(config)
+        loader = YOLOWorldLoader(YOLOWorld(), config)
         loader.load()
 
         result = loader.detect(sample_image, "person")
@@ -257,7 +263,7 @@ class TestOWLv2Loader:
             device="cpu",
         )
 
-        loader = OWLv2Loader(config)
+        loader = OWLv2Loader(OWLv2(), config)
         loader.load()
 
         assert loader.model is not None
@@ -294,7 +300,7 @@ class TestOWLv2Loader:
             device="cpu",
         )
 
-        loader = OWLv2Loader(config)
+        loader = OWLv2Loader(OWLv2(), config)
         loader.load()
 
         result = loader.detect(sample_image, "cat. dog. bird.")
@@ -329,7 +335,7 @@ class TestFlorence2Loader:
             device="cpu",
         )
 
-        loader = Florence2Loader(config)
+        loader = Florence2Loader(Florence2Detection(), config)
         loader.load()
 
         assert loader.model is not None
@@ -363,7 +369,7 @@ class TestFlorence2Loader:
             device="cpu",
         )
 
-        loader = Florence2Loader(config)
+        loader = Florence2Loader(Florence2Detection(), config)
         loader.load()
 
         result = loader.detect(sample_image, "person in the image")
@@ -378,7 +384,7 @@ class TestFlorence2Loader:
             model_id="microsoft/Florence-2-large",
             framework=DetectionFramework.TRANSFORMERS,
         )
-        loader = Florence2Loader(config)
+        loader = Florence2Loader(Florence2Detection(), config)
 
         result = '{"bboxes": [[100, 150, 300, 400], [50, 60, 200, 250]], "labels": ["cat", "dog"]}'
         detections = loader._parse_florence_output(result, width=640, height=480)
@@ -393,7 +399,7 @@ class TestFlorence2Loader:
             model_id="microsoft/Florence-2-large",
             framework=DetectionFramework.TRANSFORMERS,
         )
-        loader = Florence2Loader(config)
+        loader = Florence2Loader(Florence2Detection(), config)
 
         result = "invalid json output"
         detections = loader._parse_florence_output(result, width=640, height=480)
@@ -402,46 +408,47 @@ class TestFlorence2Loader:
 
 
 class TestCreateDetectionLoader:
-    """Tests for detection loader factory function."""
+    """Architecture-keyed dispatch tests for :func:`create_detection_loader`.
+
+    The factory dispatches purely on the architecture's Pydantic class
+    via :data:`detection_pytorch_registry` and
+    :data:`detection_onnx_registry`; the broader contract is exercised
+    by ``tests/infrastructure/adapters/outbound/models/detection/test_factory.py``.
+    These tests are kept here to lock the legacy entry points alongside
+    the loader implementations they live next to.
+    """
 
     def test_create_yolo_world_loader(self, detection_config: DetectionConfig) -> None:
-        """Test creating YOLO-World loader."""
-        loader = create_detection_loader("yolo-world-v2", detection_config)
+        """Factory resolves YOLOWorld to YOLOWorldLoader on the pytorch path."""
+        loader = create_detection_loader(YOLOWorld(), detection_config)
         assert isinstance(loader, YOLOWorldLoader)
 
     def test_create_grounding_dino_loader(self, detection_config: DetectionConfig) -> None:
-        """Test creating Grounding DINO loader."""
-        loader = create_detection_loader("grounding-dino-1-5", detection_config)
+        """Factory resolves GroundingDINO to GroundingDINOLoader on the pytorch path."""
+        loader = create_detection_loader(GroundingDINO(), detection_config)
         assert isinstance(loader, GroundingDINOLoader)
 
     def test_create_owlv2_loader(self, detection_config: DetectionConfig) -> None:
-        """Test creating OWLv2 loader."""
-        loader = create_detection_loader("owlv2", detection_config)
+        """Factory resolves OWLv2 to OWLv2Loader on the pytorch path."""
+        loader = create_detection_loader(OWLv2(), detection_config)
         assert isinstance(loader, OWLv2Loader)
 
     def test_create_florence2_loader(self, detection_config: DetectionConfig) -> None:
-        """Test creating Florence-2 loader."""
-        loader = create_detection_loader("florence-2", detection_config)
+        """Factory resolves Florence2Detection to Florence2Loader on the pytorch path."""
+        loader = create_detection_loader(Florence2Detection(), detection_config)
         assert isinstance(loader, Florence2Loader)
 
-    def test_create_loader_with_aliases(self, detection_config: DetectionConfig) -> None:
-        """Test factory function with model name aliases."""
-        loader1 = create_detection_loader("yoloworld", detection_config)
-        assert isinstance(loader1, YOLOWorldLoader)
+    def test_create_loader_unknown_architecture_raises(
+        self, detection_config: DetectionConfig
+    ) -> None:
+        """Architectures outside the detection registries fail loudly."""
+        from src.domain.entities.architectures import QwenLLM
+        from src.infrastructure.adapters.outbound.models.registry import (
+            UnknownArchitectureError,
+        )
 
-        loader2 = create_detection_loader("groundingdino", detection_config)
-        assert isinstance(loader2, GroundingDINOLoader)
-
-        loader3 = create_detection_loader("owl-v2", detection_config)
-        assert isinstance(loader3, OWLv2Loader)
-
-        loader4 = create_detection_loader("florence2", detection_config)
-        assert isinstance(loader4, Florence2Loader)
-
-    def test_create_loader_unknown_model(self, detection_config: DetectionConfig) -> None:
-        """Test factory function with unknown model name."""
-        with pytest.raises(ValueError, match="Unknown model name"):
-            create_detection_loader("unknown-model", detection_config)
+        with pytest.raises(UnknownArchitectureError):
+            create_detection_loader(QwenLLM(), detection_config)  # type: ignore[arg-type]
 
 
 class TestDetectionModelUnload:
@@ -462,7 +469,7 @@ class TestDetectionModelUnload:
         mock_yolo_class.return_value = mock_model
         mock_cuda_available.return_value = True
 
-        loader = YOLOWorldLoader(detection_config)
+        loader = YOLOWorldLoader(YOLOWorld(), detection_config)
         loader.load()
         loader.unload()
 

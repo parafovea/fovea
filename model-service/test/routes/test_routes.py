@@ -14,6 +14,11 @@ from fastapi.testclient import TestClient
 
 from src.application.dto.ontology import OntologyTypeDTO
 from src.application.dto.summarization import SummarizeResponseDTO
+from src.domain.entities.architectures import (
+    SAMURAI,
+    Llama4LLM,
+    YOLOWorld,
+)
 from src.main import app
 
 
@@ -30,6 +35,12 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     mock_model_config.quantization = "4bit"
     mock_model_config.framework = "sglang"
     mock_model_config.cpu_compatible = False
+    # Llama-4 Maverick is a multimodal VLM, not a text LLM; pin its VLM
+    # architecture so routes that pass model_config.architecture to
+    # create_vlm_loader find a valid VLMArchitecture instance.
+    from src.domain.entities.architectures import Llama4Maverick
+
+    mock_model_config.architecture = Llama4Maverick()
     mock_task_config.get_selected_config.return_value = mock_model_config
     mock_task_config.options = {"llama-4-maverick": mock_model_config}
 
@@ -41,6 +52,7 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     mock_detection_config.quantization = None
     mock_detection_config.framework = "ultralytics"
     mock_detection_config.cpu_compatible = True
+    mock_detection_config.architecture = YOLOWorld()
     mock_detection_task.get_selected_config.return_value = mock_detection_config
     mock_detection_task.options = {"yolo-world-v2": mock_detection_config}
 
@@ -52,6 +64,7 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     mock_augment_config.quantization = "4bit"
     mock_augment_config.framework = "sglang"
     mock_augment_config.cpu_compatible = False
+    mock_augment_config.architecture = Llama4LLM()
     mock_augment_task.get_selected_config.return_value = mock_augment_config
     mock_augment_task.options = {"llama-4-scout": mock_augment_config}
 
@@ -63,6 +76,7 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     mock_tracking_config.quantization = None
     mock_tracking_config.framework = "pytorch"
     mock_tracking_config.cpu_compatible = False
+    mock_tracking_config.architecture = SAMURAI()
     mock_tracking_task.get_selected_config.return_value = mock_tracking_config
     mock_tracking_task.options = {"samurai": mock_tracking_config}
 
@@ -75,6 +89,11 @@ def mock_model_manager() -> Generator[Mock, None, None]:
 
     # Mock is_external_api to return False (use self-hosted models in tests)
     mock_manager.is_external_api.return_value = False
+
+    # Routes clamp dto_request.max_frames against
+    # manager.inference_config.max_video_frames; set a real int so the
+    # comparison succeeds without a Mock-vs-int TypeError.
+    mock_manager.inference_config.max_video_frames = 1000
 
     yield mock_manager
 

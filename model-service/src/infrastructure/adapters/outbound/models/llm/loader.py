@@ -1,9 +1,23 @@
-"""Configurable LLM loader with multi-model support and quantization.
+"""Configurable LLM loader with architecture-keyed registry dispatch.
 
-This module provides a loader for text-only language models with support for
-multiple model options (Llama 4 Scout, Llama 3.3 70B, DeepSeek V3, Gemma 3),
-4-bit quantization with bitsandbytes, SGLang inference framework, and
-automatic fallback handling.
+This module hosts the local text-only LLM loader implementations and the
+``create_llm_loader`` factory that resolves an :class:`LLMArchitecture`
+discriminated-union instance to the right loader class.
+
+Dispatch flow:
+
+  yaml architecture block
+    -> Pydantic discriminated union (``LLMArchitecture``)
+    -> ``llm_registry.lookup(type(arch))``
+    -> loader class (``LLMLoader`` for transformers / sglang, or the
+       :class:`LlamaCppLLMLoader` for GGUF via the framework-level
+       pre-dispatch in :func:`create_llm_loader`).
+
+The factory NEVER inspects ``config.model_id`` or other free-text
+fields. The only legitimate dispatch keys are the architecture
+Pydantic class (registry lookup) and ``config.framework`` (the
+llama_cpp pre-dispatch, which is a framework decision rather than a
+model-identity one).
 """
 
 from __future__ import annotations
@@ -20,21 +34,26 @@ from transformers import (
     PreTrainedTokenizer,
 )
 
+from src.domain.entities.architectures import (
+    GLM4,
+    DeepSeekR1Distill,
+    DeepSeekV3LLM,
+    Gemma3LLM,
+    KimiK2,
+    Llama3LLM,
+    Llama4LLM,
+    LLMArchitecture,
+    Phi,
+    QwenLLM,
+)
 from src.infrastructure.adapters.outbound.models.llm.base import (
     GenerationConfig,
     GenerationResult,
     LLMConfig,
     LLMFramework,
 )
+from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
-
-__all__ = [
-    "GenerationConfig",
-    "GenerationResult",
-    "LLMConfig",
-    "LLMFramework",
-    "LLMLoader",
-]
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,25 +62,76 @@ if TYPE_CHECKING:
         LlamaCppLLMLoader,
     )
 
+__all__ = [
+    "GenerationConfig",
+    "GenerationResult",
+    "LLMConfig",
+    "LLMFramework",
+    "LLMLoader",
+    "create_llm_config_from_dict",
+    "create_llm_loader",
+    "create_llm_loader_with_fallback",
+    "llm_registry",
+]
 
+
+llm_registry: LoaderRegistry[LLMArchitecture, LLMLoader] = LoaderRegistry(family="llm")
+"""Architecture-keyed loader registry for the local LLM family.
+
+Loader classes register against the LLM architecture subclasses they
+implement via ``@llm_registry.register(ArchitectureClass)``. The factory
+:func:`create_llm_loader` consults this registry for every non-llama_cpp
+local model. External-API architectures (``ClaudeAPI``, ``OpenAIChat``,
+``GeminiAPI``, ``GrokAPI``) deliberately do NOT register here; routes
+branch to the external-API path before the factory is called.
+"""
+
+
+# The default transformers-backed loader covers every text-LLM family
+# the project currently supports under the transformers / sglang
+# frameworks. Per-family hyperparameters can later move onto each
+# architecture subclass; the loader receives the architecture instance
+# as its first constructor argument so it has access to those fields
+# without re-reading the YAML.
+@llm_registry.register(QwenLLM)
+@llm_registry.register(Phi)
+@llm_registry.register(DeepSeekR1Distill)
+@llm_registry.register(DeepSeekV3LLM)
+@llm_registry.register(Llama3LLM)
+@llm_registry.register(Llama4LLM)
+@llm_registry.register(Gemma3LLM)
+@llm_registry.register(KimiK2)
+@llm_registry.register(GLM4)
 class LLMLoader:
     """Loader for text-only language models with quantization support.
 
-    This class handles loading language models with configurable quantization,
-    supports multiple model options, and provides text generation utilities
-    with error handling and fallback logic.
+    Handles every text-LLM architecture registered above through the
+    ``transformers`` and ``sglang`` frameworks. GGUF / llama.cpp
+    inference for the same architectures is served by
+    :class:`LlamaCppLLMLoader` via the framework-level pre-dispatch in
+    :func:`create_llm_loader`.
+
+    Parameters
+    ----------
+    arch : LLMArchitecture
+        Discriminated-union architecture instance from the parsed YAML.
+        Provided as the first positional argument so the registry's
+        ``create(arch, *args, **kwargs)`` contract is satisfied; the
+        instance is stored for future per-architecture hyperparameter
+        access.
+    config : LLMConfig
+        Framework-level configuration (model id, quantization, tokens).
+    cache_dir : Path | None, default=None
+        Directory for caching model weights. If None, uses default HF cache.
     """
 
-    def __init__(self, config: LLMConfig, cache_dir: Path | None = None) -> None:
-        """Initialize the LLM loader.
-
-        Parameters
-        ----------
-        config : LLMConfig
-            Model configuration specifying model ID, quantization, framework.
-        cache_dir : Path | None, default=None
-            Directory for caching model weights. If None, uses default HF cache.
-        """
+    def __init__(
+        self,
+        arch: LLMArchitecture,
+        config: LLMConfig,
+        cache_dir: Path | None = None,
+    ) -> None:
+        self.arch = arch
         self.config = config
         self.cache_dir = cache_dir
         self.model: PreTrainedModel | None = None  # type: ignore[no-any-unimported]
@@ -91,10 +161,6 @@ class LLMLoader:
 
     async def load(self) -> None:
         """Load the language model and tokenizer.
-
-        This method loads the model with the specified quantization settings
-        and prepares it for inference. Loading is protected by a lock to
-        prevent concurrent loading attempts.
 
         Raises
         ------
@@ -207,10 +273,7 @@ class LLMLoader:
             raise RuntimeError(f"Generation failed: {e}") from e
 
     async def unload(self) -> None:
-        """Unload the model from memory.
-
-        This method releases the model and tokenizer, freeing GPU/CPU memory.
-        """
+        """Unload the model from memory."""
         async with self._lock:
             if self.model is not None:
                 del self.model
@@ -294,18 +357,27 @@ def create_llm_config_from_dict(model_dict: dict[str, Any]) -> LLMConfig:
 
 
 async def create_llm_loader_with_fallback(
+    architecture: LLMArchitecture,
     primary_config: LLMConfig,
     fallback_configs: list[LLMConfig],
     cache_dir: Path | None = None,
 ) -> LLMLoader:
-    """Create an LLM loader with automatic fallback to alternative models.
+    """Create an LLM loader with automatic fallback to alternative configs.
+
+    All fallback configs share the same architecture as the primary; the
+    fallback is over framework-level configuration (smaller quant, lower
+    context window) rather than over the model family. Fallback across
+    architectures would require independent registry lookups and a new
+    contract; that is deliberately out of scope here.
 
     Parameters
     ----------
+    architecture : LLMArchitecture
+        Architecture all configs in the cascade share.
     primary_config : LLMConfig
         Primary model configuration to try first.
     fallback_configs : list[LLMConfig]
-        List of fallback model configurations to try if primary fails.
+        List of fallback model configurations.
     cache_dir : Path | None, default=None
         Directory for caching model weights.
 
@@ -323,7 +395,7 @@ async def create_llm_loader_with_fallback(
 
     for i, config in enumerate(configs_to_try):
         try:
-            loader = LLMLoader(config, cache_dir)
+            loader = LLMLoader(architecture, config, cache_dir)
             await loader.load()
             return loader
         except Exception as e:
@@ -337,18 +409,25 @@ async def create_llm_loader_with_fallback(
 
 
 def create_llm_loader(
+    architecture: LLMArchitecture,
     config: LLMConfig,
     cache_dir: Path | None = None,
 ) -> LLMLoader | LlamaCppLLMLoader:
-    """Create an LLM loader based on framework configuration.
+    """Create an LLM loader by dispatching on framework then architecture.
 
-    Returns a ``LlamaCppLLMLoader`` when the framework is ``llama_cpp``,
-    or the default ``LLMLoader`` for other frameworks.
+    Framework is the first dispatch key because GGUF inference is a
+    runtime decision orthogonal to the model family; the same Qwen or
+    DeepSeek-R1-distill architecture can be loaded via transformers or
+    via llama.cpp depending on the YAML option the operator selects.
+    Once the framework branch is chosen, the loader for the local
+    transformers path is resolved from the architecture-keyed registry.
 
     Parameters
     ----------
+    architecture : LLMArchitecture
+        Architecture model parsed from the YAML's ``architecture`` block.
     config : LLMConfig
-        LLM configuration with framework specification.
+        Framework-level config (model id, quantization, generation).
     cache_dir : Path | None
         Directory for caching model files.
 
@@ -356,6 +435,13 @@ def create_llm_loader(
     -------
     LLMLoader | LlamaCppLLMLoader
         Configured LLM loader instance.
+
+    Raises
+    ------
+    UnknownArchitectureError
+        If the architecture has no registered transformers/sglang loader
+        (e.g. an external-API architecture reached the factory by a
+        route-handler bug).
     """
     if config.framework == LLMFramework.LLAMA_CPP:
         from src.infrastructure.adapters.outbound.models.llama_cpp.base import (
@@ -370,6 +456,6 @@ def create_llm_loader(
             n_ctx=config.max_tokens or 4096,
             cache_dir=cache_dir,
         )
-        return LlamaCppLLMLoader(llama_config)
+        return LlamaCppLLMLoader(architecture, llama_config)
 
-    return LLMLoader(config, cache_dir)
+    return llm_registry.create(architecture, config, cache_dir)

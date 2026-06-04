@@ -208,14 +208,12 @@ describe('QuickActionsPanel', () => {
   test('positions above bounding box by default', () => {
     render(<QuickActionsPanel {...defaultProps} />)
 
-    // Panel is rendered via portal to document.body
-    const panel = document.body.querySelector('[class*="MuiPaper"]')
+    // Panel is rendered via portal to document.body (div with absolute positioning)
+    const panel = document.body.querySelector('.absolute.grid')
     expect(panel).not.toBeNull()
 
-    const style = window.getComputedStyle(panel!)
-
-    // Should be positioned above the box (top - panelHeight - margin)
-    expect(style.position).toBe('absolute')
+    // Tailwind 'absolute' class provides positioning (jsdom can't compute Tailwind CSS)
+    expect(panel!.classList.contains('absolute')).toBe(true)
   })
 
   test('flips below bounding box when near top edge', () => {
@@ -225,13 +223,11 @@ describe('QuickActionsPanel', () => {
       <QuickActionsPanel {...defaultProps} boundingBoxRect={nearTopRect} />
     )
 
-    // Panel is rendered via portal to document.body
-    const panel = document.body.querySelector('[class*="MuiPaper"]')
+    // Panel is rendered via portal to document.body (div with absolute positioning)
+    const panel = document.body.querySelector('.absolute.grid')
     expect(panel).not.toBeNull()
 
-    const style = window.getComputedStyle(panel!)
-
-    expect(style.position).toBe('absolute')
-    // Actual position values would require more sophisticated testing
+    // Tailwind 'absolute' class provides positioning
+    expect(panel!.classList.contains('absolute')).toBe(true)
   })
 })

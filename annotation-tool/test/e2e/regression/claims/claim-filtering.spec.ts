@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/test-context.js'
+import { fillClaimEditor } from '../../utils/claim-editor.js'
 
 // Helper to open VideoSummaryDialog and navigate to Claims tab
 async function openClaimsTab(page: any) {
@@ -9,8 +10,8 @@ async function openClaimsTab(page: any) {
   const personaSelect = dialog.getByLabel(/select persona/i)
   if (await personaSelect.isVisible()) {
     await personaSelect.click()
-    // Select second option (first is disabled placeholder)
-    await page.getByRole('option').nth(1).click()
+    // Select the (only) persona option — shadcn's Select renders no disabled placeholder so the first role=option IS the active persona, unlike MUI which used a non-selectable placeholder at index 0
+    await page.getByRole('option').first().click()
     // Wait for the editor to load after persona selection
     await page.waitForTimeout(500)
   }
@@ -53,8 +54,7 @@ test.describe('Claim Filtering and Search', () => {
       const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
       await expect(claimDialog).toBeVisible()
 
-      const claimInput = claimDialog.getByLabel(/claim text with references/i)
-      await claimInput.fill(claimText)
+            await fillClaimEditor(claimDialog, { text: claimText })
 
       const saveButton = claimDialog.getByRole('button', { name: /create/i })
       await saveButton.click()
@@ -176,8 +176,7 @@ test.describe('Claim Filtering and Search', () => {
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
-    const claimInput = claimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Test claim for combined filters')
+        await fillClaimEditor(claimDialog, { text: 'Test claim for combined filters' })
 
     // Wait for Create button to become enabled (form validation)
     const saveButton = claimDialog.getByRole('button', { name: /create/i })
@@ -282,8 +281,7 @@ test.describe('Claim Filtering and Search', () => {
       const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
       await expect(claimDialog).toBeVisible()
 
-      const claimInput = claimDialog.getByLabel(/claim text with references/i)
-      await claimInput.fill(claimText)
+            await fillClaimEditor(claimDialog, { text: claimText })
 
       // Wait for Create button to be enabled
       const saveButton = claimDialog.getByRole('button', { name: /create/i })

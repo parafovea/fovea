@@ -9,6 +9,19 @@ import pytest
 import torch
 from PIL import Image
 
+from src.domain.entities.architectures import (
+    SAM2 as SAM2Arch,
+)
+from src.domain.entities.architectures import (
+    SAMURAI as SAMURAIArch,
+)
+from src.domain.entities.architectures import (
+    SAM2Long as SAM2LongArch,
+)
+from src.domain.entities.architectures import (
+    YOLO11Seg as YOLO11SegArch,
+)
+from src.infrastructure.adapters.outbound.models.registry import UnknownArchitectureError
 from src.infrastructure.adapters.outbound.models.tracking.loader import (
     SAM2Loader,
     SAM2LongLoader,
@@ -209,7 +222,7 @@ class TestSAMURAILoader:
         mock_predictor.model = MagicMock()
         mock_build_predictor.return_value = mock_predictor
 
-        loader = SAMURAILoader(tracking_config)
+        loader = SAMURAILoader(SAMURAIArch(), tracking_config)
         loader.load()
 
         assert loader.model is not None
@@ -222,7 +235,7 @@ class TestSAMURAILoader:
         """Test SAMURAI model loading failure."""
         mock_build_predictor.side_effect = RuntimeError("Model not found")
 
-        loader = SAMURAILoader(tracking_config)
+        loader = SAMURAILoader(SAMURAIArch(), tracking_config)
 
         with pytest.raises(RuntimeError, match="Model loading failed"):
             loader.load()
@@ -242,7 +255,7 @@ class TestSAMURAILoader:
 
         config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAMURAILoader(config)
+        loader = SAMURAILoader(SAMURAIArch(), config)
         loader.load()
 
         result = loader.track(
@@ -272,7 +285,7 @@ class TestSAMURAILoader:
 
         config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAMURAILoader(config)
+        loader = SAMURAILoader(SAMURAIArch(), config)
         loader.load()
 
         result = loader.track(
@@ -291,7 +304,7 @@ class TestSAMURAILoader:
         initial_mask: np.ndarray,
     ) -> None:
         """Test tracking fails if model not loaded."""
-        loader = SAMURAILoader(tracking_config)
+        loader = SAMURAILoader(SAMURAIArch(), tracking_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.track(sample_frames, [initial_mask], [1])
@@ -303,7 +316,7 @@ class TestSAMURAILoader:
         initial_mask: np.ndarray,
     ) -> None:
         """Test tracking fails with mismatched initial_masks and object_ids."""
-        loader = SAMURAILoader(tracking_config)
+        loader = SAMURAILoader(SAMURAIArch(), tracking_config)
         loader.model = MagicMock()  # Mock loaded model
 
         with pytest.raises(ValueError, match="must match"):
@@ -324,7 +337,7 @@ class TestSAMURAILoader:
 
         config = TrackingConfig(model_id="samurai", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAMURAILoader(config)
+        loader = SAMURAILoader(SAMURAIArch(), config)
         loader.load()
 
         result = loader.track(frames=sample_frames, initial_masks=[initial_mask], object_ids=[1])
@@ -387,7 +400,7 @@ class TestSAM2LongLoader:
 
         config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2LongLoader(config)
+        loader = SAM2LongLoader(SAM2LongArch(), config)
         loader.load()
 
         assert loader.model is not None
@@ -408,7 +421,7 @@ class TestSAM2LongLoader:
 
         config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2LongLoader(config)
+        loader = SAM2LongLoader(SAM2LongArch(), config)
         loader.load()
 
         result = loader.track(
@@ -435,7 +448,7 @@ class TestSAM2LongLoader:
 
         config = TrackingConfig(model_id="sam2long", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2LongLoader(config)
+        loader = SAM2LongLoader(SAM2LongArch(), config)
         loader.load()
 
         result = loader.track(
@@ -492,7 +505,7 @@ class TestSAM2Loader:
 
         config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2Loader(config)
+        loader = SAM2Loader(SAM2Arch(), config)
         loader.load()
 
         assert loader.model is not None
@@ -512,7 +525,7 @@ class TestSAM2Loader:
 
         config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2Loader(config)
+        loader = SAM2Loader(SAM2Arch(), config)
         loader.load()
 
         result = loader.track(
@@ -537,7 +550,7 @@ class TestSAM2Loader:
 
         config = TrackingConfig(model_id="sam2", framework=TrackingFramework.SAM2, device="cpu")
 
-        loader = SAM2Loader(config)
+        loader = SAM2Loader(SAM2Arch(), config)
         loader.load()
 
         result = loader.track(frames=sample_frames, initial_masks=[initial_mask], object_ids=[1])
@@ -580,7 +593,7 @@ class TestYOLO11SegLoader:
             model_id="yolo11n-seg.pt", framework=TrackingFramework.ULTRALYTICS, device="cpu"
         )
 
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
         loader.load()
 
         assert loader.model is not None
@@ -603,7 +616,7 @@ class TestYOLO11SegLoader:
             model_id="yolo11n-seg.pt", framework=TrackingFramework.ULTRALYTICS, device="cpu"
         )
 
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
         loader.load()
 
         result = loader.track(
@@ -627,7 +640,7 @@ class TestYOLO11SegLoader:
             model_id="yolo11n-seg.pt", framework=TrackingFramework.ULTRALYTICS, device="cpu"
         )
 
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
         loader.load()
 
         result = loader.track(frames=sample_frames, initial_masks=[initial_mask], object_ids=[1])
@@ -652,7 +665,7 @@ class TestYOLO11SegLoader:
             model_id="yolo11n-seg.pt", framework=TrackingFramework.ULTRALYTICS, device="cpu"
         )
 
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
         loader.load()
 
         result = loader.track(frames=sample_frames, initial_masks=[initial_mask], object_ids=[1])
@@ -664,7 +677,7 @@ class TestYOLO11SegLoader:
     def test_compute_iou_perfect_overlap(self) -> None:
         """Test IoU computation with perfect overlap."""
         config = TrackingConfig(model_id="yolo11n-seg.pt")
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
 
         mask1 = np.ones((100, 100))
         mask2 = np.ones((100, 100))
@@ -675,7 +688,7 @@ class TestYOLO11SegLoader:
     def test_compute_iou_no_overlap(self) -> None:
         """Test IoU computation with no overlap."""
         config = TrackingConfig(model_id="yolo11n-seg.pt")
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
 
         mask1 = np.zeros((100, 100))
         mask1[0:50, 0:50] = 1
@@ -689,7 +702,7 @@ class TestYOLO11SegLoader:
     def test_compute_iou_partial_overlap(self) -> None:
         """Test IoU computation with partial overlap."""
         config = TrackingConfig(model_id="yolo11n-seg.pt")
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
 
         mask1 = np.zeros((100, 100))
         mask1[0:60, 0:60] = 1
@@ -705,7 +718,7 @@ class TestYOLO11SegLoader:
     def test_compute_iou_empty_masks(self) -> None:
         """Test IoU computation with empty masks."""
         config = TrackingConfig(model_id="yolo11n-seg.pt")
-        loader = YOLO11SegLoader(config)
+        loader = YOLO11SegLoader(YOLO11SegArch(), config)
 
         mask1 = np.zeros((100, 100))
         mask2 = np.zeros((100, 100))
@@ -760,42 +773,45 @@ class TestYOLO11SegLoader:
 
 
 class TestCreateTrackingLoader:
-    """Tests for tracking loader factory function."""
+    """Tests for the architecture-keyed tracking loader factory.
+
+    The legacy substring-matching dispatch was removed; the factory now
+    dispatches purely on the architecture Pydantic class. These tests
+    exercise the per-architecture happy path and the unknown-architecture
+    failure mode at the loader-module level, complementing the family
+    tests under ``tests/.../tracking/test_factory.py``.
+    """
 
     def test_create_samurai_loader(self, tracking_config: TrackingConfig) -> None:
-        """Test creating SAMURAI loader."""
-        loader = create_tracking_loader("samurai", tracking_config)
+        """SAMURAI architecture resolves to SAMURAILoader."""
+        loader = create_tracking_loader(SAMURAIArch(), tracking_config)
         assert isinstance(loader, SAMURAILoader)
+        assert isinstance(loader.arch, SAMURAIArch)
 
     def test_create_sam2long_loader(self, tracking_config: TrackingConfig) -> None:
-        """Test creating SAM2Long loader."""
-        loader = create_tracking_loader("sam2long", tracking_config)
+        """SAM2Long architecture resolves to SAM2LongLoader."""
+        loader = create_tracking_loader(SAM2LongArch(), tracking_config)
         assert isinstance(loader, SAM2LongLoader)
-
-    def test_create_sam2long_loader_with_alias(self, tracking_config: TrackingConfig) -> None:
-        """Test creating SAM2Long loader with hyphenated alias."""
-        loader = create_tracking_loader("sam2-long", tracking_config)
-        assert isinstance(loader, SAM2LongLoader)
+        assert isinstance(loader.arch, SAM2LongArch)
 
     def test_create_sam2_loader(self, tracking_config: TrackingConfig) -> None:
-        """Test creating SAM2.1 loader."""
-        loader = create_tracking_loader("sam2", tracking_config)
+        """SAM2 architecture resolves to SAM2Loader."""
+        loader = create_tracking_loader(SAM2Arch(), tracking_config)
         assert isinstance(loader, SAM2Loader)
+        assert isinstance(loader.arch, SAM2Arch)
 
     def test_create_yolo11seg_loader(self, tracking_config: TrackingConfig) -> None:
-        """Test creating YOLO11n-seg loader."""
-        loader = create_tracking_loader("yolo11n-seg", tracking_config)
+        """YOLO11Seg architecture resolves to YOLO11SegLoader."""
+        loader = create_tracking_loader(YOLO11SegArch(), tracking_config)
         assert isinstance(loader, YOLO11SegLoader)
+        assert isinstance(loader.arch, YOLO11SegArch)
 
-    def test_create_yolo11seg_loader_with_alias(self, tracking_config: TrackingConfig) -> None:
-        """Test creating YOLO11n-seg loader with alternative naming."""
-        loader = create_tracking_loader("yolo11seg", tracking_config)
-        assert isinstance(loader, YOLO11SegLoader)
+    def test_create_loader_unknown_architecture(self, tracking_config: TrackingConfig) -> None:
+        """A non-tracking architecture must raise UnknownArchitectureError."""
+        from src.domain.entities.architectures import QwenLLM
 
-    def test_create_loader_unknown_model(self, tracking_config: TrackingConfig) -> None:
-        """Test factory function with unknown model name."""
-        with pytest.raises(ValueError, match="Unknown model name"):
-            create_tracking_loader("unknown-tracker", tracking_config)
+        with pytest.raises(UnknownArchitectureError):
+            create_tracking_loader(QwenLLM(), tracking_config)  # type: ignore[arg-type]
 
 
 class TestTrackingModelUnload:
@@ -817,7 +833,7 @@ class TestTrackingModelUnload:
         mock_build_predictor.return_value = mock_predictor
         mock_cuda_available.return_value = True
 
-        loader = SAMURAILoader(tracking_config)
+        loader = SAMURAILoader(SAMURAIArch(), tracking_config)
         loader.load()
         loader.unload()
 

@@ -55,21 +55,18 @@ test.describe('External Links', () => {
       await typeCard.click()
       await page.waitForTimeout(500)
 
-      // Look for Wikidata chip in the UI
-      // In online mode, Wikidata chips should be links (anchor tags with href)
-      const wikidataChip = page.locator('[class*="MuiChip"]').filter({ hasText: /Wikidata/i })
+      // Look for Wikidata badge in the UI (rendered as shadcn Badge wrapped in <a> when external links are enabled)
+      const wikidataChip = page.getByText(/Wikidata:\s*Q/i)
 
-      // If a Wikidata chip exists, it should be a link in online mode
       const chipCount = await wikidataChip.count()
       if (chipCount > 0) {
-        // Check if it's a link (anchor tag)
-        const chipLink = wikidataChip.first().locator('a')
+        // The Badge renders inside an anchor when allowExternalLinks is true; locate the enclosing link
+        const chipLink = page.locator('a', { has: page.getByText(/Wikidata:\s*Q/i) })
         const linkCount = await chipLink.count()
 
-        // In online mode with external links enabled, chip should be clickable
-        // and link to Wikidata
+        // In online mode with external links enabled, chip should be a clickable link to Wikidata
         if (linkCount > 0) {
-          const href = await chipLink.getAttribute('href')
+          const href = await chipLink.first().getAttribute('href')
           expect(href).toContain('wikidata.org')
         }
       }

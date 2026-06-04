@@ -1,42 +1,52 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  FormControl,
-  MenuItem,
-  Select,
-  type SelectChangeEvent,
-  Snackbar,
-  Alert,
-  CircularProgress,
-  Tooltip,
-} from '@mui/material'
-import logo from '@/assets/fovea-logo.svg'
-import {
-  VideoLibrary as VideoIcon,
-  Category as OntologyIcon,
-  Inventory2 as ObjectIcon,
-  Group as GroupIcon,
-  Folder as FolderIcon,
-  Share as ShareIcon,
-  Save as SaveIcon,
-  Download as ExportIcon,
-  Upload as ImportIcon,
-  Menu as MenuIcon,
-  Keyboard as KeyboardIcon,
-} from '@mui/icons-material'
 import { useState, useCallback, useRef, useEffect } from 'react'
+import {
+  Video,
+  Fingerprint,
+  Globe,
+  Users,
+  Folder,
+  Share2,
+  Save,
+  Download,
+  Upload,
+  Keyboard,
+  X,
+} from 'lucide-react'
+import { toast } from 'sonner'
+
+import logo from '@/assets/fovea-logo.svg'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarInset,
+} from '@/components/ui/sidebar'
+
 import { usePersonas, useAllPersonaOntologies, useWorld } from '@store/queries'
 import { useMyProjects } from '@store/queries/useProjects'
 import { useVideoUiStore } from '@store/zustand/videoUiStore'
@@ -46,22 +56,31 @@ import { useDialog } from '@store/zustand/dialogStore'
 import { api } from '@services/api'
 import { Ontology } from '@models/types'
 import { useCommands, useCommandContext } from '@hooks/commands'
-import KeyboardShortcutsDialog from '@components/shared/KeyboardShortcutsDialog'
-import BreadcrumbNavigation from '@components/shared/BreadcrumbNavigation'
-import ImportDataDialog from '@components/data-management/ImportDataDialog'
-import ExportDialog from '@components/data-management/ExportDialog'
-import UserMenu from '@components/auth/UserMenu'
+import { KeyboardShortcutsDialog } from '@components/shared/KeyboardShortcutsDialog'
+import { BreadcrumbNavigation } from '@components/shared/BreadcrumbNavigation'
+import { ImportDataDialog } from '@components/data-management/ImportDataDialog'
+import { ExportDialog } from '@components/data-management/ExportDialog'
+import { UserMenu } from '@components/auth/UserMenu'
 import UserSettingsDialog from '@components/settings/UserSettingsDialog'
 import ModelSettingsDialog from '@components/settings/ModelSettingsDialog'
 import AboutDialog from '@components/settings/AboutDialog'
 import AdminPanelDialog from '@components/settings/AdminPanelDialog'
 
-const DRAWER_WIDTH = 240
+const menuItems = [
+  { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
+  { text: 'Persona Builder', icon: Fingerprint, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
+  { text: 'World Builder', icon: Globe, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+]
+
+const collaborationItems = [
+  { text: 'My Groups', icon: Users, path: '/groups' },
+  { text: 'My Projects', icon: Folder, path: '/projects' },
+  { text: 'Shared', icon: Share2, path: '/shared' },
+]
 
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Use Zustand dialogStore for dialog state management
@@ -72,12 +91,6 @@ export default function Layout() {
   const modelSettingsDialog = useDialog('modelSettings')
   const aboutDialog = useDialog('about')
   const adminPanelDialog = useDialog('adminPanel')
-
-  const [notification, setNotification] = useState<{
-    open: boolean
-    message: string
-    severity: 'success' | 'error' | 'info' | 'warning'
-  }>({ open: false, message: '', severity: 'success' })
 
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
@@ -97,9 +110,8 @@ export default function Layout() {
   // Project context selector data
   const { data: myProjects = [] } = useMyProjects()
 
-  const handleProjectChange = useCallback((event: SelectChangeEvent<string>) => {
-    const value = event.target.value
-    if (value === '') {
+  const handleProjectChange = useCallback((value: string | null) => {
+    if (!value || value === '') {
       clearProject()
     } else {
       const project = myProjects.find(p => p.id === value)
@@ -109,7 +121,7 @@ export default function Layout() {
     }
   }, [myProjects, setActiveProject, clearProject])
 
-  // Note: unsavedChanges is no longer tracked - TanStack Query handles mutation state
+  // Note: unsavedChanges is no longer tracked; TanStack Query handles mutation state
   const unsavedChanges = false
 
   // Use ref to avoid stale closure in keyboard shortcut handlers
@@ -129,18 +141,6 @@ export default function Layout() {
       lastVideoPathRef.current = location.pathname
     }
   }, [location.pathname])
-
-  const menuItems = [
-    { text: 'Video Browser', icon: <VideoIcon />, path: '/', shortcut: 'Cmd/Ctrl+1' },
-    { text: 'Ontology Builder', icon: <OntologyIcon />, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
-    { text: 'World Builder', icon: <ObjectIcon />, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
-  ]
-
-  const collaborationItems = [
-    { text: 'My Groups', icon: <GroupIcon />, path: '/groups' },
-    { text: 'My Projects', icon: <FolderIcon />, path: '/projects' },
-    { text: 'Shared', icon: <ShareIcon />, path: '/shared' },
-  ]
 
   const handleSave = useCallback(async () => {
     setSaving(true)
@@ -164,18 +164,10 @@ export default function Layout() {
       }
 
       await api.saveOntology(ontology)
-      setNotification({
-        open: true,
-        message: 'Data saved successfully',
-        severity: 'success',
-      })
+      toast.success('Data saved successfully')
     } catch (error) {
       console.error('Failed to save data:', error)
-      setNotification({
-        open: true,
-        message: 'Failed to save data',
-        severity: 'error',
-      })
+      toast.error('Failed to save data')
     } finally {
       setSaving(false)
     }
@@ -184,10 +176,6 @@ export default function Layout() {
   const handleExport = useCallback(() => {
     exportDialog.openDialog()
   }, [exportDialog])
-
-  const handleCloseNotification = () => {
-    setNotification({ ...notification, open: false })
-  }
 
   // Setup global keyboard shortcuts
   const getCurrentContext = () => {
@@ -214,13 +202,13 @@ export default function Layout() {
     'navigate.objectBuilder': () => navigate('/objects'),
     'navigate.toggleOntology': () => {
       const currentPath = window.location.pathname
-      // If we're in the ontology builder, go back to where we came from
+      // If we're in the persona builder, go back to where we came from
       if (currentPath === '/ontology') {
         const returnPath = ontologyReturnPathRef.current || '/'
         ontologyReturnPathRef.current = null
         navigate(returnPath)
       }
-      // Otherwise, store current path and go to ontology builder
+      // Otherwise, store current path and go to persona builder
       else {
         ontologyReturnPathRef.current = currentPath
         navigate('/ontology')
@@ -255,238 +243,182 @@ export default function Layout() {
   })
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#bdbdbd', color: 'text.primary' }}>
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={() => setDrawerOpen(!drawerOpen)}
-            sx={{ mr: 2 }}
-            aria-label="Toggle navigation menu"
-          >
-            <MenuIcon />
-          </IconButton>
-          <Box
-            component="img"
-            src={logo}
-            alt="FOVEA Logo"
-            sx={{
-              height: 40,
-              width: 40,
-              mr: 2,
-            }}
-          />
-          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'baseline', gap: 1 }}>
-            <Typography
-              variant="h1"
-              component="div"
-              sx={{
-                fontWeight: 700,
-                letterSpacing: '0.05em',
-                fontSize: '1.25rem'
-              }}
-            >
-              FOVEA
-            </Typography>
-            <Typography
-              variant="body2"
-              component="div"
-              sx={{
-                color: 'text.primary',
-                fontWeight: 300,
-                display: { xs: 'none', md: 'block' }
-              }}
-            >
-              Flexible Ontology Visual Event Analyzer
-            </Typography>
-          </Box>
-          {/* Project Context Selector */}
-          <FormControl
-            size="small"
-            variant="outlined"
-            sx={{
-              minWidth: 180,
-              mr: 2,
-            }}
-          >
+    <SidebarProvider defaultOpen data-tour-id="app-shell">
+      <Sidebar collapsible="icon" side="left" data-tour-id="app-sidebar">
+        <SidebarHeader className="p-3">
+          <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+            <img src={logo} alt="FOVEA Logo" className="h-8 w-8 shrink-0" />
+            <span className="font-bold tracking-wide text-lg group-data-[collapsible=icon]:hidden">FOVEA</span>
+          </Link>
+        </SidebarHeader>
+        <Separator />
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton isActive={location.pathname === item.path} tooltip={item.text} render={<Link to={item.path} />}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.text}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <Separator />
+          <SidebarGroup>
+            <SidebarGroupLabel>Collaboration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {collaborationItems.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton isActive={location.pathname.startsWith(item.path)} tooltip={item.text} render={<Link to={item.path} />}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.text}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+
+      <SidebarInset>
+        <header className="sticky top-0 z-50 flex h-14 items-center gap-2 border-b bg-background px-4 overflow-hidden">
+          <SidebarTrigger className="-ml-1 shrink-0" />
+          <Separator orientation="vertical" className="h-4 shrink-0" />
+          <BreadcrumbNavigation />
+
+          <div className="ml-auto flex items-center gap-1 shrink-0">
+            {/* Project Context Selector */}
             <Select
               value={activeProjectId ?? ''}
-              onChange={handleProjectChange}
-              displayEmpty
+              onValueChange={handleProjectChange}
             >
-              <MenuItem value="">Personal Workspace</MenuItem>
-              {myProjects.map((project) => (
-                <MenuItem key={project.id} value={project.id}>
-                  {project.name}
-                </MenuItem>
-              ))}
+              <SelectTrigger className="h-8 w-[180px] text-sm" aria-label="Project context">
+                <SelectValue placeholder="Personal Workspace" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Personal Workspace</SelectItem>
+                {myProjects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
-          </FormControl>
-          {activeProjectRole && (
-            <Chip
-              label={activeProjectRole}
-              size="small"
-              sx={{ mr: 2 }}
-              variant="outlined"
-            />
-          )}
-          {draftClaim && (
-            <Chip
-              label="Draft Claim"
-              color="warning"
-              size="small"
-              onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
-              onDelete={clearDraftClaim}
-              sx={{ mr: 1 }}
-            />
-          )}
-          {unsavedChanges && (
-            <Typography variant="body2" sx={{ mr: 2, color: '#FFFFFF' }}>
-              Unsaved changes
-            </Typography>
-          )}
-          <Tooltip title="Save (Cmd/Ctrl+S)">
-            <span>
-              <Button
-                color="inherit"
-                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                onClick={handleSave}
-                disabled={saving}
+            {activeProjectRole && (
+              <Badge variant="outline" className="text-xs">
+                {activeProjectRole}
+              </Badge>
+            )}
+            {draftClaim && (
+              <Badge
+                variant="outline"
+                className="cursor-pointer border-amber-500 text-amber-600"
+                onClick={() => navigate(`/annotate/${draftClaim.videoId}`)}
               >
+                Draft Claim
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    clearDraftClaim()
+                  }}
+                  className="ml-1 rounded-full hover:bg-muted p-0.5"
+                  aria-label="Discard draft claim"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {unsavedChanges && (
+              <span className="text-sm text-muted-foreground">
+                Unsaved changes
+              </span>
+            )}
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={saving}
+                  />
+                }
+              >
+                {saving ? <Spinner className="mr-1.5 h-4 w-4" /> : <Save className="mr-1.5 h-4 w-4" />}
                 Save
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="Export (Cmd/Ctrl+E)">
-            <span>
-              <Button
-                color="inherit"
-                startIcon={<ExportIcon />}
-                onClick={handleExport}
+              </TooltipTrigger>
+              <TooltipContent>Save (Cmd/Ctrl+S)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleExport}
+                  />
+                }
               >
+                <Download className="mr-1.5 h-4 w-4" />
                 Export
-              </Button>
-            </span>
-          </Tooltip>
-          <Button
-            color="inherit"
-            startIcon={<ImportIcon />}
-            onClick={importDialog.openDialog}
-          >
-            Import
-          </Button>
-          <Tooltip title="Keyboard Shortcuts (?)">
-            <IconButton
-              color="inherit"
-              onClick={shortcutsDialog.openDialog}
-              sx={{ ml: 1 }}
-              aria-label="Keyboard Shortcuts (?)"
-            >
-              <KeyboardIcon />
-            </IconButton>
-          </Tooltip>
-          <UserMenu
-            onSettingsClick={userSettingsDialog.openDialog}
-            onModelSettingsClick={modelSettingsDialog.openDialog}
-            onAboutClick={aboutDialog.openDialog}
-            onAdminPanelClick={adminPanelDialog.openDialog}
-          />
-        </Toolbar>
-      </AppBar>
+              </TooltipTrigger>
+              <TooltipContent>Export (Cmd/Ctrl+E)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={importDialog.openDialog}
+                  />
+                }
+              >
+                <Upload className="mr-1.5 h-4 w-4" />
+                Import
+              </TooltipTrigger>
+              <TooltipContent>Import Data</TooltipContent>
+            </Tooltip>
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={shortcutsDialog.openDialog}
+                    aria-label="Keyboard Shortcuts (?)"
+                  />
+                }
+              >
+                <Keyboard className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent>Keyboard Shortcuts (?)</TooltipContent>
+            </Tooltip>
+            <UserMenu
+              onSettingsClick={userSettingsDialog.openDialog}
+              onModelSettingsClick={modelSettingsDialog.openDialog}
+              onAboutClick={aboutDialog.openDialog}
+              onAdminPanelClick={adminPanelDialog.openDialog}
+            />
+          </div>
+        </header>
 
-      <Drawer
-        variant="temporary"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
-            top: '64px',
-          },
-        }}
-      >
-        <List>
-          {menuItems.map((item) => (
-            <ListItem
-              key={item.path}
-              component={Link}
-              to={item.path}
-              onClick={() => setDrawerOpen(false)}
-              sx={{
-                textDecoration: 'none',
-                color: 'inherit',
-                backgroundColor: location.pathname === item.path ? 'action.selected' : 'transparent',
-              }}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText
-                primary={item.text}
-                secondary={item.shortcut}
-                secondaryTypographyProps={{
-                  variant: 'caption',
-                  sx: { opacity: 0.7 }
-                }}
-              />
-            </ListItem>
-          ))}
-        </List>
-        <Divider />
-        <List>
-          {collaborationItems.map((item) => (
-            <ListItem
-              key={item.path}
-              component={Link}
-              to={item.path}
-              onClick={() => setDrawerOpen(false)}
-              sx={{
-                textDecoration: 'none',
-                color: 'inherit',
-                backgroundColor: location.pathname.startsWith(item.path) ? 'action.selected' : 'transparent',
-              }}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItem>
-          ))}
-        </List>
-        <Divider />
-      </Drawer>
-
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          mt: '64px',
-          height: 'calc(100vh - 64px)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <BreadcrumbNavigation />
-        <Box sx={{ flexGrow: 1, p: 3, overflow: 'auto' }}>
+        <div className="flex-1 overflow-auto p-3">
           <Outlet />
-        </Box>
-      </Box>
-      
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseNotification}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
-      
+        </div>
+      </SidebarInset>
+
       <KeyboardShortcutsDialog
         open={shortcutsDialog.open}
         onClose={shortcutsDialog.close}
@@ -498,11 +430,7 @@ export default function Layout() {
         onClose={importDialog.close}
         onImportComplete={(result) => {
           console.log('Import completed:', result)
-          setNotification({
-            open: true,
-            message: `Import successful: ${result.summary.importedItems.annotations} annotations imported`,
-            severity: 'success',
-          })
+          toast.success(`Import successful: ${result.summary.importedItems.annotations} annotations imported`)
         }}
       />
 
@@ -530,6 +458,6 @@ export default function Layout() {
         open={adminPanelDialog.open}
         onClose={adminPanelDialog.close}
       />
-    </Box>
+    </SidebarProvider>
   )
 }

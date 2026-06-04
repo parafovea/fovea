@@ -1,20 +1,19 @@
 /**
- * @module DrawingCanvas
- * @description SVG canvas for drawing and displaying bounding box annotations on video.
+ * SVG canvas for drawing and displaying bounding box annotations on video.
  * Extracted from AnnotationOverlay to provide reusable drawing surface.
  * Supports interactive drawing, annotation display, and detection result visualization.
+ *
+ * @module
  */
 
 import { useRef, useMemo } from 'react'
-import { Box } from '@mui/material'
 import { useAnnotationDrawing } from '@hooks/annotation/useAnnotationDrawing'
 import InteractiveBoundingBox from './InteractiveBoundingBox'
 import type { DetectionResponse } from '@api/client'
 import { Annotation, BoundingBox } from '@models/types'
 
 /**
- * @interface DrawingCanvasProps
- * @description Props for DrawingCanvas component.
+ * Props for DrawingCanvas component.
  */
 interface DrawingCanvasProps {
   /** Video ID for annotation association */
@@ -40,8 +39,7 @@ interface DrawingCanvasProps {
 }
 
 /**
- * @component DrawingCanvas
- * @description SVG canvas component for video annotation drawing and display.
+ * SVG canvas component for video annotation drawing and display.
  * Handles rendering of existing annotations, AI detection results, and interactive
  * drawing of new bounding boxes. Uses useAnnotationDrawing hook for mouse interaction logic.
  *
@@ -117,16 +115,8 @@ export default function DrawingCanvas({
   }, [detectionResults, currentTime, videoWidth, videoHeight])
 
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'auto', // Always allow pointer events so existing annotations can be interacted with
-        zIndex: 2, // Ensure overlay is above video but allows video to show through
-      }}
+    <div
+      className="absolute top-0 left-0 w-full h-full pointer-events-auto z-[2]"
     >
       <svg
         ref={svgRef}
@@ -222,6 +212,6 @@ export default function DrawingCanvas({
           />
         )}
       </svg>
-    </Box>
+    </div>
   )
 }

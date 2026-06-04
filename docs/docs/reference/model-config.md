@@ -29,7 +29,7 @@ models:
     options:
       <option-id>:
         model_id: "<vendor-or-hf-id>"
-        framework: "sglang | vllm | transformers | llama_cpp | onnx | external_api"
+        framework: "<framework-id>"  # see model-service/config/models.yaml for the full set
         ...
 inference:
   max_memory_per_model: "auto"
@@ -58,7 +58,7 @@ voice_activity_detection   Silero VAD
 ```text
 model_id        string    Hugging Face id
 quantization    string    "4bit" | "8bit" | "none"
-framework       string    "sglang" | "vllm" | "transformers"
+framework       string    backend id; see model-service/config/models.yaml
 vram_gb         number    minimum VRAM the option needs
 speed           string    "very_fast" | "fast" | "medium" | "slow"
 description     string    free-text summary
@@ -68,7 +68,7 @@ description     string    free-text summary
 
 ```text
 model_id        string    Hugging Face id (transformers) or GGUF repo
-framework       string    "transformers" | "llama_cpp" | "onnx"
+framework       string    backend id; see model-service/config/models-cpu.yaml
 quantization    string    GGUF quant tag (e.g. "Q4_K_M") or "none"
 context_length  number    llama.cpp context window
 threads         number    CPU thread count
@@ -92,9 +92,8 @@ this order: requester's user-level key, admin shared-pool key,
 then the corresponding environment variable. See
 [Guide > API keys](../guide/api-keys.md).
 
-## v0.3.0 model catalog (Wave 1)
+## Model catalog
 
-`models.yaml` adds 57 new entries; `models-cpu.yaml` adds 11.
 The full enumeration is in
 [Reference > Model loaders](model-loaders.md). Highlights:
 
@@ -126,9 +125,9 @@ the next working option in the `options` dictionary if one
 exists; if none does, the slot fails to load and the affected
 route returns 503 until the configuration is repaired.
 
-`ModelManager.__init__` requires `capability_probe` since
-v0.3.0; the lazy default that v0.2.x carried was removed
-because it hid configuration mistakes until first inference.
+`ModelManager.__init__` requires `capability_probe`; the
+constructor does not accept a lazy default because that would
+hide configuration mistakes until first inference.
 
 ## Switching models
 

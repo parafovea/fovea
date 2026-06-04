@@ -4,8 +4,10 @@
  */
 
 import { Component, ErrorInfo, ReactNode } from 'react'
-import { ErrorFallback } from './ErrorFallback'
+
 import { logError } from '@services/errorLogging'
+
+import { ErrorFallback } from './ErrorFallback'
 
 interface ErrorBoundaryProps {
   /**
@@ -14,8 +16,8 @@ interface ErrorBoundaryProps {
   children: ReactNode
 
   /**
-   * Optional fallback component to render when an error occurs
-   * If not provided, uses the default ErrorFallback component
+   * Optional fallback component to render when an error occurs.
+   * If not provided, uses the default ErrorFallback component.
    */
   fallback?: (error: Error, resetError: () => void) => ReactNode
 

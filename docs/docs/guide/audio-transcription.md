@@ -1,8 +1,8 @@
 # Audio transcription
 
 Use the audio transcription path to attach speech-to-text output
-to a video summary. Since v0.3.0 every transcriber sits behind
-the `IAudioTranscriber` outbound port (see
+to a video summary. Every transcriber sits behind the
+`IAudioTranscriber` outbound port (see
 [Concepts > Clean Architecture](../concepts/clean-architecture.md)).
 The model service ships seven external-API vendor adapters under
 `model-service/src/infrastructure/adapters/outbound/external_apis/audio/`:
@@ -22,9 +22,9 @@ plus the on-device adapters under
 
 ```text
 loader.py            Whisper, faster-whisper
-canary.py            Canary-Qwen 2.5B (v0.3.0 Wave 3)
-parakeet.py          Parakeet TDT 1.1B (v0.3.0 Wave 3)
-whisperx.py          WhisperX large-v3 (v0.3.0 Wave 3)
+canary.py            Canary-Qwen 2.5B
+parakeet.py          Parakeet TDT 1.1B
+whisperx.py          WhisperX large-v3
 adapters.py          WhisperTranscriberAdapter, PyannoteDiarizerAdapter,
                      SileroVADAdapter
 ```
@@ -59,14 +59,34 @@ The `fusionStrategy` column on `VideoSummary` records how audio
 and visual outputs were combined:
 
 ```text
-sequential    visual then audio, audio used to refine
-parallel      visual and audio independent, fused at end
-audio-first   audio drives the narrative, visual fills detail
+sequential          visual summary generated first, then refined with audio context
+timestamp_aligned   visual and audio descriptions aligned at matching timestamps then fused
+native_multimodal   a single model processes both modalities jointly
+hybrid              combines sequential and timestamp-aligned passes
 ```
 
-The selected fusion strategy depends on the configured fusion
-model and the input characteristics; the model service picks
-based on the audio-presence detection in `av_fusion.py`.
+The fusion strategy is supplied by the caller via `fusion_strategy`
+on the `SummarizeVideoRequest`; `create_fusion_strategy` in
+`model-service/src/application/use_cases/fuse_modalities.py`
+dispatches that value to one of `SequentialFusion`,
+`TimestampAlignedFusion`, `NativeMultimodalFusion`, or
+`HybridFusion`. The default is `sequential`.
+
+## Standalone transcribe button
+
+The summary pipeline above is the indirect path: audio runs as
+part of a larger generate-summary job. The direct path is a
+`Transcribe Audio` button on the workspace toolbar that calls
+`POST /api/videos/:videoId/transcribe`, optionally enabling speaker
+diarization via pyannote 3.1, and renders the result in a
+`TranscriptPanel` with click-to-seek timestamps and color-coded
+speaker chips. See [Guide > Transcribe and diarize](transcribe-and-diarize.md)
+for the full request and response contract.
+
+The standalone route hits the model-service's `/api/transcribe` and
+`/api/diarize` endpoints directly and does not produce a `VideoSummary`
+row; it is for the case where a user wants the transcript surface
+without the full summary pipeline.
 
 ## Languages
 

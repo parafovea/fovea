@@ -56,7 +56,7 @@ describe('ProfileTab', () => {
 
     await screen.findByRole('button', { name: /save profile/i })
 
-    const displayNameField = screen.getByRole('textbox', { name: /display name/i })
+    const displayNameField = screen.getByLabelText('Display Name')
     await user.clear(displayNameField)
     await user.type(displayNameField, 'Updated Name')
 
@@ -70,7 +70,7 @@ describe('ProfileTab', () => {
 
     await screen.findByRole('button', { name: /save profile/i })
 
-    const emailField = screen.getByRole('textbox', { name: /email/i })
+    const emailField = screen.getByLabelText('Email')
     await user.clear(emailField)
     await user.type(emailField, 'updated@example.com')
 
@@ -84,7 +84,7 @@ describe('ProfileTab', () => {
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
-    const displayNameField = screen.getByRole('textbox', { name: /display name/i })
+    const displayNameField = screen.getByLabelText('Display Name')
     await user.clear(displayNameField)
 
     const form = submitButton.closest('form')!
@@ -102,7 +102,7 @@ describe('ProfileTab', () => {
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
-    const emailField = screen.getByRole('textbox', { name: /email/i })
+    const emailField = screen.getByLabelText('Email')
     await user.clear(emailField)
     await user.type(emailField, 'invalid-email')
 
@@ -116,11 +116,11 @@ describe('ProfileTab', () => {
 
   it('saves profile on submit', async () => {
     const user = userEvent.setup()
-    let savedProfile: any = null
+    let savedProfile: Record<string, unknown> | null = null
 
     server.use(
       http.put('/api/user/profile', async ({ request }) => {
-        savedProfile = await request.json()
+        savedProfile = await request.json() as Record<string, unknown>
         return HttpResponse.json({
           ...mockUser,
           displayName: savedProfile.displayName,
@@ -134,7 +134,7 @@ describe('ProfileTab', () => {
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
-    const displayNameField = screen.getByRole('textbox', { name: /display name/i })
+    const displayNameField = screen.getByLabelText('Display Name')
     await user.clear(displayNameField)
     await user.type(displayNameField, 'Updated Name')
 
@@ -143,7 +143,7 @@ describe('ProfileTab', () => {
 
     await waitFor(() => {
       expect(savedProfile).toBeTruthy()
-      expect(savedProfile.displayName).toBe('Updated Name')
+      expect(savedProfile!.displayName).toBe('Updated Name')
     })
   })
 
@@ -161,7 +161,7 @@ describe('ProfileTab', () => {
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
-    const displayNameField = screen.getByRole('textbox', { name: /display name/i })
+    const displayNameField = screen.getByLabelText('Display Name')
     await user.clear(displayNameField)
     await user.type(displayNameField, 'Updated Name')
 
@@ -190,7 +190,7 @@ describe('ProfileTab', () => {
 
     const submitButton = await screen.findByRole('button', { name: /save profile/i })
 
-    const displayNameField = screen.getByRole('textbox', { name: /display name/i })
+    const displayNameField = screen.getByLabelText('Display Name')
     await user.clear(displayNameField)
     await user.type(displayNameField, 'Updated Name')
 
@@ -228,7 +228,7 @@ describe('ProfileTab', () => {
 
     await screen.findByRole('button', { name: /save profile/i })
 
-    // Expand password accordion (click the accordion button, not the submit button)
+    // Expand password accordion (click the accordion trigger)
     const accordionButtons = screen.getAllByRole('button', { name: /change password/i })
     await user.click(accordionButtons[0])
 
@@ -258,10 +258,9 @@ describe('ProfileTab', () => {
       expect(screen.getByText('New password is required')).toBeInTheDocument()
     })
 
-    // Fill new password but too short
-    const passwordFields = screen.getAllByLabelText(/password/i)
-    const newPasswordField = passwordFields[1] // Current, New, Confirm - so index 1 is New
-    await user.type(newPasswordField, 'short')
+    // Fill new password but too short (use id to avoid matching "Confirm New Password")
+    const newPwField = document.getElementById('profile-new-password') as HTMLInputElement
+    await user.type(newPwField, 'short')
 
     fireEvent.submit(form)
 
@@ -270,8 +269,8 @@ describe('ProfileTab', () => {
     })
 
     // Fill new password correctly but mismatch confirm
-    await user.clear(newPasswordField)
-    await user.type(newPasswordField, 'newpassword123')
+    await user.clear(newPwField)
+    await user.type(newPwField, 'newpassword123')
 
     const confirmPasswordField = screen.getByLabelText(/confirm new password/i)
     await user.type(confirmPasswordField, 'different')
@@ -285,11 +284,11 @@ describe('ProfileTab', () => {
 
   it('changes password on submit', async () => {
     const user = userEvent.setup()
-    let passwordPayload: any = null
+    let passwordPayload: Record<string, unknown> | null = null
 
     server.use(
       http.put('/api/user/profile', async ({ request }) => {
-        passwordPayload = await request.json()
+        passwordPayload = await request.json() as Record<string, unknown>
         return HttpResponse.json(mockUser)
       })
     )
@@ -299,7 +298,7 @@ describe('ProfileTab', () => {
 
     await screen.findByRole('button', { name: /save profile/i })
 
-    // Expand password accordion (click the accordion button, not the submit button)
+    // Expand password accordion
     const accordionButtons = screen.getAllByRole('button', { name: /change password/i })
     await user.click(accordionButtons[0])
 
@@ -307,11 +306,14 @@ describe('ProfileTab', () => {
       expect(screen.getByLabelText(/current password/i)).toBeVisible()
     })
 
-    // Fill password change form
-    const passwordFields = screen.getAllByLabelText(/password/i)
-    await user.type(passwordFields[0], 'oldpassword') // Current Password
-    await user.type(passwordFields[1], 'newpassword123') // New Password
-    await user.type(passwordFields[2], 'newpassword123') // Confirm New Password
+    // Fill password change form using specific ids
+    const currentPw = document.getElementById('profile-current-password') as HTMLInputElement
+    const newPw = document.getElementById('profile-new-password') as HTMLInputElement
+    const confirmPw = document.getElementById('profile-confirm-password') as HTMLInputElement
+
+    await user.type(currentPw, 'oldpassword')
+    await user.type(newPw, 'newpassword123')
+    await user.type(confirmPw, 'newpassword123')
 
     const changePasswordButtons = screen.getAllByRole('button', { name: /change password/i })
     const changePasswordButton = changePasswordButtons[1]
@@ -320,7 +322,7 @@ describe('ProfileTab', () => {
 
     await waitFor(() => {
       expect(passwordPayload).toBeTruthy()
-      expect(passwordPayload.password).toBe('newpassword123')
+      expect(passwordPayload!.password).toBe('newpassword123')
     })
   })
 
@@ -338,7 +340,7 @@ describe('ProfileTab', () => {
 
     await screen.findByRole('button', { name: /save profile/i })
 
-    // Expand password accordion (click the accordion button, not the submit button)
+    // Expand password accordion
     const accordionButtons = screen.getAllByRole('button', { name: /change password/i })
     await user.click(accordionButtons[0])
 
@@ -347,10 +349,9 @@ describe('ProfileTab', () => {
     })
 
     // Fill password change form
-    const passwordFields = screen.getAllByLabelText(/password/i)
-    const currentPasswordField = passwordFields[0] as HTMLInputElement // Current Password
-    const newPasswordField = passwordFields[1] as HTMLInputElement // New Password
-    const confirmPasswordField = passwordFields[2] as HTMLInputElement // Confirm New Password
+    const currentPasswordField = document.getElementById('profile-current-password') as HTMLInputElement
+    const newPasswordField = document.getElementById('profile-new-password') as HTMLInputElement
+    const confirmPasswordField = document.getElementById('profile-confirm-password') as HTMLInputElement
 
     await user.type(currentPasswordField, 'oldpassword')
     await user.type(newPasswordField, 'newpassword123')

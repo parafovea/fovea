@@ -23,16 +23,18 @@ DELETE /api/projects/:projectId            delete
   "name": "Field study A",
   "description": "Optional",
   "slug": "field-study-a",
-  "ownerUserId": "...",
-  "ownerGroupId": null,
-  "settings": {}
+  "ownerGroupId": null
 }
 ```
 
-Exactly one of `ownerUserId` and `ownerGroupId` is set. The
-authenticated user is added as `project_owner` on creation when
-they own the project; group-owned projects inherit access through
-the group's role assignments.
+Ownership is implicit at create time: if `ownerGroupId` is
+provided, the project is group-owned and the caller must be a
+`group_admin` or `group_owner` of that group; otherwise the
+authenticated user becomes the project's `ownerUserId`. Either way
+the creator is added as `project_owner` in `ProjectMembership`.
+Group-owned projects inherit access through the group's role
+assignments. Project `settings` are not accepted on create; edit
+them via `PUT /api/projects/:projectId`.
 
 ## Members
 
@@ -82,9 +84,9 @@ per project they belong to.
 
 `Project.ownerUserId` is the ownership column for ability
 checks. Owners can do anything inside the project regardless of
-the `RolePermission` matrix; transfer ownership via `PUT
-/api/projects/:projectId` with a new `ownerUserId` (or
-`ownerGroupId`).
+the `RolePermission` matrix. There is no API for transferring
+ownership after creation; `PUT /api/projects/:projectId` only
+updates `name`, `description`, `settings`, and `isArchived`.
 
 Deleting a project cascades to `ProjectMembership` and clears
 `projectId` on dependent content rows (the FK uses `SetNull` so

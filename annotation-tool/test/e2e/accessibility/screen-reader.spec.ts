@@ -127,8 +127,11 @@ test.describe('Screen Reader - ARIA Roles and Structure', () => {
         if (controls) {
           expect(controls).toBeTruthy()
 
-          // Corresponding tabpanel should exist (may be visible or not depending on selection)
-          const tabpanel = page.locator(`#${controls}, [role="tabpanel"]`)
+          // Corresponding tabpanel should exist. base-ui generates IDs that
+          // contain colons (e.g. base-ui-:r1v:) which aren't valid in a
+          // `#id` selector without CSS.escape — match on the [id="..."]
+          // attribute selector instead.
+          const tabpanel = page.locator(`[id="${controls}"], [role="tabpanel"]`)
           const panelCount = await tabpanel.count()
           expect(panelCount).toBeGreaterThan(0)
         } else {
@@ -163,8 +166,8 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     await annotationWorkspace.drawSimpleBoundingBox()
     await page.waitForTimeout(500)
 
-    // Look for any Alert or Snackbar that might appear
-    const alerts = page.locator('[role="alert"], [role="status"], .MuiAlert-root, .MuiSnackbar-root')
+    // Look for any Alert or toast notification that might appear (sonner toasts use [data-sonner-toast])
+    const alerts = page.locator('[role="alert"], [role="status"], [data-slot="alert"], [data-sonner-toast]')
 
     // Try to save
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
@@ -200,8 +203,8 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
       await saveButton.click()
       await page.waitForTimeout(500)
 
-      // Look for error messages
-      const errors = page.locator('[role="alert"], .MuiFormHelperText-root.Mui-error, .error-message')
+      // Look for error messages (shadcn surfaces validation via aria-invalid inputs and inline error text)
+      const errors = page.locator('[role="alert"], [aria-invalid="true"], .text-destructive, .error-message')
       const errorCount = await errors.count()
 
       // If errors are shown, at least one should exist
@@ -217,7 +220,7 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
     await page.waitForLoadState('networkidle')
 
     // Look for any loading indicators
-    const loaders = page.locator('[role="progressbar"], [role="status"], .MuiCircularProgress-root, .loading')
+    const loaders = page.locator('[role="progressbar"], [role="status"], [data-slot="spinner"], .loading')
     const loaderCount = await loaders.count()
 
     if (loaderCount > 0) {
@@ -296,9 +299,14 @@ test.describe('Screen Reader - ARIA States and Properties', () => {
     const hasExpanded = await personaSelect.getAttribute('aria-expanded')
     expect(hasExpanded).toMatch(/true|false/)
 
-    // Should have aria-controls (points to listbox)
+    // Per WAI-ARIA 1.2, aria-controls on a combobox is required only when
+    // the popup is visible (shadcn/base-ui Select sets it on open). Open
+    // the listbox, assert the relationship, then close it again.
+    await personaSelect.click()
+    await page.waitForSelector('[role="listbox"]', { state: 'visible' })
     const hasControls = await personaSelect.getAttribute('aria-controls')
     expect(hasControls).toBeTruthy()
+    await page.keyboard.press('Escape')
 
     // Should have aria-haspopup
     const hasPopup = await personaSelect.evaluate((el) => {
@@ -385,17 +393,18 @@ test.describe('Screen Reader - Form Accessibility', () => {
         // Check if inside a label
         const closestLabel = el.closest('label')
 
-        // Check for Material-UI label (sibling or parent)
-        const parent = el.closest('.MuiFormControl-root, .MuiTextField-root, .MuiInputBase-root')
-        const muiLabel = parent?.querySelector('label')
+        // Check for a sibling shadcn Label inside the input's containing form-field wrapper.
+        // shadcn forms typically wrap Label + Input in a <div class="space-y-2"> (or similar).
+        const wrapper = el.closest('div')
+        const wrappedLabel = wrapper?.querySelector('label')
 
         return {
           hasHtmlLabel: !!htmlLabel,
           hasAriaLabel: !!ariaLabel,
           hasAriaLabelledby: !!ariaLabelledby && !!labelledbyElement,
           hasClosestLabel: !!closestLabel,
-          hasMuiLabel: !!muiLabel,
-          hasAnyLabel: !!(htmlLabel || ariaLabel || (ariaLabelledby && labelledbyElement) || closestLabel || muiLabel)
+          hasWrappedLabel: !!wrappedLabel,
+          hasAnyLabel: !!(htmlLabel || ariaLabel || (ariaLabelledby && labelledbyElement) || closestLabel || wrappedLabel)
         }
       })
 

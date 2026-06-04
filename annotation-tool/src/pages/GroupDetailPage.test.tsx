@@ -59,7 +59,7 @@ describe('GroupDetailPage', () => {
 
     renderWithRoute('grp-1')
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders group name and description', async () => {

@@ -1,9 +1,10 @@
 # Export and import
 
 Fovea's exchange format is JSONL. Each line is a single record with
-a `type` discriminator (`persona`, `ontology`, `worldEntity`,
-`worldEvent`, `worldTime`, `worldLocation`, `videoSummary`,
-`claim`, `annotation`, `metadata`). The first line of every full
+a `type` discriminator (`persona`, `ontology`, `entity`, `event`,
+`time`, `entity_collection`, `event_collection`,
+`time_collection`, `relation`, `summary`, `claim`,
+`claim_relation`, `annotation`, `metadata`). The first line of every full
 export is a `metadata` record carrying `exporterUserId`, used by
 the importer to detect cross-user imports and regenerate ids.
 
@@ -28,7 +29,7 @@ Inspect the first few records:
 
 ```bash
 head -3 tutorial-export.jsonl
-# {"type":"metadata","exporterUserId":"<admin-uuid>","version":"0.1.8"}
+# {"type":"metadata","data":{"exporterUserId":"<admin-uuid>","exportVersion":"1.0","exportedAt":"<iso-timestamp>"}}
 # {"type":"persona","id":"<persona-uuid>","name":"Soccer Match Analyst",...}
 # {"type":"ontology","personaId":"<persona-uuid>","entityTypes":[...],...}
 ```
@@ -39,7 +40,7 @@ Narrower exports are available:
 - `GET /api/export/world` - world state only.
 - `GET /api/export/summaries` - summaries and their claims only.
 - `GET /api/export/stats` - keyframe and interpolated frame
-  counts (scoped to the authenticated user since v0.1.4).
+  counts, scoped to the authenticated user.
 
 ## Import as a different user
 
@@ -55,20 +56,19 @@ curl -s -X POST http://localhost:3001/api/auth/login \
 curl -s -X POST http://localhost:3001/api/import \
   --cookie test-cookies.txt \
   -F "file=@tutorial-export.jsonl"
-# {"success":true,"itemsImported":N,"itemsSkipped":0,"importHistoryId":"..."}
+# {"success":true,"summary":{"totalLines":N,"processedLines":N,"importedItems":{"annotations":N,"totalKeyframes":N,"singleKeyframeSequences":N},"skippedItems":{"annotations":0}},"warnings":[],"errors":[],"conflicts":[]}
 ```
 
 Because the exporter (`admin`) and the importer (`test`) are
 different users, the importer regenerates ids for every persona,
 ontology, world object, annotation, summary, and claim. Gloss
-items pointing at world objects (`objectRef`, `entityRef`,
-`typeRef`) are remapped to the new ids in the same pass, so the
+items pointing at world objects (`objectRef`, `typeRef`) are
+remapped to the new ids in the same pass, so the
 imported claims still resolve through `GET /api/world`.
 
 ## Verify the round-trip
 
-`GET /api/import/history` lists the requester's imports (since
-v0.1.8 the route is user-scoped):
+`GET /api/import/history` lists the requester's imports:
 
 ```bash
 curl -s http://localhost:3001/api/import/history \
@@ -88,10 +88,10 @@ documented in [Concepts > Data isolation](../concepts/data-isolation.md).
 If the export references world objects that the importer cannot
 recreate (for example, a partial export missing referenced
 entities), the affected annotations are skipped with
-`missing-dependency` conflicts. v0.1.8 surfaces this as a yellow
-"Completed with Warnings" header in `ImportResultDialog`, with a
-banner explaining the skip count and the remediation (re-export
-from source with the referenced world objects included). See
+`missing-dependency` conflicts. `ImportResultDialog` surfaces
+this as a yellow "Completed with Warnings" header, with a banner
+explaining the skip count and the remediation (re-export from
+source with the referenced world objects included). See
 [Guide > Cross-user imports](../guide/cross-user-imports.md) for
 the conflict resolution flow.
 

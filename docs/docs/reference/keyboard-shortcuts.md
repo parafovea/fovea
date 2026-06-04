@@ -9,9 +9,9 @@ in any view to open the shortcuts dialog with the live list.
 
 ```text
 mod+1            Go to Video Browser
-mod+2            Go to Ontology Builder
+mod+2            Go to Persona Builder
 mod+3            Go to Object Builder
-o                Toggle Ontology Builder
+p                Toggle Persona Builder
 w                Toggle World Builder
 v                Return to last active video
 mod+s            Save current work
@@ -54,7 +54,7 @@ plus / equals    Zoom timeline in
 minus            Zoom timeline out
 ```
 
-## Ontology workspace
+## Persona Builder workspace
 
 ```text
 n                Create new type (context-aware)
@@ -62,5 +62,29 @@ enter            Edit selected type
 delete           Delete selected type
 mod+d            Duplicate selected type
 /                Focus search field
+tab              Switch to next type tab
+shift+tab        Switch to previous type tab
 mod+shift+s      Generate type suggestions with AI
+```
+
+Internal command IDs and the `ontologyWorkspaceActive` context key retain
+the `ontology` prefix for backward compatibility, even though the
+user-facing workspace is the Persona Builder.
+
+## Object Builder workspace
+
+```text
+n                Create new object (context-aware)
+enter            Edit selected object
+delete           Delete selected object
+mod+d            Duplicate selected object
+/                Focus search field
+tab              Switch to next object tab
+shift+tab        Switch to previous object tab
+```
+
+## Persona browser
+
+```text
+n                Create new persona
 ```

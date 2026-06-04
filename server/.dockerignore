@@ -4,10 +4,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-# Keep package-lock.json for npm ci
-# package-lock.json
+# Keep pnpm-lock.yaml for pnpm install --frozen-lockfile
+package-lock.json
 yarn.lock
-pnpm-lock.yaml
 
 # Build output
 dist

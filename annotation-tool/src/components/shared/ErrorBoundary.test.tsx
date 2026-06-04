@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -46,19 +46,23 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
 
-  it('displays error message in fallback UI', () => {
+  it('displays error message in fallback UI', async () => {
+    const user = userEvent.setup()
+
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
       </ErrorBoundary>
     )
 
-    // Click to expand error details
+    // Click to expand error details (Collapsible trigger)
     const expandButton = screen.getByText('Error details')
-    userEvent.click(expandButton)
+    await user.click(expandButton)
 
-    // Error message should be visible
-    expect(screen.getByText(/Test error/)).toBeInTheDocument()
+    // Error message should be visible after expanding
+    await waitFor(() => {
+      expect(screen.getByText(/Test error/)).toBeInTheDocument()
+    })
   })
 
   it('resets error boundary state when "Try Again" is clicked', async () => {

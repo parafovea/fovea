@@ -41,8 +41,8 @@ specific question of the form "how do I do X with Fovea".
 ## Data exchange
 
 - [Export and import](export-import.md) covers the JSONL format,
-  the v0.1.4 user-scoped stats, and the `Annotation.linkType`
-  round-trip introduced in v0.1.8.
+  the user-scoped stats endpoint, and the `Annotation.linkType`
+  round-trip.
 - [Cross-user imports](cross-user-imports.md) covers id
   regeneration, gloss remapping, the `metadata` provenance line,
   and the `Completed with Warnings` flow.
@@ -70,6 +70,15 @@ specific question of the form "how do I do X with Fovea".
   to seed a custom role.
 - [Admin permissions](admin-permissions.md) covers the
   `/api/admin/permissions` matrix editing surface.
+
+## Tours
+
+- [Tour catalog](tour-catalog.md) lists the twelve built-in
+  guided tours.
+- [Tour customization](tour-customization.md) covers retheming the
+  tours via `tour-content.json` for your own deployment.
+- [Tour demo mode](tour-demo-mode.md) covers the MSW-mocked tour
+  build for no-model-service demo laptops.
 
 ## Operational
 

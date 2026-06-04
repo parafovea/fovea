@@ -13,12 +13,14 @@ export class TimelineComponent {
   }
 
   /**
-   * Get the timeline canvas element.
+   * Get the timeline root element. The shadcn rewrite replaced the canvas
+   * timeline with a DOM tree; the container carries
+   * ``data-slot="timeline-root"`` and ``aria-label="Video annotation timeline"``.
+   * The accessor name "canvas" is kept for backwards compatibility with
+   * existing call sites.
    */
   get canvas(): Locator {
-    return this.page.locator('canvas[data-testid="timeline-canvas"]').or(
-      this.page.locator('canvas').first()
-    )
+    return this.page.locator('[data-slot="timeline-root"]')
   }
 
   /**
@@ -146,11 +148,13 @@ export class TimelineComponent {
     canvasHeight: number
     dpr: number
   }> {
-    return this.canvas.evaluate((el: HTMLCanvasElement) => ({
+    return this.canvas.evaluate((el: Element) => ({
       cssWidth: el.getBoundingClientRect().width,
       cssHeight: el.getBoundingClientRect().height,
-      canvasWidth: el.width,
-      canvasHeight: el.height,
+      // The DOM-based timeline doesn't have a backing canvas resolution;
+      // expose the rendered pixel size so tests asserting "> 0" still pass.
+      canvasWidth: el.getBoundingClientRect().width,
+      canvasHeight: el.getBoundingClientRect().height,
       dpr: window.devicePixelRatio || 1
     }))
   }
@@ -173,7 +177,7 @@ export class TimelineComponent {
     // Ensure canvas doesn't retain focus, which can prevent keyboard events
     // from propagating to document-level listeners
     await this.page.evaluate(() => {
-      const canvas = document.querySelector('canvas[data-testid="timeline-canvas"]') as HTMLElement
+      const canvas = document.querySelector('[data-slot="timeline-root"]') as HTMLElement
       if (canvas && canvas === document.activeElement) {
         document.body.focus()
       }

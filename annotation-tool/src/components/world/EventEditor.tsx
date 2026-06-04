@@ -1,47 +1,39 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Trash2, Zap, User, Clock, MapPin, Globe, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  Chip,
-  Divider,
-  List,
-  ListItem,
-  IconButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Alert,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  ToggleButton,
-  ToggleButtonGroup,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  FlashOn as EventIcon,
-  ExpandMore as ExpandMoreIcon,
-  Person as PersonIcon,
-  AccessTime as TimeIcon,
-  Place as LocationIcon,
-  Language as WikidataIcon,
-  Edit as EditIcon,
-} from '@mui/icons-material'
-import { useWorld, useAddEvent, useUpdateEvent, useDeleteEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+import { useWorld, useAddEvent, useUpdateEvent, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Event, EventInterpretation, GlossItem, Location, TimeInstant, TimeInterval } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 interface EventEditorProps {
   open: boolean
@@ -68,7 +60,6 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const times = useMemo(() => worldData?.times ?? [], [worldData?.times])
   const { mutateAsync: addEvent } = useAddEvent()
   const { mutateAsync: updateEvent } = useUpdateEvent()
-  const { mutate: deleteEvent } = useDeleteEvent()
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -89,61 +80,20 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const [interpretationConfidence, setInterpretationConfidence] = useState<number>(1.0)
   const [interpretationJustification, setInterpretationJustification] = useState('')
 
-  // Track auto-created event ID for cancel cleanup
-  const [autoCreatedEventId, setAutoCreatedEventId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    event
+      ? name !== event.name ||
+        selectedTimeId !== (event.time?.id || '') ||
+        selectedLocationId !== (event.location?.id || '') ||
+        certainty !== (event.metadata?.certainty ?? 1.0) ||
+        wikidataId !== (event.wikidataId || '') ||
+        wikidataUrl !== (event.wikidataUrl || '') ||
+        JSON.stringify(description) !== JSON.stringify(event.description) ||
+        JSON.stringify(interpretations) !== JSON.stringify(event.personaInterpretations || [])
+      : !!name || interpretations.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedEventId
-  }, [autoCreatedEventId])
-
-  // Auto-save hook for new events
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, interpretations, selectedTimeId, selectedLocationId, certainty, wikidataId, wikidataUrl },
-    isEnabled: open && !!name && !event, // Only for new events, require name
-    onSave: async (eventData) => {
-      const now = new Date().toISOString()
-      const timeToUse = times.find(t => t.id === eventData.selectedTimeId)
-      const locationToUse = entities.find(e => e.id === eventData.selectedLocationId && 'locationType' in e) as Location | undefined
-
-      const fullEventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: eventData.name,
-        description: eventData.description,
-        personaInterpretations: eventData.interpretations,
-        time: timeToUse,
-        location: locationToUse,
-        wikidataId: eventData.wikidataId || undefined,
-        wikidataUrl: eventData.wikidataUrl || undefined,
-        importedFrom: eventData.wikidataId ? 'wikidata' : undefined,
-        importedAt: eventData.wikidataId ? now : undefined,
-        metadata: {
-          certainty: eventData.certainty,
-          properties: {},
-        },
-      }
-
-      if (autoCreatedIdRef.current) {
-        // Update the auto-created event
-        await updateEvent({
-          id: autoCreatedIdRef.current,
-          createdAt: now,
-          updatedAt: now,
-          ...fullEventData,
-        })
-      } else {
-        // Create new event and track ID
-        const result = await addEvent(fullEventData)
-        // Get the newly created event ID from the result
-        const newEvent = result.events[result.events.length - 1]
-        if (newEvent) {
-          setAutoCreatedEventId(newEvent.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: event?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (event) {
@@ -165,8 +115,6 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
       setWikidataId('')
       setWikidataUrl('')
     }
-    // Reset auto-created ID when dialog opens/closes or event changes
-    setAutoCreatedEventId(null)
   }, [event, open])
 
   const handleAddParticipant = () => {
@@ -196,11 +144,9 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
         justification: interpretationJustification || undefined,
       }
 
-      // Remove any existing interpretation for this persona
       const filtered = interpretations.filter(i => i.personaId !== selectedPersonaId)
       setInterpretations([...filtered, newInterpretation])
 
-      // Reset form
       setSelectedEventTypeId('')
       setParticipants([])
       setInterpretationConfidence(1.0)
@@ -243,22 +189,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
     onClose()
   }
 
-  // Cancel handler deletes auto-created event
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteEvent(autoCreatedIdRef.current)
-    }
-    setAutoCreatedEventId(null)
-    onClose()
-  }
-
-  // Done handler keeps the event (already saved via autosave)
-  const handleDone = async () => {
-    // Force save any pending changes before closing
-    if (!event && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedEventId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -295,43 +227,43 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const locationEntities = entities.filter(e => 'locationType' in e)
 
   return (
-    <Dialog open={open} onClose={handleCancel} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EventIcon color="secondary" />
-          {event ? 'Edit Event' : 'Create Event'}
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Alert severity="info" icon={<EventIcon />}>
-            An event is something that actually happened (e.g., "The 2024 Olympics", "John's birthday party").
-            This is different from event types which are categories (e.g., "Olympics", "Birthday Party").
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent data-tour-id="event-editor" className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="size-5 text-secondary" />
+            {event ? 'Edit Event' : 'Create Event'}
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <Zap className="size-4" />
+            <AlertDescription>
+              An event is something that actually happened (e.g., "The 2024 Olympics", "John's birthday party").
+              This is different from event types which are categories (e.g., "Olympics", "Birthday Party").
+            </AlertDescription>
           </Alert>
 
           {/* Import mode selector */}
           {!event && (
-            <ToggleButtonGroup
-              value={importMode}
-              exclusive
-              onChange={(_, newMode) => newMode && setImportMode(newMode)}
-              fullWidth
-              size="small"
+            <ToggleGroup
+              value={[importMode]}
+              onValueChange={(value) => {
+                if (value.length > 0) setImportMode(value[0] as 'manual' | 'wikidata')
+              }}
+              size="sm"
+              className="w-full"
             >
-              <ToggleButton value="manual">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <EditIcon fontSize="small" />
-                  <Typography variant="body2">Manual Entry</Typography>
-                </Box>
-              </ToggleButton>
-              <ToggleButton value="wikidata">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <WikidataIcon fontSize="small" />
-                  <Typography variant="body2">Import from Wikidata</Typography>
-                </Box>
-              </ToggleButton>
-            </ToggleButtonGroup>
+              <ToggleGroupItem value="manual" className="flex flex-1 items-center gap-1">
+                <Pencil className="size-4" />
+                <span className="text-sm">Manual Entry</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="wikidata" className="flex flex-1 items-center gap-1">
+                <Globe className="size-4" />
+                <span className="text-sm">Import from Wikidata</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
           )}
 
           {/* Wikidata import */}
@@ -347,315 +279,280 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
 
           {/* Show Wikidata chip if imported */}
           {wikidataId && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip
-                label={`Wikidata: ${wikidataId}`}
-                size="small"
-                color="secondary"
-                variant="outlined"
-                component="a"
-                href={wikidataUrl}
-                target="_blank"
-                clickable
-              />
-              <Typography variant="caption" color="text.secondary">
+            <div className="flex items-center gap-2">
+              <a href={wikidataUrl} target="_blank" rel="noopener noreferrer">
+                <Badge variant="outline" className="cursor-pointer">
+                  Wikidata: {wikidataId}
+                </Badge>
+              </a>
+              <span className="text-xs text-muted-foreground">
                 Imported from Wikidata
-              </Typography>
-            </Box>
+              </span>
+            </div>
           )}
 
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            helperText="The specific name of this event"
-          />
+          <div className="space-y-1">
+            <Label htmlFor="event-name">Name *</Label>
+            <Input
+              id="event-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Event name"
+            />
+            <p className="text-xs text-muted-foreground">The specific name of this event</p>
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Description
-            </Typography>
+          <div className="space-y-1">
+            <Label>Description</Label>
             <GlossEditor
               gloss={description}
               onChange={setDescription}
-              personaId={activePersonaId} // Use active persona for type references
+              personaId={activePersonaId}
             />
-          </Box>
+          </div>
 
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>Time</InputLabel>
-              <Select
-                value={selectedTimeId}
-                onChange={(e) => setSelectedTimeId(e.target.value)}
-                label="Time"
-                startAdornment={<TimeIcon sx={{ mr: 1, color: 'action.active' }} />}
-              >
-                <MenuItem value="">None</MenuItem>
-                {times.map(time => (
-                  <MenuItem key={time.id} value={time.id}>
-                    {time.label || (time.type === 'instant'
-                      ? `Instant: ${(time as TimeInstant).timestamp}`
-                      : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`)}
-                  </MenuItem>
-                ))}
+          <div className="flex gap-4">
+            <div className="flex-1 space-y-1">
+              <Label className="flex items-center gap-1">
+                <Clock className="size-3 text-muted-foreground" />
+                Time
+              </Label>
+              <Select value={selectedTimeId || '_none'} onValueChange={(value) => setSelectedTimeId(!value || value === '_none' ? '' : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">None</SelectItem>
+                  {times.map(time => (
+                    <SelectItem key={time.id} value={time.id}>
+                      {time.label || (time.type === 'instant'
+                        ? `Instant: ${(time as TimeInstant).timestamp}`
+                        : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
-            <FormControl fullWidth>
-              <InputLabel>Location</InputLabel>
-              <Select
-                value={selectedLocationId}
-                onChange={(e) => setSelectedLocationId(e.target.value)}
-                label="Location"
-                startAdornment={<LocationIcon sx={{ mr: 1, color: 'action.active' }} />}
-              >
-                <MenuItem value="">None</MenuItem>
-                {locationEntities.map(location => (
-                  <MenuItem key={location.id} value={location.id}>
-                    {location.name}
-                  </MenuItem>
-                ))}
+            <div className="flex-1 space-y-1">
+              <Label className="flex items-center gap-1">
+                <MapPin className="size-3 text-muted-foreground" />
+                Location
+              </Label>
+              <Select value={selectedLocationId || '_none'} onValueChange={(value) => setSelectedLocationId(!value || value === '_none' ? '' : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">None</SelectItem>
+                  {locationEntities.map(location => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
-            <TextField
-              label="Certainty"
-              type="number"
-              value={certainty}
-              onChange={(e) => setCertainty(parseFloat(e.target.value))}
-              inputProps={{ min: 0, max: 1, step: 0.1 }}
-              sx={{ width: 150 }}
-            />
-          </Box>
+            <div className="space-y-1" style={{ width: 150 }}>
+              <Label>Certainty</Label>
+              <Input
+                type="number"
+                value={certainty}
+                onChange={(e) => setCertainty(parseFloat(e.target.value))}
+                min={0}
+                max={1}
+                step={0.1}
+              />
+            </div>
+          </div>
 
-          <Divider />
+          <Separator />
 
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Persona Interpretations
-            </Typography>
-            <Typography variant="caption" color="text.secondary" paragraph>
+          <div>
+            <h3 className="text-base font-semibold">Persona Interpretations</h3>
+            <p className="text-xs text-muted-foreground mb-4">
               Different personas can interpret this event with different event types and participant roles.
-            </Typography>
+            </p>
 
             {/* List existing interpretations */}
             {interpretations.length > 0 && (
-              <List>
+              <ul className="space-y-3 mb-4">
                 {interpretations.map((interpretation) => (
-                  <ListItem key={interpretation.personaId} sx={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                          label={getPersonaName(interpretation.personaId)}
-                          size="small"
-                          color="primary"
-                          icon={<PersonIcon />}
-                        />
-                        <Typography variant="body2">interprets as</Typography>
-                        <Chip
-                          label={getEventTypeName(interpretation.personaId, interpretation.eventTypeId)}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{ fontStyle: 'italic' }}
-                        />
-                      </Box>
-                      <IconButton
-                        size="small"
+                  <li key={interpretation.personaId} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge>
+                          <User className="mr-1 size-3" />
+                          {getPersonaName(interpretation.personaId)}
+                        </Badge>
+                        <span className="text-sm">interprets as</span>
+                        <Badge variant="outline" className="italic">
+                          {getEventTypeName(interpretation.personaId, interpretation.eventTypeId)}
+                        </Badge>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleRemoveInterpretation(interpretation.personaId)}
                       >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
 
                     {interpretation.participants.length > 0 && (
-                      <Box sx={{ ml: 4, mt: 1 }}>
-                        <Typography variant="caption" color="text.secondary">Participants:</Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                      <div className="ml-8">
+                        <span className="text-xs text-muted-foreground">Participants:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {interpretation.participants.map((p, idx) => (
-                            <Chip
-                              key={idx}
-                              size="small"
-                              label={`${getEntityName(p.entityId)} as ${getRoleTypeName(interpretation.personaId, p.roleTypeId)}`}
-                              variant="outlined"
-                            />
+                            <Badge key={idx} variant="outline">
+                              {getEntityName(p.entityId)} as {getRoleTypeName(interpretation.personaId, p.roleTypeId)}
+                            </Badge>
                           ))}
-                        </Box>
-                      </Box>
+                        </div>
+                      </div>
                     )}
-                  </ListItem>
+                  </li>
                 ))}
-              </List>
+              </ul>
             )}
 
             {/* Add new interpretation */}
             <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="subtitle2">Add Interpretation</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                  <FormControl fullWidth>
-                    <InputLabel>Persona</InputLabel>
-                    <Select
-                      value={selectedPersonaId}
-                      onChange={(e) => {
-                        setSelectedPersonaId(e.target.value)
-                        setSelectedEventTypeId('')
-                        setParticipants([])
-                      }}
-                      label="Persona"
-                    >
-                      {personas.map(persona => (
-                        <MenuItem key={persona.id} value={persona.id}>
-                          {persona.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  {selectedPersonaId && (
-                    <>
-                      <FormControl fullWidth>
-                        <InputLabel>Event Type</InputLabel>
-                        <Select
-                          value={selectedEventTypeId}
-                          onChange={(e) => setSelectedEventTypeId(e.target.value)}
-                          label="Event Type"
-                        >
-                          {availableEventTypes.map(type => (
-                            <MenuItem key={type.id} value={type.id}>
-                              <em>{type.name}</em>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-
-                      <Box>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Participants
-                        </Typography>
-                        {participants.map((participant, index) => (
-                          <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                            <FormControl sx={{ flex: 1 }}>
-                              <InputLabel size="small">Entity</InputLabel>
-                              <Select
-                                size="small"
-                                value={participant.entityId}
-                                onChange={(e) => handleUpdateParticipant(index, 'entityId', e.target.value)}
-                                label="Entity"
-                              >
-                                {entities.map(entity => (
-                                  <MenuItem key={entity.id} value={entity.id}>
-                                    {entity.name}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                            <FormControl sx={{ flex: 1 }}>
-                              <InputLabel size="small">Role</InputLabel>
-                              <Select
-                                size="small"
-                                value={participant.roleTypeId}
-                                onChange={(e) => handleUpdateParticipant(index, 'roleTypeId', e.target.value)}
-                                label="Role"
-                              >
-                                {availableRoleTypes.map(role => (
-                                  <MenuItem key={role.id} value={role.id}>
-                                    <em>{role.name}</em>
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveParticipant(index)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Box>
+              <AccordionItem value="add-interpretation">
+                <AccordionTrigger>
+                  <span className="text-sm font-medium">Add Interpretation</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <Select value={selectedPersonaId || '_none'} onValueChange={(value) => {
+                      setSelectedPersonaId(!value || value === '_none' ? '' : value)
+                      setSelectedEventTypeId('')
+                      setParticipants([])
+                    }}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select Persona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Select Persona</SelectItem>
+                        {personas.map(persona => (
+                          <SelectItem key={persona.id} value={persona.id}>
+                            {persona.name}
+                          </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+
+                    {selectedPersonaId && (
+                      <>
+                        <Select value={selectedEventTypeId || '_none'} onValueChange={(value) => setSelectedEventTypeId(!value || value === '_none' ? '' : value)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select Event Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="_none">Select Event Type</SelectItem>
+                            {availableEventTypes.map(type => (
+                              <SelectItem key={type.id} value={type.id}>
+                                <em>{type.name}</em>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Participants</Label>
+                          {participants.map((participant, index) => (
+                            <div key={index} className="flex gap-2">
+                              <Select value={participant.entityId || '_none'} onValueChange={(value) => handleUpdateParticipant(index, 'entityId', !value || value === '_none' ? '' : value)}>
+                                <SelectTrigger className="flex-1">
+                                  <SelectValue placeholder="Entity" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none">Select Entity</SelectItem>
+                                  {entities.map(entity => (
+                                    <SelectItem key={entity.id} value={entity.id}>
+                                      {entity.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Select value={participant.roleTypeId || '_none'} onValueChange={(value) => handleUpdateParticipant(index, 'roleTypeId', !value || value === '_none' ? '' : value)}>
+                                <SelectTrigger className="flex-1">
+                                  <SelectValue placeholder="Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none">Select Role</SelectItem>
+                                  {availableRoleTypes.map(role => (
+                                    <SelectItem key={role.id} value={role.id}>
+                                      <em>{role.name}</em>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleRemoveParticipant(index)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleAddParticipant}
+                          >
+                            <Plus className="mr-1 size-4" />
+                            Add Participant
+                          </Button>
+                        </div>
+
+                        <Input
+                          type="number"
+                          value={interpretationConfidence}
+                          onChange={(e) => setInterpretationConfidence(parseFloat(e.target.value))}
+                          min={0}
+                          max={1}
+                          step={0.1}
+                          placeholder="Confidence"
+                        />
+
+                        <textarea
+                          className="flex min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          rows={2}
+                          value={interpretationJustification}
+                          onChange={(e) => setInterpretationJustification(e.target.value)}
+                          placeholder="Justification (optional)"
+                        />
+
                         <Button
-                          size="small"
-                          startIcon={<AddIcon />}
-                          onClick={handleAddParticipant}
+                          variant="outline"
+                          onClick={handleAddInterpretation}
+                          disabled={!selectedEventTypeId}
                         >
-                          Add Participant
+                          <Plus className="mr-1 size-4" />
+                          Add Interpretation
                         </Button>
-                      </Box>
-
-                      <TextField
-                        label="Confidence"
-                        type="number"
-                        size="small"
-                        value={interpretationConfidence}
-                        onChange={(e) => setInterpretationConfidence(parseFloat(e.target.value))}
-                        inputProps={{ min: 0, max: 1, step: 0.1 }}
-                      />
-
-                      <TextField
-                        label="Justification (optional)"
-                        size="small"
-                        multiline
-                        rows={2}
-                        value={interpretationJustification}
-                        onChange={(e) => setInterpretationJustification(e.target.value)}
-                      />
-
-                      <Button
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        onClick={handleAddInterpretation}
-                        disabled={!selectedEventTypeId}
-                      >
-                        Add Interpretation
-                      </Button>
-                    </>
-                  )}
-                </Box>
-              </AccordionDetails>
+                      </>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             </Accordion>
-          </Box>
-        </Box>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {event ? 'Update Event' : 'Create Event'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
-        <Box>
-          {!event && (
-            <SaveStatusIndicator
-              status={saveStatus}
-              lastSavedAt={lastSavedAt}
-              errorMessage={errorMessage}
-              retryCount={retryCount}
-              onRetry={forceSave}
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={handleCancel}>Cancel</Button>
-          {event ? (
-            <Button
-              onClick={handleSave}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0}
-            >
-              Update Event
-            </Button>
-          ) : (
-            <Button
-              onClick={handleDone}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0 || !autoCreatedEventId}
-            >
-              Done
-            </Button>
-          )}
-        </Box>
-      </DialogActions>
     </Dialog>
   )
 }

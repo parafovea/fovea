@@ -18,20 +18,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: annotation-tool/package-lock.json
+          cache: 'pnpm'
 
       - name: Install dependencies
-        working-directory: annotation-tool
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Run npm audit
-        working-directory: annotation-tool
-        run: npm audit --audit-level=moderate
+      - name: Run pnpm audit
+        run: pnpm --filter @fovea/annotation-tool audit --audit-level moderate
         continue-on-error: true
 
   dependency-scan-backend:
@@ -43,20 +44,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: server/package-lock.json
+          cache: 'pnpm'
 
       - name: Install dependencies
-        working-directory: server
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Run npm audit
-        working-directory: server
-        run: npm audit --audit-level=moderate
+      - name: Run pnpm audit
+        run: pnpm --filter @fovea/server audit --audit-level moderate
         continue-on-error: true
 
   dependency-scan-model-service:

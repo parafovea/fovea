@@ -73,6 +73,29 @@ export interface SaveSummaryRequest {
 /**
  * Request payload for generating a video summary.
  */
+/**
+ * Per-request sampling overrides for the VLM call backing summarization.
+ * Every field is optional; omitted keys defer to the backend dataclass default
+ * (exposed via ``GET /api/models/defaults``).
+ */
+export interface GenerationOverridesRequest {
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+}
+
+/**
+ * Per-request transcription / diarization overrides.
+ */
+export interface AudioOverridesRequest {
+  beamSize?: number
+  computeType?: 'float16' | 'float32' | 'int8' | 'int8_float16'
+  numSpeakers?: number
+  minSpeakers?: number
+  maxSpeakers?: number
+  vadThreshold?: number
+}
+
 export interface GenerateSummaryRequest {
   videoId: string
   personaId: string
@@ -82,6 +105,8 @@ export interface GenerateSummaryRequest {
   enableSpeakerDiarization?: boolean
   fusionStrategy?: string
   audioLanguage?: string
+  generationOverrides?: GenerationOverridesRequest
+  audioOverrides?: AudioOverridesRequest
 }
 
 /**
@@ -156,6 +181,15 @@ export interface Detection {
   boundingBox: BoundingBox
   confidence: number
   trackId?: string | null
+  /**
+   * Optional final entity type the analyst should snap the box to,
+   * populated by the tour-demo mock layer so the candidates list can
+   * render a "suggested type" chip. Null when the proposal is meant
+   * to be rejected outright; absent on real model-service responses.
+   */
+  acceptAsLabel?: string | null
+  /** Wikidata QID for `acceptAsLabel`, when grounded. */
+  acceptAsWikidataId?: string | null
 }
 
 /**
@@ -192,6 +226,46 @@ export interface DetectionQueryOptions {
 /**
  * Request payload for object detection.
  */
+/**
+ * Request to transcribe a video's audio track. When `enableDiarization`
+ * is true the backend also calls the speaker_diarization model and the
+ * response carries a `speakers` list plus a per-segment `speaker` tag.
+ */
+export interface TranscribeRequest {
+  videoId: string
+  language?: string | null
+  enableDiarization?: boolean
+  numSpeakers?: number | null
+  minSpeakers?: number | null
+  maxSpeakers?: number | null
+}
+
+/**
+ * Single transcript segment returned by the ASR model.
+ */
+export interface TranscriptSegment {
+  start: number
+  end: number
+  text: string
+  confidence: number
+  speaker?: string | null
+}
+
+/**
+ * Response from the transcription endpoint.
+ */
+export interface TranscribeResponse {
+  text: string
+  segments: TranscriptSegment[]
+  language: string
+  duration: number
+  processingTime: number
+  modelUsed: string
+  speakers?: string[]
+  diarizationModelUsed?: string
+  diarizationProcessingTime?: number
+}
+
 export interface DetectionRequest {
   videoId: string
   personaId?: string
@@ -363,6 +437,236 @@ export interface ModelLoadResponse {
 }
 
 /**
+ * Default sampling parameters for LLM/VLM text generation, returned from
+ * ``GET /api/models/defaults``.
+ */
+export interface GenerationDefaults {
+  maxTokens: number
+  temperature: number
+  topP: number
+  stopSequences: string[] | null
+}
+
+/**
+ * Default loading parameters for a language model.
+ */
+export interface LLMDefaults {
+  quantization: string
+  framework: string
+  maxTokens: number
+  temperature: number
+  topP: number
+  contextLength: number
+}
+
+/**
+ * Default loading parameters for audio transcription.
+ */
+export interface TranscriptionDefaults {
+  framework: string
+  language: string | null
+  task: string
+  device: string
+  computeType: string
+  beamSize: number
+}
+
+/**
+ * Default parameters for voice-activity detection.
+ */
+export interface VADDefaults {
+  threshold: number
+  minSpeechDurationMs: number
+  minSilenceDurationMs: number
+  device: string
+}
+
+/**
+ * Default parameters for speaker diarization.
+ */
+export interface DiarizationDefaults {
+  numSpeakers: number | null
+  minSpeakers: number
+  maxSpeakers: number
+  device: string
+}
+
+/**
+ * Default parameters for object detection.
+ */
+export interface DetectionDefaults {
+  framework: string
+  confidenceThreshold: number
+  device: string
+}
+
+/**
+ * Default parameters for object tracking.
+ */
+export interface TrackingDefaults {
+  framework: string
+  device: string
+}
+
+/**
+ * Default loading parameters for a vision-language model.
+ */
+export interface VLMDefaults {
+  quantization: string
+  framework: string
+  device: string
+  trustRemoteCode: boolean
+}
+
+/**
+ * Response shape for ``GET /api/models/defaults``. Each field maps to the
+ * defaults of one dataclass in the Python model-service.
+ */
+export interface ModelDefaultsResponse {
+  generation: GenerationDefaults
+  llm: LLMDefaults
+  transcription: TranscriptionDefaults
+  vad: VADDefaults
+  diarization: DiarizationDefaults
+  detection: DetectionDefaults
+  tracking: TrackingDefaults
+  vlm: VLMDefaults
+}
+
+/**
+ * Per-user inference preferences (full shape with explicit nulls for
+ * "defer to backend default"). Written atomically — sending a field as
+ * ``null`` clears any prior override.
+ */
+export interface UserInferencePreferences {
+  generation: {
+    temperature: number | null
+    topP: number | null
+    maxTokens: number | null
+  }
+  audio: {
+    beamSize: number | null
+    computeType: 'float16' | 'float32' | 'int8' | 'int8_float16' | null
+    numSpeakers: number | null
+    minSpeakers: number | null
+    maxSpeakers: number | null
+    vadThreshold: number | null
+  }
+  detection: {
+    confidenceThreshold: number | null
+  }
+}
+
+export interface UserPreferencesResponse {
+  inferencePreferences: UserInferencePreferences
+  updatedAt: string
+}
+
+export interface UserPreferencesUpdate {
+  inferencePreferences: UserInferencePreferences
+}
+
+/**
+ * Partial per-persona preferences. Any subgroup may be omitted; within a
+ * subgroup any field may be omitted — undefined fields inherit from the
+ * user-level document at merge time.
+ */
+export interface PersonaInferenceOverrides {
+  generation?: Partial<{
+    temperature: number
+    topP: number
+    maxTokens: number
+  }>
+  audio?: Partial<{
+    beamSize: number
+    computeType: 'float16' | 'float32' | 'int8' | 'int8_float16'
+    numSpeakers: number
+    minSpeakers: number
+    maxSpeakers: number
+    vadThreshold: number
+  }>
+  detection?: Partial<{
+    confidenceThreshold: number
+  }>
+}
+
+export interface PersonaPreferencesResponse {
+  personaId: string
+  inferencePreferences: PersonaInferenceOverrides
+  updatedAt: string
+}
+
+export interface PersonaPreferencesUpdate {
+  inferencePreferences: PersonaInferenceOverrides
+}
+
+/**
+ * SystemConfig key-value rows. The row shape is a discriminated union on
+ * ``key``; ``value`` is constrained by the key.
+ */
+export type SystemConfigRow =
+  | {
+      key: 'storagePaths'
+      value: {
+        videoDataRoot: string
+        thumbnailOutputRoot: string
+        audioOutputRoot: string
+      }
+    }
+  | {
+      key: 'runtime'
+      value: {
+        cudaDevice: string
+        warmupOnStartup: boolean
+        defaultBatchSize: number
+        maxBatchSize: number
+        offloadThreshold: number
+        maxVideoFrames: number
+        frameSampleRate: number
+        vlmMaxSummaryTokens: number
+        llmMaxClaimsTokens: number
+        llmMaxSynthesisTokens: number
+        llmMaxOntologyTokens: number
+      }
+    }
+  | {
+      key: 'externalApis'
+      value: {
+        providers: Array<{
+          provider: 'anthropic' | 'openai' | 'google'
+          endpoint: string
+          timeoutSeconds: number
+          maxRetries: number
+        }>
+      }
+    }
+
+export type SystemConfigRowStored = SystemConfigRow & {
+  version: number
+  updatedAt: string
+  updatedByUserId: string | null
+}
+
+export interface SystemConfigListResponse {
+  rows: SystemConfigRowStored[]
+}
+
+/**
+ * Response shape for ``GET /api/models/frameworks``.
+ *
+ * Each field is the list of string values from the corresponding StrEnum
+ * in the Python model-service, so UI selectors don't hardcode the lists.
+ */
+export interface ModelFrameworksResponse {
+  llm: string[]
+  audio: string[]
+  detection: string[]
+  tracking: string[]
+  vlmInference: string[]
+  quantization: string[]
+}
+
+/**
  * Category of ontology type to augment.
  */
 export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
@@ -409,6 +713,27 @@ export interface ApiClientConfig {
 }
 
 /**
+ * Per-call timeout (ms) for axios requests that forward through the
+ * backend to the model-service. Cold-start CPU LLM / VLM / detection
+ * inference can run well past the 30 s axios default; the matching
+ * backend ceilings are configured via `MODEL_SERVICE_TIMEOUT_*_MS`
+ * env vars (see server/src/lib/fetchModelService.ts). To avoid the
+ * magic-number drift of repeating that value here, the frontend
+ * reads `VITE_INFERENCE_TIMEOUT_MS` at build time (set on the docker
+ * stack via build-arg). When unset (production GPU deployments where
+ * the synchronous calls return in seconds), the default mirrors the
+ * backend's prod default ceiling of 60_000 ms.
+ */
+const INFERENCE_TIMEOUT_MS: number = (() => {
+  const raw = import.meta.env.VITE_INFERENCE_TIMEOUT_MS as string | undefined
+  if (typeof raw === 'string' && raw.length > 0) {
+    const parsed = Number.parseInt(raw, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return 60_000
+})()
+
+/**
  * HTTP client for backend API communication.
  * Wraps axios with typed methods for video summary and job management.
  */
@@ -432,7 +757,13 @@ export class ApiClient {
 
     this.client = axios.create({
       baseURL,
-      timeout: config.timeout || 30000,
+      // Base ceiling covers the slowest call any route can make. The
+      // synchronous model-service-bound routes (ontology augment,
+      // detection, thumbnails) need this much for cold-start CPU
+      // inference; the rest of the API is fast and just inherits the
+      // same ceiling. Per-call overrides are still honored when a
+      // specific route wants a tighter bound.
+      timeout: config.timeout || INFERENCE_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -592,7 +923,11 @@ export class ApiClient {
           existingTypes: request.existingTypes,
           targetCategory: request.targetCategory,
           maxSuggestions: request.maxSuggestions,
-        }
+        },
+        // Synchronous model-service-bound call; uses INFERENCE_TIMEOUT_MS
+        // so the value tracks the backend's matching env-driven ceiling
+        // rather than being repeated as a literal here.
+        { timeout: INFERENCE_TIMEOUT_MS }
       )
       return response.data
     } catch (error) {
@@ -619,7 +954,35 @@ export class ApiClient {
           frameNumbers: request.frameNumbers,
           confidenceThreshold: request.confidenceThreshold,
           enableTracking: request.enableTracking,
-        }
+        },
+        // Synchronous model-service-bound call (see augmentOntology).
+        { timeout: INFERENCE_TIMEOUT_MS }
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Transcribe a video's audio track using the configured ASR model.
+   *
+   * @param request - Transcription parameters
+   * @returns Transcript text and per-segment timings
+   * @throws ApiError if request fails
+   */
+  async transcribeVideo(request: TranscribeRequest): Promise<TranscribeResponse> {
+    try {
+      const response = await this.client.post<TranscribeResponse>(
+        `/api/videos/${request.videoId}/transcribe`,
+        {
+          language: request.language ?? null,
+          enableDiarization: request.enableDiarization ?? false,
+          numSpeakers: request.numSpeakers ?? null,
+          minSpeakers: request.minSpeakers ?? null,
+          maxSpeakers: request.maxSpeakers ?? null,
+        },
+        { timeout: INFERENCE_TIMEOUT_MS }
       )
       return response.data
     } catch (error) {
@@ -731,6 +1094,138 @@ export class ApiClient {
     try {
       const response = await this.client.post<ModelLoadResponse>(
         `/api/models/load/${taskType}`
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Fetch default values for every inference config dataclass.
+   *
+   * The settings UI binds form controls to these so what the user sees
+   * matches what the backend will use when a request field is unset.
+   *
+   * @returns Defaults keyed by config group (generation, llm, transcription,
+   *   vad, diarization, detection, tracking, vlm)
+   * @throws ApiError if request fails
+   */
+  async getModelDefaults(): Promise<ModelDefaultsResponse> {
+    try {
+      const response = await this.client.get<ModelDefaultsResponse>(
+        '/api/models/defaults'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Fetch the allowed framework/quantization enum values per task group.
+   *
+   * Used to render framework selectors without hardcoding the lists in the
+   * frontend.
+   *
+   * @returns Enum value arrays keyed by task group
+   * @throws ApiError if request fails
+   */
+  async getModelFrameworks(): Promise<ModelFrameworksResponse> {
+    try {
+      const response = await this.client.get<ModelFrameworksResponse>(
+        '/api/models/frameworks'
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the authenticated user's stored inference preferences. */
+  async getMyPreferences(): Promise<UserPreferencesResponse> {
+    try {
+      const response = await this.client.get<UserPreferencesResponse>('/api/me/preferences')
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Upsert the authenticated user's inference preferences. */
+  async updateMyPreferences(
+    payload: UserPreferencesUpdate
+  ): Promise<UserPreferencesResponse> {
+    try {
+      const response = await this.client.put<UserPreferencesResponse>(
+        '/api/me/preferences',
+        payload
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the per-persona inference-preferences overrides for a given persona. */
+  async getPersonaPreferences(personaId: string): Promise<PersonaPreferencesResponse> {
+    try {
+      const response = await this.client.get<PersonaPreferencesResponse>(
+        `/api/personas/${personaId}/preferences`
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Upsert the per-persona inference-preferences overrides. */
+  async updatePersonaPreferences(
+    personaId: string,
+    payload: PersonaPreferencesUpdate
+  ): Promise<PersonaPreferencesResponse> {
+    try {
+      const response = await this.client.put<PersonaPreferencesResponse>(
+        `/api/personas/${personaId}/preferences`,
+        payload
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Fetch the full SystemConfig row set (admin-only). */
+  async listSystemConfig(): Promise<SystemConfigListResponse> {
+    try {
+      const response = await this.client.get<SystemConfigListResponse>('/api/admin/config')
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
+   * Upsert a SystemConfig row. Server propagates the change to the
+   * model-service before responding.
+   */
+  async updateSystemConfig(row: SystemConfigRow): Promise<SystemConfigRowStored> {
+    try {
+      const response = await this.client.put<SystemConfigRowStored>(
+        `/api/admin/config/${row.key}`,
+        row
+      )
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /** Replay every stored SystemConfig row to the model-service (admin-only). */
+  async replaySystemConfig(): Promise<{ replayed: string[] }> {
+    try {
+      const response = await this.client.post<{ replayed: string[] }>(
+        '/api/admin/config/replay'
       )
       return response.data
     } catch (error) {

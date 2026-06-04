@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from src.application.dto.summarization import (
+    AudioOverridesDTO,
+    GenerationOverridesDTO,
     KeyFrameDTO,
     SummarizeRequestDTO,
     SummarizeResponseDTO,
@@ -11,10 +13,39 @@ from src.infrastructure.adapters.inbound.fastapi.mappers.reasoning import (
     thinking_trace_dto_to_schema,
 )
 from src.infrastructure.adapters.inbound.fastapi.schemas.summarization import (
+    AudioOverrides,
+    GenerationOverrides,
     KeyFrame,
     SummarizeRequest,
     SummarizeResponse,
 )
+
+
+def _generation_overrides_to_dto(
+    overrides: GenerationOverrides | None,
+) -> GenerationOverridesDTO | None:
+    """Convert generation override schema to DTO, preserving ``None`` fields."""
+    if overrides is None:
+        return None
+    return GenerationOverridesDTO(
+        temperature=overrides.temperature,
+        top_p=overrides.top_p,
+        max_tokens=overrides.max_tokens,
+    )
+
+
+def _audio_overrides_to_dto(overrides: AudioOverrides | None) -> AudioOverridesDTO | None:
+    """Convert audio override schema to DTO, preserving ``None`` fields."""
+    if overrides is None:
+        return None
+    return AudioOverridesDTO(
+        beam_size=overrides.beam_size,
+        compute_type=overrides.compute_type,
+        num_speakers=overrides.num_speakers,
+        min_speakers=overrides.min_speakers,
+        max_speakers=overrides.max_speakers,
+        vad_threshold=overrides.vad_threshold,
+    )
 
 
 def summarize_request_schema_to_dto(schema: SummarizeRequest) -> SummarizeRequestDTO:
@@ -31,6 +62,8 @@ def summarize_request_schema_to_dto(schema: SummarizeRequest) -> SummarizeReques
         audio_language=schema.audio_language,
         enable_speaker_diarization=schema.enable_speaker_diarization,
         fusion_strategy=schema.fusion_strategy,
+        generation_overrides=_generation_overrides_to_dto(schema.generation_overrides),
+        audio_overrides=_audio_overrides_to_dto(schema.audio_overrides),
     )
 
 

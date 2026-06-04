@@ -1,20 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
-import {
-  Box,
-  TextField,
-  Autocomplete,
-  CircularProgress,
-  Typography,
-  Paper,
-  Button,
-  Alert,
-  Chip,
-  Link,
-} from '@mui/material'
-import {
-  Language as WikidataIcon,
-  OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Globe, ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import { searchWikidata, getWikidataEntity, extractWikidataInfo } from '@services/wikidataApi'
 import { getWikidataBaseUrl } from '@services/wikidataConfig'
 import {
@@ -107,7 +97,6 @@ function getHelpTextLabel(importType?: string): string {
     }
     return labels[importType] || 'items'
   }
-  // Generic fallback
   return 'items'
 }
 
@@ -128,13 +117,11 @@ function getPlaceholderText(importType?: string): string {
     }
     return placeholders[importType] || 'items'
   }
-  // Generic fallback
   return 'items'
 }
 
 /**
  * Import data structure passed to onImport callback.
- * These fields are optional and may be undefined if Wikidata doesn't have the data.
  */
 export interface WikidataImportCallbackData {
   name: string
@@ -160,12 +147,29 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   const [query, setQuery] = useState('')
   const [options, setOptions] = useState<WikidataSearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<WikidataSearchResult | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_selectedItem, setSelectedItem] = useState<WikidataSearchResult | null>(null)
   const [importing, setImporting] = useState(false)
   const [entityDetails, setEntityDetails] = useState<WikidataEntityDetails | null>(null)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  // Suppress the next debouncedSearch run when the query is updated as
+  // a side-effect of selecting a dropdown result rather than by the
+  // user typing. Without this flag, handleSelect's `setQuery(label)`
+  // triggers the `useEffect(() => debouncedSearch(query))` 300ms later,
+  // which re-fetches options and re-opens the dropdown on top of the
+  // freshly-revealed preview card — the dropdown's option <p> elements
+  // then intercept pointer events on the "Import as Entity Type"
+  // button and every E2E click times out.
+  const suppressNextSearchRef = useRef(false)
 
   const debouncedSearch = useMemo(
     () => debounce(async (searchQuery: string) => {
+      if (suppressNextSearchRef.current) {
+        suppressNextSearchRef.current = false
+        return
+      }
       if (!searchQuery || searchQuery.length < 2) {
         setOptions([])
         return
@@ -175,6 +179,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       try {
         const results = await searchWikidata(searchQuery)
         setOptions(results)
+        setIsDropdownOpen(true)
       } finally {
         setLoading(false)
       }
@@ -186,18 +191,34 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
     debouncedSearch(query)
   }, [query, debouncedSearch])
 
-  const handleSelect = async (value: WikidataSearchResult | null) => {
-    setSelectedItem(value)
-    if (!value) {
-      setEntityDetails(null)
-      return
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false)
+      }
     }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSelect = async (value: WikidataSearchResult) => {
+    setSelectedItem(value)
+    setIsDropdownOpen(false)
+    // Suppress the search that would otherwise re-fire from the
+    // `setQuery(label)` below (see the comment on suppressNextSearchRef).
+    suppressNextSearchRef.current = true
+    setQuery(value.label)
 
     setImporting(true)
     try {
       const entity = await getWikidataEntity(value.id)
       if (entity) {
-        // Get the base URL for wiki links (may be local Wikibase)
         const baseUrl = await getWikidataBaseUrl()
         const info = extractWikidataInfo(entity, { baseUrl })
         setEntityDetails(info as WikidataEntityDetails)
@@ -216,7 +237,6 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       wikidataId: entityDetails.id,
       wikidataUrl: entityDetails.wikidataUrl,
       aliases: entityDetails.aliases,
-      // Convert null to undefined for optional fields
       coordinates: entityDetails.coordinates ?? undefined,
       boundingBox: entityDetails.boundingBox ?? undefined,
       temporalData: entityDetails.temporalData ?? undefined,
@@ -226,172 +246,173 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Alert severity="info" icon={<WikidataIcon />}>
-        Search Wikidata to import {getHelpTextLabel(importType)} into your ontology.
-        This will create a new {entityType === 'time' ? 'time object' : entityType === 'type' ? 'type' : 'object'} based on Wikidata information.
+    <div className="flex flex-col gap-4">
+      <Alert>
+        <Globe className="h-4 w-4" />
+        <AlertDescription>
+          Search Wikidata to import {getHelpTextLabel(importType)} into your ontology.
+          This will create a new {entityType === 'time' ? 'time object' : entityType === 'type' ? 'type' : 'object'} based on Wikidata information.
+        </AlertDescription>
       </Alert>
 
-      <Autocomplete
-        options={options}
-        loading={loading}
-        value={selectedItem}
-        onChange={(_, value) => handleSelect(value)}
-        onInputChange={(_, value) => setQuery(value)}
-        getOptionLabel={(option) => option.label || ''}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Search Wikidata"
+      {/* Search input with dropdown */}
+      <div className="relative" data-tour-id="augmenter-search">
+        <div className="relative">
+          <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            ref={inputRef}
+            className="pl-9 pr-8"
             placeholder={`Search for ${getPlaceholderText(importType)}`}
-            InputProps={{
-              ...params.InputProps,
-              startAdornment: <WikidataIcon sx={{ mr: 1, color: 'action.active' }} />,
-              endAdornment: (
-                <>
-                  {loading ? <CircularProgress color="inherit" size={20} /> : null}
-                  {params.InputProps.endAdornment}
-                </>
-              ),
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setSelectedItem(null)
+              setEntityDetails(null)
             }}
+            onFocus={() => { if (options.length > 0) setIsDropdownOpen(true) }}
           />
+          {loading && (
+            <Spinner className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4" />
+          )}
+        </div>
+
+        {/* Dropdown */}
+        {isDropdownOpen && options.length > 0 && (
+          <div
+            ref={dropdownRef}
+            role="listbox"
+            aria-label="Wikidata search results"
+            data-tour-id="augmenter-results"
+            className="absolute z-50 mt-1 w-full max-h-[300px] overflow-auto rounded-lg border bg-popover shadow-md"
+          >
+            {options.map((option) => (
+              <button
+                key={option.id}
+                role="option"
+                aria-selected={false}
+                className="w-full text-left px-3 py-2 hover:bg-accent cursor-pointer"
+                onClick={() => handleSelect(option)}
+              >
+                <p className="text-sm">{option.label}</p>
+                {option.description && (
+                  <p className="text-xs text-muted-foreground">{option.description}</p>
+                )}
+                <p className="text-xs text-primary">{option.id}</p>
+              </button>
+            ))}
+          </div>
         )}
-        renderOption={(props, option) => (
-          <Box component="li" {...props}>
-            <Box sx={{ width: '100%' }}>
-              <Typography variant="body1">{option.label}</Typography>
-              {option.description && (
-                <Typography variant="caption" color="text.secondary">
-                  {option.description}
-                </Typography>
-              )}
-              <Typography variant="caption" color="primary.main" sx={{ display: 'block' }}>
-                {option.id}
-              </Typography>
-            </Box>
-          </Box>
-        )}
-      />
+      </div>
 
       {importing && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <CircularProgress />
-        </Box>
+        <div className="flex justify-center p-4">
+          <Spinner />
+        </div>
       )}
 
       {entityDetails && !importing && (
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="h6">{entityDetails.label}</Typography>
-              <Link
+        <div className="rounded-lg border p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h6 className="text-base font-semibold">{entityDetails.label}</h6>
+              <a
                 href={entityDetails.wikidataUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                className="flex items-center gap-1 text-primary hover:underline"
               >
-                <Typography variant="caption">{entityDetails.id}</Typography>
-                <OpenInNewIcon fontSize="small" />
-              </Link>
-            </Box>
+                <span className="text-xs">{entityDetails.id}</span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
 
             {entityDetails.description && (
-              <Typography variant="body2" color="text.secondary">
+              <p className="text-sm text-muted-foreground">
                 {entityDetails.description}
-              </Typography>
+              </p>
             )}
 
             {entityDetails.aliases && entityDetails.aliases.length > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+              <div>
+                <p className="text-xs text-muted-foreground">
                   Also known as:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                </p>
+                <div className="flex gap-1 flex-wrap mt-1">
                   {entityDetails.aliases.map((alias: string, index: number) => (
-                    <Chip key={index} label={alias} size="small" variant="outlined" />
+                    <Badge key={index} variant="outline">{alias}</Badge>
                   ))}
-                </Box>
-              </Box>
+                </div>
+              </div>
             )}
 
             {entityType === 'type' && entityDetails.instanceOf.length > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+              <div>
+                <p className="text-xs text-muted-foreground">
                   Instance of:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                </p>
+                <div className="flex gap-1 flex-wrap mt-1">
                   {entityDetails.instanceOf.map((id: string) => (
-                    <Chip key={id} label={id} size="small" color="primary" variant="outlined" />
+                    <Badge key={id} variant="outline">{id}</Badge>
                   ))}
-                </Box>
-              </Box>
+                </div>
+              </div>
             )}
 
             {entityType === 'type' && entityDetails.subclassOf.length > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+              <div>
+                <p className="text-xs text-muted-foreground">
                   Subclass of:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                </p>
+                <div className="flex gap-1 flex-wrap mt-1">
                   {entityDetails.subclassOf.map((id: string) => (
-                    <Chip key={id} label={id} size="small" color="secondary" variant="outlined" />
+                    <Badge key={id} variant="secondary">{id}</Badge>
                   ))}
-                </Box>
-              </Box>
+                </div>
+              </div>
             )}
 
             {/* Display temporal data if available */}
             {entityDetails.temporalData && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+              <div>
+                <p className="text-xs text-muted-foreground">
                   Temporal Information:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                </p>
+                <div className="flex flex-col gap-1 mt-1">
                   {entityDetails.temporalData.pointInTime && (
-                    <Chip 
-                      label={`Point in time: ${new Date(entityDetails.temporalData.pointInTime.timestamp).toLocaleDateString()} (${entityDetails.temporalData.pointInTime.granularity})`}
-                      size="small" 
-                      color="info" 
-                      variant="outlined" 
-                    />
+                    <Badge variant="outline">
+                      Point in time: {new Date(entityDetails.temporalData.pointInTime.timestamp).toLocaleDateString()} ({entityDetails.temporalData.pointInTime.granularity})
+                    </Badge>
                   )}
                   {entityDetails.temporalData.startTime && (
-                    <Chip 
-                      label={`Start: ${new Date(entityDetails.temporalData.startTime.timestamp).toLocaleDateString()}`}
-                      size="small" 
-                      color="info" 
-                      variant="outlined" 
-                    />
+                    <Badge variant="outline">
+                      Start: {new Date(entityDetails.temporalData.startTime.timestamp).toLocaleDateString()}
+                    </Badge>
                   )}
                   {entityDetails.temporalData.endTime && (
-                    <Chip 
-                      label={`End: ${new Date(entityDetails.temporalData.endTime.timestamp).toLocaleDateString()}`}
-                      size="small" 
-                      color="info" 
-                      variant="outlined" 
-                    />
+                    <Badge variant="outline">
+                      End: {new Date(entityDetails.temporalData.endTime.timestamp).toLocaleDateString()}
+                    </Badge>
                   )}
                   {entityDetails.temporalData.circa && (
-                    <Chip label="Circa (approximate)" size="small" variant="outlined" />
+                    <Badge variant="outline">Circa (approximate)</Badge>
                   )}
                   {entityDetails.temporalData.disputed && (
-                    <Chip label="Disputed date" size="small" variant="outlined" color="warning" />
+                    <Badge variant="outline">Disputed date</Badge>
                   )}
-                </Box>
-              </Box>
+                </div>
+              </div>
             )}
 
             <Button
-              variant="contained"
               onClick={handleImport}
-              startIcon={<WikidataIcon />}
-              fullWidth
+              className="w-full"
             >
+              <Globe className="mr-2 h-4 w-4" />
               {getButtonLabel(importType, entityType, objectSubtype)}
             </Button>
-          </Box>
-        </Paper>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }

@@ -16,27 +16,19 @@ echo ""
 # ==============================================
 # Frontend API Documentation (TypeDoc)
 # ==============================================
+# pnpm-workspace deps for both annotation-tool and server (typedoc and
+# typedoc-plugin-markdown live in each package's devDependencies) are
+# expected to be installed already via `pnpm install --frozen-lockfile`
+# at the workspace root before invoking this script.
 echo "==> Generating Frontend API documentation..."
-cd "$PROJECT_ROOT/annotation-tool"
+cd "$PROJECT_ROOT"
 
-if [ ! -f "package.json" ]; then
-  echo "ERROR: annotation-tool/package.json not found"
-  exit 1
-fi
-
-if [ ! -f "typedoc.json" ]; then
+if [ ! -f "annotation-tool/typedoc.json" ]; then
   echo "ERROR: annotation-tool/typedoc.json not found"
-  echo "Run: npm install --save-dev typedoc typedoc-plugin-markdown"
   exit 1
 fi
 
-# Check if TypeDoc is installed
-if ! npm list typedoc &>/dev/null; then
-  echo "Installing TypeDoc dependencies..."
-  npm install --save-dev typedoc typedoc-plugin-markdown
-fi
-
-npm run docs
+pnpm --filter @fovea/annotation-tool docs
 echo "✓ Frontend API documentation generated"
 echo ""
 
@@ -44,25 +36,14 @@ echo ""
 # Backend API Documentation (TypeDoc)
 # ==============================================
 echo "==> Generating Backend API documentation..."
-cd "$PROJECT_ROOT/server"
+cd "$PROJECT_ROOT"
 
-if [ ! -f "package.json" ]; then
-  echo "ERROR: server/package.json not found"
-  exit 1
-fi
-
-if [ ! -f "typedoc.json" ]; then
+if [ ! -f "server/typedoc.json" ]; then
   echo "ERROR: server/typedoc.json not found"
   exit 1
 fi
 
-# Check if TypeDoc is installed
-if ! npm list typedoc &>/dev/null; then
-  echo "Installing TypeDoc dependencies..."
-  npm install --save-dev typedoc typedoc-plugin-markdown
-fi
-
-npm run docs
+pnpm --filter @fovea/server docs
 echo "✓ Backend API documentation generated"
 echo ""
 

@@ -47,7 +47,8 @@ const createUserSchema = z.object({
   email: z.string().email().optional().nullable(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   displayName: z.string().min(1, 'Display name is required'),
-  isAdmin: z.boolean().optional().default(false)
+  isAdmin: z.boolean().optional().default(false),
+  systemRole: z.enum(['user', 'system_admin']).optional()
 })
 
 /**
@@ -273,7 +274,8 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
         email: validatedData.email || null,
         passwordHash,
         displayName: validatedData.displayName,
-        isAdmin: validatedData.isAdmin
+        isAdmin: validatedData.isAdmin,
+        ...(validatedData.systemRole ? { systemRole: validatedData.systemRole } : {})
       },
       select: {
         id: true,

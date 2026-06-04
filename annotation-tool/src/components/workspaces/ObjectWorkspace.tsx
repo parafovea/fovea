@@ -1,38 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
 import { useCommands, useCommandContext } from '@hooks/commands'
 import {
-  Box,
-  Typography,
-  Tabs,
-  Tab,
-  Fab,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  TextField,
-  InputAdornment,
-  Paper,
-  Tooltip,
-  ToggleButton,
-  ToggleButtonGroup,
-  Chip,
-} from '@mui/material'
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-  Person as EntityIcon,
-  Event as EventIcon,
-  Place as LocationIcon,
-  Schedule as TimeIcon,
-  Language as WikidataIcon,
-  Collections as CollectionIcon,
-} from '@mui/icons-material'
+  Plus,
+  Pencil,
+  Trash2,
+  Search,
+  User,
+  CalendarDays,
+  MapPin,
+  Clock,
+  Globe,
+  Layers,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 import {
   useWorld,
+  useAddEntity,
+  useAddEvent,
+  useAddTime,
+  useAddEntityCollection,
+  useAddEventCollection,
   useDeleteEntity,
   useDeleteEvent,
   useDeleteTime,
@@ -40,36 +33,17 @@ import {
   useDeleteEventCollection,
 } from '@store/queries'
 import { Entity, Event, Time, TimeInstant, TimeInterval, LocationPoint, LocationExtent, EntityCollection, EventCollection, GlossItem } from '@models/types'
+import { buildDuplicatePayload } from './duplicateWorldObject'
 import EntityEditor from '../world/EntityEditor'
 import EventEditor from '../world/EventEditor'
 import LocationEditor from '../world/LocationEditor'
 import TimeEditor from '../world/TimeEditor'
 import CollectionEditor from '../world/CollectionEditor'
+import { TimeCollectionEditorDialog } from '../world/CollectionBuilder'
 import { WikidataChip } from '../shared/WikidataChip'
-
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
 
 // Union type for all workspace items
 type WorkspaceItem = Entity | Event | Time | EntityCollection | EventCollection
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`object-tabpanel-${index}`}
-      aria-labelledby={`object-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  )
-}
 
 // Type guard to check if an Entity is a Location
 function isLocation(entity: Entity): entity is LocationPoint | LocationExtent {
@@ -86,6 +60,11 @@ export default function ObjectWorkspace() {
   const eventCollections = worldData?.eventCollections ?? []
 
   // Mutation hooks
+  const { mutate: addEntityMutate } = useAddEntity()
+  const { mutate: addEventMutate } = useAddEvent()
+  const { mutate: addTimeMutate } = useAddTime()
+  const { mutate: addEntityCollectionMutate } = useAddEntityCollection()
+  const { mutate: addEventCollectionMutate } = useAddEventCollection()
   const { mutate: deleteEntityMutate } = useDeleteEntity()
   const { mutate: deleteEventMutate } = useDeleteEvent()
   const { mutate: deleteTimeMutate } = useDeleteTime()
@@ -93,17 +72,18 @@ export default function ObjectWorkspace() {
   const { mutate: deleteEventCollectionMutate } = useDeleteEventCollection()
 
   const locations = entities.filter(isLocation) // Locations are specialized entities
-  
-  const [tabValue, setTabValue] = useState(0)
+
+  const [tabValue, setTabValue] = useState('entities')
   const [searchTerm, setSearchTerm] = useState('')
-  const [wikidataFilter, setWikidataFilter] = useState<'all' | 'wikidata' | 'manual'>('all')
-  
+  const [wikidataFilter, setWikidataFilter] = useState<readonly string[]>(['all'])
+
   // Editor states
   const [entityEditorOpen, setEntityEditorOpen] = useState(false)
   const [eventEditorOpen, setEventEditorOpen] = useState(false)
   const [locationEditorOpen, setLocationEditorOpen] = useState(false)
   const [timeEditorOpen, setTimeEditorOpen] = useState(false)
   const [collectionEditorOpen, setCollectionEditorOpen] = useState(false)
+  const [timeCollectionEditorOpen, setTimeCollectionEditorOpen] = useState(false)
 
   const [selectedEntity, setSelectedEntity] = useState<typeof entities[0] | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
@@ -111,15 +91,15 @@ export default function ObjectWorkspace() {
   const [selectedTime, setSelectedTime] = useState<typeof times[0] | null>(null)
   const [selectedCollection, setSelectedCollection] = useState<EntityCollection | EventCollection | null>(null)
   const [selectedCollectionType, setSelectedCollectionType] = useState<'entity' | 'event'>('entity')
-  
+
   // Refs for managing focus
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number>(-1)
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue)
-    setSearchTerm('')
-  }
+  // Map tab string values to numeric indices for commands
+  const tabMap: Record<string, number> = { entities: 0, events: 1, locations: 2, times: 3, collections: 4 }
+  const tabKeys = ['entities', 'events', 'locations', 'times', 'collections']
+  const tabIndex = tabMap[tabValue] ?? 0
 
   const handleEditEntity = (entity: typeof entities[0]) => {
     setSelectedEntity(entity)
@@ -143,23 +123,23 @@ export default function ObjectWorkspace() {
 
   const handleAddNew = () => {
     switch(tabValue) {
-      case 0:
+      case 'entities':
         setSelectedEntity(null)
         setEntityEditorOpen(true)
         break
-      case 1:
+      case 'events':
         setSelectedEvent(null)
         setEventEditorOpen(true)
         break
-      case 2:
+      case 'locations':
         setSelectedLocation(null)
         setLocationEditorOpen(true)
         break
-      case 3:
+      case 'times':
         setSelectedTime(null)
         setTimeEditorOpen(true)
         break
-      case 4:
+      case 'collections':
         setSelectedCollection(null)
         setSelectedCollectionType('entity') // Default to entity collection
         setCollectionEditorOpen(true)
@@ -168,9 +148,9 @@ export default function ObjectWorkspace() {
   }
 
   const filterByWikidata = (item: { wikidataId?: string }) => {
-    if (wikidataFilter === 'all') return true
-    if (wikidataFilter === 'wikidata') return !!item.wikidataId
-    if (wikidataFilter === 'manual') return !item.wikidataId
+    if (wikidataFilter.includes('all') || wikidataFilter.length === 0) return true
+    if (wikidataFilter.includes('wikidata')) return !!item.wikidataId
+    if (wikidataFilter.includes('manual')) return !item.wikidataId
     return true
   }
 
@@ -193,7 +173,7 @@ export default function ObjectWorkspace() {
       descriptionText.toLowerCase().includes(lowerTerm)
     )
   }
-  
+
   // Note: filteredEntities now includes ALL entities (including locations)
   const filteredEntities = entities.filter(e =>
     searchMatches(e, searchTerm) && filterByWikidata(e)
@@ -227,7 +207,7 @@ export default function ObjectWorkspace() {
     const count = event.personaInterpretations?.length ?? 0
     return count > 0 ? `${count} interpretation${count > 1 ? 's' : ''}` : ''
   }
-  
+
   const formatTimeDisplay = (time: typeof times[0]): string => {
     // Primary: Show label if available
     if (time.label) {
@@ -269,7 +249,7 @@ export default function ObjectWorkspace() {
             month: 'short',
             day: 'numeric'
           })
-          return `${formatDate(start)} – ${formatDate(end)}`
+          return `${formatDate(start)} - ${formatDate(end)}`
         }
       } else if (interval.startTime) {
         const start = new Date(interval.startTime)
@@ -283,20 +263,20 @@ export default function ObjectWorkspace() {
       } else if (interval.endTime) {
         const end = new Date(interval.endTime)
         if (!isNaN(end.getTime())) {
-          return `Until ${end.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+          return `Until ${end.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
           })}`
         }
       }
       return 'Interval'
     }
   }
-  
+
   const getTimeDescription = (time: typeof times[0]): string => {
     const parts: string[] = []
-    
+
     if (time.type === 'instant') {
       const instant = time as TimeInstant
       if (instant.vagueness) {
@@ -306,30 +286,30 @@ export default function ObjectWorkspace() {
         if (instant.vagueness.description) parts.push(instant.vagueness.description)
       }
     }
-    
+
     if (time.certainty && time.certainty < 1) {
       parts.push(`${Math.round(time.certainty * 100)}% certain`)
     }
-    
+
     if (time.videoReferences?.length) {
       parts.push(`${time.videoReferences.length} video ref${time.videoReferences.length > 1 ? 's' : ''}`)
     }
-    
-    return parts.join(' • ')
+
+    return parts.join(' \u2022 ')
   }
-  
+
   // Get the currently visible list items based on tab
   const getCurrentItems = (): WorkspaceItem[] => {
     switch(tabValue) {
-      case 0: return filteredEntities
-      case 1: return filteredEvents
-      case 2: return filteredLocations
-      case 3: return filteredTimes
-      case 4: return filteredAllCollections
+      case 'entities': return filteredEntities
+      case 'events': return filteredEvents
+      case 'locations': return filteredLocations
+      case 'times': return filteredTimes
+      case 'collections': return filteredAllCollections
       default: return []
     }
   }
-  
+
   // Set command context for when clauses
   useCommandContext({
     objectWorkspaceActive: true,
@@ -344,18 +324,24 @@ export default function ObjectWorkspace() {
   // Register command handlers
   useCommands({
     'object.new': () => handleAddNew(),
-    'object.nextTab': () => setTabValue((prev) => (prev + 1) % 5),
-    'object.previousTab': () => setTabValue((prev) => (prev - 1 + 5) % 5),
+    'object.nextTab': () => {
+      const nextIdx = (tabIndex + 1) % 5
+      setTabValue(tabKeys[nextIdx])
+    },
+    'object.previousTab': () => {
+      const prevIdx = (tabIndex - 1 + 5) % 5
+      setTabValue(tabKeys[prevIdx])
+    },
     'object.edit': () => {
       const items = getCurrentItems()
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex]
         switch(tabValue) {
-          case 0: handleEditEntity(item as Entity); break
-          case 1: handleEditEvent(item as Event); break
-          case 2: handleEditLocation(item as LocationPoint | LocationExtent); break
-          case 3: handleEditTime(item as Time); break
-          case 4:
+          case 'entities': handleEditEntity(item as Entity); break
+          case 'events': handleEditEvent(item as Event); break
+          case 'locations': handleEditLocation(item as LocationPoint | LocationExtent); break
+          case 'times': handleEditTime(item as Time); break
+          case 'collections':
             setSelectedCollection(item as EntityCollection | EventCollection)
             setSelectedCollectionType('entityIds' in item ? 'entity' : 'event')
             setCollectionEditorOpen(true)
@@ -368,11 +354,11 @@ export default function ObjectWorkspace() {
       if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
         const item = items[selectedItemIndex]
         switch(tabValue) {
-          case 0: deleteEntityMutate(item.id); break
-          case 1: deleteEventMutate(item.id); break
-          case 2: deleteEntityMutate(item.id); break // Locations are entities
-          case 3: deleteTimeMutate(item.id); break
-          case 4:
+          case 'entities': deleteEntityMutate(item.id); break
+          case 'events': deleteEventMutate(item.id); break
+          case 'locations': deleteEntityMutate(item.id); break // Locations are entities
+          case 'times': deleteTimeMutate(item.id); break
+          case 'collections':
             if ('entityIds' in item) {
               deleteEntityCollectionMutate(item.id)
             } else {
@@ -383,8 +369,32 @@ export default function ObjectWorkspace() {
       }
     },
     'object.duplicate': () => {
-      // TODO: Implement duplication logic
-      alert('Duplicate object not yet implemented')
+      const items = getCurrentItems()
+      if (selectedItemIndex < 0 || selectedItemIndex >= items.length) return
+      const item = items[selectedItemIndex]
+      const renamed = buildDuplicatePayload(item)
+      switch (tabValue) {
+        case 'entities':
+          addEntityMutate(renamed as unknown as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'events':
+          addEventMutate(renamed as unknown as Omit<Event, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'locations':
+          // Locations are entities with a `locationType` field.
+          addEntityMutate(renamed as unknown as Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>)
+          break
+        case 'times':
+          addTimeMutate(renamed as unknown as Omit<Time, 'id'>)
+          break
+        case 'collections':
+          if ('entityIds' in item) {
+            addEntityCollectionMutate(renamed as unknown as Omit<EntityCollection, 'id' | 'createdAt' | 'updatedAt'>)
+          } else {
+            addEventCollectionMutate(renamed as unknown as Omit<EventCollection, 'id' | 'createdAt' | 'updatedAt'>)
+          }
+          break
+      }
     },
     'object.search': () => {
       searchInputRef.current?.focus()
@@ -393,7 +403,7 @@ export default function ObjectWorkspace() {
     context: 'objectWorkspace',
     enabled: true
   })
-  
+
   // Handle item selection with mouse
   const handleItemClick = (index: number) => {
     setSelectedItemIndex(index)
@@ -404,412 +414,384 @@ export default function ObjectWorkspace() {
     setSelectedItemIndex(-1)
   }, [tabValue, searchTerm])
 
+  const renderListItem = (
+    item: { id: string; name?: string },
+    index: number,
+    primary: React.ReactNode,
+    secondary: React.ReactNode | undefined,
+    onEdit: () => void,
+    onDelete: () => void,
+    editLabel: string,
+    deleteLabel: string,
+  ) => (
+    <li
+      key={item.id}
+      className={cn(
+        'flex items-center justify-between py-2 px-3 border-b cursor-pointer hover:bg-accent/50',
+        selectedItemIndex === index && 'bg-accent/30'
+      )}
+      onClick={() => handleItemClick(index)}
+    >
+      <div className="flex-1 min-w-0">
+        <div>{primary}</div>
+        {secondary && <div className="mt-0.5">{secondary}</div>}
+      </div>
+      <div className="flex gap-1 ml-2 shrink-0">
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onEdit() }} aria-label={editLabel}>
+          <Pencil className="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onDelete() }} aria-label={deleteLabel}>
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+    </li>
+  )
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search objects (name, ID, or Wikidata ID)..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          inputRef={searchInputRef}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-            endAdornment: (
-              <InputAdornment position="end">
-                <ToggleButtonGroup
-                  value={wikidataFilter}
-                  exclusive
-                  onChange={(_, value) => value && setWikidataFilter(value)}
-                  aria-label="wikidata filter"
-                  size="small"
-                  sx={{ height: 32 }}
-                >
-                  <ToggleButton value="all" aria-label="all objects" sx={{ px: 1.5, fontSize: '0.875rem' }}>
-                    All
-                  </ToggleButton>
-                  <ToggleButton value="wikidata" aria-label="wikidata imports" sx={{ px: 1.5, fontSize: '0.875rem' }}>
-                    <WikidataIcon sx={{ mr: 0.5 }} fontSize="small" />
-                    Wikidata
-                  </ToggleButton>
-                  <ToggleButton value="manual" aria-label="manual entries" sx={{ px: 1.5, fontSize: '0.875rem' }}>
-                    Manual
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
-      </Box>
+    <div className="h-full flex flex-col">
+      <div className="p-4">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            ref={searchInputRef}
+            placeholder="Search objects (name, ID, or Wikidata ID)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 pr-2"
+          />
+        </div>
+        <div className="flex justify-end mt-2">
+          <ToggleGroup
+            value={wikidataFilter}
+            onValueChange={(val) => val.length > 0 && setWikidataFilter(val)}
+            size="sm"
+          >
+            <ToggleGroupItem value="all" aria-label="all objects">All</ToggleGroupItem>
+            <ToggleGroupItem value="wikidata" aria-label="wikidata imports">
+              <Globe className="size-4 mr-1" />Wikidata
+            </ToggleGroupItem>
+            <ToggleGroupItem value="manual" aria-label="manual entries">Manual</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </div>
 
-      <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="object types">
-          <Tab icon={<EntityIcon />} label={`Entities (${entities.length})`} />
-          <Tab icon={<EventIcon />} label={`Events (${events.length})`} />
-          <Tab icon={<LocationIcon />} label={`Locations (${locations.length})`} />
-          <Tab icon={<TimeIcon />} label={`Times (${times.length})`} />
-          <Tab icon={<CollectionIcon />} label={`Collections (${entityCollections.length + eventCollections.length})`} />
-        </Tabs>
-      </Paper>
+      <Tabs value={tabValue} onValueChange={setTabValue} className="flex-1 flex flex-col">
+        <TabsList className="mx-4" data-tour-id="world-panel-tabs">
+          <TabsTrigger value="entities">
+            <User className="size-4 mr-1" />Entities ({entities.length})
+          </TabsTrigger>
+          <TabsTrigger value="events">
+            <CalendarDays className="size-4 mr-1" />Events ({events.length})
+          </TabsTrigger>
+          <TabsTrigger value="locations">
+            <MapPin className="size-4 mr-1" />Locations ({locations.length})
+          </TabsTrigger>
+          <TabsTrigger value="times">
+            <Clock className="size-4 mr-1" />Times ({times.length})
+          </TabsTrigger>
+          <TabsTrigger value="collections">
+            <Layers className="size-4 mr-1" />Collections ({entityCollections.length + eventCollections.length})
+          </TabsTrigger>
+        </TabsList>
 
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
-        <TabPanel value={tabValue} index={0}>
-          <List>
-            {filteredEntities.map((entity, index) => {
-              const entityIsLocation = isLocation(entity)
-              return (
-                <ListItem
-                  key={entity.id}
-                  divider
-                  selected={selectedItemIndex === index}
-                  onClick={() => handleItemClick(index)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body1">{entity.name}</Typography>
-                        {entityIsLocation && (
-                          <Chip
-                            icon={<LocationIcon />}
-                            label="Location"
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                          />
+        <div className="flex-1 overflow-auto">
+          <TabsContent value="entities" className="p-6">
+            <ul>
+              {filteredEntities.map((entity, index) => {
+                const entityIsLocation = isLocation(entity)
+                return renderListItem(
+                  entity,
+                  index,
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{entity.name}</span>
+                    {entityIsLocation && (
+                      <Badge variant="outline" className="gap-1">
+                        <MapPin className="size-3" />Location
+                      </Badge>
+                    )}
+                    <WikidataChip
+                      wikidataId={entity.wikidataId}
+                      wikidataUrl={entity.wikidataUrl}
+                      wikibaseId={entity.wikibaseId}
+                      importedAt={entity.importedAt}
+                      size="small"
+                      showTimestamp={false}
+                    />
+                  </div>,
+                  <>
+                    {(entityIsLocation || getEntityTypeNames(entity)) && (
+                      <span className="text-xs text-muted-foreground block">
+                        {entityIsLocation ? (
+                          <>Type: {entity.locationType === 'point' ? 'Point' : 'Extent'} Location</>
+                        ) : (
+                          <>Types: {getEntityTypeNames(entity)}</>
                         )}
-                        <WikidataChip
-                          wikidataId={entity.wikidataId}
-                          wikidataUrl={entity.wikidataUrl}
-                          wikibaseId={entity.wikibaseId}
-                          importedAt={entity.importedAt}
-                          size="small"
-                          showTimestamp={false}
-                        />
-                      </Box>
-                    }
-                    secondary={
-                      <>
-                        {(entityIsLocation || getEntityTypeNames(entity)) && (
-                          <Typography variant="caption" component="span" display="block">
-                            {entityIsLocation ? (
-                              <>Type: {entity.locationType === 'point' ? 'Point' : 'Extent'} Location</>
-                            ) : (
-                              <>Types: {getEntityTypeNames(entity)}</>
-                            )}
-                          </Typography>
-                        )}
-                        {entity.metadata?.alternateNames && entity.metadata.alternateNames.length > 0 && (
-                          <Typography variant="caption" component="span" display="block" color="text.secondary">
-                            Also known as: {entity.metadata.alternateNames.join(', ')}
-                          </Typography>
-                        )}
-                      </>
-                    }
+                      </span>
+                    )}
+                    {entity.metadata?.alternateNames && entity.metadata.alternateNames.length > 0 && (
+                      <span className="text-xs text-muted-foreground block">
+                        Also known as: {entity.metadata.alternateNames.join(', ')}
+                      </span>
+                    )}
+                  </>,
+                  () => entityIsLocation ? handleEditLocation(entity) : handleEditEntity(entity),
+                  () => deleteEntityMutate(entity.id),
+                  `Edit ${entity.name}`,
+                  `Delete ${entity.name}`,
+                )
+              })}
+            </ul>
+          </TabsContent>
+
+          <TabsContent value="events" className="p-6">
+            <ul>
+              {filteredEvents.map((event, index) => renderListItem(
+                event,
+                index,
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{event.name}</span>
+                  <WikidataChip
+                    wikidataId={event.wikidataId}
+                    wikidataUrl={event.wikidataUrl}
+                    wikibaseId={event.wikibaseId}
+                    importedAt={event.importedAt}
+                    size="small"
+                    showTimestamp={false}
                   />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      onClick={() => entityIsLocation ? handleEditLocation(entity) : handleEditEntity(entity)}
-                      aria-label={`Edit ${entity.name}`}
+                </div>,
+                getEventTypeNames(event) ? (
+                  <span className="text-xs text-muted-foreground">
+                    Types: {getEventTypeNames(event)}
+                  </span>
+                ) : undefined,
+                () => handleEditEvent(event),
+                () => deleteEventMutate(event.id),
+                `Edit ${event.name}`,
+                `Delete ${event.name}`,
+              ))}
+            </ul>
+          </TabsContent>
+
+          <TabsContent value="locations" className="p-6">
+            <ul>
+              {filteredLocations.map((location, index) => renderListItem(
+                location,
+                index,
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{location.name}</span>
+                  <WikidataChip
+                    wikidataId={location.wikidataId}
+                    wikidataUrl={location.wikidataUrl}
+                    wikibaseId={location.wikibaseId}
+                    importedAt={location.importedAt}
+                    size="small"
+                    showTimestamp={false}
+                  />
+                </div>,
+                <span className="text-xs text-muted-foreground">
+                  Type: {location.locationType === 'point' ? 'Point' : 'Extent'}
+                </span>,
+                () => handleEditLocation(location),
+                () => deleteEntityMutate(location.id),
+                `Edit ${location.name}`,
+                `Delete ${location.name}`,
+              ))}
+            </ul>
+          </TabsContent>
+
+          <TabsContent value="times" className="p-6">
+            <ul>
+              {filteredTimes.map((time, index) => renderListItem(
+                time,
+                index,
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{formatTimeDisplay(time)}</span>
+                  <WikidataChip
+                    wikidataId={time.wikidataId}
+                    wikidataUrl={time.wikidataUrl}
+                    wikibaseId={time.wikibaseId}
+                    importedAt={time.importedAt}
+                    size="small"
+                    showTimestamp={false}
+                  />
+                </div>,
+                getTimeDescription(time) ? (
+                  <span className="text-xs text-muted-foreground">
+                    {getTimeDescription(time)}
+                  </span>
+                ) : undefined,
+                () => handleEditTime(time),
+                () => deleteTimeMutate(time.id),
+                `Edit time ${formatTimeDisplay(time)}`,
+                `Delete time ${formatTimeDisplay(time)}`,
+              ))}
+            </ul>
+          </TabsContent>
+
+          <TabsContent value="collections" className="p-6">
+            {/* Quick-add row — three distinct collection kinds. The
+                floating "+" FAB only opens an entity collection by
+                default; surface explicit buttons here so the visitor
+                can create event and time collections too. The Time
+                Collection button is the entry point Tour 5 step 5
+                spotlights (data-tour-id="time-collection-builder"
+                mounts inside the editor it opens). */}
+            <div className="mb-4 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedCollection(null)
+                  setSelectedCollectionType('entity')
+                  setCollectionEditorOpen(true)
+                }}
+              >
+                + Entity Collection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedCollection(null)
+                  setSelectedCollectionType('event')
+                  setCollectionEditorOpen(true)
+                }}
+              >
+                + Event Collection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTimeCollectionEditorOpen(true)}
+              >
+                + Time Pattern
+              </Button>
+            </div>
+            {/* Entity Collections */}
+            {filteredEntityCollections.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <User className="size-4" />
+                  Entity Collections ({filteredEntityCollections.length})
+                </h3>
+                <ul>
+                  {filteredEntityCollections.map((collection) => (
+                    <li
+                      key={collection.id}
+                      className="flex items-center justify-between py-2 px-3 border-b cursor-pointer hover:bg-accent/50"
                     >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton edge="end" onClick={() => deleteEntityMutate(entity.id)} aria-label={`Delete ${entity.name}`}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              )
-            })}
-          </List>
-        </TabPanel>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{collection.name}</span>
+                        <Badge variant="outline">{collection.collectionType}</Badge>
+                        <Badge>{collection.entityIds.length} entities</Badge>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setSelectedCollection(collection)
+                            setSelectedCollectionType('entity')
+                            setCollectionEditorOpen(true)
+                          }}
+                          aria-label={`Edit ${collection.name}`}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => deleteEntityCollectionMutate(collection.id)}
+                          aria-label={`Delete ${collection.name}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        <TabPanel value={tabValue} index={1}>
-          <List>
-            {filteredEvents.map((event, index) => (
-              <ListItem 
-                key={event.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1">{event.name}</Typography>
-                      <WikidataChip
-                        wikidataId={event.wikidataId}
-                        wikidataUrl={event.wikidataUrl}
-                        wikibaseId={event.wikibaseId}
-                        importedAt={event.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    getEventTypeNames(event) ? (
-                      <Typography variant="caption">
-                        Types: {getEventTypeNames(event)}
-                      </Typography>
-                    ) : undefined
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEvent(event)} aria-label={`Edit ${event.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton edge="end" onClick={() => deleteEventMutate(event.id)} aria-label={`Delete ${event.name}`}>
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
+            {/* Event Collections */}
+            {filteredEventCollections.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <CalendarDays className="size-4" />
+                  Event Collections ({filteredEventCollections.length})
+                </h3>
+                <ul>
+                  {filteredEventCollections.map((collection) => (
+                    <li
+                      key={collection.id}
+                      className="flex items-center justify-between py-2 px-3 border-b cursor-pointer hover:bg-accent/50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{collection.name}</span>
+                        <Badge variant="outline">{collection.collectionType}</Badge>
+                        <Badge>{collection.eventIds.length} events</Badge>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setSelectedCollection(collection)
+                            setSelectedCollectionType('event')
+                            setCollectionEditorOpen(true)
+                          }}
+                          aria-label={`Edit ${collection.name}`}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => deleteEventCollectionMutate(collection.id)}
+                          aria-label={`Delete ${collection.name}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        <TabPanel value={tabValue} index={2}>
-          <List>
-            {filteredLocations.map((location, index) => (
-              <ListItem 
-                key={location.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1">{location.name}</Typography>
-                      <WikidataChip
-                        wikidataId={location.wikidataId}
-                        wikidataUrl={location.wikidataUrl}
-                        wikibaseId={location.wikibaseId}
-                        importedAt={location.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Typography variant="caption">
-                      Type: {location.locationType === 'point' ? 'Point' : 'Extent'}
-                    </Typography>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditLocation(location)} aria-label={`Edit ${location.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton edge="end" onClick={() => deleteEntityMutate(location.id)} aria-label={`Delete ${location.name}`}>
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
+            {/* Empty state */}
+            {filteredEntityCollections.length === 0 && filteredEventCollections.length === 0 && (
+              <div className="text-center py-8">
+                <Layers className="size-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-muted-foreground">
+                  No collections yet
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Create a collection to group entities or events together
+                </p>
+              </div>
+            )}
+          </TabsContent>
+        </div>
+      </Tabs>
 
-        <TabPanel value={tabValue} index={3}>
-          <List>
-            {filteredTimes.map((time, index) => (
-              <ListItem
-                key={time.id}
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1">
-                        {formatTimeDisplay(time)}
-                      </Typography>
-                      <WikidataChip
-                        wikidataId={time.wikidataId}
-                        wikidataUrl={time.wikidataUrl}
-                        wikibaseId={time.wikibaseId}
-                        importedAt={time.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    getTimeDescription(time) ? (
-                      <Typography variant="caption">
-                        {getTimeDescription(time)}
-                      </Typography>
-                    ) : undefined
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditTime(time)} aria-label={`Edit time ${formatTimeDisplay(time)}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton edge="end" onClick={() => deleteTimeMutate(time.id)} aria-label={`Delete time ${formatTimeDisplay(time)}`}>
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={4}>
-          {/* Entity Collections */}
-          {filteredEntityCollections.length > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <EntityIcon fontSize="small" />
-                Entity Collections ({filteredEntityCollections.length})
-              </Typography>
-              <List>
-                {filteredEntityCollections.map((collection) => (
-                  <ListItem
-                    key={collection.id}
-                    divider
-                    sx={{ cursor: 'pointer' }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body1">{collection.name}</Typography>
-                          <Chip
-                            label={collection.collectionType}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Chip
-                            label={`${collection.entityIds.length} entities`}
-                            size="small"
-                            color="primary"
-                          />
-                        </Box>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        onClick={() => {
-                          setSelectedCollection(collection)
-                          setSelectedCollectionType('entity')
-                          setCollectionEditorOpen(true)
-                        }}
-                        aria-label={`Edit ${collection.name}`}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        edge="end"
-                        onClick={() => deleteEntityCollectionMutate(collection.id)}
-                        aria-label={`Delete ${collection.name}`}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
-          )}
-
-          {/* Event Collections */}
-          {filteredEventCollections.length > 0 && (
-            <Box>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <EventIcon fontSize="small" />
-                Event Collections ({filteredEventCollections.length})
-              </Typography>
-              <List>
-                {filteredEventCollections.map((collection) => (
-                  <ListItem
-                    key={collection.id}
-                    divider
-                    sx={{ cursor: 'pointer' }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body1">{collection.name}</Typography>
-                          <Chip
-                            label={collection.collectionType}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Chip
-                            label={`${collection.eventIds.length} events`}
-                            size="small"
-                            color="primary"
-                          />
-                        </Box>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        onClick={() => {
-                          setSelectedCollection(collection)
-                          setSelectedCollectionType('event')
-                          setCollectionEditorOpen(true)
-                        }}
-                        aria-label={`Edit ${collection.name}`}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        edge="end"
-                        onClick={() => deleteEventCollectionMutate(collection.id)}
-                        aria-label={`Delete ${collection.name}`}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
-          )}
-
-          {/* Empty state */}
-          {filteredEntityCollections.length === 0 && filteredEventCollections.length === 0 && (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <CollectionIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">
-                No collections yet
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Create a collection to group entities or events together
-              </Typography>
-            </Box>
-          )}
-        </TabPanel>
-      </Box>
-
-      <Tooltip title="Add New Object (Cmd/Ctrl+N)" placement="left">
-        <Fab
-          color="primary"
-          aria-label="add"
-          sx={{
-            position: 'absolute',
-            bottom: 16,
-            right: 16,
-          }}
-          onClick={handleAddNew}
-        >
-          <AddIcon />
-        </Fab>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-lg"
+                className="absolute bottom-4 right-4 rounded-full shadow-lg"
+                aria-label="add"
+                onClick={handleAddNew}
+              />
+            }
+          >
+            <Plus className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent side="left">Add New Object (Cmd/Ctrl+N)</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Editors */}
       <EntityEditor
@@ -853,6 +835,11 @@ export default function ObjectWorkspace() {
         collection={selectedCollection}
         collectionType={selectedCollectionType}
       />
-    </Box>
+      <TimeCollectionEditorDialog
+        open={timeCollectionEditorOpen}
+        onClose={() => setTimeCollectionEditorOpen(false)}
+        collection={null}
+      />
+    </div>
   )
 }

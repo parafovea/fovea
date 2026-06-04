@@ -1,4 +1,11 @@
-"""Tests for Vision Language Model loader."""
+"""Tests for Vision Language Model loaders.
+
+These tests exercise each concrete loader's constructor and load / generate
+paths against mocked HuggingFace primitives. Dispatch contract tests for
+:func:`create_vlm_loader` live in
+``tests/infrastructure/adapters/outbound/models/vlm/test_factory.py`` so
+that the registry-based factory has a single, authoritative test surface.
+"""
 
 from unittest.mock import MagicMock, patch
 
@@ -6,6 +13,15 @@ import pytest
 import torch
 from PIL import Image
 
+from src.domain.entities.architectures import (
+    Gemma3VL,
+    InternVL3,
+    Llama4Maverick,
+    Moondream,
+    Pixtral,
+    QwenVL,
+    SmolVLM,
+)
 from src.infrastructure.adapters.outbound.models.vlm.loader import (
     Gemma3Loader,
     InferenceFramework,
@@ -14,8 +30,8 @@ from src.infrastructure.adapters.outbound.models.vlm.loader import (
     PixtralLargeLoader,
     QuantizationType,
     Qwen25VLLoader,
+    SmallVLMLoader,
     VLMConfig,
-    create_vlm_loader,
 )
 
 pytestmark = pytest.mark.requires_models
@@ -42,6 +58,41 @@ def vlm_config():
         framework=InferenceFramework.TRANSFORMERS,
         device="cpu",
     )
+
+
+@pytest.fixture
+def llama4_arch():
+    return Llama4Maverick()
+
+
+@pytest.fixture
+def gemma3_arch():
+    return Gemma3VL()
+
+
+@pytest.fixture
+def internvl3_arch():
+    return InternVL3()
+
+
+@pytest.fixture
+def pixtral_arch():
+    return Pixtral()
+
+
+@pytest.fixture
+def qwen_vl_arch():
+    return QwenVL()
+
+
+@pytest.fixture
+def smolvlm_arch():
+    return SmolVLM()
+
+
+@pytest.fixture
+def moondream_arch():
+    return Moondream()
 
 
 class TestVLMConfig:
@@ -78,9 +129,10 @@ class TestVLMConfig:
 class TestLlama4MaverickLoader:
     """Tests for Llama 4 Maverick VLM loader."""
 
-    def test_initialization(self, vlm_config):
+    def test_initialization(self, llama4_arch, vlm_config):
         """Verify loader initializes with correct configuration."""
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
+        assert loader.arch is llama4_arch
         assert loader.config == vlm_config
         assert loader.model is None
         assert loader.processor is None
@@ -89,7 +141,14 @@ class TestLlama4MaverickLoader:
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
-    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
+    def test_load_with_transformers(
+        self,
+        mock_tokenizer,
+        mock_processor,
+        mock_model,
+        llama4_arch,
+        vlm_config,
+    ):
         """Test loading model with HuggingFace Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -99,7 +158,7 @@ class TestLlama4MaverickLoader:
         mock_tokenizer.from_pretrained.return_value = mock_tokenizer_instance
         mock_model.from_pretrained.return_value = mock_model_instance
 
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
         loader.load()
 
         assert loader.processor == mock_processor_instance
@@ -117,6 +176,7 @@ class TestLlama4MaverickLoader:
         mock_tokenizer_cls,
         mock_processor_cls,
         mock_model_cls,
+        llama4_arch,
         vlm_config,
         sample_images,
     ):
@@ -136,7 +196,7 @@ class TestLlama4MaverickLoader:
         mock_model.generate.return_value = torch.tensor([[1, 2, 3, 4]])
         mock_tokenizer.decode.return_value = "Generated text response"
 
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
         loader.load()
 
         result = loader.generate(
@@ -147,20 +207,20 @@ class TestLlama4MaverickLoader:
         mock_model.generate.assert_called_once()
         mock_tokenizer.decode.assert_called_once()
 
-    def test_generate_without_loading_raises_error(self, vlm_config, sample_images):
+    def test_generate_without_loading_raises_error(self, llama4_arch, vlm_config, sample_images):
         """Verify generation fails if model not loaded."""
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.generate(sample_images, "test prompt")
 
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.torch.cuda")
-    def test_unload_clears_memory(self, mock_cuda, vlm_config):
+    def test_unload_clears_memory(self, mock_cuda, llama4_arch, vlm_config):
         """Test that unload properly clears model from memory."""
         mock_cuda.is_available.return_value = True
         mock_cuda.empty_cache = MagicMock()
 
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
         loader.model = MagicMock()
         loader.processor = MagicMock()
         loader.tokenizer = MagicMock()
@@ -172,9 +232,9 @@ class TestLlama4MaverickLoader:
         assert loader.tokenizer is None
         mock_cuda.empty_cache.assert_called_once()
 
-    def test_get_quantization_config_4bit(self, vlm_config):
+    def test_get_quantization_config_4bit(self, llama4_arch, vlm_config):
         """Test 4-bit quantization config generation."""
-        loader = Llama4MaverickLoader(vlm_config)
+        loader = Llama4MaverickLoader(llama4_arch, vlm_config)
         config = loader._get_quantization_config()
 
         assert config is not None
@@ -183,7 +243,7 @@ class TestLlama4MaverickLoader:
         assert config.bnb_4bit_use_double_quant is True
         assert config.bnb_4bit_quant_type == "nf4"
 
-    def test_get_quantization_config_8bit(self):
+    def test_get_quantization_config_8bit(self, llama4_arch):
         """Test 8-bit quantization config generation."""
         config = VLMConfig(
             model_id="test-model",
@@ -191,14 +251,14 @@ class TestLlama4MaverickLoader:
             framework=InferenceFramework.TRANSFORMERS,
             device="cpu",
         )
-        loader = Llama4MaverickLoader(config)
+        loader = Llama4MaverickLoader(llama4_arch, config)
         quant_config = loader._get_quantization_config()
 
         assert quant_config is not None
         assert quant_config.load_in_8bit is True
         assert quant_config.llm_int8_threshold == 6.0  # default bitsandbytes value
 
-    def test_get_quantization_config_none(self):
+    def test_get_quantization_config_none(self, llama4_arch):
         """Test no quantization returns None config."""
         config = VLMConfig(
             model_id="test-model",
@@ -206,7 +266,7 @@ class TestLlama4MaverickLoader:
             framework=InferenceFramework.TRANSFORMERS,
             device="cpu",
         )
-        loader = Llama4MaverickLoader(config)
+        loader = Llama4MaverickLoader(llama4_arch, config)
         quant_config = loader._get_quantization_config()
 
         assert quant_config is None
@@ -215,9 +275,10 @@ class TestLlama4MaverickLoader:
 class TestGemma3Loader:
     """Tests for Gemma 3 VLM loader."""
 
-    def test_initialization(self, vlm_config):
+    def test_initialization(self, gemma3_arch, vlm_config):
         """Verify loader initializes correctly."""
-        loader = Gemma3Loader(vlm_config)
+        loader = Gemma3Loader(gemma3_arch, vlm_config)
+        assert loader.arch is gemma3_arch
         assert loader.config == vlm_config
         assert loader.model is None
 
@@ -226,7 +287,14 @@ class TestGemma3Loader:
     )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
-    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
+    def test_load_with_transformers(
+        self,
+        mock_tokenizer,
+        mock_processor,
+        mock_model,
+        gemma3_arch,
+        vlm_config,
+    ):
         """Test loading Gemma 3 with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -236,7 +304,7 @@ class TestGemma3Loader:
         mock_tokenizer.return_value = mock_tokenizer_instance
         mock_model.return_value = mock_model_instance
 
-        loader = Gemma3Loader(vlm_config)
+        loader = Gemma3Loader(gemma3_arch, vlm_config)
         loader.load()
 
         assert loader.model == mock_model_instance
@@ -247,15 +315,22 @@ class TestGemma3Loader:
 class TestInternVL3Loader:
     """Tests for InternVL3 VLM loader."""
 
-    def test_initialization(self, vlm_config):
+    def test_initialization(self, internvl3_arch, vlm_config):
         """Verify loader initializes correctly."""
-        loader = InternVL3Loader(vlm_config)
+        loader = InternVL3Loader(internvl3_arch, vlm_config)
+        assert loader.arch is internvl3_arch
         assert loader.config == vlm_config
         assert loader.model is None
 
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModel")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
-    def test_load_with_transformers(self, mock_tokenizer, mock_model, vlm_config):
+    def test_load_with_transformers(
+        self,
+        mock_tokenizer,
+        mock_model,
+        internvl3_arch,
+        vlm_config,
+    ):
         """Test loading InternVL3 with Transformers."""
         mock_tokenizer_instance = MagicMock()
         mock_model_instance = MagicMock()
@@ -263,7 +338,7 @@ class TestInternVL3Loader:
         mock_tokenizer.from_pretrained.return_value = mock_tokenizer_instance
         mock_model.from_pretrained.return_value = mock_model_instance
 
-        loader = InternVL3Loader(vlm_config)
+        loader = InternVL3Loader(internvl3_arch, vlm_config)
         loader.load()
 
         assert loader.model == mock_model_instance
@@ -271,7 +346,14 @@ class TestInternVL3Loader:
 
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModel.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
-    def test_generate(self, mock_tokenizer_cls, mock_model_cls, vlm_config, sample_images):
+    def test_generate(
+        self,
+        mock_tokenizer_cls,
+        mock_model_cls,
+        internvl3_arch,
+        vlm_config,
+        sample_images,
+    ):
         """Test text generation with InternVL3."""
         mock_tokenizer = MagicMock()
         mock_model = MagicMock()
@@ -285,7 +367,7 @@ class TestInternVL3Loader:
         mock_model.load_image.return_value = mock_pixel_values
         mock_model.chat.return_value = "InternVL3 response"
 
-        loader = InternVL3Loader(vlm_config)
+        loader = InternVL3Loader(internvl3_arch, vlm_config)
         loader.load()
 
         result = loader.generate(sample_images, "Describe this image")
@@ -297,9 +379,10 @@ class TestInternVL3Loader:
 class TestPixtralLargeLoader:
     """Tests for Pixtral Large VLM loader."""
 
-    def test_initialization(self, vlm_config):
+    def test_initialization(self, pixtral_arch, vlm_config):
         """Verify loader initializes correctly."""
-        loader = PixtralLargeLoader(vlm_config)
+        loader = PixtralLargeLoader(pixtral_arch, vlm_config)
+        assert loader.arch is pixtral_arch
         assert loader.config == vlm_config
         assert loader.model is None
 
@@ -308,7 +391,14 @@ class TestPixtralLargeLoader:
     )
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
-    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
+    def test_load_with_transformers(
+        self,
+        mock_tokenizer,
+        mock_processor,
+        mock_model,
+        pixtral_arch,
+        vlm_config,
+    ):
         """Test loading Pixtral Large with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -318,7 +408,7 @@ class TestPixtralLargeLoader:
         mock_tokenizer.return_value = mock_tokenizer_instance
         mock_model.return_value = mock_model_instance
 
-        loader = PixtralLargeLoader(vlm_config)
+        loader = PixtralLargeLoader(pixtral_arch, vlm_config)
         loader.load()
 
         assert loader.model == mock_model_instance
@@ -329,16 +419,24 @@ class TestPixtralLargeLoader:
 class TestQwen25VLLoader:
     """Tests for Qwen2.5-VL VLM loader."""
 
-    def test_initialization(self, vlm_config):
+    def test_initialization(self, qwen_vl_arch, vlm_config):
         """Verify loader initializes correctly."""
-        loader = Qwen25VLLoader(vlm_config)
+        loader = Qwen25VLLoader(qwen_vl_arch, vlm_config)
+        assert loader.arch is qwen_vl_arch
         assert loader.config == vlm_config
         assert loader.model is None
 
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.Qwen2VLForConditionalGeneration")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
     @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
-    def test_load_with_transformers(self, mock_tokenizer, mock_processor, mock_model, vlm_config):
+    def test_load_with_transformers(
+        self,
+        mock_tokenizer,
+        mock_processor,
+        mock_model,
+        qwen_vl_arch,
+        vlm_config,
+    ):
         """Test loading Qwen2.5-VL with Transformers."""
         mock_processor_instance = MagicMock()
         mock_tokenizer_instance = MagicMock()
@@ -348,7 +446,7 @@ class TestQwen25VLLoader:
         mock_tokenizer.from_pretrained.return_value = mock_tokenizer_instance
         mock_model.from_pretrained.return_value = mock_model_instance
 
-        loader = Qwen25VLLoader(vlm_config)
+        loader = Qwen25VLLoader(qwen_vl_arch, vlm_config)
         loader.load()
 
         assert loader.model == mock_model_instance
@@ -363,6 +461,7 @@ class TestQwen25VLLoader:
         mock_tokenizer_cls,
         mock_processor_cls,
         mock_model_cls,
+        qwen_vl_arch,
         vlm_config,
         sample_images,
     ):
@@ -383,7 +482,7 @@ class TestQwen25VLLoader:
         mock_model.generate.return_value = torch.tensor([[1, 2, 3, 4]])
         mock_tokenizer.decode.return_value = "Qwen2.5-VL response"
 
-        loader = Qwen25VLLoader(vlm_config)
+        loader = Qwen25VLLoader(qwen_vl_arch, vlm_config)
         loader.load()
 
         result = loader.generate(sample_images, "What do you see?")
@@ -392,75 +491,18 @@ class TestQwen25VLLoader:
         mock_model.generate.assert_called_once()
 
 
-class TestCreateVLMLoader:
-    """Tests for VLM loader factory function."""
+class TestSmallVLMLoader:
+    """Tests for the SmallVLMLoader which serves both SmolVLM and Moondream."""
 
-    def test_create_llama4_maverick_loader(self, vlm_config):
-        """Test creating Llama 4 Maverick loader."""
-        loader = create_vlm_loader("llama-4-maverick", vlm_config)
-        assert isinstance(loader, Llama4MaverickLoader)
+    def test_initialization_with_smolvlm(self, smolvlm_arch, vlm_config):
+        loader = SmallVLMLoader(smolvlm_arch, vlm_config)
+        assert loader.arch is smolvlm_arch
         assert loader.config == vlm_config
 
-    def test_create_llama4_maverick_loader_alternate_name(self, vlm_config):
-        """Test creating Llama 4 Maverick loader with alternate name."""
-        loader = create_vlm_loader("llama4-maverick", vlm_config)
-        assert isinstance(loader, Llama4MaverickLoader)
-
-    def test_create_gemma3_loader(self, vlm_config):
-        """Test creating Gemma 3 loader."""
-        loader = create_vlm_loader("gemma-3-27b", vlm_config)
-        assert isinstance(loader, Gemma3Loader)
+    def test_initialization_with_moondream(self, moondream_arch, vlm_config):
+        loader = SmallVLMLoader(moondream_arch, vlm_config)
+        assert loader.arch is moondream_arch
         assert loader.config == vlm_config
-
-    def test_create_gemma3_loader_short_name(self, vlm_config):
-        """Test creating Gemma 3 loader with short name."""
-        loader = create_vlm_loader("gemma3", vlm_config)
-        assert isinstance(loader, Gemma3Loader)
-
-    def test_create_internvl3_loader(self, vlm_config):
-        """Test creating InternVL3 loader."""
-        loader = create_vlm_loader("internvl3-78b", vlm_config)
-        assert isinstance(loader, InternVL3Loader)
-        assert loader.config == vlm_config
-
-    def test_create_pixtral_loader(self, vlm_config):
-        """Test creating Pixtral Large loader."""
-        loader = create_vlm_loader("pixtral-large", vlm_config)
-        assert isinstance(loader, PixtralLargeLoader)
-        assert loader.config == vlm_config
-
-    def test_create_pixtral_loader_short_name(self, vlm_config):
-        """Test creating Pixtral loader with short name."""
-        loader = create_vlm_loader("pixtral", vlm_config)
-        assert isinstance(loader, PixtralLargeLoader)
-
-    def test_create_qwen25vl_loader(self, vlm_config):
-        """Test creating Qwen2.5-VL loader."""
-        loader = create_vlm_loader("qwen2.5-vl-72b", vlm_config)
-        assert isinstance(loader, Qwen25VLLoader)
-        assert loader.config == vlm_config
-
-    def test_create_qwen25vl_loader_short_name(self, vlm_config):
-        """Test creating Qwen2.5-VL loader with short name."""
-        loader = create_vlm_loader("qwen25vl", vlm_config)
-        assert isinstance(loader, Qwen25VLLoader)
-
-    def test_create_loader_case_insensitive(self, vlm_config):
-        """Test factory function is case insensitive."""
-        loader1 = create_vlm_loader("LLAMA-4-MAVERICK", vlm_config)
-        loader2 = create_vlm_loader("Llama-4-Maverick", vlm_config)
-        assert isinstance(loader1, Llama4MaverickLoader)
-        assert isinstance(loader2, Llama4MaverickLoader)
-
-    def test_create_loader_with_underscores(self, vlm_config):
-        """Test factory function handles underscores."""
-        loader = create_vlm_loader("llama_4_maverick", vlm_config)
-        assert isinstance(loader, Llama4MaverickLoader)
-
-    def test_create_loader_unknown_model_raises_error(self, vlm_config):
-        """Test factory function raises error for unknown model."""
-        with pytest.raises(ValueError, match="Unknown model name"):
-            create_vlm_loader("unknown-model", vlm_config)
 
 
 class TestQuantizationType:

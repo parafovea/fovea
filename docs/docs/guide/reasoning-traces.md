@@ -2,8 +2,8 @@
 
 Use the reasoning-trace flow to capture the chain-of-thought
 output of thinking-capable language and vision-language models
-alongside the visible response. v0.3.0 introduces two DTOs in
-`model-service/src/application/dto/reasoning.py`:
+alongside the visible response. Three DTOs in
+`model-service/src/application/dto/reasoning.py` carry the trace:
 
 ```python
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class ThinkingStep:
 
 @dataclass(frozen=True)
 class ThinkingTrace:
-    steps: list[ThinkingStep]
+    steps: list[ThinkingStep] = field(default_factory=list)
     total_tokens: int | None = None
     model_id: str = ""
 
@@ -52,9 +52,12 @@ Pixtral, Claude family, GPT family, Gemini family) return
 The model-service FastAPI schemas in
 `infrastructure/adapters/inbound/fastapi/schemas/reasoning.py`
 expose the trace on every response that runs through a use case
-that calls a thinking-capable model. The backend forwards the
-trace unchanged. The frontend renders the trace inside a
-collapsible "thinking" panel below the visible response.
+that calls a thinking-capable model. The Node backend's response
+schemas in `server/src/routes/` do not yet declare a `thinking`
+field, so the trace is stripped during proxying by
+fast-json-stringify; surfacing it to the frontend (for example as
+a collapsible panel below the visible response) is planned future
+work.
 
 ## Properties
 
@@ -65,6 +68,9 @@ ReasonedText.has_thinking        True iff thinking is not None
                                  and not empty
 ```
 
-These properties are what the FastAPI schemas use to decide
-whether to emit a `thinking` block in the response body; the
-frontend uses them to decide whether to render the panel.
+The mappers (`ontology.py`, `claims.py`, `summarization.py`) check
+`dto.reasoning_trace is not None` before invoking
+`thinking_trace_dto_to_schema` to emit a `thinking` block; the
+`has_thinking` and `is_empty` properties are convenience accessors
+on the DTOs and are not consulted by the FastAPI schemas or
+mappers.

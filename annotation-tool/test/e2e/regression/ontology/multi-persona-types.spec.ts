@@ -44,16 +44,16 @@ test.describe('Multi-Persona Type Creation', () => {
       const defInput = dialog.locator('textarea').first()
       await defInput.fill('A type shared between personas')
 
-      // Look for persona checkboxes and select the second persona
-      // The checkboxes should be visible when creating a new type
-      const persona2Checkbox = dialog.getByRole('checkbox', { name: /Analyst Beta/i }).or(
-        dialog.locator('label').filter({ hasText: /Analyst Beta/i }).locator('input[type="checkbox"]')
-      )
-
-      // If multi-persona selection UI exists, check persona2
-      const checkboxVisible = await persona2Checkbox.isVisible({ timeout: 2000 }).catch(() => false)
-      if (checkboxVisible) {
-        await persona2Checkbox.check()
+      // Look for the per-persona checkbox label and toggle it. shadcn's
+      // <Checkbox> wraps a base-ui button (role=checkbox) plus a hidden
+      // native input inside a <label> with the persona name. The hidden
+      // input is aria-hidden and refuses pointer events, so click the
+      // wrapping <label> by visible text — standard label-control
+      // behaviour toggles the associated checkbox.
+      const persona2Label = dialog.locator('label').filter({ hasText: /Analyst Beta/i }).first()
+      const labelVisible = await persona2Label.isVisible({ timeout: 2000 }).catch(() => false)
+      if (labelVisible) {
+        await persona2Label.click()
       }
 
       // Save the type
@@ -73,7 +73,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.selectTab('entities')
 
       // Check if type exists in persona 2 (depends on whether multi-persona UI was available)
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.expectTypeExists('SharedVehicle')
 
         // Get the entity type from persona 2
@@ -125,19 +125,21 @@ test.describe('Multi-Persona Type Creation', () => {
       const dialog = page.locator('[role="dialog"]')
       await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-      // Look for persona checkboxes
-      const persona2Checkbox = dialog.getByRole('checkbox', { name: /Test Persona 2/i }).or(
-        dialog.locator('label').filter({ hasText: /Test Persona 2/i }).locator('input[type="checkbox"]')
-      )
+      // Find the per-persona <label> that wraps a shadcn <Checkbox>; the
+      // hidden native input is aria-hidden so we toggle by clicking the
+      // label and read state from the role=checkbox button's
+      // data-state attribute (base-ui exposes data-checked/data-unchecked).
+      const persona2Label = dialog.locator('label').filter({ hasText: /Test Persona 2/i }).first()
+      const persona2Checkbox = persona2Label.getByRole('checkbox')
+      const labelVisible = await persona2Label.isVisible({ timeout: 2000 }).catch(() => false)
 
-      const checkboxVisible = await persona2Checkbox.isVisible({ timeout: 2000 }).catch(() => false)
-
-      if (checkboxVisible) {
+      if (labelVisible) {
         // Select persona 2
-        await persona2Checkbox.check()
+        await persona2Label.click()
 
         // Verify it's checked
-        const isChecked1 = await persona2Checkbox.isChecked()
+        const isChecked1 = (await persona2Checkbox.getAttribute('data-state')) === 'checked' ||
+          (await persona2Checkbox.getAttribute('aria-checked')) === 'true'
         expect(isChecked1).toBe(true)
 
         // Now interact with the name field (this used to reset persona selection)
@@ -149,7 +151,8 @@ test.describe('Multi-Persona Type Creation', () => {
         await page.waitForTimeout(300)
 
         // Verify persona 2 is still checked (bug regression test)
-        const isChecked2 = await persona2Checkbox.isChecked()
+        const isChecked2 = (await persona2Checkbox.getAttribute('data-state')) === 'checked' ||
+          (await persona2Checkbox.getAttribute('aria-checked')) === 'true'
         expect(isChecked2).toBe(true)
 
         // Now interact with the definition field
@@ -160,7 +163,8 @@ test.describe('Multi-Persona Type Creation', () => {
         await page.waitForTimeout(300)
 
         // Verify persona 2 is still checked after interacting with another field
-        const isChecked3 = await persona2Checkbox.isChecked()
+        const isChecked3 = (await persona2Checkbox.getAttribute('data-state')) === 'checked' ||
+          (await persona2Checkbox.getAttribute('aria-checked')) === 'true'
         expect(isChecked3).toBe(true)
       }
 
@@ -267,14 +271,12 @@ test.describe('Multi-Persona Type Creation', () => {
       const defInput = dialog.locator('textarea').first()
       await defInput.fill('A meeting event type')
 
-      // Try to select second persona
-      const persona2Checkbox = dialog.getByRole('checkbox', { name: /Event Persona B/i }).or(
-        dialog.locator('label').filter({ hasText: /Event Persona B/i }).locator('input[type="checkbox"]')
-      )
-
-      const checkboxVisible = await persona2Checkbox.isVisible({ timeout: 2000 }).catch(() => false)
-      if (checkboxVisible) {
-        await persona2Checkbox.check()
+      // Click the wrapping <label> for Event Persona B (shadcn Checkbox's
+      // hidden native input is aria-hidden; clicking the label toggles it).
+      const persona2Label = dialog.locator('label').filter({ hasText: /Event Persona B/i }).first()
+      const labelVisible = await persona2Label.isVisible({ timeout: 2000 }).catch(() => false)
+      if (labelVisible) {
+        await persona2Label.click()
       }
 
       // Save
@@ -286,7 +288,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedMeeting')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('events')
         await ontologyWorkspace.expectTypeExists('SharedMeeting')
@@ -332,14 +334,12 @@ test.describe('Multi-Persona Type Creation', () => {
       const defInput = dialog.locator('textarea').first()
       await defInput.fill('An agent role type')
 
-      // Try to select second persona
-      const persona2Checkbox = dialog.getByRole('checkbox', { name: /Role Persona B/i }).or(
-        dialog.locator('label').filter({ hasText: /Role Persona B/i }).locator('input[type="checkbox"]')
-      )
-
-      const checkboxVisible = await persona2Checkbox.isVisible({ timeout: 2000 }).catch(() => false)
-      if (checkboxVisible) {
-        await persona2Checkbox.check()
+      // Click the wrapping <label> for Role Persona B (shadcn Checkbox's
+      // hidden native input is aria-hidden; clicking the label toggles it).
+      const persona2Label = dialog.locator('label').filter({ hasText: /Role Persona B/i }).first()
+      const labelVisible = await persona2Label.isVisible({ timeout: 2000 }).catch(() => false)
+      if (labelVisible) {
+        await persona2Label.click()
       }
 
       // Save
@@ -351,7 +351,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedAgent')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('roles')
         await ontologyWorkspace.expectTypeExists('SharedAgent')
@@ -399,14 +399,13 @@ test.describe('Multi-Persona Type Creation', () => {
       const defInput = dialog.locator('textarea').first()
       await defInput.fill('A connection relation type')
 
-      // Try to select second persona
-      const persona2Checkbox = dialog.getByRole('checkbox', { name: /Relation Persona B/i }).or(
-        dialog.locator('label').filter({ hasText: /Relation Persona B/i }).locator('input[type="checkbox"]')
-      )
-
-      const checkboxVisible = await persona2Checkbox.isVisible({ timeout: 2000 }).catch(() => false)
-      if (checkboxVisible) {
-        await persona2Checkbox.check()
+      // Click the wrapping <label> for Relation Persona B (shadcn
+      // Checkbox's hidden native input is aria-hidden; clicking the label
+      // toggles it).
+      const persona2Label = dialog.locator('label').filter({ hasText: /Relation Persona B/i }).first()
+      const labelVisible = await persona2Label.isVisible({ timeout: 2000 }).catch(() => false)
+      if (labelVisible) {
+        await persona2Label.click()
       }
 
       // Save
@@ -418,7 +417,7 @@ test.describe('Multi-Persona Type Creation', () => {
       await ontologyWorkspace.expectTypeExists('SharedConnection')
 
       // Navigate to persona 2 and verify if multi-select was available
-      if (checkboxVisible) {
+      if (labelVisible) {
         await ontologyWorkspace.navigateTo(persona2.id)
         await ontologyWorkspace.selectTab('relations')
         await ontologyWorkspace.expectTypeExists('SharedConnection')

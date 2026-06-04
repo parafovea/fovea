@@ -141,33 +141,26 @@ describe('TranscriptViewer', () => {
     it('highlights segment when currentTime is within segment range', () => {
       const onSeek = vi.fn()
 
-      render(
+      const { container } = render(
         <TranscriptViewer transcript={mockTranscript} currentTime={7} onSeek={onSeek} />
       )
 
       // Current time is 7, which falls in segment 2 (5-12 seconds)
-      const activeSegment = screen
-        .getByText(/Today we will discuss advanced techniques/i)
-        .closest('.MuiListItem-root')
-
-      expect(activeSegment).toBeInTheDocument()
-      // Check that the active segment has background color applied
-      expect(activeSegment).toHaveStyle({ backgroundColor: expect.any(String) })
+      // The active segment's li should have the primary highlight class
+      const listItems = container.querySelectorAll('li')
+      expect(listItems[1]).toHaveClass('bg-primary/20')
     })
 
     it('does not highlight segments outside currentTime range', () => {
       const onSeek = vi.fn()
 
-      render(
+      const { container } = render(
         <TranscriptViewer transcript={mockTranscript} currentTime={7} onSeek={onSeek} />
       )
 
       // Current time is 7, so segment 1 (0-5) should not be highlighted
-      const inactiveSegment = screen
-        .getByText(/Hello and welcome to this video/i)
-        .closest('.MuiListItem-root')
-
-      expect(inactiveSegment).toBeInTheDocument()
+      const listItems = container.querySelectorAll('li')
+      expect(listItems[0]).not.toHaveClass('bg-primary/20')
     })
 
     it('updates highlighting when currentTime changes', () => {
@@ -322,7 +315,7 @@ describe('TranscriptViewer', () => {
         <TranscriptViewer transcript={mockTranscript} currentTime={0} onSeek={onSeek} />
       )
 
-      const list = container.querySelector('.MuiList-root')
+      const list = container.querySelector('ul')
       expect(list).toBeInTheDocument()
     })
 
@@ -333,7 +326,7 @@ describe('TranscriptViewer', () => {
         <TranscriptViewer transcript={mockTranscript} currentTime={0} onSeek={onSeek} />
       )
 
-      const listItems = container.querySelectorAll('.MuiListItem-root')
+      const listItems = container.querySelectorAll('li')
       expect(listItems.length).toBe(3)
     })
   })
@@ -355,7 +348,7 @@ describe('TranscriptViewer', () => {
         <TranscriptViewer transcript={longTranscript} currentTime={25} onSeek={onSeek} />
       )
 
-      const listItems = container.querySelectorAll('.MuiListItem-root')
+      const listItems = container.querySelectorAll('li')
       expect(listItems.length).toBe(50)
     })
 

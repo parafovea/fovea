@@ -13,47 +13,43 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Box,
-  Grid,
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Typography,
-  Button,
-  TextField,
-  InputAdornment,
-  Chip,
-  CircularProgress,
-  Stack,
-  Link,
-  Badge,
-  Collapse,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Toolbar,
-  Paper,
-  Tooltip,
-} from '@mui/material'
+  Search,
+  Pencil,
+  Clock,
+  ThumbsUp,
+  Share2,
+  MessageSquare,
+  ExternalLink,
+  Sparkles,
+} from 'lucide-react'
+
+import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Search as SearchIcon,
-  Edit as AnnotateIcon,
-  Schedule as TimeIcon,
-  ThumbUp as LikeIcon,
-  Share as ShareIcon,
-  Comment as CommentIcon,
-  OpenInNew as ExternalLinkIcon,
-  AutoAwesome as SummarizeIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import { usePersonas } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 import { formatTimestamp, formatDuration } from '@utils/formatters'
 import { VideoMetadata, Persona } from '@models/types'
 import { useCommands, useCommandContext } from '@hooks/commands'
 import { useVideos, useGenerateSummary, useVideoSummary, useModelConfig } from '@store/queries'
+import { useMergedOverrides } from '@/store/preferences/useInferencePreferences'
 import { useVideoUiStore } from '@store/zustand'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from '@components/shared/JobStatusIndicator'
@@ -91,6 +87,10 @@ export default function VideoBrowser() {
 
   const { mutate: generateSummary } = useGenerateSummary()
   const { data: modelConfig } = useModelConfig()
+  // Merge user-level + persona-level preferences into a single wire payload.
+  // Persona overrides win over user defaults; null/absent fields fall back
+  // to backend dataclass defaults.
+  const { generationOverrides, audioOverrides } = useMergedOverrides(activePersonaId)
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
 
   /**
@@ -122,6 +122,8 @@ export default function VideoBrowser() {
         personaId: activePersonaId,
         frameSampleRate: 1,
         maxFrames: 30,
+        generationOverrides,
+        audioOverrides,
       },
       {
         onSuccess: (result) => {
@@ -211,6 +213,8 @@ export default function VideoBrowser() {
           personaId: activePersonaId,
           frameSampleRate: 1,
           maxFrames: 30,
+          generationOverrides,
+          audioOverrides,
         },
         {
           onSuccess: (result) => {
@@ -326,7 +330,7 @@ export default function VideoBrowser() {
     enabled: true,
     enableOnFormTags: false
   })
-  
+
   // Reset selection when search changes
   useEffect(() => {
     setSelectedVideoIndex(0)
@@ -383,79 +387,70 @@ export default function VideoBrowser() {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center h-full">
+        <Spinner className="size-8" />
+      </div>
     )
   }
 
   return (
-    <Box id="video-browser-root">
-      <Box mb={3}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search videos by title, description, uploader, or tags..."
-          value={localSearchTerm}
-          onChange={(e) => handleSearch(e.target.value)}
-          inputRef={searchInputRef}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-            endAdornment: (
-              <InputAdornment position="end">
-                <Typography variant="body2" color="text.secondary">
-                  {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
-                </Typography>
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
+    <div id="video-browser-root">
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            className="pl-10 pr-32"
+            placeholder="Search videos by title, description, uploader, or tags..."
+            value={localSearchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            ref={searchInputRef}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
 
       {/* Only show toolbar when AI models are available */}
       {!modelsDisabled && (
-        <Paper elevation={0} sx={{ mb: 3, p: 2, bgcolor: 'background.default' }}>
-          <Toolbar disableGutters sx={{ gap: 2, flexWrap: 'wrap' }}>
-            <FormControl sx={{ minWidth: 200 }} size="small">
-              <InputLabel id="persona-select-label">Persona</InputLabel>
+        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="min-w-[200px]">
               <Select
-                labelId="persona-select-label"
-                id="persona-select"
                 value={activePersonaId || ''}
-                label="Persona"
-                onChange={(e) => handlePersonaChange(e.target.value)}
+                onValueChange={(v) => v && handlePersonaChange(v)}
               >
-                {personas.length === 0 && (
-                  <MenuItem value="" disabled>
-                    No personas available
-                  </MenuItem>
-                )}
-                {personas.map((persona) => (
-                  <MenuItem key={persona.id} value={persona.id}>
-                    {persona.name}
-                    {persona.role && ` (${persona.role})`}
-                  </MenuItem>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Persona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {personas.length === 0 && (
+                    <SelectItem value="__disabled__" disabled>
+                      No personas available
+                    </SelectItem>
+                  )}
+                  {personas.map((persona) => (
+                    <SelectItem key={persona.id} value={persona.id}>
+                      {persona.name}
+                      {persona.role && ` (${persona.role})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </FormControl>
+            </div>
 
             <Button
-              variant="contained"
-              startIcon={isBatchSummarizing ? <CircularProgress size={16} /> : <SummarizeIcon />}
               onClick={handleSummarizeAll}
               disabled={!activePersonaId || isBatchSummarizing || filteredVideos.length === 0}
             >
+              {isBatchSummarizing ? <Spinner className="size-4 mr-2" /> : <Sparkles className="size-4 mr-2" />}
               {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
             </Button>
-          </Toolbar>
-        </Paper>
+          </div>
+        </div>
       )}
 
-      <Grid container spacing={3}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredVideos.map((video: VideoMetadata, index) => {
           const videoUrl = getVideoUrl(video)
           // Use backend thumbnail endpoint instead of external CDN URLs
@@ -486,27 +481,21 @@ export default function VideoBrowser() {
             />
           )
         })}
-      </Grid>
+      </div>
 
       {filteredVideos.length === 0 && !isLoading && (
-        <Box
-          display="flex"
-          flexDirection="column"
-          justifyContent="center"
-          alignItems="center"
-          height="300px"
-        >
-          <Typography variant="h6" color="text.secondary">
+        <div className="flex flex-col justify-center items-center h-[300px]">
+          <h3 className="text-base font-semibold text-muted-foreground">
             No videos found
-          </Typography>
+          </h3>
           {searchTerm && (
-            <Typography variant="body2" color="text.secondary">
+            <p className="text-sm text-muted-foreground">
               Try adjusting your search query
-            </Typography>
+            </p>
           )}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }
 
@@ -602,234 +591,207 @@ function VideoCard({
   }, [summary, activePersonaId, hasSummary, video.id, addVideoSummary])
 
   return (
-    <Grid item xs={12} sm={6} md={4} lg={3}>
-      <Card
-        sx={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          outline: selectedVideoIndex === index ? 2 : 0,
-          outlineColor: 'primary.main',
-          cursor: 'pointer',
+    <Card
+      // First-card anchor for Tour 1 ("First annotation in 90 seconds")
+      // and other tours that want to spotlight a tangible video tile
+      // without depending on which clip is rendered first.
+      data-tour-id={index === 0 ? 'video-browser-card-first' : undefined}
+      className={cn(
+        'h-full flex flex-col cursor-pointer',
+        selectedVideoIndex === index && 'outline outline-2 outline-primary'
+      )}
+      onClick={() => handleCardClick(index)}
+    >
+      {/* Thumbnail area */}
+      <div
+        className="relative pt-[56.25%] bg-muted"
+        style={{
+          backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
         }}
-        onClick={() => handleCardClick(index)}
       >
-        <CardMedia
-          component="div"
-          sx={{
-            pt: '56.25%',
-            bgcolor: 'grey.300',
-            backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            position: 'relative',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              position: 'absolute',
-              bottom: 8,
-              right: 8,
-              bgcolor: 'rgba(0, 0, 0, 0.8)',
-              color: 'white',
-              px: 1,
-              borderRadius: 1,
-            }}
-          >
-            {formatDuration(video.duration)}
-          </Typography>
-          {video.width && video.height && (
-            <Typography
-              variant="caption"
-              sx={{
-                position: 'absolute',
-                bottom: 8,
-                left: 8,
-                bgcolor: 'rgba(0, 0, 0, 0.8)',
-                color: 'white',
-                px: 1,
-                borderRadius: 1,
-              }}
-            >
-              {video.width}×{video.height}
-            </Typography>
+        <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 rounded">
+          {formatDuration(video.duration)}
+        </span>
+        {video.width && video.height && (
+          <span className="absolute bottom-2 left-2 bg-black/80 text-white text-xs px-2 rounded">
+            {video.width}&times;{video.height}
+          </span>
+        )}
+        {hasSummary && (
+          <span className="absolute top-2 right-2 bg-green-500 text-white text-xs rounded-full size-5 flex items-center justify-center">
+            &#10003;
+          </span>
+        )}
+      </div>
+
+      <CardContent className="flex-1">
+        <h3 className="text-base font-semibold mb-1">
+          {video.uploader || video.uploaderId || 'Unknown User'}
+          {video.uploaderId && (
+            <>
+              {' '}(
+              {allowExternalVideoLinks && video.uploaderUrl ? (
+                <a
+                  href={video.uploaderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  @{video.uploaderId}
+                </a>
+              ) : (
+                <span className="text-muted-foreground">
+                  @{video.uploaderId}
+                </span>
+              )}
+              )
+            </>
           )}
-          {hasSummary && (
-            <Badge
-              badgeContent="✓"
-              color="success"
-              sx={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-              }}
-            />
-          )}
-        </CardMedia>
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Typography gutterBottom variant="h6" component="h2">
-            {video.uploader || video.uploaderId || 'Unknown User'}
-            {video.uploaderId && (
-              <>
-                {' '}(
-                {allowExternalVideoLinks && video.uploaderUrl ? (
-                  <Link
-                    href={video.uploaderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    underline="hover"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    @{video.uploaderId}
-                  </Link>
-                ) : (
-                  <Typography component="span" color="text.secondary">
-                    @{video.uploaderId}
-                  </Typography>
-                )}
-                )
-              </>
+        </h3>
+
+        <p className="text-sm overflow-hidden text-ellipsis line-clamp-3 mb-2">
+          {video.description}
+        </p>
+
+        {video.timestamp && (
+          <div className="flex items-center gap-1 mb-2">
+            <Clock className="size-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              {formatTimestamp(video.timestamp)}
+            </span>
+          </div>
+        )}
+
+        {(video.likeCount || video.repostCount || video.commentCount) && (
+          <div className="flex gap-3 mb-2">
+            {video.likeCount !== undefined && (
+              <div className="flex items-center gap-1">
+                <ThumbsUp className="size-4 text-muted-foreground" />
+                <span className="text-xs">{video.likeCount.toLocaleString()}</span>
+              </div>
             )}
-          </Typography>
+            {video.repostCount !== undefined && (
+              <div className="flex items-center gap-1">
+                <Share2 className="size-4 text-muted-foreground" />
+                <span className="text-xs">{video.repostCount.toLocaleString()}</span>
+              </div>
+            )}
+            {video.commentCount !== undefined && (
+              <div className="flex items-center gap-1">
+                <MessageSquare className="size-4 text-muted-foreground" />
+                <span className="text-xs">{video.commentCount.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        )}
 
-          <Typography
-            variant="body2"
-            sx={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              mb: 1,
+        {video.tags && video.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {video.tags.slice(0, 3).map((tag, idx) => (
+              <Badge key={idx} variant="outline">
+                {tag}
+              </Badge>
+            ))}
+            {video.tags.length > 3 && (
+              <Badge variant="outline">
+                +{video.tags.length - 3}
+              </Badge>
+            )}
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="flex-col items-stretch gap-2 px-4 pb-4">
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/annotate/${video.id}`)
             }}
           >
-            {video.description}
-          </Typography>
-
-          {video.timestamp && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-              <TimeIcon fontSize="small" color="action" />
-              <Typography variant="caption" color="text.secondary">
-                {formatTimestamp(video.timestamp)}
-              </Typography>
-            </Box>
-          )}
-
-          {(video.likeCount || video.repostCount || video.commentCount) && (
-            <Stack direction="row" spacing={1.5} sx={{ mb: 1 }}>
-              {video.likeCount !== undefined && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <LikeIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.likeCount.toLocaleString()}</Typography>
-                </Box>
-              )}
-              {video.repostCount !== undefined && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <ShareIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.repostCount.toLocaleString()}</Typography>
-                </Box>
-              )}
-              {video.commentCount !== undefined && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <CommentIcon fontSize="small" color="action" />
-                  <Typography variant="caption">{video.commentCount.toLocaleString()}</Typography>
-                </Box>
-              )}
-            </Stack>
-          )}
-
-          {video.tags && video.tags.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {video.tags.slice(0, 3).map((tag, idx) => (
-                <Chip key={idx} label={tag} size="small" variant="outlined" />
-              ))}
-              {video.tags.length > 3 && (
-                <Chip
-                  label={`+${video.tags.length - 3}`}
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                />
-              )}
-            </Box>
-          )}
-        </CardContent>
-        <CardActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pb: 2 }}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Pencil className="size-4 mr-1" />
+            Annotate
+          </Button>
+          {videoUrl && (
             <Button
-              size="small"
-              startIcon={<AnnotateIcon />}
+              variant="ghost"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation()
-                navigate(`/annotate/${video.id}`)
+                window.open(videoUrl, '_blank', 'noopener,noreferrer')
               }}
             >
-              Annotate
+              <ExternalLink className="size-4 mr-1" />
+              Source
             </Button>
-            {videoUrl && (
-              <Button
-                size="small"
-                startIcon={<ExternalLinkIcon />}
-                href={videoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (hasSummary) {
+                        toggleSummaryExpand(video.id)
+                      } else {
+                        handleGenerateSummary(video.id)
+                      }
+                    }}
+                    disabled={!!activeJobId || !activePersonaId || modelsDisabled}
+                  />
+                }
               >
-                Source
-              </Button>
-            )}
-            <Tooltip title={modelsDisabled ? 'No AI models available for video summarization' : ''}>
-              <span>
-                <Button
-                  size="small"
-                  startIcon={<SummarizeIcon />}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (hasSummary) {
-                      toggleSummaryExpand(video.id)
-                    } else {
-                      handleGenerateSummary(video.id)
-                    }
-                  }}
-                  disabled={!!activeJobId || !activePersonaId || modelsDisabled}
-                >
-                  {hasSummary ? 'View' : 'Summarize'}
-                </Button>
-              </span>
+                <Sparkles className="size-4 mr-1" />
+                {hasSummary ? 'View' : 'Summarize'}
+              </TooltipTrigger>
+              {modelsDisabled && (
+                <TooltipContent>
+                  No AI models available for video summarization
+                </TooltipContent>
+              )}
             </Tooltip>
-          </Box>
+          </TooltipProvider>
+        </div>
 
-          {activeJobId && (
-            <Box onClick={(e) => e.stopPropagation()}>
-              <JobStatusIndicator
-                jobId={activeJobId}
-                title="Generating summary"
-                onComplete={() => activePersonaId && handleSummaryJobComplete(video.id, activePersonaId)}
-                onFail={() => activePersonaId && handleSummaryJobFail(video.id, activePersonaId)}
-              />
-            </Box>
-          )}
+        {activeJobId && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <JobStatusIndicator
+              jobId={activeJobId}
+              title="Generating summary"
+              onComplete={() => activePersonaId && handleSummaryJobComplete(video.id, activePersonaId)}
+              onFail={() => activePersonaId && handleSummaryJobFail(video.id, activePersonaId)}
+            />
+          </div>
+        )}
 
-          {hasSummary && expandedSummaries[video.id] && (
-            <Collapse in={expandedSummaries[video.id]} onClick={(e) => e.stopPropagation()}>
-              <VideoSummaryCard
-                summary={summary ?? null}
-                personaName={activePersona?.name}
-                personaRole={activePersona?.role}
-                loading={summaryLoading}
-                showActions={false}
-              />
-            </Collapse>
-          )}
+        {hasSummary && expandedSummaries[video.id] && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <VideoSummaryCard
+              summary={summary ?? null}
+              personaName={activePersona?.name}
+              personaRole={activePersona?.role}
+              loading={summaryLoading}
+              showActions={false}
+            />
+          </div>
+        )}
 
-          {!activePersonaId && !modelsDisabled && (
-            <Alert severity="info" sx={{ mt: 1 }}>
+        {!activePersonaId && !modelsDisabled && (
+          <Alert className="mt-2">
+            <AlertDescription>
               Select a persona to generate summaries
-            </Alert>
-          )}
-        </CardActions>
-      </Card>
-    </Grid>
+            </AlertDescription>
+          </Alert>
+        )}
+      </CardFooter>
+    </Card>
   )
 }

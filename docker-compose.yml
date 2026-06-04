@@ -4,13 +4,18 @@ name: fovea
 services:
   frontend:
     build:
-      context: ./annotation-tool
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: annotation-tool/Dockerfile
       target: production
       args:
         # Empty defaults = use relative URLs (nginx proxies /api/* to backend)
         - VITE_API_URL=${VITE_API_URL:-}
         - VITE_MODEL_SERVICE_URL=${VITE_MODEL_SERVICE_URL:-}
+        # Demo-mode flags. Production deploys leave these empty and
+        # the demo subtree tree-shakes out of the bundle; the deploy.yml
+        # demo_mode workflow input sets both to "1" for demo.fovea.video.
+        - VITE_TOUR_DEMO=${VITE_TOUR_DEMO:-}
+        - VITE_DEMO_PUBLIC=${VITE_DEMO_PUBLIC:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -27,9 +32,9 @@ services:
 
   backend:
     build:
-      context: ./server
-      dockerfile: Dockerfile
-    command: sh -c "npx prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
+      context: .
+      dockerfile: server/Dockerfile
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
     ports:
       - "3001:3001"
     environment:
@@ -259,6 +264,5 @@ volumes:
   model-cache:
   postgres-data:
   redis-data:
-  video-data:
   prometheus-data:
   grafana-data:

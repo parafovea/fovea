@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
 yarn.lock
-pnpm-lock.yaml
 
 # Production builds
 dist/
@@ -130,3 +129,5 @@ notes/
 .claude/
 .venv/
 model-service/uv.lock
+.demo-local/
+.demo-local-bringup.log

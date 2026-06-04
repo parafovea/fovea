@@ -49,7 +49,7 @@ describe('ProjectsPage', () => {
 
     render(<ProjectsPage />, { wrapper: createWrapper() })
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('shows the Create Project button', async () => {

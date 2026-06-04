@@ -4,31 +4,30 @@
  */
 
 import { useState, useEffect } from 'react'
+import { Search } from 'lucide-react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Slider } from '@/components/ui/slider'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
   Select,
-  MenuItem,
-  Slider,
-  Typography,
-  Box,
-  Stack,
-  Alert,
-  CircularProgress,
-  Tabs,
-  Tab,
-  FormControlLabel,
-  Checkbox,
-  Paper,
-  Divider,
-} from '@mui/material'
-import { Search as DetectIcon } from '@mui/icons-material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { usePersonas } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 
@@ -187,346 +186,253 @@ export function DetectionDialog({
   const canDetect = queryMode === 'manual' ? manualQuery.trim().length > 0 : Boolean(selectedPersonaId)
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Detect Objects</DialogTitle>
+    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Detect Objects</DialogTitle>
+        </DialogHeader>
 
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 1 }}>
+        <div className="flex flex-col gap-6 mt-2">
           {/* Query Mode Selection */}
-          <Box>
-            <Tabs value={queryMode} onChange={(_, v) => setQueryMode(v)} sx={{ mb: 2 }}>
-              <Tab label="Use Persona Ontology" value="persona" />
-              <Tab label="Manual Query" value="manual" />
-            </Tabs>
+          <div>
+            <Tabs value={queryMode} onValueChange={(v) => setQueryMode(v as 'persona' | 'manual')}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="persona">Use Persona Ontology</TabsTrigger>
+                <TabsTrigger value="manual">Manual Query</TabsTrigger>
+              </TabsList>
 
-            {queryMode === 'persona' && (
-              <Box>
+              <TabsContent value="persona">
                 {!selectedPersonaId && (
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    Please select a persona first to use ontology-based detection
+                  <Alert className="mb-4">
+                    <AlertDescription>
+                      Please select a persona first to use ontology-based detection
+                    </AlertDescription>
                   </Alert>
                 )}
 
                 {selectedPersona && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
+                  <div className="mb-4">
+                    <p className="text-sm font-medium">
                       Selected Persona: {selectedPersona.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    </p>
+                    <p className="text-sm text-muted-foreground">
                       {selectedPersona.role} - {selectedPersona.informationNeed}
-                    </Typography>
-                  </Box>
+                    </p>
+                  </div>
                 )}
 
                 {/* Query Options */}
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm font-medium mb-4">
                     Query Building Options
-                  </Typography>
+                  </p>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 2 }}>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
                     {/* Ontology Types */}
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
                         Ontology Types
-                      </Typography>
-                      <FormControlLabel
-                        control={
+                      </p>
+                      {([
+                        ['includeEntityTypes', 'Entity Types'],
+                        ['includeEntityGlosses', 'Entity Glosses'],
+                        ['includeEventTypes', 'Event Types'],
+                        ['includeEventGlosses', 'Event Glosses'],
+                        ['includeRoleTypes', 'Role Types'],
+                        ['includeRoleGlosses', 'Role Glosses'],
+                        ['includeRelationTypes', 'Relation Types'],
+                        ['includeRelationGlosses', 'Relation Glosses'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 py-1 cursor-pointer">
                           <Checkbox
-                            checked={queryOptions.includeEntityTypes}
-                            onChange={(e) => handleOptionChange('includeEntityTypes', e.target.checked)}
+                            checked={queryOptions[key]}
+                            onCheckedChange={(checked) => handleOptionChange(key, checked === true)}
                           />
-                        }
-                        label="Entity Types"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEntityGlosses}
-                            onChange={(e) => handleOptionChange('includeEntityGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Entity Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEventTypes}
-                            onChange={(e) => handleOptionChange('includeEventTypes', e.target.checked)}
-                          />
-                        }
-                        label="Event Types"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEventGlosses}
-                            onChange={(e) => handleOptionChange('includeEventGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Event Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeRoleTypes}
-                            onChange={(e) => handleOptionChange('includeRoleTypes', e.target.checked)}
-                          />
-                        }
-                        label="Role Types"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeRoleGlosses}
-                            onChange={(e) => handleOptionChange('includeRoleGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Role Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeRelationTypes}
-                            onChange={(e) => handleOptionChange('includeRelationTypes', e.target.checked)}
-                          />
-                        }
-                        label="Relation Types"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeRelationGlosses}
-                            onChange={(e) => handleOptionChange('includeRelationGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Relation Glosses"
-                      />
-                    </Box>
+                          <span className="text-sm">{label}</span>
+                        </label>
+                      ))}
+                    </div>
 
                     {/* World State Instances */}
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
                         World State Instances
-                      </Typography>
-                      <FormControlLabel
-                        control={
+                      </p>
+                      {([
+                        ['includeEntityInstances', 'Entity Instances'],
+                        ['includeEntityInstanceGlosses', 'Entity Instance Glosses'],
+                        ['includeEventInstances', 'Event Instances'],
+                        ['includeEventInstanceGlosses', 'Event Instance Glosses'],
+                        ['includeLocationInstances', 'Location Instances'],
+                        ['includeLocationInstanceGlosses', 'Location Instance Glosses'],
+                        ['includeTimeInstances', 'Time Instances'],
+                        ['includeTimeInstanceGlosses', 'Time Instance Glosses'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 py-1 cursor-pointer">
                           <Checkbox
-                            checked={queryOptions.includeEntityInstances}
-                            onChange={(e) => handleOptionChange('includeEntityInstances', e.target.checked)}
+                            checked={queryOptions[key]}
+                            onCheckedChange={(checked) => handleOptionChange(key, checked === true)}
                           />
-                        }
-                        label="Entity Instances"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEntityInstanceGlosses}
-                            onChange={(e) => handleOptionChange('includeEntityInstanceGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Entity Instance Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEventInstances}
-                            onChange={(e) => handleOptionChange('includeEventInstances', e.target.checked)}
-                          />
-                        }
-                        label="Event Instances"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeEventInstanceGlosses}
-                            onChange={(e) => handleOptionChange('includeEventInstanceGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Event Instance Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeLocationInstances}
-                            onChange={(e) => handleOptionChange('includeLocationInstances', e.target.checked)}
-                          />
-                        }
-                        label="Location Instances"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeLocationInstanceGlosses}
-                            onChange={(e) => handleOptionChange('includeLocationInstanceGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Location Instance Glosses"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeTimeInstances}
-                            onChange={(e) => handleOptionChange('includeTimeInstances', e.target.checked)}
-                          />
-                        }
-                        label="Time Instances"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={queryOptions.includeTimeInstanceGlosses}
-                            onChange={(e) => handleOptionChange('includeTimeInstanceGlosses', e.target.checked)}
-                          />
-                        }
-                        label="Time Instance Glosses"
-                      />
-                    </Box>
-                  </Box>
-                </Paper>
-              </Box>
-            )}
+                          <span className="text-sm">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
 
-            {queryMode === 'manual' && (
-              <TextField
-                label="Detection Query"
-                placeholder="e.g., person, vehicle, baseball"
-                value={manualQuery}
-                onChange={(e) => setManualQuery(e.target.value)}
-                fullWidth
-                helperText="Describe what you want to detect in the video"
-              />
-            )}
-          </Box>
+              <TabsContent value="manual">
+                <div>
+                  <Label htmlFor="detection-query" className="mb-2">Detection Query</Label>
+                  <Input
+                    id="detection-query"
+                    placeholder="e.g., person, vehicle, baseball"
+                    value={manualQuery}
+                    onChange={(e) => setManualQuery(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Describe what you want to detect in the video
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Frame Selection */}
-          <FormControl fullWidth>
-            <InputLabel>Frame Selection</InputLabel>
-            <Select
-              value={frameMode}
-              onChange={(e) => setFrameMode(e.target.value as 'current' | 'range' | 'all')}
-              label="Frame Selection"
-            >
-              <MenuItem value="current">Current Frame Only</MenuItem>
-              <MenuItem value="range">Frame Range</MenuItem>
-              <MenuItem value="all">All Frames</MenuItem>
+          <div>
+            <Label className="mb-2">Frame Selection</Label>
+            <Select value={frameMode} onValueChange={(v) => setFrameMode(v as 'current' | 'range' | 'all')}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Current Frame Only</SelectItem>
+                <SelectItem value="range">Frame Range</SelectItem>
+                <SelectItem value="all">All Frames</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
+          </div>
 
           {frameMode === 'range' && (
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Start Frame"
-                type="number"
-                value={frameStart}
-                onChange={(e) => setFrameStart(parseInt(e.target.value) || 0)}
-                size="small"
-                fullWidth
-              />
-              <TextField
-                label="End Frame"
-                type="number"
-                value={frameEnd}
-                onChange={(e) => setFrameEnd(parseInt(e.target.value) || 0)}
-                size="small"
-                fullWidth
-              />
-            </Box>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Label htmlFor="frame-start" className="mb-2">Start Frame</Label>
+                <Input
+                  id="frame-start"
+                  type="number"
+                  value={frameStart}
+                  onChange={(e) => setFrameStart(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="frame-end" className="mb-2">End Frame</Label>
+                <Input
+                  id="frame-end"
+                  type="number"
+                  value={frameEnd}
+                  onChange={(e) => setFrameEnd(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
           )}
 
           {/* Confidence Threshold */}
-          <Box>
-            <Typography variant="body2" gutterBottom>
+          <div>
+            <p className="text-sm mb-2">
               Confidence Threshold: {confidenceThreshold.toFixed(2)}
-            </Typography>
+            </p>
             <Slider
-              value={confidenceThreshold}
-              onChange={(_, value) => setConfidenceThreshold(value as number)}
+              value={[confidenceThreshold]}
+              onValueChange={(values) => setConfidenceThreshold((values as readonly number[])[0])}
               min={0.1}
               max={1.0}
               step={0.05}
-              marks={[
-                { value: 0.1, label: '0.1' },
-                { value: 0.5, label: '0.5' },
-                { value: 1.0, label: '1.0' },
-              ]}
             />
-          </Box>
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0.1</span>
+              <span>0.5</span>
+              <span>1.0</span>
+            </div>
+          </div>
 
           {/* Tracking Configuration */}
           {frameMode !== 'current' && (
             <>
-              <Divider />
-              <Box>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={enableTracking}
-                      onChange={(e) => setEnableTracking(e.target.checked)}
-                    />
-                  }
-                  label="Enable Tracking"
-                />
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
+              <Separator />
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={enableTracking}
+                    onCheckedChange={(checked) => setEnableTracking(checked === true)}
+                  />
+                  <span className="text-sm font-medium">Enable Tracking</span>
+                </label>
+                <p className="text-xs text-muted-foreground ml-6">
                   Track objects across frames using automation
-                </Typography>
-              </Box>
+                </p>
+              </div>
 
               {enableTracking && (
-                <Stack spacing={2}>
-                  <FormControl fullWidth>
-                    <InputLabel>Tracking Model</InputLabel>
-                    <Select
-                      value={trackingModel}
-                      onChange={(e) => setTrackingModel(e.target.value as TrackingModel)}
-                      label="Tracking Model"
-                    >
-                      <MenuItem value="samurai">SAMURAI (Recommended)</MenuItem>
-                      <MenuItem value="sam2long">SAM2Long (Long videos)</MenuItem>
-                      <MenuItem value="sam2">SAM2 (Fast)</MenuItem>
-                      <MenuItem value="yolo11seg">YOLO11n-seg (Segmentation)</MenuItem>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <Label className="mb-2">Tracking Model</Label>
+                    <Select value={trackingModel} onValueChange={(v) => setTrackingModel(v as TrackingModel)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="samurai">SAMURAI (Recommended)</SelectItem>
+                        <SelectItem value="sam2long">SAM2Long (Long videos)</SelectItem>
+                        <SelectItem value="sam2">SAM2 (Fast)</SelectItem>
+                        <SelectItem value="yolo11seg">YOLO11n-seg (Segmentation)</SelectItem>
+                      </SelectContent>
                     </Select>
-                  </FormControl>
+                  </div>
 
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={trackSingleObject}
-                        onChange={(e) => setTrackSingleObject(e.target.checked)}
-                      />
-                    }
-                    label="Track Single Object Only"
-                  />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={trackSingleObject}
+                      onCheckedChange={(checked) => setTrackSingleObject(checked === true)}
+                    />
+                    <span className="text-sm">Track Single Object Only</span>
+                  </label>
 
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    Tracking will generate candidate annotations that you can preview and accept/reject.
+                  <Alert>
+                    <AlertDescription>
+                      Tracking will generate candidate annotations that you can preview and accept/reject.
+                    </AlertDescription>
                   </Alert>
-                </Stack>
+                </div>
               )}
             </>
           )}
 
           {error && (
-            <Alert severity="error">
-              Detection failed: {error}
+            <Alert variant="destructive">
+              <AlertDescription>
+                Detection failed: {error}
+              </AlertDescription>
             </Alert>
           )}
-        </Stack>
-      </DialogContent>
+        </div>
 
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleDetect}
-          variant="contained"
-          disabled={isLoading || !canDetect}
-          startIcon={isLoading ? <CircularProgress size={20} /> : <DetectIcon />}
-        >
-          {isLoading ? 'Detecting...' : 'Run Detection'}
-        </Button>
-      </DialogActions>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleDetect}
+            disabled={isLoading || !canDetect}
+          >
+            {isLoading ? (
+              <Spinner className="mr-2 h-4 w-4" />
+            ) : (
+              <Search className="mr-2 h-4 w-4" />
+            )}
+            {isLoading ? 'Detecting...' : 'Run Detection'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   )
 }

@@ -31,13 +31,17 @@ function createSummarySavePromise(
 }
 
 test.describe('Relation Type References in Summaries', () => {
-  // Note: These tests verify relation type references in the GlossEditor component.
-  // The GlossEditor uses a controlled input with useAutoSave hook that has compatibility
-  // issues with Playwright's input simulation (fill, pressSequentially, keyboard.type).
-  // The input is not being captured by the component's onChange handler correctly.
-  // This appears to be related to the React Query cache invalidation and re-rendering
-  // that happens during auto-save operations.
-  // TODO: Fix the underlying GlossEditor/Playwright compatibility issue.
+  // These tests verify relation type references in the GlossEditor
+  // component. GlossEditor previously raced its own `gloss` prop effect
+  // against the parent's React Query auto-save: every onChange triggered
+  // a parent re-render whose echoed `gloss` prop reset the local
+  // `inputValue` via the [gloss, glossToString] effect, clobbering
+  // characters the user had typed in the interim. With Playwright's
+  // keyboard simulation firing keystrokes faster than the cache-
+  // invalidation cycle settles, this surfaced as missing characters. The
+  // fix tracks the most recently emitted gloss in a ref and suppresses
+  // the prop-driven re-sync when the incoming gloss structurally matches
+  // what we just emitted (see GlossEditor.tsx's `lastEmittedGlossRef`).
 
   test('can insert relation type reference in summary using autocomplete', async ({
     page,
@@ -67,11 +71,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').nth(1)
+    const personaOption = page.getByRole('option').first()
     await personaOption.click()
     await page.waitForTimeout(500)
 
@@ -97,16 +101,16 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('This video shows #')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear (MUI List renders as <ul> inside Paper)
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear (GlossEditor renders an absolute-positioned bg-popover container)
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
-    // Verify "Relation Types" section is visible (ListSubheader)
-    const relationTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Relation Types' })
+    // Verify "Relation Types" section header is visible
+    const relationTypesHeader = autocompletePopper.getByText('Relation Types', { exact: true })
     await expect(relationTypesHeader).toBeVisible({ timeout: 10000 })
 
-    // Click on the relation type (ListItem with the relation type name)
-    const relationTypeOption = page.locator('.MuiListItem-root').filter({ hasText: relationType.name })
+    // Click on the relation type option
+    const relationTypeOption = autocompletePopper.getByText(relationType.name, { exact: true })
     await expect(relationTypeOption).toBeVisible({ timeout: 10000 })
     await relationTypeOption.click()
 
@@ -138,11 +142,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').nth(1)
+    const personaOption = page.getByRole('option').first()
     await personaOption.click()
     await page.waitForTimeout(500)
 
@@ -187,28 +191,35 @@ test.describe('Relation Type References in Summaries', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    // Re-open summary dialog
+    // Re-open summary dialog and arm the GET wait BEFORE selecting the
+    // persona that triggers the summaries fetch, so the response is
+    // observed deterministically rather than raced against a sleep.
     await page.getByRole('button', { name: /edit summary/i }).click()
     const dialog2 = page.getByRole('dialog')
     await expect(dialog2).toBeVisible()
+
+    const summariesLoaded = page.waitForResponse(
+      (resp) =>
+        resp.url().includes(`/api/videos/${testVideo.id}/summaries`) &&
+        resp.request().method() === 'GET' &&
+        resp.status() === 200,
+      { timeout: 10000 },
+    )
 
     // Re-select persona
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     await personaSelect2.click()
     await page.waitForTimeout(300)
-    const personaOption2 = page.getByRole('option').nth(1)
+    const personaOption2 = page.getByRole('option').first()
     await personaOption2.click()
-    await page.waitForTimeout(500)
+
+    await summariesLoaded
 
     // Navigate to Summary tab
     const summaryTab2 = dialog2.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab2.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab2.click()
-      await page.waitForTimeout(300)
     }
-
-    // Wait for summary data to load from API
-    await page.waitForTimeout(2000)
 
     // Verify the summary text persisted
     const summaryTextarea2 = dialog2.locator('textarea').first()
@@ -240,11 +251,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').nth(1)
+    const personaOption = page.getByRole('option').first()
     await personaOption.click()
 
     // Wait for ontology to load
@@ -268,12 +279,12 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('Testing #')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
     // Click on the relation type in the autocomplete
-    const relationTypeOption = page.locator('.MuiListItem-root').filter({ hasText: relationType.name })
+    const relationTypeOption = autocompletePopper.getByText(relationType.name, { exact: true })
     await expect(relationTypeOption).toBeVisible({ timeout: 10000 })
     await relationTypeOption.click()
 
@@ -283,9 +294,10 @@ test.describe('Relation Type References in Summaries', () => {
     // Wait for preview to update
     await page.waitForTimeout(1000)
 
-    // Verify the relation type reference renders as a chip in the preview
-    const chip = dialog.locator('.MuiChip-root').filter({ hasText: relationType.name })
-    await expect(chip).toBeVisible({ timeout: 10000 })
+    // Verify the relation type reference renders as a Badge in the preview (shadcn Badge spans).
+    // Filter to badges (small inline-flex spans with rounded-4xl), excluding the autocomplete option text.
+    const chip = dialog.locator('span.inline-flex').filter({ hasText: relationType.name })
+    await expect(chip.first()).toBeVisible({ timeout: 10000 })
   })
 
   test('relation types appear in autocomplete alongside other types', async ({
@@ -316,11 +328,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select persona - use nth(1) to skip the disabled placeholder
+    // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').nth(1)
+    const personaOption = page.getByRole('option').first()
     await personaOption.click()
 
     // Wait for ontology to load
@@ -344,19 +356,19 @@ test.describe('Relation Type References in Summaries', () => {
     await page.keyboard.insertText('#')
     await page.waitForTimeout(500)
 
-    // Wait for autocomplete Popper to appear
-    const autocompletePopper = page.locator('.MuiPopper-root .MuiPaper-root ul').first()
+    // Wait for autocomplete popover to appear
+    const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
-    // Verify both Entity Types and Relation Types sections are visible
-    const entityTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Entity Types' })
+    // Verify both Entity Types and Relation Types section headers are visible
+    const entityTypesHeader = autocompletePopper.getByText('Entity Types', { exact: true })
     await expect(entityTypesHeader).toBeVisible({ timeout: 10000 })
 
-    const relationTypesHeader = page.locator('.MuiListSubheader-root').filter({ hasText: 'Relation Types' })
+    const relationTypesHeader = autocompletePopper.getByText('Relation Types', { exact: true })
     await expect(relationTypesHeader).toBeVisible({ timeout: 10000 })
 
-    // Verify specific types are listed
-    await expect(page.locator('.MuiListItem-root').filter({ hasText: entityType.name })).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('.MuiListItem-root').filter({ hasText: relationType.name })).toBeVisible({ timeout: 10000 })
+    // Verify specific types are listed within the popover
+    await expect(autocompletePopper.getByText(entityType.name, { exact: true })).toBeVisible({ timeout: 10000 })
+    await expect(autocompletePopper.getByText(relationType.name, { exact: true })).toBeVisible({ timeout: 10000 })
   })
 })

@@ -14,17 +14,32 @@ describe('Videos API - Detection', () => {
   let prisma: PrismaClient
   let testUserId: string
   let testSessionToken: string
+  // Tests below monkey-patch `global.fetch` to stub the model-service
+  // round-trip (see e.g. line ~110, ~232). Without restoring, the
+  // pollution leaks into adjacent test files in the same vitest worker
+  // and they see a stub that returns undefined for every call
+  // (see test/integration/model-service-hang-protection.test.ts which
+  // would fail with "promise resolved 'undefined' instead of rejecting"
+  // any time it ran after this file). Capture the real fetch on entry
+  // and restore it before/after every test.
+  let realFetch: typeof globalThis.fetch
 
   beforeAll(async () => {
+    realFetch = globalThis.fetch
     app = await buildApp()
     prisma = app.prisma
   })
 
   afterAll(async () => {
+    globalThis.fetch = realFetch
     await app.close()
   })
 
   beforeEach(async () => {
+    // Restore the real fetch before each test so individual tests
+    // that monkey-patch `global.fetch` start from a clean baseline
+    // and so the polluted stub does not leak into the next test.
+    globalThis.fetch = realFetch
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
@@ -152,7 +167,7 @@ describe('Videos API - Detection', () => {
       expect(result.videoId).toBe('test-video-id')
       expect(result.query).toContain('Analyst: Test Persona')
       expect(result.query).toContain('Entity Types: person, car')
-      expect(result.frameResults).toHaveLength(1)
+      expect(result.frames).toHaveLength(1)
     })
 
     it('includes query options in persona-based query', async () => {

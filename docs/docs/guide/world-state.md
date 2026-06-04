@@ -16,8 +16,10 @@ DELETE /api/admin/world/:userId   # admin only
 
 `GET /api/world` returns the requester's world document. In
 single-user mode every authenticated request gets the single
-shared world. In multi-user mode each user has a private world,
-keyed by `WorldState.userId @unique`.
+shared world. In multi-user mode each user can hold multiple
+world states, keyed by the composite `@@unique([userId, projectId])`:
+one row per project the user participates in, plus a personal
+row where `projectId` is null.
 
 ## Document shape
 
@@ -37,10 +39,12 @@ keyed by `WorldState.userId @unique`.
 The collection shapes (`entityCollections`, `eventCollections`,
 `timeCollections`) hold ordered groupings whose
 `entityIds` / `eventIds` arrays are remapped by the cross-user
-import path (since v0.1.7) when ids change.
+import path when ids change.
 
-The `worldLocations` list (referenced by object annotations with
-`linkType = "location"`) is part of the same document.
+Location instances live inside the `entities` array and are
+distinguished by a `locationType` discriminator field. Object
+annotations with `linkType = "location"` resolve to those entries
+via their entity id; there is no separate top-level locations key.
 
 ## Replacing the document
 

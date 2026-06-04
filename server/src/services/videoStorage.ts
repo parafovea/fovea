@@ -520,9 +520,26 @@ class S3StorageProvider implements VideoStorageProvider {
   async getVideoUrl(videoPath: string, expiresIn = 3600): Promise<string> {
     const key = this.getS3Key(videoPath);
 
-    // If using CDN, return CDN URL
+    // If using CDN, return CDN URL.
+    //
+    // When `cdn.signedUrls` is true the operator has opted into signed
+    // CDN URLs (typical for private CloudFront distributions), but
+    // generating one requires a private key + key-pair id we don't
+    // currently plumb through config. Fail fast with an actionable error
+    // rather than silently handing out an unsigned URL through a CDN
+    // that expects signing — that would render every signed-CDN request
+    // 403, which is exactly the symptom the silent placeholder produced.
+    // Either set CDN_SIGNED_URLS=false (which is appropriate for public
+    // CDNs in front of public buckets) or wire up CloudFront signing via
+    // @aws-sdk/cloudfront-signer + key-pair env vars.
     if (this.config.cdn?.enabled) {
-      // TODO: Implement CDN signed URL generation if needed
+      if (this.config.cdn.signedUrls) {
+        throw new Error(
+          'CDN signed URL generation is not implemented. ' +
+          'Either set CDN_SIGNED_URLS=false to serve unsigned URLs through the CDN (only safe in front of a public bucket), ' +
+          'or wire up CloudFront signing via @aws-sdk/cloudfront-signer with a key-pair id + private key.'
+        );
+      }
       return `${this.config.cdn.baseUrl}/${key}`;
     }
 

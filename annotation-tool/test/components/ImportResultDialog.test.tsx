@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../utils/test-utils'
-import ImportResultDialog, { shouldShowOrphanSkippedBanner } from '@components/data-management/ImportResultDialog'
+import { ImportResultDialog, shouldShowOrphanSkippedBanner } from '@components/data-management/ImportResultDialog'
 import type { ImportResult } from '@models/types'
 
 /**
@@ -110,7 +110,7 @@ describe('ImportResultDialog', () => {
    * which exercises the dialog in a real Chromium against the running
    * stack.
    */
-  describe.skip('rendered output (gated on workspace React-dedup fix)', () => {
+  describe('rendered output', () => {
     it('shows the orphan-skipped banner', () => {
       const result = makeResult({
         summary: {

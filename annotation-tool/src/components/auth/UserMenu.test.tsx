@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import UserMenu from './UserMenu.js'
+import { UserMenu } from './UserMenu.js'
 import { useAuthStore } from '@store/zustand/authStore.js'
 import { server } from '@test/setup.js'
 import { http, HttpResponse } from 'msw'
@@ -189,6 +189,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('User Settings')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('User Settings'))
 
     expect(mockOnSettingsClick).toHaveBeenCalledOnce()
@@ -210,6 +215,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Admin Panel')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('Admin Panel'))
 
     expect(mockOnAdminPanelClick).toHaveBeenCalledOnce()
@@ -233,6 +243,11 @@ describe('UserMenu', () => {
     )
 
     await user.click(screen.getByRole('button'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Logout')).toBeInTheDocument()
+    })
+
     await user.click(screen.getByText('Logout'))
 
     // Logout endpoint should be called

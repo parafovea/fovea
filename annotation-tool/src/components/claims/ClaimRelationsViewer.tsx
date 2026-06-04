@@ -1,27 +1,21 @@
-import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Chip,
-  Paper,
-  Stack,
-  CircularProgress,
-  Alert,
-  Tooltip,
-  Button,
-} from '@mui/material'
-import {
-  Delete as DeleteIcon,
-  ArrowForward as ArrowForwardIcon,
-  ArrowBack as ArrowBackIcon,
-  Add as AddIcon,
-} from '@mui/icons-material'
-import { useClaimRelations, useDeleteClaimRelation, useClaims, usePersonaOntology } from '@store/queries'
+import { ArrowLeft, ArrowRight, Plus, Trash2 } from 'lucide-react'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Claim } from '@models/types'
+import {
+  useClaimRelations,
+  useDeleteClaimRelation,
+  useClaims,
+  usePersonaOntology,
+  useEntities,
+  useEvents,
+  useTimes,
+} from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 
 interface ClaimRelationsViewerProps {
   claimId: string
@@ -41,6 +35,9 @@ export function ClaimRelationsViewer({
   const { data: claims = [] } = useClaims(summaryId, 'video')
   const deleteRelationMutation = useDeleteClaimRelation()
   const { data: ontology } = usePersonaOntology(personaId)
+  const entities = useEntities()
+  const events = useEvents()
+  const times = useTimes()
 
   const handleDelete = async (relationId: string) => {
     if (window.confirm('Delete this relation?')) {
@@ -66,143 +63,130 @@ export function ClaimRelationsViewer({
 
     const claim = findClaim(claims, claimId)
     if (!claim) return `Claim ${claimId.substring(0, 8)}...`
-    return claim.gloss.map((g) => g.content).join(' ').substring(0, 60)
+    return glossToText(claim.gloss, ontology ?? undefined, { entities, events, times }).substring(0, 60)
   }
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" p={2}>
-        <CircularProgress size={24} />
-      </Box>
+      <div className="flex justify-center p-4">
+        <Spinner className="size-5" />
+      </div>
     )
   }
 
   if (error) {
-    return <Alert severity="error">{error instanceof Error ? error.message : 'Failed to load relations'}</Alert>
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error instanceof Error ? error.message : 'Failed to load relations'}</AlertDescription>
+      </Alert>
+    )
   }
 
   const asSource = relationData?.asSource || []
   const asTarget = relationData?.asTarget || []
 
   return (
-    <Box data-testid="claim-relations-viewer">
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="subtitle1" fontWeight="medium">
+    <div data-testid="claim-relations-viewer" data-tour-id="claim-relations-viewer">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-medium">
           Claim Relations
-        </Typography>
+        </p>
         <Button
-          size="small"
-          startIcon={<AddIcon />}
+          size="sm"
+          variant="outline"
           onClick={(e) => {
             e.stopPropagation()
             onAddRelation()
           }}
-          variant="outlined"
         >
+          <Plus className="size-4" />
           Add Relation
         </Button>
-      </Box>
+      </div>
 
       {/* Outgoing Relations */}
-      <Paper variant="outlined" sx={{ mb: 2, p: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+      <div className="mb-4 rounded-lg border p-4">
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">
           Outgoing Relations ({asSource.length})
-        </Typography>
+        </h3>
         {asSource.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" fontStyle="italic">
+          <p className="text-sm italic text-muted-foreground">
             No outgoing relations
-          </Typography>
+          </p>
         ) : (
-          <List dense disablePadding>
+          <ul className="space-y-1">
             {asSource.map((relation) => (
-              <ListItem key={relation.id} sx={{ px: 0 }}>
-                <ListItemText
-                  primary={
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Chip
-                        label={getRelationTypeName(relation.relationTypeId)}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
+              <li key={relation.id} className="flex items-center justify-between py-1">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {getRelationTypeName(relation.relationTypeId)}
+                    </Badge>
+                    <ArrowRight className="size-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm">
+                      {getClaimText(relation.targetClaimId)}
+                    </span>
+                  </div>
+                  {relation.confidence && (
+                    <Badge variant="secondary" className="mt-1 text-[0.7rem]">
+                      Confidence: {(relation.confidence * 100).toFixed(0)}%
+                    </Badge>
+                  )}
+                </div>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-destructive"
+                        aria-label="Delete relation"
+                        onClick={() => handleDelete(relation.id)}
                       />
-                      <ArrowForwardIcon fontSize="small" color="action" />
-                      <Typography variant="body2" sx={{ flex: 1 }}>
-                        {getClaimText(relation.targetClaimId)}
-                      </Typography>
-                    </Stack>
-                  }
-                  secondary={
-                    relation.confidence && (
-                      <Chip
-                        label={`Confidence: ${(relation.confidence * 100).toFixed(0)}%`}
-                        size="small"
-                        variant="filled"
-                        sx={{ mt: 0.5, fontSize: '0.7rem', height: 20 }}
-                      />
-                    )
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <Tooltip title="Delete relation">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(relation.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </ListItemSecondaryAction>
-              </ListItem>
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Delete relation</TooltipContent>
+                </Tooltip>
+              </li>
             ))}
-          </List>
+          </ul>
         )}
-      </Paper>
+      </div>
 
       {/* Incoming Relations */}
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+      <div className="rounded-lg border p-4">
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">
           Incoming Relations ({asTarget.length})
-        </Typography>
+        </h3>
         {asTarget.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" fontStyle="italic">
+          <p className="text-sm italic text-muted-foreground">
             No incoming relations
-          </Typography>
+          </p>
         ) : (
-          <List dense disablePadding>
+          <ul className="space-y-1">
             {asTarget.map((relation) => (
-              <ListItem key={relation.id} sx={{ px: 0 }}>
-                <ListItemText
-                  primary={
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Typography variant="body2" sx={{ flex: 1 }}>
-                        {getClaimText(relation.sourceClaimId)}
-                      </Typography>
-                      <ArrowBackIcon fontSize="small" color="action" />
-                      <Chip
-                        label={getRelationTypeName(relation.relationTypeId)}
-                        size="small"
-                        color="secondary"
-                        variant="outlined"
-                      />
-                    </Stack>
-                  }
-                  secondary={
-                    relation.confidence && (
-                      <Chip
-                        label={`Confidence: ${(relation.confidence * 100).toFixed(0)}%`}
-                        size="small"
-                        variant="filled"
-                        sx={{ mt: 0.5, fontSize: '0.7rem', height: 20 }}
-                      />
-                    )
-                  }
-                />
-              </ListItem>
+              <li key={relation.id} className="py-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex-1 text-sm">
+                    {getClaimText(relation.sourceClaimId)}
+                  </span>
+                  <ArrowLeft className="size-4 text-muted-foreground" />
+                  <Badge variant="outline">
+                    {getRelationTypeName(relation.relationTypeId)}
+                  </Badge>
+                </div>
+                {relation.confidence && (
+                  <Badge variant="secondary" className="mt-1 text-[0.7rem]">
+                    Confidence: {(relation.confidence * 100).toFixed(0)}%
+                  </Badge>
+                )}
+              </li>
             ))}
-          </List>
+          </ul>
         )}
-      </Paper>
-    </Box>
+      </div>
+    </div>
   )
 }

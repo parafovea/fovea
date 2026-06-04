@@ -36,17 +36,20 @@ linked to world objects (for object annotations). Summaries carry
 
 ## What does not scope to a persona
 
-World state is per-user, not per-persona:
+World state is per-(user, project), not per-persona:
 
 ```text
-WorldState.userId @unique
+WorldState @@unique([userId, projectId])
 ```
 
-This is intentional. A user studying a soccer match under a
-"Coach" persona and a "Referee" persona is studying the same
-real-world objects. The named instances (`Player 9`, the specific
-match, the home stadium) are shared across the user's personas
-even though the type vocabulary differs.
+Each user has one world state per project plus one personal world
+state (with `projectId` NULL), and all of the user's personas
+within a given scope share that scope's world state. This is
+intentional. A user studying a soccer match under a "Coach"
+persona and a "Referee" persona is studying the same real-world
+objects. The named instances (`Player 9`, the specific match, the
+home stadium) are shared across the user's personas within the
+same project even though the type vocabulary differs.
 
 ## Implications for ontology change
 
@@ -54,8 +57,7 @@ Editing an ontology does not invalidate existing annotations;
 labels are stored as plain ids. If a typeId is renamed, existing
 annotations keep their old id. The ontology becomes the
 authoritative lookup at render time; missing ids show as
-unresolved (this is the symptom that surfaced in issue #121,
-fixed for object annotations in v0.1.8).
+unresolved.
 
 ## Cross-persona linking
 

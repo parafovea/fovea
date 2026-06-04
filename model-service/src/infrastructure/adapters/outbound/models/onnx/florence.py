@@ -12,6 +12,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from src.domain.entities.architectures import Florence2Detection
 from src.infrastructure.adapters.outbound.models.detection.base import (
     BoundingBox,
     Detection,
@@ -20,6 +21,7 @@ from src.infrastructure.adapters.outbound.models.detection.base import (
     DetectionResult,
 )
 from src.infrastructure.adapters.outbound.models.onnx.base import ONNXConfig, ONNXModelLoader
+from src.infrastructure.adapters.outbound.models.onnx.registry import detection_onnx_registry
 from src.infrastructure.observability.telemetry import instrument_method
 
 if TYPE_CHECKING:
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@detection_onnx_registry.register(Florence2Detection)
 class Florence2ONNXLoader(ONNXModelLoader, DetectionModelLoader):
     """Florence-2 ONNX loader for detection and grounding on CPU.
 
@@ -38,6 +41,8 @@ class Florence2ONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     Parameters
     ----------
+    arch : Florence2Detection
+        Architecture model the loader is registered against.
     config : DetectionConfig
         Detection model configuration.
     onnx_config : ONNXConfig | None
@@ -46,6 +51,7 @@ class Florence2ONNXLoader(ONNXModelLoader, DetectionModelLoader):
 
     def __init__(
         self,
+        arch: Florence2Detection,
         config: DetectionConfig,
         onnx_config: ONNXConfig | None = None,
     ) -> None:
@@ -54,7 +60,7 @@ class Florence2ONNXLoader(ONNXModelLoader, DetectionModelLoader):
             cache_dir=config.cache_dir,
         )
         ONNXModelLoader.__init__(self, onnx_cfg)
-        DetectionModelLoader.__init__(self, config)
+        DetectionModelLoader.__init__(self, arch, config)
         self._processor: Any = None
         self._encoder_session: ort.InferenceSession | None = None
         self._decoder_session: ort.InferenceSession | None = None

@@ -103,8 +103,8 @@ describe('ModelStatusDashboard', () => {
         </TestWrapper>
       )
 
-      // Skeleton elements don't have role="progressbar", look for the Skeleton component
-      const skeletons = document.querySelectorAll('.MuiSkeleton-root')
+      // Check for skeleton elements
+      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletons.length).toBeGreaterThan(0)
     })
   })
@@ -571,11 +571,11 @@ describe('ModelStatusDashboard', () => {
         </TestWrapper>
       )
 
-      const toggle = screen.getByRole('checkbox', { name: /Auto-refresh/i })
-      expect(toggle).toBeChecked()
+      const toggle = screen.getByRole('switch')
+      expect(toggle).toHaveAttribute('data-checked')
 
       await user.click(toggle)
-      expect(toggle).not.toBeChecked()
+      expect(toggle).toHaveAttribute('data-unchecked')
     })
 
     it('hides refresh button when showRefreshButton is false', () => {

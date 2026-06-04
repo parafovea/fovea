@@ -1,6 +1,6 @@
 {
   "name": "@fovea/server",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -69,6 +69,8 @@
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "eslint": "^8.56.0",
+    "fast-check": "^3.23.2",
+    "form-data": "^4.0.5",
     "supertest": "^7.1.4",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.7.1",

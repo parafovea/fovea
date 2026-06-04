@@ -1,22 +1,17 @@
 import { useState, useEffect } from 'react'
+import { Users, Plus, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
-  Box,
-  FormControlLabel,
-  Checkbox,
-  FormGroup,
-  Typography,
-  FormControl,
-  InputLabel,
   Select,
-  MenuItem,
-  TextField,
-  Chip,
-  IconButton,
-} from '@mui/material'
-import {
-  GroupWork as RoleIcon,
-  Add as AddIcon,
-} from '@mui/icons-material'
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { generateId } from '@utils/uuid'
 import {
   usePersonas,
@@ -178,97 +173,101 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
 
   // Additional fields for role types
   const additionalFields = (
-    <Box>
-      <Typography variant="subtitle2" component="div" gutterBottom>Allowed Filler Types</Typography>
-      <FormGroup row>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={allowedFillerTypes.includes('entity')}
-              onChange={() => handleToggleFillerType('entity')}
-            />
-          }
-          label="Entities"
-        />
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={allowedFillerTypes.includes('event')}
-              onChange={() => handleToggleFillerType('event')}
-            />
-          }
-          label="Events"
-        />
-      </FormGroup>
+    <div>
+      <p className="text-sm font-medium mb-2">Allowed Filler Types</p>
+      <div className="flex gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allowedFillerTypes.includes('entity')}
+            onCheckedChange={() => handleToggleFillerType('entity')}
+          />
+          <Label>Entities</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allowedFillerTypes.includes('event')}
+            onCheckedChange={() => handleToggleFillerType('event')}
+          />
+          <Label>Events</Label>
+        </div>
+      </div>
 
-      <Typography variant="subtitle2" component="div" gutterBottom sx={{ mt: 2 }}>Examples</Typography>
-      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-        <TextField
-          size="small"
+      <p className="text-sm font-medium mb-2 mt-4">Examples</p>
+      <div className="flex gap-2 mb-2">
+        <Input
           placeholder="Add example..."
           value={exampleInput}
           onChange={(e) => setExampleInput(e.target.value)}
-          onKeyPress={(e) => {
+          onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
               handleAddExample()
             }
           }}
-          fullWidth
+          className="flex-1"
         />
-        <IconButton onClick={handleAddExample} size="small">
-          <AddIcon />
-        </IconButton>
-      </Box>
-      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="icon" onClick={handleAddExample}>
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      <div className="flex gap-1 flex-wrap">
         {examples.map((example, index) => (
-          <Chip
-            key={index}
-            label={example}
-            onDelete={() => handleRemoveExample(index)}
-            size="small"
-          />
+          <Badge key={index} variant="secondary" className="gap-1">
+            {example}
+            <button onClick={() => handleRemoveExample(index)} className="ml-1 hover:text-destructive">
+              <X className="size-3" />
+            </button>
+          </Badge>
         ))}
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 
   // Source selector for copy mode
   const sourceSelector = mode === 'copy' && (
     <>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Source Persona</InputLabel>
+      <div className="mb-4">
+        <Label className="mb-2">Source Persona</Label>
         <Select
           value={sourcePersonaId}
-          onChange={(e) => {
-            setSourcePersonaId(e.target.value)
+          onValueChange={(val) => {
+            if (!val) return
+            setSourcePersonaId(val)
             setSourceRoleId('')
           }}
-          label="Source Persona"
         >
-          {personas.filter(p => p.id !== personaId).map(persona => (
-            <MenuItem key={persona.id} value={persona.id}>
-              {persona.name}
-            </MenuItem>
-          ))}
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select source persona" />
+          </SelectTrigger>
+          <SelectContent>
+            {personas.filter(p => p.id !== personaId).map(persona => (
+              <SelectItem key={persona.id} value={persona.id}>
+                {persona.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-      </FormControl>
+      </div>
 
       {sourcePersonaId && sourceOntology && (
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Source Role Type</InputLabel>
+        <div className="mb-4">
+          <Label className="mb-2">Source Role Type</Label>
           <Select
             value={sourceRoleId}
-            onChange={(e) => setSourceRoleId(e.target.value)}
-            label="Source Role Type"
+            onValueChange={(val) => val && setSourceRoleId(val)}
           >
-            {sourceOntology.roles.map(role => (
-              <MenuItem key={role.id} value={role.id}>
-                {role.name}
-              </MenuItem>
-            ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select source role type" />
+            </SelectTrigger>
+            <SelectContent>
+              {sourceOntology.roles.map(role => (
+                <SelectItem key={role.id} value={role.id}>
+                  {role.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
-        </FormControl>
+        </div>
       )}
     </>
   )
@@ -295,7 +294,7 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
       onSave={handleSave}
       onDelete={role ? handleDelete : undefined}
       title={role ? 'Edit Role Type' : 'Create Role Type'}
-      icon={<RoleIcon />}
+      icon={<Users className="size-5" />}
       additionalFields={additionalFields}
       sourceSelector={sourceSelector}
       isEditing={!!role}

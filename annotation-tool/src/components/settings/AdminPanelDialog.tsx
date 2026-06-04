@@ -3,50 +3,18 @@
  * Provides tabs for user management, session management, and settings.
  */
 
-import { useState } from 'react'
+import { Users, Lock, Settings, X } from 'lucide-react'
+import { UserManagementPage } from '../admin/UserManagementPage'
+import { SessionManagementPage } from '../admin/SessionManagementPage'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Tabs,
-  Tab,
-  Box,
-  IconButton,
-  Typography,
-} from '@mui/material'
-import {
-  People as PeopleIcon,
-  Lock as LockIcon,
-  Settings as SettingsIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material'
-import UserManagementPage from '../admin/UserManagementPage'
-import SessionManagementPage from '../admin/SessionManagementPage'
-
-/**
- * Tab panel component.
- * Displays content for the selected tab.
- *
- * @param children - Tab content
- * @param value - Current tab value
- * @param index - Tab index
- * @returns Tab panel content
- */
-interface TabPanelProps {
-  children?: React.ReactNode
-  value: number
-  index: number
-}
-
-function TabPanel({ children, value, index }: TabPanelProps) {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box>{children}</Box>}
-    </div>
-  )
-}
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 
 /**
  * Props for AdminPanelDialog component.
@@ -65,94 +33,63 @@ interface AdminPanelDialogProps {
  * @returns Admin panel dialog
  */
 export default function AdminPanelDialog({ open, onClose }: AdminPanelDialogProps) {
-  const [currentTab, setCurrentTab] = useState(0)
-
-  /**
-   * Handles tab change.
-   *
-   * @param _ - Change event (unused)
-   * @param newValue - New tab index
-   */
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setCurrentTab(newValue)
-  }
-
-  /**
-   * Resets dialog state on close.
-   */
-  const handleClose = () => {
-    setCurrentTab(0)
-    onClose()
-  }
-
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="xl" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Admin Panel
-          <IconButton
-            aria-label="close"
-            onClick={handleClose}
-            size="small"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-6xl" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Admin Panel</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="close"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </div>
+        </DialogHeader>
 
-      <Tabs
-        value={currentTab}
-        onChange={handleTabChange}
-        aria-label="admin panel tabs"
-        sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
-      >
-        <Tab
-          icon={<PeopleIcon />}
-          iconPosition="start"
-          label="Users"
-          id="admin-tab-0"
-          aria-controls="admin-tabpanel-0"
-        />
-        <Tab
-          icon={<LockIcon />}
-          iconPosition="start"
-          label="Sessions"
-          id="admin-tab-1"
-          aria-controls="admin-tabpanel-1"
-        />
-        <Tab
-          icon={<SettingsIcon />}
-          iconPosition="start"
-          label="Settings"
-          id="admin-tab-2"
-          aria-controls="admin-tabpanel-2"
-        />
-      </Tabs>
+        <Tabs defaultValue="users">
+          <TabsList variant="line" className="w-full justify-start border-b px-0">
+            <TabsTrigger value="users">
+              <Users className="size-4" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="sessions">
+              <Lock className="size-4" />
+              Sessions
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="size-4" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
 
-      <DialogContent sx={{ minHeight: 500 }}>
-        <TabPanel value={currentTab} index={0}>
-          <UserManagementPage />
-        </TabPanel>
+          <div className="min-h-[500px]">
+            <TabsContent value="users">
+              <UserManagementPage />
+            </TabsContent>
 
-        <TabPanel value={currentTab} index={1}>
-          <SessionManagementPage />
-        </TabPanel>
+            <TabsContent value="sessions">
+              <SessionManagementPage />
+            </TabsContent>
 
-        <TabPanel value={currentTab} index={2}>
-          <Box sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              System Settings
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Settings panel coming soon.
-            </Typography>
-          </Box>
-        </TabPanel>
+            <TabsContent value="settings">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold mb-2">System Settings</h3>
+                <p className="text-sm text-muted-foreground">
+                  Settings panel coming soon.
+                </p>
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   )
 }

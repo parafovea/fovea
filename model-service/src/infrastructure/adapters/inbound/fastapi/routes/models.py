@@ -11,6 +11,7 @@ from pathlib import Path
 
 import torch
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
 
@@ -342,3 +343,250 @@ async def check_task_ready(
         "cached": cached,
         "framework": model_config.framework,
     }
+
+
+class GenerationDefaults(BaseModel):
+    """Default sampling parameters for text generation."""
+
+    max_tokens: int = Field(description="Maximum tokens to generate.")
+    temperature: float = Field(description="Sampling temperature; 0.0 is greedy.")
+    top_p: float = Field(description="Nucleus sampling probability mass.")
+    stop_sequences: list[str] | None = Field(
+        default=None, description="Optional stop strings terminating generation."
+    )
+
+
+class LLMDefaults(BaseModel):
+    """Default loading parameters for a language model."""
+
+    quantization: str
+    framework: str
+    max_tokens: int
+    temperature: float
+    top_p: float
+    context_length: int
+
+
+class TranscriptionDefaults(BaseModel):
+    """Default loading parameters for audio transcription."""
+
+    framework: str
+    language: str | None
+    task: str
+    device: str
+    compute_type: str
+    beam_size: int
+
+
+class VADDefaults(BaseModel):
+    """Default parameters for voice-activity detection."""
+
+    threshold: float
+    min_speech_duration_ms: int
+    min_silence_duration_ms: int
+    device: str
+
+
+class DiarizationDefaults(BaseModel):
+    """Default parameters for speaker diarization."""
+
+    num_speakers: int | None
+    min_speakers: int
+    max_speakers: int
+    device: str
+
+
+class DetectionDefaults(BaseModel):
+    """Default parameters for object detection."""
+
+    framework: str
+    confidence_threshold: float
+    device: str
+
+
+class TrackingDefaults(BaseModel):
+    """Default parameters for object tracking."""
+
+    framework: str
+    device: str
+
+
+class VLMDefaults(BaseModel):
+    """Default loading parameters for a vision-language model."""
+
+    quantization: str
+    framework: str
+    device: str
+    trust_remote_code: bool
+
+
+class ModelDefaultsResponse(BaseModel):
+    """Response shape for ``GET /api/models/defaults``."""
+
+    generation: GenerationDefaults
+    llm: LLMDefaults
+    transcription: TranscriptionDefaults
+    vad: VADDefaults
+    diarization: DiarizationDefaults
+    detection: DetectionDefaults
+    tracking: TrackingDefaults
+    vlm: VLMDefaults
+
+
+class ModelFrameworksResponse(BaseModel):
+    """Response shape for ``GET /api/models/frameworks``.
+
+    Each field is the full list of string values from the corresponding
+    StrEnum so the UI can render selectors without hardcoding choices.
+    """
+
+    llm: list[str]
+    audio: list[str]
+    detection: list[str]
+    tracking: list[str]
+    vlm_inference: list[str]
+    quantization: list[str]
+
+
+@router.get(
+    "/models/defaults",
+    response_model=ModelDefaultsResponse,
+    summary="Get default inference configs per task",
+    description="Returns the dataclass defaults used to construct each inference "
+    "config (generation, transcription, diarization, VAD, detection, tracking). "
+    "Used by the settings UI to render controls pre-filled with backend defaults.",
+)
+async def get_model_defaults() -> ModelDefaultsResponse:
+    """Return default values for every inference config dataclass.
+
+    The frontend uses these to render settings forms and validate user-entered
+    overrides before they are sent in a request body.
+    """
+    from src.infrastructure.adapters.outbound.models.audio.base import (
+        TranscriptionConfig,
+    )
+    from src.infrastructure.adapters.outbound.models.audio.loader import (
+        DiarizationConfig,
+        VADConfig,
+    )
+    from src.infrastructure.adapters.outbound.models.detection.base import (
+        DetectionConfig,
+    )
+    from src.infrastructure.adapters.outbound.models.llm.base import (
+        GenerationConfig,
+        LLMConfig,
+        LLMFramework,
+    )
+    from src.infrastructure.adapters.outbound.models.tracking.loader import (
+        TrackingConfig,
+    )
+    from src.infrastructure.adapters.outbound.models.vlm.loader import (
+        VLMConfig,
+    )
+
+    # Instantiate each config with placeholder required fields so we can read
+    # the effective defaults off real instances. ``model_id`` is required on
+    # most configs but is never a "default" we want to ship — the settings UI
+    # picks it separately from ``/api/models/config``.
+    gen = GenerationConfig()
+    llm = LLMConfig(
+        model_id="__placeholder__",
+        quantization="4bit",
+        framework=LLMFramework.TRANSFORMERS,
+    )
+    transcription = TranscriptionConfig(model_id="__placeholder__")
+    vad = VADConfig(model_id="__placeholder__")
+    diarization = DiarizationConfig(model_id="__placeholder__")
+    detection = DetectionConfig(model_id="__placeholder__")
+    tracking = TrackingConfig(model_id="__placeholder__")
+    vlm = VLMConfig(model_id="__placeholder__")
+
+    return ModelDefaultsResponse(
+        generation=GenerationDefaults(
+            max_tokens=gen.max_tokens,
+            temperature=gen.temperature,
+            top_p=gen.top_p,
+            stop_sequences=gen.stop_sequences,
+        ),
+        llm=LLMDefaults(
+            quantization=llm.quantization,
+            framework=str(llm.framework),
+            max_tokens=llm.max_tokens,
+            temperature=llm.temperature,
+            top_p=llm.top_p,
+            context_length=llm.context_length,
+        ),
+        transcription=TranscriptionDefaults(
+            framework=str(transcription.framework),
+            language=transcription.language,
+            task=transcription.task,
+            device=transcription.device,
+            compute_type=transcription.compute_type,
+            beam_size=transcription.beam_size,
+        ),
+        vad=VADDefaults(
+            threshold=vad.threshold,
+            min_speech_duration_ms=vad.min_speech_duration_ms,
+            min_silence_duration_ms=vad.min_silence_duration_ms,
+            device=vad.device,
+        ),
+        diarization=DiarizationDefaults(
+            num_speakers=diarization.num_speakers,
+            min_speakers=diarization.min_speakers,
+            max_speakers=diarization.max_speakers,
+            device=diarization.device,
+        ),
+        detection=DetectionDefaults(
+            framework=str(detection.framework),
+            confidence_threshold=detection.confidence_threshold,
+            device=detection.device,
+        ),
+        tracking=TrackingDefaults(
+            framework=str(tracking.framework),
+            device=tracking.device,
+        ),
+        vlm=VLMDefaults(
+            quantization=str(vlm.quantization),
+            framework=str(vlm.framework),
+            device=vlm.device,
+            trust_remote_code=vlm.trust_remote_code,
+        ),
+    )
+
+
+@router.get(
+    "/models/frameworks",
+    response_model=ModelFrameworksResponse,
+    summary="Get available framework values per task",
+    description="Enumerates the StrEnum values for LLMFramework, AudioFramework, "
+    "DetectionFramework, TrackingFramework, VLM InferenceFramework, and "
+    "QuantizationType so the UI can render framework pickers without hardcoding "
+    "the lists.",
+)
+async def get_model_frameworks() -> ModelFrameworksResponse:
+    """Return every framework/quantization enum value keyed by task group."""
+    from src.infrastructure.adapters.outbound.models.audio.base import (
+        AudioFramework,
+    )
+    from src.infrastructure.adapters.outbound.models.detection.base import (
+        DetectionFramework,
+    )
+    from src.infrastructure.adapters.outbound.models.llm.base import (
+        LLMFramework,
+    )
+    from src.infrastructure.adapters.outbound.models.tracking.loader import (
+        TrackingFramework,
+    )
+    from src.infrastructure.adapters.outbound.models.vlm.loader import (
+        InferenceFramework,
+        QuantizationType,
+    )
+
+    return ModelFrameworksResponse(
+        llm=[f.value for f in LLMFramework],
+        audio=[f.value for f in AudioFramework],
+        detection=[f.value for f in DetectionFramework],
+        tracking=[f.value for f in TrackingFramework],
+        vlm_inference=[f.value for f in InferenceFramework],
+        quantization=[f.value for f in QuantizationType],
+    )

@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/test-context.js'
+import { fillClaimEditor } from '../../utils/claim-editor.js'
 
 test.describe('Manual Claim Management', () => {
   test.describe.configure({ mode: 'serial' })
@@ -26,8 +27,8 @@ test.describe('Manual Claim Management', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      // Select second option (first is disabled placeholder)
-      const personaOption = page.getByRole('option').nth(1)
+      // Select the (only) persona option — shadcn's Select renders no disabled placeholder so the first role=option IS the active persona, unlike MUI which used a non-selectable placeholder at index 0
+      const personaOption = page.getByRole('option').first()
       await personaOption.click()
       // Wait for editor to load after persona selection
       await page.waitForTimeout(500)
@@ -50,12 +51,13 @@ test.describe('Manual Claim Management', () => {
       const claimEditorDialog = page.getByRole('dialog', { name: /add manual claim/i })
       await expect(claimEditorDialog).toBeVisible({ timeout: 5000 })
 
-      // Enter claim text
-      const claimInput = claimEditorDialog.getByLabel(/claim text with references/i)
-      await claimInput.fill('This is a test claim about baseball')
+      // Enter claim text + tick a modality checkbox so the shadcn
+      // ClaimEditor's isValid (gloss + modality + confidence) is true
+      // and Create becomes clickable. Default modality is audio.speech
+      // (the most common modality for video claims).
+      await fillClaimEditor(claimEditorDialog, { text: 'This is a test claim about baseball' })
 
-      // Optionally adjust confidence (slider)
-      // Default is usually 90%, we'll leave it as is
+      // Confidence defaults to 0.9 on mount; no adjustment needed.
 
       // Save the claim
       const saveButton = claimEditorDialog.getByRole('button', { name: /create|save/i })
@@ -91,7 +93,7 @@ test.describe('Manual Claim Management', () => {
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').nth(1)
+      const personaOption = page.getByRole('option').first()
       await personaOption.click()
     }
 
@@ -109,8 +111,7 @@ test.describe('Manual Claim Management', () => {
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
-    const claimInput = claimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Original claim text')
+        await fillClaimEditor(claimDialog, { text: 'Original claim text' })
 
     const saveButton = claimDialog.getByRole('button', { name: /create|save/i })
     await saveButton.click()
@@ -127,9 +128,7 @@ test.describe('Manual Claim Management', () => {
     await expect(editClaimDialog).toBeVisible({ timeout: 5000 })
 
     // Modify the claim text
-    const editClaimInput = editClaimDialog.getByLabel(/claim text with references/i)
-    await editClaimInput.clear()
-    await editClaimInput.fill('Modified claim text')
+    await fillClaimEditor(editClaimDialog, { text: 'Modified claim text' })
 
     // Save changes
     const editSaveButton = editClaimDialog.getByRole('button', { name: /save/i })
@@ -159,7 +158,7 @@ test.describe('Manual Claim Management', () => {
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      await page.getByRole('option').nth(1).click()
+      await page.getByRole('option').first().click()
     }
 
     const claimsTab = summaryDialog.getByRole('tab', { name: /claims/i })
@@ -176,8 +175,7 @@ test.describe('Manual Claim Management', () => {
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
-    const claimInput = claimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Claim to be deleted')
+        await fillClaimEditor(claimDialog, { text: 'Claim to be deleted' })
 
     const saveButton = claimDialog.getByRole('button', { name: /create/i })
     await saveButton.click()
@@ -225,7 +223,7 @@ test.describe('Manual Claim Management', () => {
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      await page.getByRole('option').nth(1).click()
+      await page.getByRole('option').first().click()
     }
 
     const claimsTab = summaryDialog.getByRole('tab', { name: /claims/i })
@@ -242,8 +240,7 @@ test.describe('Manual Claim Management', () => {
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
-    let claimInput = claimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Parent claim')
+        await fillClaimEditor(claimDialog, { text: 'Parent claim' })
 
     let saveButton = claimDialog.getByRole('button', { name: /create/i })
     await saveButton.click()
@@ -260,8 +257,7 @@ test.describe('Manual Claim Management', () => {
     await expect(subclaimDialog).toBeVisible({ timeout: 5000 })
 
     // Enter subclaim text
-    claimInput = subclaimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('This is a subclaim')
+        await fillClaimEditor(subclaimDialog, { text: 'This is a subclaim' })
 
     // Save
     saveButton = subclaimDialog.getByRole('button', { name: /create/i })
@@ -318,7 +314,7 @@ test.describe('Manual Claim Management', () => {
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      await page.getByRole('option').nth(1).click()
+      await page.getByRole('option').first().click()
     }
 
     const claimsTab = summaryDialog.getByRole('tab', { name: /claims/i })
@@ -336,8 +332,7 @@ test.describe('Manual Claim Management', () => {
     const claimDialog = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(claimDialog).toBeVisible()
 
-    let claimInput = claimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Parent to be deleted')
+        await fillClaimEditor(claimDialog, { text: 'Parent to be deleted' })
 
     let saveButton = claimDialog.getByRole('button', { name: /create/i })
     await saveButton.click()
@@ -353,8 +348,7 @@ test.describe('Manual Claim Management', () => {
     const subclaimDialog = page.getByRole('dialog', { name: /add subclaim/i })
     await expect(subclaimDialog).toBeVisible()
 
-    claimInput = subclaimDialog.getByLabel(/claim text with references/i)
-    await claimInput.fill('Subclaim to be cascade deleted')
+        await fillClaimEditor(subclaimDialog, { text: 'Subclaim to be cascade deleted' })
 
     saveButton = subclaimDialog.getByRole('button', { name: /create/i })
     await saveButton.click()

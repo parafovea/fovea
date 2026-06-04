@@ -1,43 +1,35 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { Clock, Timer, CalendarRange, Trash2, Plus, Pencil, Globe } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  ToggleButton,
-  ToggleButtonGroup,
-  Alert,
-  FormControlLabel,
-  Switch,
-  Slider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  IconButton,
-  Divider,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  AccessTime as TimeIcon,
-  Schedule as InstantIcon,
-  DateRange as IntervalIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Language as WikidataIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useVideos } from '@store/queries'
-import { useAddTime, useUpdateTime, useDeleteTime } from '@store/queries'
+import { useAddTime, useUpdateTime } from '@store/queries'
 import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '@components/shared/WikidataSearch'
 import { generateId } from '@utils/uuid'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 /** Granularity options for vagueness */
 type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
@@ -66,7 +58,6 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const { data: videos = [] } = useVideos()
   const { mutateAsync: addTime } = useAddTime()
   const { mutateAsync: updateTime } = useUpdateTime()
-  const { mutate: deleteTime } = useDeleteTime()
 
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
@@ -101,108 +92,19 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   // Certainty
   const [certainty, setCertainty] = useState(1.0)
 
-  // Track auto-created time ID for cancel cleanup
-  const [autoCreatedTimeId, setAutoCreatedTimeId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
+  const isDirty = open && (
+    time
+      ? label !== (time.label || '') ||
+        timeType !== time.type ||
+        wikidataId !== (time.wikidataId || '') ||
+        wikidataUrl !== (time.wikidataUrl || '') ||
+        certainty !== (time.certainty ?? 1.0) ||
+        JSON.stringify(videoReferences) !== JSON.stringify(time.videoReferences || [])
+      : !!label || timestamp !== '' || startTime !== '' || endTime !== '' ||
+        videoReferences.length > 0
+  )
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedTimeId
-  }, [autoCreatedTimeId])
-
-  // Auto-save hook for new times
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: {
-      timeType,
-      label,
-      timestamp,
-      startTime,
-      endTime,
-      hasVagueness,
-      vaguenessType,
-      vaguenessDescription,
-      earliestBound,
-      latestBound,
-      typicalTime,
-      granularity,
-      hasDeictic,
-      deicticAnchorType,
-      deicticExpression,
-      videoReferences,
-      certainty,
-      wikidataId,
-      wikidataUrl,
-    },
-    isEnabled: open && !!label && !time, // Only for new times, require label
-    onSave: async (timeData) => {
-      const baseTime: Omit<Time, 'id'> = {
-        type: timeData.timeType,
-        label: timeData.label || undefined,
-        videoReferences: timeData.videoReferences.filter(ref => ref.videoId),
-        certainty: timeData.certainty,
-        wikidataId: timeData.wikidataId || undefined,
-        wikidataUrl: timeData.wikidataUrl || undefined,
-        metadata: {},
-      }
-
-      if (timeData.hasVagueness) {
-        baseTime.vagueness = {
-          type: timeData.vaguenessType,
-          description: timeData.vaguenessDescription || undefined,
-          bounds: (timeData.earliestBound || timeData.latestBound || timeData.typicalTime) ? {
-            earliest: timeData.earliestBound || undefined,
-            latest: timeData.latestBound || undefined,
-            typical: timeData.typicalTime || undefined,
-          } : undefined,
-          granularity: timeData.granularity,
-        }
-      }
-
-      if (timeData.hasDeictic) {
-        baseTime.deictic = {
-          anchorType: timeData.deicticAnchorType,
-          anchorTime: undefined,
-          expression: timeData.deicticExpression || undefined,
-        }
-      }
-
-      let fullTimeData: Omit<Time, 'id'>
-
-      if (timeData.timeType === 'instant') {
-        fullTimeData = {
-          ...baseTime,
-          type: 'instant',
-          timestamp: timeData.timestamp,
-        } as Omit<TimeInstant, 'id'>
-      } else {
-        fullTimeData = {
-          ...baseTime,
-          type: 'interval',
-          startTime: timeData.startTime || undefined,
-          endTime: timeData.endTime || undefined,
-        } as Omit<TimeInterval, 'id'>
-      }
-
-      if (autoCreatedIdRef.current) {
-        // Update the auto-created time
-        await updateTime({
-          ...fullTimeData,
-          id: autoCreatedIdRef.current,
-        } as Time)
-      } else {
-        // Create new time and track ID
-        const newId = generateId()
-        const result = await addTime({ ...fullTimeData, id: newId } as Time)
-        // Get the newly created time ID from the result
-        const newTime = result.times[result.times.length - 1]
-        if (newTime) {
-          setAutoCreatedTimeId(newTime.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: time?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (time) {
@@ -240,7 +142,6 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       setVideoReferences(time.videoReferences || [])
       setCertainty(time.certainty || 1.0)
     } else {
-      // Reset to defaults for new time
       setImportMode('manual')
       setTimeType('instant')
       setLabel('')
@@ -254,8 +155,6 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
       setVideoReferences([])
       setCertainty(1.0)
     }
-    // Reset auto-created ID when dialog opens/closes or time changes
-    setAutoCreatedTimeId(null)
   }, [time, open])
 
   const handleAddVideoReference = () => {
@@ -301,7 +200,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     if (hasDeictic) {
       baseTime.deictic = {
         anchorType: deicticAnchorType,
-        anchorTime: undefined, // Would be set based on context
+        anchorTime: undefined,
         expression: deicticExpression || undefined,
       }
     }
@@ -332,61 +231,49 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
     onClose()
   }
 
-  // Cancel handler deletes auto-created time
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteTime(autoCreatedIdRef.current)
-    }
-    setAutoCreatedTimeId(null)
-    onClose()
-  }
-
-  // Done handler keeps the time (already saved via autosave)
-  const handleDone = async () => {
-    // Force save any pending changes before closing
-    if (!time && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedTimeId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
   return (
-    <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TimeIcon color="secondary" />
-          {time ? 'Edit Time' : 'Create Time'}
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Alert severity="info" icon={<TimeIcon />}>
-            A time represents when something happens, either a specific instant or an interval.
-            Times can be precise or vague, and can reference specific video frames.
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent data-tour-id="time-editor" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="size-5 text-secondary" />
+            {time ? 'Edit Time' : 'Create Time'}
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <Clock className="size-4" />
+            <AlertDescription>
+              A time represents when something happens, either a specific instant or an interval.
+              Times can be precise or vague, and can reference specific video frames.
+            </AlertDescription>
           </Alert>
 
           {/* Import mode selector */}
           {!time && (
-            <Box>
-              <ToggleButtonGroup
-                value={importMode}
-                exclusive
-                onChange={(_, value) => value && setImportMode(value)}
-                size="small"
-                fullWidth
-              >
-                <ToggleButton value="manual">
-                  <EditIcon sx={{ mr: 1 }} />
-                  Manual Entry
-                </ToggleButton>
-                <ToggleButton value="wikidata">
-                  <WikidataIcon sx={{ mr: 1 }} />
-                  Import from Wikidata
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
+            <ToggleGroup
+              value={[importMode]}
+              onValueChange={(value) => {
+                if (value.length > 0) setImportMode(value[0] as 'manual' | 'wikidata')
+              }}
+              size="sm"
+              className="w-full"
+            >
+              <ToggleGroupItem value="manual" className="flex flex-1 items-center gap-1">
+                <Pencil className="size-4" />
+                Manual Entry
+              </ToggleGroupItem>
+              <ToggleGroupItem value="wikidata" className="flex flex-1 items-center gap-1">
+                <Globe className="size-4" />
+                Import from Wikidata
+              </ToggleGroupItem>
+            </ToggleGroup>
           )}
 
           {/* Wikidata import */}
@@ -400,26 +287,21 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                 if (data.temporalData) {
                   const td = data.temporalData
 
-                  // Handle interval (start and end times)
                   if (td.startTime && td.endTime) {
                     setTimeType('interval')
                     setStartTime(td.startTime.timestamp)
                     setEndTime(td.endTime.timestamp)
 
-                    // Set vagueness if needed
                     if (td.startTime.granularity !== 'day' || td.endTime.granularity !== 'day') {
                       setHasVagueness(true)
                       setGranularity(td.startTime.granularity as VaguenessGranularity)
                     }
-                  }
-                  // Handle single point in time
-                  else if (td.pointInTime || td.inception || td.publicationDate) {
+                  } else if (td.pointInTime || td.inception || td.publicationDate) {
                     setTimeType('instant')
                     const timeData = td.pointInTime ?? td.inception ?? td.publicationDate
                     if (timeData) {
                       setTimestamp(timeData.timestamp)
 
-                      // Set vagueness based on granularity
                       if (timeData.granularity !== 'day') {
                         setHasVagueness(true)
                         setGranularity(timeData.granularity as VaguenessGranularity)
@@ -441,362 +323,316 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
 
           {/* Show Wikidata chip if imported */}
           {wikidataId && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip
-                label={`Wikidata: ${wikidataId}`}
-                size="small"
-                color="secondary"
-                variant="outlined"
-                component="a"
-                href={wikidataUrl}
-                target="_blank"
-                clickable
-              />
-              <Typography variant="caption" color="text.secondary">
+            <div className="flex items-center gap-2">
+              <a href={wikidataUrl} target="_blank" rel="noopener noreferrer">
+                <Badge variant="outline" className="cursor-pointer">
+                  Wikidata: {wikidataId}
+                </Badge>
+              </a>
+              <span className="text-xs text-muted-foreground">
                 Imported from Wikidata
-              </Typography>
-            </Box>
+              </span>
+            </div>
           )}
 
           {/* Label Field */}
-          <TextField
-            label="Label"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            fullWidth
-            placeholder="e.g., Apollo 11 Launch, Summer 2024"
-            helperText="Human-readable name for this time (optional but recommended)"
-          />
+          <div className="space-y-1">
+            <Label htmlFor="time-label">Label</Label>
+            <Input
+              id="time-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g., Apollo 11 Launch, Summer 2024"
+            />
+            <p className="text-xs text-muted-foreground">Human-readable name for this time (optional but recommended)</p>
+          </div>
 
           {/* Time Type Selection */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Time Type
-            </Typography>
-            <ToggleButtonGroup
-              value={timeType}
-              exclusive
-              onChange={(_, value) => value && setTimeType(value)}
-              fullWidth
+          <div className="space-y-1">
+            <Label>Time Type</Label>
+            <ToggleGroup
+              value={[timeType]}
+              onValueChange={(value) => {
+                if (value.length > 0) setTimeType(value[0] as 'instant' | 'interval')
+              }}
+              className="w-full"
             >
-              <ToggleButton value="instant">
-                <InstantIcon sx={{ mr: 1 }} />
+              <ToggleGroupItem value="instant" className="flex flex-1 items-center gap-1">
+                <Timer className="size-4" />
                 Instant (Point in Time)
-              </ToggleButton>
-              <ToggleButton value="interval">
-                <IntervalIcon sx={{ mr: 1 }} />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="interval" className="flex flex-1 items-center gap-1">
+                <CalendarRange className="size-4" />
                 Interval (Time Span)
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
 
           {/* Instant Fields */}
           {timeType === 'instant' && (
-            <TextField
-              label="Timestamp"
-              type="datetime-local"
-              value={timestamp ? timestamp.slice(0, 16) : ''}
-              onChange={(e) => setTimestamp(e.target.value ? new Date(e.target.value).toISOString() : '')}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              helperText="The specific moment in time"
-            />
+            <div className="space-y-1">
+              <Label htmlFor="time-timestamp">Timestamp</Label>
+              <Input
+                id="time-timestamp"
+                type="datetime-local"
+                value={timestamp ? timestamp.slice(0, 16) : ''}
+                onChange={(e) => setTimestamp(e.target.value ? new Date(e.target.value).toISOString() : '')}
+              />
+              <p className="text-xs text-muted-foreground">The specific moment in time</p>
+            </div>
           )}
 
           {/* Interval Fields */}
           {timeType === 'interval' && (
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Start Time (Optional)"
-                type="datetime-local"
-                value={startTime ? startTime.slice(0, 16) : ''}
-                onChange={(e) => setStartTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                label="End Time (Optional)"
-                type="datetime-local"
-                value={endTime ? endTime.slice(0, 16) : ''}
-                onChange={(e) => setEndTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Box>
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="time-start">Start Time (Optional)</Label>
+                <Input
+                  id="time-start"
+                  type="datetime-local"
+                  value={startTime ? startTime.slice(0, 16) : ''}
+                  onChange={(e) => setStartTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="time-end">End Time (Optional)</Label>
+                <Input
+                  id="time-end"
+                  type="datetime-local"
+                  value={endTime ? endTime.slice(0, 16) : ''}
+                  onChange={(e) => setEndTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                />
+              </div>
+            </div>
           )}
 
-          <Divider />
+          <Separator />
 
           {/* Vagueness */}
-          <Box>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={hasVagueness}
-                  onChange={(e) => setHasVagueness(e.target.checked)}
-                />
-              }
-              label="Add Vagueness Information"
-            />
+          <div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={hasVagueness}
+                onCheckedChange={setHasVagueness}
+              />
+              <Label>Add Vagueness Information</Label>
+            </div>
             {hasVagueness && (
-              <Box sx={{ mt: 2, pl: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Vagueness Type</InputLabel>
-                  <Select
-                    value={vaguenessType}
-                    onChange={(e) => setVaguenessType(e.target.value as VaguenessType)}
-                    label="Vagueness Type"
-                  >
-                    <MenuItem value="approximate">Approximate</MenuItem>
-                    <MenuItem value="bounded">Bounded</MenuItem>
-                    <MenuItem value="fuzzy">Fuzzy</MenuItem>
-                  </Select>
-                </FormControl>
+              <div className="mt-4 pl-4 flex flex-col gap-3">
+                <Select value={vaguenessType} onValueChange={(value) => setVaguenessType(value as VaguenessType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approximate">Approximate</SelectItem>
+                    <SelectItem value="bounded">Bounded</SelectItem>
+                    <SelectItem value="fuzzy">Fuzzy</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                <TextField
-                  label="Description"
-                  size="small"
+                <Input
                   value={vaguenessDescription}
                   onChange={(e) => setVaguenessDescription(e.target.value)}
                   placeholder="e.g., 'around noon', 'early morning'"
-                  fullWidth
                 />
 
                 {vaguenessType === 'bounded' && (
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <TextField
-                      label="Earliest"
-                      type="datetime-local"
-                      size="small"
-                      value={earliestBound ? earliestBound.slice(0, 16) : ''}
-                      onChange={(e) => setEarliestBound(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="Latest"
-                      type="datetime-local"
-                      size="small"
-                      value={latestBound ? latestBound.slice(0, 16) : ''}
-                      onChange={(e) => setLatestBound(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="Typical"
-                      type="datetime-local"
-                      size="small"
-                      value={typicalTime ? typicalTime.slice(0, 16) : ''}
-                      onChange={(e) => setTypicalTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Box>
+                  <div className="flex gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Earliest</Label>
+                      <Input
+                        type="datetime-local"
+                        value={earliestBound ? earliestBound.slice(0, 16) : ''}
+                        onChange={(e) => setEarliestBound(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Latest</Label>
+                      <Input
+                        type="datetime-local"
+                        value={latestBound ? latestBound.slice(0, 16) : ''}
+                        onChange={(e) => setLatestBound(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Typical</Label>
+                      <Input
+                        type="datetime-local"
+                        value={typicalTime ? typicalTime.slice(0, 16) : ''}
+                        onChange={(e) => setTypicalTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                      />
+                    </div>
+                  </div>
                 )}
 
-                <FormControl fullWidth size="small">
-                  <InputLabel>Granularity</InputLabel>
-                  <Select
-                    value={granularity}
-                    onChange={(e) => setGranularity(e.target.value as VaguenessGranularity)}
-                    label="Granularity"
-                  >
-                    <MenuItem value="millisecond">Millisecond</MenuItem>
-                    <MenuItem value="second">Second</MenuItem>
-                    <MenuItem value="minute">Minute</MenuItem>
-                    <MenuItem value="hour">Hour</MenuItem>
-                    <MenuItem value="day">Day</MenuItem>
-                    <MenuItem value="week">Week</MenuItem>
-                    <MenuItem value="month">Month</MenuItem>
-                    <MenuItem value="year">Year</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
+                <Select value={granularity} onValueChange={(value) => setGranularity(value as VaguenessGranularity)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="millisecond">Millisecond</SelectItem>
+                    <SelectItem value="second">Second</SelectItem>
+                    <SelectItem value="minute">Minute</SelectItem>
+                    <SelectItem value="hour">Hour</SelectItem>
+                    <SelectItem value="day">Day</SelectItem>
+                    <SelectItem value="week">Week</SelectItem>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="year">Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-          </Box>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Deictic Reference */}
-          <Box>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={hasDeictic}
-                  onChange={(e) => setHasDeictic(e.target.checked)}
-                />
-              }
-              label="Add Deictic Reference"
-            />
+          <div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={hasDeictic}
+                onCheckedChange={setHasDeictic}
+              />
+              <Label>Add Deictic Reference</Label>
+            </div>
             {hasDeictic && (
-              <Box sx={{ mt: 2, pl: 2, display: 'flex', gap: 2 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Anchor Type</InputLabel>
-                  <Select
-                    value={deicticAnchorType}
-                    onChange={(e) => setDeicticAnchorType(e.target.value as DeicticAnchorType)}
-                    label="Anchor Type"
-                  >
-                    <MenuItem value="annotation_time">Annotation Time</MenuItem>
-                    <MenuItem value="video_time">Video Time</MenuItem>
-                    <MenuItem value="reference_time">Reference Time</MenuItem>
+              <div className="mt-4 pl-4 flex gap-4">
+                <div className="flex-1">
+                  <Select value={deicticAnchorType} onValueChange={(value) => setDeicticAnchorType(value as DeicticAnchorType)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="annotation_time">Annotation Time</SelectItem>
+                      <SelectItem value="video_time">Video Time</SelectItem>
+                      <SelectItem value="reference_time">Reference Time</SelectItem>
+                    </SelectContent>
                   </Select>
-                </FormControl>
-
-                <TextField
-                  label="Expression"
-                  size="small"
-                  value={deicticExpression}
-                  onChange={(e) => setDeicticExpression(e.target.value)}
-                  placeholder="e.g., 'yesterday', 'at this point'"
-                  fullWidth
-                />
-              </Box>
+                </div>
+                <div className="flex-1">
+                  <Input
+                    value={deicticExpression}
+                    onChange={(e) => setDeicticExpression(e.target.value)}
+                    placeholder="e.g., 'yesterday', 'at this point'"
+                  />
+                </div>
+              </div>
             )}
-          </Box>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Video References */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Video References
-            </Typography>
-            <Typography variant="caption" color="text.secondary" paragraph>
+          <div>
+            <Label className="text-sm font-medium">Video References</Label>
+            <p className="text-xs text-muted-foreground mb-3">
               Link this time to specific moments in videos
-            </Typography>
+            </p>
 
             {videoReferences.map((ref, index) => (
-              <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                <FormControl sx={{ minWidth: 200 }}>
-                  <InputLabel size="small">Video</InputLabel>
-                  <Select
-                    size="small"
-                    value={ref.videoId}
-                    onChange={(e) => handleUpdateVideoReference(index, { ...ref, videoId: e.target.value })}
-                    label="Video"
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {videos.map(video => (
-                      <MenuItem key={video.id} value={video.id}>
-                        {video.title}
-                      </MenuItem>
-                    ))}
+              <div key={index} className="flex gap-2 mb-2">
+                <div style={{ minWidth: 200 }}>
+                  <Select value={ref.videoId || '_none'} onValueChange={(value) => handleUpdateVideoReference(index, { ...ref, videoId: !value || value === '_none' ? '' : value })}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Video" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">None</SelectItem>
+                      {videos.map(video => (
+                        <SelectItem key={video.id} value={video.id}>
+                          {video.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
-                </FormControl>
+                </div>
 
                 {timeType === 'instant' ? (
                   <>
-                    <TextField
-                      label="Frame"
+                    <Input
                       type="number"
-                      size="small"
+                      placeholder="Frame"
                       value={ref.frameNumber || ''}
                       onChange={(e) => handleUpdateVideoReference(index, {
                         ...ref,
                         frameNumber: e.target.value ? parseInt(e.target.value) : undefined
                       })}
+                      className="w-24"
                     />
-                    <TextField
-                      label="Milliseconds"
+                    <Input
                       type="number"
-                      size="small"
+                      placeholder="Milliseconds"
                       value={ref.milliseconds || ''}
                       onChange={(e) => handleUpdateVideoReference(index, {
                         ...ref,
                         milliseconds: e.target.value ? parseInt(e.target.value) : undefined
                       })}
+                      className="w-28"
                     />
                   </>
                 ) : (
-                  <>
-                    <TextField
-                      label="Frame Range"
-                      size="small"
-                      placeholder="start-end"
-                      value={ref.frameRange ? `${ref.frameRange[0]}-${ref.frameRange[1]}` : ''}
-                      onChange={(e) => {
-                        const parts = e.target.value.split('-').map(p => parseInt(p.trim())).filter(n => !isNaN(n))
-                        handleUpdateVideoReference(index, {
-                          ...ref,
-                          frameRange: parts.length === 2 ? [parts[0], parts[1]] : undefined
-                        })
-                      }}
-                    />
-                  </>
+                  <Input
+                    placeholder="Frame Range (start-end)"
+                    value={ref.frameRange ? `${ref.frameRange[0]}-${ref.frameRange[1]}` : ''}
+                    onChange={(e) => {
+                      const parts = e.target.value.split('-').map(p => parseInt(p.trim())).filter(n => !isNaN(n))
+                      handleUpdateVideoReference(index, {
+                        ...ref,
+                        frameRange: parts.length === 2 ? [parts[0], parts[1]] : undefined
+                      })
+                    }}
+                  />
                 )}
 
-                <IconButton size="small" onClick={() => handleRemoveVideoReference(index)}>
-                  <DeleteIcon />
-                </IconButton>
-              </Box>
+                <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveVideoReference(index)}>
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
             ))}
 
             <Button
-              size="small"
-              startIcon={<AddIcon />}
+              variant="ghost"
+              size="sm"
               onClick={handleAddVideoReference}
             >
+              <Plus className="mr-1 size-4" />
               Add Video Reference
             </Button>
-          </Box>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Certainty */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+          <div>
+            <Label className="text-sm font-medium">
               Certainty: {(certainty * 100).toFixed(0)}%
-            </Typography>
+            </Label>
             <Slider
-              value={certainty}
-              onChange={(_, value) => setCertainty(value as number)}
+              value={[certainty]}
+              onValueChange={(value) => setCertainty(Array.isArray(value) ? value[0] : value)}
               min={0}
               max={1}
               step={0.1}
-              marks
-              valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${(value * 100).toFixed(0)}%`}
             />
-          </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
-        <Box>
-          {!time && (
-            <SaveStatusIndicator
-              status={saveStatus}
-              lastSavedAt={lastSavedAt}
-              errorMessage={errorMessage}
-              retryCount={retryCount}
-              onRetry={forceSave}
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={handleCancel}>Cancel</Button>
-          {time ? (
-            <Button
-              onClick={handleSave}
-              variant="contained"
-              color="secondary"
-              disabled={
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={
+              !label || (
                 timeType === 'instant'
                   ? !timestamp && !hasVagueness && !hasDeictic
                   : !startTime && !endTime && !hasVagueness && !hasDeictic
-              }
-            >
-              Update Time
-            </Button>
-          ) : (
-            <Button
-              onClick={handleDone}
-              variant="contained"
-              color="secondary"
-              disabled={!label || !autoCreatedTimeId}
-            >
-              Done
-            </Button>
-          )}
-        </Box>
-      </DialogActions>
+              )
+            }
+          >
+            {time ? 'Update Time' : 'Create Time'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   )
 }

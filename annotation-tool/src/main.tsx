@@ -3,9 +3,15 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from 'next-themes'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/sonner'
 import App from './App'
+import { DemoShell } from './demo/DemoShell'
+import { isDemoModeEnabled } from './demo/config'
+import { TourProvider } from './tours'
+import { loadTourContentBundle } from './tours/content/loader'
+import type { TourContentBundle } from './tours/content/types'
 import './index.css'
 
 // Initialize command registry before React renders (must be before component mount effects)
@@ -32,50 +38,19 @@ initErrorLogging({
 initializeCommands()
 initializeGlobalContext()
 
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#8c4e87',
-      light: '#b87ab3',
-      dark: '#633660',
-    },
-    secondary: {
-      main: '#4e878c',
-      light: '#7ab8b3',
-      dark: '#366360',
-    },
-    error: {
-      main: '#8c534e',
-      light: '#b87a76',
-      dark: '#633633',
-    },
-    warning: {
-      main: '#8c7d4e',
-      light: '#b8a87a',
-      dark: '#635636',
-    },
-    background: {
-      default: '#f8f9fa',
-      paper: '#ffffff',
-    },
-    success: {
-      main: '#4e8c53',
-      light: '#7ab87e',
-      dark: '#366338',
-    },
-    info: {
-      main: '#4e678c',
-      light: '#7a93b8',
-      dark: '#364863',
-    },
-    text: {
-      primary: 'rgba(0, 0, 0, 0.87)',
-      secondary: 'rgba(0, 0, 0, 0.70)',
-      disabled: 'rgba(0, 0, 0, 0.50)',
-    },
-  },
-})
+/**
+ * Start the MSW tour-demo worker BEFORE React mounts so the first
+ * model-service-bound request fired by any tour intro screen is
+ * already intercepted. Production builds without VITE_TOUR_DEMO=1
+ * tree-shake the entire `src/mocks/tourDemo` subtree out of the
+ * bundle because the dynamic import below sits behind a statically-
+ * analysable env-var guard.
+ */
+async function maybeStartTourDemoMocking(): Promise<void> {
+  if (import.meta.env.VITE_TOUR_DEMO !== '1') return
+  const { startTourDemoWorker } = await import('./mocks/tourDemo/browser')
+  await startTourDemoWorker()
+}
 
 /**
  * TanStack Query client configuration.
@@ -91,14 +66,106 @@ const queryClient = new QueryClient({
   },
 })
 
+// Boot-time fetch of the deployment's tour content bundle from
+// /tour-content.json (the admin's editable config). NO silent
+// fallback: if the file is missing or malformed, render a visible
+// banner and mount the app WITHOUT TourProvider so the admin can fix
+// the JSON without an opaque "tours just don't work" failure mode.
+function Root() {
+  type LoadState =
+    | { kind: 'loading' }
+    | { kind: 'ready'; bundle: TourContentBundle }
+    | { kind: 'error'; message: string }
+  const [state, setState] = React.useState<LoadState>({ kind: 'loading' })
+  React.useEffect(() => {
+    loadTourContentBundle()
+      .then((bundle) => setState({ kind: 'ready', bundle }))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[tours] content bundle load failed:', message)
+        setState({ kind: 'error', message })
+      })
+  }, [])
+
+  if (isDemoModeEnabled()) return <DemoShell />
+
+  if (state.kind === 'error') {
+    return (
+      <>
+        <div
+          role="alert"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: '#b91c1c',
+            color: 'white',
+            padding: '12px 16px',
+            zIndex: 9999,
+            fontSize: 13,
+          }}
+        >
+          <strong>Tours disabled: content config error.</strong>{' '}
+          {state.message} See <code>docs/tour-customization.md</code>.
+        </div>
+        <App />
+      </>
+    )
+  }
+  if (state.kind === 'loading') {
+    return <App />
+  }
+  return (
+    <TourProvider contentBundle={state.bundle}>
+      <App />
+    </TourProvider>
+  )
+}
+
+// The MSW worker registration is fire-and-forget for the bundle to
+// remain compatible with esbuild's default target (top-level await
+// requires target esnext). React mounts immediately; any model-
+// service request fired before the worker finishes registering will
+// pass through to the real backend, which is acceptable for the
+// tour-intro screen because no tour starts its model-service-bound
+// step inside the first few hundred milliseconds of page load.
+void maybeStartTourDemoMocking()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-          <ReactQueryDevtools initialIsOpen={false} />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <TooltipProvider>
+            {/*
+              Demo deployments render <DemoShell />, which provides its
+              own TourProvider with the seed-on-launch hook wrapped
+              around App. Stock builds mount TourProvider here so the
+              tour engine is available to <App /> directly (anchored
+              mode against the user's real workspace). Either way the
+              TourProvider is mounted EXACTLY ONCE. Nesting it would
+              shadow the outer state and the runner would never paint.
+
+              The tour content bundle comes from /tour-content.json
+              (admin-editable JSON, loaded at boot via Root above).
+              Edit that file to retheme the tour catalogue for your
+              own domain. See docs/tour-customization.md.
+            */}
+            <Root />
+            <Toaster position="bottom-right" />
+          </TooltipProvider>
+          {/*
+            The TanStack Query devtools toggle button is fixed to the
+            bottom-right corner with a large invisible hit area; the
+            annotation-workspace and ontology-workspace FABs sit at the
+            same corner and the devtools intercept their clicks. Skip in
+            test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
+            the FABs.
+          */}
+          {import.meta.env.MODE !== 'test' && !import.meta.env.VITE_E2E && (
+            <ReactQueryDevtools initialIsOpen={false} />
+          )}
         </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>

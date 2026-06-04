@@ -17,9 +17,9 @@ POST /api/import/preview          # dry-run, returns conflict report
 GET  /api/import/history          # requester's prior imports
 ```
 
-`GET /api/export/stats` was scoped to the authenticated user in
-v0.1.4. `GET /api/import/history` was scoped to
-`importedBy = request.user.id` in v0.1.8, and the corresponding
+`GET /api/export/stats` is scoped to the authenticated user.
+`GET /api/import/history` is scoped to
+`importedBy = request.user.id`, and the corresponding
 `POST /api/import` writes `importedBy` on every history row.
 
 ## JSONL format
@@ -29,12 +29,13 @@ Each line is one record. The first line of every full export is a
 discriminators:
 
 ```text
-metadata, persona, ontology, worldEntity, worldEvent, worldTime,
-worldLocation, videoSummary, claim, annotation
+metadata, persona, ontology, entity, entity_collection, event,
+event_collection, time, time_collection, relation, summary, claim,
+claim_relation, annotation
 ```
 
-The format is pinned within the v0.1.x line. See
-[Project > Stability](../project/stability.md).
+The format is pinned within the export-format maintenance line.
+See [Project > Stability](../project/stability.md).
 
 ## Preview
 
@@ -44,18 +45,16 @@ import dialog with smart defaults per conflict.
 
 ## Upload limits
 
-`POST /api/import` since v0.1.8 returns the multipart
-upload-too-large failure with the underlying 4xx status (typically
-413). The previous local `catch` collapsed `FST_REQ_FILE_TOO_LARGE`
-and similar `FST_*_LIMIT` codes into 500; the route now passes
-them through so clients can render a "file too big" message.
+`POST /api/import` returns the multipart upload-too-large failure
+with the underlying 4xx status (typically 413), so clients can
+render a "file too big" message.
 
 ## linkType round-trip
 
 Object annotations linked to events, times, or locations
 round-trip through export and import without flattening. The
-`Annotation.linkType` column added in v0.1.8 carries the kind on
-the round-trip, the export emits the matching `linkedEventId` /
+`Annotation.linkType` column carries the kind on the round-trip,
+the export emits the matching `linkedEventId` /
 `linkedTimeId` / `linkedLocationId` line, and the import reads
 any of the four. See
 [Guide > Annotations](annotations.md) for the column semantics.

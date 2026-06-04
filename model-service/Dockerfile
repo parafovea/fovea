@@ -72,8 +72,13 @@ FROM builder-${DEVICE} AS builder-base
 # Build argument for deployment mode
 ARG BUILD_MODE=minimal
 ARG DEVICE=cpu
+ARG ENABLE_AUDIO=0
 # BUILD_MODE options: minimal (base only), recommended (+ bitsandbytes), full (+ all inference engines)
 # DEVICE options: cpu (local dev), gpu (production)
+# ENABLE_AUDIO: when set to 1, pulls the `[audio]` extras (faster-whisper,
+# pyannote.audio, torch-audiomentations, pydub, AssemblyAI/Deepgram/AWS
+# SDKs) so the model-service can serve transcription, diarization, and
+# voice activity detection. Off by default to keep image size down.
 
 # Install Python and build tools
 # - cmake is needed for llama-cpp-python on CPU
@@ -127,6 +132,47 @@ RUN --mount=type=cache,target=/root/.cache/pip \
           fi ) && \
         ( if [ "$DEVICE" = "cpu" ]; then \
               pip install --no-cache-dir -e ".[cpu]"; \
+          fi ) && \
+        ( if [ "$ENABLE_AUDIO" = "1" ]; then \
+              # Several packages in the audio extras (torch-pitch-shift,
+              # asteroid-filterbanks, older openai-whisper releases)
+              # still import `pkg_resources` at setup time, but
+              # setuptools >=81 removed that module. Pin setuptools to
+              # the last release that ships pkg_resources before the
+              # audio install so the wheel build doesn't blow up with
+              # "ModuleNotFoundError: No module named 'pkg_resources'".
+              # `--ignore-installed wheel` skips the Debian-shipped
+              # wheel (which has no RECORD file and pip refuses to
+              # uninstall), letting the newer wheel land alongside.
+              pip install --no-cache-dir --ignore-installed wheel \
+                  "setuptools<81" "wheel>=0.45" && \
+              # Force CPU-only torch wheels before pulling audio extras
+              # so `pyannote.audio` and `torch-audiomentations` don't
+              # transitively reinstall the CUDA-enabled wheel (which
+              # links libcudart.so at import time and crashes pyannote
+              # / Silero VAD load on CPU-only hosts). The CUDA wheels
+              # also bring in ~6 GB of nvidia-* dependencies that the
+              # demo image has no use for.
+              if [ "$DEVICE" = "cpu" ]; then \
+                  # Install torch / torchvision / torchaudio together
+                  # from PyTorch's CPU index so all three land at the
+                  # same major and share an ABI. Letting pip choose
+                  # versions within the CPU index keeps the trio
+                  # current without dragging in the CUDA-flavored
+                  # wheel (which links libcudart.so at import time
+                  # and breaks pyannote / Silero VAD load on CPU-only
+                  # hosts).
+                  pip install --no-cache-dir \
+                      --index-url https://download.pytorch.org/whl/cpu \
+                      torch torchvision torchaudio; \
+              fi && \
+              # `--no-build-isolation` makes setup.py-driven packages
+              # (notably openai-whisper, asteroid-filterbanks, and
+              # torch-pitch-shift) reuse the venv's `setuptools<81`
+              # instead of pulling the latest setuptools into a fresh
+              # build env where `pkg_resources` is no longer shipped.
+              pip install --no-cache-dir --no-build-isolation \
+                  -e ".[audio]"; \
           fi ) && break; \
         echo "pip install -e failed (attempt $i/3), retrying in 30s..." && sleep 30; \
     done

@@ -1,18 +1,19 @@
 /**
- * @module QuickActionsPanel
- * @description Floating quick actions panel for bounding box editing.
+ * Floating quick actions panel for bounding box editing.
  * Provides quick access to keyframe operations without moving mouse to distant buttons.
+ *
+ * @module
  */
 
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Paper, IconButton, Typography, Box, Tooltip } from '@mui/material'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Annotation, InterpolationType } from '@models/types'
 import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
 
 /**
- * @interface QuickActionsPanelProps
- * @description Props for QuickActionsPanel component.
+ * Props for QuickActionsPanel component.
  */
 export interface QuickActionsPanelProps {
   /** Annotation being edited */
@@ -36,8 +37,7 @@ export interface QuickActionsPanelProps {
 }
 
 /**
- * @component QuickActionsPanel
- * @description Floating panel with quick actions for bounding box editing.
+ * Floating panel with quick actions for bounding box editing.
  */
 export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   annotation,
@@ -96,143 +96,91 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
   const canInterpolate = keyframes.length >= 2
 
   return createPortal(
-    <Paper
-      elevation={8}
-      sx={{
-        position: 'absolute',
+    <div
+      data-tour-id="quick-actions-track"
+      className="absolute grid grid-cols-2 gap-2 bg-card rounded-lg p-2 shadow-lg ring-1 ring-foreground/10 z-[1000] opacity-95 transition-all duration-200 ease-in-out"
+      style={{
         top: position.top,
         left: position.left,
         width: 250,
-        padding: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 1,
-        backgroundColor: 'background.paper',
-        zIndex: 1000,
-        opacity: 0.95,
-        transition: 'all 200ms ease-in-out',
       }}
     >
       {/* Add Keyframe Button */}
-      <Tooltip title="Add Keyframe (K)" arrow placement="top">
-        <Box>
-          <IconButton
-            size="small"
-            onClick={onAddKeyframe}
-            disabled={isKeyframe}
-            aria-label="Add Keyframe"
-            sx={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 1,
-              '&:disabled': {
-                opacity: 0.5,
-              },
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: '1.2rem' }}>
-              🔑
-            </Typography>
-            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-              Keyframe
-            </Typography>
-          </IconButton>
-        </Box>
+      <Tooltip>
+        <TooltipTrigger render={<div />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAddKeyframe}
+              disabled={isKeyframe}
+              aria-label="Add Keyframe"
+              className="w-full flex flex-col items-center p-2 h-auto"
+            >
+              <span className="text-xl">🔑</span>
+              <span className="text-[0.7rem]">Keyframe</span>
+            </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Add Keyframe (K)</TooltipContent>
       </Tooltip>
 
       {/* Delete Keyframe Button */}
-      <Tooltip
-        title={
-          !isKeyframe
+      <Tooltip>
+        <TooltipTrigger render={<div />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteKeyframe}
+              disabled={!isKeyframe || isFirstOrLastKeyframe}
+              aria-label="Delete Keyframe"
+              className="w-full flex flex-col items-center p-2 h-auto"
+            >
+              <span className="text-xl">╳</span>
+              <span className="text-[0.7rem]">Delete</span>
+            </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          {!isKeyframe
             ? 'Not a keyframe'
             : isFirstOrLastKeyframe
             ? 'Cannot delete first/last keyframe'
-            : 'Delete Keyframe (Del)'
-        }
-        arrow
-        placement="top"
-      >
-        <Box>
-          <IconButton
-            size="small"
-            onClick={onDeleteKeyframe}
-            disabled={!isKeyframe || isFirstOrLastKeyframe}
-            aria-label="Delete Keyframe"
-            sx={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 1,
-              '&:disabled': {
-                opacity: 0.5,
-              },
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: '1.2rem' }}>
-              ╳
-            </Typography>
-            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-              Delete
-            </Typography>
-          </IconButton>
-        </Box>
+            : 'Delete Keyframe (Del)'}
+        </TooltipContent>
       </Tooltip>
 
       {/* Copy Previous Frame Button */}
-      <Tooltip title="Copy Previous Frame (Ctrl+C)" arrow placement="bottom">
-        <Box>
-          <IconButton
-            size="small"
-            onClick={onCopyPreviousFrame}
-            disabled={currentFrame === 0}
-            aria-label="Copy Previous Frame"
-            sx={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 1,
-              '&:disabled': {
-                opacity: 0.5,
-              },
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: '1.2rem' }}>
-              ↻
-            </Typography>
-            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-              Previous
-            </Typography>
-          </IconButton>
-        </Box>
+      <Tooltip>
+        <TooltipTrigger render={<div />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCopyPreviousFrame}
+              disabled={currentFrame === 0}
+              aria-label="Copy Previous Frame"
+              className="w-full flex flex-col items-center p-2 h-auto"
+            >
+              <span className="text-xl">↻</span>
+              <span className="text-[0.7rem]">Previous</span>
+            </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Copy Previous Frame (Ctrl+C)</TooltipContent>
       </Tooltip>
 
       {/* Interpolation Menu Button */}
-      <Tooltip title="Interpolation Mode (I)" arrow placement="bottom">
-        <Box>
-          <IconButton
-            size="small"
-            onClick={() => setInterpolationDialogOpen(true)}
-            disabled={!canInterpolate}
-            aria-label="Interpolation Mode"
-            sx={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: 1,
-              '&:disabled': {
-                opacity: 0.5,
-              },
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: '1.2rem' }}>
-              ~
-            </Typography>
-            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-              Interp.
-            </Typography>
-          </IconButton>
-        </Box>
+      <Tooltip>
+        <TooltipTrigger render={<div />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setInterpolationDialogOpen(true)}
+              disabled={!canInterpolate}
+              aria-label="Interpolation Mode"
+              className="w-full flex flex-col items-center p-2 h-auto"
+            >
+              <span className="text-xl">~</span>
+              <span className="text-[0.7rem]">Interp.</span>
+            </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Interpolation Mode (I)</TooltipContent>
       </Tooltip>
 
       {/* Interpolation Mode Selector Dialog */}
@@ -246,7 +194,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
           setInterpolationDialogOpen(false)
         }}
       />
-    </Paper>,
+    </div>,
     document.body
   )
 }

@@ -1,50 +1,30 @@
 import { useState, useEffect } from 'react'
+import { Calendar, RefreshCw, CalendarDays, Clock, CalendarCheck, Trash2, RotateCw, Globe, Waypoints } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Slider } from '@/components/ui/slider'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  TextField,
-  Typography,
-  ToggleButton,
-  ToggleButtonGroup,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Paper,
-  Grid,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Alert,
-  Tabs,
-  Tab,
-  FormControlLabel,
-  Checkbox,
-  FormGroup,
-  Slider,
-  IconButton,
-  Divider,
-} from '@mui/material'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  CalendarMonth as CalendarIcon,
-  Loop as RecurringIcon,
-  Event as EventIcon,
-  AccessTime as TimeIcon,
-  Today as TodayIcon,
-  Delete as DeleteIcon,
-  Refresh as CyclicalIcon,
-  Language as LinguisticIcon,
-  Pattern as PatternIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns'
 import { useWorld, useAddTimeCollection, useUpdateTimeCollection } from '@store/queries'
 import {
@@ -72,26 +52,6 @@ interface TimeCollectionBuilderProps {
   collection?: TimeCollection | null
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`time-collection-tabpanel-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
-    </div>
-  )
-}
-
 const WEEKDAYS: { value: DayOfWeek; label: string }[] = [
   { value: 'MO', label: 'Monday' },
   { value: 'TU', label: 'Tuesday' },
@@ -112,16 +72,15 @@ export default function TimeCollectionBuilder({
   const events = worldData?.events ?? []
   const { mutate: addTimeCollection } = useAddTimeCollection()
   const { mutate: updateTimeCollection } = useUpdateTimeCollection()
-  
+
   // Basic fields
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [collectionType, setCollectionType] = useState<'periodic' | 'calendar' | 'habitual' | 'irregular' | 'anchored'>('calendar')
-  const [tabValue, setTabValue] = useState(0)
-  
+
   // Selected times (for irregular collections)
   const [selectedTimeIds, setSelectedTimeIds] = useState<string[]>([])
-  
+
   // Recurrence fields (RRULE-based)
   const [frequency, setFrequency] = useState<RecurrenceFrequency>('DAILY')
   const [interval, setInterval] = useState(1)
@@ -129,7 +88,7 @@ export default function TimeCollectionBuilder({
   const [endCount, setEndCount] = useState(10)
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [weekStart, setWeekStart] = useState<DayOfWeek>('MO')
-  
+
   // BY rules
   const [selectedWeekdays, setSelectedWeekdays] = useState<DayOfWeek[]>([])
   const [selectedMonthDays, setSelectedMonthDays] = useState<number[]>([])
@@ -137,11 +96,11 @@ export default function TimeCollectionBuilder({
   const [nthWeekday, setNthWeekday] = useState<number | undefined>()
   const [byHour, setByHour] = useState<number[]>([])
   const [byMinute, setByMinute] = useState<number[]>([])
-  
+
   // Exceptions
   const [exceptions, setExceptions] = useState<Date[]>([])
-  const [newException, setNewException] = useState<Date | null>(null)
-  
+  const [newException, setNewException] = useState<string>('')
+
   // Habitual pattern fields
   const [habitualFrequency, setHabitualFrequency] = useState<HabitualFrequency>('sometimes')
   const [typicality, setTypicality] = useState(0.5)
@@ -150,36 +109,36 @@ export default function TimeCollectionBuilder({
   const [vagueness, setVagueness] = useState<'precise' | 'approximate' | 'fuzzy'>('approximate')
   const [anchorType, setAnchorType] = useState<'event' | 'time_of_day' | 'season' | 'cultural'>('time_of_day')
   const [anchorReference, setAnchorReference] = useState('')
-  
+
   // Cyclical pattern fields
   const [phases, setPhases] = useState<Array<{ name: string; duration?: string; description?: string }>>([])
   const [phaseName, setPhaseName] = useState('')
   const [phaseDuration, setPhaseDuration] = useState('')
   const [phaseDescription, setPhaseDescription] = useState('')
-  
+
   useEffect(() => {
     if (collection) {
       setName(collection.name)
       setDescription(collection.description)
       setCollectionType(collection.collectionType)
-      
+
       if (collection.times) {
         setSelectedTimeIds(collection.times.map(t => t.id))
       }
-      
+
       if (collection.recurrence) {
         const rec = collection.recurrence
         setFrequency(rec.frequency)
         setInterval(rec.interval || 1)
-        
+
         if (rec.endCondition) {
           setEndType(rec.endCondition.type)
           if (rec.endCondition.count) setEndCount(rec.endCondition.count)
           if (rec.endCondition.until) setEndDate(new Date(rec.endCondition.until))
         }
-        
+
         if (rec.weekStart) setWeekStart(rec.weekStart)
-        
+
         if (rec.byRules) {
           if (rec.byRules.byDay) {
             setSelectedWeekdays(rec.byRules.byDay.map(d => d.day))
@@ -192,46 +151,46 @@ export default function TimeCollectionBuilder({
           if (rec.byRules.byHour) setByHour(rec.byRules.byHour)
           if (rec.byRules.byMinute) setByMinute(rec.byRules.byMinute)
         }
-        
+
         if (rec.exceptions) {
           setExceptions(rec.exceptions.map(e => new Date(e)))
         }
       }
-      
+
       if (collection.habituality) {
         const hab = collection.habituality
         setHabitualFrequency(hab.frequency)
         setTypicality(hab.typicality)
-        
+
         if (hab.naturalLanguage) {
           setNaturalExpression(hab.naturalLanguage.expression)
           setCulturalContext(hab.naturalLanguage.culturalContext || '')
           setVagueness(hab.naturalLanguage.vagueness || 'approximate')
         }
-        
+
         if (hab.anchors && hab.anchors.length > 0) {
           setAnchorType(hab.anchors[0].type)
           setAnchorReference(hab.anchors[0].reference)
         }
       }
-      
+
       if (collection.cycle) {
         setPhases(collection.cycle.phases)
       }
     }
   }, [collection])
-  
+
   const handleAddException = () => {
     if (newException) {
-      setExceptions([...exceptions, newException])
-      setNewException(null)
+      setExceptions([...exceptions, new Date(newException)])
+      setNewException('')
     }
   }
-  
+
   const handleRemoveException = (index: number) => {
     setExceptions(exceptions.filter((_, i) => i !== index))
   }
-  
+
   const handleAddPhase = () => {
     if (phaseName) {
       setPhases([...phases, {
@@ -244,11 +203,11 @@ export default function TimeCollectionBuilder({
       setPhaseDescription('')
     }
   }
-  
+
   const handleRemovePhase = (index: number) => {
     setPhases(phases.filter((_, i) => i !== index))
   }
-  
+
   const toggleWeekday = (day: DayOfWeek) => {
     setSelectedWeekdays(prev =>
       prev.includes(day)
@@ -256,7 +215,7 @@ export default function TimeCollectionBuilder({
         : [...prev, day]
     )
   }
-  
+
   const toggleMonthDay = (day: number) => {
     setSelectedMonthDays(prev =>
       prev.includes(day)
@@ -264,7 +223,15 @@ export default function TimeCollectionBuilder({
         : [...prev, day]
     )
   }
-  
+
+  const toggleTimeId = (id: string) => {
+    setSelectedTimeIds(prev =>
+      prev.includes(id)
+        ? prev.filter(t => t !== id)
+        : [...prev, id]
+    )
+  }
+
   const generatePreviewDates = (): Date[] => {
     const dates: Date[] = []
     const startDate = new Date()
@@ -272,14 +239,14 @@ export default function TimeCollectionBuilder({
     let count = 0
     const maxCount = endType === 'count' ? endCount : 10
     const untilDate = endType === 'until' ? endDate : addYears(startDate, 1)
-    
+
     while (count < maxCount && (!untilDate || currentDate <= untilDate)) {
-      // Simple preview logic - in production, use a proper RRULE library
+      // Simple preview logic
       if (!exceptions.some(ex => ex.toDateString() === currentDate.toDateString())) {
         dates.push(new Date(currentDate))
         count++
       }
-      
+
       switch (frequency) {
         case 'DAILY':
           currentDate = addDays(currentDate, interval)
@@ -297,21 +264,21 @@ export default function TimeCollectionBuilder({
           currentDate = addDays(currentDate, interval)
       }
     }
-    
+
     return dates
   }
-  
+
   const handleSave = () => {
     let recurrence: RecurrenceRule | undefined
     let habituality: HabitualPattern | undefined
     let cycle: CyclicalPattern | undefined
-    
+
     if (collectionType === 'calendar' || collectionType === 'periodic') {
       const byDay: RecurrenceByDay[] = selectedWeekdays.map(day => ({
         day,
         nth: nthWeekday,
       }))
-      
+
       recurrence = {
         frequency,
         interval: interval > 1 ? interval : undefined,
@@ -331,7 +298,7 @@ export default function TimeCollectionBuilder({
         exceptions: exceptions.map(e => e.toISOString()),
       }
     }
-    
+
     if (collectionType === 'habitual') {
       habituality = {
         frequency: habitualFrequency,
@@ -348,7 +315,7 @@ export default function TimeCollectionBuilder({
         }] : undefined,
       }
     }
-    
+
     if (phases.length > 0) {
       cycle = {
         phases,
@@ -356,7 +323,7 @@ export default function TimeCollectionBuilder({
         startTime: new Date().toISOString(),
       }
     }
-    
+
     const collectionData: Omit<TimeCollection, 'id'> = {
       name,
       description,
@@ -367,16 +334,16 @@ export default function TimeCollectionBuilder({
       cycle,
       metadata: {},
     }
-    
+
     if (collection) {
       updateTimeCollection({ ...collection, ...collectionData })
     } else {
       addTimeCollection(collectionData)
     }
-    
+
     onClose()
   }
-  
+
   const getFrequencyLabel = (freq: RecurrenceFrequency): string => {
     const labels: Record<RecurrenceFrequency, string> = {
       'YEARLY': 'Year(s)',
@@ -389,257 +356,242 @@ export default function TimeCollectionBuilder({
     }
     return labels[freq]
   }
-  
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PatternIcon color="primary" />
-          <Typography variant="h6">Time Collection Builder</Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Basic Info */}
-            <TextField
-              label="Collection Name"
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Waypoints className="size-5 text-primary" />
+            Time Collection Builder
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          {/* Basic Info */}
+          <div className="space-y-1">
+            <Label>Collection Name *</Label>
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              fullWidth
-              required
+              placeholder="Collection name"
             />
-            
-            <TextField
-              label="Description"
+          </div>
+
+          <div className="space-y-1">
+            <Label>Description</Label>
+            <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              fullWidth
-              multiline
               rows={2}
             />
-            
-            {/* Collection Type Selector */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Pattern Type
-              </Typography>
-              <ToggleButtonGroup
-                value={collectionType}
-                exclusive
-                onChange={(_, value) => value && setCollectionType(value)}
-                fullWidth
-              >
-                <ToggleButton value="calendar">
-                  <CalendarIcon sx={{ mr: 1 }} />
-                  Calendar
-                </ToggleButton>
-                <ToggleButton value="periodic">
-                  <RecurringIcon sx={{ mr: 1 }} />
-                  Periodic
-                </ToggleButton>
-                <ToggleButton value="habitual">
-                  <LinguisticIcon sx={{ mr: 1 }} />
-                  Habitual
-                </ToggleButton>
-                <ToggleButton value="irregular">
-                  <TimeIcon sx={{ mr: 1 }} />
-                  Irregular
-                </ToggleButton>
-                <ToggleButton value="anchored">
-                  <EventIcon sx={{ mr: 1 }} />
-                  Anchored
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-            
-            {/* Pattern-specific configuration */}
-            {(collectionType === 'calendar' || collectionType === 'periodic') && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Recurrence Pattern (iCalendar RRULE)
-                </Typography>
-                
-                <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-                  <Tab label="Basic" />
-                  <Tab label="Advanced" />
-                  <Tab label="Exceptions" />
-                  <Tab label="Preview" />
-                </Tabs>
-                
+          </div>
+
+          {/* Collection Type Selector */}
+          <div>
+            <Label className="mb-2 block font-medium">Pattern Type</Label>
+            <ToggleGroup
+              value={[collectionType]}
+              onValueChange={(value) => { if (value.length > 0) setCollectionType(value[0] as 'periodic' | 'calendar' | 'habitual' | 'irregular' | 'anchored') }}
+              className="w-full"
+            >
+              <ToggleGroupItem value="calendar" className="flex flex-1 items-center gap-1 text-xs">
+                <Calendar className="size-4" />
+                Calendar
+              </ToggleGroupItem>
+              <ToggleGroupItem value="periodic" className="flex flex-1 items-center gap-1 text-xs">
+                <RefreshCw className="size-4" />
+                Periodic
+              </ToggleGroupItem>
+              <ToggleGroupItem value="habitual" className="flex flex-1 items-center gap-1 text-xs">
+                <Globe className="size-4" />
+                Habitual
+              </ToggleGroupItem>
+              <ToggleGroupItem value="irregular" className="flex flex-1 items-center gap-1 text-xs">
+                <Clock className="size-4" />
+                Irregular
+              </ToggleGroupItem>
+              <ToggleGroupItem value="anchored" className="flex flex-1 items-center gap-1 text-xs">
+                <CalendarDays className="size-4" />
+                Anchored
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          {/* Pattern-specific configuration */}
+          {(collectionType === 'calendar' || collectionType === 'periodic') && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-lg font-semibold mb-2">Recurrence Pattern (iCalendar RRULE)</h3>
+
+              <Tabs defaultValue="basic">
+                <TabsList>
+                  <TabsTrigger value="basic">Basic</TabsTrigger>
+                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                  <TabsTrigger value="exceptions">Exceptions</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+
                 {/* Basic Tab */}
-                <TabPanel value={tabValue} index={0}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Frequency</InputLabel>
-                        <Select
-                          value={frequency}
-                          onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}
-                          label="Frequency"
-                        >
-                          <MenuItem value="DAILY">Daily</MenuItem>
-                          <MenuItem value="WEEKLY">Weekly</MenuItem>
-                          <MenuItem value="MONTHLY">Monthly</MenuItem>
-                          <MenuItem value="YEARLY">Yearly</MenuItem>
-                          <MenuItem value="HOURLY">Hourly</MenuItem>
-                          <MenuItem value="MINUTELY">Minutely</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <TextField
-                        label={`Every X ${getFrequencyLabel(frequency)}`}
+                <TabsContent value="basic">
+                  <div className="grid grid-cols-2 gap-4 py-2">
+                    <div className="space-y-1">
+                      <Label>Frequency</Label>
+                      <Select value={frequency} onValueChange={(value) => setFrequency(value as RecurrenceFrequency)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DAILY">Daily</SelectItem>
+                          <SelectItem value="WEEKLY">Weekly</SelectItem>
+                          <SelectItem value="MONTHLY">Monthly</SelectItem>
+                          <SelectItem value="YEARLY">Yearly</SelectItem>
+                          <SelectItem value="HOURLY">Hourly</SelectItem>
+                          <SelectItem value="MINUTELY">Minutely</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Every X {getFrequencyLabel(frequency)}</Label>
+                      <Input
                         type="number"
                         value={interval}
                         onChange={(e) => setInterval(parseInt(e.target.value) || 1)}
-                        inputProps={{ min: 1 }}
-                        fullWidth
+                        min={1}
                       />
-                    </Grid>
-                    
+                    </div>
+
                     {frequency === 'WEEKLY' && (
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          On These Days
-                        </Typography>
-                        <FormGroup row>
+                      <div className="col-span-2">
+                        <Label className="mb-2 block font-medium">On These Days</Label>
+                        <div className="flex flex-wrap gap-2">
                           {WEEKDAYS.map(day => (
-                            <FormControlLabel
-                              key={day.value}
-                              control={
-                                <Checkbox
-                                  checked={selectedWeekdays.includes(day.value)}
-                                  onChange={() => toggleWeekday(day.value)}
-                                />
-                              }
-                              label={day.label}
-                            />
+                            <label key={day.value} className="flex items-center gap-1.5 text-sm">
+                              <Checkbox
+                                checked={selectedWeekdays.includes(day.value)}
+                                onCheckedChange={() => toggleWeekday(day.value)}
+                              />
+                              {day.label}
+                            </label>
                           ))}
-                        </FormGroup>
-                      </Grid>
+                        </div>
+                      </div>
                     )}
-                    
+
                     {frequency === 'MONTHLY' && (
                       <>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle2" gutterBottom>
-                            On These Days of the Month
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        <div className="col-span-2">
+                          <Label className="mb-2 block font-medium">On These Days of the Month</Label>
+                          <div className="flex flex-wrap gap-1">
                             {[...Array(31)].map((_, i) => (
-                              <Chip
+                              <Badge
                                 key={i + 1}
-                                label={i + 1}
+                                variant={selectedMonthDays.includes(i + 1) ? 'default' : 'outline'}
+                                className="cursor-pointer"
                                 onClick={() => toggleMonthDay(i + 1)}
-                                color={selectedMonthDays.includes(i + 1) ? 'primary' : 'default'}
-                                variant={selectedMonthDays.includes(i + 1) ? 'filled' : 'outlined'}
-                              />
+                              >
+                                {i + 1}
+                              </Badge>
                             ))}
-                            <Chip
-                              label="Last"
+                            <Badge
+                              variant={selectedMonthDays.includes(-1) ? 'default' : 'outline'}
+                              className="cursor-pointer"
                               onClick={() => toggleMonthDay(-1)}
-                              color={selectedMonthDays.includes(-1) ? 'primary' : 'default'}
-                              variant={selectedMonthDays.includes(-1) ? 'filled' : 'outlined'}
-                            />
-                          </Box>
-                        </Grid>
-                        
-                        <Grid item xs={12}>
-                          <FormControl fullWidth>
-                            <InputLabel>Or on the Nth weekday</InputLabel>
-                            <Select
-                              value={nthWeekday || ''}
-                              onChange={(e) => setNthWeekday(e.target.value as number || undefined)}
-                              label="Or on the Nth weekday"
                             >
-                              <MenuItem value="">None</MenuItem>
-                              <MenuItem value={1}>First</MenuItem>
-                              <MenuItem value={2}>Second</MenuItem>
-                              <MenuItem value={3}>Third</MenuItem>
-                              <MenuItem value={4}>Fourth</MenuItem>
-                              <MenuItem value={-1}>Last</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                              Last
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <div className="col-span-2 space-y-1">
+                          <Label>Or on the Nth weekday</Label>
+                          <Select
+                            value={nthWeekday?.toString() || '_none'}
+                            onValueChange={(value) => setNthWeekday(!value || value === '_none' ? undefined : parseInt(value))}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_none">None</SelectItem>
+                              <SelectItem value="1">First</SelectItem>
+                              <SelectItem value="2">Second</SelectItem>
+                              <SelectItem value="3">Third</SelectItem>
+                              <SelectItem value="4">Fourth</SelectItem>
+                              <SelectItem value="-1">Last</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </>
                     )}
-                    
-                    <Grid item xs={12}>
-                      <Divider sx={{ my: 2 }} />
-                      <Typography variant="subtitle2" gutterBottom>
-                        End Condition
-                      </Typography>
-                      <ToggleButtonGroup
-                        value={endType}
-                        exclusive
-                        onChange={(_, value) => value && setEndType(value)}
-                        fullWidth
+
+                    <div className="col-span-2">
+                      <Separator className="my-2" />
+                      <Label className="mb-2 block font-medium">End Condition</Label>
+                      <ToggleGroup
+                        value={[endType]}
+                        onValueChange={(value) => { if (value.length > 0) setEndType(value[0] as 'never' | 'count' | 'until') }}
+                        className="w-full"
                       >
-                        <ToggleButton value="never">Never</ToggleButton>
-                        <ToggleButton value="count">After N occurrences</ToggleButton>
-                        <ToggleButton value="until">Until date</ToggleButton>
-                      </ToggleButtonGroup>
-                    </Grid>
-                    
+                        <ToggleGroupItem value="never" className="flex-1">Never</ToggleGroupItem>
+                        <ToggleGroupItem value="count" className="flex-1">After N occurrences</ToggleGroupItem>
+                        <ToggleGroupItem value="until" className="flex-1">Until date</ToggleGroupItem>
+                      </ToggleGroup>
+                    </div>
+
                     {endType === 'count' && (
-                      <Grid item xs={12}>
-                        <TextField
-                          label="Number of occurrences"
+                      <div className="col-span-2 space-y-1">
+                        <Label>Number of occurrences</Label>
+                        <Input
                           type="number"
                           value={endCount}
                           onChange={(e) => setEndCount(parseInt(e.target.value) || 1)}
-                          inputProps={{ min: 1 }}
-                          fullWidth
+                          min={1}
                         />
-                      </Grid>
+                      </div>
                     )}
-                    
+
                     {endType === 'until' && (
-                      <Grid item xs={12}>
-                        <DatePicker
-                          label="End date"
-                          value={endDate}
-                          onChange={setEndDate}
-                          slotProps={{ textField: { fullWidth: true } }}
+                      <div className="col-span-2 space-y-1">
+                        <Label>End date</Label>
+                        <Input
+                          type="date"
+                          value={endDate ? endDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
                         />
-                      </Grid>
+                      </div>
                     )}
-                  </Grid>
-                </TabPanel>
-                
+                  </div>
+                </TabsContent>
+
                 {/* Advanced Tab */}
-                <TabPanel value={tabValue} index={1}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <FormControl fullWidth>
-                        <InputLabel>Week Start Day</InputLabel>
-                        <Select
-                          value={weekStart}
-                          onChange={(e) => setWeekStart(e.target.value as DayOfWeek)}
-                          label="Week Start Day"
-                        >
+                <TabsContent value="advanced">
+                  <div className="flex flex-col gap-4 py-2">
+                    <div className="space-y-1">
+                      <Label>Week Start Day</Label>
+                      <Select value={weekStart} onValueChange={(value) => setWeekStart(value as DayOfWeek)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
                           {WEEKDAYS.map(day => (
-                            <MenuItem key={day.value} value={day.value}>
+                            <SelectItem key={day.value} value={day.value}>
                               {day.label}
-                            </MenuItem>
+                            </SelectItem>
                           ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     {frequency === 'YEARLY' && (
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          In These Months
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      <div>
+                        <Label className="mb-2 block font-medium">In These Months</Label>
+                        <div className="flex flex-wrap gap-1">
                           {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                            <Chip
+                            <Badge
                               key={i}
-                              label={month}
+                              variant={selectedMonths.includes(i + 1) ? 'default' : 'outline'}
+                              className="cursor-pointer"
                               onClick={() => {
                                 const monthNum = i + 1
                                 setSelectedMonths(prev =>
@@ -648,373 +600,362 @@ export default function TimeCollectionBuilder({
                                     : [...prev, monthNum]
                                 )
                               }}
-                              color={selectedMonths.includes(i + 1) ? 'primary' : 'default'}
-                              variant={selectedMonths.includes(i + 1) ? 'filled' : 'outlined'}
-                            />
+                            >
+                              {month}
+                            </Badge>
                           ))}
-                        </Box>
-                      </Grid>
+                        </div>
+                      </div>
                     )}
-                  </Grid>
-                </TabPanel>
-                
+                  </div>
+                </TabsContent>
+
                 {/* Exceptions Tab */}
-                <TabPanel value={tabValue} index={2}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Alert severity="info">
-                      Add specific dates to exclude from the pattern
+                <TabsContent value="exceptions">
+                  <div className="flex flex-col gap-4 py-2">
+                    <Alert>
+                      <AlertDescription>
+                        Add specific dates to exclude from the pattern
+                      </AlertDescription>
                     </Alert>
-                    
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <DatePicker
-                        label="Exception date"
+
+                    <div className="flex gap-2">
+                      <Input
+                        type="date"
                         value={newException}
-                        onChange={setNewException}
-                        slotProps={{ textField: { fullWidth: true } }}
+                        onChange={(e) => setNewException(e.target.value)}
+                        className="flex-1"
                       />
                       <Button
-                        variant="outlined"
+                        variant="outline"
                         onClick={handleAddException}
                         disabled={!newException}
-                        sx={{ minWidth: 100 }}
+                        className="min-w-[100px]"
                       >
                         Add
                       </Button>
-                    </Box>
-                    
+                    </div>
+
                     {exceptions.length > 0 && (
-                      <List>
+                      <ul className="space-y-1">
                         {exceptions.map((ex, index) => (
-                          <ListItem key={index}>
-                            <ListItemText
-                              primary={format(ex, 'EEEE, MMMM d, yyyy')}
-                            />
-                            <IconButton
-                              edge="end"
+                          <li key={index} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                            <span className="text-sm">{format(ex, 'EEEE, MMMM d, yyyy')}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleRemoveException(index)}
                             >
-                              <DeleteIcon />
-                            </IconButton>
-                          </ListItem>
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </li>
                         ))}
-                      </List>
+                      </ul>
                     )}
-                  </Box>
-                </TabPanel>
-                
+                  </div>
+                </TabsContent>
+
                 {/* Preview Tab */}
-                <TabPanel value={tabValue} index={3}>
-                  <Box>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Next Occurrences
-                    </Typography>
-                    <List>
+                <TabsContent value="preview">
+                  <div className="py-2">
+                    <Label className="mb-2 block font-medium">Next Occurrences</Label>
+                    <ul className="space-y-1">
                       {generatePreviewDates().map((date, index) => (
-                        <ListItem key={index}>
-                          <ListItemIcon>
-                            <TodayIcon />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={format(date, 'EEEE, MMMM d, yyyy')}
-                            secondary={format(date, 'h:mm a')}
-                          />
-                        </ListItem>
+                        <li key={index} className="flex items-center gap-2 rounded-lg border px-3 py-2">
+                          <CalendarCheck className="size-4 text-muted-foreground" />
+                          <div>
+                            <div className="text-sm font-medium">{format(date, 'EEEE, MMMM d, yyyy')}</div>
+                            <div className="text-xs text-muted-foreground">{format(date, 'h:mm a')}</div>
+                          </div>
+                        </li>
                       ))}
-                    </List>
-                  </Box>
-                </TabPanel>
-              </Paper>
-            )}
-            
-            {collectionType === 'habitual' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Habitual Pattern
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      label="Natural Language Expression"
-                      value={naturalExpression}
-                      onChange={(e) => setNaturalExpression(e.target.value)}
-                      placeholder="e.g., 'every morning', 'on weekends', 'during lunch'"
-                      fullWidth
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Frequency</InputLabel>
-                      <Select
-                        value={habitualFrequency}
-                        onChange={(e) => setHabitualFrequency(e.target.value as HabitualFrequency)}
-                        label="Frequency"
-                      >
-                        <MenuItem value="always">Always</MenuItem>
-                        <MenuItem value="usually">Usually</MenuItem>
-                        <MenuItem value="often">Often</MenuItem>
-                        <MenuItem value="sometimes">Sometimes</MenuItem>
-                        <MenuItem value="rarely">Rarely</MenuItem>
-                        <MenuItem value="never">Never</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Vagueness</InputLabel>
-                      <Select
-                        value={vagueness}
-                        onChange={(e) => setVagueness(e.target.value as VaguenessType)}
-                        label="Vagueness"
-                      >
-                        <MenuItem value="precise">Precise</MenuItem>
-                        <MenuItem value="approximate">Approximate</MenuItem>
-                        <MenuItem value="fuzzy">Fuzzy</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Typography gutterBottom>
-                      Typicality: {Math.round(typicality * 100)}%
-                    </Typography>
-                    <Slider
-                      value={typicality}
-                      onChange={(_, value) => setTypicality(value as number)}
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      marks
-                      valueLabelDisplay="auto"
-                      valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <TextField
-                      label="Cultural Context"
-                      value={culturalContext}
-                      onChange={(e) => setCulturalContext(e.target.value)}
-                      placeholder="e.g., 'Western business hours', 'Mediterranean siesta'"
-                      fullWidth
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" gutterBottom>
-                      Temporal Anchor
-                    </Typography>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Anchor Type</InputLabel>
-                      <Select
-                        value={anchorType}
-                        onChange={(e) => setAnchorType(e.target.value as AnchorType)}
-                        label="Anchor Type"
-                      >
-                        <MenuItem value="time_of_day">Time of Day</MenuItem>
-                        <MenuItem value="event">Event</MenuItem>
-                        <MenuItem value="season">Season</MenuItem>
-                        <MenuItem value="cultural">Cultural</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
+                    </ul>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {collectionType === 'habitual' && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-lg font-semibold mb-4">Habitual Pattern</h3>
+
+              <div className="flex flex-col gap-4">
+                <div className="space-y-1">
+                  <Label>Natural Language Expression</Label>
+                  <Input
+                    value={naturalExpression}
+                    onChange={(e) => setNaturalExpression(e.target.value)}
+                    placeholder="e.g., 'every morning', 'on weekends', 'during lunch'"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label>Frequency</Label>
+                    <Select value={habitualFrequency} onValueChange={(value) => setHabitualFrequency(value as HabitualFrequency)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="always">Always</SelectItem>
+                        <SelectItem value="usually">Usually</SelectItem>
+                        <SelectItem value="often">Often</SelectItem>
+                        <SelectItem value="sometimes">Sometimes</SelectItem>
+                        <SelectItem value="rarely">Rarely</SelectItem>
+                        <SelectItem value="never">Never</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Vagueness</Label>
+                    <Select value={vagueness} onValueChange={(value) => setVagueness(value as VaguenessType)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="precise">Precise</SelectItem>
+                        <SelectItem value="approximate">Approximate</SelectItem>
+                        <SelectItem value="fuzzy">Fuzzy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">
+                    Typicality: {Math.round(typicality * 100)}%
+                  </Label>
+                  <Slider
+                    value={[typicality]}
+                    onValueChange={(value) => setTypicality(Array.isArray(value) ? value[0] : value)}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Cultural Context</Label>
+                  <Input
+                    value={culturalContext}
+                    onChange={(e) => setCulturalContext(e.target.value)}
+                    placeholder="e.g., 'Western business hours', 'Mediterranean siesta'"
+                  />
+                </div>
+
+                <Separator />
+
+                <Label className="font-medium">Temporal Anchor</Label>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label>Anchor Type</Label>
+                    <Select value={anchorType} onValueChange={(value) => setAnchorType(value as AnchorType)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="time_of_day">Time of Day</SelectItem>
+                        <SelectItem value="event">Event</SelectItem>
+                        <SelectItem value="season">Season</SelectItem>
+                        <SelectItem value="cultural">Cultural</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
                     {anchorType === 'event' ? (
-                      <FormControl fullWidth>
-                        <InputLabel>Anchor Event</InputLabel>
-                        <Select
+                      <>
+                        <Label>Anchor Event</Label>
+                        <Select value={anchorReference} onValueChange={(v) => setAnchorReference(v ?? '')}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select an event" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {events.map(event => (
+                              <SelectItem key={event.id} value={event.id}>
+                                {event.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : (
+                      <>
+                        <Label>Anchor Reference</Label>
+                        <Input
                           value={anchorReference}
                           onChange={(e) => setAnchorReference(e.target.value)}
-                          label="Anchor Event"
-                        >
-                          {events.map(event => (
-                            <MenuItem key={event.id} value={event.id}>
-                              {event.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    ) : (
-                      <TextField
-                        label="Anchor Reference"
-                        value={anchorReference}
-                        onChange={(e) => setAnchorReference(e.target.value)}
-                        placeholder={
-                          anchorType === 'time_of_day' ? 'e.g., morning, noon, evening' :
-                          anchorType === 'season' ? 'e.g., summer, winter' :
-                          anchorType === 'cultural' ? 'e.g., Christmas, Ramadan' :
-                          ''
-                        }
-                        fullWidth
-                      />
-                    )}
-                  </Grid>
-                </Grid>
-              </Paper>
-            )}
-            
-            {collectionType === 'irregular' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Select Specific Times
-                </Typography>
-                
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Choose existing time objects to include in this collection
-                </Alert>
-                
-                <FormControl fullWidth>
-                  <InputLabel>Selected Times</InputLabel>
-                  <Select
-                    multiple
-                    value={selectedTimeIds}
-                    onChange={(e) => setSelectedTimeIds(e.target.value as string[])}
-                    label="Selected Times"
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map(id => {
-                          const time = times.find(t => t.id === id)
-                          return (
-                            <Chip
-                              key={id}
-                              label={time?.type === 'instant' ? 'Instant' : 'Interval'}
-                              size="small"
-                            />
-                          )
-                        })}
-                      </Box>
-                    )}
-                  >
-                    {times.map(time => (
-                      <MenuItem key={time.id} value={time.id}>
-                        {time.type === 'instant'
-                          ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
-                          : `Interval: ${(time as TimeInterval).startTime || '?'} to ${(time as TimeInterval).endTime || '?'}`
-                        }
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Paper>
-            )}
-            
-            {collectionType === 'anchored' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Event-Anchored Pattern
-                </Typography>
-                
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Define times relative to specific events
-                </Alert>
-                
-                <FormControl fullWidth>
-                  <InputLabel>Anchor Events</InputLabel>
-                  <Select
-                    multiple
-                    value={[]}
-                    onChange={() => {}}
-                    label="Anchor Events"
-                  >
-                    {events.map(event => (
-                      <MenuItem key={event.id} value={event.id}>
-                        {event.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Paper>
-            )}
-            
-            {/* Cyclical Phases */}
-            {phases.length > 0 || collectionType === 'periodic' ? (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Cyclical Phases (Optional)
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
-                    <TextField
-                      label="Phase Name"
-                      value={phaseName}
-                      onChange={(e) => setPhaseName(e.target.value)}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <TextField
-                      label="Duration (ISO 8601)"
-                      value={phaseDuration}
-                      onChange={(e) => setPhaseDuration(e.target.value)}
-                      placeholder="e.g., P1D, PT2H"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={4}>
-                    <TextField
-                      label="Description"
-                      value={phaseDescription}
-                      onChange={(e) => setPhaseDescription(e.target.value)}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={1}>
-                    <Button
-                      variant="outlined"
-                      onClick={handleAddPhase}
-                      disabled={!phaseName}
-                    >
-                      Add
-                    </Button>
-                  </Grid>
-                </Grid>
-                
-                {phases.length > 0 && (
-                  <List sx={{ mt: 2 }}>
-                    {phases.map((phase, index) => (
-                      <ListItem key={index}>
-                        <ListItemIcon>
-                          <CyclicalIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={phase.name}
-                          secondary={`${phase.duration || 'No duration'} - ${phase.description || 'No description'}`}
+                          placeholder={
+                            anchorType === 'time_of_day' ? 'e.g., morning, noon, evening' :
+                            anchorType === 'season' ? 'e.g., summer, winter' :
+                            anchorType === 'cultural' ? 'e.g., Christmas, Ramadan' :
+                            ''
+                          }
                         />
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleRemovePhase(index)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </ListItem>
-                    ))}
-                  </List>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {collectionType === 'irregular' && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-lg font-semibold mb-2">Select Specific Times</h3>
+
+              <Alert className="mb-4">
+                <AlertDescription>
+                  Choose existing time objects to include in this collection
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-1">
+                <Label>Selected Times ({selectedTimeIds.length})</Label>
+                <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+                  {times.map(time => (
+                    <button
+                      key={time.id}
+                      type="button"
+                      onClick={() => toggleTimeId(time.id)}
+                      className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
+                        selectedTimeIds.includes(time.id)
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      {time.type === 'instant'
+                        ? `Instant: ${(time as TimeInstant).timestamp || 'unspecified'}`
+                        : `Interval: ${(time as TimeInterval).startTime || '?'} to ${(time as TimeInterval).endTime || '?'}`
+                      }
+                    </button>
+                  ))}
+                </div>
+
+                {selectedTimeIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {selectedTimeIds.map(id => {
+                      const time = times.find(t => t.id === id)
+                      return (
+                        <Badge key={id} variant="outline">
+                          {time?.type === 'instant' ? 'Instant' : 'Interval'}
+                        </Badge>
+                      )
+                    })}
+                  </div>
                 )}
-              </Paper>
-            ) : null}
-          </Box>
-        </LocalizationProvider>
+              </div>
+            </div>
+          )}
+
+          {collectionType === 'anchored' && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-lg font-semibold mb-2">Event-Anchored Pattern</h3>
+
+              <Alert className="mb-4">
+                <AlertDescription>
+                  Define times relative to specific events
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-1">
+                <Label>Anchor Events</Label>
+                <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+                  {events.map(event => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      className="w-full text-left px-2 py-1 rounded text-sm transition-colors hover:bg-muted"
+                    >
+                      {event.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cyclical Phases */}
+          {(phases.length > 0 || collectionType === 'periodic') && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-lg font-semibold mb-2">Cyclical Phases (Optional)</h3>
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-4 space-y-1">
+                  <Label>Phase Name</Label>
+                  <Input
+                    value={phaseName}
+                    onChange={(e) => setPhaseName(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <Label>Duration (ISO 8601)</Label>
+                  <Input
+                    value={phaseDuration}
+                    onChange={(e) => setPhaseDuration(e.target.value)}
+                    placeholder="e.g., P1D, PT2H"
+                  />
+                </div>
+                <div className="col-span-4 space-y-1">
+                  <Label>Description</Label>
+                  <Input
+                    value={phaseDescription}
+                    onChange={(e) => setPhaseDescription(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-1 flex items-end">
+                  <Button
+                    variant="outline"
+                    onClick={handleAddPhase}
+                    disabled={!phaseName}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {phases.length > 0 && (
+                <ul className="mt-4 space-y-1">
+                  {phases.map((phase, index) => (
+                    <li key={index} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <RotateCw className="size-4 text-muted-foreground" />
+                        <div>
+                          <div className="text-sm font-medium">{phase.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {phase.duration || 'No duration'} - {phase.description || 'No description'}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleRemovePhase(index)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name.trim()}
+          >
+            {collection ? 'Update' : 'Create'} Collection
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="primary"
-          disabled={!name.trim()}
-        >
-          {collection ? 'Update' : 'Create'} Collection
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

@@ -66,3 +66,68 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 })
+
+/**
+ * Polyfill PointerEvent for jsdom.
+ *
+ * jsdom (any version through 27) does not implement PointerEvent, but Base
+ * UI (shadcn's upstream primitives for Checkbox, Dialog close triggers,
+ * Menu, Popover, Select, etc.) dispatches pointer events in its click
+ * handlers. Without this shim, a React Testing Library ``userEvent.click``
+ * bubbles into ``new PointerEvent(...)`` inside Base UI and throws a
+ * process-level ``ReferenceError: PointerEvent is not defined``, which
+ * Vitest surfaces as an "Uncaught Exception" and marks the whole test file
+ * as failed.
+ *
+ * The shim delegates to ``MouseEvent`` (which jsdom does implement) while
+ * copying over ``pointerId``, ``pointerType``, and ``isPrimary`` that Base
+ * UI reads on the event object. This is deliberately minimal — it is not a
+ * spec-accurate PointerEvent implementation, just enough surface for
+ * headless-DOM click paths.
+ */
+if (typeof globalThis.PointerEvent === 'undefined') {
+  interface PointerEventInitLike extends MouseEventInit {
+    pointerId?: number
+    pointerType?: string
+    isPrimary?: boolean
+  }
+
+  class PointerEventShim extends MouseEvent {
+    readonly pointerId: number
+    readonly pointerType: string
+    readonly isPrimary: boolean
+
+    constructor(type: string, init: PointerEventInitLike = {}) {
+      super(type, init)
+      this.pointerId = init.pointerId ?? 0
+      this.pointerType = init.pointerType ?? ''
+      this.isPrimary = init.isPrimary ?? false
+    }
+  }
+
+  globalThis.PointerEvent = PointerEventShim as unknown as typeof PointerEvent
+  ;(window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent =
+    PointerEventShim as unknown as typeof PointerEvent
+}
+
+/**
+ * Element-level pointer-capture methods are likewise missing in jsdom.
+ * Base UI Radio/Checkbox roots call ``hasPointerCapture``/``setPointerCapture``
+ * inside their pointerdown handler; both are no-ops here.
+ */
+if (typeof Element !== 'undefined') {
+  const proto = Element.prototype as unknown as {
+    hasPointerCapture?: (pointerId: number) => boolean
+    setPointerCapture?: (pointerId: number) => void
+    releasePointerCapture?: (pointerId: number) => void
+  }
+  if (!proto.hasPointerCapture) {
+    proto.hasPointerCapture = () => false
+  }
+  if (!proto.setPointerCapture) {
+    proto.setPointerCapture = () => {}
+  }
+  if (!proto.releasePointerCapture) {
+    proto.releasePointerCapture = () => {}
+  }
+}

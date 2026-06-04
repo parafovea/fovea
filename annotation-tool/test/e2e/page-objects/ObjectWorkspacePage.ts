@@ -232,8 +232,13 @@ export class ObjectWorkspacePage extends BasePage {
     const personaListbox = this.page.getByRole('listbox').first()
     await personaListbox.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Wait for options to be available and click the first one
-    const firstPersonaOption = personaListbox.getByRole('option').first()
+    // Skip the leading "_none" placeholder option ("Select Persona") so
+    // we actually select a real persona and the Event Type combobox
+    // renders (it is gated on selectedPersonaId being truthy).
+    const firstPersonaOption = personaListbox
+      .getByRole('option')
+      .filter({ hasNotText: /^Select Persona$/ })
+      .first()
     await firstPersonaOption.waitFor({ state: 'visible', timeout: 5000 })
     await firstPersonaOption.click({ timeout: 5000 })
     await this.wait(500)
@@ -252,7 +257,11 @@ export class ObjectWorkspacePage extends BasePage {
     await typeListbox.waitFor({ state: 'visible', timeout: 5000 })
     await this.wait(300)
 
-    const typeOption = typeListbox.getByRole('option', { name: new RegExp(typeName, 'i') }).first()
+    const typeOption = typeListbox
+      .getByRole('option')
+      .filter({ hasNotText: /^Select Event Type$/ })
+      .filter({ hasText: new RegExp(typeName, 'i') })
+      .first()
     await typeOption.waitFor({ state: 'visible', timeout: 5000 })
     await typeOption.click({ timeout: 5000 })
     await this.wait(500)
@@ -260,8 +269,10 @@ export class ObjectWorkspacePage extends BasePage {
     // Wait for listbox to close
     await typeListbox.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
 
-    // Click "Add Interpretation" button inside the region
-    const addButton = accordionRegion.getByRole('button', { name: /add interpretation/i })
+    // Two "Add Interpretation" buttons share the region — the
+    // accordion-trigger (first, with data-slot=accordion-trigger) and
+    // the actual submit button at the bottom. Pick the last one.
+    const addButton = accordionRegion.getByRole('button', { name: /add interpretation/i }).last()
     await addButton.waitFor({ state: 'visible', timeout: 3000 })
     await addButton.click({ timeout: 3000 })
     await this.wait(500)
@@ -371,23 +382,24 @@ export class ObjectWorkspacePage extends BasePage {
       await this.wait(300)
     }
 
-    // Find Location select - look for combobox near "Location" text
-    const locationInput = dialog.locator('[role="combobox"]').filter({ has: this.page.locator('input[id*="location"]') }).first()
-    if (await locationInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await locationInput.click({ timeout: 3000 })
-    } else {
-      // Fallback: try finding by nearby text
-      const locationFormControl = dialog.locator('.MuiFormControl-root').filter({ hasText: /location/i }).first()
-      const combobox = locationFormControl.locator('[role="combobox"]').first()
-      await combobox.click({ timeout: 3000 })
-    }
+    // Locate the Location-section combobox by walking up from the
+    // 'Location' Label to the parent flex-row that contains the Select.
+    const locationGroup = dialog
+      .locator('div.space-y-1')
+      .filter({ has: this.page.locator('label', { hasText: /^Location$/ }) })
+      .first()
+    await locationGroup.getByRole('combobox').first().click({ timeout: 5000 })
     await this.wait(300)
 
-    // Wait for listbox and select location
     const listbox = this.page.getByRole('listbox').first()
-    await listbox.waitFor({ state: 'visible', timeout: 3000 })
-    const locationOption = listbox.getByRole('option', { name: new RegExp(locationName, 'i') }).first()
-    await locationOption.click({ timeout: 3000 })
+    await listbox.waitFor({ state: 'visible', timeout: 5000 })
+    // Skip the leading "None" placeholder when searching for the named option.
+    const locationOption = listbox
+      .getByRole('option')
+      .filter({ hasNotText: /^None$/ })
+      .filter({ hasText: new RegExp(locationName, 'i') })
+      .first()
+    await locationOption.click({ timeout: 5000 })
     await this.wait(300)
 
     await this.saveForm()
@@ -408,15 +420,16 @@ export class ObjectWorkspacePage extends BasePage {
       await this.wait(300)
     }
 
-    // Find Time select - look for combobox near "Time" text
-    const timeInput = dialog.locator('[role="combobox"]').filter({ has: this.page.locator('input[id*="time"]') }).first()
-    if (await timeInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await timeInput.click({ timeout: 3000 })
+    // Find Time select trigger (shadcn Select renders as combobox)
+    const timeCombobox = dialog.getByRole('combobox').filter({ hasText: /instant|interval|time|none/i }).first()
+    if (await timeCombobox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await timeCombobox.click({ timeout: 3000 })
     } else {
-      // Fallback: try finding by nearby text
-      const timeFormControl = dialog.locator('.MuiFormControl-root').filter({ hasText: /time/i }).first()
-      const combobox = timeFormControl.locator('[role="combobox"]').first()
-      await combobox.click({ timeout: 3000 })
+      // Fallback: locate via Label + sibling combobox group
+      const timeGroup = dialog.locator('div').filter({
+        has: this.page.getByText(/^time$/i)
+      }).filter({ has: this.page.getByRole('combobox') }).first()
+      await timeGroup.getByRole('combobox').first().click({ timeout: 3000 })
     }
     await this.wait(300)
 
@@ -682,21 +695,15 @@ export class ObjectWorkspacePage extends BasePage {
       await descTextarea.fill(description)
     }
 
-    // Add entities if provided
+    // Add entities. CollectionBuilder renders each entity as a toggle
+    // button in a scrollable list under the "Entities in Collection"
+    // label; click each by exact name to add it to the selection.
     if (entityNames.length > 0) {
-      const autocomplete = dialog.getByLabel(/select entities/i).first()
-      if (await autocomplete.isVisible({ timeout: 2000 }).catch(() => false)) {
-        for (const entityName of entityNames) {
-          await autocomplete.click()
-          await autocomplete.fill(entityName)
-          await this.wait(300)
-
-          const option = this.page.getByRole('option', { name: new RegExp(entityName, 'i') }).first()
-          if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await option.click()
-            await this.wait(300)
-          }
-        }
+      for (const entityName of entityNames) {
+        const entityButton = dialog.getByRole('button', { name: entityName, exact: true })
+        await expect(entityButton).toBeVisible({ timeout: 5000 })
+        await entityButton.click()
+        await this.wait(100)
       }
     }
 
@@ -731,21 +738,14 @@ export class ObjectWorkspacePage extends BasePage {
       await descTextarea.fill(description)
     }
 
-    // Add events if provided
+    // CollectionBuilder renders each event as a toggle <button>
+    // under the 'Events in Collection' Label; click by name.
     if (eventNames.length > 0) {
-      const autocomplete = dialog.getByLabel(/select events/i).first()
-      if (await autocomplete.isVisible({ timeout: 2000 }).catch(() => false)) {
-        for (const eventName of eventNames) {
-          await autocomplete.click()
-          await autocomplete.fill(eventName)
-          await this.wait(300)
-
-          const option = this.page.getByRole('option', { name: new RegExp(eventName, 'i') }).first()
-          if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await option.click()
-            await this.wait(300)
-          }
-        }
+      for (const eventName of eventNames) {
+        const eventToggle = dialog.getByRole('button', { name: eventName, exact: true })
+        await expect(eventToggle).toBeVisible({ timeout: 5000 })
+        await eventToggle.click()
+        await this.wait(100)
       }
     }
 
@@ -785,19 +785,12 @@ export class ObjectWorkspacePage extends BasePage {
     const dialog = this.page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Find the autocomplete container
-    const autocompleteContainer = dialog.locator('.MuiAutocomplete-root').first()
-
-    // Get all member chips in the autocomplete (exclude collection type chips)
-    const memberChipsInAutocomplete = autocompleteContainer.locator('.MuiChip-root').filter({
-      has: this.page.locator('.MuiChip-deleteIcon')
-    })
-
-    // Find and click the delete icon for the chip to remove
-    const chipToRemove = memberChipsInAutocomplete.filter({ hasText: memberNameToRemove }).first()
-    const deleteIcon = chipToRemove.locator('.MuiChip-deleteIcon')
-    if (await deleteIcon.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await deleteIcon.click()
+    // shadcn CollectionEditor: members are toggled by clicking buttons in the
+    // available-members list. Click the matching toggle to deselect.
+    const memberToggle = dialog.getByRole('button', { name: new RegExp(`^${memberNameToRemove}$`, 'i') }).first()
+    if (await memberToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await memberToggle.scrollIntoViewIfNeeded()
+      await memberToggle.click()
       await this.wait(500)
     }
 

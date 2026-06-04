@@ -14,7 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
-import ClaimEditor from './ClaimEditor'
+import { ClaimEditor } from './ClaimEditor'
 import { Claim } from '@models/types'
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 import { server } from '@test/setup'
@@ -158,7 +158,7 @@ describe('ClaimEditor', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       expect(screen.getByText(/Confidence \*/i)).toBeInTheDocument()
-      const slider = screen.getByRole('slider')
+      const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()
     })
 
@@ -194,8 +194,8 @@ describe('ClaimEditor', () => {
 
     it('starts with confidence at 90%', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      const slider = screen.getByRole('slider')
-      expect(slider).toHaveValue('0.9')
+      // Confidence display shows 90%
+      expect(screen.getByText('90%')).toBeInTheDocument()
     })
 
     it('disables save button when no content', () => {
@@ -214,8 +214,8 @@ describe('ClaimEditor', () => {
     it('populates fields with claim data', () => {
       render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
       expect(screen.getByDisplayValue('Baseball is a popular sport')).toBeInTheDocument()
-      const slider = screen.getByRole('slider')
-      expect(slider).toHaveValue('0.85')
+      // mockClaim has confidence 0.85
+      expect(screen.getByText('85%')).toBeInTheDocument()
     })
 
     it('updates save button text to "Save"', () => {
@@ -257,9 +257,11 @@ describe('ClaimEditor', () => {
 
     it('validates confidence range (0-1)', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      const slider = screen.getByRole('slider')
-      expect(slider).toHaveAttribute('min', '0')
-      expect(slider).toHaveAttribute('max', '1')
+      const slider = document.querySelector('[data-slot="slider"]')
+      expect(slider).toBeInTheDocument()
+      // Slider renders with min/max marks (0%, 50%, 100%)
+      expect(screen.getByText('0%')).toBeInTheDocument()
+      expect(screen.getByText('100%')).toBeInTheDocument()
     })
   })
 
@@ -352,21 +354,19 @@ describe('ClaimEditor', () => {
   })
 
   describe('Confidence Slider', () => {
-    it('updates confidence value when slider moved', () => {
+    it('renders confidence slider with initial value', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      const slider = screen.getByRole('slider')
+      const slider = document.querySelector('[data-slot="slider"]')
 
-      // Slider starts at 0.9 (90%)
-      expect(slider).toHaveValue('0.9')
+      // Slider starts at 0.9 (90%) shown in display text
       expect(slider).toBeInTheDocument()
-      expect(slider).toHaveAttribute('step', '0.01')
+      expect(screen.getByText('90%')).toBeInTheDocument()
     })
 
     it('displays confidence percentage correctly', () => {
       render(<ClaimEditor {...defaultProps} claim={mockClaim} />, { wrapper: createWrapper() })
       // mockClaim has confidence 0.85
-      const slider = screen.getByRole('slider')
-      expect(slider).toHaveValue('0.85')
+      expect(screen.getByText('85%')).toBeInTheDocument()
     })
   })
 
@@ -379,7 +379,7 @@ describe('ClaimEditor', () => {
       await user.click(claimerAccordion)
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/claimer type/i)).toBeInTheDocument()
+        expect(screen.getByText('Claimer Type')).toBeInTheDocument()
       })
     })
 
@@ -391,8 +391,7 @@ describe('ClaimEditor', () => {
       await user.click(claimerAccordion)
 
       await waitFor(() => {
-        const claimerTypeSelect = screen.getByLabelText(/claimer type/i)
-        expect(claimerTypeSelect).toBeInTheDocument()
+        expect(screen.getByText('Claimer Type')).toBeInTheDocument()
       })
     })
 
@@ -403,16 +402,21 @@ describe('ClaimEditor', () => {
       const claimerAccordion = screen.getByText(/Claimer \(optional\)/i)
       await user.click(claimerAccordion)
 
-      await waitFor(async () => {
-        const claimerTypeSelect = screen.getByLabelText(/claimer type/i)
-        await user.click(claimerTypeSelect)
+      await waitFor(() => {
+        expect(screen.getByText('Claimer Type')).toBeInTheDocument()
       })
 
-      const entityOption = screen.getByRole('option', { name: /Entity \(single world state entity\)/i })
-      await user.click(entityOption)
+      // Click the select trigger
+      const selectTrigger = screen.getByText(/none \(standalone claim\)/i)
+      await user.click(selectTrigger)
+
+      await waitFor(async () => {
+        const entityOption = screen.getByText(/Entity \(single world state entity\)/i)
+        await user.click(entityOption)
+      })
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/^claimer$/i)).toBeInTheDocument()
+        expect(screen.getByText(/who is making this claim/i)).toBeInTheDocument()
       })
     })
 
@@ -452,9 +456,9 @@ describe('ClaimEditor', () => {
       await user.click(contextAccordion)
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/claiming event/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/claiming time/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/claiming location/i)).toBeInTheDocument()
+        expect(screen.getByText('Claiming Event')).toBeInTheDocument()
+        expect(screen.getByText('Claiming Time')).toBeInTheDocument()
+        expect(screen.getByText('Claiming Location')).toBeInTheDocument()
       })
     })
 
@@ -466,10 +470,107 @@ describe('ClaimEditor', () => {
       await user.click(contextAccordion)
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/claiming event/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/claiming time/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/claiming location/i)).toBeInTheDocument()
+        expect(screen.getByText('Claiming Event')).toBeInTheDocument()
+        expect(screen.getByText('Claiming Time')).toBeInTheDocument()
+        expect(screen.getByText('Claiming Location')).toBeInTheDocument()
       })
+    })
+
+    it('populates Claiming Event / Time / Location dropdowns from world state', async () => {
+      // Replace the default world handler with one carrying real options
+      // for each of the three context dropdowns. The Time `label` field is
+      // used as the visible item text; locations are entities tagged with
+      // a `locationType` field (Fovea data model does not promote them to
+      // a top-level WorldState key).
+      server.use(
+        http.get('/api/world', () => {
+          return HttpResponse.json({
+            entities: [
+              { id: 'e-1', name: 'Person A' },
+              { id: 'loc-1', name: 'Conference Room', locationType: 'room' },
+              { id: 'loc-2', name: 'Lobby', locationType: 'room' },
+            ],
+            events: [
+              { id: 'ev-1', name: 'Standup' },
+              { id: 'ev-2', name: 'Demo' },
+            ],
+            times: [
+              { id: 't-1', label: '2026-05-15 09:00', type: 'instant' },
+              { id: 't-2', label: 'Sprint 12', type: 'interval' },
+            ],
+            locations: [],
+            relations: [],
+            collections: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+          })
+        }),
+      )
+
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      const contextAccordion = screen.getByText(/Claim Context \(optional\)/i)
+      await user.click(contextAccordion)
+
+      // Open the Claiming Event combobox and confirm the world events surface.
+      const triggers = await screen.findAllByRole('combobox')
+      // Layout: Claimer Type, Audio, Video, Metadata + Event / Time / Location.
+      // Identify the three context triggers by walking each and checking the
+      // option set; we only assert the union contains every expected label.
+      const seenLabels = new Set<string>()
+      for (const trigger of triggers) {
+        await user.click(trigger)
+        document.querySelectorAll('[role="option"]').forEach(o => {
+          if (o.textContent) seenLabels.add(o.textContent)
+        })
+        // Close the dropdown via Escape so the next iteration opens cleanly.
+        await user.keyboard('{Escape}')
+      }
+      expect(seenLabels).toContain('Standup')
+      expect(seenLabels).toContain('Demo')
+      expect(seenLabels).toContain('2026-05-15 09:00')
+      expect(seenLabels).toContain('Sprint 12')
+      expect(seenLabels).toContain('Conference Room')
+      expect(seenLabels).toContain('Lobby')
+      // Person A is a non-location entity and must NOT appear in any context dropdown.
+      expect(seenLabels).not.toContain('Person A')
+    })
+
+    it('renders the time-object id as a fallback when label is missing', async () => {
+      server.use(
+        http.get('/api/world', () => {
+          return HttpResponse.json({
+            entities: [],
+            events: [],
+            times: [{ id: 't-unlabelled', type: 'instant' }],
+            locations: [],
+            relations: [],
+            collections: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+          })
+        }),
+      )
+
+      const user = userEvent.setup()
+      render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
+
+      const contextAccordion = screen.getByText(/Claim Context \(optional\)/i)
+      await user.click(contextAccordion)
+
+      const triggers = await screen.findAllByRole('combobox')
+      const seenLabels = new Set<string>()
+      for (const trigger of triggers) {
+        await user.click(trigger)
+        document.querySelectorAll('[role="option"]').forEach(o => {
+          if (o.textContent) seenLabels.add(o.textContent)
+        })
+        await user.keyboard('{Escape}')
+      }
+      expect(seenLabels).toContain('t-unlabelled')
     })
   })
 
@@ -811,15 +912,12 @@ describe('ClaimEditor', () => {
       expect(nonSpeechCheckboxes.length).toBeGreaterThan(0)
     })
 
-    it('shows info icons with tooltips for modality sections', () => {
+    it('shows info icons for modality sections', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      
-      // Info icons should be present
-      const infoIcons = screen.getAllByRole('button', { hidden: true })
-      const audioInfoIcon = infoIcons.find(btn => 
-        btn.closest('[aria-label*="Audio"]') || btn.querySelector('svg[data-testid="InfoIcon"]')
-      )
-      expect(audioInfoIcon).toBeDefined()
+
+      // Info icons (lucide-info SVGs) should be present next to each modality section header
+      const infoIcons = document.querySelectorAll('svg.lucide-info')
+      expect(infoIcons.length).toBe(3) // Audio, Video, Metadata
     })
 
     it('renders checkboxes for modality options (not dropdowns)', () => {
@@ -1136,24 +1234,22 @@ describe('ClaimEditor', () => {
   })
 
   describe('Confidence Slider', () => {
-    it('displays percentage on slider thumb (not above)', () => {
+    it('displays percentage inline above slider', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      
-      const slider = screen.getByRole('slider')
-      // Check that slider has valueLabelDisplay prop (may not be visible as attribute)
+
+      const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()
-      
-      // Should not have percentage text above slider (it's on the thumb)
-      expect(screen.queryByText(/Confidence: 90%/)).not.toBeInTheDocument()
+
+      // Percentage is displayed as text above the slider
+      expect(screen.getByText('90%')).toBeInTheDocument()
     })
 
-    it('updates percentage on thumb when slider moved', () => {
+    it('renders slider with initial value', () => {
       render(<ClaimEditor {...defaultProps} />, { wrapper: createWrapper() })
-      
-      const slider = screen.getByRole('slider')
-      // Slider should display percentage on thumb (valueLabelDisplay="on")
+
+      const slider = document.querySelector('[data-slot="slider"]')
       expect(slider).toBeInTheDocument()
-      expect(slider).toHaveValue('0.9')
+      expect(screen.getByText('90%')).toBeInTheDocument()
     })
   })
 

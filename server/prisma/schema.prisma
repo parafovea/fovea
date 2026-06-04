@@ -44,10 +44,35 @@ model User {
   sharedByMe         ResourceShare[]          @relation("SharedByMe")
   sharedWithMe       ResourceShare[]          @relation("SharedWithMe")
 
+  // Per-user inference preferences (1:1, created on-demand)
+  preferences        UserPreferences?
+  systemConfigEdits  SystemConfig[]           @relation("SystemConfigUpdatedBy")
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@map("users")
+}
+
+/// UserPreferences stores per-user inference sampling/audio/detection overrides.
+///
+/// The `inferencePreferences` JSON column holds a partial object matching the
+/// shape of the `InferencePreferences` type on the frontend. Null/missing
+/// fields mean "defer to backend default" — there are no null fields forced
+/// into every row. The row is created lazily when a user first writes a
+/// preference and upserted on every subsequent edit.
+model UserPreferences {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// JSON structure: InferencePreferences (see annotation-tool/src/store/preferences/useInferencePreferences.ts)
+  inferencePreferences   Json     @default("{}")
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("user_preferences")
 }
 
 /// Session stores user authentication sessions
@@ -133,8 +158,51 @@ model Persona {
   videoSummaries  VideoSummary[]
   annotations     Annotation[]
 
+  // Per-persona inference preferences (1:1, created on-demand)
+  preferences     PersonaPreferences?
+
   @@index([projectId])
   @@map("personas")
+}
+
+/// PersonaPreferences stores per-persona inference overrides layered on top
+/// of the owning user's UserPreferences.
+///
+/// Merge order at request time: user defaults → persona overrides → per-request
+/// overrides (most specific wins). The `inferencePreferences` column stores a
+/// partial object; omitted fields fall through to the user level.
+model PersonaPreferences {
+  id                     String   @id @default(uuid())
+  personaId              String   @unique
+  persona                Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  /// JSON structure: Partial<InferencePreferences>
+  inferencePreferences   Json     @default("{}")
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("persona_preferences")
+}
+
+/// SystemConfig is an admin-only key-value store for system-wide settings
+/// (storage roots, CUDA device, warmup, external API endpoints). Each
+/// mutation bumps `version` and records `updatedByUserId` for audit.
+///
+/// Keys are validated against a discriminated TypeBox schema at the API
+/// boundary so the `value` column always matches the shape advertised for
+/// its key.
+model SystemConfig {
+  key             String   @id
+  value           Json
+  version         Int      @default(1)
+  updatedByUserId String?
+  updatedBy       User?    @relation("SystemConfigUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("system_config")
 }
 
 /// Ontology defines the types (entities, events, roles, relations) for a specific persona

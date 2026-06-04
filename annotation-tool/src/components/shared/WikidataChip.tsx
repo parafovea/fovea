@@ -1,5 +1,6 @@
-import { Box, Chip, Typography, Tooltip } from '@mui/material'
-import { Language as WikidataIcon, Storage as WikibaseIcon } from '@mui/icons-material'
+import { Globe, Database } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useWikidataConfig, useWikidataBaseUrl } from '@hooks/config'
 
 interface WikidataChipProps {
@@ -22,7 +23,7 @@ export function WikidataChip({
   wikidataUrl,
   wikibaseId,
   importedAt,
-  size = 'small',
+  size: _size = 'small',
   showTimestamp = true
 }: WikidataChipProps) {
   const { mode, allowExternalLinks } = useWikidataConfig()
@@ -44,92 +45,76 @@ export function WikidataChip({
 
   // Wikibase chip (local instance) - only shown in offline mode
   const wikibaseChip = isOfflineWithLocalId && wikibaseBaseUrl ? (
-    <Tooltip title="View in local Wikibase">
-      <Chip
-        icon={<WikibaseIcon />}
-        label={`Wikibase: ${wikibaseId}`}
-        size={size}
-        variant="outlined"
-        color="info"
-        component="a"
-        href={`${wikibaseBaseUrl}/wiki/${wikibaseId}`}
-        target="_blank"
-        clickable
-        onClick={(e) => e.stopPropagation()}
-        sx={{
-          cursor: 'pointer',
-          '&:hover': {
-            backgroundColor: 'info.main',
-            color: 'info.contrastText',
-            '& .MuiChip-icon': {
-              color: 'inherit'
-            }
-          }
-        }}
-      />
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <a
+            href={`${wikibaseBaseUrl}/wiki/${wikibaseId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          />
+        }
+      >
+        <Badge variant="outline" className="cursor-pointer gap-1 hover:bg-accent">
+          <Database className="size-3" />
+          Wikibase: {wikibaseId}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>View in local Wikibase</TooltipContent>
     </Tooltip>
   ) : null
 
   // Wikidata chip - always shown if wikidataId exists
   const wikidataChipEnabled = allowExternalLinks && wikidataUrl
-  const wikidataChip = (
-    <Tooltip
-      title={
-        wikidataChipEnabled
-          ? 'View on Wikidata'
-          : 'External Wikidata links disabled'
-      }
-    >
-      <Chip
-        icon={<WikidataIcon />}
-        label={`Wikidata: ${wikidataId}`}
-        size={size}
-        variant="outlined"
-        color={wikidataChipEnabled ? 'primary' : 'default'}
-        {...(wikidataChipEnabled ? {
-          component: 'a' as const,
-          href: wikidataUrl,
-          target: '_blank',
-          clickable: true,
-        } : {})}
-        onClick={(e) => e.stopPropagation()}
-        sx={{
-          cursor: wikidataChipEnabled ? 'pointer' : 'default',
-          ...(wikidataChipEnabled ? {
-            '&:hover': {
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              '& .MuiChip-icon': {
-                color: 'inherit'
-              }
-            }
-          } : {
-            opacity: 0.6,
-            '& .MuiChip-icon': {
-              color: 'action.disabled'
-            }
-          })
-        }}
-      />
+
+  const wikidataChipElement = wikidataChipEnabled ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <a
+            href={wikidataUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          />
+        }
+      >
+        <Badge variant="outline" className="cursor-pointer gap-1 hover:bg-primary hover:text-primary-foreground">
+          <Globe className="size-3" />
+          Wikidata: {wikidataId}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>View on Wikidata</TooltipContent>
+    </Tooltip>
+  ) : (
+    <Tooltip>
+      <TooltipTrigger>
+        <Badge variant="outline" className="gap-1 opacity-60 cursor-default">
+          <Globe className="size-3" />
+          Wikidata: {wikidataId}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>External Wikidata links disabled</TooltipContent>
     </Tooltip>
   )
 
   // Combine chips
   const chips = (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+    <div className="flex items-center gap-1">
       {wikibaseChip}
-      {wikidataChip}
-    </Box>
+      {wikidataChipElement}
+    </div>
   )
 
   if (importedAt && showTimestamp) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <div className="flex items-center gap-2">
         {chips}
-        <Typography variant="caption" color="text.secondary">
+        <span className="text-xs text-muted-foreground">
           Imported {formatDate(importedAt)}
-        </Typography>
-      </Box>
+        </span>
+      </div>
     )
   }
 

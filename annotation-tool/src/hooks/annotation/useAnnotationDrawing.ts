@@ -4,9 +4,9 @@
  * Extracted from AnnotationOverlay to provide reusable drawing logic for video annotations.
  */
 
-import { useState, useCallback, RefObject, useMemo } from 'react'
+import { useState, useCallback, RefObject } from 'react'
 import { useAnnotationUiStore } from '@store/zustand'
-import { useAddAnnotation, usePersonas, useAllPersonaOntologies } from '@store/queries'
+import { useAddAnnotation } from '@store/queries'
 import type { Annotation } from '@models/types'
 
 /**
@@ -118,11 +118,6 @@ export function useAnnotationDrawing({
 
   // TanStack Query mutation for adding annotations
   const { mutate: addAnnotation } = useAddAnnotation()
-
-  // Get persona ontologies for shared type lookup
-  const { data: personas = [] } = usePersonas()
-  const personaIds = useMemo(() => personas.map((p) => p.id), [personas])
-  const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
 
   /**
    * Determines if drawing is allowed based on current annotation mode and requirements.
@@ -278,79 +273,22 @@ export function useAnnotationDrawing({
       }
 
       if (annotationMode === 'type') {
-        // Look up the selected type to check for sharedTypeId
-        const selectedOntology = personaOntologies.find(o => o.personaId === selectedPersonaId)
         const typeCategory = drawingMode as 'entity' | 'role' | 'event'
 
-        // Get the appropriate type array based on category
-        let selectedType: { id: string; sharedTypeId?: string; wikidataId?: string } | undefined
-        if (typeCategory === 'entity') {
-          selectedType = selectedOntology?.entities.find(e => e.id === selectedTypeId)
-        } else if (typeCategory === 'role') {
-          selectedType = selectedOntology?.roles.find(r => r.id === selectedTypeId)
-        } else if (typeCategory === 'event') {
-          selectedType = selectedOntology?.events.find(e => e.id === selectedTypeId)
+        // Create a single annotation for the currently selected persona and type
+        const annotation: NewAnnotationInput = {
+          ...baseAnnotation,
+          annotationType: 'type',
+          personaId: selectedPersonaId ?? undefined,
+          typeCategory,
+          typeId: selectedTypeId ?? 'temp-type',
         }
 
-        // Check for sharedTypeId or wikidataId to find linked types
-        const sharedId = selectedType?.sharedTypeId || selectedType?.wikidataId
-        let isFirstAnnotation = true
-
-        if (sharedId && personaOntologies.length > 1) {
-          // Create annotations for all personas with matching shared type
-          for (const ontology of personaOntologies) {
-            let matchingType: { id: string; sharedTypeId?: string; wikidataId?: string } | undefined
-            if (typeCategory === 'entity') {
-              matchingType = ontology.entities.find(e =>
-                e.sharedTypeId === sharedId ||
-                (selectedType?.wikidataId && e.wikidataId === selectedType.wikidataId)
-              )
-            } else if (typeCategory === 'role') {
-              matchingType = ontology.roles.find(r =>
-                r.sharedTypeId === sharedId ||
-                (selectedType?.wikidataId && r.wikidataId === selectedType.wikidataId)
-              )
-            } else if (typeCategory === 'event') {
-              matchingType = ontology.events.find(e =>
-                e.sharedTypeId === sharedId ||
-                (selectedType?.wikidataId && e.wikidataId === selectedType.wikidataId)
-              )
-            }
-
-            if (matchingType) {
-              const annotation: NewAnnotationInput = {
-                ...baseAnnotation,
-                annotationType: 'type',
-                personaId: ontology.personaId,
-                typeCategory,
-                typeId: matchingType.id,
-              }
-
-              addAnnotation(annotation, {
-                onSuccess: isFirstAnnotation ? (savedAnnotation) => {
-                  // Auto-select the first created annotation to show timeline
-                  setSelectedAnnotation(savedAnnotation)
-                } : undefined,
-              })
-              isFirstAnnotation = false
-            }
-          }
-        } else {
-          // No sharedTypeId, create single annotation
-          const annotation: NewAnnotationInput = {
-            ...baseAnnotation,
-            annotationType: 'type',
-            personaId: selectedPersonaId ?? undefined,
-            typeCategory,
-            typeId: selectedTypeId ?? 'temp-type',
-          }
-
-          addAnnotation(annotation, {
-            onSuccess: (savedAnnotation) => {
-              setSelectedAnnotation(savedAnnotation)
-            },
-          })
-        }
+        addAnnotation(annotation, {
+          onSuccess: (savedAnnotation) => {
+            setSelectedAnnotation(savedAnnotation)
+          },
+        })
       } else {
         // Object annotation mode - single annotation
         const objectAnnotation: NewAnnotationInput = {
@@ -394,7 +332,6 @@ export function useAnnotationDrawing({
     addAnnotation,
     setSelectedAnnotation,
     resetDrawingState,
-    personaOntologies,
   ])
 
   return {

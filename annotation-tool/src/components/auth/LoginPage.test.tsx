@@ -7,7 +7,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { renderWithProviders } from '@test/utils/test-utils.js'
-import LoginPage from './LoginPage.js'
+import { LoginPage } from './LoginPage.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '@test/setup.js'
 
@@ -55,7 +55,7 @@ describe('LoginPage', () => {
 
     // Login should complete without error
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
     })
   })
 
@@ -94,7 +94,7 @@ describe('LoginPage', () => {
       </MemoryRouter>
     )
 
-    const checkbox = screen.getByRole('checkbox', { name: /remember me/i })
+    const checkbox = screen.getByRole('checkbox')
     expect(checkbox).not.toBeChecked()
 
     await user.click(checkbox)
@@ -228,7 +228,7 @@ describe('LoginPage', () => {
 
       // Login completes without error (navigate was called)
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
 
@@ -252,7 +252,7 @@ describe('LoginPage', () => {
 
       // Login completes without error (navigate was called with from path)
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
 
@@ -270,7 +270,7 @@ describe('LoginPage', () => {
       await user.click(screen.getByRole('button', { name: /^login$/i }))
 
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('login-error-alert')).not.toBeInTheDocument()
       })
     })
   })

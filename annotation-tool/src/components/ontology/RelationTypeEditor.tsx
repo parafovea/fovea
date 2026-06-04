@@ -1,37 +1,27 @@
 import { useState, useEffect } from 'react'
+import { Trash2, Plus, ArrowRight, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  FormControlLabel,
-  Checkbox,
-  Chip,
-  Stack,
-  Tabs,
-  Tab,
-  FormControl,
-  FormGroup,
-  InputLabel,
-  Select,
-  MenuItem,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Divider,
-  Alert,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  ArrowForward as ArrowIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { generateId } from '@utils/uuid'
 import {
   usePersonas,
@@ -65,7 +55,7 @@ export default function RelationTypeEditor({
   const { mutate: addRelationMutation } = useAddRelationToPersona()
   const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
 
-  const [tabValue, setTabValue] = useState(0)
+  const [tabValue, setTabValue] = useState('definition')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
   const [name, setName] = useState('')
   const [gloss, setGloss] = useState<GlossItem[]>([])
@@ -91,7 +81,7 @@ export default function RelationTypeEditor({
       setSymmetric(relationType.symmetric || false)
       setTransitive(relationType.transitive || false)
       setExamples(relationType.examples || [])
-      setTabValue(0) // Start on definition tab when editing
+      setTabValue('definition') // Start on definition tab when editing
       // When editing, always use the current persona only
       setTargetPersonaIds([personaId || ''])
     } else {
@@ -102,17 +92,16 @@ export default function RelationTypeEditor({
       setSymmetric(false)
       setTransitive(false)
       setExamples([])
-      setTabValue(0)
-      // Don't reset targetPersonaIds when creating - preserve user's persona selections
-      // Only initialize if empty (first open)
-      if (targetPersonaIds.length === 0 || (targetPersonaIds.length === 1 && targetPersonaIds[0] === '')) {
-        setTargetPersonaIds([personaId || ''])
-      }
+      setTabValue('definition')
+      setTargetPersonaIds([personaId || ''])
     }
     setExampleInput('')
     setSourceId('')
     setTargetId('')
-  }, [relationType, personaId, targetPersonaIds])
+    // targetPersonaIds is intentionally NOT a dependency: re-running this
+    // effect when the user toggles a target-persona checkbox wipes their
+    // in-progress name / gloss / source / target / examples.
+  }, [relationType, personaId])
 
   const handleSave = async () => {
     if (!personaId) return
@@ -162,7 +151,7 @@ export default function RelationTypeEditor({
 
     onClose()
   }
-  
+
   const getSourceOptions = () => {
     if (!ontology) return []
     switch (sourceType) {
@@ -190,7 +179,7 @@ export default function RelationTypeEditor({
         return []
     }
   }
-  
+
   const handleAddRelationInstance = () => {
     if (!personaId || !relationType || !sourceId || !targetId) return
 
@@ -216,7 +205,7 @@ export default function RelationTypeEditor({
     if (!personaId) return
     deleteRelationMutation({ personaId, relationId })
   }
-  
+
   const getItemName = (type: 'entity' | 'role' | 'event' | 'time' | 'claim', id: string) => {
     if (!ontology) return 'Unknown'
     switch (type) {
@@ -238,9 +227,9 @@ export default function RelationTypeEditor({
         return 'Unknown'
     }
   }
-  
+
   // Get existing relation instances for this type
-  const relationInstances = relationType 
+  const relationInstances = relationType
     ? (ontology?.relations.filter(r => r.relationTypeId === relationType.id) || [])
     : []
 
@@ -272,306 +261,53 @@ export default function RelationTypeEditor({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        {relationType ? 'Edit Relation Type' : 'Create Relation Type'}
-      </DialogTitle>
-      <DialogContent>
-        {relationType && (
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-              <Tab label="Definition" />
-              <Tab label={`Instances (${relationInstances.length})`} />
-            </Tabs>
-          </Box>
-        )}
-        
-        {(!relationType || tabValue === 0) && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              label="Relation Type Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-              required
-              helperText="e.g., 'subtype-of', 'part-of', 'causes', 'located-at'"
-            />
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent data-tour-id="relation-type-editor" className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {relationType ? 'Edit Relation Type' : 'Create Relation Type'}
+          </DialogTitle>
+        </DialogHeader>
 
-            <Box>
-              <Typography variant="subtitle2" component="div" gutterBottom>
-                Source Types (can be)
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Chip
-                  label="Entity"
-                  color={sourceTypes.includes('entity') ? 'primary' : 'default'}
-                  onClick={() => toggleSourceType('entity')}
-                />
-                <Chip
-                  label="Role"
-                  color={sourceTypes.includes('role') ? 'primary' : 'default'}
-                  onClick={() => toggleSourceType('role')}
-                />
-                <Chip
-                  label="Event"
-                  color={sourceTypes.includes('event') ? 'primary' : 'default'}
-                  onClick={() => toggleSourceType('event')}
-                />
-                <Chip
-                  label="Claim"
-                  color={sourceTypes.includes('claim') ? 'primary' : 'default'}
-                  onClick={() => toggleSourceType('claim')}
-                />
-              </Stack>
-            </Box>
+        {relationType ? (
+          <Tabs value={tabValue} onValueChange={setTabValue}>
+            <TabsList>
+              <TabsTrigger value="definition">Definition</TabsTrigger>
+              <TabsTrigger value="instances">Instances ({relationInstances.length})</TabsTrigger>
+            </TabsList>
 
-            <Box>
-              <Typography variant="subtitle2" component="div" gutterBottom>
-                Target Types (can be)
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Chip
-                  label="Entity"
-                  color={targetTypes.includes('entity') ? 'primary' : 'default'}
-                  onClick={() => toggleTargetType('entity')}
-                />
-                <Chip
-                  label="Role"
-                  color={targetTypes.includes('role') ? 'primary' : 'default'}
-                  onClick={() => toggleTargetType('role')}
-                />
-                <Chip
-                  label="Event"
-                  color={targetTypes.includes('event') ? 'primary' : 'default'}
-                  onClick={() => toggleTargetType('event')}
-                />
-                <Chip
-                  label="Claim"
-                  color={targetTypes.includes('claim') ? 'primary' : 'default'}
-                  onClick={() => toggleTargetType('claim')}
-                />
-              </Stack>
-            </Box>
+            <TabsContent value="definition">
+              <div className="flex flex-col gap-4 mt-4">
+                {renderDefinitionFields()}
+              </div>
+            </TabsContent>
 
-          <Box>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={symmetric}
-                  onChange={(e) => setSymmetric(e.target.checked)}
-                />
-              }
-              label="Symmetric (if A relates to B, then B relates to A)"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={transitive}
-                  onChange={(e) => setTransitive(e.target.checked)}
-                />
-              }
-              label="Transitive (if A→B and B→C, then A→C)"
-            />
-          </Box>
-
-          <Box>
-            <Typography variant="subtitle2" component="div" gutterBottom>
-              Gloss (Definition)
-            </Typography>
-            <GlossEditor
-              gloss={gloss}
-              onChange={setGloss}
-              availableTypes={['entity', 'role', 'event', 'relation']}
-              personaId={personaId}
-            />
-          </Box>
-
-          <Box>
-            <Typography variant="subtitle2" component="div" gutterBottom>
-              Examples
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <TextField
-                value={exampleInput}
-                onChange={(e) => setExampleInput(e.target.value)}
-                placeholder="Enter an example usage"
-                fullWidth
-                size="small"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    addExample()
-                  }
-                }}
-              />
-              <Button onClick={addExample} size="small">
-                Add
-              </Button>
-            </Box>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              {examples.map((example, index) => (
-                <Chip
-                  key={index}
-                  label={example}
-                  onDelete={() => removeExample(index)}
-                  size="small"
-                />
-              ))}
-            </Stack>
-          </Box>
-          </Box>
-        )}
-        
-        {relationType && tabValue === 1 && (
-          <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Create instances of the "{relationType.name}" relation between specific items in your ontology.
-            </Alert>
-            
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Source Type</InputLabel>
-                <Select
-                  value={sourceType}
-                  onChange={(e) => {
-                    setSourceType(e.target.value as 'entity' | 'role' | 'event')
-                    setSourceId('')
-                  }}
-                  label="Source Type"
-                >
-                  {relationType.sourceTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel>Source</InputLabel>
-                <Select
-                  value={sourceId}
-                  onChange={(e) => setSourceId(e.target.value)}
-                  label="Source"
-                >
-                  {getSourceOptions().map(item => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <ArrowIcon sx={{ alignSelf: 'center' }} />
-              
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Target Type</InputLabel>
-                <Select
-                  value={targetType}
-                  onChange={(e) => {
-                    setTargetType(e.target.value as 'entity' | 'role' | 'event')
-                    setTargetId('')
-                  }}
-                  label="Target Type"
-                >
-                  {relationType.targetTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel>Target</InputLabel>
-                <Select
-                  value={targetId}
-                  onChange={(e) => setTargetId(e.target.value)}
-                  label="Target"
-                >
-                  {getTargetOptions().map(item => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <IconButton
-                color="primary"
-                onClick={handleAddRelationInstance}
-                disabled={!sourceId || !targetId}
-              >
-                <AddIcon />
-              </IconButton>
-            </Box>
-            
-            <Divider sx={{ my: 2 }} />
-
-            <Typography variant="subtitle2" component="div" gutterBottom>
-              Existing Instances
-            </Typography>
-            
-            {relationInstances.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No instances of this relation type yet.
-              </Typography>
-            ) : (
-              <List>
-                {relationInstances.map(relation => (
-                  <ListItem key={relation.id}>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip
-                            label={relation.sourceType}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Typography variant="body2">
-                            {getItemName(relation.sourceType, relation.sourceId)}
-                          </Typography>
-                          <ArrowIcon fontSize="small" />
-                          <Typography variant="body2">
-                            {getItemName(relation.targetType, relation.targetId)}
-                          </Typography>
-                          <Chip
-                            label={relation.targetType}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </Box>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleDeleteRelationInstance(relation.id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Box>
+            <TabsContent value="instances">
+              {renderInstancesTab()}
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="flex flex-col gap-4 mt-4">
+            {renderDefinitionFields()}
+          </div>
         )}
 
         {/* Persona selection for new relation types */}
         {!relationType && personas.length > 1 && (
-          <Box sx={{ mt: 2 }}>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="subtitle2" gutterBottom>
+          <div className="mt-4">
+            <Separator className="mb-4" />
+            <p className="text-sm font-medium mb-2">
               Add to Personas
-            </Typography>
-            <FormGroup>
-              {personas.map(persona => (
-                <FormControlLabel
-                  key={persona.id}
-                  control={
+            </p>
+            <div className="space-y-2">
+              {personas.map(persona => {
+                const cbId = `relation-target-persona-${persona.id}`
+                return (
+                  <div key={persona.id} className="flex items-center gap-2">
                     <Checkbox
+                      id={cbId}
                       checked={targetPersonaIds.includes(persona.id)}
-                      onChange={() => {
+                      onCheckedChange={() => {
                         setTargetPersonaIds(
                           targetPersonaIds.includes(persona.id)
                             ? targetPersonaIds.filter(id => id !== persona.id)
@@ -579,24 +315,287 @@ export default function RelationTypeEditor({
                         )
                       }}
                     />
-                  }
-                  label={persona.name}
-                />
-              ))}
-            </FormGroup>
-          </Box>
+                    <Label htmlFor={cbId}>{persona.name}</Label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            disabled={!name.trim() || !gloss.some(g => g.content.trim()) || sourceTypes.length === 0 || targetTypes.length === 0}
+          >
+            {relationType ? 'Save Changes' : 'Create'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!name.trim() || !gloss.some(g => g.content.trim()) || sourceTypes.length === 0 || targetTypes.length === 0}
-        >
-          {relationType ? 'Save Changes' : 'Create'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
+
+  function renderDefinitionFields() {
+    return (
+      <>
+        <div>
+          <Label className="mb-2" htmlFor="relation-type-name">Relation Type Name</Label>
+          <Input
+            id="relation-type-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="e.g., 'subtype-of', 'part-of', 'causes', 'located-at'"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            e.g., 'subtype-of', 'part-of', 'causes', 'located-at'
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">
+            Source Types (can be)
+          </p>
+          <div className="flex gap-2">
+            {(['entity', 'role', 'event', 'claim'] as const).map(type => (
+              <Badge
+                key={type}
+                variant={sourceTypes.includes(type) ? 'default' : 'outline'}
+                className="cursor-pointer"
+                onClick={() => toggleSourceType(type)}
+              >
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">
+            Target Types (can be)
+          </p>
+          <div className="flex gap-2">
+            {(['entity', 'role', 'event', 'claim'] as const).map(type => (
+              <Badge
+                key={type}
+                variant={targetTypes.includes(type) ? 'default' : 'outline'}
+                className="cursor-pointer"
+                onClick={() => toggleTargetType(type)}
+              >
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={symmetric}
+              onCheckedChange={(checked) => setSymmetric(checked === true)}
+            />
+            <Label>Symmetric (if A relates to B, then B relates to A)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={transitive}
+              onCheckedChange={(checked) => setTransitive(checked === true)}
+            />
+            <Label>Transitive (if A-&gt;B and B-&gt;C, then A-&gt;C)</Label>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">
+            Gloss (Definition)
+          </p>
+          <GlossEditor
+            gloss={gloss}
+            onChange={setGloss}
+            availableTypes={['entity', 'role', 'event', 'relation']}
+            personaId={personaId}
+          />
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">
+            Examples
+          </p>
+          <div className="flex gap-2 mb-2">
+            <Input
+              value={exampleInput}
+              onChange={(e) => setExampleInput(e.target.value)}
+              placeholder="Enter an example usage"
+              className="flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addExample()
+                }
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={addExample}>
+              Add
+            </Button>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {examples.map((example, index) => (
+              <Badge key={index} variant="secondary" className="gap-1">
+                {example}
+                <button onClick={() => removeExample(index)} className="ml-1 hover:text-destructive">
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  function renderInstancesTab() {
+    if (!relationType) return null
+
+    return (
+      <div className="mt-4">
+        <Alert className="mb-4">
+          <AlertDescription>
+            Create instances of the "{relationType.name}" relation between specific items in your ontology.
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex gap-2 mb-4 items-end flex-wrap">
+          <div className="min-w-28">
+            <Label className="mb-2">Source Type</Label>
+            <Select
+              value={sourceType}
+              onValueChange={(val) => {
+                setSourceType(val as 'entity' | 'role' | 'event')
+                setSourceId('')
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {relationType.sourceTypes.map(type => (
+                  <SelectItem key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex-1">
+            <Label className="mb-2">Source</Label>
+            <Select
+              value={sourceId}
+              onValueChange={(val) => val && setSourceId(val)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
+              <SelectContent>
+                {getSourceOptions().map(item => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ArrowRight className="size-5 text-muted-foreground mb-2" />
+
+          <div className="min-w-28">
+            <Label className="mb-2">Target Type</Label>
+            <Select
+              value={targetType}
+              onValueChange={(val) => {
+                setTargetType(val as 'entity' | 'role' | 'event')
+                setTargetId('')
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {relationType.targetTypes.map(type => (
+                  <SelectItem key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex-1">
+            <Label className="mb-2">Target</Label>
+            <Select
+              value={targetId}
+              onValueChange={(val) => val && setTargetId(val)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select target" />
+              </SelectTrigger>
+              <SelectContent>
+                {getTargetOptions().map(item => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddRelationInstance}
+            disabled={!sourceId || !targetId}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+
+        <Separator className="my-4" />
+
+        <p className="text-sm font-medium mb-2">
+          Existing Instances
+        </p>
+
+        {relationInstances.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No instances of this relation type yet.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {relationInstances.map(relation => (
+              <li key={relation.id} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline">{relation.sourceType}</Badge>
+                  <span className="text-sm">
+                    {getItemName(relation.sourceType, relation.sourceId)}
+                  </span>
+                  <ArrowRight className="size-4" />
+                  <span className="text-sm">
+                    {getItemName(relation.targetType, relation.targetId)}
+                  </span>
+                  <Badge variant="outline">{relation.targetType}</Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleDeleteRelationInstance(relation.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
 }

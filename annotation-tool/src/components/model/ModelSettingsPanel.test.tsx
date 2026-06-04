@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ModelSettingsPanel } from './ModelSettingsPanel'
 import * as useModelConfigHooks from '@store/queries/useModelConfig'
@@ -196,8 +197,8 @@ describe('ModelSettingsPanel', () => {
 
       renderWithQuery(<ModelSettingsPanel />)
 
-      // Check for skeleton elements instead of progressbar
-      const skeletons = document.querySelectorAll('.MuiSkeleton-root')
+      // Check for skeleton elements
+      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletons.length).toBeGreaterThan(0)
     })
   })
@@ -331,6 +332,7 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       renderWithQuery(<ModelSettingsPanel />)
 
       // Initially save should be disabled (no changes)
@@ -341,7 +343,7 @@ describe('ModelSettingsPanel', () => {
       const selects = screen.getAllByRole('combobox')
       const objectDetectionSelect = selects[1] // Second select for object detection
 
-      fireEvent.mouseDown(objectDetectionSelect)
+      await user.click(objectDetectionSelect)
 
       // Wait for menu to appear and find the option by text in the menu item
       await waitFor(() => {
@@ -355,7 +357,7 @@ describe('ModelSettingsPanel', () => {
         (option) => option.textContent?.includes('owlv2-large')
       )
       expect(owlv2Option).toBeDefined()
-      fireEvent.click(owlv2Option!)
+      await user.click(owlv2Option!)
 
       // Verify save button becomes enabled after change
       await waitFor(() => {
@@ -393,6 +395,7 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       renderWithQuery(<ModelSettingsPanel />)
 
       // Initially reset should be disabled
@@ -401,7 +404,7 @@ describe('ModelSettingsPanel', () => {
 
       // Make a change
       const selects = screen.getAllByRole('combobox')
-      fireEvent.mouseDown(selects[0])
+      await user.click(selects[0])
 
       await waitFor(() => {
         const menuItems = screen.getAllByRole('option')
@@ -412,7 +415,7 @@ describe('ModelSettingsPanel', () => {
         (option) => option.textContent?.includes('qwen-2.5-vl')
       )
       expect(qwenOption).toBeDefined()
-      fireEvent.click(qwenOption!)
+      await user.click(qwenOption!)
 
       // Reset button should now be enabled
       await waitFor(() => {
@@ -570,12 +573,13 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       const onSaveSuccess = vi.fn()
       renderWithQuery(<ModelSettingsPanel onSaveSuccess={onSaveSuccess} />)
 
       // Make a change
       const selects = screen.getAllByRole('combobox')
-      fireEvent.mouseDown(selects[1])
+      await user.click(selects[1])
 
       await waitFor(() => {
         const menuItems = screen.getAllByRole('option')
@@ -586,7 +590,7 @@ describe('ModelSettingsPanel', () => {
         (option) => option.textContent?.includes('owlv2-large')
       )
       expect(owlv2Option).toBeDefined()
-      fireEvent.click(owlv2Option!)
+      await user.click(owlv2Option!)
 
       // Wait for save button to be enabled
       const saveButton = screen.getByRole('button', { name: /Save Configuration/i })
@@ -595,7 +599,7 @@ describe('ModelSettingsPanel', () => {
       })
 
       // Click save
-      fireEvent.click(saveButton)
+      await user.click(saveButton)
 
       // Verify mutation was called
       await waitFor(() => {
@@ -638,12 +642,13 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       const onSaveError = vi.fn()
       renderWithQuery(<ModelSettingsPanel onSaveError={onSaveError} />)
 
       // Make a change
       const selects = screen.getAllByRole('combobox')
-      fireEvent.mouseDown(selects[0])
+      await user.click(selects[0])
 
       await waitFor(() => {
         const menuItems = screen.getAllByRole('option')
@@ -654,7 +659,7 @@ describe('ModelSettingsPanel', () => {
         (option) => option.textContent?.includes('qwen-2.5-vl')
       )
       expect(qwenOption).toBeDefined()
-      fireEvent.click(qwenOption!)
+      await user.click(qwenOption!)
 
       // Wait for save button to be enabled
       const saveButton = screen.getByRole('button', { name: /Save Configuration/i })
@@ -663,7 +668,7 @@ describe('ModelSettingsPanel', () => {
       })
 
       // Click save
-      fireEvent.click(saveButton)
+      await user.click(saveButton)
 
       // Verify error callback was called
       await waitFor(() => {
@@ -703,11 +708,12 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       renderWithQuery(<ModelSettingsPanel />)
 
       // Make a change
       const selects = screen.getAllByRole('combobox')
-      fireEvent.mouseDown(selects[0])
+      await user.click(selects[0])
 
       await waitFor(() => {
         const menuItems = screen.getAllByRole('option')
@@ -718,7 +724,7 @@ describe('ModelSettingsPanel', () => {
         (option) => option.textContent?.includes('qwen-2.5-vl')
       )
       expect(qwenOption).toBeDefined()
-      fireEvent.click(qwenOption!)
+      await user.click(qwenOption!)
 
       // Verify reset button is enabled
       const resetButton = screen.getByRole('button', { name: /Reset/i })
@@ -727,7 +733,7 @@ describe('ModelSettingsPanel', () => {
       })
 
       // Click reset
-      fireEvent.click(resetButton)
+      await user.click(resetButton)
 
       // Verify reset button is disabled again
       await waitFor(() => {
@@ -737,7 +743,7 @@ describe('ModelSettingsPanel', () => {
   })
 
   describe('refresh functionality', () => {
-    it('refetches configuration when refresh button is clicked', () => {
+    it('refetches configuration when refresh button is clicked', async () => {
       const mockRefetch = vi.fn()
       const mockRefetchValidation = vi.fn()
 
@@ -760,10 +766,11 @@ describe('ModelSettingsPanel', () => {
         isSuccess: false,
       } as any)
 
+      const user = userEvent.setup()
       renderWithQuery(<ModelSettingsPanel />)
 
       const refreshButton = screen.getByRole('button', { name: /Refresh/i })
-      fireEvent.click(refreshButton)
+      await user.click(refreshButton)
 
       expect(mockRefetch).toHaveBeenCalled()
       expect(mockRefetchValidation).toHaveBeenCalled()

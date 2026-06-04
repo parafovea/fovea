@@ -272,11 +272,16 @@ export class OntologyWorkspacePage extends BasePage {
     // Wait for data to load
     await this.page.waitForLoadState('networkidle', { timeout: 10000 })
 
-    // Find visible (not hidden) tab panel and look for type by name
-    // MUI TabPanel hides inactive panels with hidden attribute
-    // Use p element with exact text to avoid matching definitions
+    // Find visible (not hidden) tab panel and look for type by name.
+    // The shadcn rewrite renders type rows as plain <li> with the name in
+    // a nested <div>; the prior `li > p` query was MUI-specific.
     const visibleTabPanel = this.page.locator('[role="tabpanel"]:not([hidden])')
-    const typeItem = visibleTabPanel.locator('li').locator('p').filter({ hasText: new RegExp(`^${name}$`) }).first()
+    // Anchor on the Edit/Delete button aria-label since each row carries
+    // "Edit <name>" — that's an exact, unambiguous substring even when the
+    // type's gloss happens to contain the name elsewhere on the page.
+    const typeItem = visibleTabPanel.locator('li').filter({
+      has: this.page.getByRole('button', { name: `Edit ${name}` })
+    }).first()
     await expect(typeItem).toBeVisible({ timeout: 10000 })
   }
 
@@ -350,11 +355,17 @@ export class OntologyWorkspacePage extends BasePage {
     const dialog = this.page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Fill name field - MUI adds asterisk for required fields
+    // Fill name field. The shadcn Input is a base-ui Field.Control which
+    // is React-controlled, so Playwright's .fill() on a prefilled input
+    // doesn't always propagate. Click → clear → fill works for create
+    // and rename flows; if that ever falls back to the old MUI behavior
+    // we'll switch to pressSequentially.
     const nameInput = dialog.getByRole('textbox', { name: /^name/i }).first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
     await nameInput.click()
+    await nameInput.fill('')
     await nameInput.fill(name)
+    await nameInput.blur()
 
     // Fill definition/gloss field
     const defInput = dialog.locator('textarea').first()
@@ -388,7 +399,15 @@ export class OntologyWorkspacePage extends BasePage {
   }
 
   private async saveTypeForm() {
-    const saveButton = this.page.getByRole('button', { name: /save|create|done/i })
+    // Scope to the dialog so we don't pick up the global Sidebar Save
+    // button (which matches /save/i too) — that button doesn't submit
+    // the form and the test would silently no-op.
+    const dialog = this.page.locator('[role="dialog"]')
+    // RelationTypeEditor's Edit dialog uses "Save Changes" (not "Save"),
+    // so the regex must allow the trailing " Changes". Other dialogs
+    // use plain Save / Create / Done.
+    const saveButton = dialog.getByRole('button', { name: /^(save( changes)?|create|done)$/i }).first()
+    await saveButton.scrollIntoViewIfNeeded()
     await saveButton.waitFor({ state: 'visible', timeout: 5000 })
     await saveButton.click()
 

@@ -13,6 +13,8 @@ import {
 import {
   apiClient,
   ModelConfig,
+  ModelDefaultsResponse,
+  ModelFrameworksResponse,
   SelectModelRequest,
   SelectModelResponse,
   MemoryValidation,
@@ -33,6 +35,8 @@ export const modelConfigKeys = {
   status: () => [...modelConfigKeys.all, 'status'] as const,
   taskReady: (taskType: string) => [...modelConfigKeys.all, 'taskReady', taskType] as const,
   allTaskReady: () => [...modelConfigKeys.all, 'taskReady'] as const,
+  defaults: () => [...modelConfigKeys.all, 'defaults'] as const,
+  frameworks: () => [...modelConfigKeys.all, 'frameworks'] as const,
 }
 
 /**
@@ -208,6 +212,47 @@ export function useLoadModel(
       })
       options?.onSuccess?.(data, taskType, context, mutation)
     },
+    ...options,
+  })
+}
+
+/**
+ * Fetch default values for every inference config dataclass.
+ *
+ * Results are stable across the session (dataclass defaults don't change at
+ * runtime), so the cache is long-lived. Settings forms read these to
+ * initialize slider / input values and to render "reset to default" actions.
+ */
+export function useModelDefaults(
+  options?: Omit<
+    UseQueryOptions<ModelDefaultsResponse, ApiError>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  return useQuery<ModelDefaultsResponse, ApiError>({
+    queryKey: modelConfigKeys.defaults(),
+    queryFn: () => apiClient.getModelDefaults(),
+    staleTime: 60 * 60 * 1000, // 1 hour — defaults are effectively static
+    ...options,
+  })
+}
+
+/**
+ * Fetch allowed framework/quantization enum values per task group.
+ *
+ * Used by framework selectors in the settings UI so choices stay in sync
+ * with the StrEnum definitions in the Python model-service.
+ */
+export function useModelFrameworks(
+  options?: Omit<
+    UseQueryOptions<ModelFrameworksResponse, ApiError>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  return useQuery<ModelFrameworksResponse, ApiError>({
+    queryKey: modelConfigKeys.frameworks(),
+    queryFn: () => apiClient.getModelFrameworks(),
+    staleTime: 60 * 60 * 1000,
     ...options,
   })
 }

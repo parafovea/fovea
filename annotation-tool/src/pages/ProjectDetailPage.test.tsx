@@ -93,7 +93,7 @@ describe('ProjectDetailPage', () => {
 
     renderWithRoute('proj-1')
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders project name', async () => {

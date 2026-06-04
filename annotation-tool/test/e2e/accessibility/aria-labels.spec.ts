@@ -42,9 +42,10 @@ test.describe('ARIA Labels - Buttons and Interactive Elements', () => {
         rule: v.id,
         impact: v.impact,
         nodes: v.nodes.length,
-        description: v.description
+        description: v.description,
+        targets: v.nodes.map((n: any) => ({ target: n.target, html: n.html })),
       }))
-      console.log('Button name violations:', violationDetails)
+      console.log('Button name violations:', JSON.stringify(violationDetails, null, 2))
     }
 
     expect(violations.length).toBe(0)
@@ -273,24 +274,21 @@ test.describe('ARIA Labels - Images and Icons', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await injectAxe(page)
 
-    // Configure axe to disable non-image-related rules
-    await page.evaluate(() => {
-      (window as any).axe.configure({
-        rules: [
-          { id: 'color-contrast', enabled: false }, // Intentional MUI design choice
-          { id: 'label', enabled: false }, // Not testing form labels here
-          { id: 'page-has-heading-one', enabled: false } // Not relevant to image testing
-        ]
+    // Run axe directly with runOnly so only image-alt violations are
+    // counted. (checkA11y from axe-playwright reports across all enabled
+    // rules even when given runOnly, which previously surfaced unrelated
+    // button-name / region violations.)
+    const results = await page.evaluate(async () => {
+      return await (window as any).axe.run(document, {
+        runOnly: { type: 'rule', values: ['image-alt'] },
       })
     })
 
-    // Run axe check for image-alt rule only
-    await checkA11y(page, null, {
-      runOnly: {
-        type: 'rule',
-        values: ['image-alt']
-      }
-    })
+    const violations = (results as { violations: unknown[] }).violations || []
+    if (violations.length > 0) {
+      console.log('Image alt violations:', JSON.stringify(violations, null, 2))
+    }
+    expect(violations.length).toBe(0)
   })
 
   test('logo image has descriptive alt text', async ({ page, annotationWorkspace }) => {

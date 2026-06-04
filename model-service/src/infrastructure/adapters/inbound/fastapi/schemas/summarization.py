@@ -39,6 +39,42 @@ class KeyFrame(StrictBaseModel):
     confidence: ConfidenceScore = Field(default=0.0, description="Model confidence score")
 
 
+class GenerationOverrides(StrictBaseModel):
+    """Per-request overrides for LLM/VLM sampling parameters.
+
+    Each field defaults to ``None``; a ``None`` field means "use the backend
+    default" (see ``GET /api/models/defaults``). Non-null values are passed
+    through to the inference call site unchanged.
+    """
+
+    temperature: float | None = Field(
+        default=None, ge=0.0, le=2.0, description="Sampling temperature override"
+    )
+    top_p: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Nucleus sampling probability mass"
+    )
+    max_tokens: int | None = Field(
+        default=None, ge=1, le=32768, description="Maximum tokens to generate"
+    )
+
+
+class AudioOverrides(StrictBaseModel):
+    """Per-request overrides for transcription and diarization."""
+
+    beam_size: int | None = Field(default=None, ge=1, le=10, description="Decoder beam width")
+    compute_type: Literal["float16", "float32", "int8", "int8_float16"] | None = Field(
+        default=None, description="Transcriber compute precision"
+    )
+    num_speakers: int | None = Field(
+        default=None, ge=1, le=20, description="Exact speaker count (skips auto-detect)"
+    )
+    min_speakers: int | None = Field(default=None, ge=1, le=20)
+    max_speakers: int | None = Field(default=None, ge=1, le=20)
+    vad_threshold: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Voice-activity detection probability threshold"
+    )
+
+
 class SummarizeRequest(StrictBaseModel):
     """Request model for video summarization endpoint.
 
@@ -66,6 +102,10 @@ class SummarizeRequest(StrictBaseModel):
         Enable speaker identification.
     fusion_strategy : str | None
         Audio-visual fusion strategy.
+    generation_overrides : GenerationOverrides | None
+        Optional per-request VLM sampling overrides.
+    audio_overrides : AudioOverrides | None
+        Optional per-request transcription/diarization overrides.
     """
 
     video_id: NonEmptyStr = Field(..., description="Unique identifier for the video")
@@ -89,6 +129,15 @@ class SummarizeRequest(StrictBaseModel):
     fusion_strategy: (
         Literal["sequential", "timestamp_aligned", "native_multimodal", "hybrid"] | None
     ) = Field(default="sequential", description="Audio-visual fusion strategy")
+
+    # Per-request inference overrides; omit or set fields to ``None`` to use
+    # backend defaults.
+    generation_overrides: GenerationOverrides | None = Field(
+        default=None, description="Per-request VLM sampling overrides"
+    )
+    audio_overrides: AudioOverrides | None = Field(
+        default=None, description="Per-request transcription/diarization overrides"
+    )
 
 
 class SummarizeResponse(StrictBaseModel):

@@ -1,34 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react'
+import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  CircularProgress,
-  LinearProgress,
-  Chip,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  FormGroup,
-  FormLabel,
-} from '@mui/material'
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Spinner } from '@/components/ui/spinner'
+import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
 import { usePersonas, useVideos } from '@store/queries'
 import { api } from '@services/api'
 import { ExportOptions, ExportStats, VideoMetadata } from '@models/types'
 
 /**
- * @interface ExportDialogProps
- * @description Props for the ExportDialog component.
- * @property open - Whether the dialog is open
- * @property onClose - Callback when dialog is closed
+ * Props for the ExportDialog component.
+ *
+ * @param open - Whether the dialog is open
+ * @param onClose - Callback when dialog is closed
  */
 interface ExportDialogProps {
   open: boolean
@@ -36,7 +35,7 @@ interface ExportDialogProps {
 }
 
 /**
- * Helper to check if any data exists in export stats.
+ * Check if any data exists in export stats.
  */
 function hasAnyData(stats: ExportStats | null): boolean {
   if (!stats) return false
@@ -53,16 +52,14 @@ function hasAnyData(stats: ExportStats | null): boolean {
 }
 
 /**
- * ExportDialog component for exporting all user data.
  * Exports personas, ontologies, world state, summaries, claims, and annotations.
- * Provides options for keyframes-only vs. fully interpolated export for annotations,
+ * Provides options for keyframes-only vs. fully interpolated export,
  * and filtering by persona and video for annotations.
  *
  * @param props - Component props
  * @returns Export dialog component
  */
-export default function ExportDialog({ open, onClose }: ExportDialogProps) {
-  // TanStack Query for personas and videos
+export function ExportDialog({ open, onClose }: ExportDialogProps): JSX.Element {
   const { data: personas = [] } = usePersonas()
   const { data: videos = [] } = useVideos()
 
@@ -101,7 +98,6 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
     }
   }, [includeInterpolated, selectedPersonaIds, selectedVideoIds, selectedAnnotationTypes])
 
-  // Load export statistics when options change
   useEffect(() => {
     if (open) {
       loadExportStats()
@@ -111,7 +107,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   /**
    * Perform the export and trigger download.
    */
-  const handleExport = async () => {
+  const handleExport = async (): Promise<void> => {
     setIsExporting(true)
     setError(null)
 
@@ -146,7 +142,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   /**
    * Toggle persona selection.
    */
-  const togglePersona = (personaId: string) => {
+  const togglePersona = (personaId: string): void => {
     setSelectedPersonaIds(prev =>
       prev.includes(personaId)
         ? prev.filter(id => id !== personaId)
@@ -157,7 +153,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   /**
    * Toggle video selection.
    */
-  const toggleVideo = (videoId: string) => {
+  const toggleVideo = (videoId: string): void => {
     setSelectedVideoIds(prev =>
       prev.includes(videoId)
         ? prev.filter(id => id !== videoId)
@@ -168,7 +164,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   /**
    * Toggle annotation type selection.
    */
-  const toggleAnnotationType = (type: 'type' | 'object') => {
+  const toggleAnnotationType = (type: 'type' | 'object'): void => {
     setSelectedAnnotationTypes(prev =>
       prev.includes(type)
         ? prev.filter(t => t !== type)
@@ -190,318 +186,306 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   return (
     <Dialog
       open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
+      onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogTitle>Export All Data</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+      <DialogContent data-tour-id="export-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Export All Data</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-6 pt-2">
           {/* Export Mode */}
-          <Box>
-            <FormLabel component="legend">Export Mode</FormLabel>
-            <FormGroup>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={!includeInterpolated}
-                    onChange={(e) => setIncludeInterpolated(!e.target.checked)}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2">
-                      <strong>Export keyframes only (recommended)</strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Smaller file size, preserves author intent, allows re-interpolation
-                    </Typography>
-                  </Box>
-                }
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={includeInterpolated}
-                    onChange={(e) => setIncludeInterpolated(e.target.checked)}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2">
-                      <strong>Include all interpolated frames</strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Larger file (up to 100x), useful for debugging or external tools
-                    </Typography>
-                  </Box>
-                }
-              />
-            </FormGroup>
+          <div>
+            <Label className="mb-3 text-xs font-semibold uppercase text-muted-foreground">Export Mode</Label>
+            <div className="flex flex-col gap-3 mt-2">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  checked={!includeInterpolated}
+                  onCheckedChange={(checked) => setIncludeInterpolated(!checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-semibold">Export keyframes only (recommended)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Smaller file size, preserves author intent, allows re-interpolation
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  checked={includeInterpolated}
+                  onCheckedChange={(checked) => setIncludeInterpolated(!!checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-semibold">Include all interpolated frames</p>
+                  <p className="text-xs text-muted-foreground">
+                    Larger file (up to 100x), useful for debugging or external tools
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {includeInterpolated && (
-              <Alert severity="warning" sx={{ mt: 1 }}>
-                File size can be 100x larger with interpolated frames. Consider exporting keyframes-only unless you need all frames.
+              <Alert className="mt-3">
+                <AlertDescription>
+                  File size can be 100x larger with interpolated frames. Consider exporting keyframes-only unless you need all frames.
+                </AlertDescription>
               </Alert>
             )}
-          </Box>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Filter Annotations by Persona */}
-          <Box>
-            <FormLabel component="legend">Filter Annotations by Persona (optional)</FormLabel>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+          <div>
+            <Label className="mb-1">Filter Annotations by Persona (optional)</Label>
+            <p className="mb-2 text-xs text-muted-foreground">
               Leave empty to export all annotations. Other data types are always fully exported.
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
               {personas.map(persona => (
-                <Chip
+                <button
                   key={persona.id}
-                  label={persona.name}
+                  type="button"
                   onClick={() => togglePersona(persona.id)}
-                  color={selectedPersonaIds.includes(persona.id) ? 'primary' : 'default'}
-                  variant={selectedPersonaIds.includes(persona.id) ? 'filled' : 'outlined'}
-                />
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    selectedPersonaIds.includes(persona.id)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:bg-muted"
+                  )}
+                >
+                  {persona.name}
+                </button>
               ))}
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {/* Filter Annotations by Video */}
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <FormLabel
-                component="legend"
-                sx={{ cursor: 'pointer' }}
+          <div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-sm font-medium"
                 onClick={() => setVideoFilterExpanded(prev => !prev)}
               >
-                Filter Annotations by Video (optional) {videoFilterExpanded ? '▾' : '▸'}
-              </FormLabel>
+                {videoFilterExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                Filter Annotations by Video (optional)
+              </button>
               {selectedVideoIds.length > 0 && (
-                <Chip label={selectedVideoIds.length} size="small" color="primary" />
+                <Badge variant="default">{selectedVideoIds.length}</Badge>
               )}
-            </Box>
+            </div>
             {videoFilterExpanded && (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              <div className="mt-2">
+                <p className="mb-2 text-xs text-muted-foreground">
                   Leave empty to export annotations for all videos
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                </p>
+                <div className="flex flex-wrap gap-2">
                   {videos.map((video: VideoMetadata) => (
-                    <Chip
+                    <button
                       key={video.id}
-                      label={video.title || video.id}
+                      type="button"
                       onClick={() => toggleVideo(video.id)}
-                      color={selectedVideoIds.includes(video.id) ? 'primary' : 'default'}
-                      variant={selectedVideoIds.includes(video.id) ? 'filled' : 'outlined'}
-                    />
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        selectedVideoIds.includes(video.id)
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground hover:bg-muted"
+                      )}
+                    >
+                      {video.title || video.id}
+                    </button>
                   ))}
-                </Box>
-              </>
+                </div>
+              </div>
             )}
-          </Box>
+          </div>
 
           {/* Filter Annotations by Type */}
-          <Box>
-            <FormLabel component="legend">Filter Annotations by Type (optional)</FormLabel>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+          <div>
+            <Label className="mb-1">Filter Annotations by Type (optional)</Label>
+            <p className="mb-2 text-xs text-muted-foreground">
               Leave empty to export all annotation types
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-              <Chip
-                label="Type Annotations"
+            </p>
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
                 onClick={() => toggleAnnotationType('type')}
-                color={selectedAnnotationTypes.includes('type') ? 'primary' : 'default'}
-                variant={selectedAnnotationTypes.includes('type') ? 'filled' : 'outlined'}
-              />
-              <Chip
-                label="Object Annotations"
+                className={cn(
+                  "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  selectedAnnotationTypes.includes('type')
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground hover:bg-muted"
+                )}
+              >
+                Type Annotations
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleAnnotationType('object')}
-                color={selectedAnnotationTypes.includes('object') ? 'primary' : 'default'}
-                variant={selectedAnnotationTypes.includes('object') ? 'filled' : 'outlined'}
-              />
-            </Box>
-          </Box>
+                className={cn(
+                  "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  selectedAnnotationTypes.includes('object')
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground hover:bg-muted"
+                )}
+              >
+                Object Annotations
+              </button>
+            </div>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Export Statistics */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Export Statistics
-            </Typography>
+          <div>
+            <h3 className="mb-3 text-sm font-medium">Export Statistics</h3>
 
             {isLoadingStats && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={20} />
-                <Typography variant="body2" color="text.secondary">
-                  Calculating...
-                </Typography>
-              </Box>
+              <div className="flex items-center gap-2">
+                <Spinner />
+                <p className="text-sm text-muted-foreground">Calculating...</p>
+              </div>
             )}
 
             {!isLoadingStats && exportStats && (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div className="flex flex-col gap-4">
                 {/* Personas & Ontologies */}
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                    Personas & Ontologies
-                  </Typography>
-                  <List dense disablePadding>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Personas"
-                        secondary={
-                          exportStats.systemPersonaCount > 0
-                            ? `${exportStats.personaCount - exportStats.systemPersonaCount} user-created, ${exportStats.systemPersonaCount} system-generated`
-                            : exportStats.personaCount.toLocaleString()
-                        }
-                      />
-                    </ListItem>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Ontology Types"
-                        secondary={`${exportStats.entityTypeCount} entity, ${exportStats.eventTypeCount} event, ${exportStats.roleTypeCount} role, ${exportStats.relationTypeCount} relation`}
-                      />
-                    </ListItem>
-                  </List>
-                </Box>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Personas & Ontologies</p>
+                  <div className="mt-1 space-y-1">
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Personas</span>
+                      <span className="text-muted-foreground">
+                        {exportStats.systemPersonaCount > 0
+                          ? `${exportStats.personaCount - exportStats.systemPersonaCount} user-created, ${exportStats.systemPersonaCount} system-generated`
+                          : exportStats.personaCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Ontology Types</span>
+                      <span className="text-muted-foreground">
+                        {exportStats.entityTypeCount} entity, {exportStats.eventTypeCount} event, {exportStats.roleTypeCount} role, {exportStats.relationTypeCount} relation
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
                 {/* World State */}
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                    World State
-                  </Typography>
-                  <List dense disablePadding>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Objects"
-                        secondary={`${exportStats.entityCount} entities, ${exportStats.eventCount} events, ${exportStats.timeCount} times`}
-                      />
-                    </ListItem>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">World State</p>
+                  <div className="mt-1 space-y-1">
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Objects</span>
+                      <span className="text-muted-foreground">
+                        {exportStats.entityCount} entities, {exportStats.eventCount} events, {exportStats.timeCount} times
+                      </span>
+                    </div>
                     {(exportStats.entityCollectionCount > 0 || exportStats.eventCollectionCount > 0 || exportStats.timeCollectionCount > 0) && (
-                      <ListItem sx={{ py: 0 }}>
-                        <ListItemText
-                          primary="Collections"
-                          secondary={`${exportStats.entityCollectionCount} entity, ${exportStats.eventCollectionCount} event, ${exportStats.timeCollectionCount} time`}
-                        />
-                      </ListItem>
+                      <div className="flex justify-between py-0.5 text-sm">
+                        <span>Collections</span>
+                        <span className="text-muted-foreground">
+                          {exportStats.entityCollectionCount} entity, {exportStats.eventCollectionCount} event, {exportStats.timeCollectionCount} time
+                        </span>
+                      </div>
                     )}
                     {exportStats.worldRelationCount > 0 && (
-                      <ListItem sx={{ py: 0 }}>
-                        <ListItemText
-                          primary="Relations"
-                          secondary={exportStats.worldRelationCount.toLocaleString()}
-                        />
-                      </ListItem>
+                      <div className="flex justify-between py-0.5 text-sm">
+                        <span>Relations</span>
+                        <span className="text-muted-foreground">{exportStats.worldRelationCount.toLocaleString()}</span>
+                      </div>
                     )}
-                  </List>
-                </Box>
+                  </div>
+                </div>
 
                 {/* Summaries & Claims */}
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                    Summaries & Claims
-                  </Typography>
-                  <List dense disablePadding>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Summaries"
-                        secondary={exportStats.summaryCount.toLocaleString()}
-                      />
-                    </ListItem>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Claims"
-                        secondary={exportStats.claimCount.toLocaleString()}
-                      />
-                    </ListItem>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Summaries & Claims</p>
+                  <div className="mt-1 space-y-1">
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Summaries</span>
+                      <span className="text-muted-foreground">{exportStats.summaryCount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Claims</span>
+                      <span className="text-muted-foreground">{exportStats.claimCount.toLocaleString()}</span>
+                    </div>
                     {exportStats.claimRelationCount > 0 && (
-                      <ListItem sx={{ py: 0 }}>
-                        <ListItemText
-                          primary="Claim Relations"
-                          secondary={exportStats.claimRelationCount.toLocaleString()}
-                        />
-                      </ListItem>
+                      <div className="flex justify-between py-0.5 text-sm">
+                        <span>Claim Relations</span>
+                        <span className="text-muted-foreground">{exportStats.claimRelationCount.toLocaleString()}</span>
+                      </div>
                     )}
-                  </List>
-                </Box>
+                  </div>
+                </div>
 
                 {/* Annotations */}
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                    Annotations
-                  </Typography>
-                  <List dense disablePadding>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Annotations"
-                        secondary={exportStats.annotationCount.toLocaleString()}
-                      />
-                    </ListItem>
-                    <ListItem sx={{ py: 0 }}>
-                      <ListItemText
-                        primary="Keyframes"
-                        secondary={exportStats.keyframeCount.toLocaleString()}
-                      />
-                    </ListItem>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Annotations</p>
+                  <div className="mt-1 space-y-1">
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Annotations</span>
+                      <span className="text-muted-foreground">{exportStats.annotationCount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-0.5 text-sm">
+                      <span>Keyframes</span>
+                      <span className="text-muted-foreground">{exportStats.keyframeCount.toLocaleString()}</span>
+                    </div>
                     {includeInterpolated && (
-                      <ListItem sx={{ py: 0 }}>
-                        <ListItemText
-                          primary="Interpolated Frames"
-                          secondary={exportStats.interpolatedFrameCount.toLocaleString()}
-                        />
-                      </ListItem>
+                      <div className="flex justify-between py-0.5 text-sm">
+                        <span>Interpolated Frames</span>
+                        <span className="text-muted-foreground">{exportStats.interpolatedFrameCount.toLocaleString()}</span>
+                      </div>
                     )}
-                  </List>
-                </Box>
+                  </div>
+                </div>
 
                 {/* Total Size */}
-                <Box sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }}>
-                  <Typography variant="body2">
+                <div className="border-t pt-3">
+                  <p className="text-sm">
                     <strong>Estimated File Size:</strong> {formatBytes(exportStats.totalSize)}
-                  </Typography>
-                </Box>
-              </Box>
+                  </p>
+                </div>
+              </div>
             )}
 
             {!isLoadingStats && exportStats && !hasAnyData(exportStats) && (
-              <Alert severity="info" sx={{ mt: 1 }}>
-                No data to export.
+              <Alert className="mt-2">
+                <AlertDescription>No data to export.</AlertDescription>
               </Alert>
             )}
-          </Box>
+          </div>
 
           {/* Error Display */}
           {error && (
-            <Alert severity="error">
-              {error}
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {/* Export Progress */}
           {isExporting && (
-            <Box>
-              <Typography variant="body2" gutterBottom>
-                Exporting data...
-              </Typography>
-              <LinearProgress />
-            </Box>
+            <div>
+              <p className="mb-2 text-sm">Exporting data...</p>
+              <Progress value={null} />
+            </div>
           )}
-        </Box>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isExporting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleExport}
+            disabled={isExporting || isLoadingStats || !hasAnyData(exportStats)}
+          >
+            {isExporting ? 'Exporting...' : 'Export'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={isExporting}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleExport}
-          variant="contained"
-          disabled={isExporting || isLoadingStats || !hasAnyData(exportStats)}
-        >
-          {isExporting ? 'Exporting...' : 'Export'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

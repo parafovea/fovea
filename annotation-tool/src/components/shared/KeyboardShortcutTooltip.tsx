@@ -1,19 +1,25 @@
 /**
  * Tooltip component that displays keyboard shortcuts.
- * Wraps MUI Tooltip and automatically fetches shortcut from command registry.
+ * Wraps shadcn Tooltip and automatically fetches shortcut from command registry.
  */
 
-import { Tooltip, TooltipProps, Box, Typography } from '@mui/material'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { commandRegistry } from '@lib/commands/command-registry'
 import { formatKeybinding } from '@lib/commands/commands'
 
-interface KeyboardShortcutTooltipProps extends Omit<TooltipProps, 'title'> {
+interface KeyboardShortcutTooltipProps {
   /** Command ID to fetch shortcut for */
   commandId?: string
   /** Custom title (if not using commandId) */
   title?: string
   /** Additional text to append after shortcut */
   description?: string
+  /** Child element to wrap with the tooltip */
+  children: React.ReactElement
 }
 
 /**
@@ -38,8 +44,7 @@ export function KeyboardShortcutTooltip({
   title,
   description,
   children,
-  ...tooltipProps
-}: KeyboardShortcutTooltipProps) {
+}: KeyboardShortcutTooltipProps): JSX.Element {
   let tooltipContent: React.ReactNode = title || ''
 
   if (commandId) {
@@ -53,31 +58,26 @@ export function KeyboardShortcutTooltip({
         : null
 
       tooltipContent = (
-        <Box>
-          <Typography variant="body2">
+        <div>
+          <p className="text-sm">
             {description || command.description || command.title}
-          </Typography>
+          </p>
           {shortcutText && (
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                mt: 0.5,
-                fontFamily: 'monospace',
-                opacity: 0.8
-              }}
-            >
+            <span className="mt-1 block font-mono text-xs opacity-80">
               {shortcutText}
-            </Typography>
+            </span>
           )}
-        </Box>
+        </div>
       )
     }
   }
 
   return (
-    <Tooltip title={tooltipContent} {...tooltipProps}>
-      {children}
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent>
+        {tooltipContent}
+      </TooltipContent>
     </Tooltip>
   )
 }

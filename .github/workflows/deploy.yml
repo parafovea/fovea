@@ -5,6 +5,18 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      demo_mode:
+        description: >
+          Build for demo.fovea.video: frontend lands on the public tour
+          catalogue (VITE_DEMO_PUBLIC=1) with MSW model-service mocks
+          (VITE_TOUR_DEMO=1); backend has ALLOW_REGISTRATION=false; the
+          model-service container is skipped; nginx serves the
+          rate-limited demo profile. Leave false for the regular
+          production push to main.
+        type: boolean
+        default: false
+        required: false
 
 jobs:
   test:
@@ -14,38 +26,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            annotation-tool/package-lock.json
-            server/package-lock.json
+          node-version: '22'
+          cache: 'pnpm'
 
-      - name: Install frontend dependencies
-        working-directory: ./annotation-tool
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Type check frontend
-        working-directory: ./annotation-tool
-        run: npm run type-check
+        run: pnpm --filter @fovea/annotation-tool type-check
 
       - name: Lint frontend
-        working-directory: ./annotation-tool
-        run: npm run lint
+        run: pnpm --filter @fovea/annotation-tool lint
 
-      - name: Install backend dependencies
-        working-directory: ./server
-        run: npm ci
-
-      - name: Type check backend
-        working-directory: ./server
-        run: npm run build
+      - name: Build backend (type-checks)
+        run: pnpm --filter @fovea/server build
 
       - name: Lint backend
-        working-directory: ./server
-        run: npm run lint
+        run: pnpm --filter @fovea/server lint
 
   deploy:
     name: Deploy Application
@@ -143,11 +147,64 @@ jobs:
               echo 'FOVEA_MODE=multi-user' >> .env
             fi
 
-            # Enable user registration for demo deployment
+            # Registration policy. The demo.fovea.video workflow run
+            # (workflow_dispatch with demo_mode=true) disables self-
+            # registration so the QR-code traffic profile is anonymous-
+            # only; the booth operator mints real accounts via the
+            # admin console's Create User dialog. Regular pushes to
+            # main keep registration enabled.
+            ALLOW_REGISTRATION_VALUE=true
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              ALLOW_REGISTRATION_VALUE=false
+            fi
             if grep -q '^ALLOW_REGISTRATION=' .env; then
-              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=true|' .env
+              sed -i \"s|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE|\" .env
             else
-              echo 'ALLOW_REGISTRATION=true' >> .env
+              echo \"ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE\" >> .env
+            fi
+
+            # Frontend demo-mode build flags. These flip the SPA into
+            # the public tour catalogue landing + MSW model-service
+            # interception that demo.fovea.video ships. Regular
+            # pushes to main blank both so the demo subtree tree-
+            # shakes out of the production bundle.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              VITE_TOUR_DEMO_VALUE=1
+              VITE_DEMO_PUBLIC_VALUE=1
+            else
+              VITE_TOUR_DEMO_VALUE=
+              VITE_DEMO_PUBLIC_VALUE=
+            fi
+            if grep -q '^VITE_TOUR_DEMO=' .env; then
+              sed -i \"s|^VITE_TOUR_DEMO=.*|VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE|\" .env
+            else
+              echo \"VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE\" >> .env
+            fi
+            if grep -q '^VITE_DEMO_PUBLIC=' .env; then
+              sed -i \"s|^VITE_DEMO_PUBLIC=.*|VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE|\" .env
+            else
+              echo \"VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE\" >> .env
+            fi
+
+            # Swap nginx config when demo_mode is on so the auth-
+            # endpoint rate limits take effect. The Dockerfile COPYs
+            # annotation-tool/nginx.conf at image build time, so we
+            # overwrite the file on disk BEFORE the docker build runs
+            # below. The prior rsync step always ships the canonical
+            # nginx.conf from git, so a subsequent demo_mode=false
+            # deploy restores the standard config automatically; the
+            # demo overwrite is therefore safely scoped to a single
+            # deploy.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              cp annotation-tool/nginx.demo.conf annotation-tool/nginx.conf
+              echo 'Swapped nginx config to nginx.demo.conf for demo mode'
+            else
+              # Belt-and-suspenders: if a prior demo_mode=true deploy
+              # left a stale nginx.conf on disk and rsync somehow
+              # skipped it (e.g. timestamp tie), force the canonical
+              # file back by checking out from the synced tree's
+              # docker-image source of truth.
+              echo 'demo_mode=false: nginx.conf left at the rsynced canonical version'
             fi
 
             # Ensure online Wikidata mode (not local Wikibase) for demo
@@ -220,7 +277,12 @@ jobs:
 
             echo '🚀 Starting infrastructure containers...'
             docker compose up -d --no-deps postgres redis otel-collector
-            docker compose up -d --no-deps prometheus grafana model-service
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              echo 'demo_mode=true: skipping model-service start (MSW intercepts model-service routes in the frontend bundle).'
+              docker compose up -d --no-deps prometheus grafana
+            else
+              docker compose up -d --no-deps prometheus grafana model-service
+            fi
 
             echo '⏳ Waiting for postgres to be ready...'
             for i in {1..20}; do
@@ -249,7 +311,20 @@ jobs:
             fi
 
             echo '🚀 Starting application containers...'
-            if ! docker compose up -d --force-recreate; then
+            # demo_mode skips the model-service service entirely; the
+            # frontend bundle's MSW worker intercepts model-service
+            # routes so there is nothing to start. In non-demo mode we
+            # pass no service args at all so docker compose brings up
+            # every service in docker-compose.yml. A bare empty-string
+            # arg is treated by compose as a literal service name and
+            # errors with 'no such service: \"\"', so we must branch
+            # the whole command rather than interpolate an empty var.
+            if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
+              UP_CMD='docker compose up -d --force-recreate backend frontend'
+            else
+              UP_CMD='docker compose up -d --force-recreate'
+            fi
+            if ! eval \$UP_CMD; then
               echo '❌ docker compose up failed — dumping logs from every service:'
               docker compose ps
               echo '--- backend logs ---'
@@ -383,5 +458,9 @@ jobs:
       - name: Verify docs deployment
         run: |
           sleep 10
-          curl --fail -I https://fovea.video || exit 1
+          # The docs subdomain follows the docs/static/CNAME +
+          # docs/docusaurus.config.ts pair; both moved from
+          # fovea.video to docs.fovea.video in 0.4.0 so the apex
+          # is free for the demo SPA.
+          curl --fail -I https://docs.fovea.video || exit 1
           echo "✅ Documentation site healthy"

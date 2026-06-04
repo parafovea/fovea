@@ -136,10 +136,10 @@ test.describe('Bounding Box Window Resize', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.waitForTimeout(300)
 
-      // Check that label (Chip) is visible and has minimum readable size
+      // Check that label (shadcn Badge span) is visible and has minimum readable size
       const labelInfo = await page.evaluate(() => {
         const foreignObject = document.querySelector('[data-testid="bounding-box"] foreignObject')
-        const chip = foreignObject?.querySelector('.MuiChip-root')
+        const chip = foreignObject?.querySelector('span')
         if (!chip) return null
 
         const chipRect = chip.getBoundingClientRect()

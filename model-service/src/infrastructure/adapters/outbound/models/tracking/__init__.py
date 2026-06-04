@@ -21,6 +21,7 @@ from src.infrastructure.adapters.outbound.models.tracking.loader import (
     TrackingResult,
     YOLO11SegLoader,
     create_tracking_loader,
+    tracking_registry,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "TrackingResult",
     "YOLO11SegLoader",
     "create_tracking_loader",
+    "tracking_registry",
 ]

@@ -3,36 +3,22 @@ import { usePreferences } from '@hooks/preferences'
 import { useCommands, useCommandContext } from '@hooks/commands'
 import { useAnnotationUiStore } from '@store/zustand'
 import {
-  Box,
-  Tabs,
-  Tab,
-  Paper,
-  Typography,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Fab,
-  AppBar,
-  Tooltip,
-  Toolbar,
-  Button,
-  TextField,
-  InputAdornment,
-} from '@mui/material'
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Category as EntityTypeIcon,
-  GroupWork as RoleIcon,
-  Event as EventTypeIcon,
-  Share as RelationIcon,
-  ArrowBack as BackIcon,
-  Search as SearchIcon,
-  AutoAwesome as AutoAwesomeIcon,
-} from '@mui/icons-material'
+  Plus,
+  Pencil,
+  Trash2,
+  Blocks,
+  Users,
+  CalendarDays,
+  Share2,
+  ArrowLeft,
+  Search,
+  Sparkles,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import PersonaBrowser from '../browsers/PersonaBrowser'
 import PersonaEditor from '@components/persona/PersonaEditor'
 import EntityTypeEditor from '@components/ontology/EntityTypeEditor'
@@ -45,6 +31,10 @@ import { WikidataChip } from '../shared/WikidataChip'
 import {
   usePersonas,
   usePersonaOntology,
+  useAddEntityToPersona,
+  useAddRoleToPersona,
+  useAddEventToPersona,
+  useAddRelationTypeToPersona,
   useDeleteEntityFromPersona,
   useDeleteRoleFromPersona,
   useDeleteEventFromPersona,
@@ -55,6 +45,8 @@ import {
 import { OntologyAugmenter, OntologyCategory } from '@components/ontology/OntologyAugmenter'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@models/types'
+import { generateId } from '@utils/uuid'
+import { buildDuplicateOntologyType } from './duplicateOntologyType'
 
 /**
  * Union type for any ontology type item that can be filtered/edited.
@@ -67,58 +59,11 @@ type OntologyTypeItem = {
 }
 
 /**
- * Props for the TabPanel component.
- *
- * @property children - Content to render within the tab panel
- * @property index - Zero-based index of this panel
- * @property value - Currently active tab index
- */
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-/**
- * Tab panel component that conditionally renders content based on active tab.
- * Provides accessible tabpanel structure with ARIA attributes.
- *
- * @param props - Component props
- * @returns Hidden div when inactive, visible content when tab is selected
- *
- * @example
- * ```tsx
- * <TabPanel value={activeTab} index={0}>
- *   <EntityTypeList />
- * </TabPanel>
- * ```
- */
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`ontology-tabpanel-${index}`}
-      aria-labelledby={`ontology-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  )
-}
-
-/**
  * Ontology workspace for managing persona-specific type definitions.
  * Provides tabbed interface for entity, role, event, and relation types with search,
  * CRUD operations, and AI-powered type suggestions.
  *
  * @returns React component rendering persona browser or ontology editor with tabs
- *
- * @example
- * ```tsx
- * <Route path="/ontology" element={<OntologyWorkspace />} />
- * ```
  */
 export default function OntologyWorkspace() {
   // TanStack Query hooks for data
@@ -136,6 +81,10 @@ export default function OntologyWorkspace() {
   const { mutate: deleteRoleMutation } = useDeleteRoleFromPersona()
   const { mutate: deleteEventMutation } = useDeleteEventFromPersona()
   const { mutate: deleteRelationTypeMutation } = useDeleteRelationTypeFromPersona()
+  const { mutate: addEntityMutation } = useAddEntityToPersona()
+  const { mutate: addRoleMutation } = useAddRoleToPersona()
+  const { mutate: addEventMutation } = useAddEventToPersona()
+  const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
   const { mutate: saveOntologyMutation } = useSavePersonaOntology()
 
   // Use preferences for smart defaults
@@ -160,23 +109,23 @@ export default function OntologyWorkspace() {
 
   const [personaEditorOpen, setPersonaEditorOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<typeof personas[0] | null>(null)
-  
+
   // Initialize search from saved filter state
   const initialFilterState = getFilterState('ontology')
   const [searchTerm, setSearchTermState] = useState(initialFilterState.searchQuery || '')
-  
+
   // Wrapper to also save search term
   const setSearchTerm = (term: string) => {
     setSearchTermState(term)
     setFilterState('ontology', { ...getFilterState('ontology'), searchQuery: term })
   }
-  
+
   // Type editor states
   const [entityTypeEditorOpen, setEntityTypeEditorOpen] = useState(false)
   const [roleEditorOpen, setRoleEditorOpen] = useState(false)
   const [eventTypeEditorOpen, setEventTypeEditorOpen] = useState(false)
   const [relationTypeEditorOpen, setRelationTypeEditorOpen] = useState(false)
-  
+
   const [selectedEntityType, setSelectedEntityType] = useState<any>(null)
   const [selectedRole, setSelectedRole] = useState<any>(null)
   const [selectedEventType, setSelectedEventType] = useState<any>(null)
@@ -333,7 +282,11 @@ export default function OntologyWorkspace() {
       default: return []
     }
   }
-  
+
+  // Map numeric tabValue to string keys for the Tabs component
+  const tabKeys = ['entities', 'roles', 'events', 'relations']
+  const currentTabKey = tabKeys[tabValue] || 'entities'
+
   // Set command context for when clauses
   useCommandContext({
     ontologyWorkspaceActive: selectedPersonaId !== null,
@@ -387,8 +340,32 @@ export default function OntologyWorkspace() {
       }
     },
     'ontology.duplicateType': () => {
-      // TODO: Implement duplication logic
-      alert('Duplicate type not yet implemented')
+      const items = getCurrentItems()
+      if (!selectedPersonaId) return
+      if (selectedItemIndex < 0 || selectedItemIndex >= items.length) return
+      const item = items[selectedItemIndex]
+      switch (tabValue) {
+        case 0: {
+          const duped = buildDuplicateOntologyType(item as EntityType, generateId())
+          addEntityMutation({ personaId: selectedPersonaId, entity: duped })
+          break
+        }
+        case 1: {
+          const duped = buildDuplicateOntologyType(item as RoleType, generateId())
+          addRoleMutation({ personaId: selectedPersonaId, role: duped })
+          break
+        }
+        case 2: {
+          const duped = buildDuplicateOntologyType(item as EventType, generateId())
+          addEventMutation({ personaId: selectedPersonaId, event: duped })
+          break
+        }
+        case 3: {
+          const duped = buildDuplicateOntologyType(item as RelationType, generateId())
+          addRelationTypeMutation({ personaId: selectedPersonaId, relationType: duped })
+          break
+        }
+      }
     },
     'ontology.search': () => {
       searchInputRef.current?.focus()
@@ -396,12 +373,12 @@ export default function OntologyWorkspace() {
   }, {
     context: 'ontologyWorkspace'
   })
-  
+
   // Handle item selection with mouse
   const handleItemClick = (index: number) => {
     setSelectedItemIndex(index)
   }
-  
+
   // Reset selection when tab or search changes
   useEffect(() => {
     setSelectedItemIndex(-1)
@@ -409,13 +386,13 @@ export default function OntologyWorkspace() {
 
   if (!selectedPersonaId) {
     return (
-      <Box>
+      <div>
         <PersonaBrowser
           onSelectPersona={handleSelectPersona}
           onEditPersona={handleEditPersona}
           onAddPersona={handleAddPersona}
         />
-        
+
         <PersonaEditor
           open={personaEditorOpen}
           onClose={() => {
@@ -424,356 +401,210 @@ export default function OntologyWorkspace() {
           }}
           persona={editingPersona}
         />
-      </Box>
+      </div>
     )
   }
 
-  return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search types by name or description..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          inputRef={searchInputRef}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
-
-      <AppBar position="static" color="default" elevation={1}>
-        <Toolbar>
-          <IconButton edge="start" onClick={handleBackToBrowser} sx={{ mr: 2 }} aria-label="Back to persona browser">
-            <BackIcon />
-          </IconButton>
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6">
-              {selectedPersona?.name}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {selectedPersona?.role} - {selectedPersona?.informationNeed}
-            </Typography>
-          </Box>
-          <Button
-            startIcon={<EditIcon />}
-            onClick={() => handleEditPersona(selectedPersona!)}
-          >
-            Edit Persona
-          </Button>
-        </Toolbar>
-      </AppBar>
-
-      <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-          <Tab 
-            icon={<EntityTypeIcon />} 
-            label={`Entity Types (${filteredEntities.length}/${selectedOntology?.entities.length || 0})`} 
-          />
-          <Tab 
-            icon={<RoleIcon />} 
-            label={`Role Types (${filteredRoles.length}/${selectedOntology?.roles.length || 0})`} 
-          />
-          <Tab 
-            icon={<EventTypeIcon />} 
-            label={`Event Types (${filteredEvents.length}/${selectedOntology?.events.length || 0})`} 
-          />
-          <Tab 
-            icon={<RelationIcon />} 
-            label={`Relation Types (${filteredRelations.length}/${selectedOntology?.relationTypes.length || 0})`} 
-          />
-        </Tabs>
-      </Paper>
-
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
-        <TabPanel value={tabValue} index={0}>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
-              <span>
-                <Button
-                  variant="outlined"
-                  startIcon={<AutoAwesomeIcon />}
-                  onClick={() => handleOpenAugmenter('entity')}
-                  size="small"
-                  disabled={modelsDisabled}
-                >
-                  Suggest Types
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          <List>
-            {filteredEntities.map((entity, index) => (
-              <ListItem 
-                key={entity.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography>{entity.name}</Typography>
-                      <WikidataChip
-                        wikidataId={entity.wikidataId}
-                        wikidataUrl={entity.wikidataUrl}
-                        wikibaseId={entity.wikibaseId}
-                        importedAt={entity.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={<GlossRenderer gloss={entity.gloss} personaId={selectedPersonaId} />}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEntityType(entity)} aria-label={`Edit ${entity.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => deleteEntityMutation({
-                      personaId: selectedPersonaId,
-                      entityId: entity.id
-                    })}
-                    aria-label={`Delete ${entity.name}`}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
-              <span>
-                <Button
-                  variant="outlined"
-                  startIcon={<AutoAwesomeIcon />}
-                  onClick={() => handleOpenAugmenter('role')}
-                  size="small"
-                  disabled={modelsDisabled}
-                >
-                  Suggest Types
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          <List>
-            {filteredRoles.map((role, index) => (
-              <ListItem 
-                key={role.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography>{role.name}</Typography>
-                      <WikidataChip
-                        wikidataId={role.wikidataId}
-                        wikidataUrl={role.wikidataUrl}
-                        wikibaseId={role.wikibaseId}
-                        importedAt={role.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <GlossRenderer gloss={role.gloss} personaId={selectedPersonaId} />
-                      <Typography variant="caption" component="div">
-                        Allowed fillers: {(role.allowedFillerTypes || []).join(', ')}
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditRole(role)} aria-label={`Edit ${role.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => deleteRoleMutation({
-                      personaId: selectedPersonaId,
-                      roleId: role.id
-                    })}
-                    aria-label={`Delete ${role.name}`}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={2}>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
-              <span>
-                <Button
-                  variant="outlined"
-                  startIcon={<AutoAwesomeIcon />}
-                  onClick={() => handleOpenAugmenter('event')}
-                  size="small"
-                  disabled={modelsDisabled}
-                >
-                  Suggest Types
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          <List>
-            {filteredEvents.map((event, index) => (
-              <ListItem 
-                key={event.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography>{event.name}</Typography>
-                      <WikidataChip
-                        wikidataId={event.wikidataId}
-                        wikidataUrl={event.wikidataUrl}
-                        wikibaseId={event.wikibaseId}
-                        importedAt={event.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <GlossRenderer gloss={event.gloss} personaId={selectedPersonaId} />
-                      {event.roles.length > 0 && (
-                        <Typography variant="caption" component="div">
-                          Roles: {event.roles.length}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditEventType(event)} aria-label={`Edit ${event.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => deleteEventMutation({
-                      personaId: selectedPersonaId,
-                      eventId: event.id
-                    })}
-                    aria-label={`Delete ${event.name}`}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Tooltip title={modelsDisabled ? 'No AI models available for type suggestions' : ''}>
-              <span>
-                <Button
-                  variant="outlined"
-                  startIcon={<AutoAwesomeIcon />}
-                  onClick={() => handleOpenAugmenter('relation')}
-                  size="small"
-                  disabled={modelsDisabled}
-                >
-                  Suggest Types
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          <List>
-            {filteredRelations.map((relation, index) => (
-              <ListItem 
-                key={relation.id} 
-                divider
-                selected={selectedItemIndex === index}
-                onClick={() => handleItemClick(index)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography>{relation.name}</Typography>
-                      <WikidataChip
-                        wikidataId={relation.wikidataId}
-                        wikidataUrl={relation.wikidataUrl}
-                        wikibaseId={relation.wikibaseId}
-                        importedAt={relation.importedAt}
-                        size="small"
-                        showTimestamp={false}
-                      />
-                    </Box>
-                  }
-                  secondary={
-                    <Box>
-                      <GlossRenderer gloss={relation.gloss} personaId={selectedPersonaId} />
-                      <Typography variant="caption" component="div">
-                        {relation.sourceTypes.join(', ')} → {relation.targetTypes.join(', ')}
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => handleEditRelationType(relation)} aria-label={`Edit ${relation.name}`}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => deleteRelationTypeMutation({
-                      personaId: selectedPersonaId,
-                      relationTypeId: relation.id
-                    })}
-                    aria-label={`Delete ${relation.name}`}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-        </TabPanel>
-      </Box>
-
-      <Tooltip title="Add New Type (Cmd/Ctrl+N)" placement="left">
-        <Fab
-          color="primary"
-          aria-label="add type"
-          sx={{
-            position: 'absolute',
-            bottom: 16,
-            right: 16,
-          }}
-          onClick={handleAddType}
+  const renderTypeList = (
+    items: Array<{ id: string; name: string; gloss: GlossItem[]; wikidataId?: string; wikidataUrl?: string; wikibaseId?: string; importedAt?: string; [key: string]: any }>,
+    onEdit: (item: any) => void,
+    onDelete: (item: any) => void,
+    renderSecondary?: (item: any) => React.ReactNode,
+  ) => (
+    <ul>
+      {items.map((item, index) => (
+        <li
+          key={item.id}
+          className={cn(
+            'flex items-center justify-between py-2 px-3 border-b cursor-pointer hover:bg-accent/50',
+            selectedItemIndex === index && 'bg-accent/30'
+          )}
+          onClick={() => handleItemClick(index)}
         >
-          <AddIcon />
-        </Fab>
-      </Tooltip>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">{item.name}</span>
+              <WikidataChip
+                wikidataId={item.wikidataId}
+                wikidataUrl={item.wikidataUrl}
+                wikibaseId={item.wikibaseId}
+                importedAt={item.importedAt}
+                size="small"
+                showTimestamp={false}
+              />
+            </div>
+            <div className="mt-0.5">
+              <GlossRenderer gloss={item.gloss} personaId={selectedPersonaId} />
+              {renderSecondary && renderSecondary(item)}
+            </div>
+          </div>
+          <div className="flex gap-1 ml-2 shrink-0">
+            <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onEdit(item) }} aria-label={`Edit ${item.name}`}>
+              <Pencil className="size-4" />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); onDelete(item) }} aria-label={`Delete ${item.name}`}>
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+
+  const renderSuggestButton = (category: OntologyCategory) => (
+    <div className="mb-4 flex justify-end">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenAugmenter(category)}
+                disabled={modelsDisabled}
+              />
+            }
+          >
+            <Sparkles className="size-4 mr-1" />
+            Suggest Types
+          </TooltipTrigger>
+          {modelsDisabled && (
+            <TooltipContent>No AI models available for type suggestions</TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="p-4">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            ref={searchInputRef}
+            type="search"
+            placeholder="Search types by name or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 px-4 py-2 border-b bg-card">
+        <Button variant="ghost" size="icon" onClick={handleBackToBrowser} aria-label="Back to persona browser">
+          <ArrowLeft className="size-5" />
+        </Button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold truncate">
+            {selectedPersona?.name}
+          </h2>
+          <p className="text-xs text-muted-foreground truncate">
+            {selectedPersona?.role} - {selectedPersona?.informationNeed}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => handleEditPersona(selectedPersona!)}>
+          <Pencil className="size-4 mr-1" />
+          Edit Persona
+        </Button>
+      </div>
+
+      <Tabs
+        value={currentTabKey}
+        onValueChange={(val) => setTabValue(tabKeys.indexOf(val))}
+        className="flex-1 flex flex-col"
+      >
+        <TabsList className="mx-4 mt-2" data-tour-id="ontology-workspace-tabs">
+          <TabsTrigger value="entities">
+            <Blocks className="size-4 mr-1" />
+            Entity Types ({filteredEntities.length}/{selectedOntology?.entities.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="roles">
+            <Users className="size-4 mr-1" />
+            Role Types ({filteredRoles.length}/{selectedOntology?.roles.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="events">
+            <CalendarDays className="size-4 mr-1" />
+            Event Types ({filteredEvents.length}/{selectedOntology?.events.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="relations">
+            <Share2 className="size-4 mr-1" />
+            Relation Types ({filteredRelations.length}/{selectedOntology?.relationTypes.length || 0})
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="flex-1 overflow-auto">
+          <TabsContent value="entities" className="p-6">
+            {renderSuggestButton('entity')}
+            {renderTypeList(
+              filteredEntities,
+              handleEditEntityType,
+              (entity) => deleteEntityMutation({ personaId: selectedPersonaId, entityId: entity.id }),
+            )}
+          </TabsContent>
+
+          <TabsContent value="roles" className="p-6">
+            {renderSuggestButton('role')}
+            {renderTypeList(
+              filteredRoles,
+              handleEditRole,
+              (role) => deleteRoleMutation({ personaId: selectedPersonaId, roleId: role.id }),
+              (role) => (
+                <span className="text-xs text-muted-foreground block">
+                  Allowed fillers: {(role.allowedFillerTypes || []).join(', ')}
+                </span>
+              ),
+            )}
+          </TabsContent>
+
+          <TabsContent value="events" className="p-6">
+            {renderSuggestButton('event')}
+            {renderTypeList(
+              filteredEvents,
+              handleEditEventType,
+              (event) => deleteEventMutation({ personaId: selectedPersonaId, eventId: event.id }),
+              (event) => event.roles.length > 0 ? (
+                <span className="text-xs text-muted-foreground block">
+                  Roles: {event.roles.length}
+                </span>
+              ) : null,
+            )}
+          </TabsContent>
+
+          <TabsContent value="relations" className="p-6">
+            {renderSuggestButton('relation')}
+            {renderTypeList(
+              filteredRelations,
+              handleEditRelationType,
+              (relation) => deleteRelationTypeMutation({ personaId: selectedPersonaId, relationTypeId: relation.id }),
+              (relation) => (
+                <span className="text-xs text-muted-foreground block">
+                  {relation.sourceTypes.join(', ')} -&gt; {relation.targetTypes.join(', ')}
+                </span>
+              ),
+            )}
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-lg"
+                className="absolute bottom-4 right-4 rounded-full shadow-lg"
+                aria-label="add type"
+                onClick={handleAddType}
+              />
+            }
+          >
+            <Plus className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent side="left">Add New Type (Cmd/Ctrl+N)</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Type Editors */}
       <EntityTypeEditor
@@ -785,7 +616,7 @@ export default function OntologyWorkspace() {
         entity={selectedEntityType}
         personaId={selectedPersonaId}
       />
-      
+
       <RoleEditor
         open={roleEditorOpen}
         onClose={() => {
@@ -795,7 +626,7 @@ export default function OntologyWorkspace() {
         role={selectedRole}
         personaId={selectedPersonaId}
       />
-      
+
       <EventTypeEditor
         open={eventTypeEditorOpen}
         onClose={() => {
@@ -805,7 +636,7 @@ export default function OntologyWorkspace() {
         event={selectedEventType}
         personaId={selectedPersonaId}
       />
-      
+
       <RelationTypeEditor
         open={relationTypeEditorOpen}
         onClose={() => {
@@ -815,7 +646,7 @@ export default function OntologyWorkspace() {
         relationType={selectedRelationType}
         personaId={selectedPersonaId}
       />
-      
+
       <PersonaEditor
         open={personaEditorOpen}
         onClose={() => {
@@ -827,18 +658,8 @@ export default function OntologyWorkspace() {
 
       {/* Ontology Augmenter Dialog */}
       {augmenterOpen && selectedPersonaId && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1300,
-            maxWidth: '800px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto',
-          }}
+        <div
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 max-w-[800px] w-[90%] max-h-[90vh] overflow-auto"
         >
           <OntologyAugmenter
             personaId={selectedPersonaId}
@@ -846,8 +667,8 @@ export default function OntologyWorkspace() {
             initialCategory={augmenterCategory}
             onClose={() => setAugmenterOpen(false)}
           />
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }

@@ -131,29 +131,31 @@ describe('ClaimRelationEditor', () => {
       expect(screen.getByText(/baseball is a popular sport/i)).toBeInTheDocument()
     })
 
-    it('renders relation type dropdown', () => {
+    it('renders relation type label and select trigger', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByLabelText(/relation type/i)).toBeInTheDocument()
+      expect(screen.getByText('Relation Type')).toBeInTheDocument()
+      expect(screen.getByText('Select relation type')).toBeInTheDocument()
     })
 
-    it('renders target claim autocomplete', () => {
+    it('renders target claim label and select trigger', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByLabelText(/target claim/i)).toBeInTheDocument()
+      expect(screen.getByText('Target Claim')).toBeInTheDocument()
+      expect(screen.getByText('Select target claim')).toBeInTheDocument()
     })
 
-    it('renders confidence slider', () => {
+    it('renders confidence label', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByText(/confidence:/i)).toBeInTheDocument()
-      expect(screen.getByRole('slider')).toBeInTheDocument()
+      expect(screen.getByText(/confidence: 80%/i)).toBeInTheDocument()
     })
 
     it('renders notes textarea', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByLabelText(/notes \(optional\)/i)).toBeInTheDocument()
+      expect(screen.getByText('Notes (optional)')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText(/add notes explaining/i)).toBeInTheDocument()
     })
   })
 
@@ -161,9 +163,8 @@ describe('ClaimRelationEditor', () => {
     it('shows only claim-compatible types', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      // Should show the 2 claim-compatible types
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      expect(relationTypeSelect).toBeInTheDocument()
+      // Should show the select trigger for relation types
+      expect(screen.getByText('Relation Type')).toBeInTheDocument()
     })
 
     it('hides entity-only relation types', () => {
@@ -188,7 +189,7 @@ describe('ClaimRelationEditor', () => {
 
       // The entity-only type should not be available in the dropdown
       // This is a structural test - the component filters it out internally
-      expect(screen.getByLabelText(/relation type/i)).toBeInTheDocument()
+      expect(screen.getByText('Relation Type')).toBeInTheDocument()
     })
 
     it('shows warning when no compatible types', () => {
@@ -201,12 +202,13 @@ describe('ClaimRelationEditor', () => {
   })
 
   describe('Target Claim Selection', () => {
-    it('lists all claims except source', async () => {
+    it('lists all claims except source via select', async () => {
       const user = userEvent.setup()
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      // Click the target claim select trigger
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       // Should show 2 claims (claim-2 and claim-3), not the source claim-1
       await waitFor(() => {
@@ -219,8 +221,8 @@ describe('ClaimRelationEditor', () => {
       const user = userEvent.setup()
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(() => {
         expect(screen.getByText(/sports are popular worldwide/i)).toBeInTheDocument()
@@ -241,8 +243,8 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Select target claim but not relation type
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const option = screen.getByText(/sports are popular worldwide/i)
@@ -258,8 +260,8 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Select target claim
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
@@ -267,11 +269,11 @@ describe('ClaimRelationEditor', () => {
       })
 
       // Select relation type
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
@@ -289,8 +291,8 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Select target claim
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
@@ -298,11 +300,11 @@ describe('ClaimRelationEditor', () => {
       })
 
       // Select relation type
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
@@ -322,19 +324,19 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill required fields
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
         await user.click(targetOption)
       })
 
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
@@ -358,24 +360,24 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill required fields
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
         await user.click(targetOption)
       })
 
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
       // Add notes
-      const notesInput = screen.getByLabelText(/notes \(optional\)/i)
+      const notesInput = screen.getByPlaceholderText(/add notes explaining/i)
       await user.type(notesInput, 'This is a test note')
 
       const saveButton = screen.getByRole('button', { name: /save relation/i })
@@ -399,19 +401,19 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} onClose={onClose} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill and submit form
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
         await user.click(targetOption)
       })
 
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
@@ -431,19 +433,19 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} onSave={onSave} />, { wrapper: createWrapper() })
 
       // Fill and submit form
-      const targetInput = screen.getByLabelText(/target claim/i)
-      await user.click(targetInput)
+      const targetTrigger = screen.getByText('Select target claim')
+      await user.click(targetTrigger)
 
       await waitFor(async () => {
         const targetOption = screen.getByText(/sports are popular worldwide/i)
         await user.click(targetOption)
       })
 
-      const relationTypeSelect = screen.getByLabelText(/relation type/i)
-      await user.click(relationTypeSelect)
+      const relationTypeTrigger = screen.getByText('Select relation type')
+      await user.click(relationTypeTrigger)
 
       await waitFor(async () => {
-        const typeOption = screen.getByRole('option', { name: /supports/i })
+        const typeOption = screen.getByText(/supports/i)
         await user.click(typeOption)
       })
 
@@ -539,7 +541,7 @@ describe('ClaimRelationEditor', () => {
       render(<ClaimRelationEditor {...defaultProps} />, { wrapper: createWrapper() })
 
       // Component should flatten claims including subclaims
-      expect(screen.getByLabelText(/target claim/i)).toBeInTheDocument()
+      expect(screen.getByText('Target Claim')).toBeInTheDocument()
     })
   })
 })
