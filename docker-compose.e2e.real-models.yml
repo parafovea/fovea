@@ -60,6 +60,12 @@ services:
       MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS: '1800000'
       MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS: '1800000'
       MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS: '1800000'
+      # The /transcribe + /diarize forwarder; faster-whisper-tiny + pyannote-3.1
+      # on CPU cold-load can run minutes on a clip, so lift the ceiling in line
+      # with the summarize / claims / synthesize knobs above. Without this the
+      # backend defaults to 300000 ms and the integration-models transcribe
+      # spec would 504 mid-inference on first-load.
+      MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS: '1800000'
     depends_on:
       postgres:
         condition: service_healthy
