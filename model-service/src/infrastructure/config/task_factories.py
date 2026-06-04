@@ -8,12 +8,13 @@ returns a concrete loader instance.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
 if TYPE_CHECKING:
     from src.application.services.model_management import ModelConfig, TaskModelFactory
+    from src.domain.entities.architectures import AudioArchitecture
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def _audio_transcription_factory(model_config: ModelConfig) -> Any:
         compute_type="float16" if device == "cuda" else "int8",
     )
 
-    loader = create_audio_loader(model_config.architecture, config)
+    loader = create_audio_loader(cast("AudioArchitecture", model_config.architecture), config)
     loader.load()
     logger.info(f"Audio transcription model loaded: {model_config.model_id}")
     return loader

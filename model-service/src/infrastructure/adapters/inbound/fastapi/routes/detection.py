@@ -6,8 +6,12 @@ Thin FastAPI wrapper that delegates to :class:`DetectObjectsUseCase`.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, cast
 
 import cv2
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import DetectionArchitecture
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -106,7 +110,7 @@ async def detect_objects(
                 )
 
             use_case = container.build_detect_objects_use_case(
-                architecture=architecture,
+                architecture=cast("DetectionArchitecture", architecture),
                 model_id=selected_model_config.model_id,
                 framework=selected_model_config.framework,
                 confidence_threshold=request.confidence_threshold,

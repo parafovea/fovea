@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import LLMArchitecture
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -117,7 +121,10 @@ async def augment_ontology(
                     temperature=0.7,
                     top_p=0.9,
                 )
-                loader = create_llm_loader(selected_model_config.architecture, llm_config)
+                loader = create_llm_loader(
+                    cast("LLMArchitecture", selected_model_config.architecture),
+                    llm_config,
+                )
                 language_model = LLMLoaderAdapter(loader)
                 await language_model.aload()
                 try:

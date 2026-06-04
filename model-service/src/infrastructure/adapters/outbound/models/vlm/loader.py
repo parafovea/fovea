@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from transformers import (
@@ -346,7 +347,9 @@ class Llama4MaverickLoader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)
@@ -522,7 +525,9 @@ class Gemma3Loader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)
@@ -913,7 +918,9 @@ class Qwen25VLLoader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import NotRequired, TypedDict, cast
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import LLMArchitecture
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -105,7 +108,9 @@ async def extract_claims(
                 temperature=0.7,
             )
 
-            loader = create_llm_loader(selected_config.architecture, llm_config)
+            loader = create_llm_loader(
+                cast("LLMArchitecture", selected_config.architecture), llm_config
+            )
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 
@@ -208,7 +213,9 @@ async def synthesize_summary(
                 temperature=0.8,
             )
 
-            loader = create_llm_loader(selected_config.architecture, llm_config)
+            loader = create_llm_loader(
+                cast("LLMArchitecture", selected_config.architecture), llm_config
+            )
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 

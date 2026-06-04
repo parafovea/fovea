@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import VLMArchitecture
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -182,7 +186,7 @@ async def summarize_video(
                         "(e.g. architecture: {kind: 'smolvlm'}) to the matching "
                         "entry in models.yaml or models-cpu.yaml."
                     )
-                vlm_loader = create_vlm_loader(architecture, model_config)
+                vlm_loader = create_vlm_loader(cast("VLMArchitecture", architecture), model_config)
                 vlm = VLMLoaderAdapter(vlm_loader)
 
                 response_dto = await summarize_module.summarize_video_with_vlm(
