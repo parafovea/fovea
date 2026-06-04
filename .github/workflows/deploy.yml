@@ -187,12 +187,24 @@ jobs:
             fi
 
             # Swap nginx config when demo_mode is on so the auth-
-            # endpoint rate limits take effect. The Dockerfile copies
-            # nginx.conf by default; we overlay nginx.demo.conf via a
-            # bind-mount on the frontend container at runtime.
+            # endpoint rate limits take effect. The Dockerfile COPYs
+            # annotation-tool/nginx.conf at image build time, so we
+            # overwrite the file on disk BEFORE the docker build runs
+            # below. The prior rsync step always ships the canonical
+            # nginx.conf from git, so a subsequent demo_mode=false
+            # deploy restores the standard config automatically; the
+            # demo overwrite is therefore safely scoped to a single
+            # deploy.
             if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
               cp annotation-tool/nginx.demo.conf annotation-tool/nginx.conf
               echo 'Swapped nginx config to nginx.demo.conf for demo mode'
+            else
+              # Belt-and-suspenders: if a prior demo_mode=true deploy
+              # left a stale nginx.conf on disk and rsync somehow
+              # skipped it (e.g. timestamp tie), force the canonical
+              # file back by checking out from the synced tree's
+              # docker-image source of truth.
+              echo 'demo_mode=false: nginx.conf left at the rsynced canonical version'
             fi
 
             # Ensure online Wikidata mode (not local Wikibase) for demo
@@ -301,13 +313,18 @@ jobs:
             echo '🚀 Starting application containers...'
             # demo_mode skips the model-service service entirely; the
             # frontend bundle's MSW worker intercepts model-service
-            # routes so there is nothing to start.
+            # routes so there is nothing to start. In non-demo mode we
+            # pass no service args at all so docker compose brings up
+            # every service in docker-compose.yml. A bare empty-string
+            # arg is treated by compose as a literal service name and
+            # errors with 'no such service: \"\"', so we must branch
+            # the whole command rather than interpolate an empty var.
             if [ \"${{ inputs.demo_mode }}\" = \"true\" ]; then
-              APP_SERVICES='backend frontend'
+              UP_CMD='docker compose up -d --force-recreate backend frontend'
             else
-              APP_SERVICES=''
+              UP_CMD='docker compose up -d --force-recreate'
             fi
-            if ! docker compose up -d --force-recreate \$APP_SERVICES; then
+            if ! eval \$UP_CMD; then
               echo '❌ docker compose up failed — dumping logs from every service:'
               docker compose ps
               echo '--- backend logs ---'
@@ -441,5 +458,9 @@ jobs:
       - name: Verify docs deployment
         run: |
           sleep 10
-          curl --fail -I https://fovea.video || exit 1
+          # The docs subdomain follows the docs/static/CNAME +
+          # docs/docusaurus.config.ts pair; both moved from
+          # fovea.video to docs.fovea.video in 0.4.0 so the apex
+          # is free for the demo SPA.
+          curl --fail -I https://docs.fovea.video || exit 1
           echo "✅ Documentation site healthy"

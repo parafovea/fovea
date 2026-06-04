@@ -27,3 +27,15 @@ services:
     build:
       args:
         - VITE_TOUR_DEMO=1
+
+  # Park the model-service under a never-active profile so
+  # `docker compose up` on the booth laptop never starts it. The
+  # base docker-compose.yml puts model-service under profiles
+  # ["cpu", ""] (active by default) which would otherwise pull
+  # multi-GB model weights on a GPU-less booth machine and crash
+  # at load time the moment a tour visitor clicked something the
+  # MSW worker missed. The override re-scopes it to the explicit
+  # "real-models" profile so the booth operator opts in only when
+  # they actually want the real backend.
+  model-service:
+    profiles: ["real-models"]
