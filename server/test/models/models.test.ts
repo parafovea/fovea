@@ -309,7 +309,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=detection&modelName=yolov8n'
+        url: '/api/models/select?taskType=object_detection&modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(200)
@@ -318,7 +318,7 @@ describe('Model Routes', () => {
         'http://localhost:8000/api/models/select',
         null,
         {
-          params: { task_type: 'detection', model_name: 'yolov8n' },
+          params: { task_type: 'object_detection', model_name: 'yolov8n' },
           timeout: 30000
         }
       )
@@ -335,7 +335,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=tracking&modelName=botsort'
+        url: '/api/models/select?taskType=video_tracking&modelName=botsort'
       })
 
       expect(response.statusCode).toBe(200)
@@ -353,7 +353,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=summarization&modelName=llava-1.5-7b'
+        url: '/api/models/select?taskType=video_summarization&modelName=llava-1.5-7b'
       })
 
       expect(response.statusCode).toBe(200)
@@ -372,7 +372,7 @@ describe('Model Routes', () => {
     it('validates required model_name parameter', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=detection'
+        url: '/api/models/select?taskType=object_detection'
       })
 
       expect(response.statusCode).toBe(400)
@@ -416,7 +416,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=detection&modelName=nonexistent_model'
+        url: '/api/models/select?taskType=object_detection&modelName=nonexistent_model'
       })
 
       expect(response.statusCode).toBe(404)
@@ -439,7 +439,7 @@ describe('Model Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=detection&modelName=yolov8n'
+        url: '/api/models/select?taskType=object_detection&modelName=yolov8n'
       })
 
       expect(response.statusCode).toBe(503)

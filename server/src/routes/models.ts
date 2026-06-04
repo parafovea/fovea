@@ -23,7 +23,7 @@ function normalizeAndAssertTaskType(taskType: string): string {
     case 'voice_activity_detection': return 'voice_activity_detection'
     case 'claim_extraction': return 'claim_extraction'
     case 'claim_synthesis': return 'claim_synthesis'
-    default: throw new ValidationError(`Invalid taskType: ${taskType}`)
+    default: throw new ValidationError(`Invalid task type: ${taskType}`)
   }
 }
 
@@ -101,6 +101,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -162,6 +168,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -240,6 +252,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -295,6 +313,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -334,6 +358,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -374,6 +404,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -414,6 +450,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -453,6 +495,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -491,6 +539,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
