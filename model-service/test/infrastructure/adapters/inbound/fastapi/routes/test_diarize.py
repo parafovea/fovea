@@ -50,6 +50,7 @@ def _widen_audio_path_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     tempdir = os.path.realpath(tempfile.gettempdir()) + os.sep
     monkeypatch.setattr(diarize_route, "_VIDEO_DATA_PREFIX", tempdir)
     monkeypatch.setattr(diarize_route, "_AUDIO_OUTPUT_PREFIX", tempdir)
+    monkeypatch.setattr(diarize_route, "_AUDIO_PATH_ROOTS", (tempdir, tempdir))
 
 
 class FakeDiarizationModel:

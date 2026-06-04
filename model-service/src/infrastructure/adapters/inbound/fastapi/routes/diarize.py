@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 # breaks the recognised StartswithCall pattern.
 _VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
 _AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
+_AUDIO_PATH_ROOTS: tuple[str, str] = (_VIDEO_DATA_PREFIX, _AUDIO_OUTPUT_PREFIX)
 
 
 class _DiarizationModel(Protocol):
@@ -90,12 +91,13 @@ async def diarize(
     """Run speaker diarization against the configured pyannote model."""
     # CodeQL sanitizer chain (inlined per StartswithCall recognition):
     #   1. os.path.realpath -> PathNormalization
-    #   2. startswith(const_prefix) + raise -> barrier guard
+    #   2. single startswith(const_prefix_tuple) + raise -> barrier guard.
+    #      str.startswith accepts a tuple of prefixes natively; using the
+    #      tuple form keeps this as one StartswithCall (CodeQL recognises
+    #      it as the barrier guard) rather than an or-chain of two calls
+    #      (which the taint engine does not collapse into a barrier).
     audio_path_real = os.path.realpath(request.audio_path)
-    if not (
-        audio_path_real.startswith(_VIDEO_DATA_PREFIX)
-        or audio_path_real.startswith(_AUDIO_OUTPUT_PREFIX)
-    ):
+    if not audio_path_real.startswith(_AUDIO_PATH_ROOTS):
         raise HTTPException(
             status_code=400,
             detail=f"audio_path is outside the configured data roots: {request.audio_path!r}",
