@@ -8,11 +8,6 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from src.domain.entities.architectures import Llama3LLM, QwenVL
-
-# Default LLM architecture for legacy tests that predate the
-# architecture-keyed dispatch and constructed LlamaCppLLMLoader with a
-# single config arg.
-_DEFAULT_LLM_ARCH = Llama3LLM()
 from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
 from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
 from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
@@ -144,7 +139,7 @@ class TestLlamaCppLLMLoader:
 
     def test_is_loaded_initially_false(self) -> None:
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
 
         assert loader.is_loaded is False
 
@@ -156,7 +151,7 @@ class TestLlamaCppLLMLoader:
         mock_llama_mod.Llama = mock_llama_cls
 
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
 
         with patch.dict("sys.modules", {"llama_cpp": mock_llama_mod}):
             await loader.load()
@@ -173,7 +168,7 @@ class TestLlamaCppLLMLoader:
     @pytest.mark.asyncio
     async def test_generate_raises_when_not_loaded(self) -> None:
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
 
         with pytest.raises(RuntimeError, match="Model not loaded"):
             await loader.generate("Hello")
@@ -181,7 +176,7 @@ class TestLlamaCppLLMLoader:
     @pytest.mark.asyncio
     async def test_generate_returns_result(self) -> None:
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
 
         mock_model = MagicMock()
         mock_model.create_completion.return_value = {
@@ -200,7 +195,7 @@ class TestLlamaCppLLMLoader:
     @pytest.mark.asyncio
     async def test_generate_passes_stop_sequences(self) -> None:
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
 
         mock_model = MagicMock()
         mock_model.create_completion.return_value = {
@@ -218,7 +213,7 @@ class TestLlamaCppLLMLoader:
     @pytest.mark.asyncio
     async def test_unload_clears_model(self) -> None:
         config = LlamaCppConfig(model_id="TheBloke/Llama-2-7B-GGUF")
-        loader = LlamaCppLLMLoader(_DEFAULT_LLM_ARCH, config)
+        loader = LlamaCppLLMLoader(Llama3LLM(), config)
         loader._model = MagicMock()
 
         await loader.unload()
@@ -298,7 +293,7 @@ class TestCreateLLMLoaderFactory:
             max_tokens=2048,
         )
 
-        loader = create_llm_loader(_DEFAULT_LLM_ARCH, config, cache_dir=Path("/tmp/models"))
+        loader = create_llm_loader(Llama3LLM(), config, cache_dir=Path("/tmp/models"))
 
         assert isinstance(loader, LlamaCppLLMLoader)
         assert loader.config.model_id == "TheBloke/Llama-2-7B-GGUF"
@@ -312,6 +307,6 @@ class TestCreateLLMLoaderFactory:
             framework=LLMFramework.TRANSFORMERS,
         )
 
-        loader = create_llm_loader(_DEFAULT_LLM_ARCH, config)
+        loader = create_llm_loader(Llama3LLM(), config)
 
         assert isinstance(loader, LLMLoader)

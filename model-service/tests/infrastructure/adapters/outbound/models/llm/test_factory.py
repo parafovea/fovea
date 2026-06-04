@@ -26,22 +26,23 @@ from __future__ import annotations
 import pytest
 
 from src.domain.entities.architectures import (
+    GLM4,
     ClaudeAPI,
     DeepSeekR1Distill,
     DeepSeekV3LLM,
-    GLM4,
-    Gemma3LLM,
     GeminiAPI,
+    Gemma3LLM,
     GrokAPI,
     KimiK2,
-    LLMArchitecture,
     Llama3LLM,
     Llama4LLM,
+    LLMArchitecture,
     OpenAIChat,
     Phi,
     QwenLLM,
     SmolVLM,
 )
+from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
 from src.infrastructure.adapters.outbound.models.llama_cpp.llm import LlamaCppLLMLoader
 from src.infrastructure.adapters.outbound.models.llm.base import (
     LLMConfig,
@@ -55,7 +56,6 @@ from src.infrastructure.adapters.outbound.models.llm.loader import (
 from src.infrastructure.adapters.outbound.models.registry import (
     UnknownArchitectureError,
 )
-
 
 LOCAL_LLM_ARCHITECTURES: list[LLMArchitecture] = [
     QwenLLM(),
@@ -180,10 +180,6 @@ class TestLLMLoaderConstructor:
         assert loader.cache_dir is None
 
     def test_llamacpploader_accepts_arch_as_first_positional_arg(self) -> None:
-        from src.infrastructure.adapters.outbound.models.llama_cpp.base import (
-            LlamaCppConfig,
-        )
-
         arch = QwenLLM()
         config = LlamaCppConfig(model_id="test/model-gguf", n_ctx=4096)
         loader = LlamaCppLLMLoader(arch, config)

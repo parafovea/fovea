@@ -26,10 +26,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
-from numpy.typing import NDArray
 
 from src.domain.entities.architectures import (
     AudioArchitecture,
@@ -48,6 +47,9 @@ from src.infrastructure.adapters.outbound.models.audio.base import (
     audio_registry,
 )
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 __all__ = [
     "AudioFramework",
@@ -515,7 +517,7 @@ class PyannoteLoader:
             # download without code changes; deployments without a
             # token surface a useful error instead of pyannote's
             # generic "could not download model" message.
-            import os  # noqa: PLC0415
+            import os
 
             hf_token = os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN")
             # huggingface_hub 1.x renamed `use_auth_token` → `token`.

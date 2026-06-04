@@ -136,7 +136,7 @@ class LlamaCppLLMLoader:
         # invalid tokens at decode time, so small models cannot emit
         # malformed output.
         if config.json_schema is not None:
-            from llama_cpp.llama_grammar import LlamaGrammar  # noqa: PLC0415
+            from llama_cpp.llama_grammar import LlamaGrammar
 
             completion_kwargs["grammar"] = LlamaGrammar.from_json_schema(
                 json.dumps(config.json_schema)

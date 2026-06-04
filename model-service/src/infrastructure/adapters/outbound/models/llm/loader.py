@@ -35,14 +35,14 @@ from transformers import (
 )
 
 from src.domain.entities.architectures import (
+    GLM4,
     DeepSeekR1Distill,
     DeepSeekV3LLM,
-    GLM4,
     Gemma3LLM,
     KimiK2,
-    LLMArchitecture,
     Llama3LLM,
     Llama4LLM,
+    LLMArchitecture,
     Phi,
     QwenLLM,
 )
@@ -75,7 +75,7 @@ __all__ = [
 ]
 
 
-llm_registry: LoaderRegistry[LLMArchitecture, "LLMLoader"] = LoaderRegistry(family="llm")
+llm_registry: LoaderRegistry[LLMArchitecture, LLMLoader] = LoaderRegistry(family="llm")
 """Architecture-keyed loader registry for the local LLM family.
 
 Loader classes register against the LLM architecture subclasses they

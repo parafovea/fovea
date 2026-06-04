@@ -23,13 +23,15 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
-from src.infrastructure.adapters.outbound.models.audio.loader import DiarizationResult
+
+if TYPE_CHECKING:
+    from src.infrastructure.adapters.outbound.models.audio.loader import DiarizationResult
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -96,8 +96,8 @@ async def track_objects(
 
             from src.domain.entities.architectures import (
                 SAM2,
-                SAM2Long,
                 SAMURAI,
+                SAM2Long,
                 YOLO11Seg,
             )
 

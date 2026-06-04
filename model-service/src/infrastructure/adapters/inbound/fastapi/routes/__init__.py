@@ -38,6 +38,9 @@ from src.infrastructure.adapters.inbound.fastapi.routes.claims import (
 from src.infrastructure.adapters.inbound.fastapi.routes.detection import (
     router as detection_router,
 )
+from src.infrastructure.adapters.inbound.fastapi.routes.diarize import (
+    router as diarize_router,
+)
 from src.infrastructure.adapters.inbound.fastapi.routes.models import (
     router as models_router,
 )
@@ -55,9 +58,6 @@ from src.infrastructure.adapters.inbound.fastapi.routes.tracking import (
 )
 from src.infrastructure.adapters.inbound.fastapi.routes.transcribe import (
     router as transcribe_router,
-)
-from src.infrastructure.adapters.inbound.fastapi.routes.diarize import (
-    router as diarize_router,
 )
 
 router = APIRouter(prefix="/api")

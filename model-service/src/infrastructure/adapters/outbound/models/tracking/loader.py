@@ -31,8 +31,8 @@ from PIL import Image
 
 from src.domain.entities.architectures import (
     SAM2,
-    SAM2Long,
     SAMURAI,
+    SAM2Long,
     TrackingArchitecture,
     YOLO11Seg,
 )

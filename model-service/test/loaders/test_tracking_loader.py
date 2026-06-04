@@ -11,8 +11,14 @@ from PIL import Image
 
 from src.domain.entities.architectures import (
     SAM2 as SAM2Arch,
-    SAM2Long as SAM2LongArch,
+)
+from src.domain.entities.architectures import (
     SAMURAI as SAMURAIArch,
+)
+from src.domain.entities.architectures import (
+    SAM2Long as SAM2LongArch,
+)
+from src.domain.entities.architectures import (
     YOLO11Seg as YOLO11SegArch,
 )
 from src.infrastructure.adapters.outbound.models.registry import UnknownArchitectureError
@@ -804,7 +810,7 @@ class TestCreateTrackingLoader:
         self, tracking_config: TrackingConfig
     ) -> None:
         """A non-tracking architecture must raise UnknownArchitectureError."""
-        from src.domain.entities.architectures import QwenLLM  # noqa: PLC0415
+        from src.domain.entities.architectures import QwenLLM
 
         with pytest.raises(UnknownArchitectureError):
             create_tracking_loader(QwenLLM(), tracking_config)  # type: ignore[arg-type]

@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 from src.application.dto.ontology import OntologyTypeDTO
 from src.application.dto.summarization import SummarizeResponseDTO
 from src.domain.entities.architectures import (
-    Llama4LLM,
     SAMURAI,
+    Llama4LLM,
     YOLOWorld,
 )
 from src.main import app

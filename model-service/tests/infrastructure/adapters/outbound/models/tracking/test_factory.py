@@ -27,10 +27,10 @@ import pytest
 
 from src.domain.entities.architectures import (
     SAM2,
-    SAM2Long,
-    SAM3Tracking,
     SAMURAI,
     QwenLLM,
+    SAM2Long,
+    SAM3Tracking,
     TrackingArchitecture,
     YOLO11Seg,
 )

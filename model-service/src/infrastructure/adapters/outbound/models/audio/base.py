@@ -11,12 +11,14 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from src.domain.entities.architectures import AudioArchitecture
 from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import AudioArchitecture
 
 logger = logging.getLogger(__name__)
 

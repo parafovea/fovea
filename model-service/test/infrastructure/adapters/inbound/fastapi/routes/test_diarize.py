@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import logging
 import tempfile
-from collections.abc import Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,6 +30,9 @@ from src.infrastructure.adapters.outbound.models.audio.loader import (
     SpeakerSegment,
 )
 from src.main import app
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class FakeDiarizationModel:

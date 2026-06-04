@@ -17,10 +17,9 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
-from PIL import Image
 from transformers import (
     AutoModel,
     AutoModelForImageTextToText,
@@ -44,6 +43,9 @@ from src.domain.entities.architectures import (
 )
 from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +97,7 @@ class VLMConfig:
     trust_remote_code: bool = True
 
 
-vlm_registry: LoaderRegistry[VLMArchitecture, "VLMLoader"] = LoaderRegistry(family="vlm")
+vlm_registry: LoaderRegistry[VLMArchitecture, VLMLoader] = LoaderRegistry(family="vlm")
 """Architecture-keyed registry of VLM loader classes.
 
 Loader classes register themselves below with

@@ -17,6 +17,8 @@ architecture Pydantic class is the only legitimate dispatch key.
 
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
 from src.domain.entities.architectures import (
@@ -25,11 +27,12 @@ from src.domain.entities.architectures import (
     Llama4Maverick,
     Moondream,
     Pixtral,
-    QwenLLM,
     Qwen3VL,
+    QwenLLM,
     QwenVL,
     SmolVLM,
     Tarsier2,
+    VLMArchitecture,
 )
 from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
 from src.infrastructure.adapters.outbound.models.registry import UnknownArchitectureError
@@ -102,9 +105,6 @@ class TestRegistryBindings:
         them out by name suffix and locks the negative (no external-API
         architecture may accidentally be registered).
         """
-        from src.domain.entities.architectures import VLMArchitecture  # noqa: PLC0415
-        from typing import get_args
-
         union_type = get_args(VLMArchitecture)[0]
         members = set(get_args(union_type))
         external_api_markers = {cls for cls in members if cls.__name__.endswith("VisionAPI")}

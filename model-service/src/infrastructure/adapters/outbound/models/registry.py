@@ -25,9 +25,12 @@ fails loudly with an actionable error message.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ArchT = TypeVar("ArchT", bound=BaseModel)
 LoaderT = TypeVar("LoaderT")
@@ -89,7 +92,7 @@ class DuplicateArchitectureError(ValueError):
         )
 
 
-class LoaderRegistry(Generic[ArchT, LoaderT]):
+class LoaderRegistry[ArchT: BaseModel, LoaderT]:
     """Architecture-keyed loader registry for one model family.
 
     Parameters

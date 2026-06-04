@@ -7,12 +7,14 @@ task configurations, and inference settings.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
 
 from src.domain.entities.architectures import Architecture
-from src.domain.types import DeviceType
+
+if TYPE_CHECKING:
+    from src.domain.types import DeviceType
 
 # Module-level Pydantic adapter that parses the discriminated
 # Architecture union from a plain dict (the shape every YAML config
@@ -141,7 +143,7 @@ class ModelConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ModelConfig":
+    def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
         """Create from dictionary representation.
 
         Parameters
@@ -295,7 +297,7 @@ class InferenceConfig:
             )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InferenceConfig":
+    def from_dict(cls, data: dict[str, Any]) -> InferenceConfig:
         """Create from dictionary representation.
 
         Parameters
