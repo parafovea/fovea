@@ -110,12 +110,12 @@ class Frame:
     @property
     def height(self) -> int:
         """Image height in pixels."""
-        return self.image.shape[0]
+        return int(self.image.shape[0])
 
     @property
     def width(self) -> int:
         """Image width in pixels."""
-        return self.image.shape[1]
+        return int(self.image.shape[1])
 
     @property
     def channels(self) -> int:
