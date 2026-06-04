@@ -55,7 +55,9 @@ def _safe_audio_path(raw_path: str) -> str:
     """
     resolved = os.path.realpath(raw_path)
     if not (resolved.startswith(_VIDEO_DATA_PREFIX) or resolved.startswith(_AUDIO_OUTPUT_PREFIX)):
-        raise HTTPException(status_code=400, detail=f"audio_path is outside the configured data roots: {raw_path!r}")
+        raise HTTPException(
+            status_code=400, detail=f"audio_path is outside the configured data roots: {raw_path!r}"
+        )
     return resolved
 
 

@@ -182,7 +182,7 @@ class TestErrorPaths:
 
         # Path under the sanitizer-accepted root (tempdir per the autouse
         # fixture) but pointing at a file that does not exist on disk.
-        missing_path = os.path.join(tempfile.gettempdir(), "nonexistent-audio.wav")
+        missing_path = str(Path(tempfile.gettempdir()) / "nonexistent-audio.wav")
         response = client.post("/api/diarize", json={"audio_path": missing_path})
 
         assert response.status_code == 404
