@@ -927,6 +927,7 @@ export default function AnnotationWorkspace() {
                       size="sm"
                       disabled={transcribeMutation.isPending}
                       data-testid="transcribe-audio-button"
+                      data-tour-id="transcribe-audio-button"
                     >
                       <Mic className="size-4 mr-1" />
                       {transcribeMutation.isPending ? 'Transcribing…' : 'Transcribe Audio'}
@@ -951,6 +952,7 @@ export default function AnnotationWorkspace() {
             {/* Timeline Panel - slides in from right to replace standard controls */}
             <div
               data-testid="timeline-panel"
+              data-tour-id="timeline-panel"
               className="absolute top-0 left-0 right-0 transition-all duration-300 ease-in-out"
               style={{
                 transform: timelineExpanded ? 'translateX(0)' : 'translateX(100%)',
@@ -1166,7 +1168,7 @@ export default function AnnotationWorkspace() {
 
       {/* Transcript Dialog */}
       <Dialog open={transcriptDialogOpen} onOpenChange={setTranscriptDialogOpen}>
-        <DialogContent className="sm:max-w-3xl" data-testid="transcript-dialog">
+        <DialogContent className="sm:max-w-3xl" data-testid="transcript-dialog" data-tour-id="transcript-dialog">
           <DialogHeader>
             <DialogTitle>Audio Transcript</DialogTitle>
           </DialogHeader>

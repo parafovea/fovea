@@ -116,38 +116,27 @@ export function createTourDemoHandlers(
     })),
   }
 
+  // The summary generation endpoint returns a JOB queue ticket
+  // (GenerateSummaryResponse: { jobId, videoId, personaId }); the
+  // frontend then polls /api/jobs/:id for the actual summary. Mirror
+  // that shape so the immediate response validates against the
+  // client type even if the polling path is not yet wired up.
   const summarizeResponse = {
     jobId: 'demo-summary-job-001',
     videoId: m7.videoId,
     personaId: '__tour_demo__',
-    summary: {
-      summary: m7.mockVlmSummaryText,
-      segments: m7.mockClaimSplitAtoms.map((c) => ({
-        start: c.start,
-        end: c.end,
-        text: c.text,
-      })),
-      processingTime: 38.4,
-      modelUsed: 'smolvlm-500m',
-    },
   }
 
+  // The claim extraction endpoint likewise returns a job ticket
+  // (ExtractClaimsResponse: { jobId, status, summaryId, summaryType }).
+  // The claim payloads in mockCompoundClaimText / mockClaimSplitAtoms
+  // are delivered via the polled job-status response, not the
+  // immediate queue acknowledgement.
   const claimsExtractResponse = {
-    claims: [
-      {
-        text: m7.mockCompoundClaimText,
-        confidence: 0.83,
-        roles: [],
-        timeRange: {
-          start: m7.mockClaimSplitAtoms[0]?.start ?? 0,
-          end:
-            m7.mockClaimSplitAtoms[m7.mockClaimSplitAtoms.length - 1]?.end ??
-            m7.mockTranscript.duration,
-        },
-        needsSplit: true,
-        splitTargets: m7.mockClaimSplitAtoms.map((c) => c.text),
-      },
-    ],
+    jobId: 'demo-claims-job-001',
+    status: 'queued' as const,
+    summaryId: 'demo-summary-001',
+    summaryType: 'video',
   }
 
   return [
@@ -167,11 +156,19 @@ export function createTourDemoHandlers(
       await simulatedInferenceDelay()
       return HttpResponse.json(transcribeResponse)
     }),
-    http.post('/api/videos/:videoId/summarize', async () => {
+    // The summarize + claim-extraction frontend hooks post to
+    // `/api/videos/summaries/generate` and
+    // `/api/summaries/:summaryId/claims/generate` (see
+    // useSummaries.ts and useClaims.ts) — NOT the earlier
+    // `videos/:videoId/summarize` / `claims/extract` paths that an
+    // earlier draft of this file targeted. Match the real client
+    // call sites so MSW actually intercepts the request in tour
+    // demo mode.
+    http.post('/api/videos/summaries/generate', async () => {
       await simulatedInferenceDelay()
       return HttpResponse.json(summarizeResponse)
     }),
-    http.post('/api/claims/extract', async () => {
+    http.post('/api/summaries/:summaryId/claims/generate', async () => {
       await simulatedInferenceDelay()
       return HttpResponse.json(claimsExtractResponse)
     }),

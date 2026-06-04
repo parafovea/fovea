@@ -97,6 +97,15 @@ export const DetectionResponseSchema = Type.Object({
       }),
       confidence: Type.Number(),
       trackId: Type.Union([Type.String(), Type.Null()]),
+      // Tour-demo augmentation fields. The real model-service does
+      // not emit these, but the MSW handler in
+      // src/mocks/tourDemo/handlers.ts does, and the candidates list
+      // renders a "snap to type" chip when present. Declared here as
+      // optional so that if the model-service ever emits them they
+      // survive fast-json-stringify rather than being silently
+      // dropped from the response body.
+      acceptAsLabel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+      acceptAsWikidataId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     })),
   })),
   totalDetections: Type.Number(),
