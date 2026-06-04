@@ -8,7 +8,7 @@
  *
  * Pause / resume:
  *   The visitor can pause a tour mid-step (Pause button on StepCard).
- *   The provider snapshots {tour, stepIndex, captured route + scroll}
+ *   The provider snapshots `{tour, stepIndex, captured route + scroll}`
  *   into sessionStorage and unmounts the runner. A floating "Resume
  *   tour" pill appears in the corner. On resume, the provider soft-
  *   navigates back to the captured route (via history.pushState +

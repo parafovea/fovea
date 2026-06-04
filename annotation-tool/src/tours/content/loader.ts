@@ -249,7 +249,7 @@ async function resolveBundle(raw: TourContentBundleRaw): Promise<TourContentBund
  * file. silent fallback to a bundled default would be worse than
  * useless because the default references videos a different
  * deployment doesn't have, which means the booth visitor lands on
- * /annotate/{some-video-id-not-in-this-deployment} and stares at a
+ * `/annotate/{some-video-id-not-in-this-deployment}` and stares at a
  * 404 instead of the running example.
  *
  * The shipped public/tour-content.json file ensures every fresh
