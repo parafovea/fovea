@@ -54,11 +54,10 @@ deployments do not change behavior.
 
 ```text
 MODEL_SERVICE_TIMEOUT_DETECTION_MS         no   60000      detection ceiling
-MODEL_SERVICE_TIMEOUT_TRACKING_MS          no   60000      tracking ceiling
-MODEL_SERVICE_TIMEOUT_THUMBNAIL_MS         no   30000      thumbnail ceiling
+MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS        no   30000      thumbnail ceiling
 MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS  no   60000      ontology augment ceiling
 MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS         no   300000     summary ceiling
-MODEL_SERVICE_TIMEOUT_CLAIM_EXTRACTION_MS  no   300000     claim extract ceiling
+MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS    no   300000     claim extract ceiling
 MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS        no   300000     claim synthesis ceiling
 MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS        no   300000     transcribe / diarize ceiling
 ```
@@ -116,7 +115,7 @@ CDN_SIGNED_URLS           no         true                           sign CDN URL
 THUMBNAIL_STORAGE_TYPE    no         local                          local | s3
 THUMBNAIL_PATH            no         /videos/thumbnails             local thumbnail root
 THUMBNAIL_S3_PREFIX       no         thumbnails/                    S3 key prefix
-THUMBNAIL_OUTPUT_ROOT     no         /videos/thumbnails             model-service thumbnail output
+THUMBNAIL_OUTPUT_ROOT     no         /tmp/thumbnails                model-service thumbnail output
 ```
 
 ## Wikidata

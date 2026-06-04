@@ -179,8 +179,7 @@ source          String   "manual" | "tracking" | "detection"
 ```
 
 `linkType` is provided by the migration
-`20260429000000_add_annotation_link_type` (restamped on the
-RBAC line as `20260505000000_add_annotation_link_type`).
+`20260505000000_add_annotation_link_type`.
 `createdByUserId` is the CASL ownership column; the backfill
 migration `20260415000000_backfill_rbac_ownership` populated it
 from `userId` on existing rows.
@@ -190,7 +189,7 @@ from `userId` on existing rows.
 ```text
 id              String   @id
 filename        String
-importedBy      String?  -> User (set on import)
+importedBy      String?  // user id by convention; no FK to User
 importOptions   Json
 result          Json
 success         Boolean

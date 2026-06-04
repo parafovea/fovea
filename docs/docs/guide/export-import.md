@@ -29,8 +29,9 @@ Each line is one record. The first line of every full export is a
 discriminators:
 
 ```text
-metadata, persona, ontology, worldEntity, worldEvent, worldTime,
-worldLocation, videoSummary, claim, annotation
+metadata, persona, ontology, entity, entity_collection, event,
+event_collection, time, time_collection, relation, summary, claim,
+claim_relation, annotation
 ```
 
 The format is pinned within the export-format maintenance line.

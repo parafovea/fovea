@@ -59,14 +59,18 @@ The `fusionStrategy` column on `VideoSummary` records how audio
 and visual outputs were combined:
 
 ```text
-sequential    visual then audio, audio used to refine
-parallel      visual and audio independent, fused at end
-audio-first   audio drives the narrative, visual fills detail
+sequential          visual summary generated first, then refined with audio context
+timestamp_aligned   visual and audio descriptions aligned at matching timestamps then fused
+native_multimodal   a single model processes both modalities jointly
+hybrid              combines sequential and timestamp-aligned passes
 ```
 
-The selected fusion strategy depends on the configured fusion
-model and the input characteristics; the model service picks
-based on the audio-presence detection in `av_fusion.py`.
+The fusion strategy is supplied by the caller via `fusion_strategy`
+on the `SummarizeVideoRequest`; `create_fusion_strategy` in
+`model-service/src/application/use_cases/fuse_modalities.py`
+dispatches that value to one of `SequentialFusion`,
+`TimestampAlignedFusion`, `NativeMultimodalFusion`, or
+`HybridFusion`. The default is `sequential`.
 
 ## Standalone transcribe button
 

@@ -30,7 +30,7 @@ project.
 
 **Fusion.** Combining audio transcription and visual
 summarization into a single summary. Strategies are
-`sequential`, `parallel`, `audio-first`.
+`sequential`, `timestamp_aligned`, `native_multimodal`, `hybrid`.
 
 **Gloss item.** One entry in a claim's gloss array. Type is one
 of `text`, `objectRef`, `typeRef`, `annotationRef`, `claimRef`.

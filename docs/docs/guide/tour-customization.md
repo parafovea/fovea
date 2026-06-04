@@ -1,6 +1,6 @@
 # Tailoring Fovea's guided tours for your deployment
 
-Fovea ships ten built-in guided tours that walk a new user through the
+Fovea ships twelve built-in guided tours that walk a new user through the
 full annotation surface. The narration of each tour, the suggested
 type names the visitor builds, the example venue and claim text, and
 **the actual video each tour walks the visitor through** are all
@@ -12,9 +12,10 @@ sourced from a single JSON file: `annotation-tool/public/tour-content.json`.
 ## What the running example needs to be coherent
 
 A guided tour is a concrete walkthrough. The visitor watches a real
-clip while the narration tells them what to do with it. For Tour 4
-("Box the person grabbing the ball, then box the person who had it
-first") to make sense, the visitor must be looking at a clip where a
+clip while the narration tells them what to do with it. For the
+Events / Roles / Claims tour ("Box the person grabbing the ball,
+then box the person who had it first") to make sense, the visitor
+must be looking at a clip where a
 ball-grab is actually happening. So **the video, the persona, the
 type names, the event, and the example claim all have to describe
 ONE example.**
@@ -30,7 +31,7 @@ retheme the tours for your own domain, supply a different bundle.
 ### File 1: drop your videos into `videos/`
 
 Put your video files in the directory `STORAGE_PATH` points at (the
-annotation-tool's `videos/` directory in stock dev, your deployment's
+repo-root `videos/` directory in stock dev, your deployment's
 mounted volume in production). Filenames are arbitrary but case- and
 character-sensitive; they're hashed (`md5(filename)[0:16]`) to
 derive the videoId Fovea uses everywhere.
@@ -46,8 +47,10 @@ This is the same scan that runs on backend boot in production; the
 manual sync is just for after you've added or removed files at
 runtime.
 
-Sidecar `.info.json` files next to each video (same basename) are
-picked up by the sync and surface as the video's metadata.
+Sidecar `.info.json` files next to each video (same name with the
+video extension `.webm`/`.mp4`/`.ogg`/`.mov`/`.avi`/`.mkv` replaced
+by `.info.json`) are picked up by the sync and surface as the
+video's metadata.
 
 ### File 2: edit `tour-content.json`
 

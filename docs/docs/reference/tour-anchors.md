@@ -33,6 +33,16 @@ No tour numbers in names.
 | `timeline` | `TimelineRoot.tsx` outer div | The full timeline component. |
 | `save-indicator` | `SaveStatusIndicator.tsx` | Renders only when there's a status to show (saving / saved / failed). May not be present at tour-step-1 time. |
 | `object-picker-popover` | `ObjectPicker.tsx` `DialogContent` | Object/type picker dialog. Mounted on user click; guard with `waitForAnchor`'s 3 s ceiling. |
+| `event-annotation-button` | Event `ToggleGroupItem` in `AnnotationWorkspace.tsx` | Event-mode toggle inside the annotation-type ToggleGroup. |
+| `role-assignment-panel` | Role-assignment container in `AnnotationWorkspace.tsx` | Side panel that surfaces role slots for the active event annotation. |
+| `annotation-world-reference` | Linked-object `Alert` in `AnnotationEditor.tsx` | "Annotation Target" callout shown when the annotation links to an entity, event, location, or collection. Conditionally rendered; tours may need fixture data to surface it. |
+| `quick-actions-track` | Track action in `QuickActionsPanel.tsx` | "Track this object" model-in-the-loop trigger. |
+| `tracking-results-panel` | Outer div in `TrackingResultsPanel.tsx` | Per-object tracking results with per-frame controls. |
+| `motion-path-overlay` | `<g>` overlay in `MotionPathOverlay.tsx` | SVG motion-path overlay rendered above the video. |
+| `interpolation-mode-selector` | `DialogContent` in `InterpolationModeSelector.tsx` | Linear / Bezier interpolation chooser dialog. |
+| `bezier-curve-editor` | Outer div in `BezierCurveEditor.tsx` | Bezier handle editor for keyframe curves. |
+| `temporal-annotator` | Outer div in `TemporalAnnotator.tsx` | Keyframe interval / temporal annotation surface. |
+| `annotation-candidates-list` | Outer div in `AnnotationCandidatesList.tsx` | Model-proposed annotation candidates the user can accept or reject. |
 
 ## Ontology workspace
 
@@ -49,7 +59,7 @@ No tour numbers in names.
 
 | Anchor | Location | Notes |
 |---|---|---|
-| `augmenter-search` | `OntologyAugmenter.tsx` domain-description block | Free-text concept input (this isn't a Wikidata search field per se; it's the domain description used to drive AI suggestions, but it's the right "type a concept" anchor for Tour 3). |
+| `augmenter-search` | Domain-description block in `OntologyAugmenter.tsx` and concept input in `shared/WikidataSearch.tsx` | Intentionally shared across both components so the tour step lands on whichever one is mounted: the domain-description textarea that drives AI suggestions in OntologyAugmenter, or the Wikidata concept search input. |
 | `augmenter-import-target` | Category Select trigger in `OntologyAugmenter.tsx` | Entity / event / role / relation toggle. |
 | `augmenter-results` | Results section in `OntologyAugmenter.tsx`, conditionally rendered | Mounts only when a suggestion run has completed. |
 
@@ -72,8 +82,8 @@ No tour numbers in names.
 | `event-editor` | `EventEditor.tsx` `DialogContent` | Specific-event instance editor. |
 | `location-map-picker` | `LocationEditor.tsx` `DialogContent` | Location editor with map picker. |
 | `time-editor` | `TimeEditor.tsx` `DialogContent` | Time-point / time-interval editor. |
-| `collection-builder` | First two `DialogContent`s in `CollectionBuilder.tsx` (entity + event variants) | Entity collection editor. |
-| `time-collection-builder` | Third `DialogContent` in `CollectionBuilder.tsx` (time variant) | Time collection editor. |
+| `collection-builder` | `DialogContent` in `CollectionBuilder.tsx` and `DialogContent` in `CollectionEditor.tsx` | Entity / event collection editor dialog (shared anchor across both surfaces). |
+| `time-collection-builder` | Second `DialogContent` in `CollectionBuilder.tsx` | Time collection editor variant. |
 
 ## Summaries and transcripts
 
@@ -101,6 +111,21 @@ No tour numbers in names.
 | `model-management-page` | Outer div in `ModelManagementPage.tsx` | Active model selection. |
 | `session-management-page` | Outer div in `SessionManagementPage.tsx` | Live session audit. |
 | `system-config-panel` | Outer div in `SystemConfigPanel.tsx` | System-wide propagation toggles. |
+| `permissions-page` | Outer div in `PermissionsPage.tsx` | Role / permission matrix. |
+| `model-memory-validation` | Memory-validation card in `ModelManagementPage.tsx` | VRAM budget validation for the active model selection. |
+| `project-video-assignment` | Outer div in `VideoAssignmentPage.tsx` | Assign videos to projects. |
+
+## Persona
+
+| Anchor | Location | Notes |
+|---|---|---|
+| `persona-preferences-section` | Outer div in `PersonaPreferencesSection.tsx` | Per-persona preferences block. |
+
+## Settings
+
+| Anchor | Location | Notes |
+|---|---|---|
+| `api-keys-page` | Outer div in `ApiKeyManagementPanel.tsx` | API key management surface. |
 
 ## Import / export
 
@@ -119,24 +144,10 @@ No tour numbers in names.
 
 ## Anchors not yet landed
 
-A handful of Tour 4-9 step targets reference product surfaces that
-haven't been built yet. Those steps are tagged `requiresFixture: true`
-in the tour scripts and surface a graceful "this step uses demo
-content" note in anchored mode rather than hanging. Specifically:
-
-- `event-annotation-button`, `role-assignment-panel` (Tour 4); event-
-  mode bbox draw flow inside AnnotationWorkspace doesn't yet expose a
-  dedicated event-annotation button or role-assignment panel.
-- `annotation-world-reference` (Tour 5); the world-instance reference
-  picker inside the annotation context isn't a dedicated surface yet.
-- `quick-actions-track`, `tracking-results-panel`, `motion-path-overlay`,
-  `interpolation-mode-selector`, `bezier-curve-editor`, `temporal-
-  annotator`, `annotation-candidates-list` (Tour 6); the model-in-the-
-  loop UI surface lands when those features ship.
-- `permissions-page`, `model-memory-validation`, `project-video-
-  assignment`, `persona-preferences-section`, `api-keys-page` (Tours
-  8 + 9); adjacent admin / persona pages exist but the named anchor
-  points are subcomponents that haven't been carved out.
-
-When these land, add the attribute, update the table above, and remove
-the `requiresFixture` flag from the corresponding step.
+All tour anchors referenced by the shipped tour scripts are present in
+product code. When a future tour step targets a surface that hasn't
+been built yet, tag the step `requiresFixture: true` in the tour
+script so anchored mode surfaces a graceful "this step uses demo
+content" note rather than hanging, then list the pending anchor here.
+Once the surface lands, add the `data-tour-id` attribute, document it
+in the table above, and clear the `requiresFixture` flag.

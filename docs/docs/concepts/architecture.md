@@ -8,7 +8,7 @@ persistence and queue layers.
 
 ## What the frontend adds
 
-- React 18 + TypeScript + Material UI v5 + Vite.
+- React 18 + TypeScript + shadcn/ui + Tailwind CSS v4 + Vite.
 - The annotation workspace (canvas, timeline, keyboard model,
   drawing state machine).
 - The persona, ontology, world, summary, and claims editors.
@@ -30,8 +30,9 @@ persistence and queue layers.
 - A CASL-based RBAC engine with per-user ability cache and
   per-row ownership conditions. See
   [Concepts > RBAC](rbac.md).
-- BullMQ queues for summarization, claim extraction, claim
-  synthesis, and detection.
+- BullMQ queues for summarization, claim extraction, and claim
+  synthesis. Detection is a synchronous HTTP proxy to the
+  model service via `fetchModelService`, not a queued job.
 - Multipart upload handling for video sync and JSONL import.
 - Encrypted API key storage.
 
@@ -50,7 +51,7 @@ persistence and queue layers.
   Parakeet, and WhisperX, all behind the `IAudioTranscriber`
   port.
 - An `external_api` framework dispatching to hosted providers
-  (Anthropic, OpenAI, Google) when the configured option
+  (Anthropic, OpenAI, Google, and xAI) when the configured option
   requires an API key.
 - A modality-fusion use case that combines audio transcription
   and visual summarization into the final summary.

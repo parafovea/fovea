@@ -22,15 +22,13 @@ moondream-3                   transformers   models.yaml
 moondream-2b                  transformers   models.yaml
 moondream-0-5b                transformers   models.yaml
 internvl3-78b                 sglang         models.yaml
-llama-4-maverick              vllm           models.yaml
+llama-4-maverick              sglang         models.yaml
 llama-4-scout                 vllm           models.yaml
-pixtral-large                 vllm           models.yaml
-gemma-3-27b                   transformers   models.yaml
+pixtral-large                 sglang         models.yaml
+gemma-3-27b                   sglang         models.yaml
 smolvlm-2-2b                  transformers   models-cpu.yaml
 smolvlm-500m                  transformers   models-cpu.yaml
 qwen2-5-vl-3b-gguf            llama_cpp      models-cpu.yaml
-florence-2                    transformers   models.yaml
-florence-2-base-onnx          onnx           models-cpu.yaml
 gpt-4o                        external_api   models.yaml
 gpt-5-4                       external_api   models.yaml
 claude-sonnet-4-5             external_api   models.yaml
@@ -59,8 +57,8 @@ deepseek-v3                   sglang         models.yaml
 deepseek-v3-2                 sglang         models.yaml
 kimi-k2-6                     sglang         models.yaml
 glm-4-7                       sglang         models.yaml
-llama-3-3-70b                 vllm           models.yaml
-gemma-3-27b-text              transformers   models.yaml
+llama-3-3-70b                 sglang         models.yaml
+gemma-3-27b-text              sglang         models.yaml
 phi-3-mini-4k                 transformers   models.yaml
 phi-4-mini                    transformers   models.yaml
 claude-sonnet-4-5             external_api   models.yaml
@@ -74,39 +72,41 @@ grok-4                        external_api   models.yaml
 ## Object detection
 
 ```text
-sam-3-1                       transformers   models.yaml
-sam-3                         transformers   models.yaml
-yolov12-large                 transformers   models.yaml
-yoloe-26                      transformers   models.yaml
-rf-detr-base                  transformers   models.yaml
-yolo-world-v2                 transformers   models.yaml
+sam-3-1                       sam3           models.yaml
+sam-3                         sam3           models.yaml
+yolov12-large                 ultralytics    models.yaml
+yoloe-26                      ultralytics    models.yaml
+rf-detr-base                  pytorch        models.yaml
+yolo-world-v2                 pytorch        models.yaml
 yolo-world-s-onnx             onnx           models-cpu.yaml
-grounding-dino-1-5            transformers   models.yaml
+grounding-dino-1-5            pytorch        models.yaml
 grounding-dino-tiny-onnx      onnx           models-cpu.yaml
-owlv2                         transformers   models.yaml
+owlv2                         pytorch        models.yaml
+florence-2                    transformers   models.yaml
+florence-2-base-onnx          onnx           models-cpu.yaml
 ```
 
 ## Object tracking
 
 ```text
-sam-3-1-tracking              transformers   models.yaml
-sam2-1                        transformers   models.yaml
-sam2long                      transformers   models.yaml
-samurai                       transformers   models.yaml
-yolo11n-seg                   transformers   models.yaml
+sam-3-1-tracking              sam3           models.yaml
+sam2-1                        pytorch        models.yaml
+sam2long                      pytorch        models.yaml
+samurai                       pytorch        models.yaml
+yolo11n-seg                   ultralytics    models.yaml
 ```
 
 ## Audio transcription
 
 ```text
-whisper-v3-turbo              transformers       models.yaml
-whisper-large-v3              transformers       models.yaml
+whisper-v3-turbo              whisper            models.yaml
+whisper-large-v3              whisper            models.yaml
 faster-whisper-large-v3       faster_whisper     models.yaml
 faster-whisper-medium-cpu     faster_whisper     models-cpu.yaml
 faster-whisper-small-cpu      faster_whisper     models-cpu.yaml
-canary-qwen-2-5b              transformers       models.yaml
-parakeet-tdt-1-1b             transformers       models.yaml
-whisperx-large-v3             transformers       models.yaml
+canary-qwen-2-5b              nemo_canary        models.yaml
+parakeet-tdt-1-1b             nemo_parakeet      models.yaml
+whisperx-large-v3             whisperx           models.yaml
 assemblyai-universal          external_api       models.yaml
 deepgram-nova-3               external_api       models.yaml
 gladia                        external_api       models.yaml
@@ -119,8 +119,8 @@ aws-transcribe                external_api       models.yaml
 ## Speaker diarization and VAD
 
 ```text
-pyannote-3-1                  transformers   speaker_diarization
-silero-vad                    transformers   voice_activity_detection
+pyannote-3-1                  pyannote       speaker_diarization
+silero-vad                    pytorch        voice_activity_detection
 ```
 
 ## Loader implementations
@@ -144,12 +144,26 @@ llama.cpp LLM / VLM (CPU)     models/llama_cpp/llm.py,
 SmolVLM / Moondream (CPU)     models/vlm/loader.py (transformers branch)
 ```
 
-## Fallback chain
+## Selection and load failures
 
-If the selected option fails to load, the manager iterates the
-remaining `options` entries in declaration order. The first
-working option becomes the active loader; the failed option is
-recorded in
-`GET /api/models/status`. A slot with no working option returns
-503 from any route that needs it until the configuration is
-repaired.
+`ModelManager.load_model` loads only the option named by the
+slot's `selected` field (resolved via
+`TaskConfig.get_selected_config`); it does not automatically
+iterate the other `options` entries when a loader raises. Any
+loader exception propagates to the caller; the `transcribe` and
+`diarize` routes surface load failures with a `Model load
+failed` detail, and the other per-task routes (`detection`,
+`summarization`, `claims`, `ontology`, `thumbnails`) wrap load
+failures with their own per-route detail strings, until the
+slot is repointed via `POST /api/models/select` or the
+underlying option is fixed.
+`GET /api/models/status` reports `loaded_models` plus memory
+and availability flags; it does not surface a failed-option
+record for slots that are not currently loaded.
+
+The LLM loader layer exposes a separate helper,
+`create_llm_loader_with_fallback`
+(`model-service/src/infrastructure/adapters/outbound/models/llm/loader.py`),
+which iterates an explicit `fallback_configs` list inside a
+single loader. That helper operates on an in-process list of
+configurations, not on the YAML `options` dict.

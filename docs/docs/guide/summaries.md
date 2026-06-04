@@ -41,7 +41,7 @@ job's data.
 The columns most commonly read by clients:
 
 ```text
-summary           Json    paragraphs of prose, one per array element
+summary           Json    GlossItem[]; each item is {type, content, refType?, refPersonaId?, refClaimId?} for rich text with inline references
 visualAnalysis    String? raw VLM output before paragraph splitting
 audioTranscript   String? transcript text
 keyFrames         Json?   selected frame ids and timestamps
@@ -49,7 +49,7 @@ transcriptJson    Json?   structured transcript (vendor-specific)
 audioLanguage     String? ISO code from the transcription vendor
 audioModelUsed    String? vendor adapter id
 visualModelUsed   String? VLM id (e.g. "qwen-2-5-vl-7b")
-fusionStrategy    String? "sequential" | "parallel" | "audio-first"
+fusionStrategy    String? "sequential" | "timestamp_aligned" | "native_multimodal" | "hybrid"
 claimsJson        Json?   serialized extracted claims (denormalized)
 comment           Text?   user-authored comment
 ```
@@ -60,10 +60,13 @@ canonical TypeBox is in `server/src/routes/summaries.ts`.
 
 ## Edit a summary
 
-`PUT /api/videos/:videoId/summaries/:summaryId` accepts a partial
-update. The route runs `assertSummaryOwned` so only the owning
-user can edit. Use this to correct the summary text or set the
-`comment` field.
+`PUT /api/videos/:videoId/summaries/:summaryId` replaces the
+`summary` field with a new `GlossItem[]` array (the request body
+accepts only `summary`; no other fields are writable through this
+endpoint). The route loads the existing row and runs
+`request.ability.can('update', subject('VideoSummary', existing))`,
+throwing `ForbiddenError` if the caller's abilities (built by
+`buildAbilities`) do not permit updating that specific row.
 
 ## Reasoning traces
 

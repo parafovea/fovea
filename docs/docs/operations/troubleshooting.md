@@ -30,7 +30,7 @@ Common ones to raise on CPU:
 | `MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS`     | 30000       | 600000                    |
 | `MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS`| 60000      | 600000                    |
 | `MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS`      | 300000      | 1800000                   |
-| `MODEL_SERVICE_TIMEOUT_CLAIM_EXTRACTION_MS`| 300000     | 1800000                   |
+| `MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS` | 300000      | 1800000                   |
 
 If raising the ceiling does not fix it, the model service is
 genuinely stuck. Check its logs (`docker compose logs -f
@@ -102,19 +102,25 @@ with the flag set.
 ## "Postgres connection refused after a restart"
 
 Postgres takes longer to come up than the backend's
-connection-retry budget by default. The fix is in
-`docker-compose.yml`: add a healthcheck to the postgres service
-and a `depends_on: { postgres: { condition: service_healthy } }`
-on the backend. The `docker-compose.dev.yml` overlay shows the
-shape.
+connection-retry budget by default. The base `docker-compose.yml`
+already ships the postgres healthcheck (`pg_isready -U fovea`)
+and the backend's `depends_on: postgres: condition:
+service_healthy`, so the symptom usually means a customized
+compose has dropped one of those blocks. Verify both are still
+present in the effective compose: a common cause is an
+operator-supplied override that re-declares the postgres service
+without the healthcheck, or a backend override that replaces
+`depends_on` with the plain list form (which discards the
+condition).
 
 ## "Admin UI shows an empty SystemConfig panel"
 
 The admin RBAC permission for system-config visibility is
 missing from the user's role. Either grant it through the
 admin role editor, or re-run
-`docker compose exec backend npm run seed:permissions` if the
-upgrade step was skipped (see [Upgrades](upgrades.md)).
+`docker compose exec backend npm run seed` if the upgrade step
+was skipped (the seed script runs the permissions seeder; see
+[Upgrades](upgrades.md)).
 
 ## Where to look first
 

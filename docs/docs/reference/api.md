@@ -56,14 +56,14 @@ DELETE /api/personas/:id
 GET    /api/personas/:id/deletion-preview
 GET    /api/personas/:id/ontology
 PUT    /api/personas/:id/ontology
-GET    /api/personas/:personaId/entity-types/:typeId
-DELETE /api/personas/:personaId/entity-types/:typeId
-GET    /api/personas/:personaId/event-types/:typeId
-DELETE /api/personas/:personaId/event-types/:typeId
-GET    /api/personas/:personaId/role-types/:typeId
-DELETE /api/personas/:personaId/role-types/:typeId
-GET    /api/personas/:personaId/relation-types/:typeId
-DELETE /api/personas/:personaId/relation-types/:typeId
+GET    /api/personas/:personaId/ontology/entities/:typeId/deletion-preview
+DELETE /api/personas/:personaId/ontology/entities/:typeId
+GET    /api/personas/:personaId/ontology/events/:typeId/deletion-preview
+DELETE /api/personas/:personaId/ontology/events/:typeId
+GET    /api/personas/:personaId/ontology/roles/:typeId/deletion-preview
+DELETE /api/personas/:personaId/ontology/roles/:typeId
+GET    /api/personas/:personaId/ontology/relation-types/:typeId/deletion-preview
+DELETE /api/personas/:personaId/ontology/relation-types/:typeId
 ```
 
 `POST` and `PUT` silently coerce `isSystemGenerated` to `false`
@@ -73,8 +73,7 @@ for non-admin requesters.
 
 ```text
 GET    /api/ontology               query personaId
-PUT    /api/ontology               body { personaId, entityTypes, eventTypes,
-                                          roleTypes, relationTypes }
+PUT    /api/ontology               body { personas, personaOntologies, world? }
 POST   /api/ontology/augment       requireAuth; body { personaId, prompt }
 ```
 
@@ -145,7 +144,7 @@ POST   /api/summaries/:summaryId/claims/generate
 GET    /api/jobs/claims/:jobId
 POST   /api/summaries/:summaryId/synthesize
 GET    /api/jobs/synthesis/:jobId
-GET    /api/videos/:videoId/personas/:personaId/claims
+POST   /api/videos/:videoId/personas/:personaId/claims
 ```
 
 ## Claim relations
@@ -276,33 +275,33 @@ defined under
 `model-service/src/infrastructure/adapters/inbound/fastapi/routes/`.
 
 ```text
-GET    /models/config
-GET    /models/status
-POST   /models/select
-POST   /models/validate
-POST   /models/load/{task_type}
-POST   /models/unload/{task_type}
-GET    /models/task-ready/{task_type}
-POST   /detection/detect             body: DetectionRequest schema
-POST   /tracking/track                body: TrackingRequest schema
-POST   /summarize                     body: SummarizationRequest;
-                                      response carries optional ReasonedText
-POST   /ontology/augment              body: OntologyAugmentRequest
-POST   /extract-claims                body: ClaimExtractionRequest
-POST   /synthesize-summary            body: SummarySynthesisRequest
-POST   /thumbnails/generate           body: ThumbnailRequest;
-                                      writes to THUMBNAIL_OUTPUT_ROOT
-POST   /admin/reconfigure             gated by MODEL_SERVICE_ADMIN_TOKEN
-POST   /transcribe                    body { audio_path, language? };
-                                      returns { text, segments, language,
-                                      duration, processing_time, model_used }
-POST   /diarize                       body { audio_path, num_speakers?,
-                                      min_speakers?, max_speakers? };
-                                      returns { segments, speakers,
-                                      processing_time, model_used }
+GET    /api/models/config
+GET    /api/models/status
+POST   /api/models/select
+POST   /api/models/validate
+POST   /api/models/load/{task_type}
+POST   /api/models/unload/{task_type}
+GET    /api/models/task-ready/{task_type}
+POST   /api/detection/detect             body: DetectionRequest schema
+POST   /api/tracking/track               body: TrackingRequest schema
+POST   /api/summarize                    body: SummarizeRequest;
+                                         response carries optional ReasonedText
+POST   /api/ontology/augment             body: AugmentRequest
+POST   /api/extract-claims               body: ClaimExtractionRequest
+POST   /api/synthesize-summary           body: SummarySynthesisRequest
+POST   /api/thumbnails/generate          body: ThumbnailGenerateRequest;
+                                         writes to THUMBNAIL_OUTPUT_ROOT
+POST   /api/admin/reconfigure            gated by MODEL_SERVICE_ADMIN_TOKEN
+POST   /api/transcribe                   body { audio_path, language? };
+                                         returns { text, segments, language,
+                                         duration, processing_time, model_used }
+POST   /api/diarize                      body { audio_path, num_speakers?,
+                                         min_speakers?, max_speakers? };
+                                         returns { segments, speakers,
+                                         processing_time, model_used }
 ```
 
-`POST /transcribe` and `POST /diarize` are the standalone audio
+`POST /api/transcribe` and `POST /api/diarize` are the standalone audio
 endpoints. The backend
 `/api/videos/:videoId/transcribe` route calls both and merges them;
 direct callers can hit them independently.

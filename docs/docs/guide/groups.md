@@ -10,16 +10,15 @@ projects, and CASL takes the union.
 
 ```text
 POST   /api/groups                           create
-GET    /api/groups                           list groups the requester can read
+GET    /api/groups                           list groups the current user is a member of
 GET    /api/groups/:groupId                  read one
 PUT    /api/groups/:groupId                  update name, description
 DELETE /api/groups/:groupId                  delete
 ```
 
 `POST /api/groups` accepts `{ name, description?, slug }`. The
-creator is recorded in `UserGroup.createdBy`; they are not
-automatically a member, but the route adds them as
-`group_owner` on creation.
+creator is recorded in `UserGroup.createdBy`, and the route also
+adds them as a `group_owner` member in the same transaction.
 
 ## Membership
 
@@ -51,7 +50,6 @@ GET    /api/admin/groups
 POST   /api/admin/groups
 PUT    /api/admin/groups/:groupId
 DELETE /api/admin/groups/:groupId
-GET    /api/admin/groups/:groupId/members
 ```
 
 The admin variants bypass the group-membership check; they still

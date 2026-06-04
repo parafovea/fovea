@@ -29,7 +29,7 @@ models:
     options:
       <option-id>:
         model_id: "<vendor-or-hf-id>"
-        framework: "sglang | vllm | transformers | llama_cpp | onnx | external_api"
+        framework: "<framework-id>"  # see model-service/config/models.yaml for the full set
         ...
 inference:
   max_memory_per_model: "auto"
@@ -58,7 +58,7 @@ voice_activity_detection   Silero VAD
 ```text
 model_id        string    Hugging Face id
 quantization    string    "4bit" | "8bit" | "none"
-framework       string    "sglang" | "vllm" | "transformers"
+framework       string    backend id; see model-service/config/models.yaml
 vram_gb         number    minimum VRAM the option needs
 speed           string    "very_fast" | "fast" | "medium" | "slow"
 description     string    free-text summary
@@ -68,7 +68,7 @@ description     string    free-text summary
 
 ```text
 model_id        string    Hugging Face id (transformers) or GGUF repo
-framework       string    "transformers" | "llama_cpp" | "onnx"
+framework       string    backend id; see model-service/config/models-cpu.yaml
 quantization    string    GGUF quant tag (e.g. "Q4_K_M") or "none"
 context_length  number    llama.cpp context window
 threads         number    CPU thread count

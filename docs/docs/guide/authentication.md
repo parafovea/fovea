@@ -46,8 +46,9 @@ handling.
 
 `Session` rows carry `token`, `expiresAt`, `ipAddress`, and
 `userAgent`. The default expiration is `SESSION_TIMEOUT_DAYS=7`.
-`POST /api/auth/extend-session` resets `expiresAt` and
-`lastActivityAt` to the current time plus the timeout.
+`POST /api/auth/extend-session` adds 30 minutes to the later of
+the current `expiresAt` or now, and sets `lastActivityAt` to the
+current time.
 
 `GET /api/sessions` lists the requester's active sessions.
 `GET /api/admin/sessions` lists every session (admin only).

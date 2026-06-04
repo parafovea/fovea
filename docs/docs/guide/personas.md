@@ -58,8 +58,9 @@ warn before a destructive action.
 ## Ontology endpoints
 
 `GET /api/personas/:id/ontology` returns the four type lists.
-The route enforces ownership for non-system personas; an
-anonymous or foreign request returns 404, not 403. See
+The route hides non-system personas from anonymous callers
+with a 404; authenticated callers who lack CASL read ability
+on the persona get a 403 (`Access denied`). See
 [Guide > Ontologies](ontologies.md) for the document shape.
 
 ## System-generated personas

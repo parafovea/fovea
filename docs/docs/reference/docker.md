@@ -1,12 +1,14 @@
 # Docker
 
-The repository ships three compose files:
+The repository ships six compose files:
 
 ```text
-docker-compose.yml          production-shaped, the default
-docker-compose.dev.yml      overrides for local development
-docker-compose.e2e.yml      overrides for the end-to-end test suite
-docker-compose.wikibase.yml local Wikibase instance
+docker-compose.yml                  production-shaped, the default
+docker-compose.dev.yml              overrides for local development
+docker-compose.e2e.yml              overrides for the end-to-end test suite
+docker-compose.e2e.real-models.yml  overrides for the e2e suite running against real models
+docker-compose.tour-demo.yml        overrides for the tour/demo environment
+docker-compose.wikibase.yml         local Wikibase instance
 ```
 
 ## Profiles
@@ -29,7 +31,7 @@ empty profile (`profiles: ["cpu", ""]` on the
 The model-service Dockerfile takes two args:
 
 ```text
-BUILD_MODE   minimal | full
+BUILD_MODE   minimal | recommended | full
 DEVICE       cpu | gpu
 ```
 
@@ -44,7 +46,9 @@ gpu          gpu      full
 ```
 
 `minimal` builds an image that only ships ungated open-weights
-models; `full` builds the complete set including the 70B+ models.
+models; `recommended` adds bitsandbytes for model quantization on
+top of the minimal base; `full` builds the complete set including
+vLLM, SGLang, and SAM-2 (requires `DEVICE=gpu`).
 
 ## Service set
 
@@ -58,7 +62,7 @@ otel-collector   4317   OTLP gRPC
                  4318   OTLP HTTP
                  8889   collector self-metrics
 prometheus       9090   metrics
-grafana          3010   dashboards
+grafana          3002   dashboards
 ```
 
 ## Volumes
@@ -68,16 +72,18 @@ postgres-data       /var/lib/postgresql/data
 redis-data          /data
 model-cache         /models   (HF cache)
 ./videos            /videos   (video storage)
-./model-service/config  /config (models.yaml)
+./model-service/config  /config (models.yaml for GPU, models-cpu.yaml for the default CPU profile)
 ./wikibase/output   /wikibase (offline mode mapping)
 ```
 
 ## Health checks
 
-Each service ships a healthcheck. The frontend and the model
-service depend on the backend's `/api/health` endpoint reporting
-healthy before they consider the stack ready. The backend depends
-on Postgres and Redis healthchecks before starting.
+Each service ships a healthcheck. The frontend depends on the
+backend's `/api/health` endpoint reporting healthy before it
+considers the stack ready. The backend depends on Postgres and
+Redis healthchecks before starting, and waits for the
+OpenTelemetry collector to start. The model service has no
+`depends_on` and starts independently.
 
 ## Restart policy
 

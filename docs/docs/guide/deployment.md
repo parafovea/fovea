@@ -29,13 +29,16 @@ build args:
 DEVICE=cpu                   # CPU-only inference (ONNX Runtime, llama.cpp,
                              # Transformers SmolVLM / Moondream)
 DEVICE=gpu                   # GPU inference (SGLang, vLLM, Transformers)
-MODEL_BUILD_MODE=minimal     # only ungated open models; CPU-suitable
-MODEL_BUILD_MODE=full        # full set including 70B+ models
+BUILD_MODE=minimal           # only ungated open models; CPU-suitable
+BUILD_MODE=full              # full set including 70B+ models
 ```
 
-The `cpu` profile defaults to `minimal`; the `gpu` profile
-defaults to `full`. Override per environment via
-`MODEL_BUILD_MODE`.
+When building via docker compose, the compose file maps the
+`MODEL_DEVICE` and `MODEL_BUILD_MODE` environment variables onto
+the `DEVICE` and `BUILD_MODE` Dockerfile build args. The `cpu`
+profile defaults to `minimal`; the `gpu` profile defaults to
+`full`. Override per environment via `MODEL_BUILD_MODE` (compose)
+or `--build-arg BUILD_MODE=...` (direct `docker build`).
 
 ## Active model config selection
 
@@ -94,7 +97,7 @@ postgres            (5432)
 redis               (6379)
 otel-collector      (4317 grpc, 4318 http)
 prometheus          (9090)
-grafana             (3010)
+grafana             (3002)
 ```
 
 See [Reference > Service ports](../reference/service-ports.md) for

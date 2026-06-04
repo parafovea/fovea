@@ -1,10 +1,12 @@
 # Tracking
 
 Use the tracking flow to extend a hand-drawn keyframe sequence to
-neighbouring frames automatically. The model service hosts the
-tracker; the backend wraps it as a job. Tracking is used after
-two or more keyframes have been drawn and the user wants
-intermediate keyframes filled in by the model rather than by
+neighboring frames automatically. The model service exposes the
+tracker directly at `/api/tracking/track`; the Fovea backend and
+annotation tool do not yet forward to it, so this flow is reachable
+only by calling the model-service API directly. Tracking is intended
+for use after two or more keyframes have been drawn and the user
+wants intermediate keyframes filled in by the model rather than by
 linear interpolation.
 
 ## How the tracker is selected
@@ -44,10 +46,15 @@ near-linear. Tracking is the right choice when:
 
 ## Lifecycle
 
-The frontend dispatches a tracking request with the
-(annotationId, startFrame, endFrame) tuple. The backend forwards
-to the model service, which returns interpolated boxes. The
-returned frames are written back as additional keyframes on the
-annotation. The user can edit or delete any of them through the
-normal annotation editing flow documented in
+The model-service `/api/tracking/track` endpoint accepts a video
+reference and a seed box and returns interpolated boxes for the
+requested frame range. Wiring this through the Fovea backend
+(`server/src/routes/videos/`) and into the annotation tool
+(`annotation-tool/src/store/queries/`) so that returned frames are
+written back as additional keyframes on an annotation is planned
+but not yet implemented; in the current build, propagation between
+keyframes in the annotation tool is handled by client-side linear
+interpolation (see `annotation-tool/src/utils/interpolation.ts`).
+Once wired, the returned frames will be editable through the normal
+annotation editing flow documented in
 [Guide > Annotations](annotations.md).

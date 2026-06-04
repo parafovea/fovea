@@ -13,7 +13,7 @@ a different cost-of-loss and a different backup cadence.
 | ------------------------------- | --------------------- | ----------------------------------------------------------- |
 | Application database            | Postgres              | All annotation, persona, ontology, claim, and user state    |
 | Uploaded videos                 | `STORAGE_PATH` volume | Videos themselves; annotations on those videos still resolve|
-| Model weights                   | `MODEL_CACHE_DIR`     | One re-download per model at next use                       |
+| Model weights                   | `HF_HOME` volume      | One re-download per model at next use                       |
 | Redis (queue state)             | Redis volume          | Any currently-running job; user retries from the UI         |
 
 Postgres is the only piece that justifies a full point-in-time
@@ -88,7 +88,7 @@ quarterly:
 1. Stand up an empty stack on a separate host.
 2. Restore the most recent Postgres dump.
 3. Sync the video volume.
-4. Copy the production `.env` over with `JWT_SECRET` and
+4. Copy the production `.env` over with `SESSION_SECRET` and
    `DATABASE_URL` adjusted for the new host.
 5. Confirm a user can log in and load a previously-annotated
    video, that the annotations render, and that a re-run of
@@ -98,4 +98,4 @@ The drill is the only way to catch backup gaps before you need
 them. Operators have hit at least two: forgetting to back up
 the `STORAGE_PATH` volume because Postgres "is the database",
 and backing up the volume but not the env file (which means
-no JWT secret to verify the existing sessions).
+no session secret to verify the existing sessions).

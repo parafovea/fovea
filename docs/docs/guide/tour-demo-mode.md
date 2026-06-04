@@ -7,7 +7,7 @@ sidebar_label: Tour demo mode
 Tour demo mode is a build-time flag that lets the annotation tool run
 a complete guided-tour experience **without a model service**. When
 the flag is set, a Mock Service Worker (MSW) browser worker installs
-at boot and intercepts the six routes that would otherwise forward to
+at boot and intercepts the routes that would otherwise forward to
 the model service, resolving each from a JSON content bundle. The
 event-booth demo laptop uses this mode; the public deployment at
 `demo.fovea.video` uses it too.
@@ -26,18 +26,26 @@ the code in place.
 
 ## Routes intercepted
 
-Six routes are mocked. The MSW handlers add a randomised 800-1800 ms
-delay so each call feels like a warm model-service response without
-needing one:
+Eight routes are mocked: six POSTs that intercept the model-service
+calls plus two GETs that satisfy the summary and claim-extraction
+job-status polls. The MSW handlers add a randomised 800-1800 ms delay
+so each call feels like a warm model-service response without needing
+one:
 
 ```text
 POST /api/ontology/augment
 POST /api/videos/:videoId/detect
 POST /api/videos/:videoId/track
 POST /api/videos/:videoId/transcribe
-POST /api/videos/:videoId/summarize
-POST /api/claims/extract
+POST /api/videos/summaries/generate
+POST /api/summaries/:summaryId/claims/generate
+GET  /api/jobs/:jobId
+GET  /api/jobs/claims/:jobId
 ```
+
+The two GETs return `state`/`status=completed` immediately so the
+summary-editor and claim-split tour beats actually render their mock
+payload rather than stalling on a "Job queued" poll.
 
 Every other backend route (auth, personas, world, annotations, ...)
 hits the real backend as normal. Operators can sign in and use the
@@ -46,7 +54,9 @@ app normally while the model-driven routes remain mocked.
 ## Where the fixture data lives
 
 All fixtures live in the deployment's `TourContentBundle`, served at
-`/tour-content.json` and editable through the admin console. Three
+`/tour-content.json` and edited by replacing the file at
+`annotation-tool/public/tour-content.json` (or, on a live deploy, the
+path your web server serves it from). Three
 sub-slot interfaces drive the mocked outputs:
 
 - `TourMockOntologySuggestion` for the ontology-augmentation tour.
@@ -95,7 +105,7 @@ Three smoke specs lock the tour-demo path in CI:
 
 ```text
 test/e2e/smoke/tour-demo-msw.spec.ts
-    Asserts that all six routes are intercepted and that response
+    Asserts that the mocked routes are intercepted and that response
     latency falls inside the 800-1800 ms window.
 
 test/e2e/smoke/tour-demo-launch-all.spec.ts

@@ -35,7 +35,7 @@ NULL       | treated as entity-linked (legacy)
 ```
 
 The `linkType` column lives on the `Annotation` table
-(migration `20260429000000_add_annotation_link_type`). The export
+(migration `20260505000000_add_annotation_link_type`). The export
 emits the correct `linkedEntityId` / `linkedEventId` /
 `linkedTimeId` / `linkedLocationId` field for each annotation,
 the import reads any of the four, and `linkType` is preserved on

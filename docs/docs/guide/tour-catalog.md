@@ -25,7 +25,7 @@ menu inside the authenticated app.
 | 7 | Summaries, transcripts, and claim extraction | `summaries-and-claims.ts` |
 | 8 | Collaboration: projects, groups, sharing | `collaboration.ts` |
 | 9 | Admin: users, models, and system config | `admin.ts` |
-| 10 | Import and export | `import-export.ts` |
+| 10 | Import & export | `import-export.ts` |
 | 11 | Keyframes and interpolation | `keyframes-interpolation.ts` |
 
 Tour 0 is the orientation entry. Tour 11 is the temporal deep dive.
@@ -34,7 +34,7 @@ Both bracket the 4x3 grid; reorder by editing `getBuiltInTours` in
 
 ## Notes on the catalog
 
-- **Tour 0 (Welcome)** is a four-minute orientation that lands a
+- **Tour 0 (Welcome)** is a two-minute orientation that lands a
   first-time visitor on the workspace and names the panels they
   will use. **Tour 11 (Keyframes and interpolation)** walks the
   keyframe-and-interpolation contract end to end.

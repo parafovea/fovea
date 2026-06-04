@@ -69,9 +69,9 @@ warning when they are supplied.
   "language": "en",
   "duration": 14.3,
   "processingTime": 1.42,
-  "modelUsed": "faster-whisper-tiny",
+  "modelUsed": "Systran/faster-whisper-tiny",
   "speakers": ["SPEAKER_00", "SPEAKER_01"],
-  "diarizationModelUsed": "pyannote-3-1",
+  "diarizationModelUsed": "pyannote/speaker-diarization-3.1",
   "diarizationProcessingTime": 2.18
 }
 ```
@@ -87,8 +87,9 @@ The audio loaders are configured under the
 `audio_transcription` and `speaker_diarization` task slots in
 `model-service/config/models.yaml` (GPU build) and
 `model-service/config/models-cpu.yaml` (CPU build). The CPU build
-defaults to `faster-whisper-tiny` for transcription so the demo
-demo laptop and the docs-test runners can transcribe a 30-second
+selects the `faster-whisper-tiny-cpu` loader option (model_id
+`Systran/faster-whisper-tiny`) for transcription so the demo
+laptop and the docs-test runners can transcribe a 30-second
 clip in roughly two seconds.
 
 The diarization loader is `pyannote-3-1` in both builds. Pyannote
@@ -113,10 +114,12 @@ diarization on a long clip is the most common case for raising it.
 
 ## TranscriptPanel UI
 
-The panel lives in the right-hand workspace dock. Each row is:
+The panel renders inside the Audio Transcript dialog
+(`data-testid="transcript-dialog"`) opened by the Transcribe
+Audio toolbar button in the annotation workspace. Each row is:
 
 - A colored chip for the speaker (`SPEAKER_00`, `SPEAKER_01`, ...).
-  Colours are assigned by first-appearance order so the same clip
+  Colors are assigned by first-appearance order so the same clip
   always paints the same speaker palette across reloads.
 - A `mm:ss` start timestamp. Clicking it seeks the player.
 - The segment text. The currently-playing segment highlights as the

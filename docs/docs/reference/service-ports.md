@@ -13,7 +13,7 @@ the host. Confirmed against `docker-compose.yml`.
 4318   otel-collector     OTLP HTTP ingestion
 8889   otel-collector     Prometheus self-metrics scrape
 9090   prometheus         metrics database and UI
-3010   grafana            dashboard UI
+3002   grafana            dashboard UI
 ```
 
 The collector self-metrics port (`8889`) is what Prometheus

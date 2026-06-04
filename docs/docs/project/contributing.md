@@ -52,13 +52,17 @@ npm test       # vitest unit tests
 npm run lint   # eslint
 ```
 
-End-to-end tests live under `annotation-tool/e2e/` and run via
-Playwright against the e2e compose stack:
+End-to-end tests live under `annotation-tool/test/e2e/` and run
+via Playwright against the e2e compose stack:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
-npx playwright test
+cd annotation-tool && npm run test:e2e
 ```
+
+The Playwright projects have dedicated npm scripts:
+`npm run test:e2e:smoke`, `npm run test:e2e:regression`,
+`npm run test:e2e:a11y`, and `npm run test:e2e:visual`.
 
 ## Model service
 
@@ -96,8 +100,11 @@ are part of the API contract.
 Integration tests that exercise multi-user isolation
 (`test/integration/multi-user-isolation.test.ts`,
 `import-export-cross-user.test.ts`,
-`issue-121-real-fixture.test.ts`) call the shared helper
-`test/integration/_rbac-baseline.ts` from their `beforeEach`. The
+`cross-user-import-real-fixture.test.ts`,
+`cross-user-import-rich-fixture.test.ts`,
+`cross-user-import-foreign-fixture.test.ts`) call the shared
+helper `reseedOwnershipBaseline` from
+`test/integration/_rbac-baseline.ts` in their `beforeEach`. The
 helper deletes the test-helper's blanket-grant `RolePermission`
 rows under the system scope and re-seeds an ownership-aware
 production-like baseline: every action on every content type

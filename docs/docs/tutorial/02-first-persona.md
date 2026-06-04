@@ -33,25 +33,24 @@ is created lazily the first time the ontology is read.
 ## Seed the ontology
 
 The persona starts with an empty ontology. Populate the four lists
-through `PUT /api/ontology` (the full ontology document, not a
-diff):
+through `PUT /api/personas/:id/ontology` (the full ontology
+document, not a diff):
 
 ```bash
-curl -s -X PUT http://localhost:3001/api/ontology \
+curl -s -X PUT http://localhost:3001/api/personas/$PERSONA_ID/ontology \
   -H 'Content-Type: application/json' \
   --cookie cookies.txt \
-  -d "{
-    \"personaId\": \"$PERSONA_ID\",
-    \"entityTypes\":  [{\"id\":\"player\",\"name\":\"Player\"},
-                      {\"id\":\"ball\",\"name\":\"Ball\"},
-                      {\"id\":\"field\",\"name\":\"Field\"}],
-    \"eventTypes\":   [{\"id\":\"pass\",\"name\":\"Pass\"},
-                      {\"id\":\"shot\",\"name\":\"Shot\"},
-                      {\"id\":\"foul\",\"name\":\"Foul\"}],
-    \"roleTypes\":    [{\"id\":\"passer\",\"name\":\"Passer\"},
-                      {\"id\":\"receiver\",\"name\":\"Receiver\"}],
-    \"relationTypes\":[{\"id\":\"causes\",\"name\":\"causes\"}]
-  }"
+  -d '{
+    "entities":     [{"id":"player","name":"Player"},
+                     {"id":"ball","name":"Ball"},
+                     {"id":"field","name":"Field"}],
+    "events":       [{"id":"pass","name":"Pass"},
+                     {"id":"shot","name":"Shot"},
+                     {"id":"foul","name":"Foul"}],
+    "roles":        [{"id":"passer","name":"Passer"},
+                     {"id":"receiver","name":"Receiver"}],
+    "relationTypes":[{"id":"causes","name":"causes"}]
+  }'
 ```
 
 The full type schema (sub-properties, descriptions, attributes) is

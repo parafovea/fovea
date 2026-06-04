@@ -4,26 +4,34 @@ sidebar_label: Production deployment
 
 # Production deployment
 
-A production Fovea install is six containers wired together by
+A production Fovea install is eight containers wired together by
 the `docker-compose.yml` at the repo root: Postgres, Redis,
-backend, model service, frontend, and an OpenTelemetry collector.
-All six come from the same image set that CI publishes on every
-tagged release; nothing in `docker-compose.yml` is dev-only.
+backend, model service, frontend, an OpenTelemetry collector,
+Prometheus, and Grafana. The last two are part of the default
+observability stack but can be omitted if you forward telemetry
+to a remote vendor instead. Everything comes from the same image
+set that CI publishes on every tagged release; nothing in
+`docker-compose.yml` is dev-only.
 
 ## Prerequisites
 
-- A Linux host with at least 16 GB RAM and a GPU if you want
-  local model inference. CPU-only inference is supported via
-  the `models-cpu.yaml` config but is slower per video by an
-  order of magnitude.
+- A Linux host with at least 16 GB RAM. The default
+  `docker compose up` stack runs the CPU model service (using
+  `models-cpu.yaml`); GPU inference requires the `--profile gpu`
+  override, which activates the `model-service-gpu` variant and
+  selects `models.yaml`. CPU inference is roughly an order of
+  magnitude slower per video than GPU.
 - Docker and Docker Compose v2.
 - A Postgres-reachable disk volume for persistent data. The
   default `docker-compose.yml` mounts a named volume; production
   installs typically bind a host path so backups are easy.
-- An OIDC issuer if you want SSO. Without one, the backend
-  signs its own JWTs and accounts are minted by the admin
-  CLI or by the registration form when
-  `ALLOW_REGISTRATION=true`.
+- A strong value for `SESSION_SECRET`. The backend uses
+  session-cookie auth and reads `SESSION_SECRET` at startup
+  (`server/src/app.ts`); the compose default is a placeholder
+  that must be overridden in production. The initial admin
+  account is seeded from `ADMIN_PASSWORD` on first boot;
+  subsequent accounts are minted through the registration form
+  when `ALLOW_REGISTRATION=true`.
 
 ## First-time setup
 
@@ -33,26 +41,25 @@ tagged release; nothing in `docker-compose.yml` is dev-only.
    variables listed in
    [Reference / Environment variables](../reference/environment-variables.md).
    The variables that almost always need editing are
-   `JWT_SECRET`, `DATABASE_URL`, `STORAGE_PATH`, and any
-   external API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
-   `HF_TOKEN`).
+   `SESSION_SECRET`, `ADMIN_PASSWORD`, `DATABASE_URL`,
+   `STORAGE_PATH`, and any external API keys
+   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `HF_TOKEN`).
 3. `docker compose pull` to fetch the image set for this tag.
-4. `docker compose run --rm backend npx prisma migrate deploy`
-   to apply database migrations against an empty database.
-   This is idempotent; running it twice is a no-op.
-5. `docker compose run --rm backend npm run seed:permissions`
-   to populate the RBAC permission catalog.
-6. `docker compose up -d` to start the stack.
-7. Mint the first admin account either through the
-   registration form (with `ALLOW_REGISTRATION=true` set
-   temporarily) or through `docker compose exec backend
-   npm run admin:create -- <email>`.
+4. `docker compose up -d` to start the stack. The backend
+   container's startup command runs `prisma migrate deploy`
+   and `node prisma/seed.cjs` before starting the server, so
+   migrations and the RBAC permission catalog are applied
+   automatically on first boot (both steps are idempotent).
+5. Mint the first admin account either by setting
+   `ADMIN_PASSWORD` in `.env` before step 4 (the seeder reads
+   it and creates the initial admin) or by temporarily setting
+   `ALLOW_REGISTRATION=true` and registering through the form.
 
 ## What runs where
 
 | Container       | Port (internal) | Purpose                                   |
 | --------------- | --------------- | ----------------------------------------- |
-| `frontend`      | 80              | nginx serving the React build             |
+| `frontend`      | 3000            | nginx serving the React build             |
 | `backend`       | 3001            | Fastify API + BullMQ queue producers      |
 | `model-service` | 8000            | FastAPI inference service                 |
 | `postgres`      | 5432            | Application database                      |
@@ -62,9 +69,9 @@ tagged release; nothing in `docker-compose.yml` is dev-only.
 The frontend container terminates HTTP. In a real deployment
 you typically front it with a reverse proxy (caddy, nginx,
 Traefik, an ALB) that holds the TLS certificate and forwards
-to the frontend container on port 80. The reverse proxy is the
-right place to configure rate limits, IP allowlists, and the
-HSTS / CSP headers Fovea does not set itself.
+to the frontend container on port 3000. The reverse proxy is
+the right place to configure rate limits, IP allowlists, and
+the HSTS / CSP headers Fovea does not set itself.
 
 ## What to expose
 
@@ -83,7 +90,8 @@ network, not the public internet.
 - The `STORAGE_PATH` volume holds uploaded videos. Losing it
   loses the videos but leaves all annotation metadata intact;
   annotations carry stable video IDs.
-- The `MODEL_CACHE_DIR` volume holds downloaded model weights.
+- The `model-cache` named volume (mounted at `/models` via
+  `TRANSFORMERS_CACHE`) holds downloaded model weights.
   Losing it costs one re-download per model at next use.
 - Redis holds in-flight job state. Losing it cancels any
   currently-running detection or summarization job; the user

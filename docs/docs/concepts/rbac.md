@@ -67,9 +67,11 @@ Project.ownerUserId
 
 The 20260415000000_backfill_rbac_ownership migration populated
 these columns for historical rows. The
-20260310000000_add_annotation_userid migration introduced
-`Annotation.userId`; `createdByUserId` is added later and is
-preferred by CASL. All write paths populate
+20260221000000_add_projects_groups_rbac migration introduced
+`Annotation.createdByUserId`; the later
+20260310000000_add_annotation_userid migration added
+`Annotation.userId` (backfilled from `persona.userId`) as a compat
+column, and CASL prefers `createdByUserId`. All write paths populate
 `createdByUserId` / `createdBy` from the authenticated session,
 never from the request body.
 

@@ -62,7 +62,7 @@ production stays untouched.
 Registration is off, so visitors cannot mint their own accounts. To
 hand a partner an account at the demo deployment:
 
-1. Sign in as the admin user seeded by `prisma/seed.cjs`
+1. Sign in as the admin user seeded by `prisma/seed.ts`
    (the `ADMIN_PASSWORD` GitHub secret).
 2. Open the admin console.
 3. `Users` -> `Create User`.
@@ -108,13 +108,15 @@ In a browser:
 
 `nginx.demo.conf` adds:
 
-- Two `limit_req_zone` scopes: `login_zone` at `30r/m` with `burst 10`,
-  `register_zone` at `5r/m` with `burst 3`. Defence in depth even
+- Two `limit_req_zone` scopes: `login_zone` at `600r/m` with `burst 100`,
+  `register_zone` at `60r/m` with `burst 20`. Defense in depth even
   though registration is disabled.
 - `Cache-Control: no-store` on `/tour-content.json` so admin edits to
   the content bundle propagate on the next page load.
-- `Cache-Control: public, max-age=31536000, immutable` on `/assets/`
-  for the hashed bundle output.
+- `expires 1y;` plus `Cache-Control: public, immutable` on `/assets/`
+  for the hashed bundle output (nginx's `expires 1y` directive emits
+  the `max-age=31536000` component of the `Cache-Control` header
+  automatically).
 - 60 second cache on `/mockServiceWorker.js` so a worker-version bump
   propagates fast without making every QR-code visitor re-download it
   on each scan.

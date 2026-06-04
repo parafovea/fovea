@@ -19,19 +19,22 @@ curl -s -X POST http://localhost:3001/api/videos/summaries/generate \
   -H 'Content-Type: application/json' \
   --cookie cookies.txt \
   -d "{\"videoId\":\"$VIDEO_ID\",\"personaId\":\"$PERSONA_ID\"}"
-# {"jobId":"<job-uuid>","status":"queued"}
+# 202 {"jobId":"<job-uuid>","status":"queued","videoId":"...","personaId":"..."}
 ```
 
-Poll the job status until it completes:
+Poll the job status until `state` is `completed`:
 
 ```bash
 curl -s "http://localhost:3001/api/jobs/$JOB_ID" --cookie cookies.txt
-# {"status":"completed","summaryId":"<summary-uuid>"}
+# {"id":"<job-uuid>","state":"completed","progress":100,
+#  "data":{"videoId":"...","personaId":"..."},
+#  "returnvalue":{"id":"<summary-uuid>", ...},
+#  "failedReason":null,"finishedOn":...,"processedOn":...}
 ```
 
-The summary is now available at
-`GET /api/videos/:videoId/summaries/:personaId`. Save the
-returned `id` as `SUMMARY_ID`.
+The completed summary is returned under `returnvalue`; read its
+`id` field as `SUMMARY_ID`. The same row is also reachable at
+`GET /api/videos/:videoId/summaries/:personaId`.
 
 ## Extract claims
 
@@ -43,7 +46,7 @@ curl -s -X POST "http://localhost:3001/api/summaries/$SUMMARY_ID/claims/generate
   -H 'Content-Type: application/json' \
   --cookie cookies.txt \
   -d '{}'
-# {"jobId":"<job-uuid>","status":"queued"}
+# 202 {"jobId":"<job-uuid>","status":"queued","summaryId":"..."}
 ```
 
 When the job completes, the claims live under

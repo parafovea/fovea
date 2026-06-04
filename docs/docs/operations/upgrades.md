@@ -44,10 +44,11 @@ entry for the target minor calls these out under
 6. Apply migrations with the new image:
    `docker compose run --rm backend npx prisma migrate deploy`
 7. `docker compose up -d`
-8. Re-seed the permission catalog:
-   `docker compose run --rm backend npm run seed:permissions`.
-   This is idempotent and required because new permissions
-   land in the catalog on most minor releases.
+8. Re-seed the permission catalog by running the full seed:
+   `docker compose run --rm backend npm run seed`.
+   The seed script is idempotent and re-applies the permission
+   catalog, which picks up new permissions added on most
+   minor releases.
 9. Spot-check the UI: log in, load a video, run summarization,
    open the admin SystemConfig panel.
 
@@ -65,30 +66,40 @@ major lands.
 
 ## Model service upgrades
 
-The model service ships in two flavors: `model-service` with
-CUDA wheels and `model-service-cpu` with CPU-only wheels. Pick
-the one matching your hardware in `docker-compose.yml`. Within
-a tag, the two flavors are wire-compatible; you can switch
-between them without changing the backend image.
+The model service ships in two flavors: the default
+`model-service` with CPU-only wheels (uses `models-cpu.yaml`,
+active under the `cpu` profile and when no profile is selected)
+and `model-service-gpu` with CUDA wheels (uses `models.yaml`,
+activated via `--profile gpu` and aliased to `model-service` on
+the compose network). Pick the one matching your hardware in
+`docker-compose.yml`. Within a tag, the two flavors are
+wire-compatible; you can switch between them without changing
+the backend image.
 
 Switching `models.yaml` to a model that has not been downloaded
 yet causes a slow first request (the weights pull on demand).
-Pre-warm by hitting `GET /models` on the model service after
-the upgrade, which triggers the discovery path without
-serving a real inference.
+Pre-warm by hitting `GET /api/models/config` on the model
+service after the upgrade, which triggers the discovery path
+without serving a real inference.
 
 ## CI / CD shape
 
 The `deploy.yml` GitHub Actions workflow handles tagged
 deploys to the host in the repo's reference deployment. It
-takes a tag input, pulls images, runs Prisma migrate deploy,
-and brings the stack back up. The same workflow accepts a
+takes a tag input, rsyncs the source tree to the host, builds
+the images there, runs Prisma migrate deploy, and brings the
+stack back up. The same workflow accepts a
 `demo_mode` flag that swaps to the demo compose overlay; see
 [demo.fovea.video deployment](demo-fovea-deployment.md) for
 that path.
 
 Self-hosted operators typically copy the workflow as a starting
-point and adapt the SSH targets and image registry to their
-infrastructure. The two pieces that always need editing are
-the `IMAGE_REGISTRY` and the host inventory under
-`deploy.yml`.
+point and adapt the SSH targets to their infrastructure. The
+workflow does not pull pre-built images from a registry; it
+rsyncs the source tree to the host and runs
+`docker compose build` there, so registry handling is out of
+scope. The pieces that always need editing are the GitHub
+Actions secrets that target the SSH host (`DEPLOY_HOST`,
+`DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`) and the
+hardcoded `demo.fovea.video` URLs in the verify-deployment and
+smoke-test steps.
