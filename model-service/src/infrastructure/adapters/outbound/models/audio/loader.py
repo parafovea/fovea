@@ -378,10 +378,13 @@ class SileroVADLoader:
         # when the host has no CUDA libs, which fails on CPU-only
         # deployments with "libcudart.so.13: cannot open shared
         # object file". ONNX runtime handles the same model with
-        # no PyTorch dependency. Resolve this before the try block
-        # so static analysis can prove `use_onnx` is always defined
-        # by the time the body references it.
-        use_onnx: bool = not (torch.cuda.is_available() and self.config.device == "cuda")
+        # no PyTorch dependency. Initialize the flag unconditionally
+        # before the try block AND with the conditional default in
+        # the same statement so static analysis (CodeQL) sees the
+        # variable as definitely assigned at every later use.
+        use_onnx: bool = True
+        if torch.cuda.is_available() and self.config.device == "cuda":
+            use_onnx = False
         try:
             logger.info("Loading Silero VAD model")
 

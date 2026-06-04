@@ -38,27 +38,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # CodeQL path-traversal sanitizer roots. See transcribe.py for the
-# rationale; the diarize route accepts the same audio_path shape.
+# rationale; the diarize route accepts the same audio_path shape. The
+# barrier (realpath + startswith + raise) MUST be inlined at the use
+# site so CodeQL's taint engine recognises it; wrapping it in a helper
+# breaks the recognised StartswithCall pattern.
 _VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
 _AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
-
-
-def _safe_audio_path(raw_path: str) -> str:
-    """Resolve and validate a caller-supplied audio path.
-
-    CodeQL sanitizer chain at the filesystem sink:
-      1. ``os.path.realpath`` resolves symlinks and `..` segments
-         (PathNormalization).
-      2. ``x.startswith(const_prefix)`` against a module-level
-         constant that already includes ``os.sep`` is a single-
-         clause StartswithCall barrier guard.
-    """
-    resolved = os.path.realpath(raw_path)
-    if not (resolved.startswith(_VIDEO_DATA_PREFIX) or resolved.startswith(_AUDIO_OUTPUT_PREFIX)):
-        raise HTTPException(
-            status_code=400, detail=f"audio_path is outside the configured data roots: {raw_path!r}"
-        )
-    return resolved
 
 
 class _DiarizationModel(Protocol):
@@ -103,9 +88,19 @@ async def diarize(
     manager: ModelManagerDep,
 ) -> DiarizeResponse:
     """Run speaker diarization against the configured pyannote model."""
-    safe_path_str = _safe_audio_path(request.audio_path)
-    audio_path = Path(safe_path_str)
-    if not audio_path.exists():
+    # CodeQL sanitizer chain (inlined per StartswithCall recognition):
+    #   1. os.path.realpath -> PathNormalization
+    #   2. startswith(const_prefix) + raise -> barrier guard
+    audio_path_real = os.path.realpath(request.audio_path)
+    if not (
+        audio_path_real.startswith(_VIDEO_DATA_PREFIX)
+        or audio_path_real.startswith(_AUDIO_OUTPUT_PREFIX)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"audio_path is outside the configured data roots: {request.audio_path!r}",
+        )
+    if not Path(audio_path_real).exists():
         raise HTTPException(status_code=404, detail=f"Audio not found: {request.audio_path}")
 
     task_config = manager.tasks.get("speaker_diarization")
@@ -146,7 +141,7 @@ async def diarize(
 
     start = time.time()
     try:
-        result: DiarizationResult = model.diarize(str(audio_path))
+        result: DiarizationResult = model.diarize(audio_path_real)
     except Exception as exc:
         logger.exception("Diarization failed")
         raise HTTPException(status_code=500, detail=f"Diarization failed: {exc}") from exc
