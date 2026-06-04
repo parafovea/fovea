@@ -31,7 +31,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Claim, GlossItem, ClaimerType } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
-import { useClaims, useEvents, useTimes, useEntities } from '@store/queries'
+import { useClaims, useEvents, useTimes, useEntities, usePersonaOntology } from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 import { logWarning } from '@services/errorLogging'
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 
@@ -58,6 +59,10 @@ export function ClaimEditor({
 }: ClaimEditorProps) {
   // Fetch sibling claims for $ references
   const { data: existingClaims = [] } = useClaims(summaryId)
+
+  // Fetch the persona's ontology so claim text can be rendered with
+  // human-readable type / object names instead of UUIDs.
+  const { data: personaOntology } = usePersonaOntology(personaId)
 
   // Fetch world-state objects for the claim-context dropdowns. Locations
   // are entities tagged with a `locationType` field (the Fovea data model
@@ -193,8 +198,16 @@ export function ClaimEditor({
   }, [open, videoId, personaId, summaryId, claim?.id, parentClaimId, navigate, saveDraftClaim])
 
   const handleSave = () => {
-    // Convert gloss to plain text for the text field
-    const text = gloss.map(item => item.content).join('')
+    // Convert gloss to plain text for the text field, resolving typeRef /
+    // objectRef / annotationRef / claimRef ids to human-readable labels.
+    // Falling back to the raw id keeps the field non-empty when an ontology
+    // or world lookup misses; export consumers should still treat `text` as
+    // a display string, not the canonical reference (gloss holds those).
+    const text = glossToText(gloss, personaOntology ?? undefined, {
+      entities,
+      events,
+      times,
+    })
 
     const claimData: Partial<Claim> = {
       text,
