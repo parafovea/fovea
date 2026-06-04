@@ -90,6 +90,11 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     # Mock is_external_api to return False (use self-hosted models in tests)
     mock_manager.is_external_api.return_value = False
 
+    # Routes clamp dto_request.max_frames against
+    # manager.inference_config.max_video_frames; set a real int so the
+    # comparison succeeds without a Mock-vs-int TypeError.
+    mock_manager.inference_config.max_video_frames = 1000
+
     yield mock_manager
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.application.use_cases.extract_claims import (
+    ExtractClaimsRequest,
     ExtractClaimsUseCase,
     build_extraction_prompt,
     parse_claims_response,
@@ -38,11 +39,13 @@ async def test_extract_claims_happy_path() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="The JWST was launched. It orbits L2.",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=10,
-        min_confidence=0.5,
+        ExtractClaimsRequest(
+            summary_text="The JWST was launched. It orbits L2.",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=10,
+            min_confidence=0.5,
+        )
     )
 
     assert len(claims) == 2
@@ -58,11 +61,13 @@ async def test_extract_claims_filters_by_min_confidence() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="Summary",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=10,
-        min_confidence=0.9,
+        ExtractClaimsRequest(
+            summary_text="Summary",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=10,
+            min_confidence=0.9,
+        )
     )
 
     assert len(claims) == 1
@@ -75,11 +80,13 @@ async def test_extract_claims_respects_max_claims() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="text",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=1,
-        min_confidence=0.0,
+        ExtractClaimsRequest(
+            summary_text="text",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=1,
+            min_confidence=0.0,
+        )
     )
     assert len(claims) == 1
 
@@ -90,11 +97,13 @@ async def test_extract_claims_empty_response() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="text",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=10,
-        min_confidence=0.0,
+        ExtractClaimsRequest(
+            summary_text="text",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=10,
+            min_confidence=0.0,
+        )
     )
     assert claims == []
 
@@ -106,11 +115,13 @@ async def test_extract_claims_propagates_llm_error() -> None:
 
     with pytest.raises(RuntimeError, match="llm down"):
         await use_case.execute(
-            summary_text="text",
-            sentences=None,
-            strategy="sentence-based",
-            max_claims=10,
-            min_confidence=0.0,
+            ExtractClaimsRequest(
+                summary_text="text",
+                sentences=None,
+                strategy="sentence-based",
+                max_claims=10,
+                min_confidence=0.0,
+            )
         )
 
 
