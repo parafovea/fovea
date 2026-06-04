@@ -22,9 +22,9 @@ GET    /api/videos/:videoId/personas/:personaId/claims
 
 The two listing endpoints
 (`GET /api/summaries/:summaryId/claims` and
-`GET /api/summaries/:summaryId/claims/:claimId`) since v0.1.8
-enforce summary ownership through `assertSummaryOwned` so a user
-who knows another user's summaryId cannot read their claim list.
+`GET /api/summaries/:summaryId/claims/:claimId`) enforce summary
+ownership through `assertSummaryOwned` so a user who knows
+another user's summaryId cannot read their claim list.
 
 ## Claim fields
 
@@ -48,10 +48,7 @@ extractionStrategy String? sentence-based|semantic-units|hierarchical|manual
 ```
 
 `audio`, `video`, and `metadata` are JSON columns and round-trip
-through export and import for any JSON value. The pre-v0.1.8
-`Array.isArray(...) ? ... : Prisma.JsonNull` guards in
-`import-handler.importClaim` were dropping object-shaped metadata
-on every import; v0.1.8 removed those guards.
+through export and import for any JSON value.
 
 ## Gloss items
 

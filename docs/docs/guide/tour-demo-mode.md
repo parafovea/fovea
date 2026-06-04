@@ -71,7 +71,7 @@ on the next page load. The bundle schema lives in the repo at
 Open browser DevTools. Before React mounts you should see:
 
 ```text
-[tour-demo] MSW worker active — model-service calls are mocked.
+[tour-demo] MSW worker active; model-service calls are mocked.
 ```
 
 If you see model-service errors in the console instead, the flag was

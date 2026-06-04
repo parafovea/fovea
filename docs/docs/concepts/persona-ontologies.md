@@ -54,8 +54,7 @@ Editing an ontology does not invalidate existing annotations;
 labels are stored as plain ids. If a typeId is renamed, existing
 annotations keep their old id. The ontology becomes the
 authoritative lookup at render time; missing ids show as
-unresolved (this is the symptom that surfaced in issue #121,
-fixed for object annotations in v0.1.8).
+unresolved.
 
 ## Cross-persona linking
 

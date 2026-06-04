@@ -45,27 +45,25 @@ linkType   resolves through
 NULL       treated as entity-linked (legacy)
 ```
 
-The pre-v0.1.8 schema had no `linkType` column. The export emitted
-only `linkedEntityId` and the import only honoured
-`linkedEntityId`, so any object annotation linked to an event,
-time, or location was silently flattened to entity-linked on
-every round-trip. The migration
-`20260429000000_add_annotation_link_type` added the column
-nullable; the frontend, the export handler, and the import
-handler now write and read whichever linked-id field matches the
-column.
+The `linkType` column was introduced by the migration
+`20260429000000_add_annotation_link_type` (nullable). The
+frontend, the export handler, and the import handler write and
+read whichever linked-id field matches the column, so object
+annotations linked to events, times, or locations round-trip
+without flattening to entity-linked.
 
 ## Ownership columns
 
-Annotations carry two ownership columns. `Annotation.userId` was
-added in `20260310000000_add_annotation_userid` to support
-user-scoped object annotations (object annotations have an
-optional `personaId`, so the persona-side ownership check does
-not apply). v0.2.0 added `Annotation.createdByUserId` and the
-backfill migration `20260415000000_backfill_rbac_ownership` copied
-`userId` into it for historical rows. CASL's ability builder
-matches against `createdByUserId`; the legacy `userId` is still
-populated by write paths so v0.1.x clients see consistent data.
+Annotations carry two ownership columns. `Annotation.userId`
+was introduced by `20260310000000_add_annotation_userid` to
+support user-scoped object annotations (object annotations have
+an optional `personaId`, so the persona-side ownership check
+does not apply). `Annotation.createdByUserId` is the RBAC
+ownership column, populated for historical rows by the backfill
+migration `20260415000000_backfill_rbac_ownership`. CASL's
+ability builder matches against `createdByUserId`; the legacy
+`userId` is still populated by write paths so legacy clients
+see consistent data.
 
 `GET /api/annotations/:videoId` is filtered by
 `accessibleBy(request.ability, 'read').Annotation`, which compiles

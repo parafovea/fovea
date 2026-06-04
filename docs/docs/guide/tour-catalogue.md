@@ -32,15 +32,14 @@ Tour 0 is the orientation entry. Tour 11 is the temporal deep dive.
 Both bracket the 4x3 grid; reorder by editing `getBuiltInTours` in
 `annotation-tool/src/tours/scripts/index.ts`.
 
-## What changed in v0.4.0
+## Notes on the catalogue
 
-- **Tour 0 (Welcome) and Tour 11 (Keyframes and interpolation) are
-  new.** Tour 0 is a four-minute orientation that lands a first-time
-  visitor on the workspace and names the panels they will use. Tour
-  11 walks the keyframe-and-interpolation contract end to end.
-- **Tour 2** (relation-type-editor) narration tightened.
-- **Tour 3** now covers both manual type creation and Wikidata import
-  in one walkthrough; previously these were split steps.
+- **Tour 0 (Welcome)** is a four-minute orientation that lands a
+  first-time visitor on the workspace and names the panels they
+  will use. **Tour 11 (Keyframes and interpolation)** walks the
+  keyframe-and-interpolation contract end to end.
+- **Tour 3** covers both manual type creation and Wikidata import
+  in a single walkthrough.
 - **Tour 5** walks all four world-object editors (entity, location,
   event, time) in contrast so the narration covers the differences
   between them explicitly.
@@ -51,18 +50,16 @@ Both bracket the 4x3 grid; reorder by editing `getBuiltInTours` in
 - **Tours 3, 6, 7** narrate the
   accept-some / reject-some / inline-edit / split-compound-claim
   editing loop the model-driven proposals are designed for.
-- **Tour 7** prelude visits the new `Transcribe Audio` button (see
+- **Tour 7** prelude visits the `Transcribe Audio` button (see
   [Transcribe and diarize](transcribe-and-diarize.md)).
-- Em-dashes have been scrubbed from every user-facing tour string
-  to match house style.
 
 ## Anchors and authoring
 
 Anchor names that tours reference live in the
 [`data-tour-id` anchor reference](../reference/tour-anchors.md).
-The authoring contract (anchor naming, fallback timeout, fixture vs
-anchored mode) is unchanged from v0.3.x; see the
-[Tour customization](tour-customization.md) guide for the schema.
+See the [Tour customization](tour-customization.md) guide for the
+authoring contract (anchor naming, fallback timeout, fixture vs
+anchored mode).
 
 ## Tour demo mode
 

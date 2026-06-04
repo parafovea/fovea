@@ -11,7 +11,7 @@ linear interpolation.
 
 The selected tracker model is configured under the
 `object_tracking` task slot in
-`model-service/config/models.yaml`. v0.3.0 ships these options:
+`model-service/config/models.yaml`. The shipped options are:
 
 ```text
 sam-3-1-tracking   SAM 3.1 tracking adapter   default on GPU

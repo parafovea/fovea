@@ -8,11 +8,10 @@ creates a build-time symlink at `/app/config/active-models.yaml`
 based on the `DEVICE` build arg (see
 [Guide > Deployment](deployment.md)).
 
-Since v0.3.0 the configuration is loaded by the
-`YamlModelRepository` adapter, an implementation of the
-`IModelRepository` outbound port. Application code reads
-`TaskConfig` and `ModelConfig` domain entities, never raw
-YAML.
+The configuration is loaded by the `YamlModelRepository`
+adapter, an implementation of the `IModelRepository` outbound
+port. Application code reads `TaskConfig` and `ModelConfig`
+domain entities, never raw YAML.
 
 ## Task slots
 
@@ -88,9 +87,8 @@ applying it.
 ## Per-persona overrides
 
 Persona-level inference overrides live in `PersonaPreferences`
-(introduced in v0.3.0) and are merged with the user-level
-defaults from `UserPreferences`; user precedence wins for keys
-present in both. The merged `GenerationOverrides` and
+and are merged with the user-level defaults from
+`UserPreferences`; user precedence wins for keys present in both. The merged `GenerationOverrides` and
 `AudioOverrides` structures are threaded through
 `CreateSummaryRequest`, the BullMQ job payload, and finally
 into the model-service request body as `generation_overrides`

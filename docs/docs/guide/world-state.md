@@ -37,7 +37,7 @@ keyed by `WorldState.userId @unique`.
 The collection shapes (`entityCollections`, `eventCollections`,
 `timeCollections`) hold ordered groupings whose
 `entityIds` / `eventIds` arrays are remapped by the cross-user
-import path (since v0.1.7) when ids change.
+import path when ids change.
 
 The `worldLocations` list (referenced by object annotations with
 `linkType = "location"`) is part of the same document.

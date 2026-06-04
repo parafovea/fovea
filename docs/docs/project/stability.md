@@ -2,21 +2,19 @@
 
 Fovea is pre-1.0. Versions are semver-shaped but the pre-1.0
 contract is narrower than post-1.0 semver. This page documents
-what is stable within v0.3.x (the active line) and what is not.
-v0.2.x continues as a maintenance line for the 0.2.0 RBAC
-framework; v0.1.x continues as a maintenance line for the
-0.1.0 export format. The policy below applies to all three.
+what is stable on the active release branch and what is not.
+Older maintenance branches preserve the contracts they shipped
+under; the policy below applies on every branch.
 
-## What is stable within v0.3.x
+## What is stable within a release line
 
-- The JSONL export format. A file written by any v0.3.x release
-  imports into any other v0.3.x release on the same instance.
-  The first line is always a `metadata` provenance record; every
-  subsequent line is one record with a `type` discriminator.
-  Cross-version exports between v0.2.x and v0.3.x are
-  intentionally not supported; the v0.3.0 removal of the
-  `TimeSpan` and gloss-string back-compat shims (see below)
-  changes the in-memory shape that an importer reconstructs.
+- The JSONL export format. A file written by one patch release
+  on a given line imports into any other patch release on the
+  same line. The first line is always a `metadata` provenance
+  record; every subsequent line is one record with a `type`
+  discriminator. Cross-major-version exports are intentionally
+  not supported because each major may change the in-memory
+  shape that an importer reconstructs.
 - Database migrations under `server/prisma/migrations/`. A landed
   migration is never rewritten. Schema evolution is forward-only;
   see "Schema evolution" below.
@@ -40,64 +38,61 @@ framework; v0.1.x continues as a maintenance line for the
 
 ## What may break across patch versions
 
-- Bug fixes change behavior. v0.1.8's data isolation work changed
-  the shape of `GET /api/import/history` to return only the
-  requester's rows; consumers that depended on seeing every user's
-  imports broke. This is by design.
+- Bug fixes change behavior. Data-isolation fixes have changed
+  the shape of routes like `GET /api/import/history` to return
+  only the requester's rows; consumers that depended on seeing
+  every user's imports broke. This is by design.
 - Default values for environment variables.
 
-## v0.3.0 backcompat shim removals
+## Removed backcompat shims
 
-v0.3.0 removed several backcompat shims that v0.2.x and v0.1.x
-carried for forward compatibility. These are clean breaking
-changes; pre-1.0 minor bumps are allowed to do this.
+Several backcompat shims that earlier lines carried for forward
+compatibility have been removed as planned breaking changes.
+Pre-1.0 minor bumps are allowed to do this.
 
-- The `TimeSpan` interface and `timeSpan?` annotation field are
-  gone. Server types, the ontology JSON schema, the frontend
+- The `TimeSpan` interface and `timeSpan?` annotation field do
+  not exist. Server types, the ontology JSON schema, the frontend
   `transformBackendToFrontend` helper, and the
-  `useAnnotationDrawing` stub no longer reference them.
-- The legacy `string` branch of `OntologyTypeItem.gloss` is
-  gone; the type is now `GlossItem[]` only.
-- The legacy `string`-baseUrl overload of
-  `extractWikidataInfo` is gone; `WikidataSearch` now passes
-  `{ baseUrl }`.
-- The `capability_probe=None` lazy default in
-  `ModelManager.__init__` is gone; the probe is now required.
+  `useAnnotationDrawing` stub do not reference them.
+- `OntologyTypeItem.gloss` is `GlossItem[]` only; the legacy
+  `string` branch is gone.
+- `extractWikidataInfo` takes `{ baseUrl }`; the legacy
+  `string`-baseUrl overload is gone.
+- The `capability_probe` argument on `ModelManager.__init__` is
+  required; the lazy-default path is gone.
 
-A v0.2.x or v0.1.x export that depends on any of these shapes
-will not import on v0.3.x. Stay on v0.2.x or v0.1.x to keep
-the older shape, or migrate the export through a one-time
-conversion before importing on v0.3.x.
+An export from an older line that depends on any of these shapes
+will not import on the active line. Stay on the older line to
+keep the older shape, or migrate the export through a one-time
+conversion before importing.
 
-## Model service Clean Architecture (v0.3.x)
+## Model service Clean Architecture
 
-The Clean Architecture layout introduced in v0.3.0 is the
-stable surface within v0.3.x. The dependency rule (domain ←
-application ← infrastructure, never reversed) is contract; the
-specific module names under `model-service/src/` are
-implementation detail. The outbound port set (`ILanguageModel`,
-`IVisionLanguageModel`, `IDetectionModel`, `ITrackingModel`,
-`IAudioTranscriber`, `ISpeakerDiarizer`,
-`IVoiceActivityDetector`, `IFrameSampler`,
+The model service is laid out as a Clean Architecture. The
+dependency rule (domain ← application ← infrastructure, never
+reversed) is contract; the specific module names under
+`model-service/src/` are implementation detail. The outbound
+port set (`ILanguageModel`, `IVisionLanguageModel`,
+`IDetectionModel`, `ITrackingModel`, `IAudioTranscriber`,
+`ISpeakerDiarizer`, `IVoiceActivityDetector`, `IFrameSampler`,
 `IModelRepository`, `IModelCapabilityProbe`,
-`IExternalAPIRouter`) is contract within v0.3.x; new ports may
-be added as a minor bump. Removing or narrowing an existing
-port is breaking and requires a major bump (post-1.0) or a
-breaking pre-1.0 minor.
+`IExternalAPIRouter`) is contract within a release line; new
+ports may be added as a minor bump. Removing or narrowing an
+existing port is breaking and requires a major bump (post-1.0)
+or a breaking pre-1.0 minor.
 
-## RBAC stability (v0.2.x and v0.3.x)
+## RBAC stability
 
 - The set of `Actions` and the set of `Subjects` (Prisma
-  `ModelName` values used as CASL subjects) is stable within
-  the active line. Adding a new action or subject is a
+  `ModelName` values used as CASL subjects) is stable within a
+  release line. Adding a new action or subject is a
   minor-version change that adds capability without removing
   any. Removing one is a breaking change.
-- The seeded `RolePermission` matrix is stable within the
-  active line.
-  Adding new rows (new roles, new resource types, new actions)
-  is non-breaking; removing or narrowing an existing row is
-  breaking and requires a major bump. Existing instances may
-  also have edited the matrix at runtime via
+- The seeded `RolePermission` matrix is stable within a release
+  line. Adding new rows (new roles, new resource types, new
+  actions) is non-breaking; removing or narrowing an existing
+  row is breaking and requires a major bump. Existing instances
+  may also have edited the matrix at runtime via
   `/api/admin/permissions`; the seed is run with `upsert` so a
   re-seed never overwrites local edits to existing rows.
 - The system roles `system_admin` and `user`, the project roles
@@ -115,8 +110,7 @@ breaking pre-1.0 minor.
 ## Schema evolution
 
 A new column is added through a new migration. The column is
-nullable on first introduction (the `Annotation.linkType` column
-in v0.1.8 followed this path). A later release may make it
+nullable on first introduction. A later release may make it
 non-nullable after enough time has passed for backfills.
 
 A column is never renamed; the new name is a new column and the
@@ -134,11 +128,10 @@ undefined and may fail.
 
 ## Release process
 
-The active line lives on the `release/0.3.x` branch; v0.2.x
-continues on `release/0.2.x` and v0.1.x continues on
-`release/0.1.x` for maintenance. Tags are cut from the
-appropriate branch; maintenance tags use `--latest=false` so the
-GitHub release UI does not promote them above the active line.
-CI workflows run on PRs to `main`, `develop`, and `release/**`,
-so backport PRs to maintenance branches go through the same lint
-+ test gate.
+The active line lives on its own `release/*` branch, and the
+maintenance branches continue to receive backports for the lines
+they cover. Tags are cut from the appropriate branch;
+maintenance tags use `--latest=false` so the GitHub release UI
+does not promote them above the active line. CI workflows run
+on PRs to `main`, `develop`, and `release/**`, so backport PRs
+go through the same lint + test gate.

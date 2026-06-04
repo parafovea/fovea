@@ -17,10 +17,8 @@ POST   /api/videos/summaries/generate            # enqueue VLM job
 GET    /api/jobs/:jobId                          # poll the VLM job
 ```
 
-`GET /api/videos/:videoId/summaries` since v0.1.8 returns only
-summaries on personas the requester owns. The pre-v0.1.8 unscoped
-listing let a foreign user's imported summary mask the importer's
-own summary in the persona switcher.
+`GET /api/videos/:videoId/summaries` returns only summaries on
+personas the requester owns.
 
 ## Generate a summary
 
@@ -34,9 +32,9 @@ curl -X POST http://localhost:3001/api/videos/summaries/generate \
 The job runs in the BullMQ summarization queue. The model service
 performs frame extraction, audio transcription, and VLM
 captioning; when complete it writes the result back as a
-`VideoSummary` row. Poll the job at `GET /api/jobs/:jobId`. Since
-v0.1.8 the poll endpoint enforces ownership of the persona that
-owns the job's data.
+`VideoSummary` row. Poll the job at `GET /api/jobs/:jobId`; the
+poll endpoint enforces ownership of the persona that owns the
+job's data.
 
 ## Summary row fields
 

@@ -97,9 +97,9 @@ curl -s -X POST http://localhost:3001/api/annotations \
 ```
 
 Object annotations linked to events, times, or locations use
-`linkType` values `event`, `time`, `location` respectively. The
-column was added in v0.1.8 so these annotations round-trip through
-export and import without flattening to entity-linked. See
+`linkType` values `event`, `time`, `location` respectively, so
+these annotations round-trip through export and import without
+flattening to entity-linked. See
 [Guide > Annotations](../guide/annotations.md) for the full state
 machine.
 

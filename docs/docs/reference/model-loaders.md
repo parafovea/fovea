@@ -123,10 +123,10 @@ pyannote-3-1                  transformers   speaker_diarization
 silero-vad                    transformers   voice_activity_detection
 ```
 
-## Wave 2+3 loaders introduced in v0.3.0
+## Loader implementations
 
-The following entries are new loader implementations (not just
-new YAML rows):
+The following entries are first-class loader implementations
+(not just YAML rows):
 
 ```text
 SAM 3 / 3.1                   models/sam3/loader.py

@@ -23,10 +23,9 @@ curl -X POST \
        "confidence":0.8,"notes":"explicit cue word"}'
 ```
 
-Since v0.1.8 the route runs `assertSummaryOwned` on both the
-source claim's summary and the target claim's summary. A relation
-to a foreign user's claim returns 404; previously A could create a
-relation that surfaced B's claim text in A's relations view.
+The route runs `assertSummaryOwned` on both the source claim's
+summary and the target claim's summary. A relation to a foreign
+user's claim returns 404.
 
 ## Spans
 

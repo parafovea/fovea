@@ -2,8 +2,8 @@
 
 Use the reasoning-trace flow to capture the chain-of-thought
 output of thinking-capable language and vision-language models
-alongside the visible response. v0.3.0 introduces two DTOs in
-`model-service/src/application/dto/reasoning.py`:
+alongside the visible response. Two DTOs in
+`model-service/src/application/dto/reasoning.py` carry the trace:
 
 ```python
 @dataclass(frozen=True)

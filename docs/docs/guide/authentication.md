@@ -71,10 +71,9 @@ When `ALLOW_REGISTRATION=false` (the default), the route returns
 
 ## System role
 
-`User.systemRole` (added in v0.2.0) is the source of truth for
-admin status. It takes one of `'user'` or `'system_admin'`. The
+`User.systemRole` is the source of truth for admin status. It takes one of `'user'` or `'system_admin'`. The
 older boolean `User.isAdmin` is still populated for backward
 compatibility but new code reads `systemRole`. CASL builds an
 ability for every authenticated user that includes
-`can('manage', 'all')` when `systemRole === 'system_admin'` — see
+`can('manage', 'all')` when `systemRole === 'system_admin'`; see
 [Concepts > RBAC](../concepts/rbac.md).

@@ -7,8 +7,8 @@ database. The backend invokes it via BullMQ jobs (for the
 long-running summarization, extraction, and synthesis flows) and
 direct HTTP (for detection, tracking, and thumbnail generation).
 
-Since v0.3.0 the model service is laid out as a Clean
-Architecture stack (domain / application / infrastructure). This
+The model service is laid out as a Clean Architecture stack
+(domain / application / infrastructure). This
 page covers the task-slot configuration, the loader hierarchy,
 and the external-API path; the layered structure is documented
 in [Clean Architecture](clean-architecture.md).

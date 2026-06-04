@@ -1,8 +1,8 @@
 # Audio transcription
 
 Use the audio transcription path to attach speech-to-text output
-to a video summary. Since v0.3.0 every transcriber sits behind
-the `IAudioTranscriber` outbound port (see
+to a video summary. Every transcriber sits behind the
+`IAudioTranscriber` outbound port (see
 [Concepts > Clean Architecture](../concepts/clean-architecture.md)).
 The model service ships seven external-API vendor adapters under
 `model-service/src/infrastructure/adapters/outbound/external_apis/audio/`:
@@ -22,9 +22,9 @@ plus the on-device adapters under
 
 ```text
 loader.py            Whisper, faster-whisper
-canary.py            Canary-Qwen 2.5B (v0.3.0 Wave 3)
-parakeet.py          Parakeet TDT 1.1B (v0.3.0 Wave 3)
-whisperx.py          WhisperX large-v3 (v0.3.0 Wave 3)
+canary.py            Canary-Qwen 2.5B
+parakeet.py          Parakeet TDT 1.1B
+whisperx.py          WhisperX large-v3
 adapters.py          WhisperTranscriberAdapter, PyannoteDiarizerAdapter,
                      SileroVADAdapter
 ```
@@ -68,10 +68,10 @@ The selected fusion strategy depends on the configured fusion
 model and the input characteristics; the model service picks
 based on the audio-presence detection in `av_fusion.py`.
 
-## Standalone transcribe button (v0.4.0)
+## Standalone transcribe button
 
-The summary pipeline above is the indirect path: audio runs as part
-of a larger generate-summary job. v0.4.0 adds a direct path: a
+The summary pipeline above is the indirect path: audio runs as
+part of a larger generate-summary job. The direct path is a
 `Transcribe Audio` button on the workspace toolbar that calls
 `POST /api/videos/:videoId/transcribe`, optionally enabling speaker
 diarization via pyannote 3.1, and renders the result in a

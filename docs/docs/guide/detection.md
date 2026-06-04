@@ -13,11 +13,9 @@ POST /api/videos/:videoId/detect
 body: { "personaId": "<id>", "frame": <number> | { "start": ..., "end": ... } }
 ```
 
-Since v0.1.8 the route runs `assertPersonaOwned` on the
-`personaId` body field before reading the persona's ontology to
-build the detection query. A foreign `personaId` returns 404.
-Previously a user could feed user B's ontology into the detector
-and consume model-service quota on B's behalf.
+The route runs `assertPersonaOwned` on the `personaId` body
+field before reading the persona's ontology to build the
+detection query. A foreign `personaId` returns 404.
 
 ## Detection query construction
 
@@ -27,7 +25,7 @@ labels and the frame index (or range). The model service
 dispatches the DTO through the `DetectObjectsUseCase`, which
 calls the configured `IDetectionModel` adapter. The
 `object_detection` task slot in `models.yaml` selects the
-adapter; v0.3.0 ships these options:
+adapter; the shipped options are:
 
 ```text
 sam-3-1                  SAM 3.1                  default on GPU

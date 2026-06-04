@@ -21,9 +21,8 @@ the collector via `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ## Model service spans and metrics
 
-Since v0.3.0 every use case in
-`model-service/src/application/use_cases/` wraps its
-`execute` in an OpenTelemetry span. The span name is the use
+Every use case in `model-service/src/application/use_cases/`
+wraps its `execute` in an OpenTelemetry span. The span name is the use
 case class name; attributes carry the request DTO's identifying
 fields (video id, persona id, model id where applicable).
 

@@ -39,7 +39,7 @@ Narrower exports are available:
 - `GET /api/export/world` - world state only.
 - `GET /api/export/summaries` - summaries and their claims only.
 - `GET /api/export/stats` - keyframe and interpolated frame
-  counts (scoped to the authenticated user since v0.1.4).
+  counts, scoped to the authenticated user.
 
 ## Import as a different user
 
@@ -67,8 +67,7 @@ imported claims still resolve through `GET /api/world`.
 
 ## Verify the round-trip
 
-`GET /api/import/history` lists the requester's imports (since
-v0.1.8 the route is user-scoped):
+`GET /api/import/history` lists the requester's imports:
 
 ```bash
 curl -s http://localhost:3001/api/import/history \
@@ -88,10 +87,10 @@ documented in [Concepts > Data isolation](../concepts/data-isolation.md).
 If the export references world objects that the importer cannot
 recreate (for example, a partial export missing referenced
 entities), the affected annotations are skipped with
-`missing-dependency` conflicts. v0.1.8 surfaces this as a yellow
-"Completed with Warnings" header in `ImportResultDialog`, with a
-banner explaining the skip count and the remediation (re-export
-from source with the referenced world objects included). See
+`missing-dependency` conflicts. `ImportResultDialog` surfaces
+this as a yellow "Completed with Warnings" header, with a banner
+explaining the skip count and the remediation (re-export from
+source with the referenced world objects included). See
 [Guide > Cross-user imports](../guide/cross-user-imports.md) for
 the conflict resolution flow.
 

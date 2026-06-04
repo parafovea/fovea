@@ -54,7 +54,7 @@ When the job completes, the claims live under
 The gloss array carries one entry per token-or-span the extractor
 chose to surface. Items of type `objectRef` carry a world-object
 id under `content`; items of type `typeRef` carry a type id. The
-v0.1.7 import path remaps these ids when the claim crosses a user
+import path remaps these ids when the claim crosses a user
 boundary so cross-user imports keep their gloss links live.
 
 ## Add a typed claim relation

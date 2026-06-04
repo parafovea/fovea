@@ -1,8 +1,7 @@
 # RBAC
 
-v0.2.0 replaced v0.1.x's `lib/ownership.ts` helpers with a
-[CASL](https://casl.js.org/) ability framework backed by a database
-permission table. Every authenticated request carries a per-user
+Authorization runs through a [CASL](https://casl.js.org/) ability
+framework backed by a database permission table. Every authenticated request carries a per-user
 `Ability` instance built from the user's roles plus the
 `RolePermission` matrix. Routes ask the ability what the user can do
 and CASL compiles the answer into either a boolean (for class-level
@@ -66,12 +65,13 @@ UserGroup.createdBy
 Project.ownerUserId
 ```
 
-The 20260415000000_backfill_rbac_ownership migration populated these
-columns for v0.1.x rows. The 20260310000000_add_annotation_userid
-migration introduced `Annotation.userId` for the v0.1.8 work; v0.2.0
-adds `createdByUserId` and prefers it. All write paths populate
-`createdByUserId` / `createdBy` from the authenticated session, never
-from the request body.
+The 20260415000000_backfill_rbac_ownership migration populated
+these columns for historical rows. The
+20260310000000_add_annotation_userid migration introduced
+`Annotation.userId`; `createdByUserId` is added later and is
+preferred by CASL. All write paths populate
+`createdByUserId` / `createdBy` from the authenticated session,
+never from the request body.
 
 ## ownOnly
 
@@ -109,8 +109,9 @@ const where = accessibleBy(request.ability, 'read').Annotation
 const rows = await prisma.annotation.findMany({ where })
 ```
 
-This replaces the v0.1.x explicit `userId: request.user.id` filters.
-The clause includes the union of every applicable rule's condition,
+This replaces explicit `userId: request.user.id` filters in the
+route handler. The clause includes the union of every applicable
+rule's condition,
 so a user who is both a project member (read all annotations in the
 project) and a global owner (read all own annotations across all
 projects) gets both sets in one query.
@@ -129,8 +130,8 @@ if (!annotation || !request.ability.can('update', subject('Annotation', annotati
 }
 ```
 
-The `NotFoundError`-on-deny pattern carries over from v0.1.x: the
-goal is to avoid confirming the existence of records the requester
+The `NotFoundError`-on-deny pattern is deliberate: the goal is
+to avoid confirming the existence of records the requester
 cannot see.
 
 ## Foreign-id precheck on create
@@ -149,7 +150,7 @@ if (body.personaId) {
 }
 ```
 
-v0.2.1 added these prechecks on `POST /api/annotations` (personaId),
+These prechecks run on `POST /api/annotations` (personaId),
 `POST /api/videos/:videoId/detect` (personaId),
 `POST /api/summaries/:summaryId/claims` (parent summary), and a
 defense-in-depth read-on-parent check on

@@ -92,9 +92,8 @@ this order: requester's user-level key, admin shared-pool key,
 then the corresponding environment variable. See
 [Guide > API keys](../guide/api-keys.md).
 
-## v0.3.0 model catalog (Wave 1)
+## Model catalog
 
-`models.yaml` adds 57 new entries; `models-cpu.yaml` adds 11.
 The full enumeration is in
 [Reference > Model loaders](model-loaders.md). Highlights:
 
@@ -126,9 +125,9 @@ the next working option in the `options` dictionary if one
 exists; if none does, the slot fails to load and the affected
 route returns 503 until the configuration is repaired.
 
-`ModelManager.__init__` requires `capability_probe` since
-v0.3.0; the lazy default that v0.2.x carried was removed
-because it hid configuration mistakes until first inference.
+`ModelManager.__init__` requires `capability_probe`; the
+constructor does not accept a lazy default because that would
+hide configuration mistakes until first inference.
 
 ## Switching models
 

@@ -1,10 +1,11 @@
 # Contributing
 
-The repository accepts pull requests against `main` for new work,
-against `release/0.2.x` for the active line, and against
-`release/0.1.x` for maintenance fixes to the 0.1.0 export-format
-line. All three branches require the test suite to pass before
-merge; CI runs on PRs to `main`, `develop`, and `release/**`.
+The repository accepts pull requests against `main` for new
+work, against the active release branch for the current line,
+and against the maintenance branches for fixes that need to land
+on older lines. All branches require the test suite to pass
+before merge; CI runs on PRs to `main`, `develop`, and
+`release/**`.
 
 ## Development setup
 
@@ -107,8 +108,8 @@ the gate the test exercises rather than an unconditional grant.
 
 Without `_rbac-baseline.ts`, the test-helper's blanket grants
 hide ownership leaks: the matrix would falsely pass even when
-v0.2.0's permission state would have allowed cross-user access in
-production. New isolation tests should pull in the helper.
+the production permission state would have allowed cross-user
+access. New isolation tests should pull in the helper.
 
 ## Filing issues
 

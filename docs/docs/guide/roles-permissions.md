@@ -19,15 +19,15 @@ is the project role; one row per (user, project) pair.
 ## System roles
 
 ```text
-system_admin    can('manage', 'all') — full access to every resource
+system_admin    can('manage', 'all'); full access to every resource
 user            default; permissions come from group + project roles
                 plus baseline ownership rules
 ```
 
 `User.systemRole` defaults to `'user'`. `system_admin` is set
-explicitly during seed or via an admin endpoint; in v0.1.x the
-flag was the boolean `User.isAdmin`. Both columns exist on
-v0.2.x; new code uses `systemRole`.
+explicitly during seed or via an admin endpoint. The legacy
+boolean `User.isAdmin` column is still populated for backward
+compatibility, but `systemRole` is the source of truth.
 
 ## Group roles
 

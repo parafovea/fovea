@@ -1,14 +1,12 @@
 # Clean Architecture
 
-v0.3.0 restructured the model service from a flat
-`model-service/src/<module>.py` layout into three concentric
-layers: domain, application, and infrastructure. The motivation
-is the same as the canonical Clean Architecture argument:
-business rules should not depend on the framework, the
-framework should not import the business rules transitively,
-and every external dependency should sit behind an interface
-the inner layer owns. This page describes how that lands in
-the v0.3.x model service.
+The model service is laid out as three concentric layers:
+domain, application, and infrastructure. The motivation is the
+canonical Clean Architecture argument: business rules should
+not depend on the framework, the framework should not import
+the business rules transitively, and every external dependency
+should sit behind an interface the inner layer owns. This page
+describes how that lands in the model service.
 
 ## Layers
 
@@ -178,9 +176,9 @@ or `models-cpu.yaml` depending on the `DEVICE` build arg) so
 the same path works on both CPU and GPU images. See
 [Reference > Model config](../reference/model-config.md).
 
-`ModelManager.__init__` requires `capability_probe` since
-v0.3.0; the lazy default that v0.2.x carried was removed
-because it hid configuration mistakes until first inference.
+`ModelManager.__init__` requires `capability_probe`; the
+constructor does not accept a lazy default because that would
+hide configuration mistakes until first inference.
 
 ## Observability
 

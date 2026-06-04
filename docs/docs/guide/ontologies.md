@@ -54,21 +54,15 @@ curl -X PUT http://localhost:3001/api/ontology \
   -d @ontology.json
 ```
 
-`PUT /api/ontology` since v0.1.8 refuses to upsert a persona id or
-ontology id whose existing row belongs to a different user, returning
-404. Previously the upsert silently overwrote the foreign user's
-persona; see the v0.1.8 entry in
-[Project > Changelog](../project/changelog.md) for the full set of
-ownership fixes.
+`PUT /api/ontology` refuses to upsert a persona id or ontology id
+whose existing row belongs to a different user, returning 404.
 
 ## Augment with AI
 
 `POST /api/ontology/augment` posts the current ontology plus a
 free-text prompt to the model service and returns suggested
-additions for the four type lists. Since v0.1.8 the route requires
-authentication and an owned `personaId`; the previous
-`optionalAuth` configuration let any visitor consume model-service
-quota under another user's persona context.
+additions for the four type lists. The route requires
+authentication and an owned `personaId`.
 
 ```bash
 curl -X POST http://localhost:3001/api/ontology/augment \

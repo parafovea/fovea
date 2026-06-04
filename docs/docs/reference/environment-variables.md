@@ -116,7 +116,7 @@ CDN_SIGNED_URLS           no         true                           sign CDN URL
 THUMBNAIL_STORAGE_TYPE    no         local                          local | s3
 THUMBNAIL_PATH            no         /videos/thumbnails             local thumbnail root
 THUMBNAIL_S3_PREFIX       no         thumbnails/                    S3 key prefix
-THUMBNAIL_OUTPUT_ROOT     no         /videos/thumbnails             model-service thumbnail output (v0.3.0)
+THUMBNAIL_OUTPUT_ROOT     no         /videos/thumbnails             model-service thumbnail output
 ```
 
 ## Wikidata

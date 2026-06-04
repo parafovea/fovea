@@ -19,9 +19,8 @@ Relations: `personas`, `apiKeys`, `sessions`, `worldStates`,
 `annotations`, `groupMemberships`, `projectMemberships`,
 `ownedProjects`, `videoAssignments`, `sharedByMe`, `sharedWithMe`.
 
-`systemRole` was added in v0.2.0 and is the source of truth for
-admin checks. `isAdmin` is still populated for backward
-compatibility.
+`systemRole` is the source of truth for admin checks.
+`isAdmin` is still populated for backward compatibility.
 
 ## Session
 
@@ -110,8 +109,7 @@ payload, not as a separate column).
 
 Each user has at most one personal world state (`projectId =
 NULL`) and one world state per project they belong to. The
-v0.1.x global `userId @unique` constraint was relaxed in v0.2.0
-to the composite unique index above.
+composite unique index above enforces that constraint.
 
 ## Video
 
@@ -170,7 +168,7 @@ id              String   @id
 videoId         String   -> Video
 personaId       String?  -> Persona (NULL for object annotations)
 userId          String?  -> User    (legacy; kept for back-compat)
-createdByUserId String?  -> User    (CASL ownership column, v0.2.0)
+createdByUserId String?  -> User    (CASL ownership column)
 projectId       String?  -> Project
 type            String   "type" | "object"
 label           String   typeId or world-object id
@@ -180,19 +178,19 @@ confidence      Float?
 source          String   "manual" | "tracking" | "detection"
 ```
 
-`linkType` was added by migration
-`20260429000000_add_annotation_link_type` (v0.1.8 / v0.2.1
-restamped as `20260505000000_add_annotation_link_type`).
-`createdByUserId` was added in v0.2.0; the backfill migration
-`20260415000000_backfill_rbac_ownership` populated it from `userId`
-on existing rows.
+`linkType` is provided by the migration
+`20260429000000_add_annotation_link_type` (restamped on the
+RBAC line as `20260505000000_add_annotation_link_type`).
+`createdByUserId` is the CASL ownership column; the backfill
+migration `20260415000000_backfill_rbac_ownership` populated it
+from `userId` on existing rows.
 
 ## ImportHistory
 
 ```text
 id              String   @id
 filename        String
-importedBy      String?  -> User (set in v0.1.8)
+importedBy      String?  -> User (set on import)
 importOptions   Json
 result          Json
 success         Boolean
@@ -367,10 +365,10 @@ ones:
 20260128095411_add_modality_metadata_to_claims
 20260128153121_change_modality_metadata_to_arrays
 20260130011500_add_comment_fields
-20260221000000_add_projects_groups_rbac          (v0.2.0)
+20260221000000_add_projects_groups_rbac
 20260310000000_add_annotation_userid
-20260415000000_backfill_rbac_ownership           (v0.2.0)
-20260505000000_add_annotation_link_type          (v0.2.1)
+20260415000000_backfill_rbac_ownership
+20260505000000_add_annotation_link_type
 ```
 
 Migrations are stable. Never rewrite a landed migration; add a

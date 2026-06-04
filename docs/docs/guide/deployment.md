@@ -64,7 +64,7 @@ docker buildx build \
 
 Without the secret, gated entries are skipped.
 
-## v0.3.0 SSRF and path-injection hardening
+## SSRF and path-injection hardening
 
 The model service's video downloader and processor enforce:
 

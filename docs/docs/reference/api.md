@@ -303,7 +303,7 @@ POST   /diarize                       body { audio_path, num_speakers?,
 ```
 
 `POST /transcribe` and `POST /diarize` are the standalone audio
-endpoints introduced in v0.4.0. The backend
+endpoints. The backend
 `/api/videos/:videoId/transcribe` route calls both and merges them;
 direct callers can hit them independently.
 

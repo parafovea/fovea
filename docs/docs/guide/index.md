@@ -41,8 +41,8 @@ specific question of the form "how do I do X with Fovea".
 ## Data exchange
 
 - [Export and import](export-import.md) covers the JSONL format,
-  the v0.1.4 user-scoped stats, and the `Annotation.linkType`
-  round-trip introduced in v0.1.8.
+  the user-scoped stats endpoint, and the `Annotation.linkType`
+  round-trip.
 - [Cross-user imports](cross-user-imports.md) covers id
   regeneration, gloss remapping, the `metadata` provenance line,
   and the `Completed with Warnings` flow.

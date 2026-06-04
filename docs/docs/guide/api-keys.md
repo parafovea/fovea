@@ -53,4 +53,4 @@ openssl rand -hex 32
 ```
 
 Rotating the encryption key requires re-encrypting all stored
-keys; there is no automated rotation path in v0.1.x.
+keys; there is no automated rotation path.

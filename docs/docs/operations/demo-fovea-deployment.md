@@ -95,7 +95,7 @@ In a browser:
    the "Flexible Ontology Visual Event Analyzer" tagline, and a 4x3
    grid of tour cards.
 2. DevTools console should show
-   `[tour-demo] MSW worker active — model-service calls are mocked.`
+   `[tour-demo] MSW worker active; model-service calls are mocked.`
    before React mounts.
 3. Click any tour tile. The engine launches and the spotlight overlays
    the active anchor.
