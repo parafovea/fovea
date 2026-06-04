@@ -89,7 +89,12 @@ const sidebars: SidebarsConfig = {
       label: 'Operations',
       link: {type: 'doc', id: 'operations/index'},
       items: [
+        'operations/production-deployment',
         'operations/demo-fovea-deployment',
+        'operations/monitoring',
+        'operations/backup-restore',
+        'operations/upgrades',
+        'operations/troubleshooting',
       ],
     },
     {
