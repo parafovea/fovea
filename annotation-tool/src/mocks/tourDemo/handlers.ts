@@ -172,5 +172,107 @@ export function createTourDemoHandlers(
       await simulatedInferenceDelay()
       return HttpResponse.json(claimsExtractResponse)
     }),
+
+    // After the queue-ticket POST, the frontend polls these two job
+    // status endpoints for the actual payload. Without these handlers
+    // the tour visitor sees the "Job queued" beat but never the mock
+    // VLM summary text or the compound-claim split content.
+
+    // GET /api/jobs/:jobId is the generic BullMQ status surface used
+    // by the summary-generation polling loop (apiClient.getJobStatus
+    // in src/api/client.ts:846). Return state=completed immediately
+    // with returnvalue carrying a VideoSummary-shaped payload built
+    // from m7.mockVlmSummaryText so the summary-editor renders the
+    // mock text.
+    http.get('/api/jobs/:jobId', async () => {
+      await simulatedInferenceDelay()
+      const nowIso = '2026-06-04T00:00:00.000Z'
+      const videoSummary = {
+        id: 'demo-summary-001',
+        videoId: m7.videoId,
+        personaId: '__tour_demo__',
+        summary: [
+          {
+            type: 'text' as const,
+            content: m7.mockVlmSummaryText,
+          },
+        ],
+        visualAnalysis: m7.mockVlmSummaryText,
+        audioTranscript: m7.mockTranscript.segments.map((s) => s.text).join(' '),
+        keyFrames: null,
+        confidence: 0.83,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        audioLanguage: m7.mockTranscript.language,
+        speakerCount: m7.mockTranscript.speakers.length,
+        audioModelUsed: 'Systran/faster-whisper-tiny',
+        visualModelUsed: 'smolvlm-500m',
+        fusionStrategy: 'timestampAligned',
+        processingTimeAudio: 6.18,
+        processingTimeVisual: 38.4,
+        processingTimeFusion: 1.21,
+      }
+      return HttpResponse.json({
+        id: 'demo-summary-job-001',
+        state: 'completed' as const,
+        progress: 100,
+        data: { videoId: m7.videoId, personaId: '__tour_demo__' },
+        returnvalue: videoSummary,
+        processedOn: Date.parse(nowIso),
+        finishedOn: Date.parse(nowIso),
+      })
+    }),
+
+    // GET /api/jobs/claims/:jobId is the claim-extraction job status
+    // surface (useClaims.ts:144). Return status=completed with a
+    // ClaimStructure-shaped result whose `claims` array carries the
+    // compound claim PLUS its three split atoms as subclaims so the
+    // tour's "split into atomic claims" step actually has rows to
+    // operate against.
+    http.get('/api/jobs/claims/:jobId', async () => {
+      await simulatedInferenceDelay()
+      const nowIso = '2026-06-04T00:00:00.000Z'
+      const compoundStart = m7.mockClaimSplitAtoms[0]?.start ?? 0
+      const compoundEnd =
+        m7.mockClaimSplitAtoms[m7.mockClaimSplitAtoms.length - 1]?.end ??
+        m7.mockTranscript.duration
+      const claimStructure = {
+        version: '1.0',
+        claims: [
+          {
+            id: 'demo-claim-compound-001',
+            text: m7.mockCompoundClaimText,
+            confidence: 0.83,
+            timeRange: { start: compoundStart, end: compoundEnd },
+            subclaims: m7.mockClaimSplitAtoms.map((c, i) => ({
+              id: `demo-claim-atom-${i + 1}`,
+              text: c.text,
+              confidence: 0.9,
+              timeRange: { start: c.start, end: c.end },
+              subclaims: [],
+            })),
+          },
+        ],
+        metadata: {
+          extractedAt: nowIso,
+          modelUsed: 'qwen2-5-1-5b-gguf',
+          config: {
+            maxClaims: 8,
+            maxDepth: 2,
+            includeTimeRanges: true,
+            includeConfidence: true,
+          },
+          totalClaims: 1,
+          totalSubclaims: m7.mockClaimSplitAtoms.length,
+          maxDepth: 2,
+        },
+      }
+      return HttpResponse.json({
+        jobId: 'demo-claims-job-001',
+        status: 'completed' as const,
+        progress: 100,
+        result: claimStructure,
+      })
+    }),
   ]
 }
