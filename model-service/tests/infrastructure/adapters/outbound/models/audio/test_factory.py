@@ -197,21 +197,15 @@ class TestRegistryDoesNotMatchOnModelId:
     """
 
     def test_whisper_model_id_with_canary_arch_returns_canary_loader(self) -> None:
-        loader = create_audio_loader(
-            NemoCanary(), _config(model_id="openai/whisper-large-v3")
-        )
+        loader = create_audio_loader(NemoCanary(), _config(model_id="openai/whisper-large-v3"))
         assert isinstance(loader, CanaryQwenLoader)
 
     def test_canary_model_id_with_whisper_arch_returns_whisper_loader(self) -> None:
-        loader = create_audio_loader(
-            Whisper(), _config(model_id="nvidia/canary-qwen-2.5b")
-        )
+        loader = create_audio_loader(Whisper(), _config(model_id="nvidia/canary-qwen-2.5b"))
         assert isinstance(loader, WhisperLoader)
 
     def test_parakeet_model_id_with_faster_whisper_arch_returns_faster_whisper(
         self,
     ) -> None:
-        loader = create_audio_loader(
-            FasterWhisper(), _config(model_id="nvidia/parakeet-tdt-1.1b")
-        )
+        loader = create_audio_loader(FasterWhisper(), _config(model_id="nvidia/parakeet-tdt-1.1b"))
         assert isinstance(loader, FasterWhisperLoader)

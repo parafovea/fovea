@@ -91,12 +91,8 @@ class TestTaskConfig:
         assert not task.is_valid_selection("missing")
 
     def test_cpu_compatible_options(self) -> None:
-        a = ModelConfig(
-            model_id="a", framework="pytorch", architecture=_ARCH, cpu_compatible=True
-        )
-        b = ModelConfig(
-            model_id="b", framework="pytorch", architecture=_ARCH, cpu_compatible=False
-        )
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH, cpu_compatible=True)
+        b = ModelConfig(model_id="b", framework="pytorch", architecture=_ARCH, cpu_compatible=False)
         task = TaskConfig(task_name="t", selected="a", options={"a": a, "b": b})
         compatible = task.get_cpu_compatible_options()
         assert set(compatible.keys()) == {"a"}

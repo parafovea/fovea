@@ -39,6 +39,7 @@ def mock_model_manager() -> Generator[Mock, None, None]:
     # architecture so routes that pass model_config.architecture to
     # create_vlm_loader find a valid VLMArchitecture instance.
     from src.domain.entities.architectures import Llama4Maverick
+
     mock_model_config.architecture = Llama4Maverick()
     mock_task_config.get_selected_config.return_value = mock_model_config
     mock_task_config.options = {"llama-4-maverick": mock_model_config}

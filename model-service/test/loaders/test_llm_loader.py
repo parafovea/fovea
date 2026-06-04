@@ -547,7 +547,9 @@ class TestFallbackLoading:
                 return_value=mock_model,
             ),
         ):
-            loader = await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback1, fallback2])
+            loader = await create_llm_loader_with_fallback(
+                _DEFAULT_LLM_ARCH, primary, [fallback1, fallback2]
+            )
 
             assert loader.is_loaded()
             assert loader.config.model_id == "meta-llama/Llama-4-Scout"
@@ -587,7 +589,7 @@ class TestFallbackLoading:
                 side_effect=mock_from_pretrained,
             ),
         ):
-            loader = await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback])
+            loader = await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary, [fallback])
 
             assert loader.is_loaded()
             assert loader.config.model_id == "google/gemma-3-27b-it"
@@ -614,7 +616,7 @@ class TestFallbackLoading:
             patch("builtins.print"),
             pytest.raises(RuntimeError, match="All model loading attempts failed"),
         ):
-            await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary,[fallback])
+            await create_llm_loader_with_fallback(_DEFAULT_LLM_ARCH, primary, [fallback])
 
 
 class TestDiverseExamples:

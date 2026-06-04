@@ -806,9 +806,7 @@ class TestCreateTrackingLoader:
         assert isinstance(loader, YOLO11SegLoader)
         assert isinstance(loader.arch, YOLO11SegArch)
 
-    def test_create_loader_unknown_architecture(
-        self, tracking_config: TrackingConfig
-    ) -> None:
+    def test_create_loader_unknown_architecture(self, tracking_config: TrackingConfig) -> None:
         """A non-tracking architecture must raise UnknownArchitectureError."""
         from src.domain.entities.architectures import QwenLLM
 

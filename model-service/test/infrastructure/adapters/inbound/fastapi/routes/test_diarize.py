@@ -132,9 +132,7 @@ def _clear_overrides() -> Generator[None, None, None]:
 class TestHappyPath:
     """Successful diarization request produces ordered, deduped speakers."""
 
-    def test_returns_segments_and_first_appearance_speaker_order(
-        self, audio_file: str
-    ) -> None:
+    def test_returns_segments_and_first_appearance_speaker_order(self, audio_file: str) -> None:
         segments = [
             SpeakerSegment(speaker="SPEAKER_00", start=0.0, end=1.5),
             SpeakerSegment(speaker="SPEAKER_01", start=1.5, end=3.0),
@@ -165,9 +163,7 @@ class TestErrorPaths:
         manager = FakeModelManager(model=FakeDiarizationModel())
         client = _client_with(manager)
 
-        response = client.post(
-            "/api/diarize", json={"audio_path": "/nonexistent/path/audio.wav"}
-        )
+        response = client.post("/api/diarize", json={"audio_path": "/nonexistent/path/audio.wav"})
 
         assert response.status_code == 404
         assert "/nonexistent/path/audio.wav" in response.json()["detail"]
@@ -249,6 +245,4 @@ class TestSpeakerCountForwarding:
             response = client.post("/api/diarize", json={"audio_path": audio_file})
 
         assert response.status_code == 200
-        assert all(
-            "per-request speaker-count hints" not in r.message for r in caplog.records
-        )
+        assert all("per-request speaker-count hints" not in r.message for r in caplog.records)

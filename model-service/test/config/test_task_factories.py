@@ -120,9 +120,7 @@ class TestAudioTranscriptionFactory:
         ):
             registry = build_default_task_factories()
             factory = registry["audio_transcription"]
-            returned = factory(
-                _make_model_config(framework=framework_hint, architecture=Whisper())
-            )
+            returned = factory(_make_model_config(framework=framework_hint, architecture=Whisper()))
 
         assert returned is loader
         loader.load.assert_called_once()
@@ -277,9 +275,7 @@ class TestObjectDetectionFactory:
 
         registry = build_default_task_factories()
         with pytest.raises(UnknownArchitectureError) as exc_info:
-            registry["object_detection"](
-                _make_model_config(framework="pytorch", model_id="model")
-            )
+            registry["object_detection"](_make_model_config(framework="pytorch", model_id="model"))
         assert exc_info.value.family.startswith("detection")
         assert "Whisper" in str(exc_info.value)
 

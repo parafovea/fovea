@@ -47,9 +47,7 @@ class DiarizeRequest(BaseModel):
     """Request schema for the diarization endpoint."""
 
     audio_path: str = Field(..., description="Filesystem path to an audio or video file.")
-    num_speakers: int | None = Field(
-        default=None, description="Exact number of speakers if known."
-    )
+    num_speakers: int | None = Field(default=None, description="Exact number of speakers if known.")
     min_speakers: int | None = Field(default=None, description="Lower bound on speaker count.")
     max_speakers: int | None = Field(default=None, description="Upper bound on speaker count.")
 

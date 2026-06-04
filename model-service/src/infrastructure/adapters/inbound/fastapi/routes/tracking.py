@@ -110,9 +110,7 @@ async def track_objects(
                         "no architecture set; add an `architecture:` block to its YAML entry."
                     ),
                 )
-            if not isinstance(
-                tracking_architecture, (SAMURAI, SAM2Long, SAM2, YOLO11Seg)
-            ):
+            if not isinstance(tracking_architecture, (SAMURAI, SAM2Long, SAM2, YOLO11Seg)):
                 raise HTTPException(
                     status_code=500,
                     detail=(

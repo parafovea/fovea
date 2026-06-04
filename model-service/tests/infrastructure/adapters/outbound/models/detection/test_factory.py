@@ -200,9 +200,7 @@ class TestRegistryCoverage:
         """
         union_type = get_args(DetectionArchitecture)[0]
         members = set(get_args(union_type))
-        framework_pre_dispatched = {
-            cls for cls in members if cls.__name__.startswith("SAM3")
-        }
+        framework_pre_dispatched = {cls for cls in members if cls.__name__.startswith("SAM3")}
         local_members = members - framework_pre_dispatched
         registered = set(detection_pytorch_registry.registered_architectures)
 
@@ -333,7 +331,6 @@ class TestRegistryIndependence:
         """
         assert YOLOWorld in detection_pytorch_registry.registered_architectures
         assert YOLOWorld in detection_onnx_registry.registered_architectures
-        assert (
-            detection_pytorch_registry.lookup(YOLOWorld)
-            is not detection_onnx_registry.lookup(YOLOWorld)
+        assert detection_pytorch_registry.lookup(YOLOWorld) is not detection_onnx_registry.lookup(
+            YOLOWorld
         )

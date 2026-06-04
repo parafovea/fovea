@@ -117,9 +117,7 @@ async def augment_ontology(
                     temperature=0.7,
                     top_p=0.9,
                 )
-                loader = create_llm_loader(
-                    selected_model_config.architecture, llm_config
-                )
+                loader = create_llm_loader(selected_model_config.architecture, llm_config)
                 language_model = LLMLoaderAdapter(loader)
                 await language_model.aload()
                 try:
