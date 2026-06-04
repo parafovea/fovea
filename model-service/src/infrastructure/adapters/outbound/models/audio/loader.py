@@ -372,17 +372,19 @@ class SileroVADLoader:
         RuntimeError
             If model loading fails.
         """
+        # Prefer the ONNX backend when CUDA isn't available. The
+        # PyTorch backend's `silero_vad` model in the snakers4/
+        # silero-vad hub repo eagerly imports CUDA runtime even
+        # when the host has no CUDA libs, which fails on CPU-only
+        # deployments with "libcudart.so.13: cannot open shared
+        # object file". ONNX runtime handles the same model with
+        # no PyTorch dependency. Resolve this before the try block
+        # so static analysis can prove `use_onnx` is always defined
+        # by the time the body references it.
+        use_onnx: bool = not (torch.cuda.is_available() and self.config.device == "cuda")
         try:
             logger.info("Loading Silero VAD model")
 
-            # Prefer the ONNX backend when CUDA isn't available. The
-            # PyTorch backend's `silero_vad` model in the snakers4/
-            # silero-vad hub repo eagerly imports CUDA runtime even
-            # when the host has no CUDA libs, which fails on CPU-only
-            # deployments with "libcudart.so.13: cannot open shared
-            # object file". ONNX runtime handles the same model with
-            # no PyTorch dependency.
-            use_onnx = not (torch.cuda.is_available() and self.config.device == "cuda")
             self.model, self.utils = torch.hub.load(  # type: ignore[no-untyped-call]
                 repo_or_dir="snakers4/silero-vad",
                 model="silero_vad",

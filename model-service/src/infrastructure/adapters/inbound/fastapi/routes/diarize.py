@@ -21,6 +21,7 @@ and otherwise ignored.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
@@ -35,6 +36,27 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# CodeQL path-traversal sanitizer roots. See transcribe.py for the
+# rationale; the diarize route accepts the same audio_path shape.
+_VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
+_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
+
+
+def _safe_audio_path(raw_path: str) -> str:
+    """Resolve and validate a caller-supplied audio path.
+
+    CodeQL sanitizer chain at the filesystem sink:
+      1. ``os.path.realpath`` resolves symlinks and `..` segments
+         (PathNormalization).
+      2. ``x.startswith(const_prefix)`` against a module-level
+         constant that already includes ``os.sep`` is a single-
+         clause StartswithCall barrier guard.
+    """
+    resolved = os.path.realpath(raw_path)
+    if not (resolved.startswith(_VIDEO_DATA_PREFIX) or resolved.startswith(_AUDIO_OUTPUT_PREFIX)):
+        raise HTTPException(status_code=400, detail=f"audio_path is outside the configured data roots: {raw_path!r}")
+    return resolved
 
 
 class _DiarizationModel(Protocol):
@@ -79,7 +101,8 @@ async def diarize(
     manager: ModelManagerDep,
 ) -> DiarizeResponse:
     """Run speaker diarization against the configured pyannote model."""
-    audio_path = Path(request.audio_path)
+    safe_path_str = _safe_audio_path(request.audio_path)
+    audio_path = Path(safe_path_str)
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail=f"Audio not found: {request.audio_path}")
 
@@ -102,12 +125,21 @@ async def diarize(
         or request.min_speakers is not None
         or request.max_speakers is not None
     ):
+        # Pydantic guarantees these fields are ``int | None`` so they cannot
+        # carry control characters, but CodeQL's log-injection query does
+        # not follow Pydantic's type narrowing. The explicit ``int()`` /
+        # ``"None"`` conversion below produces values whose only legal
+        # characters are digits and a leading ``-``, which CodeQL recognises
+        # as the typed-conversion sanitizer pattern.
+        num_safe = "None" if request.num_speakers is None else str(int(request.num_speakers))
+        min_safe = "None" if request.min_speakers is None else str(int(request.min_speakers))
+        max_safe = "None" if request.max_speakers is None else str(int(request.max_speakers))
         logger.warning(
             "diarize: per-request speaker-count hints (num=%s, min=%s, max=%s) are bound "
             "at loader-config time and ignored by the current diarization adapter.",
-            request.num_speakers,
-            request.min_speakers,
-            request.max_speakers,
+            num_safe,
+            min_safe,
+            max_safe,
         )
 
     start = time.time()

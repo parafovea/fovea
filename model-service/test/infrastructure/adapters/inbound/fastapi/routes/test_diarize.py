@@ -17,6 +17,7 @@ them.
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
+from src.infrastructure.adapters.inbound.fastapi.routes import diarize as diarize_route
 from src.infrastructure.adapters.outbound.models.audio.loader import (
     DiarizationResult,
     SpeakerSegment,
@@ -33,6 +35,21 @@ from src.main import app
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+
+@pytest.fixture(autouse=True)
+def _widen_audio_path_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Widen the sanitizer prefix so NamedTemporaryFile paths are accepted.
+
+    The production diarize.py constrains audio_path to be under
+    VIDEO_DATA_ROOT or AUDIO_OUTPUT_ROOT (CodeQL-recognized
+    StartswithCall sanitizer). Tests place fixtures under the system
+    temp dir, so we monkeypatch the prefix to point at that dir for
+    the duration of each test.
+    """
+    tempdir = os.path.realpath(tempfile.gettempdir()) + os.sep
+    monkeypatch.setattr(diarize_route, "_VIDEO_DATA_PREFIX", tempdir)
+    monkeypatch.setattr(diarize_route, "_AUDIO_OUTPUT_PREFIX", tempdir)
 
 
 class FakeDiarizationModel:
@@ -163,10 +180,13 @@ class TestErrorPaths:
         manager = FakeModelManager(model=FakeDiarizationModel())
         client = _client_with(manager)
 
-        response = client.post("/api/diarize", json={"audio_path": "/nonexistent/path/audio.wav"})
+        # Path under the sanitizer-accepted root (tempdir per the autouse
+        # fixture) but pointing at a file that does not exist on disk.
+        missing_path = os.path.join(tempfile.gettempdir(), "nonexistent-audio.wav")
+        response = client.post("/api/diarize", json={"audio_path": missing_path})
 
         assert response.status_code == 404
-        assert "/nonexistent/path/audio.wav" in response.json()["detail"]
+        assert missing_path in response.json()["detail"]
 
     def test_missing_task_returns_500(self, audio_file: str) -> None:
         manager = FakeModelManager(include_task=False)
@@ -223,7 +243,10 @@ class TestSpeakerCountForwarding:
 
         assert response.status_code == 200
         assert model.call_count == 1
-        assert model.last_audio_path == audio_file
+        # The route resolves audio_path through os.path.realpath as part of the
+        # path-traversal sanitizer, so compare realpaths rather than raw strings
+        # (on macOS /tmp resolves to /private/tmp).
+        assert model.last_audio_path == os.path.realpath(audio_file)
         # The warning text carries all three hint values so a deployer
         # debugging "why isn't num_speakers honoured?" sees them.
         warning_text = "\n".join(r.message for r in caplog.records)

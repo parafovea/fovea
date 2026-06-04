@@ -13,6 +13,7 @@ The summarize use case already drives transcription internally via
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import cast
@@ -28,6 +29,37 @@ from src.infrastructure.adapters.outbound.models.audio.base import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# CodeQL path-traversal sanitizer roots. Audio inputs to the
+# transcribe / diarize routes are either video files under
+# `VIDEO_DATA_ROOT` (when the backend forwards a stored video) or
+# extracted audio under `AUDIO_OUTPUT_ROOT` (when the backend
+# forwards a pre-extracted wav). Both prefixes are realpath-
+# normalised with a trailing separator so the StartswithCall guard
+# below cannot match a sibling directory whose name starts with
+# the root name.
+_VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
+_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
+
+
+def _safe_audio_path(raw_path: str) -> str:
+    """Resolve and validate a caller-supplied audio path.
+
+    CodeQL sanitizer chain at the filesystem sink:
+      1. ``os.path.realpath`` resolves symlinks and `..` segments,
+         producing a canonical absolute path (PathNormalization).
+      2. ``x.startswith(const_prefix)`` against a module-level
+         constant that already includes ``os.sep`` is a single-
+         clause StartswithCall barrier guard.
+
+    Raises HTTPException(400) when the resolved path escapes both
+    of the two allowed roots, so the caller cannot read or trigger
+    inference against files outside the configured data volumes.
+    """
+    resolved = os.path.realpath(raw_path)
+    if not (resolved.startswith(_VIDEO_DATA_PREFIX) or resolved.startswith(_AUDIO_OUTPUT_PREFIX)):
+        raise HTTPException(status_code=400, detail=f"audio_path is outside the configured data roots: {raw_path!r}")
+    return resolved
 
 
 class TranscribeRequest(BaseModel):
@@ -73,7 +105,8 @@ async def transcribe(
     manager: ModelManagerDep,
 ) -> TranscribeResponse:
     """Transcribe an audio or video file using the configured ASR model."""
-    audio_path = Path(request.audio_path)
+    safe_path_str = _safe_audio_path(request.audio_path)
+    audio_path = Path(safe_path_str)
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail=f"Audio not found: {request.audio_path}")
 
